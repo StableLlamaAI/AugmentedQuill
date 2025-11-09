@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}AugmentedQuill — Prototype{% endblock %}
+{% block content %}
+  <section class="aq-panel" x-data="{ mode: 'home' }">
+    <div class="aq-toolbar">
+      <button id="refresh" class="aq-btn">Refresh</button>
+    </div>
+    <div class="aq-content">
+      <div class="aq-card" hx-get="/health/fragment" hx-trigger="load, click from:#refresh" hx-target="#health" hx-swap="outerHTML">
+        <div id="health">Loading…</div>
+      </div>
+      <p class="aq-tip">This is a rudimentary UI. Click Refresh to ping the server and update the status below via HTMX.</p>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}AugmentedQuill{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body>
+  <header class="aq-header">
+    <h1>AugmentedQuill</h1>
+  </header>
+  <main class="aq-main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="aq-footer">
+    <small>Prototype UI • {{ year }}</small>
+  </footer>
+</body>
+</html>
