@@ -32,8 +32,10 @@
       llm_max_tokens: 2048,
       saved_msg: '',
       error_msg: '',
-      project_dir: '',
-      recent_projects: [],
+      new_project_name: '',
+      current_project: '',
+      available_projects: [],
+      _baseline: '',
       async init() {
         try {
           // Load story, machine configs, and project registry via REST
@@ -44,9 +46,10 @@
           ]);
           const story = storyResp.ok ? await storyResp.json() : {};
           const machine = machineResp.ok ? await machineResp.json() : {};
-          const projects = projectsResp.ok ? await projectsResp.json() : {current:'', recent:[]};
-          this.project_dir = projects.current || '';
-          this.recent_projects = Array.isArray(projects.recent) ? projects.recent : [];
+          const projects = projectsResp.ok ? await projectsResp.json() : {current:'', recent:[], available:[]};
+          const curPath = projects.current || '';
+          this.current_project = typeof curPath === 'string' && curPath ? curPath.split('/').pop() : '';
+          this.available_projects = Array.isArray(projects.available) ? projects.available : [];
 
           // Story
           this.project_title = story.project_title || '';
@@ -66,6 +69,9 @@
             this.models = [{ name: 'default', base_url: openai.base_url || 'https://api.openai.com/v1', api_key: openai.api_key || '', timeout_s: openai.timeout_s || 60, remote_model: openai.model || '', remote_models: [], endpoint_ok: undefined }];
             this.selected_name = 'default';
           }
+
+          // Establish baseline after initial load
+          this._setBaseline();
 
           queueMicrotask(() => { this.models.forEach((_, idx) => this.loadRemoteModels(idx)); });
         } catch (e) {
@@ -127,15 +133,36 @@
         const payload = this.models.map(m => ({ name: m.name, base_url: m.base_url, api_key: m.api_key, timeout_s: m.timeout_s, model: m.remote_model || '' }));
         return { models: payload, selected: this.selected_name };
       },
-      async selectProject() {
-        this.saved_msg=''; this.error_msg='';
+      _snapshot() {
+        // Normalize current state into a stable JSON string for change detection
+        const story = {
+          project_title: this.project_title || 'Untitled Project',
+          format: this.format || 'markdown',
+          chapters: (this.chapters_text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean),
+          llm_prefs: { temperature: Number(this.llm_temperature), max_tokens: Number(this.llm_max_tokens) }
+        };
+        const machine = { openai: this.serializeModelsPayload() };
+        try { return JSON.stringify({ story, machine }); } catch(_) { return ''; }
+      },
+      _setBaseline() { this._baseline = this._snapshot(); },
+      isDirty() { return this._snapshot() !== this._baseline; },
+      async selectByName(name) {
+        // Do not clear saved_msg here to prevent banner collapse/expand flicker during switches
+        this.error_msg='';
+        // Warn if there are unsaved changes
+        const targetName = (name || '').trim();
+        const sameProject = !!this.current_project && this.current_project === targetName;
+        if (!sameProject && this.isDirty()) {
+          const proceed = confirm('You have unsaved changes in the current project. Switching projects will discard them. Continue without saving?');
+          if (!proceed) return;
+        }
         try {
-          const resp = await fetch('/api/projects/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: this.project_dir || '' }) });
+          const resp = await fetch('/api/projects/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name || '' }) });
           const data = await resp.json();
           if (!resp.ok || data.ok !== true) throw new Error(data.detail || data.error || 'Selection failed');
-          const reg = data.registry || { current: this.project_dir, recent: [] };
-          this.project_dir = reg.current || this.project_dir;
-          this.recent_projects = Array.isArray(reg.recent) ? reg.recent : [];
+          const reg = data.registry || { current: '' };
+          const curPath = reg.current || '';
+          this.current_project = typeof curPath === 'string' && curPath ? curPath.split('/').pop() : '';
           const story = data.story || {};
           this.project_title = story.project_title || '';
           this.format = story.format || 'markdown';
@@ -143,12 +170,53 @@
           const lp = story.llm_prefs || {};
           this.llm_temperature = (typeof lp.temperature === 'number') ? lp.temperature : parseFloat(lp.temperature || '0.7') || 0.7;
           this.llm_max_tokens = (typeof lp.max_tokens === 'number') ? lp.max_tokens : parseInt(lp.max_tokens || '2048', 10) || 2048;
+          // Reset baseline after switching projects and loading their settings
+          this._setBaseline();
           this.saved_msg = data.message || 'Project selected.';
+          // refresh available list
+          try { const pj = await (await fetch('/api/projects')).json(); this.available_projects = Array.isArray(pj.available) ? pj.available : this.available_projects; } catch(_) {}
         } catch(e) {
           this.error_msg = 'Failed to select project: ' + (e && e.message ? e.message : e);
         }
       },
-      useRecent(p) { this.project_dir = p; return this.selectProject(); },
+      async createProject() {
+        const name = (this.new_project_name || '').trim();
+        if (!name) { this.error_msg = 'Enter a project name.'; return; }
+        return this.selectByName(name);
+      },
+      async deleteProject(name) {
+        if (!name) return;
+        const deletingCurrent = this.current_project && this.current_project === name;
+        if (deletingCurrent && this.isDirty()) {
+          const proceedDirty = confirm('You have unsaved changes in the current project. Deleting it will discard them. Continue without saving?');
+          if (!proceedDirty) return;
+        }
+        if (!confirm(`Delete project "${name}"? This cannot be undone.`)) return;
+        this.saved_msg=''; this.error_msg='';
+        try {
+          const resp = await fetch('/api/projects/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+          const data = await resp.json();
+          if (!resp.ok || data.ok !== true) throw new Error(data.detail || data.error || 'Delete failed');
+          this.available_projects = Array.isArray(data.available) ? data.available : this.available_projects;
+          const reg = data.registry || { current: '' };
+          const curPath = reg.current || '';
+          this.current_project = typeof curPath === 'string' && curPath ? curPath.split('/').pop() : '';
+          // Reload story if current was deleted
+          try {
+            const story = await (await fetch('/api/story')).json();
+            this.project_title = story.project_title || '';
+            this.format = story.format || 'markdown';
+            this.chapters_text = Array.isArray(story.chapters) ? story.chapters.join('\n') : '';
+            const lp = story.llm_prefs || {};
+            this.llm_temperature = (typeof lp.temperature === 'number') ? lp.temperature : parseFloat(lp.temperature || '0.7') || 0.7;
+            this.llm_max_tokens = (typeof lp.max_tokens === 'number') ? lp.max_tokens : parseInt(lp.max_tokens || '2048', 10) || 2048;
+            this._setBaseline();
+          } catch(_) {}
+          this.saved_msg = data.message || 'Project deleted.';
+        } catch(e) {
+          this.error_msg = 'Failed to delete project: ' + (e && e.message ? e.message : e);
+        }
+      },
       async save() {
         this.saved_msg = ''; this.error_msg = '';
         if (this.hasNameIssues()) { this.error_msg = 'Resolve model name issues before saving.'; return; }
@@ -167,6 +235,8 @@
           const data = await resp.json();
           if (!resp.ok || data.ok !== true) throw new Error(data.detail || data.error || 'Save failed');
           this.saved_msg = 'Settings saved successfully.';
+          // Update baseline after successful save
+          this._setBaseline();
         } catch (e) { this.error_msg = 'Failed to save: ' + (e && e.message ? e.message : e); }
       },
       endpointStatus(m) { return m.endpoint_ok === undefined ? '' : (m.endpoint_ok ? '' : ''); }

@@ -5,15 +5,25 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
+import shutil
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
+PROJECTS_ROOT = BASE_DIR / "projects"
 REGISTRY_PATH = Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
 
 def get_registry_path() -> Path:
     # Re-evaluate environment at call time to make tests able to redirect location
     return Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
+
+
+def get_projects_root() -> Path:
+    """Return the root directory where projects (stories) are stored.
+
+    Defaults to <repo>/projects. Can be overridden by AUGQ_PROJECTS_ROOT env var.
+    """
+    return Path(os.getenv("AUGQ_PROJECTS_ROOT", str(PROJECTS_ROOT)))
 
 
 @dataclass
@@ -81,6 +91,42 @@ def get_active_project_dir() -> Path | None:
     return None
 
 
+def delete_project(name: str) -> Tuple[bool, str]:
+    """Delete a project directory under the projects root by name.
+
+    If the deleted project is the current one, clear current in the registry.
+    """
+    if not name:
+        return False, "Project name is required"
+    if any(ch in name for ch in ("/", "\\")) or name.strip() != name or name in (".", ".."):
+        return False, "Invalid project name"
+    root = get_projects_root()
+    p = root / name
+    if not p.exists() or not p.is_dir():
+        return False, "Project does not exist"
+    # Safety: ensure path is inside root
+    try:
+        p.resolve().relative_to(root.resolve())
+    except Exception:
+        return False, "Invalid project path"
+    # Remove directory recursively
+    shutil.rmtree(p)
+    # Update registry
+    reg = load_registry()
+    current = reg.get("current") or ""
+    recent = [x for x in reg.get("recent", []) if x]
+    if current:
+        try:
+            cur_name = Path(current).name
+        except Exception:
+            cur_name = ""
+        if cur_name == name:
+            current = ""
+    recent = [x for x in recent if Path(x).name != name]
+    save_registry(current, recent)
+    return True, "Project deleted"
+
+
 def validate_project_dir(path: Path) -> ProjectInfo:
     """Validate that path is a project directory.
 
@@ -131,20 +177,41 @@ def initialize_project_dir(path: Path, project_title: str = "Untitled Project") 
         story_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def select_project(path_str: str) -> Tuple[bool, str]:
-    """Select a project directory.
+def list_projects() -> List[Dict[str, str | bool]]:
+    """List projects under the projects root directory.
 
-    Behavior:
-    - If path does not exist or is an empty directory → create/initialize.
-    - If it is a valid project directory → accept.
+    Returns a list of dicts: {name, path, is_valid}
+    """
+    root = get_projects_root()
+    if not root.exists():
+        return []
+    items: List[Dict[str, str | bool]] = []
+    for d in sorted([p for p in root.iterdir() if p.is_dir()]):
+        info = validate_project_dir(d)
+        items.append({"name": d.name, "path": str(d), "is_valid": info.is_valid})
+    return items
+
+
+def select_project(name: str) -> Tuple[bool, str]:
+    """Select or create a project by name under the projects root.
+
+    Rules:
+    - `name` must be a simple directory name (no path separators, not absolute).
+    - The project lives at `<projects_root>/<name>`.
+    - If it does not exist or is empty → create/initialize and select.
+    - If it is a valid project directory → select.
     - Otherwise → error.
     Returns (ok, message). On success updates registry current+recent.
     """
-    if not path_str:
-        return False, "Path is required"
-    p = Path(path_str).expanduser()
+    if not name:
+        return False, "Project name is required"
+    # Reject any separators or traversal
+    if any(ch in name for ch in ("/", "\\")) or name.strip() != name or name in (".", ".."):
+        return False, "Invalid project name"
+    root = get_projects_root()
+    p = root / name
     if not p.exists():
-        # Create new project
+        _ensure_dir(root)
         initialize_project_dir(p)
         set_active_project(p)
         return True, "Project created"

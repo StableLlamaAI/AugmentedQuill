@@ -15,6 +15,8 @@ from app.projects import (
     load_registry,
     select_project,
     get_active_project_dir,
+    list_projects,
+    delete_project,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -391,10 +393,26 @@ from app.projects import load_registry as _load_projects_registry
 @app.get("/api/projects")
 async def api_projects() -> dict:
     reg = _load_projects_registry()
-    # Validate that paths still exist; filter out missing
     cur = reg.get("current") or ""
     recent = [p for p in reg.get("recent", []) if p]
-    return {"current": cur, "recent": recent[:5]}
+    available = list_projects()
+    return {"current": cur, "recent": recent[:5], "available": available}
+
+
+@app.post("/api/projects/delete")
+async def api_projects_delete(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    name = (payload or {}).get("name") or ""
+    ok, msg = delete_project(name)
+    if not ok:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
+    # Return updated registry and available list
+    reg = _load_projects_registry()
+    available = list_projects()
+    return JSONResponse(status_code=200, content={"ok": True, "message": msg, "registry": reg, "available": available})
 
 
 @app.post("/api/projects/select")
@@ -403,8 +421,8 @@ async def api_projects_select(request: Request) -> JSONResponse:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    path = (payload or {}).get("path") or ""
-    ok, msg = select_project(path)
+    name = (payload or {}).get("name") or ""
+    ok, msg = select_project(name)
     if not ok:
         return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
     # On success, return current registry and the story that was loaded/created

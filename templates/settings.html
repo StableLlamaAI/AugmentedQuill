@@ -3,34 +3,39 @@
     <h2 style="margin:0">Settings</h2>
   </div>
   <div class="aq-content">
-    <template x-if="saved_msg">
-      <div class="aq-card" role="status" x-text="saved_msg"></div>
-    </template>
-    <template x-if="error_msg">
-      <div class="aq-card" role="alert" style="border-color:#b91c1c;color:#fecaca;background:#450a0a;" x-text="error_msg"></div>
-    </template>
+    <div class="aq-card" role="status" x-show="saved_msg" x-transition.opacity x-text="saved_msg"></div>
+    <div class="aq-card" role="alert" x-show="error_msg" x-transition.opacity style="border-color:#b91c1c;color:#fecaca;background:#450a0a;" x-text="error_msg"></div>
 
     <div class="aq-form">
       <div class="aq-form-grid">
         <fieldset class="aq-card">
-          <legend>Project directory</legend>
+          <legend>Project</legend>
           <div class="aq-field-group">
-            <label class="aq-field" style="grid-column: span 2;">
-              <span>Path to project folder (story.json + chapters/)</span>
-              <input type="text" x-model="project_dir" placeholder="/path/to/my/story" />
-            </label>
-          </div>
-          <div class="aq-toolbar" style="justify-content: space-between; align-items: flex-start;">
-            <div>
-              <button type="button" class="aq-btn" @click="selectProject()">Use / Create here</button>
+            <div class="aq-card" style="margin:0;">
+              <div><strong>Current:</strong> <span x-text="current_project ? current_project : '(none selected)'"></span></div>
             </div>
+            <label class="aq-field" style="grid-column: span 2;">
+              <span>Create new project (name only; will be created under projects/)</span>
+              <input type="text" x-model="new_project_name" placeholder="my-story" />
+            </label>
+            <div>
+              <button type="button" class="aq-btn" @click="createProject()">Create</button>
+            </div>
+          </div>
+          <div class="aq-toolbar" style="justify-content: space-between; align-items: flex-start; gap:1rem; align-items: stretch;">
             <div style="text-align:right;">
-              <div style="font-size:0.9rem; color:#94a3b8; margin-bottom:0.25rem;">Recent projects</div>
-              <template x-if="!(recent_projects && recent_projects.length)">
-                <div class="aq-tip">No recent projects yet</div>
+              <div style="font-size:0.9rem; color:#94a3b8; margin-bottom:0.25rem;">Available in projects/</div>
+              <template x-if="!(available_projects && available_projects.length)">
+                <div class="aq-tip">No projects found under the built-in projects folder.</div>
               </template>
-              <template x-for="p in recent_projects" :key="p">
-                <div><button type="button" class="aq-btn" style="padding:0.25rem 0.5rem;" @click="useRecent(p)" x-text="p"></button></div>
+              <template x-for="ap in available_projects" :key="ap.path">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button type="button" class="aq-btn" style="padding:0.25rem 0.5rem;" @click="selectByName(ap.name)">
+                    <span x-text="ap.name"></span>
+                    <span x-show="!ap.is_valid" style="color:#fbbf24;"> (init)</span>
+                  </button>
+                  <button type="button" class="aq-btn" style="padding:0.25rem 0.5rem; background:#3b82f6;" @click="deleteProject(ap.name)">Delete</button>
+                </div>
               </template>
             </div>
           </div>
