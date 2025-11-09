@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}AugmentedQuill — Prototype{% endblock %}
 {% block content %}
-  <div class="aq-shell" x-data="shellView()" x-init="load()">
+  <div class="aq-shell" x-data="shellView()" x-init="init()">
     <aside class="aq-sidebar">
       <div class="aq-sidebar-top">
         <h3 class="aq-sidebar-title">Chapters</h3>
@@ -9,9 +9,25 @@
           <template x-if="!(chapters && chapters.length)">
             <li class="aq-empty">No chapters configured</li>
           </template>
-          <template x-for="ch in chapters" :key="ch">
-            <li><button class="aq-link" disabled title="Not implemented yet" x-text="ch"></button></li>
+          <template x-for="ch in chapters" :key="ch.id">
+            <li>
+              <template x-if="editingId !== ch.id">
+                <button class="aq-link" :class="{'aq-active': activeId===ch.id}" @click="openChapter(ch.id)" @dblclick.stop="startEdit(ch)" x-text="ch.title"></button>
+              </template>
+              <template x-if="editingId === ch.id">
+                <div class="aq-edit-wrap">
+                  <input type="text" x-ref="titleInput" x-model="editingTitle" @keydown.enter.prevent="saveEdit()" @keydown.escape.prevent="cancelEdit()" @blur="saveEdit()" class="aq-input-inline" style="width:100%; padding:0.25rem 0.5rem; border-radius:6px; border:1px solid #334155; background:#0b1223; color:var(--fg);" />
+                  <div class="aq-edit-actions">
+                    <button class="aq-btn aq-btn-sm" @click="saveEdit()">Save</button>
+                    <button class="aq-btn aq-btn-sm" @click="cancelEdit()">Cancel</button>
+                  </div>
+                </div>
+              </template>
+            </li>
           </template>
+          <li>
+            <button class="aq-btn" style="width:100%;" @click="createChapter()">+ New chapter</button>
+          </li>
         </ul>
       </div>
       <div class="aq-sidebar-bottom">
@@ -27,6 +43,17 @@
         <div class="aq-content">
           <div class="aq-card">
             <div id="health">Status: <strong x-text="status"></strong> <template x-if="server_time">• Server time: <span x-text="server_time"></span></template></div>
+          </div>
+          <div class="aq-card" style="white-space: pre-wrap;">
+            <template x-if="activeId === null">
+              <div class="aq-empty">Select a chapter to view its content.</div>
+            </template>
+            <template x-if="activeId !== null">
+              <div>
+                <div style="font-weight:600; margin-bottom:0.5rem;">Chapter <span x-text="activeId"></span></div>
+                <div x-text="content"></div>
+              </div>
+            </template>
           </div>
           <p class="aq-tip">This is a rudimentary UI. Use the Settings button in the sidebar to configure machine and story settings.</p>
         </div>

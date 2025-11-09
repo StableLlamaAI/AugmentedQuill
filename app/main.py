@@ -3,10 +3,11 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
+import re
 
-from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, HTTPException, Form, Path as FastAPIPath
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -430,6 +431,189 @@ async def api_projects_select(request: Request) -> JSONResponse:
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else (CONFIG_DIR / "story.json"))
     return JSONResponse(status_code=200, content={"ok": True, "message": msg, "registry": reg, "story": story})
+
+
+# --- Chapters APIs ---
+import io
+
+
+def _scan_chapter_files() -> List[Tuple[int, Path]]:
+    """Return list of (index, path) for chapter files under active project.
+
+    Supports files like '0001.txt' (preferred) and legacy like 'chapter01.txt'.
+    Sorted by numeric index ascending.
+    """
+    active = get_active_project_dir()
+    if not active:
+        return []
+    chapters_dir = active / "chapters"
+    if not chapters_dir.exists() or not chapters_dir.is_dir():
+        return []
+    items: List[Tuple[int, Path]] = []
+    for p in chapters_dir.glob("*.txt"):
+        if not p.is_file():
+            continue
+        name = p.name
+        m = re.match(r"^(\d{4})\.txt$", name)
+        if m:
+            idx = int(m.group(1))
+            items.append((idx, p))
+            continue
+        # legacy chapter01.txt -> index 1
+        m2 = re.match(r"^chapter(\d+)\.txt$", name, re.IGNORECASE)
+        if m2:
+            try:
+                idx = int(m2.group(1))
+                items.append((idx, p))
+            except ValueError:
+                pass
+    items.sort(key=lambda t: t[0])
+    return items
+
+
+def _load_chapter_titles(count: int) -> List[str]:
+    """Load chapter titles from story.json chapters array if present.
+    Do not pad; callers decide fallbacks (e.g., filename).
+    """
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else (CONFIG_DIR / "story.json")) or {}
+    titles = story.get("chapters") or []
+    # Normalize to strings and keep as-provided; empty strings allowed (handled by caller)
+    titles = [str(x) for x in titles if isinstance(x, (str, int, float))]
+    return titles[:count]
+
+
+@app.get("/api/chapters")
+async def api_chapters() -> dict:
+    files = _scan_chapter_files()
+    titles = _load_chapter_titles(len(files))
+    result = []
+    for i, (idx, p) in enumerate(files):
+        # Prefer configured title; fall back to filename when missing/blank
+        raw_title = titles[i] if i < len(titles) else ""
+        title = (raw_title or "").strip() or p.name
+        result.append({"id": idx, "title": title, "filename": p.name})
+    return {"chapters": result}
+
+
+@app.get("/api/chapters/{chap_id}")
+async def api_chapter_content(chap_id: int = FastAPIPath(..., ge=0)) -> dict:
+    files = _scan_chapter_files()
+    # Find by numeric id
+    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    idx, path, pos = match
+    titles = _load_chapter_titles(len(files))
+    raw_title = titles[pos] if pos < len(titles) else ""
+    title = (raw_title or "").strip() or path.name
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+    return {"id": idx, "title": title, "filename": path.name, "content": content}
+
+
+@app.put("/api/chapters/{chap_id}/title")
+async def api_update_chapter_title(request: Request, chap_id: int = FastAPIPath(..., ge=0)) -> JSONResponse:
+    """Update the title of a chapter in the active project's story.json.
+    The title positions correspond to the sorted chapter files list.
+    """
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    new_title = (payload or {}).get("title")
+    if new_title is None:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "title is required"})
+    new_title_str = str(new_title).strip()
+
+    files = _scan_chapter_files()
+    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    _, path, pos = match
+
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    titles = story.get("chapters") or []
+    # ensure list length up to current count
+    count = len(files)
+    if not isinstance(titles, list):
+        titles = []
+    if len(titles) < count:
+        titles = [str(t) if isinstance(t, (str, int, float)) else "" for t in titles]
+        titles.extend([""] * (count - len(titles)))
+    # set new title at position
+    titles[pos] = new_title_str
+    story["chapters"] = titles
+    try:
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write story.json: {e}"})
+
+    # Respond with updated descriptor
+    return JSONResponse(status_code=200, content={
+        "ok": True,
+        "chapter": {"id": files[pos][0], "title": new_title_str or path.name, "filename": path.name}
+    })
+
+
+@app.post("/api/chapters")
+async def api_create_chapter(request: Request) -> JSONResponse:
+    """Create a new chapter file at the end and update titles list.
+    Body: {"title": str | None, "content": str | None}
+    """
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    title = str(payload.get("title", "")).strip() if isinstance(payload, dict) else ""
+    content = payload.get("content") if isinstance(payload, dict) else None
+    if content is None:
+        content = ""
+
+    # Determine next index and path
+    files = _scan_chapter_files()
+    next_idx = (files[-1][0] + 1) if files else 1
+    filename = f"{next_idx:04d}.txt"
+    chapters_dir = active / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    path = chapters_dir / filename
+    try:
+        path.write_text(str(content), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write chapter file: {e}"})
+
+    # Update story.json titles array (append as last)
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    titles = story.get("chapters") or []
+    if not isinstance(titles, list):
+        titles = []
+    # Ensure titles length aligns with existing files count after creation (count becomes len(files)+1)
+    count_after = len(files) + 1
+    titles = [str(t) if isinstance(t, (str, int, float)) else "" for t in titles]
+    if len(titles) < count_after - 1:
+        titles.extend([""] * (count_after - 1 - len(titles)))
+    # Append provided title (may be empty string)
+    titles.append(title)
+    story["chapters"] = titles
+    try:
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to update story.json: {e}"})
+
+    return JSONResponse(status_code=200, content={
+        "ok": True,
+        "chapter": {"id": next_idx, "title": title or filename, "filename": filename}
+    })
 
 
 # --- Proxy endpoint for OpenAI model listing (fallback when CORS blocks browser) ---

@@ -173,6 +173,8 @@
           // Reset baseline after switching projects and loading their settings
           this._setBaseline();
           this.saved_msg = data.message || 'Project selected.';
+                    // Notify other views (like index shell) to reload chapters
+                    document.dispatchEvent(new CustomEvent('aq:project-selected', { detail: { name: targetName } }));
           // refresh available list
           try { const pj = await (await fetch('/api/projects')).json(); this.available_projects = Array.isArray(pj.available) ? pj.available : this.available_projects; } catch(_) {}
         } catch(e) {
@@ -246,14 +248,26 @@
   // Index page data factory (global)
   function shellView() {
     return {
-      chapters: [],
+      chapters: [], // [{id,title,filename}]
+      activeId: null,
+      content: '',
       status: 'unknown',
       server_time: '',
+      // inline title editing state
+      editingId: null,
+      editingTitle: '',
+      init() {
+        // Listen for project change notifications
+        document.addEventListener('aq:project-selected', () => { this.refreshChapters(); });
+        this.load();
+      },
       async load() {
         try {
-          const s = await fetch('/api/story');
-          const sj = await s.json();
-          this.chapters = Array.isArray(sj.chapters) ? sj.chapters : [];
+          await this.refreshChapters();
+          if (!(this.chapters && this.chapters.length)) {
+            await this.ensureProjectSelected();
+          }
+          // Load health info
           const h = await fetch('/api/health');
           const hj = await h.json();
           this.status = hj.status || 'unknown';
@@ -261,7 +275,101 @@
         } catch(_) {
           this.status='error';
         }
-      }
+      },
+      async ensureProjectSelected() {
+        try {
+          const pr = await fetch('/api/projects');
+          if (!pr.ok) return;
+          const pj = await pr.json();
+          const current = pj.current || '';
+          const available = Array.isArray(pj.available) ? pj.available : [];
+          if ((!current || current.trim() === '') && available.length > 0) {
+            const first = available[0];
+            if (first && first.name) {
+              const resp = await fetch('/api/projects/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: first.name }) });
+              if (resp.ok) {
+                // give backend a moment then reload chapters
+                await this.refreshChapters();
+              }
+            }
+          }
+        } catch(_) { /* no-op */ }
+      },
+      async refreshChapters() {
+        try {
+          const resp = await fetch('/api/chapters');
+          const data = await resp.json();
+          this.chapters = Array.isArray(data.chapters) ? data.chapters : [];
+          // If previously selected chapter still exists, keep it; otherwise select first
+          const hasActive = this.chapters.some(c => c.id === this.activeId);
+          if (!hasActive && this.chapters.length) {
+            const firstId = this.chapters[0].id;
+            await this.openChapter(firstId);
+          } else if (!this.chapters.length) {
+            this.activeId = null;
+            this.content = '';
+          }
+        } catch(_) {
+          this.chapters = [];
+        }
+      },
+      async openChapter(id) {
+        if (id == null) return;
+        // Leaving edit mode when switching chapters
+        this.editingId = null; this.editingTitle = '';
+        try {
+          const resp = await fetch(`/api/chapters/${id}`);
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          this.activeId = data.id;
+          this.content = data.content || '';
+        } catch(e) {
+          this.content = 'Error loading chapter: ' + (e && e.message ? e.message : e);
+        }
+      },
+      startEdit(ch) {
+        this.activeId = ch.id; // ensure selected
+        this.editingId = ch.id;
+        this.editingTitle = ch.title || '';
+        // autofocus handled in template via x-ref
+        queueMicrotask(() => {
+          try { this.$refs && this.$refs.titleInput && this.$refs.titleInput.focus(); } catch(_) {}
+        });
+      },
+      async saveEdit() {
+        if (this.editingId == null) return;
+        const id = this.editingId;
+        const title = (this.editingTitle || '').trim();
+        try {
+          const resp = await fetch(`/api/chapters/${id}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+          const data = await resp.json();
+          if (!resp.ok || data.ok !== true) throw new Error(data.detail || data.error || 'Save failed');
+          // update local list
+          this.chapters = this.chapters.map(c => c.id === id ? { ...c, title: data.chapter.title } : c);
+        } catch(e) {
+          alert('Failed to save title: ' + (e && e.message ? e.message : e));
+        } finally {
+          this.editingId = null; this.editingTitle = '';
+        }
+      },
+      cancelEdit() { this.editingId = null; this.editingTitle = ''; },
+      async createChapter() {
+        try {
+          const resp = await fetch('/api/chapters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '', content: '' }) });
+          const data = await resp.json();
+          if (!resp.ok || data.ok !== true) throw new Error(data.detail || data.error || 'Create failed');
+          await this.refreshChapters();
+          // select and begin editing the newly created chapter at the end
+          const newId = data.chapter && data.chapter.id;
+          if (newId != null) {
+            const ch = this.chapters.find(c => c.id === newId) || data.chapter;
+            this.activeId = newId;
+            this.startEdit(ch);
+          }
+        } catch(e) {
+          alert('Failed to create chapter: ' + (e && e.message ? e.message : e));
+        }
+      },
     }
   }
 
