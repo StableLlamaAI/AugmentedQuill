@@ -59,7 +59,6 @@ export class ModelsEditor extends Component {
     if (addBtn) {
       addBtn.addEventListener('click', () => {
         this.add();
-        this.renderModels();
       });
     }
 
@@ -71,6 +70,86 @@ export class ModelsEditor extends Component {
 
     // Form inputs
     this._bindFormInputs();
+
+    // Models list event delegation
+    const modelsList = this.el.querySelector('[data-models-list]');
+    if (modelsList) {
+        let debounceTimeout;
+
+        modelsList.addEventListener('input', (e) => {
+            const target = e.target;
+            const modelCard = target.closest('[data-model-index]');
+            if (!modelCard) return;
+
+            const idx = parseInt(modelCard.dataset.modelIndex, 10);
+            const model = this.models[idx];
+            const field = target.dataset.modelField;
+
+            if (field && model) {
+                model[field] = target.value;
+                if (field === 'name') {
+                    const radio = modelCard.querySelector('input[type="radio"][name="openai_selected_name"]');
+                    if (radio) {
+                        if (radio.checked) {
+                            this.selected_name = target.value;
+                        }
+                        radio.value = target.value;
+                    }
+                    this.renderNameIssues();
+                    this.renderSaveButton();
+                }
+
+                if (field === 'base_url' || field === 'api_key') {
+                    model.endpoint_ok = undefined;
+                    this.renderModels();
+                    clearTimeout(debounceTimeout);
+                    debounceTimeout = setTimeout(() => {
+                        this.loadRemoteModels(idx).then(() => this.renderModels());
+                    }, 500);
+                }
+            }
+        });
+
+        modelsList.addEventListener('change', e => {
+            const target = e.target;
+            const modelCard = target.closest('[data-model-index]');
+            if (!modelCard) return;
+
+            const idx = parseInt(modelCard.dataset.modelIndex, 10);
+            const model = this.models[idx];
+            const field = target.dataset.modelField;
+
+            if (field === 'remote_model' && model) {
+                model.remote_model = target.value;
+                this.renderModels();
+            }
+        });
+
+        modelsList.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action]');
+            if (!target) return;
+
+            const modelCard = target.closest('[data-model-index]');
+            if (!modelCard) return;
+
+            const idx = parseInt(modelCard.dataset.modelIndex, 10);
+            const action = target.dataset.action;
+
+            if (action === 'remove-model') {
+                this.remove(idx);
+            } else if (action === 'load-remote-models') {
+                this.models[idx].endpoint_ok = undefined;
+                this.renderModels();
+                this.loadRemoteModels(idx).then(() => this.renderModels());
+            }
+        });
+    }
+
+    this.el.addEventListener('change', e => {
+      if (e.target.name === 'openai_selected_name') {
+        this.selected_name = e.target.value;
+      }
+    });
   }
 
   /**
@@ -110,10 +189,12 @@ export class ModelsEditor extends Component {
 
       // Establish baseline for dirty tracking
       this._setBaseline();
+      this.renderModels();
 
       // Load remote models asynchronously after initialization
       queueMicrotask(() => {
-        this.models.forEach((_, idx) => this.loadRemoteModels(idx));
+        const promises = this.models.map((_, idx) => this.loadRemoteModels(idx));
+        Promise.all(promises).then(() => this.renderModels());
       });
     } catch (e) {
       this.error_msg = `Failed to load settings: ${e.message || e}`;
@@ -145,11 +226,65 @@ export class ModelsEditor extends Component {
     const container = this.el?.querySelector('[data-models-list]');
     if (!container) return;
 
-    // This would require more complex rendering logic
-    // For now, trigger a custom event that the HTML can listen to
-    container.dispatchEvent(new CustomEvent('models-updated', {
-      detail: { models: this.models }
-    }));
+    container.innerHTML = this.models.map((m, idx) => `
+      <div class="aq-card" style="margin:0 0 0.5rem 0; padding:0.75rem;" data-model-index="${idx}">
+        <div class="aq-field-group">
+          <label class="aq-field">
+            <span>Name</span>
+            <input type="text" data-model-field="name" value="${this.escapeHtml(m.name)}" placeholder="prod-openai" />
+          </label>
+          <label class="aq-field">
+            <span>Base URL</span>
+            <input type="text" data-model-field="base_url" value="${this.escapeHtml(m.base_url)}" placeholder="https://api.openai.com/v1" />
+          </label>
+        </div>
+        <div class="aq-field-group">
+          <label class="aq-field">
+            <span>API key</span>
+            <input type="text" data-model-field="api_key" value="${this.escapeHtml(m.api_key)}" placeholder="OPENAI_API_KEY" />
+          </label>
+          <label class="aq-field">
+            <span>Timeout (s)</span>
+            <input type="text" data-model-field="timeout_s" value="${m.timeout_s}" placeholder="60" />
+          </label>
+        </div>
+        <div class="aq-field">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <button type="button" class="aq-btn" data-action="load-remote-models">Load models</button>
+            <span data-endpoint-status>
+              ${m.endpoint_ok === true ? '✅ Endpoint OK' : ''}
+              ${m.endpoint_ok === false ? '❌ Endpoint error' : ''}
+            </span>
+          </div>
+        </div>
+        <div class="aq-field">
+          <label class="aq-field">
+            <span>Select remote model</span>
+            <select data-model-field="remote_model">
+              <option value="">-- choose --</option>
+              ${m.remote_model && !(m.remote_models?.includes(m.remote_model)) ? `<option value="${this.escapeHtml(m.remote_model)}" selected>${this.escapeHtml(m.remote_model)} (current)</option>` : ''}
+              ${(m.remote_models || []).map(rm => `<option value="${this.escapeHtml(rm)}" ${rm === m.remote_model ? 'selected' : ''}>${this.escapeHtml(rm)}</option>`).join('')}
+            </select>
+          </label>
+          <div>
+            <span data-model-status>
+              ${m.remote_model && m.remote_models && m.remote_models.includes(m.remote_model) ? '✅ Model available' : ''}
+              ${m.remote_model && m.remote_models && !m.remote_models.includes(m.remote_model) ? '⚠️ Model not offered' : ''}
+            </span>
+          </div>
+        </div>
+        <div class="aq-toolbar" style="justify-content: space-between;">
+          <label style="display:flex; align-items:center; gap:0.4rem;">
+            <input type="radio" name="openai_selected_name" value="${this.escapeHtml(m.name)}" ${this.selected_name === m.name ? 'checked' : ''} />
+            <span>Use this model</span>
+          </label>
+          <button type="button" class="aq-btn" data-action="remove-model">Remove</button>
+        </div>
+      </div>
+    `).join('');
+
+    this.renderNameIssues();
+    this.renderSaveButton();
   }
 
   /**
@@ -169,12 +304,19 @@ export class ModelsEditor extends Component {
     const listEl = this.el?.querySelector('[data-project-list]');
     if (!listEl) return;
 
-    listEl.innerHTML = this.available_projects.map(proj => `
-      <li class="project-item">
-        <span>${this.escapeHtml(proj.name)}</span>
-        <button onclick="window.app.modelsEditor.selectByName('${this.escapeHtml(proj.name).replace(/'/g, "\\'")}')">Select</button>
-        <button onclick="window.app.modelsEditor.deleteProject('${this.escapeHtml(proj.name).replace(/'/g, "\\'")}')">Delete</button>
-      </li>
+    if (!this.available_projects || this.available_projects.length === 0) {
+        listEl.innerHTML = `<div class="aq-tip">No projects found under the built-in projects folder.</div>`;
+        return;
+    }
+
+    listEl.innerHTML = this.available_projects.map(ap => `
+      <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+        <button type="button" class="aq-btn" style="padding:0.25rem 0.5rem;" onclick="window.app.modelsEditor.selectByName('${this.escapeHtml(ap.name).replace(/'/g, "\\'")}')">
+          <span>${this.escapeHtml(ap.name)}</span>
+          ${!ap.is_valid ? `<span style="color:#fbbf24;"> (init)</span>` : ''}
+        </button>
+        <button type="button" class="aq-btn" style="padding:0.25rem 0.5rem; background:#3b82f6;" onclick="window.app.modelsEditor.deleteProject('${this.escapeHtml(ap.name).replace(/'/g, "\\'")}')">Delete</button>
+      </div>
     `).join('');
   }
 
@@ -646,5 +788,38 @@ export class ModelsEditor extends Component {
   endpointStatus(model) {
     if (model.endpoint_ok === undefined) return '';
     return model.endpoint_ok ? '✓' : '✗';
+  }
+
+  renderNameIssues() {
+    const container = this.el?.querySelector('[data-name-issues]');
+    if (!container) return;
+
+    const hasIssues = this.hasNameIssues();
+    container.style.display = hasIssues ? 'block' : 'none';
+
+    if (!hasIssues) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const emptyName = this.hasEmptyName();
+    const duplicates = this.duplicateNamesList();
+
+    container.innerHTML = `
+        <strong>Model name issues:</strong>
+        <ul style="margin:0.5rem 0 0 1rem;">
+            ${emptyName ? `<li>Each model must have a non-empty name.</li>` : ''}
+            ${duplicates.map(dn => `<li>Duplicate name: <code>${this.escapeHtml(dn)}</code></li>`).join('')}
+        </ul>
+    `;
+  }
+
+  renderSaveButton() {
+      const saveBtn = this.el?.querySelector('[data-action="save"]');
+      if (saveBtn) {
+          const hasIssues = this.hasNameIssues();
+          saveBtn.disabled = hasIssues;
+          saveBtn.title = hasIssues ? 'Resolve model name issues before saving' : '';
+      }
   }
 }
