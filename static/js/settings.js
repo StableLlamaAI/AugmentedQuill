@@ -1,49 +1,196 @@
 import { fetchJSON, API } from './utils.js';
+import { Component } from './component.js';
 
 /**
- * Settings Page Data Factory
+ * Settings Page Component
  */
-export function modelsEditor() {
-  return {
-    models: [],
-    selected_name: '',
-    project_title: '',
-    format: 'markdown',
-    chapters_text: '',
-    llm_temperature: 0.7,
-    llm_max_tokens: 2048,
-    saved_msg: '',
-    error_msg: '',
-    new_project_name: '',
-    current_project: '',
-    available_projects: [],
-    _baseline: '',
-    async init() {
-      try {
-        // Load all configuration data in parallel
-        const [story, machine, projects] = await this._loadAllConfigs();
+export class ModelsEditor extends Component {
+  constructor(element) {
+    const initialState = {
+      models: [],
+      selected_name: '',
+      project_title: '',
+      format: 'markdown',
+      chapters_text: '',
+      llm_temperature: 0.7,
+      llm_max_tokens: 2048,
+      saved_msg: '',
+      error_msg: '',
+      new_project_name: '',
+      current_project: '',
+      available_projects: [],
+      _baseline: ''
+    };
 
-        // Initialize state from loaded configs
-        this._initializeProjectState(projects);
-        this._initializeStoryState(story);
-        this._initializeModelState(machine);
+    super(element, initialState);
+  }
 
-        // Establish baseline for dirty tracking
-        this._setBaseline();
+  init() {
+    super.init();
 
-        // Load remote models asynchronously after initialization
-        queueMicrotask(() => {
-          this.models.forEach((_, idx) => this.loadRemoteModels(idx));
-        });
-      } catch (e) {
-        this.error_msg = `Failed to load settings: ${e.message || e}`;
+    // Watch for state changes
+    this.watch('saved_msg', () => this.renderMessages());
+    this.watch('error_msg', () => this.renderMessages());
+    this.watch('models', () => this.renderModels());
+    this.watch('current_project', () => this.renderProjectInfo());
+    this.watch('available_projects', () => this.renderProjectList());
+
+    // Setup event listeners
+    this._setupEventListeners();
+
+    // Load initial data
+    this._loadInitialData();
+  }
+
+  /**
+   * Setup event listeners for settings UI
+   */
+  _setupEventListeners() {
+    if (!this.el) return;
+
+    // Save button
+    const saveBtn = this.el.querySelector('[data-action="save"]');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.save());
+    }
+
+    // Add model button
+    const addBtn = this.el.querySelector('[data-action="add-model"]');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        this.add();
+        this.renderModels();
+      });
+    }
+
+    // Create project button
+    const createProjectBtn = this.el.querySelector('[data-action="create-project"]');
+    if (createProjectBtn) {
+      createProjectBtn.addEventListener('click', () => this.createProject());
+    }
+
+    // Form inputs
+    this._bindFormInputs();
+  }
+
+  /**
+   * Bind form inputs to state
+   */
+  _bindFormInputs() {
+    const inputs = {
+      'project_title': (e) => this.project_title = e.target.value,
+      'format': (e) => this.format = e.target.value,
+      'chapters_text': (e) => this.chapters_text = e.target.value,
+      'llm_temperature': (e) => this.llm_temperature = parseFloat(e.target.value) || 0.7,
+      'llm_max_tokens': (e) => this.llm_max_tokens = parseInt(e.target.value, 10) || 2048,
+      'new_project_name': (e) => this.new_project_name = e.target.value
+    };
+
+    Object.entries(inputs).forEach(([name, handler]) => {
+      const input = this.el?.querySelector(`[name="${name}"]`);
+      if (input) {
+        input.addEventListener('input', handler);
+        input.addEventListener('change', handler);
       }
-    },
+    });
+  }
 
-    /**
-     * Load story, machine, and project configurations from API
-     */
-    async _loadAllConfigs() {
+  /**
+   * Load initial data
+   */
+  async _loadInitialData() {
+    try {
+      // Load all configuration data in parallel
+      const [story, machine, projects] = await this._loadAllConfigs();
+
+      // Initialize state from loaded configs
+      this._initializeProjectState(projects);
+      this._initializeStoryState(story);
+      this._initializeModelState(machine);
+
+      // Establish baseline for dirty tracking
+      this._setBaseline();
+
+      // Load remote models asynchronously after initialization
+      queueMicrotask(() => {
+        this.models.forEach((_, idx) => this.loadRemoteModels(idx));
+      });
+    } catch (e) {
+      this.error_msg = `Failed to load settings: ${e.message || e}`;
+    }
+  }
+
+  /**
+   * Render messages (saved/error)
+   */
+  renderMessages() {
+    const savedEl = this.el?.querySelector('[data-message="saved"]');
+    const errorEl = this.el?.querySelector('[data-message="error"]');
+
+    if (savedEl) {
+      savedEl.textContent = this.saved_msg;
+      savedEl.style.display = this.saved_msg ? 'block' : 'none';
+    }
+
+    if (errorEl) {
+      errorEl.textContent = this.error_msg;
+      errorEl.style.display = this.error_msg ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Render models list
+   */
+  renderModels() {
+    const container = this.el?.querySelector('[data-models-list]');
+    if (!container) return;
+
+    // This would require more complex rendering logic
+    // For now, trigger a custom event that the HTML can listen to
+    container.dispatchEvent(new CustomEvent('models-updated', {
+      detail: { models: this.models }
+    }));
+  }
+
+  /**
+   * Render project information
+   */
+  renderProjectInfo() {
+    const projectEl = this.el?.querySelector('[data-current-project]');
+    if (projectEl) {
+      projectEl.textContent = this.current_project || 'No project';
+    }
+  }
+
+  /**
+   * Render project list
+   */
+  renderProjectList() {
+    const listEl = this.el?.querySelector('[data-project-list]');
+    if (!listEl) return;
+
+    listEl.innerHTML = this.available_projects.map(proj => `
+      <li class="project-item">
+        <span>${this.escapeHtml(proj.name)}</span>
+        <button onclick="window.app.modelsEditor.selectByName('${this.escapeHtml(proj.name).replace(/'/g, "\\'")}')">Select</button>
+        <button onclick="window.app.modelsEditor.deleteProject('${this.escapeHtml(proj.name).replace(/'/g, "\\'")}')">Delete</button>
+      </li>
+    `).join('');
+  }
+
+  /**
+   * Escape HTML for safe rendering
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Load story, machine, and project configurations from API
+   */
+  async _loadAllConfigs() {
       const [story, machineResp, projects] = await Promise.all([
         API.loadStory(),
         fetch('/api/machine'),
@@ -55,67 +202,68 @@ export function modelsEditor() {
         machineResp.ok ? await machineResp.json() : {},
         projects && (projects.current || projects.available) ? projects : { current: '', available: [] }
       ];
-    },
+  }
 
-    /**
-     * Initialize project-related state
-     */
-    _initializeProjectState(projects) {
-      const currentPath = projects.current || '';
-      this.current_project = currentPath ? currentPath.split('/').pop() : '';
-      this.available_projects = Array.isArray(projects.available) ? projects.available : [];
-    },
+  /**
+   * Initialize project-related state
+   */
+  _initializeProjectState(projects) {
+    const currentPath = projects.current || '';
+    this.current_project = currentPath ? currentPath.split('/').pop() : '';
+    this.available_projects = Array.isArray(projects.available) ? projects.available : [];
+  }
 
-    /**
-     * Initialize story configuration state
-     */
-    _initializeStoryState(story) {
-      this.project_title = story.project_title || '';
-      this.format = story.format || 'markdown';
-      this.chapters_text = Array.isArray(story.chapters) ? story.chapters.join('\n') : '';
+  /**
+   * Initialize story configuration state
+   */
+  _initializeStoryState(story) {
+    this.project_title = story.project_title || '';
+    this.format = story.format || 'markdown';
+    this.chapters_text = Array.isArray(story.chapters) ? story.chapters.join('\n') : '';
 
-      const prefs = story.llm_prefs || {};
-      this.llm_temperature = typeof prefs.temperature === 'number'
-        ? prefs.temperature
-        : parseFloat(prefs.temperature) || 0.7;
-      this.llm_max_tokens = typeof prefs.max_tokens === 'number'
-        ? prefs.max_tokens
-        : parseInt(prefs.max_tokens, 10) || 2048;
-    },
+    const prefs = story.llm_prefs || {};
+    this.llm_temperature = typeof prefs.temperature === 'number'
+      ? prefs.temperature
+      : parseFloat(prefs.temperature) || 0.7;
+    this.llm_max_tokens = typeof prefs.max_tokens === 'number'
+      ? prefs.max_tokens
+      : parseInt(prefs.max_tokens, 10) || 2048;
+  }
 
-    /**
-     * Initialize model configuration state
-     */
-    _initializeModelState(machine) {
-      const openai = machine?.openai || {};
-      const models = Array.isArray(openai.models) ? openai.models : [];
+  /**
+   * Initialize model configuration state
+   */
+  _initializeModelState(machine) {
+    const openai = machine?.openai || {};
+    const models = Array.isArray(openai.models) ? openai.models : [];
 
-      if (models.length) {
-        this.models = models.map(m => ({
-          ...m,
-          endpoint_ok: undefined,
-          remote_models: m.remote_models || [],
-          remote_model: m.model || m.remote_model || ''
-        }));
-        this.selected_name = openai.selected || this.models[0]?.name || '';
-      } else {
-        // Create default model configuration
-        this.models = [{
-          name: 'default',
-          base_url: openai.base_url || 'https://api.openai.com/v1',
-          api_key: openai.api_key || '',
-          timeout_s: openai.timeout_s || 60,
-          remote_model: openai.model || '',
-          remote_models: [],
-          endpoint_ok: undefined
-        }];
-        this.selected_name = 'default';
-      }
-    },
-    /**
-     * Add a new model configuration
-     */
-    add() {
+    if (models.length) {
+      this.models = models.map(m => ({
+        ...m,
+        endpoint_ok: undefined,
+        remote_models: m.remote_models || [],
+        remote_model: m.model || m.remote_model || ''
+      }));
+      this.selected_name = openai.selected || this.models[0]?.name || '';
+    } else {
+      // Create default model configuration
+      this.models = [{
+        name: 'default',
+        base_url: openai.base_url || 'https://api.openai.com/v1',
+        api_key: openai.api_key || '',
+        timeout_s: openai.timeout_s || 60,
+        remote_model: openai.model || '',
+        remote_models: [],
+        endpoint_ok: undefined
+      }];
+      this.selected_name = 'default';
+    }
+  }
+
+  /**
+   * Add a new model configuration
+   */
+  add() {
       this.models.push({
         name: `model-${this.models.length + 1}`,
         base_url: 'https://api.openai.com/v1',
@@ -125,24 +273,24 @@ export function modelsEditor() {
         remote_models: [],
         endpoint_ok: undefined
       });
-    },
+  }
 
-    /**
-     * Remove a model configuration by index
-     */
-    remove(idx) {
-      const removed = this.models.splice(idx, 1);
-      // If removed model was selected, switch to first available
-      if (removed.length && this.selected_name === removed[0].name) {
-        this.selected_name = this.models[0]?.name || '';
-      }
-    },
+  /**
+   * Remove a model configuration by index
+   */
+  remove(idx) {
+    const removed = this.models.splice(idx, 1);
+    // If removed model was selected, switch to first available
+    if (removed.length && this.selected_name === removed[0].name) {
+      this.selected_name = this.models[0]?.name || '';
+    }
+  }
 
-    /**
-     * Load available models from remote endpoint.
-     * Tries direct connection first, falls back to proxy if CORS blocks it.
-     */
-    async loadRemoteModels(idx) {
+  /**
+   * Load available models from remote endpoint.
+   * Tries direct connection first, falls back to proxy if CORS blocks it.
+   */
+  async loadRemoteModels(idx) {
       const model = this.models[idx];
       const currentSelection = model.remote_model;
 
@@ -172,43 +320,44 @@ export function modelsEditor() {
         model.remote_model = currentSelection;
         model.endpoint_ok = false;
       }
-    },
+  }
 
-    /**
-     * Fetch models directly from OpenAI-compatible endpoint
-     */
-    async _fetchModelsDirect(model) {
-      const url = model.base_url.replace(/\/$/, '') + '/models';
-      const headers = {};
-      if (model.api_key) {
-        headers['Authorization'] = `Bearer ${model.api_key}`;
-      }
+  /**
+   * Fetch models directly from OpenAI-compatible endpoint
+   */
+  async _fetchModelsDirect(model) {
+    const url = model.base_url.replace(/\/$/, '') + '/models';
+    const headers = {};
+    if (model.api_key) {
+      headers['Authorization'] = `Bearer ${model.api_key}`;
+    }
 
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    },
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  }
 
-    /**
-     * Fetch models via backend proxy (for CORS issues)
-     */
-    async _fetchModelsViaProxy(model) {
-      const response = await fetch('/api/openai/models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          base_url: model.base_url,
-          api_key: model.api_key,
-          timeout_s: model.timeout_s || 60
-        })
-      });
-      if (!response.ok) throw new Error(`Proxy HTTP ${response.status}`);
-      return await response.json();
-    },
-    /**
-     * Count model name occurrences for validation
-     */
-    _countModelNames() {
+  /**
+   * Fetch models via backend proxy (for CORS issues)
+   */
+  async _fetchModelsViaProxy(model) {
+    const response = await fetch('/api/openai/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_url: model.base_url,
+        api_key: model.api_key,
+        timeout_s: model.timeout_s || 60
+      })
+    });
+    if (!response.ok) throw new Error(`Proxy HTTP ${response.status}`);
+    return await response.json();
+  }
+
+  /**
+   * Count model name occurrences for validation
+   */
+  _countModelNames() {
       return this.models.reduce((acc, m) => {
         const name = (m.name || '').trim();
         if (name) {
@@ -216,44 +365,44 @@ export function modelsEditor() {
         }
         return acc;
       }, {});
-    },
+  }
 
-    /**
-     * Check if any model names are duplicated
-     */
-    hasDuplicateNames() {
-      const counts = this._countModelNames();
-      return Object.values(counts).some(count => count > 1);
-    },
+  /**
+   * Check if any model names are duplicated
+   */
+  hasDuplicateNames() {
+    const counts = this._countModelNames();
+    return Object.values(counts).some(count => count > 1);
+  }
 
-    /**
-     * Get list of duplicate model names for error messages
-     */
-    duplicateNamesList() {
-      const counts = this._countModelNames();
-      return Object.entries(counts)
+  /**
+   * Get list of duplicate model names for error messages
+   */
+  duplicateNamesList() {
+    const counts = this._countModelNames();
+    return Object.entries(counts)
       .filter(([_, count]) => count > 1)
       .map(([name]) => name);
-    },
+  }
 
-    /**
-     * Check if any models have empty names
-     */
-    hasEmptyName() {
-      return this.models.some(m => !m.name?.trim());
-    },
+  /**
+   * Check if any models have empty names
+   */
+  hasEmptyName() {
+    return this.models.some(m => !m.name?.trim());
+  }
 
-    /**
-     * Check if there are any name validation issues
-     */
-    hasNameIssues() {
-      return this.hasDuplicateNames() || this.hasEmptyName();
-    },
+  /**
+   * Check if there are any name validation issues
+   */
+  hasNameIssues() {
+    return this.hasDuplicateNames() || this.hasEmptyName();
+  }
 
-    /**
-     * Serialize models for API submission
-     */
-    serializeModelsPayload() {
+  /**
+   * Serialize models for API submission
+   */
+  serializeModelsPayload() {
       const payload = this.models.map(m => ({
         name: m.name,
         base_url: m.base_url,
@@ -262,54 +411,57 @@ export function modelsEditor() {
         model: m.remote_model || ''
       }));
       return { models: payload, selected: this.selected_name };
-    },
-    /**
-     * Create a snapshot of current state for dirty tracking
-     */
-    _snapshot() {
-      const story = this._buildStoryPayload();
-      const machine = { openai: this.serializeModelsPayload() };
+  }
 
-      try {
-        return JSON.stringify({ story, machine });
-      } catch (_) {
-        return '';
-      }
-    },
+  /**
+   * Create a snapshot of current state for dirty tracking
+   */
+  _snapshot() {
+    const story = this._buildStoryPayload();
+    const machine = { openai: this.serializeModelsPayload() };
 
-    /**
-     * Set baseline for dirty tracking (after load or save)
-     */
-    _setBaseline() {
-      this._baseline = this._snapshot();
-    },
+    try {
+      return JSON.stringify({ story, machine });
+    } catch (_) {
+      return '';
+    }
+  }
 
-    /**
-     * Check if current state differs from baseline
-     */
-    isDirty() {
-      return this._snapshot() !== this._baseline;
-    },
-    /**
-     * Build story payload from current editor fields
-     */
-    _buildStoryPayload() {
+  /**
+   * Set baseline for dirty tracking (after load or save)
+   */
+  _setBaseline() {
+    this._baseline = this._snapshot();
+  }
+
+  /**
+   * Check if current state differs from baseline
+   */
+  isDirty() {
+    return this._snapshot() !== this._baseline;
+  }
+
+  /**
+   * Build story payload from current editor fields
+   */
+  _buildStoryPayload() {
       return {
         project_title: this.project_title || 'Untitled Project',
         format: this.format || 'markdown',
         chapters: this.chapters_text.split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(Boolean),
+          .map(s => s.trim())
+          .filter(Boolean),
         llm_prefs: {
           temperature: Number(this.llm_temperature),
           max_tokens: Number(this.llm_max_tokens)
         }
       };
-    },
-    /**
-     * Switch to a different project (creates if doesn't exist)
-     */
-    async selectByName(name) {
+  }
+
+  /**
+   * Switch to a different project (creates if doesn't exist)
+   */
+  async selectByName(name) {
       this.error_msg = '';
 
       const targetName = (name || '').trim();
@@ -352,38 +504,39 @@ export function modelsEditor() {
       } catch (e) {
         this.error_msg = `Failed to select project: ${e.message || e}`;
       }
-    },
+  }
 
-    /**
-     * Refresh the list of available projects
-     */
-    async _refreshAvailableProjects() {
-      try {
-        const data = await API.loadProjects();
-        if (Array.isArray(data.available)) {
-          this.available_projects = data.available;
-        }
-      } catch (_) {
-        // Keep existing list on error
+  /**
+   * Refresh the list of available projects
+   */
+  async _refreshAvailableProjects() {
+    try {
+      const data = await API.loadProjects();
+      if (Array.isArray(data.available)) {
+        this.available_projects = data.available;
       }
-    },
-    /**
-     * Create a new project with the entered name
-     */
-    async createProject() {
-      const name = this.new_project_name?.trim();
-      if (!name) {
-        this.error_msg = 'Enter a project name.';
-        return;
-      }
-      // Create by selecting (backend creates if doesn't exist)
-      return this.selectByName(name);
-    },
+    } catch (_) {
+      // Keep existing list on error
+    }
+  }
 
-    /**
-     * Delete a project after confirmation
-     */
-    async deleteProject(name) {
+  /**
+   * Create a new project with the entered name
+   */
+  async createProject() {
+    const name = this.new_project_name?.trim();
+    if (!name) {
+      this.error_msg = 'Enter a project name.';
+      return;
+    }
+    // Create by selecting (backend creates if doesn't exist)
+    return this.selectByName(name);
+  }
+
+  /**
+   * Delete a project after confirmation
+   */
+  async deleteProject(name) {
       if (!name) return;
 
       const isDeletingCurrent = this.current_project === name;
@@ -431,26 +584,27 @@ export function modelsEditor() {
       } catch (e) {
         this.error_msg = `Failed to delete project: ${e.message || e}`;
       }
-    },
+  }
 
-    /**
-     * Reload story settings from API
-     */
-    async _reloadStoryFromAPI() {
-      try {
-        const story = await API.loadStory();
-        if (story && Object.keys(story).length) {
-          this._initializeStoryState(story);
-          this._setBaseline();
-        }
-      } catch (_) {
-        // Silent failure - user will see default values
+  /**
+   * Reload story settings from API
+   */
+  async _reloadStoryFromAPI() {
+    try {
+      const story = await API.loadStory();
+      if (story && Object.keys(story).length) {
+        this._initializeStoryState(story);
+        this._setBaseline();
       }
-    },
-    /**
-     * Save all settings to backend
-     */
-    async save() {
+    } catch (_) {
+      // Silent failure - user will see default values
+    }
+  }
+
+  /**
+   * Save all settings to backend
+   */
+  async save() {
       this.saved_msg = '';
       this.error_msg = '';
 
@@ -483,15 +637,14 @@ export function modelsEditor() {
       } catch (e) {
         this.error_msg = `Failed to save: ${e.message || e}`;
       }
-    },
+  }
 
-    /**
-     * Get visual indicator for endpoint connection status
-     * Returns checkmark or X emoji based on endpoint_ok state
-     */
-    endpointStatus(model) {
-      if (model.endpoint_ok === undefined) return '';
-      return model.endpoint_ok ? '✓' : '✗';
-    }
+  /**
+   * Get visual indicator for endpoint connection status
+   * Returns checkmark or X emoji based on endpoint_ok state
+   */
+  endpointStatus(model) {
+    if (model.endpoint_ok === undefined) return '';
+    return model.endpoint_ok ? '✓' : '✗';
   }
 }

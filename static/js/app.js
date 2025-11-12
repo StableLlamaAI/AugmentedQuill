@@ -1,34 +1,90 @@
 // AugmentedQuill frontend script bundle
-// - Initializes Alpine components and global event hooks
+// - Initializes components and global event hooks
 
-import { modelsEditor } from './settings.js';
-import { shellView } from './editor.js';
+import { ModelsEditor } from './settings.js';
+import { ShellView } from './editor.js';
+import { registry } from './component.js';
 
 // ========================================
-// Global Exports for Alpine.js
+// Application State
 // ========================================
 
-window.modelsEditor = modelsEditor;
-window.shellView = shellView;
+window.app = {
+  shellView: null,
+  modelsEditor: null,
+  registry
+};
+
+// ========================================
+// Component Initialization
+// ========================================
+
+/**
+ * Initialize all components on the page
+ */
+function initComponents() {
+  // Initialize shell view (chapter editor) if element exists
+  const shellElement = document.querySelector('[data-component="shell-view"]');
+  if (shellElement && !window.app.shellView) {
+    window.app.shellView = new ShellView(shellElement);
+    registry.register('shellView', window.app.shellView);
+    window.app.shellView.init();
+  }
+
+  // Initialize settings editor if element exists
+  const settingsElement = document.querySelector('[data-component="models-editor"]');
+  if (settingsElement && !window.app.modelsEditor) {
+    window.app.modelsEditor = new ModelsEditor(settingsElement);
+    registry.register('modelsEditor', window.app.modelsEditor);
+    window.app.modelsEditor.init();
+  }
+}
 
 // ========================================
 // DOM Event Listeners
 // ========================================
 
-// Footer year updater
-document.addEventListener('DOMContentLoaded', function(){
+// Initialize components when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Footer year updater
   const yearElement = document.getElementById('aq-year');
   if (yearElement) {
     yearElement.textContent = new Date().getFullYear();
   }
+
+  // Initialize all components
+  initComponents();
 });
 
-// Re-initialize Alpine.js on HTMX content swaps so x-data components work after partial loads
+// Re-initialize components on HTMX content swaps
 document.addEventListener('htmx:afterSwap', function (e) {
   try {
     const target = e.detail?.target || e.target;
-    if (window.Alpine && target) {
-      window.Alpine.initTree(target);
+    if (target) {
+      // Re-scan for new components in swapped content
+      initComponents();
     }
-  } catch (_) { /* no-op */ }
+  } catch (err) {
+    console.error('Failed to reinitialize components after HTMX swap:', err);
+  }
+});
+
+// Clean up components before content is swapped out
+document.addEventListener('htmx:beforeSwap', function (e) {
+  try {
+    const target = e.detail?.target || e.target;
+    if (target) {
+      // Clean up any components in the target
+      ['shellView', 'modelsEditor'].forEach(name => {
+        const component = window.app[name];
+        if (component && target.contains(component.el)) {
+          component.destroy();
+          window.app[name] = null;
+          registry.components.delete(name);
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Failed to clean up components before HTMX swap:', err);
+  }
 });
