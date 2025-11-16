@@ -21,9 +21,12 @@
       <div class="aq-panel">
         <div class="aq-toolbar" style="gap:0.5rem; align-items:center;">
           <button id="save" class="aq-btn aq-btn-primary" data-action="save">Save</button>
-          <span data-dirty-indicator style="font-size:0.9rem; color:#fbbf24; margin-left:0.5rem; display:none;">Unsaved changes</span>
+          <span data-dirty-indicator style="font-size:0.9rem; color:var(--accent); margin-left:0.5rem; display:none;">Unsaved changes</span>
           <div style="margin-left:auto; display:flex; gap:0.5rem; align-items:center;">
-            <span style="font-size:0.9rem; color:#94a3b8;">Editor:</span>
+            <span style="font-size:0.9rem; color:var(--muted);">Width:</span>
+            <button class="aq-btn" data-action="change-width" data-direction="decrease">Narrower</button>
+            <button class="aq-btn" data-action="change-width" data-direction="increase">Wider</button>
+            <span style="font-size:0.9rem; color:var(--muted); margin-left: 0.5rem;">Editor:</span>
             <button class="aq-btn" data-mode="raw">Raw</button>
             <button class="aq-btn" data-mode="markdown">Markdown</button>
             <button class="aq-btn" data-mode="wysiwyg">WYSIWYG</button>
@@ -59,7 +62,7 @@
         <h3 class="aq-sidebar-title">Chat</h3>
         <div class="aq-field" style="margin-top:0.25rem;">
           <label>
-            <span style="display:block; font-size:0.85rem; color:#94a3b8; margin-bottom:0.25rem;">Model</span>
+            <span style="display:block; font-size:0.85rem; color:var(--muted); margin-bottom:0.25rem;">Model</span>
             <select data-ref="modelSelect"></select>
           </label>
         </div>

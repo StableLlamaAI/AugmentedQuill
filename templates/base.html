@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}AugmentedQuill{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/images/icon_16.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/static/images/icon_64.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icon_512.png">
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
   <!-- Toast UI Editor (true WYSIWYG with Markdown IO) -->
@@ -15,7 +18,10 @@
 </head>
 <body>
   <header class="aq-header">
-    <h1>AugmentedQuill</h1>
+    <a href="/" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
+      <img src="/static/images/logo_2048.png" alt="AugmentedQuill" style="height: 2rem;">
+      <h1 style="margin:0; font-size: 1.5rem;">AugmentedQuill</h1>
+    </a>
   </header>
   <main class="aq-main">
     {% block content %}{% endblock %}

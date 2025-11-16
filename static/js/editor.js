@@ -11,6 +11,7 @@ export class ShellView extends Component {
       activeId: null,
       content: '',
       renderMode: 'raw',
+      contentWidth: 33, // em units
       dirty: false,
       _originalContent: '',
       editingId: null,
@@ -44,6 +45,7 @@ export class ShellView extends Component {
       this.renderModeButtons();
       this.renderRawEditorToolbar();
     });
+    this.watch('contentWidth', () => this.renderContentWidth());
 
     // Listen for project changes from settings page
     document.addEventListener('aq:project-selected', () => {
@@ -74,6 +76,7 @@ export class ShellView extends Component {
     this.load();
     this.renderMainView();
     this.renderRawEditorToolbar();
+    this.renderContentWidth();
   }
 
   /**
@@ -163,6 +166,23 @@ export class ShellView extends Component {
     if (rawBtn) rawBtn.addEventListener('click', () => this.switchRender('raw'));
     if (markdownBtn) markdownBtn.addEventListener('click', () => this.switchRender('markdown'));
     if (wysiwygBtn) wysiwygBtn.addEventListener('click', () => this.switchRender('wysiwyg'));
+
+    // Width mode buttons
+    const widthButtons = this.el.querySelectorAll('[data-action="change-width"]');
+    widthButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const direction = btn.dataset.direction;
+        const step = 4; // em
+        const minWidth = 25; // em
+        const maxWidth = 80; // em
+
+        if (direction === 'increase') {
+          this.contentWidth = Math.min(maxWidth, this.contentWidth + step);
+        } else if (direction === 'decrease') {
+          this.contentWidth = Math.max(minWidth, this.contentWidth - step);
+        }
+      });
+    });
 
     // Raw editor toolbar
     const rawToolbar = this.el.querySelector('[data-raw-toolbar]');
@@ -278,6 +298,13 @@ export class ShellView extends Component {
         btn.classList.toggle('active', this.renderMode === mode);
       }
     });
+  }
+
+  /**
+   * Render content width (narrow/wide)
+   */
+  renderContentWidth() {
+    this.el.style.gridTemplateColumns = `1fr ${this.contentWidth + 2}em 1fr`;
   }
 
   /**

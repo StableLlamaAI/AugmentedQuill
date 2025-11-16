@@ -7,7 +7,7 @@ Scope
 Project Snapshot
 - Stack (from README):
   - Backend: Python, FastAPI
-  - Frontend: HTMX + Alpine.js
+  - Frontend: HTMX
   - LLM Access: OpenAI API
   - Configuration: JSON files for both machine-specific and story-specific settings
 
