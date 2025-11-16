@@ -147,7 +147,7 @@ export class ShellView extends Component {
     }
 
     // Save button
-    const saveBtn = this.el.querySelector('[data-action="save"]');
+    const saveBtn = document.querySelector('[data-action="save"]');
     if (saveBtn) {
       saveBtn.addEventListener('click', () => this.saveContent());
     }
@@ -159,16 +159,16 @@ export class ShellView extends Component {
     }
 
     // Render mode buttons
-    const rawBtn = this.el.querySelector('[data-mode="raw"]');
-    const markdownBtn = this.el.querySelector('[data-mode="markdown"]');
-    const wysiwygBtn = this.el.querySelector('[data-mode="wysiwyg"]');
+    const rawBtn = document.querySelector('[data-mode="raw"]');
+    const markdownBtn = document.querySelector('[data-mode="markdown"]');
+    const wysiwygBtn = document.querySelector('[data-mode="wysiwyg"]');
 
     if (rawBtn) rawBtn.addEventListener('click', () => this.switchRender('raw'));
     if (markdownBtn) markdownBtn.addEventListener('click', () => this.switchRender('markdown'));
     if (wysiwygBtn) wysiwygBtn.addEventListener('click', () => this.switchRender('wysiwyg'));
 
     // Width mode buttons
-    const widthButtons = this.el.querySelectorAll('[data-action="change-width"]');
+    const widthButtons = document.querySelectorAll('[data-action="change-width"]');
     widthButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const direction = btn.dataset.direction;
@@ -269,7 +269,7 @@ export class ShellView extends Component {
    * Render save button state
    */
   renderSaveButton() {
-    const saveBtn = this.el?.querySelector('[data-action="save"]');
+    const saveBtn = document.querySelector('[data-action="save"]');
     if (saveBtn) {
       saveBtn.disabled = !this.dirty;
       saveBtn.textContent = this.dirty ? 'Save *' : 'Save';
@@ -293,7 +293,7 @@ export class ShellView extends Component {
    */
   renderModeButtons() {
     ['raw', 'markdown', 'wysiwyg'].forEach(mode => {
-      const btn = this.el?.querySelector(`[data-mode="${mode}"]`);
+      const btn = document.querySelector(`[data-mode="${mode}"]`);
       if (btn) {
         btn.classList.toggle('active', this.renderMode === mode);
       }
@@ -844,7 +844,7 @@ export class ShellView extends Component {
   }
 
   renderDirtyState() {
-    const dirtyIndicator = this.el.querySelector('[data-dirty-indicator]');
+    const dirtyIndicator = document.querySelector('[data-dirty-indicator]');
     if (dirtyIndicator) {
       dirtyIndicator.style.display = this.dirty ? 'inline' : 'none';
     }
