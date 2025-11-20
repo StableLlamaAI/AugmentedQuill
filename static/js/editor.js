@@ -266,6 +266,14 @@ export class ShellView extends Component {
         }
       });
     }
+    const deleteLastBtn = this.el.querySelector('[data-ref="deleteLast"]');
+    if (deleteLastBtn) {
+      deleteLastBtn.addEventListener('click', () => this.deleteLastChatMessage());
+    }
+    const regenerateBtn = this.el.querySelector('[data-ref="regenerate"]');
+    if (regenerateBtn) {
+      regenerateBtn.addEventListener('click', () => this.regenerateLastChatMessage());
+    }
   }
 
   /**
@@ -518,33 +526,69 @@ export class ShellView extends Component {
     if (this.$refs.regenerate) {
       this.$refs.regenerate.disabled = this.chatSending;
     }
+    if (this.$refs.deleteLast) {
+      this.$refs.deleteLast.disabled = this.chatSending;
+    }
   }
 
-  async sendChatMessage() {
-    if (this.chatSending) return;
+  deleteLastChatMessage() {
+    if (this.chatSending || !this.chatMessages.length) return;
+    this.chatMessages = this.chatMessages.slice(0, -1);
+  }
+
+  async regenerateLastChatMessage() {
+    if (this.chatSending || !this.chatMessages.length) return;
+    const lastMessage = this.chatMessages[this.chatMessages.length - 1];
+    if (lastMessage.role !== 'assistant') return; // Only regenerate assistant messages
+
+    this.chatMessages = this.chatMessages.slice(0, -1); // Remove the last assistant message
+    this.renderChatMessages(); // Re-render to reflect removal
+
+    await this.sendChatMessage(true); // Re-send the last user message or continue the conversation
+  }
+
+  async sendChatMessage(isRegenerate = false) {
+    if (this.chatSending && !isRegenerate) return; // Prevent sending new messages if already sending
+    if (this.chatSending && isRegenerate) { // If regenerating, bypass input checks
+        // Continue with the existing chat history
+    }
 
     const input = this.$refs.input;
     const roleSelect = this.$refs.roleSelect;
-    if (!input || !roleSelect) return;
 
-    const content = input.value.trim();
-    if (!content) return;
+    let content = '';
+    let role = 'user';
 
-    const role = roleSelect.value;
-    const newMessage = { role, content };
+    if (!isRegenerate) {
+        if (!input || !roleSelect) return;
+        content = input.value.trim();
+        if (!content) return;
+        role = roleSelect.value;
+    } else {
+        // When regenerating, we assume the previous context is sufficient.
+        // If there's a user message preceding the removed assistant message,
+        // it serves as the prompt for regeneration.
+        // We don't need to read from the input field.
+    }
 
-    this.chatMessages = [...this.chatMessages, newMessage];
-    input.value = '';
-    input.focus();
 
-    if (role === 'user') {
+    if (!isRegenerate) {
+        const newMessage = { role, content };
+        this.chatMessages = [...this.chatMessages, newMessage];
+        input.value = '';
+        input.focus();
+    }
+
+
+    if (role === 'user' || isRegenerate) { // Always query if it's a user message or regeneration
       this.chatSending = true;
       try {
+        const messagesToSend = this.chatMessages.map(m => ({ role: m.role, content: m.content }));
         const response = await fetchJSON('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: this.chatMessages,
+            messages: messagesToSend,
             model: this.$refs.modelSelect.value
           })
         });

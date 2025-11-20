@@ -129,8 +129,8 @@ textarea[data-ref="rawEditor"] {
 
 /* Right chat sidebar */
 .aq-rightbar {
-  display: grid;
-  grid-template-rows: 1fr;
+  display: flex; /* Changed to flex */
+  flex-direction: column; /* Arrange children vertically */
   height: calc(100vh - 140px);
   position: sticky;
   top: 1rem;
@@ -139,9 +139,17 @@ textarea[data-ref="rawEditor"] {
   border-radius: 8px;
   padding: 0.75rem;
 }
-.aq-rightbar-top { display: grid; grid-template-rows: auto 1fr auto; gap: 0.5rem; }
+.aq-rightbar-top {
+  display: flex; /* Changed to flex */
+  flex-direction: column; /* Arrange children vertically */
+  flex-grow: 1; /* Make it grow to fill the parent aq-rightbar */
+  min-height: 0; /* Allow this flex item to shrink if content overflows */
+  gap: 0.5rem;
+}
 .aq-chat {
   overflow: auto;
+  min-height: 0; /* Allow the flex/grid item to shrink and enable scroll */
+  flex-grow: 1; /* Make it grow to fill remaining space in aq-rightbar-top */
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.5rem;
