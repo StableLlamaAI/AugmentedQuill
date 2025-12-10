@@ -1186,6 +1186,115 @@ async def api_story_continue(request: Request) -> JSONResponse:
 
 
 
+@app.post("/api/story/suggest_pair")
+async def api_story_suggest_pair(request: Request) -> JSONResponse:
+    """Return two alternative one-sentence suggestions to continue the current chapter.
+
+    Body JSON: {"chap_id": int, "model_name": str | None, "current_text": str | None, overrides...}
+    Returns: {ok: true, left: str, right: str}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    chap_id = (payload or {}).get("chap_id")
+    if not isinstance(chap_id, int):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "chap_id is required"})
+
+    idx, path, pos = _chapter_by_id_or_404(chap_id)
+    # Use current_text override if provided (to reflect unsaved editor state); otherwise read from disk
+    current_text = (payload or {}).get("current_text")
+    if not isinstance(current_text, str):
+        try:
+            current_text = path.read_text(encoding="utf-8")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    story = load_story_config(active / "story.json") or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        # If summary is missing, still proceed with empty summary
+        chapters_data.extend([{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1))
+    summary = chapters_data[pos].get("summary", "")
+    title = chapters_data[pos].get("title") or path.name
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {
+        "role": "system",
+        "content": (
+            "You are a concise, creative story writing assistant."
+            " Propose two alternative next sentences to continue the chapter."
+            " Each option MUST be exactly one sentence, natural and non-meta, 5–30 words,"
+            " matching tone, style, POV, tense, and characters."
+            " Do not add numbering or extra commentary."
+            " Respond as strict JSON with keys 'left' and 'right'."
+        ),
+    }
+
+    user_prompt = (
+        f"Project: {story.get('project_title', 'Story')}\n"
+        f"Title: {title}\n\n"
+        f"Summary (optional):\n{summary}\n\n"
+        "Existing chapter text (may be partial):\n" + current_text + "\n\n"
+        "Task: Return JSON only: {\"left\": \"<one sentence>\", \"right\": \"<one sentence>\"}."
+    )
+
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    try:
+        data = await _openai_chat_complete(
+            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
+        )
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+
+    # Try to parse JSON strictly; fall back to lenient split if needed
+    left, right = "", ""
+    try:
+        choices = (data or {}).get("choices") or []
+        content = ""
+        if choices:
+            msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+            if isinstance(msg, dict):
+                content = msg.get("content", "") or ""
+        import json as _json
+        parsed = _json.loads(content)
+        if isinstance(parsed, dict):
+            l = parsed.get("left")
+            r = parsed.get("right")
+            left = str(l).strip() if l is not None else ""
+            right = str(r).strip() if r is not None else ""
+    except Exception:
+        # Try to split by a delimiter or lines
+        content = (content if isinstance(content, str) else "").strip()
+        if "\n---\n" in content:
+            parts = [p.strip() for p in content.split("\n---\n") if p.strip()]
+        else:
+            parts = [p.strip(" -\t") for p in content.splitlines() if p.strip()]
+        if parts:
+            left = parts[0]
+        if len(parts) > 1:
+            right = parts[1]
+
+    # Final coercion to ensure non-empty strings
+    left = left.strip()
+    right = right.strip()
+    if not left or not right:
+        # As a last resort, fabricate placeholders to avoid blocking the UI
+        if not left:
+            left = "(No suggestion)"
+        if not right:
+            right = "(No suggestion)"
+
+    return JSONResponse(status_code=200, content={"ok": True, "left": left, "right": right})
+
+
+
 
 # --- Proxy endpoint for OpenAI model listing (fallback when CORS blocks browser) ---
 @app.post("/api/openai/models")

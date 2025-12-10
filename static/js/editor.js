@@ -39,6 +39,12 @@ export class ShellView extends Component {
     this._debouncedSaveSummary = this._debounce(this._saveSummary.bind(this), 1000); // Debounce by 1 second
     this._debouncedSaveTitle = this._debounce(this._saveTitle.bind(this), 500);
     this._storyAbortController = null;
+
+    // Flow mode state (two-choice sentence suggestions)
+    this._defineReactive('flowActive', false);
+    this._defineReactive('flowBusy', false);
+    this._defineReactive('flowLeft', '');
+    this._defineReactive('flowRight', '');
   }
 
   /**
@@ -50,6 +56,8 @@ export class ShellView extends Component {
     // Watch for state changes to update DOM
     this.watch('chapters', () => this.renderChapterList());
     this.watch('activeId', () => {
+      // Reset Flow mode when switching chapters to avoid mixing contexts
+      if (this.flowActive) this.handleFlowStop();
       this.renderChapterList();
       this.renderMainView();
     });
@@ -68,6 +76,12 @@ export class ShellView extends Component {
     this.watch('chatModels', () => this.renderChatModels());
     this.watch('storyModels', () => this.renderStoryModels());
     this.watch('storyBusy', () => this.renderStoryBusy());
+
+    // Flow mode watchers
+    this.watch('flowActive', () => this.renderFlowUI());
+    this.watch('flowBusy', () => this.renderFlowUI());
+    this.watch('flowLeft', () => this.renderFlowUI());
+    this.watch('flowRight', () => this.renderFlowUI());
 
 
     // Listen for project changes from settings page
@@ -102,6 +116,24 @@ export class ShellView extends Component {
         if (this.dirty) {
           this.saveContent();
         }
+      }
+    });
+
+    // Global keyboard for Flow mode: ← / → to pick, ↓ to discard
+    window.addEventListener('keydown', (e) => {
+      if (!this.flowActive) return;
+      if (['INPUT', 'TEXTAREA'].includes((document.activeElement && document.activeElement.tagName) || '')) {
+        // still allow when in editor, but we'll handle explicitly
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        this._flowPick('left');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        this._flowPick('right');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this._flowDiscard();
       }
     });
 
@@ -394,6 +426,28 @@ export class ShellView extends Component {
     if (cancelStoryBtn) {
       cancelStoryBtn.addEventListener('click', () => this.cancelStoryAction());
     }
+
+    // Flow mode buttons
+    const flowStartBtn = this.el.querySelector('[data-action="flow-start"]');
+    if (flowStartBtn) {
+      flowStartBtn.addEventListener('click', () => this.handleFlowStart());
+    }
+    const flowStopBtn = this.el.querySelector('[data-action="flow-stop"]');
+    if (flowStopBtn) {
+      flowStopBtn.addEventListener('click', () => this.handleFlowStop());
+    }
+    const flowPickLeft = this.el.querySelector('[data-action="flow-pick-left"]');
+    if (flowPickLeft) {
+      flowPickLeft.addEventListener('click', () => this._flowPick('left'));
+    }
+    const flowPickRight = this.el.querySelector('[data-action="flow-pick-right"]');
+    if (flowPickRight) {
+      flowPickRight.addEventListener('click', () => this._flowPick('right'));
+    }
+    const flowDiscard = this.el.querySelector('[data-action="flow-discard"]');
+    if (flowDiscard) {
+      flowDiscard.addEventListener('click', () => this._flowDiscard());
+    }
   }
 
   /**
@@ -456,6 +510,34 @@ export class ShellView extends Component {
       textarea.value = this.content;
       this._suspendInput = false;
     }
+  }
+
+  /**
+   * Render Flow mode UI state
+   */
+  renderFlowUI() {
+    const area = this.$refs.flowArea || this.el.querySelector('[data-ref="flowArea"]');
+    const startBtn = this.el.querySelector('[data-action="flow-start"]');
+    const stopBtn = this.el.querySelector('[data-action="flow-stop"]');
+    const leftBox = this.$refs.flowLeft || this.el.querySelector('[data-ref="flowLeft"]');
+    const rightBox = this.$refs.flowRight || this.el.querySelector('[data-ref="flowRight"]');
+    const hint = this.$refs.flowHint || this.el.querySelector('[data-ref="flowHint"]');
+
+    if (area) {
+      area.style.display = this.flowActive ? '' : 'none';
+    }
+    if (startBtn) startBtn.style.display = this.flowActive ? 'none' : '';
+    if (stopBtn) stopBtn.style.display = this.flowActive ? '' : 'none';
+
+    const loadingText = this.flowBusy ? '…' : '';
+    if (leftBox) leftBox.textContent = this.flowLeft || loadingText;
+    if (rightBox) rightBox.textContent = this.flowRight || loadingText;
+    const disabled = this.flowBusy || !this.flowActive;
+    ['flow-pick-left','flow-pick-right','flow-discard'].forEach(sel => {
+      const btn = this.el.querySelector(`[data-action="${sel}"]`);
+      if (btn) btn.disabled = disabled;
+    });
+    if (hint) hint.style.opacity = this.flowBusy ? '0.6' : '1';
   }
 
   /**
@@ -714,6 +796,70 @@ export class ShellView extends Component {
       console.error('Failed to continue chapter:', e);
       alert(`Failed to continue chapter: ${e.message || e}`);
     }
+  }
+
+  // =====================
+  // Flow mode handlers
+  // =====================
+  async handleFlowStart() {
+    if (this.activeId == null) return;
+    this.flowActive = true;
+    await this._flowFetchPair();
+  }
+
+  handleFlowStop() {
+    this.flowActive = false;
+    this.flowLeft = '';
+    this.flowRight = '';
+  }
+
+  async _flowFetchPair() {
+    if (!this.flowActive || this.activeId == null) return;
+    this.flowBusy = true;
+    try {
+      const payload = { chap_id: this.activeId, model_name: this.storyCurrentModel, current_text: this.content || '' };
+      const data = await fetchJSON('/api/story/suggest_pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      this.flowLeft = data.left || '';
+      this.flowRight = data.right || '';
+    } catch (e) {
+      this.flowLeft = '(error)';
+      this.flowRight = '(error)';
+    } finally {
+      this.flowBusy = false;
+    }
+  }
+
+  _flowAppendSentence(sentence) {
+    if (!sentence) return;
+    const base = this.content || '';
+    let sep = '';
+    if (!base) {
+      sep = '';
+    } else if (/\s$/.test(base)) {
+      sep = '';
+    } else if (/[\.\!\?]$/.test(base.trim())) {
+      sep = ' ';
+    } else {
+      sep = ' ';
+    }
+    this.content = (base + sep + sentence).replace(/\s+$/,' ') ;
+    this.dirty = true;
+    this.renderSaveButton();
+  }
+
+  async _flowPick(side) {
+    if (!this.flowActive || this.flowBusy) return;
+    const sentence = side === 'left' ? this.flowLeft : this.flowRight;
+    this._flowAppendSentence(sentence);
+    // Immediately fetch next pair to keep flow
+    await this._flowFetchPair();
+  }
+
+  async _flowDiscard() {
+    if (!this.flowActive || this.flowBusy) return;
+    this.flowLeft = '';
+    this.flowRight = '';
+    await this._flowFetchPair();
   }
 
   renderChatMessages() {

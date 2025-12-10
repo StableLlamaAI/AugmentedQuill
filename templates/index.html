@@ -64,7 +64,28 @@
               <textarea data-ref="rawEditor"></textarea>
             </div>
           </div>
-          <p class="aq-tip">This is a rudimentary UI. Use the Settings button in the header to configure machine and story settings.</p>
+          <!-- Flow writing mode: simple, low-distraction, two-choice sentence generator -->
+          <div class="aq-card" data-component="flow-mode" style="margin-top:0.5rem;">
+            <div class="aq-toolbar" style="align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <strong style="font-size:0.95rem;">Flow mode</strong>
+              <span class="aq-tip" style="margin:0;">Pick between two one-sentence suggestions to continue the chapter.</span>
+              <div class="aq-flex-spacer" style="flex:1 1 auto;"></div>
+              <button class="aq-btn aq-btn-sm" data-action="flow-start">Start</button>
+              <button class="aq-btn aq-btn-sm" data-action="flow-stop" style="display:none;">Stop</button>
+            </div>
+            <div data-ref="flowArea" style="display:none; margin-top:0.5rem;">
+              <div class="aq-toolbar" style="gap:0.5rem; justify-content:center;">
+                <button class="aq-btn" data-action="flow-pick-left" title="Pick left (←)">← Pick</button>
+                <button class="aq-btn" data-action="flow-discard" title="Discard both (↓)">↓ New</button>
+                <button class="aq-btn" data-action="flow-pick-right" title="Pick right (→)">Pick →</button>
+              </div>
+              <div class="aq-flow-choices" style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                <div class="aq-flow-choice" data-ref="flowLeft" tabindex="0" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:8px; min-height:3.25rem; background:var(--card);"></div>
+                <div class="aq-flow-choice" data-ref="flowRight" tabindex="0" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:8px; min-height:3.25rem; background:var(--card);"></div>
+              </div>
+              <div class="aq-tip" data-ref="flowHint" style="text-align:center; margin-top:0.5rem;">Use ← or → to choose, ↓ to discard and get new suggestions.</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
