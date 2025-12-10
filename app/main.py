@@ -6,7 +6,7 @@ from typing import Optional, List, Tuple
 import re
 
 from fastapi import FastAPI, Request, HTTPException, Form, Path as FastAPIPath
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -332,6 +332,7 @@ from fastapi.responses import JSONResponse
 import httpx  # HTTP client for server-side fetch fallback
 import json as _json
 from typing import Any, Dict
+import asyncio
 
 
 @app.post("/api/settings")
@@ -1284,3 +1285,257 @@ async def api_chat(request: Request) -> JSONResponse:
             return JSONResponse(status_code=200, content={"ok": True, "message": {"role": role, "content": content}, "usage": usage})
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Chat request failed: {e}")
+
+
+# ==============================
+# Streaming LLM support (OpenAI SSE)
+# ==============================
+
+async def _openai_chat_complete_stream(
+    *,
+    messages: list[dict],
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+):
+    """Async generator yielding content chunks from OpenAI-compatible SSE stream.
+
+    Yields raw text deltas as they arrive. Stops on [DONE].
+    """
+    # Pull llm prefs
+    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = prefs.get("temperature", 0.7)
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens")
+
+    url = str(base_url).rstrip("/") + "/chat/completions"
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    body: Dict[str, Any] = {"model": model_id, "messages": messages, "temperature": temperature, "stream": True}
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+
+    try:
+        timeout_obj = httpx.Timeout(float(timeout_s or 60))
+    except Exception:
+        timeout_obj = httpx.Timeout(60.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_obj) as client:
+            async with client.stream("POST", url, headers=headers, json=body) as resp:
+                if resp.status_code >= 400:
+                    # try parse body
+                    data = None
+                    try:
+                        data = await resp.aread()
+                    except Exception:
+                        pass
+                    raise HTTPException(status_code=resp.status_code, detail=data.decode() if isinstance(data, (bytes, bytearray)) else "Upstream error")
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    # Expect lines like: "data: {json}"
+                    if line.startswith("data: "):
+                        payload = line[6:].strip()
+                    else:
+                        payload = line.strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        obj = _json.loads(payload)
+                    except Exception:
+                        # yield raw text if not JSON
+                        yield payload
+                        continue
+                    try:
+                        # OpenAI delta format
+                        choices = obj.get("choices") or []
+                        if choices:
+                            delta = choices[0].get("delta") or {}
+                            txt = delta.get("content")
+                            if txt:
+                                yield txt
+                    except Exception:
+                        pass
+    except asyncio.CancelledError:
+        # Propagate cancellation for caller to handle
+        raise
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Stream request failed: {e}")
+
+
+def _as_streaming_response(gen_factory, media_type: str = "text/plain"):
+    return StreamingResponse(gen_factory(), media_type=media_type)
+
+
+@app.post("/api/story/summary/stream")
+async def api_story_summary_stream(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        raise HTTPException(status_code=400, detail="chap_id is required")
+    mode = (payload.get("mode") or "").lower()
+    if mode not in ("discard", "update", ""):
+        raise HTTPException(status_code=400, detail="mode must be discard|update")
+
+    _, path, pos = _chapter_by_id_or_404(chap_id)
+    try:
+        chapter_text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        chapters_data.extend([{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1))
+    current_summary = chapters_data[pos].get("summary", "")
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {"role": "system", "content": "You are an expert story editor. Write a concise summary capturing plot, characters, tone, and open threads."}
+    if mode == "discard" or not current_summary:
+        user_prompt = f"Chapter text:\n\n{chapter_text}\n\nTask: Write a new summary (5-10 sentences)."
+    else:
+        user_prompt = (
+            "Existing summary:\n\n" + current_summary +
+            "\n\nChapter text:\n\n" + chapter_text +
+            "\n\nTask: Update the summary to accurately reflect the chapter, keeping style and brevity."
+        )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    # We'll aggregate to persist at the end if not cancelled
+    async def _gen():
+        buf = []
+        try:
+            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+                buf.append(chunk)
+                yield chunk
+        except asyncio.CancelledError:
+            # Do not persist on cancel
+            return
+        # Persist on normal completion
+        try:
+            new_summary = "".join(buf)
+            chapters_data[pos]["summary"] = new_summary
+            story["chapters"] = chapters_data
+            story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return _as_streaming_response(_gen)
+
+
+@app.post("/api/story/write/stream")
+async def api_story_write_stream(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        raise HTTPException(status_code=400, detail="chap_id is required")
+    idx, path, pos = _chapter_by_id_or_404(chap_id)
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+    story = load_story_config(active / "story.json") or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        raise HTTPException(status_code=400, detail="No summary available for this chapter")
+    summary = chapters_data[pos].get("summary", "").strip()
+    title = chapters_data[pos].get("title") or path.name
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {"role": "system", "content": "You are a skilled novelist writing compelling prose based on a summary."}
+    user_prompt = (
+        f"Project: {story.get('project_title', 'Story')}\nTitle: {title}\n\nSummary:\n\n{summary}\n\n"
+        "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
+    )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    async def _gen():
+        buf = []
+        try:
+            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+                buf.append(chunk)
+                yield chunk
+        except asyncio.CancelledError:
+            return
+        # Persist full overwrite on completion
+        try:
+            content = "".join(buf)
+            path.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+
+    return _as_streaming_response(_gen)
+
+
+@app.post("/api/story/continue/stream")
+async def api_story_continue_stream(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        raise HTTPException(status_code=400, detail="chap_id is required")
+    idx, path, pos = _chapter_by_id_or_404(chap_id)
+
+    try:
+        existing = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+    story = load_story_config(active / "story.json") or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        raise HTTPException(status_code=400, detail="No summary available for this chapter")
+    summary = chapters_data[pos].get("summary", "")
+    title = chapters_data[pos].get("title") or path.name
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {"role": "system", "content": "You are a skilled novelist continuing a chapter. Do not repeat or edit existing text; only continue."}
+    user_prompt = (
+        f"Title: {title}\n\nSummary:\n{summary}\n\nExisting chapter text (do not change):\n\n{existing}\n\n"
+        "Task: Continue the chapter from where it stops to advance the summary coherently."
+    )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    async def _gen():
+        buf = []
+        try:
+            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+                buf.append(chunk)
+                yield chunk
+        except asyncio.CancelledError:
+            return
+        # Persist appended content on completion
+        try:
+            appended = "".join(buf)
+            new_content = existing + ("\n" if existing and not existing.endswith("\n") else "") + appended
+            path.write_text(new_content, encoding="utf-8")
+        except Exception:
+            pass
+
+    return _as_streaming_response(_gen)

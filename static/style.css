@@ -9,7 +9,8 @@ body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu
 
 /* Shell layout with left sidebar */
 .aq-shell { display: grid; grid-template-columns: 1fr 40rem 1fr; gap: 1rem; align-items: start; }
-.aq-sidebar { display: grid; grid-template-rows: 1fr auto; height: calc(100vh - 140px); position: sticky; top: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; }
+.aq-sidebar { display: grid; grid-template-rows: 1fr auto; height: calc(100vh - 140px); position: sticky; top: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; overflow: hidden; }
+.aq-sidebar-top { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; gap: 0.25rem; }
 .aq-sidebar-title { margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--muted); }
 .aq-chapters { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.25rem; }
 .aq-chapters li { display: block; border: 1px solid transparent; border-radius: 6px; }
@@ -19,6 +20,33 @@ body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu
 .aq-link { background: transparent; border: none; color: var(--fg); text-align: left; padding: 0.25rem 0.5rem; border-radius: 6px; cursor: pointer; opacity: 1; }
 .aq-empty { color: var(--muted); font-size: 0.9rem; }
 .aq-sidebar-bottom { padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+
+/* Inline chapter editing inputs */
+.chapter-title-input,
+.chapter-summary-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+}
+.chapter-title-input:focus,
+.chapter-summary-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25);
+}
+.chapter-summary-section { padding: 0 0.5rem 0.5rem; }
+.summary-edit-container { display:block; }
+.chapter-summary-input {
+  display: block;
+  min-height: calc(1.2em * 3 + 0.8rem);
+  max-height: calc(100vh - 180px);
+  resize: vertical;
+  overflow: auto;
+}
 
 /* Main pane */
 .aq-mainpane {

@@ -26,6 +26,9 @@ export class ShellView extends Component {
       // Story model (separate from chat model)
       storyModels: [],
       storyCurrentModel: '',
+      // Streaming state for story actions
+      storyBusy: false,
+      storyAction: '', // 'summary' | 'write' | 'continue'
     };
 
     super(element, initialState);
@@ -34,6 +37,8 @@ export class ShellView extends Component {
     this._tui = null;
     this._tuiEl = null;
     this._debouncedSaveSummary = this._debounce(this._saveSummary.bind(this), 1000); // Debounce by 1 second
+    this._debouncedSaveTitle = this._debounce(this._saveTitle.bind(this), 500);
+    this._storyAbortController = null;
   }
 
   /**
@@ -61,6 +66,7 @@ export class ShellView extends Component {
     this.watch('chatSending', () => this.renderChatSending());
     this.watch('chatModels', () => this.renderChatModels());
     this.watch('storyModels', () => this.renderStoryModels());
+    this.watch('storyBusy', () => this.renderStoryBusy());
 
 
     // Listen for project changes from settings page
@@ -105,7 +111,7 @@ export class ShellView extends Component {
     // Delegate chapter list clicks
     const chapterList = this.el.querySelector('[data-chapter-list]');
     if (chapterList) {
-      chapterList.addEventListener('click', (e) => {
+      chapterList.addEventListener('click', async (e) => {
         // Handle actions within an editing item first
         if (this.editingId !== null) {
           const saveBtn = e.target.closest('[data-action="save-title"]');
@@ -133,49 +139,79 @@ export class ShellView extends Component {
         }
 
         const chapterItem = e.target.closest('[data-chapter-id]');
-        // Do not trigger openChapter if we are clicking inside an editing area (title or summary)
-        if (chapterItem && !chapterItem.querySelector('.chapter-edit-container') && !e.target.matches('[data-ref="summaryInput"]')) {
+        // Open chapter when clicking item; allow clicks on the title input to also switch chapters
+        const clickedTitleInput = e.target.matches('[data-ref="titleInput"]');
+        const clickedSummaryInput = e.target.matches('[data-ref="summaryInput"]');
+        const clickedToggle = e.target.closest('[data-action="toggle-summary"]');
+        if (chapterItem) {
           const id = parseInt(chapterItem.getAttribute('data-chapter-id'), 10);
           if (!isNaN(id)) {
+            if (clickedToggle || clickedSummaryInput) {
+              // Do nothing; handled elsewhere
+              return;
+            }
+            // If clicking the title input on a non-active chapter, open it and then restore focus
+            if (clickedTitleInput) {
+              if (this.activeId !== id) {
+                const caretPos = e.target.selectionStart ?? null;
+                await this.openChapter(id);
+                // After render, re-focus the title input of the now-active item and restore caret to end
+                queueMicrotask(() => {
+                  const input = this.el.querySelector(`[data-chapter-id="${id}"] [data-ref="titleInput"]`);
+                  if (input) {
+                    input.focus();
+                    try {
+                      const len = input.value.length;
+                      const pos = caretPos == null ? len : Math.min(caretPos, len);
+                      input.setSelectionRange(pos, pos);
+                    } catch (_) {}
+                  }
+                });
+              }
+              return;
+            }
+            // Clicked elsewhere in the item: open normally
             this.openChapter(id);
           }
         }
       });
 
-      chapterList.addEventListener('dblclick', (e) => {
-        const titleSpan = e.target.closest('[data-action="edit-title"]');
-        if (titleSpan) {
-          const chapterItem = titleSpan.closest('[data-chapter-id]');
-          if (chapterItem) {
-            const id = parseInt(chapterItem.getAttribute('data-chapter-id'), 10);
-            const chapter = this.chapters.find(c => c.id === id);
-            if (chapter) {
-              this.startEdit(chapter);
-            }
-          }
-        }
-      });
+      // No-op: editing is always inline now; double-click not needed
 
       chapterList.addEventListener('keydown', (e) => {
-        if (this.editingId === null || !e.target.matches('[data-ref="titleInput"]')) return;
-
+        if (!e.target.matches('[data-ref="titleInput"]')) return;
         if (e.key === 'Enter') {
           e.preventDefault();
-          this.saveEdit();
+          e.target.blur();
         } else if (e.key === 'Escape') {
           e.preventDefault();
-          this.cancelEdit();
+          // Revert to last known title
+          const item = e.target.closest('[data-chapter-id]');
+          if (item) {
+            const id = parseInt(item.getAttribute('data-chapter-id'), 10);
+            const chap = this.chapters.find(c => c.id === id);
+            if (chap) {
+              e.target.value = chap.title || '';
+            }
+          }
+          e.target.blur();
         }
       });
 
       chapterList.addEventListener('input', (e) => {
         if (e.target.matches('[data-ref="titleInput"]')) {
-          if (this.editingId === null) return;
-          this.editingTitle = e.target.value;
+          this._debouncedSaveTitle(e);
         } else if (e.target.matches('[data-ref="summaryInput"]')) {
           this._debouncedSaveSummary(e);
         }
       });
+
+      chapterList.addEventListener('blur', (e) => {
+        if (e.target.matches('[data-ref="titleInput"]')) {
+          // Ensure save on blur (debounce already queued)
+          this._saveTitle(e);
+        }
+      }, true);
     }
 
     // Save button
@@ -318,6 +354,11 @@ export class ShellView extends Component {
     if (continueChapterBtn) {
       continueChapterBtn.addEventListener('click', () => this.handleContinueChapter());
     }
+
+    const cancelStoryBtn = this.el.querySelector('[data-action="story-cancel"]');
+    if (cancelStoryBtn) {
+      cancelStoryBtn.addEventListener('click', () => this.cancelStoryAction());
+    }
   }
 
   /**
@@ -334,23 +375,13 @@ export class ShellView extends Component {
             <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="toggle-summary" title="Toggle Summary">
                 ${chapter.expanded ? '▼' : '▶'}
             </button>
-            ${chapter.id === this.editingId
-                ? `
-                <div class="chapter-edit-container">
-                    <input type="text"
-                           value="${this.escapeHtml(this.editingTitle)}"
-                           data-ref="titleInput"
-                           class="chapter-title-input">
-                    <div class="chapter-edit-buttons">
-                        <button data-action="save-title" class="aq-btn aq-btn-sm aq-btn-primary">Save</button>
-                        <button data-action="cancel-edit" class="aq-btn aq-btn-sm">Cancel</button>
-                    </div>
-                </div>
-                `
-                : `
-                <span class="chapter-title" data-action="edit-title">${this.escapeHtml(chapter.title || 'Untitled')}</span>
-                `
-            }
+            <div class="chapter-edit-container" style="flex:1;">
+              <input type="text"
+                     value="${this.escapeHtml(chapter.title || '')}"
+                     placeholder="Untitled"
+                     data-ref="titleInput"
+                     class="chapter-title-input">
+            </div>
         </div>
         ${chapter.expanded ? `
             <div class="chapter-summary-section">
@@ -365,16 +396,8 @@ export class ShellView extends Component {
         ` : ''}
       </li>
     `).join('');
-
-    // Update refs if editing
-    if (this.editingId !== null) {
-      this._scanRefs();
-      const input = this.$refs.titleInput;
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }
+    // Refresh refs
+    this._scanRefs();
   }
 
   /**
@@ -1214,6 +1237,30 @@ export class ShellView extends Component {
     }
   }
 
+  async _saveTitle(event) {
+    const input = event?.target;
+    if (!input || !input.matches('[data-ref="titleInput"]')) return;
+    const item = input.closest('[data-chapter-id]');
+    if (!item) return;
+    const id = parseInt(item.getAttribute('data-chapter-id'), 10);
+    if (isNaN(id)) return;
+    const title = String(input.value || '').trim();
+    try {
+      const data = await fetchJSON(`/api/chapters/${id}/title`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      // Avoid re-rendering the whole list to preserve focus; mutate in place
+      const idx = this.chapters.findIndex(c => c.id === id);
+      if (idx !== -1) {
+        this.chapters[idx].title = data.chapter.title;
+      }
+    } catch (e) {
+      console.error(`Failed to save title for chapter ${id}:`, e);
+    }
+  }
+
   async createChapter() {
     try {
       const data = await fetchJSON('/api/chapters', {
@@ -1270,5 +1317,164 @@ export class ShellView extends Component {
     const show = this.renderMode === 'raw';
     toolbar.style.display = show ? 'flex' : 'none';
     textarea.style.display = show ? 'block' : 'none';
+  }
+
+  // =============================
+  // Story streaming UX
+  // =============================
+  renderStoryBusy() {
+    const summaryBtn = this.el.querySelector('[data-action="story-write-summary"]');
+    const writeBtn = this.el.querySelector('[data-action="story-write-chapter"]');
+    const continueBtn = this.el.querySelector('[data-action="story-continue-chapter"]');
+    const cancelBtn = this.el.querySelector('[data-action="story-cancel"]');
+    const busy = !!this.storyBusy;
+    [summaryBtn, writeBtn, continueBtn].forEach(btn => { if (btn) btn.disabled = busy; });
+    if (cancelBtn) {
+      cancelBtn.style.display = busy ? 'inline-block' : 'none';
+    }
+  }
+
+  cancelStoryAction() {
+    if (this._storyAbortController) {
+      try { this._storyAbortController.abort(); } catch (_) {}
+    }
+  }
+
+  async _streamFetch(url, body, onChunk) {
+    const controller = new AbortController();
+    this._storyAbortController = controller;
+    this.storyBusy = true;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (resp.status === 404) {
+        throw Object.assign(new Error('Streaming not supported (404)'), { code: 404 });
+      }
+      if (!resp.ok || !resp.body) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) onChunk(chunk);
+      }
+    } finally {
+      this.storyBusy = false;
+      this._storyAbortController = null;
+    }
+  }
+
+  async handleWriteSummary() {
+    if (this.activeId == null) return;
+    const chapter = (this.chapters || []).find(c => c.id === this.activeId) || {};
+    const hasExisting = !!(chapter.summary && chapter.summary.trim());
+    let mode = 'discard';
+    if (hasExisting) {
+      const answer = confirm('Summary already exists. OK = discard and write new; Cancel = update existing.');
+      mode = answer ? 'discard' : 'update';
+    }
+    // Try streaming endpoint first
+    try {
+      const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
+      let accum = '';
+      await this._streamFetch('/api/story/summary/stream', { chap_id: this.activeId, mode, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        if (textarea) textarea.value = accum;
+      });
+      // On completion, update chapters state but do not persist here (server didn’t persist). Caller can save manually or rely on debounce.
+      this.chapters = this.chapters.map(c => c.id === this.activeId ? { ...c, summary: (textarea ? textarea.value : accum) } : c);
+    } catch (err) {
+      if (err && err.code === 404) {
+        // Fallback to non-streaming
+        try {
+          const data = await fetchJSON('/api/story/summary', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, mode, model_name: this.storyCurrentModel })
+          });
+          const updated = (this.chapters || []).map(c => c.id === this.activeId ? { ...c, summary: data.summary || '' } : c);
+          this.chapters = updated;
+          const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
+          if (textarea) textarea.value = data.summary || '';
+        } catch (e) {
+          alert(`Failed to write summary: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Summary request failed: ${err.message || err}`);
+      }
+    }
+  }
+
+  async handleWriteChapter() {
+    if (this.activeId == null) return;
+    try {
+      let accum = '';
+      await this._streamFetch('/api/story/write/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        this.content = accum;
+      });
+      // On completion, leave content in editor; user can Save.
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (err) {
+      if (err && err.code === 404) {
+        // Fallback to non-streaming
+        try {
+          const data = await fetchJSON('/api/story/write', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+          });
+          this.content = data.content || '';
+          this._originalContent = this.content;
+          this.dirty = false;
+          this.renderSaveButton();
+        } catch (e) {
+          alert(`Failed to write chapter: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Write request failed: ${err.message || err}`);
+      }
+    }
+  }
+
+  async handleContinueChapter() {
+    if (this.activeId == null) return;
+    try {
+      let accum = '';
+      const base = this.content || '';
+      await this._streamFetch('/api/story/continue/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        const sep = base && !base.endsWith('\n') ? '\n' : '';
+        this.content = base + sep + accum;
+      });
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (err) {
+      if (err && err.code === 404) {
+        try {
+          const data = await fetchJSON('/api/story/continue', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+          });
+          this.content = data.content || '';
+          this._originalContent = this.content;
+          this.dirty = false;
+          this.renderSaveButton();
+        } catch (e) {
+          alert(`Failed to continue chapter: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Continue request failed: ${err.message || err}`);
+      }
+    }
   }
 }
