@@ -770,64 +770,20 @@ async def api_update_chapter_summary(request: Request, chap_id: int = FastAPIPat
     })
 
 
-# ==============================
-# Story LLM endpoints (summary, write, continue)
-# ==============================
+"""
+LLM integration shims
+These thin wrappers delegate to app.llm for all OpenAI-compatible operations.
+They are kept here to preserve backward-compatibility with tests and any code
+that patches app.main._resolve_openai_credentials / _openai_chat_complete /
+_openai_chat_complete_stream.
+"""
+from typing import Any, Dict  # local import to limit top-of-file clutter
+from app import llm as _llm
+
 
 def _resolve_openai_credentials(payload: Dict[str, Any]) -> tuple[str, str | None, str, int]:
-    """Resolve base_url, api_key, model_id, timeout_s from machine config or overrides.
-
-    The payload may include:
-      - model_name: select by configured name in machine.openai.models
-      - base_url, api_key, model, timeout_s: direct overrides
-    """
-    import os
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
-    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
-
-    selected_name = payload.get("model_name") or openai_cfg.get("selected")
-    base_url = payload.get("base_url")
-    api_key = payload.get("api_key")
-    model_id = payload.get("model")
-    timeout_s = payload.get("timeout_s")
-
-    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
-    if isinstance(models, list) and models:
-        chosen = None
-        if selected_name:
-            for m in models:
-                if isinstance(m, dict) and (m.get("name") == selected_name):
-                    chosen = m
-                    break
-        if chosen is None:
-            chosen = models[0]
-        base_url = chosen.get("base_url") or base_url
-        api_key = chosen.get("api_key") or api_key
-        model_id = chosen.get("model") or model_id
-        timeout_s = chosen.get("timeout_s", 60) or timeout_s
-    else:
-        # Fall back to legacy single-model fields from config
-        base_url = base_url or openai_cfg.get("base_url")
-        api_key = api_key or openai_cfg.get("api_key")
-        model_id = model_id or openai_cfg.get("model")
-        timeout_s = timeout_s or openai_cfg.get("timeout_s", 60)
-
-    # Environment variable overrides always win
-    env_base = os.getenv("OPENAI_BASE_URL")
-    env_key = os.getenv("OPENAI_API_KEY")
-    if env_base:
-        base_url = env_base
-    if env_key:
-        api_key = env_key
-
-    if not base_url or not model_id:
-        raise HTTPException(status_code=400, detail="Missing base_url or model in configuration")
-
-    try:
-        ts = int(timeout_s or 60)
-    except Exception:
-        ts = 60
-    return str(base_url), (str(api_key) if api_key else None), str(model_id), ts
+    """Delegate to app.llm.resolve_openai_credentials."""
+    return _llm.resolve_openai_credentials(payload)
 
 
 async def _openai_chat_complete(
@@ -839,67 +795,15 @@ async def _openai_chat_complete(
     timeout_s: int,
     extra_body: dict | None = None,
 ) -> dict:
-    # Pull llm prefs
-    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
-
-    url = str(base_url).rstrip("/") + "/chat/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    body: Dict[str, Any] = {"model": model_id, "messages": messages, "temperature": temperature}
-    if isinstance(max_tokens, int):
-        body["max_tokens"] = max_tokens
-    if extra_body:
-        # Shallow merge of extra fields (e.g., tools, tool_choice)
-        for k, v in extra_body.items():
-            body[k] = v
-
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
-
-    def _llm_debug_enabled() -> bool:
-        env = os.getenv("AUGQ_DEBUG_LLM", "").strip()
-        if env and env not in ("0", "false", "False"):
-            return True
-        try:
-            machine_cfg = load_machine_config(CONFIG_DIR / "machine.json") or {}
-            openai_cfg = (machine_cfg.get("openai") or {}) if isinstance(machine_cfg, dict) else {}
-            return bool(openai_cfg.get("debug_llm"))
-        except Exception:
-            return False
-
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        if _llm_debug_enabled():
-            try:
-                print("AUGQ DEBUG LLM → POST", url)
-                print("Headers:", headers)
-                print("Body:", _json.dumps(body, indent=2))
-            except Exception:
-                pass
-        resp = await client.post(url, headers=headers, json=body)
-        try:
-            data = resp.json()
-        except Exception:
-            data = {"raw": resp.text}
-        if _llm_debug_enabled():
-            try:
-                print("AUGQ DEBUG LLM ← Status:", resp.status_code)
-                print("Response Text:", resp.text)
-            except Exception:
-                pass
-        if resp.status_code >= 400:
-            raise HTTPException(status_code=resp.status_code, detail=data)
-        return data
+    """Delegate to app.llm.openai_chat_complete."""
+    return await _llm.openai_chat_complete(
+        messages=messages,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        extra_body=extra_body,
+    )
 
 
 def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
@@ -1814,76 +1718,15 @@ async def _openai_chat_complete_stream(
     model_id: str,
     timeout_s: int,
 ):
-    """Async generator yielding content chunks from OpenAI-compatible SSE stream.
-
-    Yields raw text deltas as they arrive. Stops on [DONE].
-    """
-    # Pull llm prefs
-    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
-
-    url = str(base_url).rstrip("/") + "/chat/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    body: Dict[str, Any] = {"model": model_id, "messages": messages, "temperature": temperature, "stream": True}
-    if isinstance(max_tokens, int):
-        body["max_tokens"] = max_tokens
-
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout_obj) as client:
-            async with client.stream("POST", url, headers=headers, json=body) as resp:
-                if resp.status_code >= 400:
-                    # try parse body
-                    data = None
-                    try:
-                        data = await resp.aread()
-                    except Exception:
-                        pass
-                    raise HTTPException(status_code=resp.status_code, detail=data.decode() if isinstance(data, (bytes, bytearray)) else "Upstream error")
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    # Expect lines like: "data: {json}"
-                    if line.startswith("data: "):
-                        payload = line[6:].strip()
-                    else:
-                        payload = line.strip()
-                    if payload == "[DONE]":
-                        break
-                    try:
-                        obj = _json.loads(payload)
-                    except Exception:
-                        # yield raw text if not JSON
-                        yield payload
-                        continue
-                    try:
-                        # OpenAI delta format
-                        choices = obj.get("choices") or []
-                        if choices:
-                            delta = choices[0].get("delta") or {}
-                            txt = delta.get("content")
-                            if txt:
-                                yield txt
-                    except Exception:
-                        pass
-    except asyncio.CancelledError:
-        # Propagate cancellation for caller to handle
-        raise
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Stream request failed: {e}")
+    """Delegate to app.llm.openai_chat_complete_stream (async generator)."""
+    async for chunk in _llm.openai_chat_complete_stream(
+        messages=messages,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+    ):
+        yield chunk
 
 
 def _as_streaming_response(gen_factory, media_type: str = "text/plain"):
