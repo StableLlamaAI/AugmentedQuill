@@ -560,6 +560,9 @@ async def api_update_chapter_title(request: Request, chap_id: int = FastAPIPath(
     if new_title is None:
         return JSONResponse(status_code=400, content={"ok": False, "detail": "title is required"})
     new_title_str = str(new_title).strip()
+    # Sanitize bogus JS toString leakage
+    if new_title_str.lower() == "[object object]":
+        new_title_str = ""
 
     files = _scan_chapter_files()
     match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
@@ -657,14 +660,26 @@ async def api_create_chapter(request: Request) -> JSONResponse:
 
 
 def _normalize_chapter_entry(entry: Any) -> Dict[str, str]:
-    """Ensures a chapter entry is a dict with 'title' and 'summary'."""
+    """Ensures a chapter entry is a dict with 'title' and 'summary'.
+
+    Additionally sanitizes the common bogus string "[object Object]" that can
+    arrive from UI mishaps, treating it as empty so filename fallbacks apply.
+    """
+
+    def _sanitize_text(val: Any) -> str:
+        s = str(val if val is not None else "").strip()
+        # Treat JS's default object toString leak as empty
+        if s.lower() == "[object object]":
+            return ""
+        return s
+
     if isinstance(entry, dict):
         return {
-            "title": str(entry.get("title", "")).strip(),
-            "summary": str(entry.get("summary", "")).strip(),
+            "title": _sanitize_text(entry.get("title", "")),
+            "summary": _sanitize_text(entry.get("summary", "")),
         }
     elif isinstance(entry, (str, int, float)):
-        return {"title": str(entry).strip(), "summary": ""}
+        return {"title": _sanitize_text(entry), "summary": ""}
     return {"title": "", "summary": ""}
 
 
@@ -694,43 +709,50 @@ async def api_update_chapter_content(request: Request, chap_id: int = FastAPIPat
 
     return JSONResponse(status_code=200, content={"ok": True})
 
+
+# New endpoint: update chapter summary (restored after refactor)
 @app.put("/api/chapters/{chap_id}/summary")
 async def api_update_chapter_summary(request: Request, chap_id: int = FastAPIPath(..., ge=0)) -> JSONResponse:
     """Update the summary of a chapter in the active project's story.json.
+
+    Body: {"summary": str}
     """
     active = get_active_project_dir()
     if not active:
         return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+
+    # Parse body
     try:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    new_summary = (payload or {}).get("summary")
-    if new_summary is None:
+    if not isinstance(payload, dict) or "summary" not in payload:
         return JSONResponse(status_code=400, content={"ok": False, "detail": "summary is required"})
-    new_summary_str = str(new_summary).strip()
+    new_summary = str(payload.get("summary", "")).strip()
 
+    # Locate chapter by id
     files = _scan_chapter_files()
     match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
     if not match:
         raise HTTPException(status_code=404, detail="Chapter not found")
     _, path, pos = match
 
+    # Load and normalize story.json
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     chapters_data = story.get("chapters") or []
-
-    # Ensure chapters_data is a list of dicts, and pad if necessary
     chapters_data = [_normalize_chapter_entry(c) for c in chapters_data]
-    if len(chapters_data) < len(files):
-        chapters_data.extend([{"title": "", "summary": ""}] * (len(files) - len(chapters_data)))
+
+    # Ensure alignment with number of files
+    count = len(files)
+    if len(chapters_data) < count:
+        chapters_data.extend([{"title": "", "summary": ""}] * (count - len(chapters_data)))
 
     # Update summary at position
     if pos < len(chapters_data):
-        chapters_data[pos]["summary"] = new_summary_str
+        chapters_data[pos]["summary"] = new_summary
     else:
-        # This case should ideally not happen if padding is correct
-        chapters_data.append({"title": path.name, "summary": new_summary_str})
+        chapters_data.append({"title": "", "summary": new_summary})
 
     story["chapters"] = chapters_data
     try:
@@ -738,13 +760,330 @@ async def api_update_chapter_summary(request: Request, chap_id: int = FastAPIPat
     except Exception as e:
         return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write story.json: {e}"})
 
-    # Respond with updated descriptor
-    # Get the title for response
     title_for_response = chapters_data[pos].get("title") or path.name
     return JSONResponse(status_code=200, content={
         "ok": True,
-        "chapter": {"id": files[pos][0], "title": title_for_response, "filename": path.name, "summary": new_summary_str}
+        "chapter": {"id": files[pos][0], "title": title_for_response, "filename": path.name, "summary": new_summary},
     })
+
+
+# ==============================
+# Story LLM endpoints (summary, write, continue)
+# ==============================
+
+def _resolve_openai_credentials(payload: Dict[str, Any]) -> tuple[str, str | None, str, int]:
+    """Resolve base_url, api_key, model_id, timeout_s from machine config or overrides.
+
+    The payload may include:
+      - model_name: select by configured name in machine.openai.models
+      - base_url, api_key, model, timeout_s: direct overrides
+    """
+    import os
+    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
+
+    selected_name = payload.get("model_name") or openai_cfg.get("selected")
+    base_url = payload.get("base_url")
+    api_key = payload.get("api_key")
+    model_id = payload.get("model")
+    timeout_s = payload.get("timeout_s")
+
+    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
+    if isinstance(models, list) and models:
+        chosen = None
+        if selected_name:
+            for m in models:
+                if isinstance(m, dict) and (m.get("name") == selected_name):
+                    chosen = m
+                    break
+        if chosen is None:
+            chosen = models[0]
+        base_url = chosen.get("base_url") or base_url
+        api_key = chosen.get("api_key") or api_key
+        model_id = chosen.get("model") or model_id
+        timeout_s = chosen.get("timeout_s", 60) or timeout_s
+    else:
+        # Fall back to legacy single-model fields from config
+        base_url = base_url or openai_cfg.get("base_url")
+        api_key = api_key or openai_cfg.get("api_key")
+        model_id = model_id or openai_cfg.get("model")
+        timeout_s = timeout_s or openai_cfg.get("timeout_s", 60)
+
+    # Environment variable overrides always win
+    env_base = os.getenv("OPENAI_BASE_URL")
+    env_key = os.getenv("OPENAI_API_KEY")
+    if env_base:
+        base_url = env_base
+    if env_key:
+        api_key = env_key
+
+    if not base_url or not model_id:
+        raise HTTPException(status_code=400, detail="Missing base_url or model in configuration")
+
+    try:
+        ts = int(timeout_s or 60)
+    except Exception:
+        ts = 60
+    return str(base_url), (str(api_key) if api_key else None), str(model_id), ts
+
+
+async def _openai_chat_complete(
+    *,
+    messages: list[dict],
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+) -> dict:
+    # Pull llm prefs
+    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = prefs.get("temperature", 0.7)
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens")
+
+    url = str(base_url).rstrip("/") + "/chat/completions"
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    body: Dict[str, Any] = {"model": model_id, "messages": messages, "temperature": temperature}
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+
+    try:
+        timeout_obj = httpx.Timeout(float(timeout_s or 60))
+    except Exception:
+        timeout_obj = httpx.Timeout(60.0)
+
+    async with httpx.AsyncClient(timeout=timeout_obj) as client:
+        resp = await client.post(url, headers=headers, json=body)
+        try:
+            data = resp.json()
+        except Exception:
+            data = {"raw": resp.text}
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail=data)
+        return data
+
+
+def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
+    files = _scan_chapter_files()
+    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    return match  # (idx, path, pos)
+
+
+@app.post("/api/story/summary")
+async def api_story_summary(request: Request) -> JSONResponse:
+    """Generate or update a chapter summary using the story model.
+
+    Body JSON:
+      {"chap_id": int, "mode": "discard"|"update"|None, "model_name": str | None,
+       // optional overrides: base_url, api_key, model, timeout_s}
+    Returns: {ok: true, summary: str, chapter: {...}}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "chap_id is required"})
+    mode = (payload.get("mode") or "").lower()
+    if mode not in ("discard", "update", ""):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "mode must be discard|update"})
+
+    _, path, pos = _chapter_by_id_or_404(chap_id)
+    try:
+        chapter_text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        chapters_data.extend([{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1))
+    current_summary = chapters_data[pos].get("summary", "")
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    # Build messages
+    sys_msg = {
+        "role": "system",
+        "content": (
+            "You are an expert story editor. Write a concise summary capturing plot, characters, tone, and open threads."
+        ),
+    }
+    if mode == "discard" or not current_summary:
+        user_prompt = f"Chapter text:\n\n{chapter_text}\n\nTask: Write a new summary (5-10 sentences)."
+    else:
+        user_prompt = (
+            "Existing summary:\n\n" + current_summary +
+            "\n\nChapter text:\n\n" + chapter_text +
+            "\n\nTask: Update the summary to accurately reflect the chapter, keeping style and brevity."
+        )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    try:
+        data = await _openai_chat_complete(
+            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
+        )
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+
+    # Extract content OpenAI-style
+    choices = (data or {}).get("choices") or []
+    new_summary = ""
+    if choices:
+        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if isinstance(msg, dict):
+            new_summary = msg.get("content", "") or ""
+
+    # Persist to story.json
+    chapters_data[pos]["summary"] = new_summary
+    story["chapters"] = chapters_data
+    try:
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write story.json: {e}"})
+
+    title_for_response = chapters_data[pos].get("title") or path.name
+    return JSONResponse(status_code=200, content={
+        "ok": True,
+        "summary": new_summary,
+        "chapter": {"id": chap_id, "title": title_for_response, "filename": path.name, "summary": new_summary},
+    })
+
+
+@app.post("/api/story/write")
+async def api_story_write(request: Request) -> JSONResponse:
+    """Write/overwrite the full chapter from its summary using the story model.
+
+    Body JSON: {"chap_id": int, "model_name": str | None, overrides...}
+    Returns: {ok: true, content: str}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "chap_id is required"})
+
+    idx, path, pos = _chapter_by_id_or_404(chap_id)
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    story = load_story_config(active / "story.json") or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No summary available for this chapter"})
+    summary = chapters_data[pos].get("summary", "").strip()
+    title = chapters_data[pos].get("title") or path.name
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {"role": "system", "content": "You are a skilled novelist writing compelling prose based on a summary."}
+    user_prompt = (
+        f"Project: {story.get('project_title', 'Story')}\nTitle: {title}\n\nSummary:\n\n{summary}\n\n" 
+        "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
+    )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    try:
+        data = await _openai_chat_complete(
+            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
+        )
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+
+    choices = (data or {}).get("choices") or []
+    content = ""
+    if choices:
+        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if isinstance(msg, dict):
+            content = msg.get("content", "") or ""
+
+    try:
+        path.write_text(content, encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write chapter: {e}"})
+
+    return JSONResponse(status_code=200, content={"ok": True, "content": content})
+
+
+@app.post("/api/story/continue")
+async def api_story_continue(request: Request) -> JSONResponse:
+    """Continue the current chapter without modifying existing text, to align with the summary.
+
+    Body JSON: {"chap_id": int, "model_name": str | None, overrides...}
+    Returns: {ok: true, appended: str, content: str}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    chap_id = payload.get("chap_id")
+    if not isinstance(chap_id, int):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "chap_id is required"})
+
+    idx, path, pos = _chapter_by_id_or_404(chap_id)
+    try:
+        existing = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
+
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    story = load_story_config(active / "story.json") or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    if pos >= len(chapters_data):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No summary available for this chapter"})
+    summary = chapters_data[pos].get("summary", "")
+    title = chapters_data[pos].get("title") or path.name
+
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {"role": "system", "content": "You are a skilled novelist continuing a chapter. Do not repeat or edit existing text; only continue."}
+    user_prompt = (
+        f"Title: {title}\n\nSummary:\n{summary}\n\nExisting chapter text (do not change):\n\n{existing}\n\n" 
+        "Task: Continue the chapter from where it stops to advance the summary coherently."
+    )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    try:
+        data = await _openai_chat_complete(
+            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
+        )
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+
+    choices = (data or {}).get("choices") or []
+    appended = ""
+    if choices:
+        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if isinstance(msg, dict):
+            appended = msg.get("content", "") or ""
+
+    new_content = existing + ("\n" if existing and not existing.endswith("\n") else "") + appended
+    try:
+        path.write_text(new_content, encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write chapter: {e}"})
+
+    return JSONResponse(status_code=200, content={"ok": True, "appended": appended, "content": new_content})
+
 
 
 
@@ -801,9 +1140,21 @@ async def api_get_chat() -> dict:
             m.get("name") for m in models_list if isinstance(m, dict) and m.get("name")
         ]
 
+    # If no named models configured, but legacy single model fields exist,
+    # surface a synthetic default entry so the UI has a selectable option.
+    if not model_names:
+        legacy_model = openai_cfg.get("model")
+        legacy_base = openai_cfg.get("base_url")
+        if legacy_model or legacy_base:
+            model_names = ["default"]
+
     selected = openai_cfg.get("selected", "") if isinstance(openai_cfg, dict) else ""
-    if not selected and model_names:
-        selected = model_names[0]
+    # Coerce to a valid selection
+    if model_names:
+        if not selected:
+            selected = model_names[0]
+        elif selected not in model_names:
+            selected = model_names[0]
 
     return {
         "models": model_names,

@@ -23,6 +23,9 @@ export class ShellView extends Component {
       chatModels: [],
       chatCurrentModel: '',
       chatSending: false,
+      // Story model (separate from chat model)
+      storyModels: [],
+      storyCurrentModel: '',
     };
 
     super(element, initialState);
@@ -57,6 +60,7 @@ export class ShellView extends Component {
     this.watch('chatMessages', () => this.renderChatMessages());
     this.watch('chatSending', () => this.renderChatSending());
     this.watch('chatModels', () => this.renderChatModels());
+    this.watch('storyModels', () => this.renderStoryModels());
 
 
     // Listen for project changes from settings page
@@ -291,6 +295,29 @@ export class ShellView extends Component {
     if (regenerateBtn) {
       regenerateBtn.addEventListener('click', () => this.regenerateLastChatMessage());
     }
+
+    // Story model & actions
+    const storyModelSelect = this.$refs.storyModelSelect || this.el.querySelector('[data-ref="storyModelSelect"]');
+    if (storyModelSelect) {
+      storyModelSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        this.storyCurrentModel = val;
+        try { localStorage.setItem('aq.storyModel', val); } catch (_) {}
+      });
+    }
+
+    const writeSummaryBtn = this.el.querySelector('[data-action="story-write-summary"]');
+    if (writeSummaryBtn) {
+      writeSummaryBtn.addEventListener('click', () => this.handleWriteSummary());
+    }
+    const writeChapterBtn = this.el.querySelector('[data-action="story-write-chapter"]');
+    if (writeChapterBtn) {
+      writeChapterBtn.addEventListener('click', () => this.handleWriteChapter());
+    }
+    const continueChapterBtn = this.el.querySelector('[data-action="story-continue-chapter"]');
+    if (continueChapterBtn) {
+      continueChapterBtn.addEventListener('click', () => this.handleContinueChapter());
+    }
   }
 
   /**
@@ -521,6 +548,24 @@ export class ShellView extends Component {
       this.chatModels = data.models || [];
       this.chatCurrentModel = data.current_model || '';
       this.chatMessages = data.messages || [];
+
+      // Initialize story model list from same source for now (separate selection)
+      this.storyModels = Array.isArray(data.models) ? data.models.slice() : [];
+      const persisted = (() => { try { return localStorage.getItem('aq.storyModel') || ''; } catch (_) { return ''; } })();
+      let chosen = '';
+      if (persisted && this.storyModels.includes(persisted)) {
+        chosen = persisted;
+      } else if (this.storyModels.includes(data.current_model)) {
+        chosen = data.current_model;
+      } else if (this.storyModels.length > 0) {
+        chosen = this.storyModels[0];
+      } else {
+        chosen = '';
+      }
+      this.storyCurrentModel = chosen;
+      if (chosen) {
+        try { localStorage.setItem('aq.storyModel', chosen); } catch (_) {}
+      }
     } catch (e) {
       console.error('Failed to load chat state', e);
       this.chatMessages = [{ role: 'assistant', content: `Failed to load chat state: ${e.message}` }];
@@ -533,6 +578,82 @@ export class ShellView extends Component {
     select.innerHTML = (this.chatModels || []).map(m =>
       `<option value="${m}" ${m === this.chatCurrentModel ? 'selected' : ''}>${m}</option>`
     ).join('');
+  }
+
+  // ========================================
+  // Story LLM controls
+  // ========================================
+  renderStoryModels() {
+    const select = this.$refs.storyModelSelect || this.el.querySelector('[data-ref="storyModelSelect"]');
+    if (!select) return;
+    const models = Array.isArray(this.storyModels) ? this.storyModels : [];
+    const current = this.storyCurrentModel || '';
+    select.innerHTML = models.map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`).join('');
+  }
+
+  async handleWriteSummary() {
+    if (this.activeId == null) return;
+    const chapter = (this.chapters || []).find(c => c.id === this.activeId) || {};
+    const hasExisting = !!(chapter.summary && chapter.summary.trim());
+    let mode = 'discard';
+    if (hasExisting) {
+      const answer = confirm('Summary already exists. OK = discard and write new; Cancel = update existing.');
+      mode = answer ? 'discard' : 'update';
+    }
+    try {
+      const data = await fetchJSON('/api/story/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap_id: this.activeId, mode, model_name: this.storyCurrentModel })
+      });
+      const updated = (this.chapters || []).map(c => c.id === this.activeId ? { ...c, summary: data.summary || '' } : c);
+      this.chapters = updated;
+      // Also update inline expanded textarea if visible
+      const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
+      if (textarea) textarea.value = data.summary || '';
+    } catch (e) {
+      console.error('Failed to write summary:', e);
+      alert(`Failed to write summary: ${e.message || e}`);
+    }
+  }
+
+  async handleWriteChapter() {
+    if (this.activeId == null) return;
+    try {
+      const data = await fetchJSON('/api/story/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+      });
+      // Overwrite editor content
+      this.content = data.content || '';
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (e) {
+      console.error('Failed to write chapter:', e);
+      alert(`Failed to write chapter: ${e.message || e}`);
+    }
+  }
+
+  async handleContinueChapter() {
+    if (this.activeId == null) return;
+    try {
+      const data = await fetchJSON('/api/story/continue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+      });
+      // Append to editor content
+      const appended = data.appended || '';
+      this.content = (this.content || '') + ((this.content && !this.content.endsWith('\n')) ? '\n' : '') + appended;
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (e) {
+      console.error('Failed to continue chapter:', e);
+      alert(`Failed to continue chapter: ${e.message || e}`);
+    }
   }
 
   renderChatMessages() {

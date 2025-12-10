@@ -34,6 +34,14 @@
                 <button class="aq-btn aq-btn-sm" title="Code" data-action="wrap-selection" data-before="`" data-after="`">Code</button>
                 <button class="aq-btn aq-btn-sm" title="Bullet list" data-action="toggle-list" data-prefix="- ">• List</button>
                 <button class="aq-btn aq-btn-sm" title="Quote" data-action="toggle-prefix" data-prefix="> ">❝ Quote</button>
+                <span class="aq-sep" style="margin:0 0.25rem; opacity:0.5;">|</span>
+                <label style="display:inline-flex; align-items:center; gap:0.35rem;">
+                  <span style="font-size:0.85rem; color:var(--muted);">Story model</span>
+                  <select data-ref="storyModelSelect" class="aq-select aq-select-sm"></select>
+                </label>
+                <button class="aq-btn aq-btn-sm" data-action="story-write-summary" title="Write or update summary">✎ Summary</button>
+                <button class="aq-btn aq-btn-sm" data-action="story-write-chapter" title="Write chapter from summary">📝 Write</button>
+                <button class="aq-btn aq-btn-sm" data-action="story-continue-chapter" title="Continue chapter to match summary">⏭ Continue</button>
               </div>
               <textarea data-ref="rawEditor"></textarea>
             </div>
