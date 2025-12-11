@@ -1,4 +1,4 @@
-import { fetchJSON, getJSONOrEmpty } from './utils.js';
+import { fetchJSON, getJSONOrEmpty, API } from './utils.js';
 import { Component } from './component.js';
 
 export class ChatView extends Component {
@@ -17,7 +17,9 @@ export class ChatView extends Component {
     if (!this.el) return;
     this._scanRefs();
     this._bindEvents();
+    // Load models first (machine configuration), then load chat state (messages, current model)
     this.loadModels();
+    this.loadState();
     this.render();
   }
 
@@ -32,6 +34,30 @@ export class ChatView extends Component {
     this.models = models;
     this.selectedName = openai.selected || (models[0]?.name || '');
     this.renderModelSelect();
+    // notify machine change to other parts of the app
+    try { document.dispatchEvent(new CustomEvent('aq:machine-updated', { detail: {} })); } catch (_) {}
+  }
+
+  // Load chat state (messages, models) from the API and dispatch an event
+  async loadState() {
+    try {
+      const data = await API.loadChat();
+      // Normalize data
+      this.messages = Array.isArray(data.messages) ? data.messages.slice() : (this.messages || []);
+      // If models present, prefer them; otherwise preserve models loaded from machine
+      if (Array.isArray(data.models) && data.models.length) {
+        this.models = data.models;
+      }
+      if (data.current_model) {
+        this.selectedName = data.current_model;
+      }
+      this.renderModelSelect();
+      this.renderMessages();
+      try { document.dispatchEvent(new CustomEvent('aq:chat-loaded', { detail: { messages: this.messages.slice() } })); } catch (_) {}
+    } catch (e) {
+      console.error('Failed to load chat state:', e);
+      // keep existing state
+    }
   }
 
   _bindEvents() {
@@ -99,9 +125,9 @@ export class ChatView extends Component {
     sel.appendChild(placeholder);
     this.models.forEach(m => {
       const opt = document.createElement('option');
-      opt.value = m.name;
-      opt.textContent = m.name + (m.remote_model ? ` → ${m.remote_model}` : (m.model ? ` → ${m.model}` : ''));
-      if (m.name === this.selectedName) opt.selected = true;
+      opt.value = m.name || m;
+      opt.textContent = (m.name || m) + (m.remote_model ? ` → ${m.remote_model}` : (m.model ? ` → ${m.model}` : ''));
+      if ((m.name || m) === this.selectedName) opt.selected = true;
       sel.appendChild(opt);
     });
   }
@@ -115,7 +141,7 @@ export class ChatView extends Component {
     if (!list) return;
     list.innerHTML = '';
     // Filter out tool messages from rendering to keep UI clean
-    const renderable = this.messages.filter(m => m.role !== 'tool');
+    const renderable = (this.messages || []).filter(m => m.role !== 'tool');
     if (!renderable.length) {
       const empty = document.createElement('div');
       empty.className = 'aq-empty';
@@ -214,26 +240,34 @@ export class ChatView extends Component {
     const content = (ta?.value || '').trim();
     if (!content) return;
     const role = this.inputRole || 'user';
-    this.messages = [...this.messages, { role, content }];
+    this.messages = [...(this.messages || []), { role, content }];
     if (ta) ta.value = '';
     this.renderMessages();
+    // Emit chat-updated so others can react immediately (optional)
+    try { document.dispatchEvent(new CustomEvent('aq:chat-updated', { detail: { messages: this.messages.slice() } })); } catch (_) {}
+
     await this._queryAssistant();
+
+    // After assistant round finished, broadcast updated messages
+    try { document.dispatchEvent(new CustomEvent('aq:chat-updated', { detail: { messages: this.messages.slice() } })); } catch (_) {}
   }
 
   deleteLast() {
-    if (!this.messages.length) return;
+    if (!this.messages || !this.messages.length) return;
     this.messages = this.messages.slice(0, -1);
     this.renderMessages();
+    try { document.dispatchEvent(new CustomEvent('aq:chat-updated', { detail: { messages: this.messages.slice() } })); } catch (_) {}
   }
 
   async regenerate() {
     // Regenerate last assistant bubble by removing it and re-querying
-    if (!this.messages.length) return;
+    if (!this.messages || !this.messages.length) return;
     const last = this.messages[this.messages.length - 1];
     if (last.role !== 'assistant') return;
     this.messages = this.messages.slice(0, -1);
     this.renderMessages();
     await this._queryAssistant();
+    try { document.dispatchEvent(new CustomEvent('aq:chat-updated', { detail: { messages: this.messages.slice() } })); } catch (_) {}
   }
 
   async _queryAssistant() {
@@ -331,7 +365,7 @@ export class ChatView extends Component {
         if (!toolCalls.length) return { appended_messages: [], mutations: {} };
         const body = {
           model_name: this.selectedName || null,
-          messages: this.messages.map(m => ({ role: m.role, content: m.content, tool_call_id: m.tool_call_id, name: m.name })).concat([{ role: 'assistant', content: assistantMsg.content || '', tool_calls: toolCalls }]),
+          messages: this.messages.map(m => ({ role: m.role, content: m.content, tool_call_id: m.tool_call_id, name: m.name })).concat([{ role: 'assistant', content: assistantMsg.content || '', tool_calls: assistantMsg.tool_calls }]),
           active_chapter_id: (window.app?.shellView?.activeId ?? null)
         };
         const result = await fetchJSON('/api/chat/tools', {
@@ -392,7 +426,7 @@ export class ChatView extends Component {
       if (resp && resp.ok && resp.message) {
         const assistantMsg = resp.message;
         // Append assistant message (even if content empty, as it may contain tool_calls)
-        this.messages = [...this.messages, { role: assistantMsg.role || 'assistant', content: assistantMsg.content || '', tool_calls: assistantMsg.tool_calls }];
+        this.messages = [...(this.messages || []), { role: assistantMsg.role || 'assistant', content: assistantMsg.content || '', tool_calls: assistantMsg.tool_calls }];
 
         // If server executed tools internally, it will return mutations. Apply them now.
         try {
@@ -418,13 +452,13 @@ export class ChatView extends Component {
             if (appended.length) {
               // Append tool messages to transcript (not rendered visually)
               appended.forEach(tm => {
-                this.messages = [...this.messages, { role: 'tool', content: tm.content || '', name: tm.name || '', tool_call_id: tm.tool_call_id }];
+                this.messages = [...(this.messages || []), { role: 'tool', content: tm.content || '', name: tm.name || '', tool_call_id: tm.tool_call_id }];
               });
               // Second LLM call with tool outputs
               resp = await callChat();
               if (resp && resp.ok && resp.message) {
                 const msg2 = resp.message;
-                this.messages = [...this.messages, { role: msg2.role || 'assistant', content: msg2.content || '' }];
+                this.messages = [...(this.messages || []), { role: msg2.role || 'assistant', content: msg2.content || '' }];
                 // Apply any server-side mutations from the second call as well
                 try {
                   const muts2 = resp.mutations || {};
@@ -445,11 +479,13 @@ export class ChatView extends Component {
           }
         }
         this.renderMessages();
+        try { document.dispatchEvent(new CustomEvent('aq:chat-updated', { detail: { messages: this.messages.slice() } })); } catch (_) {}
       }
     } catch (e) {
       alert(`Chat error: ${e.message || e}`);
     } finally {
       this.sending = false;
+      try { document.dispatchEvent(new CustomEvent('aq:chat-sending', { detail: { sending: this.sending } })); } catch (_) {}
     }
   }
 }

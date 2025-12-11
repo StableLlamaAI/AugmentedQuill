@@ -19,10 +19,6 @@ export class ShellView extends Component {
       editingId: null,
       editingTitle: '',
       _suspendInput: false,
-      chatMessages: [],
-      chatModels: [],
-      chatCurrentModel: '',
-      chatSending: false,
       // Story model (separate from chat model)
       storyModels: [],
       storyCurrentModel: '',
@@ -71,9 +67,6 @@ export class ShellView extends Component {
     });
     this.watch('contentWidth', () => this.renderContentWidth());
     this.watch('fontSize', () => this.renderFontSize());
-    this.watch('chatMessages', () => this.renderChatMessages());
-    this.watch('chatSending', () => this.renderChatSending());
-    this.watch('chatModels', () => this.renderChatModels());
     this.watch('storyModels', () => this.renderStoryModels());
     this.watch('storyBusy', () => this.renderStoryBusy());
 
@@ -103,8 +96,8 @@ export class ShellView extends Component {
     document.addEventListener('aq:story-updated', this._onStoryUpdated);
 
     this._onMachineUpdated = () => {
-      // Reload chat/story models and chapters to reflect new configuration
-      Promise.resolve(this.loadChat());
+      // Reload story models and chapters to reflect new configuration
+      Promise.resolve(this.loadChat()); // loadChat now only loads story models if needed
       Promise.resolve(this.refreshChapters());
     };
     document.addEventListener('aq:machine-updated', this._onMachineUpdated);
@@ -198,14 +191,14 @@ export class ShellView extends Component {
         }
         const toggleSummaryBtn = e.target.closest('[data-action="toggle-summary"]');
         if (toggleSummaryBtn) {
-            const chapterItem = toggleSummaryBtn.closest('[data-chapter-id]');
-            if (chapterItem) {
-                const id = parseInt(chapterItem.getAttribute('data-chapter-id'), 10);
-                if (!isNaN(id)) {
-                    this.toggleSummary(id);
-                }
+          const chapterItem = toggleSummaryBtn.closest('[data-chapter-id]');
+          if (chapterItem) {
+            const id = parseInt(chapterItem.getAttribute('data-chapter-id'), 10);
+            if (!isNaN(id)) {
+              this.toggleSummary(id);
             }
-            return;
+          }
+          return;
         }
 
         const chapterItem = e.target.closest('[data-chapter-id]');
@@ -374,29 +367,6 @@ export class ShellView extends Component {
           this.onChanged();
         }
       });
-    }
-
-    // Chat listeners
-    const sendBtn = this.el.querySelector('[data-ref="send"]');
-    if (sendBtn) {
-      sendBtn.addEventListener('click', () => this.sendChatMessage());
-    }
-    const chatInput = this.el.querySelector('[data-ref="input"]');
-    if (chatInput) {
-      chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          this.sendChatMessage();
-        }
-      });
-    }
-    const deleteLastBtn = this.el.querySelector('[data-ref="deleteLast"]');
-    if (deleteLastBtn) {
-      deleteLastBtn.addEventListener('click', () => this.deleteLastChatMessage());
-    }
-    const regenerateBtn = this.el.querySelector('[data-ref="regenerate"]');
-    if (regenerateBtn) {
-      regenerateBtn.addEventListener('click', () => this.regenerateLastChatMessage());
     }
 
     // Story model & actions
@@ -596,7 +566,7 @@ export class ShellView extends Component {
 
       // Load chapter list
       await this.refreshChapters();
-      await this.loadChat();
+      // Chat is now handled by ChatView component; don't duplicate here
 
       // Auto-select first project if none selected
       if (!this.chapters.length) {
@@ -682,47 +652,6 @@ export class ShellView extends Component {
   }
 
   // ========================================
-  // Chat
-  // ========================================
-  async loadChat() {
-    try {
-      const data = await API.loadChat();
-      this.chatModels = data.models || [];
-      this.chatCurrentModel = data.current_model || '';
-      this.chatMessages = data.messages || [];
-
-      // Initialize story model list from same source for now (separate selection)
-      this.storyModels = Array.isArray(data.models) ? data.models.slice() : [];
-      const persisted = (() => { try { return localStorage.getItem('aq.storyModel') || ''; } catch (_) { return ''; } })();
-      let chosen = '';
-      if (persisted && this.storyModels.includes(persisted)) {
-        chosen = persisted;
-      } else if (this.storyModels.includes(data.current_model)) {
-        chosen = data.current_model;
-      } else if (this.storyModels.length > 0) {
-        chosen = this.storyModels[0];
-      } else {
-        chosen = '';
-      }
-      this.storyCurrentModel = chosen;
-      if (chosen) {
-        try { localStorage.setItem('aq.storyModel', chosen); } catch (_) {}
-      }
-    } catch (e) {
-      console.error('Failed to load chat state', e);
-      this.chatMessages = [{ role: 'assistant', content: `Failed to load chat state: ${e.message}` }];
-    }
-  }
-
-  renderChatModels() {
-    const select = this.$refs.modelSelect;
-    if (!select) return;
-    select.innerHTML = (this.chatModels || []).map(m =>
-      `<option value="${m}" ${m === this.chatCurrentModel ? 'selected' : ''}>${m}</option>`
-    ).join('');
-  }
-
-  // ========================================
   // Story LLM controls
   // ========================================
   renderStoryModels() {
@@ -731,71 +660,6 @@ export class ShellView extends Component {
     const models = Array.isArray(this.storyModels) ? this.storyModels : [];
     const current = this.storyCurrentModel || '';
     select.innerHTML = models.map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`).join('');
-  }
-
-  async handleWriteSummary() {
-    if (this.activeId == null) return;
-    const chapter = (this.chapters || []).find(c => c.id === this.activeId) || {};
-    const hasExisting = !!(chapter.summary && chapter.summary.trim());
-    let mode = 'discard';
-    if (hasExisting) {
-      const answer = confirm('Summary already exists. OK = discard and write new; Cancel = update existing.');
-      mode = answer ? 'discard' : 'update';
-    }
-    try {
-      const data = await fetchJSON('/api/story/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap_id: this.activeId, mode, model_name: this.storyCurrentModel })
-      });
-      const updated = (this.chapters || []).map(c => c.id === this.activeId ? { ...c, summary: data.summary || '' } : c);
-      this.chapters = updated;
-      // Also update inline expanded textarea if visible
-      const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
-      if (textarea) textarea.value = data.summary || '';
-    } catch (e) {
-      console.error('Failed to write summary:', e);
-      alert(`Failed to write summary: ${e.message || e}`);
-    }
-  }
-
-  async handleWriteChapter() {
-    if (this.activeId == null) return;
-    try {
-      const data = await fetchJSON('/api/story/write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
-      });
-      // Overwrite editor content
-      this.content = data.content || '';
-      this._originalContent = this.content;
-      this.dirty = false;
-      this.renderSaveButton();
-    } catch (e) {
-      console.error('Failed to write chapter:', e);
-      alert(`Failed to write chapter: ${e.message || e}`);
-    }
-  }
-
-  async handleContinueChapter() {
-    if (this.activeId == null) return;
-    try {
-      const data = await fetchJSON('/api/story/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
-      });
-      // Append to editor content
-      const appended = data.appended || '';
-      this.content = (this.content || '') + ((this.content && !this.content.endsWith('\n')) ? '\n' : '') + appended;
-      this._originalContent = this.content;
-      this.dirty = false;
-      this.renderSaveButton();
-    } catch (e) {
-      console.error('Failed to continue chapter:', e);
-      alert(`Failed to continue chapter: ${e.message || e}`);
-    }
   }
 
   // =====================
@@ -862,329 +726,186 @@ export class ShellView extends Component {
     await this._flowFetchPair();
   }
 
-  renderChatMessages() {
-    const list = this.$refs.chatList;
-    if (!list) return;
+  // ========================================
+  // Story LLM actions (streaming-enabled)
+  // ========================================
 
-    if (!this.chatMessages || this.chatMessages.length === 0) {
-      list.innerHTML = '<div class="aq-empty">No messages</div>';
-      return;
+  // Streaming infra
+  _ensureToastHost() {
+    let host = document.querySelector('.aq-toasts');
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'aq-toasts';
+      document.body.appendChild(host);
     }
-
-    list.innerHTML = this.chatMessages.map(msg => `
-      <div class="aq-bubble ${msg.role}">
-        <div class="aq-bubble-head">${this.escapeHtml(msg.role)}</div>
-        <div class="aq-bubble-body" contenteditable="true">${this.escapeHtml(msg.content)}</div>
-      </div>
-    `).join('');
-    list.scrollTop = list.scrollHeight;
+    return host;
   }
 
-  renderChatSending() {
-    if (this.$refs.send) {
-      this.$refs.send.disabled = this.chatSending;
-    }
-    if (this.$refs.regenerate) {
-      this.$refs.regenerate.disabled = this.chatSending;
-    }
-    if (this.$refs.deleteLast) {
-      this.$refs.deleteLast.disabled = this.chatSending;
-    }
+  _toast(message, variant = 'info', timeoutMs = 2500) {
+    const host = this._ensureToastHost();
+    const el = document.createElement('div');
+    el.className = `aq-toast ${variant}`;
+    el.textContent = message;
+    host.appendChild(el);
+    window.setTimeout(() => {
+      try { el.remove(); } catch (_) {}
+      if (!host.childElementCount) host.remove();
+    }, timeoutMs);
   }
 
-  deleteLastChatMessage() {
-    if (this.chatSending || !this.chatMessages.length) return;
-    this.chatMessages = this.chatMessages.slice(0, -1);
-  }
-
-  async regenerateLastChatMessage() {
-    if (this.chatSending || !this.chatMessages.length) return;
-    const lastMessage = this.chatMessages[this.chatMessages.length - 1];
-    if (lastMessage.role !== 'assistant') return; // Only regenerate assistant messages
-
-    this.chatMessages = this.chatMessages.slice(0, -1); // Remove the last assistant message
-    this.renderChatMessages(); // Re-render to reflect removal
-
-    await this.sendChatMessage(true); // Re-send the last user message or continue the conversation
-  }
-
-  async sendChatMessage(isRegenerate = false) {
-    if (this.chatSending && !isRegenerate) return; // Prevent sending new messages if already sending
-    if (this.chatSending && isRegenerate) { // If regenerating, bypass input checks
-        // Continue with the existing chat history
-    }
-
-    const input = this.$refs.input;
-    const roleSelect = this.$refs.roleSelect;
-
-    let content = '';
-    let role = 'user';
-
-    if (!isRegenerate) {
-        if (!input || !roleSelect) return;
-        content = input.value.trim();
-        if (!content) return;
-        role = roleSelect.value;
-    } else {
-        // When regenerating, we assume the previous context is sufficient.
-        // If there's a user message preceding the removed assistant message,
-        // it serves as the prompt for regeneration.
-        // We don't need to read from the input field.
-    }
-
-
-    if (!isRegenerate) {
-        const newMessage = { role, content };
-        this.chatMessages = [...this.chatMessages, newMessage];
-        input.value = '';
-        input.focus();
-    }
-
-
-    if (role === 'user' || isRegenerate) { // Always query if it's a user message or regeneration
-      this.chatSending = true;
-      try {
-        const messagesToSend = this.chatMessages.map(m => ({ role: m.role, content: m.content }));
-        const response = await fetchJSON('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: messagesToSend,
-            model: this.$refs.modelSelect.value
-          })
-        });
-
-        if (response.message) {
-          this.chatMessages = [...this.chatMessages, response.message];
-        }
-      } catch (e) {
-        let errorMessage = 'An unknown error occurred';
-        if (e) {
-          if (typeof e.message === 'string') {
-            errorMessage = e.message;
-          } else if (typeof e.message === 'object' && e.message !== null) {
-            try {
-              errorMessage = JSON.stringify(e.message);
-            } catch (jsonError) {
-              errorMessage = String(e.message);
-            }
-          } else if (typeof e === 'object' && e !== null) {
-            try {
-              errorMessage = JSON.stringify(e);
-            } catch (jsonError) {
-              errorMessage = String(e);
-            }
-          } else {
-            errorMessage = String(e);
-          }
-        }
-        this.chatMessages = [...this.chatMessages, { role: 'assistant', content: `Error: ${errorMessage}` }];
-      } finally {
-        this.chatSending = false;
-      }
+  cancelStoryAction() {
+    if (this._storyAbortController) {
+      try { this._storyAbortController.abort(); } catch (_) {}
     }
   }
 
-
-  // Integrated editor helpers
-  getRawEl() {
-    return this.$refs?.rawEditor || this.el?.querySelector('[data-ref="rawEditor"]') || null;
-  }
-
-  getEditorEl() {
-    if (this.renderMode !== 'raw' && this._tui && this._tuiEl) {
-      return this._tuiEl;
-    }
-    return this.getRawEl();
-  }
-
-  /**
-   * Render markdown content into the WYSIWYG editor
-   */
-  async setEditorHtmlFromContent() {
-    if (this._tui) {
-      this._suspendInput = true;
-      try {
-        const contentValue = await Promise.resolve(this.content || '');
-        this._tui.setMarkdown(String(contentValue));
-      } finally {
-        this._suspendInput = false;
-      }
-      return;
-    }
-    const textarea = this.getRawEl();
-    if (!textarea) return;
-    // Raw textarea already reflects content binding
-  }
-
-  /**
-   * Capture the current Y position of the caret/editor for scroll adjustment
-   */
-  _captureAnchorY() {
-    const editor = this.getEditorEl();
-    if (!editor) return window.scrollY;
-
-    // In markdown mode, use selection position if available
-    if (this.renderMode === 'markdown') {
-      try {
-        const selection = window.getSelection();
-        if (selection?.rangeCount) {
-          const rect = selection.getRangeAt(0).getBoundingClientRect();
-          if (rect && rect.height >= 0) {
-            return rect.top;
-          }
-        }
-      } catch (_) {
-        // Fall through to editor position
-      }
-    }
-
-    return editor.getBoundingClientRect().top;
-  }
-
-  /**
-   * Adjust scroll position to maintain visual anchor after mode switch
-   */
-  _scrollAdjust(oldY) {
+  async _streamFetch(url, body, onChunk) {
+    const controller = new AbortController();
+    this._storyAbortController = controller;
+    this.storyBusy = true;
     try {
-      const newY = this._captureAnchorY();
-      const delta = newY - oldY;
-
-      if (delta !== 0) {
-        window.scrollBy(0, delta);
-      }
-    } catch (_) {
-      // Scroll adjustment is non-critical
-    }
-  }
-
-  /**
-   * Switch between raw textarea, Toast Markdown, and Toast WYSIWYG
-   * Preserves caret/scroll position where possible
-   */
-  switchRender(mode) {
-    const m = String(mode || '').toLowerCase();
-    const normalized = (m === 'raw' || m === 'markdown' || m === 'wysiwyg') ? m : 'raw';
-    if (this.renderMode === normalized) return;
-
-    const oldScrollY = this._captureAnchorY();
-
-    if (normalized === 'raw') {
-      this._destroyTUI();
-    } else {
-      this._destroyTUI();
-      this._initTUI(normalized, this.content);
-    }
-
-    this.renderMode = normalized;
-    this._scrollAdjust(oldScrollY);
-  }
-
-  /**
-   * Initialize Toast UI Editor on top of the textarea
-   */
-  _initTUI(mode = 'wysiwyg', initialContent = null) {
-    try {
-      const textarea = this.getRawEl();
-      if (!textarea) return false;
-      if (!(window.toastui && window.toastui.Editor)) {
-        console.warn('Toast UI Editor not loaded; staying in raw mode');
-        return false;
-      }
-
-      textarea.style.display = 'none';
-
-      if (this._tui) {
-        this._tui.changeMode(mode);
-        this.setEditorHtmlFromContent();
-        return true;
-      }
-
-      const container = document.createElement('div');
-      container.className = 'aq-tui-wrap';
-      textarea.parentNode.insertBefore(container, textarea);
-      this._tuiEl = container;
-
-      const content = initialContent !== null ? initialContent : (this.content || '');
-
-      this._tui = new window.toastui.Editor({
-        el: container,
-        initialEditType: mode === 'wysiwyg' ? 'wysiwyg' : 'markdown',
-        previewStyle: 'tab',
-        height: '100%',
-        usageStatistics: false,
-        toolbarItems: [
-          ['heading', 'bold', 'italic', 'strike'],
-          ['hr', 'quote'],
-          ['ul', 'ol', 'task', 'indent', 'outdent'],
-          ['table', 'link'],
-          ['code', 'codeblock']
-        ],
-        hideModeSwitch: true,
-        initialValue: content
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      if (resp.status === 404) {
+        throw Object.assign(new Error('Streaming not supported (404)'), { code: 404 });
+      }
+      if (!resp.ok || !resp.body) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) onChunk(chunk);
+      }
+    } finally {
+      this.storyBusy = false;
+      this._storyAbortController = null;
+    }
+  }
 
-      this._tui.on('change', () => {
-        if (this._suspendInput) return;
+  async handleWriteSummary() {
+    if (this.activeId == null) return;
+    const chapter = (this.chapters || []).find(c => c.id === this.activeId) || {};
+    const hasExisting = !!(chapter.summary && chapter.summary.trim());
+    let mode = 'discard';
+    if (hasExisting) {
+      const answer = confirm('Summary already exists. OK = discard and write new; Cancel = update existing.');
+      mode = answer ? 'discard' : 'update';
+    }
+    // Try streaming endpoint first
+    try {
+      const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
+      let accum = '';
+      await this._streamFetch('/api/story/summary/stream', { chap_id: this.activeId, mode, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        if (textarea) textarea.value = accum;
+      });
+      // On completion, update chapters state but do not persist here (server didn’t persist). Caller can save manually or rely on debounce.
+      this.chapters = this.chapters.map(c => c.id === this.activeId ? { ...c, summary: (textarea ? textarea.value : accum) } : c);
+    } catch (err) {
+      if (err && err.code === 404) {
+        // Fallback to non-streaming
         try {
-          this.content = this._tui.getMarkdown();
-          this.onChanged();
-        } catch (_) { /* no-op */ }
-      });
-
-      return true;
-    } catch (e) {
-      console.error('Failed to init Toast UI Editor:', e);
-      return false;
+          const data = await fetchJSON('/api/story/summary', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, mode, model_name: this.storyCurrentModel })
+          });
+          const updated = (this.chapters || []).map(c => c.id === this.activeId ? { ...c, summary: data.summary || '' } : c);
+          this.chapters = updated;
+          const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
+          if (textarea) textarea.value = data.summary || '';
+        } catch (e) {
+          alert(`Failed to write summary: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Summary request failed: ${err.message || err}`);
+      }
     }
   }
 
-  /**
-   * Destroy Toast UI instance and restore textarea
-   */
-  _destroyTUI() {
-    if (!this._tui) return;
+  async handleWriteChapter() {
+    if (this.activeId == null) return;
     try {
-      const textarea = this.getRawEl();
-      this._suspendInput = true;
-      try {
-        this.content = this._tui.getMarkdown();
-      } finally {
-        this._suspendInput = false;
+      let accum = '';
+      await this._streamFetch('/api/story/write/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        this.content = accum;
+      });
+      // On completion, leave content in editor; user can Save.
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (err) {
+      if (err && err.code === 404) {
+        // Fallback to non-streaming
+        try {
+          const data = await fetchJSON('/api/story/write', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+          });
+          this.content = data.content || '';
+          this._originalContent = this.content;
+          this.dirty = false;
+          this.renderSaveButton();
+        } catch (e) {
+          alert(`Failed to write chapter: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Write request failed: ${err.message || err}`);
       }
-      this._tui.destroy();
-      this._tui = null;
-      if (this._tuiEl && this._tuiEl.parentNode) {
-        this._tuiEl.parentNode.removeChild(this._tuiEl);
-      }
-      this._tuiEl = null;
-      if (textarea) textarea.style.display = '';
-    } catch (e) {
-      console.error('Failed to destroy Toast UI Editor:', e);
-      this._tui = null;
-      this._tuiEl = null;
     }
   }
 
-  /**
-   * Mark content as changed (dirty tracking)
-   */
-  onChanged() {
-    this.dirty = this.content !== this._originalContent;
+  async handleContinueChapter() {
+    if (this.activeId == null) return;
+    try {
+      let accum = '';
+      const base = this.content || '';
+      await this._streamFetch('/api/story/continue/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        const sep = base && !base.endsWith('\n') ? '\n' : '';
+        this.content = base + sep + accum;
+      });
+      this._originalContent = this.content;
+      this.dirty = false;
+      this.renderSaveButton();
+    } catch (err) {
+      if (err && err.code === 404) {
+        try {
+          const data = await fetchJSON('/api/story/continue', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
+          });
+          this.content = data.content || '';
+          this._originalContent = this.content;
+          this.dirty = false;
+          this.renderSaveButton();
+        } catch (e) {
+          alert(`Failed to continue chapter: ${e.message || e}`);
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        alert(`Continue request failed: ${err.message || err}`);
+      }
+    }
   }
 
-  /**
-   * Confirm with user before discarding unsaved changes
-   */
-  _confirmDiscardIfDirty() {
-    if (!this.dirty) return true;
-    return confirm('You have unsaved changes. Discard them?');
-  }
+  // =============================
+  // Toasts (Moved up where used)
+  // =============================
 
-  // ========================================
+  // =============================
+  // Remaining Editor helpers (wrapping, selection, saving, etc.)
+  // =============================
+
   // Toolbar Commands (Raw Mode)
-  // ========================================
-
   _replaceSelection(before, after) {
     const textarea = this.getRawEl();
     if (!textarea) return;
@@ -1546,147 +1267,202 @@ export class ShellView extends Component {
     }, timeoutMs);
   }
 
-  cancelStoryAction() {
-    if (this._storyAbortController) {
-      try { this._storyAbortController.abort(); } catch (_) {}
-    }
+  // ========================================
+  // Remaining editor helpers
+  // ========================================
+
+  // Integrated editor helpers
+  getRawEl() {
+    return this.$refs?.rawEditor || this.el?.querySelector('[data-ref="rawEditor"]') || null;
   }
 
-  async _streamFetch(url, body, onChunk) {
-    const controller = new AbortController();
-    this._storyAbortController = controller;
-    this.storyBusy = true;
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (resp.status === 404) {
-        throw Object.assign(new Error('Streaming not supported (404)'), { code: 404 });
-      }
-      if (!resp.ok || !resp.body) {
-        const text = await resp.text();
-        throw new Error(`HTTP ${resp.status}: ${text}`);
-      }
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk) onChunk(chunk);
-      }
-    } finally {
-      this.storyBusy = false;
-      this._storyAbortController = null;
+  getEditorEl() {
+    if (this.renderMode !== 'raw' && this._tui && this._tuiEl) {
+      return this._tuiEl;
     }
+    return this.getRawEl();
   }
 
-  async handleWriteSummary() {
-    if (this.activeId == null) return;
-    const chapter = (this.chapters || []).find(c => c.id === this.activeId) || {};
-    const hasExisting = !!(chapter.summary && chapter.summary.trim());
-    let mode = 'discard';
-    if (hasExisting) {
-      const answer = confirm('Summary already exists. OK = discard and write new; Cancel = update existing.');
-      mode = answer ? 'discard' : 'update';
+  /**
+   * Render markdown content into the WYSIWYG editor
+   */
+  async setEditorHtmlFromContent() {
+    if (this._tui) {
+      this._suspendInput = true;
+      try {
+        const contentValue = await Promise.resolve(this.content || '');
+        this._tui.setMarkdown(String(contentValue));
+      } finally {
+        this._suspendInput = false;
+      }
+      return;
     }
-    // Try streaming endpoint first
-    try {
-      const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
-      let accum = '';
-      await this._streamFetch('/api/story/summary/stream', { chap_id: this.activeId, mode, model_name: this.storyCurrentModel }, (chunk) => {
-        accum += chunk;
-        if (textarea) textarea.value = accum;
-      });
-      // On completion, update chapters state but do not persist here (server didn’t persist). Caller can save manually or rely on debounce.
-      this.chapters = this.chapters.map(c => c.id === this.activeId ? { ...c, summary: (textarea ? textarea.value : accum) } : c);
-    } catch (err) {
-      if (err && err.code === 404) {
-        // Fallback to non-streaming
-        try {
-          const data = await fetchJSON('/api/story/summary', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chap_id: this.activeId, mode, model_name: this.storyCurrentModel })
-          });
-          const updated = (this.chapters || []).map(c => c.id === this.activeId ? { ...c, summary: data.summary || '' } : c);
-          this.chapters = updated;
-          const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
-          if (textarea) textarea.value = data.summary || '';
-        } catch (e) {
-          alert(`Failed to write summary: ${e.message || e}`);
+    const textarea = this.getRawEl();
+    if (!textarea) return;
+    // Raw textarea already reflects content binding
+  }
+
+  /**
+   * Capture the current Y position of the caret/editor for scroll adjustment
+   */
+  _captureAnchorY() {
+    const editor = this.getEditorEl();
+    if (!editor) return window.scrollY;
+
+    // In markdown mode, use selection position if available
+    if (this.renderMode === 'markdown') {
+      try {
+        const selection = window.getSelection();
+        if (selection?.rangeCount) {
+          const rect = selection.getRangeAt(0).getBoundingClientRect();
+          if (rect && rect.height >= 0) {
+            return rect.top;
+          }
         }
-      } else if (!(err && err.name === 'AbortError')) {
-        alert(`Summary request failed: ${err.message || err}`);
+      } catch (_) {
+        // Fall through to editor position
       }
+    }
+
+    return editor.getBoundingClientRect().top;
+  }
+
+  /**
+   * Adjust scroll position to maintain visual anchor after mode switch
+   */
+  _scrollAdjust(oldY) {
+    try {
+      const newY = this._captureAnchorY();
+      const delta = newY - oldY;
+
+      if (delta !== 0) {
+        window.scrollBy(0, delta);
+      }
+    } catch (_) {
+      // Scroll adjustment is non-critical
     }
   }
 
-  async handleWriteChapter() {
-    if (this.activeId == null) return;
+  /**
+   * Switch between raw textarea, Toast Markdown, and Toast WYSIWYG
+   * Preserves caret/scroll position where possible
+   */
+  switchRender(mode) {
+    const m = String(mode || '').toLowerCase();
+    const normalized = (m === 'raw' || m === 'markdown' || m === 'wysiwyg') ? m : 'raw';
+    if (this.renderMode === normalized) return;
+
+    const oldScrollY = this._captureAnchorY();
+
+    if (normalized === 'raw') {
+      this._destroyTUI();
+    } else {
+      this._destroyTUI();
+      this._initTUI(normalized, this.content);
+    }
+
+    this.renderMode = normalized;
+    this._scrollAdjust(oldScrollY);
+  }
+
+  /**
+   * Initialize Toast UI Editor on top of the textarea
+   */
+  _initTUI(mode = 'wysiwyg', initialContent = null) {
     try {
-      let accum = '';
-      await this._streamFetch('/api/story/write/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
-        accum += chunk;
-        this.content = accum;
-      });
-      // On completion, leave content in editor; user can Save.
-      this._originalContent = this.content;
-      this.dirty = false;
-      this.renderSaveButton();
-    } catch (err) {
-      if (err && err.code === 404) {
-        // Fallback to non-streaming
-        try {
-          const data = await fetchJSON('/api/story/write', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
-          });
-          this.content = data.content || '';
-          this._originalContent = this.content;
-          this.dirty = false;
-          this.renderSaveButton();
-        } catch (e) {
-          alert(`Failed to write chapter: ${e.message || e}`);
-        }
-      } else if (!(err && err.name === 'AbortError')) {
-        alert(`Write request failed: ${err.message || err}`);
+      const textarea = this.getRawEl();
+      if (!textarea) return false;
+      if (!(window.toastui && window.toastui.Editor)) {
+        console.warn('Toast UI Editor not loaded; staying in raw mode');
+        return false;
       }
+
+      textarea.style.display = 'none';
+
+      if (this._tui) {
+        this._tui.changeMode(mode);
+        this.setEditorHtmlFromContent();
+        return true;
+      }
+
+      const container = document.createElement('div');
+      container.className = 'aq-tui-wrap';
+      textarea.parentNode.insertBefore(container, textarea);
+      this._tuiEl = container;
+
+      const content = initialContent !== null ? initialContent : (this.content || '');
+
+      this._tui = new window.toastui.Editor({
+        el: container,
+        initialEditType: mode === 'wysiwyg' ? 'wysiwyg' : 'markdown',
+        previewStyle: 'tab',
+        height: '100%',
+        usageStatistics: false,
+        toolbarItems: [
+          ['heading', 'bold', 'italic', 'strike'],
+          ['hr', 'quote'],
+          ['ul', 'ol', 'task', 'indent', 'outdent'],
+          ['table', 'link'],
+          ['code', 'codeblock']
+        ],
+        hideModeSwitch: true,
+        initialValue: content
+      });
+
+      this._tui.on('change', () => {
+        if (this._suspendInput) return;
+        try {
+          this.content = this._tui.getMarkdown();
+          this.onChanged();
+        } catch (_) { /* no-op */ }
+      });
+
+      return true;
+    } catch (e) {
+      console.error('Failed to init Toast UI Editor:', e);
+      return false;
     }
   }
 
-  async handleContinueChapter() {
-    if (this.activeId == null) return;
+  /**
+   * Destroy Toast UI instance and restore textarea
+   */
+  _destroyTUI() {
+    if (!this._tui) return;
     try {
-      let accum = '';
-      const base = this.content || '';
-      await this._streamFetch('/api/story/continue/stream', { chap_id: this.activeId, model_name: this.storyCurrentModel }, (chunk) => {
-        accum += chunk;
-        const sep = base && !base.endsWith('\n') ? '\n' : '';
-        this.content = base + sep + accum;
-      });
-      this._originalContent = this.content;
-      this.dirty = false;
-      this.renderSaveButton();
-    } catch (err) {
-      if (err && err.code === 404) {
-        try {
-          const data = await fetchJSON('/api/story/continue', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chap_id: this.activeId, model_name: this.storyCurrentModel })
-          });
-          this.content = data.content || '';
-          this._originalContent = this.content;
-          this.dirty = false;
-          this.renderSaveButton();
-        } catch (e) {
-          alert(`Failed to continue chapter: ${e.message || e}`);
-        }
-      } else if (!(err && err.name === 'AbortError')) {
-        alert(`Continue request failed: ${err.message || err}`);
+      const textarea = this.getRawEl();
+      this._suspendInput = true;
+      try {
+        this.content = this._tui.getMarkdown();
+      } finally {
+        this._suspendInput = false;
       }
+      this._tui.destroy();
+      this._tui = null;
+      if (this._tuiEl && this._tuiEl.parentNode) {
+        this._tuiEl.parentNode.removeChild(this._tuiEl);
+      }
+      this._tuiEl = null;
+      if (textarea) textarea.style.display = '';
+    } catch (e) {
+      console.error('Failed to destroy Toast UI Editor:', e);
+      this._tui = null;
+      this._tuiEl = null;
     }
+  }
+
+  /**
+   * Mark content as changed (dirty tracking)
+   */
+  onChanged() {
+    this.dirty = this.content !== this._originalContent;
+  }
+
+  /**
+   * Confirm with user before discarding unsaved changes
+   */
+  _confirmDiscardIfDirty() {
+    if (!this.dirty) return true;
+    return confirm('You have unsaved changes. Discard them?');
   }
 }
