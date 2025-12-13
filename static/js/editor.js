@@ -1,18 +1,27 @@
 import { fetchJSON, API } from './utils.js';
 import { Component } from './component.js';
+import { RENDER_MODES, EVENTS, DEFAULTS } from './editorConstants.js';
+import { ChapterRenderer } from './chapterRenderer.js';
+import { ContentEditor } from './contentEditor.js';
+import { StoryActions } from './storyActions.js';
+import { FlowMode } from './flowMode.js';
+import { debounce, toast } from './editorUtils.js';
 
 /**
  * Chapter Editor Component
  */
 export class ShellView extends Component {
+  /**
+   * @param {HTMLElement} element - The root element for the shell view.
+   */
   constructor(element) {
     const initialState = {
       chapters: [],
       activeId: null,
       content: '',
-      renderMode: 'raw',
-      contentWidth: 33, // em units
-      fontSize: 1, // rem units
+      renderMode: RENDER_MODES.RAW,
+      contentWidth: DEFAULTS.CONTENT_WIDTH, // em units
+      fontSize: DEFAULTS.FONT_SIZE, // rem units
       dirty: false,
       _originalContent: '',
       _originalSummaryContent: '', // Added for summary dirty tracking
@@ -32,8 +41,8 @@ export class ShellView extends Component {
     // Non-reactive properties
     this._tui = null;
     this._tuiEl = null;
-    this._debouncedSaveSummary = this._debounce(this._saveSummary.bind(this), 1000); // Debounce by 1 second
-    this._debouncedSaveTitle = this._debounce(this._saveTitle.bind(this), 500);
+    this._debouncedSaveSummary = debounce(this._saveSummary.bind(this), DEFAULTS.DEBOUNCE_SUMMARY); // Debounce by 1 second
+    this._debouncedSaveTitle = debounce(this._saveTitle.bind(this), DEFAULTS.DEBOUNCE_TITLE);
     this._storyAbortController = null;
 
     // Flow mode state (two-choice sentence suggestions)
@@ -41,6 +50,12 @@ export class ShellView extends Component {
     this._defineReactive('flowBusy', false);
     this._defineReactive('flowLeft', '');
     this._defineReactive('flowRight', '');
+
+    // Sub-components
+    this.chapterRenderer = new ChapterRenderer(this);
+    this.contentEditor = new ContentEditor(this);
+    this.storyActions = new StoryActions(this);
+    this.flowMode = new FlowMode(this);
   }
 
   /**
@@ -50,36 +65,36 @@ export class ShellView extends Component {
     super.init();
 
     // Watch for state changes to update DOM
-    this.watch('chapters', () => this.renderChapterList());
+    this.watch('chapters', () => this.chapterRenderer.renderChapterList());
     this.watch('activeId', () => {
       // Reset Flow mode when switching chapters to avoid mixing contexts
-      if (this.flowActive) this.handleFlowStop();
-      this.renderChapterList();
-      this.renderMainView();
+      if (this.flowActive) this.flowMode.handleFlowStop();
+      this.chapterRenderer.renderChapterList();
+      this.chapterRenderer.renderMainView();
     });
-    this.watch('editingId', () => this.renderChapterList());
-    this.watch('dirty', () => this.renderDirtyState());
-    this.watch('content', () => this.renderContent());
+    this.watch('editingId', () => this.chapterRenderer.renderChapterList());
+    this.watch('dirty', () => this.chapterRenderer.renderDirtyState());
+    this.watch('content', () => this.contentEditor.renderContent());
     this.watch('renderMode', () => {
       try { localStorage.setItem('aq:renderMode', this.renderMode); } catch (_) {}
-      this.renderModeButtons();
-      this.renderRawEditorToolbar();
+      this.contentEditor.renderModeButtons();
+      this.contentEditor.renderRawEditorToolbar();
     });
-    this.watch('contentWidth', () => this.renderContentWidth());
-    this.watch('fontSize', () => this.renderFontSize());
-    this.watch('storyModels', () => this.renderStoryModels());
-    this.watch('storyBusy', () => this.renderStoryBusy());
+    this.watch('contentWidth', () => this.contentEditor.renderContentWidth());
+    this.watch('fontSize', () => this.contentEditor.renderFontSize());
+    this.watch('storyModels', () => this.storyActions.renderStoryModels());
+    this.watch('storyBusy', () => this.storyActions.renderStoryBusy());
 
     // Flow mode watchers
-    this.watch('flowActive', () => this.renderFlowUI());
-    this.watch('flowBusy', () => this.renderFlowUI());
-    this.watch('flowLeft', () => this.renderFlowUI());
-    this.watch('flowRight', () => this.renderFlowUI());
+    this.watch('flowActive', () => this.flowMode.renderFlowUI());
+    this.watch('flowBusy', () => this.flowMode.renderFlowUI());
+    this.watch('flowLeft', () => this.flowMode.renderFlowUI());
+    this.watch('flowRight', () => this.flowMode.renderFlowUI());
 
 
     // Listen for project changes from settings page
     this._onProjectSelected = () => { this.refreshChapters(); };
-    document.addEventListener('aq:project-selected', this._onProjectSelected);
+    document.addEventListener(EVENTS.PROJECT_SELECTED, this._onProjectSelected);
 
     // Global updates when story or machine settings change (from chat tools or settings modal)
     this._onStoryUpdated = (e) => {
@@ -93,14 +108,14 @@ export class ShellView extends Component {
         }
       });
     };
-    document.addEventListener('aq:story-updated', this._onStoryUpdated);
+    document.addEventListener(EVENTS.STORY_UPDATED, this._onStoryUpdated);
 
     this._onMachineUpdated = () => {
       // Reload story models and chapters to reflect new configuration
       Promise.resolve(this.loadChat()); // loadChat now only loads story models if needed
       Promise.resolve(this.refreshChapters());
     };
-    document.addEventListener('aq:machine-updated', this._onMachineUpdated);
+    document.addEventListener(EVENTS.MACHINE_UPDATED, this._onMachineUpdated);
 
     // Keyboard shortcut: Ctrl/Cmd+S to save
     window.addEventListener('keydown', (e) => {
@@ -120,13 +135,13 @@ export class ShellView extends Component {
       }
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        this._flowPick('left');
+        this.flowMode._flowPick('left');
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        this._flowPick('right');
+        this.flowMode._flowPick('right');
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this._flowDiscard();
+        this.flowMode._flowDiscard();
       }
     });
 
@@ -144,23 +159,23 @@ export class ShellView extends Component {
     // Load saved render mode preference first
     try {
       const savedMode = localStorage.getItem('aq:renderMode');
-      if (savedMode === 'raw' || savedMode === 'markdown' || savedMode === 'wysiwyg') {
+      if (savedMode === RENDER_MODES.RAW || savedMode === RENDER_MODES.MARKDOWN || savedMode === RENDER_MODES.WYSIWYG) {
         this.renderMode = savedMode;
       }
     } catch (_) {}
 
     this.load();
-    this.renderMainView();
-    this.renderRawEditorToolbar();
-    this.renderContentWidth();
-    this.renderFontSize();
+    this.chapterRenderer.renderMainView();
+    this.contentEditor.renderRawEditorToolbar();
+    this.contentEditor.renderContentWidth();
+    this.contentEditor.renderFontSize();
   }
 
   destroy() {
     try {
-      if (this._onProjectSelected) document.removeEventListener('aq:project-selected', this._onProjectSelected);
-      if (this._onStoryUpdated) document.removeEventListener('aq:story-updated', this._onStoryUpdated);
-      if (this._onMachineUpdated) document.removeEventListener('aq:machine-updated', this._onMachineUpdated);
+      if (this._onProjectSelected) document.removeEventListener(EVENTS.PROJECT_SELECTED, this._onProjectSelected);
+      if (this._onStoryUpdated) document.removeEventListener(EVENTS.STORY_UPDATED, this._onStoryUpdated);
+      if (this._onMachineUpdated) document.removeEventListener(EVENTS.MACHINE_UPDATED, this._onMachineUpdated);
     } catch (_) {}
     super.destroy();
   }
@@ -290,9 +305,9 @@ export class ShellView extends Component {
     }
 
     // Render mode buttons (scoped to editor toolbar in main pane)
-    ['raw','markdown','wysiwyg'].forEach(mode => {
+    [RENDER_MODES.RAW, RENDER_MODES.MARKDOWN, RENDER_MODES.WYSIWYG].forEach(mode => {
       const btn = this.el.querySelector(`[data-mode="${mode}"]`);
-      if (btn) btn.addEventListener('click', () => this.switchRender(mode));
+      if (btn) btn.addEventListener('click', () => this.contentEditor.switchRender(mode));
     });
 
     // Width mode buttons (scoped)
@@ -300,9 +315,9 @@ export class ShellView extends Component {
     widthButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const direction = btn.dataset.direction;
-        const step = 4; // em
-        const minWidth = 25; // em
-        const maxWidth = 80; // em
+        const step = DEFAULTS.WIDTH_STEP; // em
+        const minWidth = DEFAULTS.MIN_WIDTH; // em
+        const maxWidth = DEFAULTS.MAX_WIDTH; // em
 
         if (direction === 'increase') {
           this.contentWidth = Math.min(maxWidth, this.contentWidth + step);
@@ -317,9 +332,9 @@ export class ShellView extends Component {
     fontSizeButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const direction = btn.dataset.direction;
-        const step = 0.1; // rem
-        const minSize = 0.7; // rem
-        const maxSize = 2.0; // rem
+        const step = DEFAULTS.FONT_STEP; // rem
+        const minSize = DEFAULTS.MIN_FONT; // rem
+        const maxSize = DEFAULTS.MAX_FONT; // rem
 
         if (direction === 'increase') {
           this.fontSize = Math.min(maxSize, this.fontSize + step);
@@ -381,173 +396,51 @@ export class ShellView extends Component {
 
     const writeSummaryBtn = this.el.querySelector('[data-action="story-write-summary"]');
     if (writeSummaryBtn) {
-      writeSummaryBtn.addEventListener('click', () => this.handleWriteSummary());
+      writeSummaryBtn.addEventListener('click', () => this.storyActions.handleWriteSummary());
     }
     const writeChapterBtn = this.el.querySelector('[data-action="story-write-chapter"]');
     if (writeChapterBtn) {
-      writeChapterBtn.addEventListener('click', () => this.handleWriteChapter());
+      writeChapterBtn.addEventListener('click', () => this.storyActions.handleWriteChapter());
     }
     const continueChapterBtn = this.el.querySelector('[data-action="story-continue-chapter"]');
     if (continueChapterBtn) {
-      continueChapterBtn.addEventListener('click', () => this.handleContinueChapter());
+      continueChapterBtn.addEventListener('click', () => this.storyActions.handleContinueChapter());
     }
 
     const cancelStoryBtn = this.el.querySelector('[data-action="story-cancel"]');
     if (cancelStoryBtn) {
-      cancelStoryBtn.addEventListener('click', () => this.cancelStoryAction());
+      cancelStoryBtn.addEventListener('click', () => this.storyActions.cancelStoryAction());
     }
 
     // Flow mode buttons
     const flowStartBtn = this.el.querySelector('[data-action="flow-start"]');
     if (flowStartBtn) {
-      flowStartBtn.addEventListener('click', () => this.handleFlowStart());
+      flowStartBtn.addEventListener('click', () => this.flowMode.handleFlowStart());
     }
     const flowStopBtn = this.el.querySelector('[data-action="flow-stop"]');
     if (flowStopBtn) {
-      flowStopBtn.addEventListener('click', () => this.handleFlowStop());
+      flowStopBtn.addEventListener('click', () => this.flowMode.handleFlowStop());
     }
     const flowPickLeft = this.el.querySelector('[data-action="flow-pick-left"]');
     if (flowPickLeft) {
-      flowPickLeft.addEventListener('click', () => this._flowPick('left'));
+      flowPickLeft.addEventListener('click', () => this.flowMode._flowPick('left'));
     }
     const flowPickRight = this.el.querySelector('[data-action="flow-pick-right"]');
     if (flowPickRight) {
-      flowPickRight.addEventListener('click', () => this._flowPick('right'));
+      flowPickRight.addEventListener('click', () => this.flowMode._flowPick('right'));
     }
     const flowDiscard = this.el.querySelector('[data-action="flow-discard"]');
     if (flowDiscard) {
-      flowDiscard.addEventListener('click', () => this._flowDiscard());
+      flowDiscard.addEventListener('click', () => this.flowMode._flowDiscard());
     }
   }
 
   /**
-   * Render chapter list in DOM
+   * Confirm with user before discarding unsaved changes
    */
-  renderChapterList() {
-    const list = this.el?.querySelector('[data-chapter-list]');
-    if (!list) return;
-
-    list.innerHTML = this.chapters.map(chapter => `
-      <li class="chapter-item ${chapter.id === this.activeId ? 'active' : ''} ${chapter.expanded ? 'expanded' : ''}"
-          data-chapter-id="${chapter.id}">
-        <div class="chapter-header">
-            <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="toggle-summary" title="Toggle Summary">
-                ${chapter.expanded ? '▼' : '▶'}
-            </button>
-            <div class="chapter-edit-container" style="flex:1;">
-              <input type="text"
-                     value="${this.escapeHtml(chapter.title || '')}"
-                     placeholder="Untitled"
-                     data-ref="titleInput"
-                     class="chapter-title-input">
-            </div>
-        </div>
-        ${chapter.expanded ? `
-            <div class="chapter-summary-section">
-                <div class="summary-edit-container">
-                    <textarea data-chapter-id="${chapter.id}"
-                              data-ref="summaryInput"
-                              class="chapter-summary-input"
-                              rows="3"
-                              placeholder="Enter summary...">${this.escapeHtml(chapter.summary || '')}</textarea>
-                </div>
-            </div>
-        ` : ''}
-      </li>
-    `).join('');
-    // Refresh refs
-    this._scanRefs();
-  }
-
-  /**
-   * Render save button state
-   */
-  renderSaveButton() {
-    const saveBtn = document.querySelector('[data-action="save"]');
-    if (saveBtn) {
-      saveBtn.disabled = !this.dirty;
-      saveBtn.textContent = this.dirty ? 'Save *' : 'Save';
-    }
-  }
-
-  /**
-   * Render content in textarea
-   */
-  renderContent() {
-    const textarea = this.$refs.rawEditor;
-    if (textarea && textarea.value !== this.content && !this._suspendInput) {
-      this._suspendInput = true;
-      textarea.value = this.content;
-      this._suspendInput = false;
-    }
-  }
-
-  /**
-   * Render Flow mode UI state
-   */
-  renderFlowUI() {
-    const area = this.$refs.flowArea || this.el.querySelector('[data-ref="flowArea"]');
-    const startBtn = this.el.querySelector('[data-action="flow-start"]');
-    const stopBtn = this.el.querySelector('[data-action="flow-stop"]');
-    const leftBox = this.$refs.flowLeft || this.el.querySelector('[data-ref="flowLeft"]');
-    const rightBox = this.$refs.flowRight || this.el.querySelector('[data-ref="flowRight"]');
-    const hint = this.$refs.flowHint || this.el.querySelector('[data-ref="flowHint"]');
-
-    if (area) {
-      area.style.display = this.flowActive ? '' : 'none';
-    }
-    if (startBtn) startBtn.style.display = this.flowActive ? 'none' : '';
-    if (stopBtn) stopBtn.style.display = this.flowActive ? '' : 'none';
-
-    const loadingText = this.flowBusy ? '…' : '';
-    if (leftBox) leftBox.textContent = this.flowLeft || loadingText;
-    if (rightBox) rightBox.textContent = this.flowRight || loadingText;
-    const disabled = this.flowBusy || !this.flowActive;
-    ['flow-pick-left','flow-pick-right','flow-discard'].forEach(sel => {
-      const btn = this.el.querySelector(`[data-action="${sel}"]`);
-      if (btn) btn.disabled = disabled;
-    });
-    if (hint) hint.style.opacity = this.flowBusy ? '0.6' : '1';
-  }
-
-  /**
-   * Render mode button states
-   */
-  renderModeButtons() {
-    ['raw', 'markdown', 'wysiwyg'].forEach(mode => {
-      const btn = this.el.querySelector(`[data-mode="${mode}"]`);
-      if (btn) {
-        const active = this.renderMode === mode;
-        btn.classList.toggle('active', active);
-        btn.setAttribute('aria-selected', active ? 'true' : 'false');
-      }
-    });
-  }
-
-  /**
-   * Render content width (narrow/wide)
-   */
-  renderContentWidth() {
-    this.el.style.gridTemplateColumns = `1fr ${this.contentWidth + 2}em 1fr`;
-  }
-
-  /**
-   * Render editor font size
-   */
-  renderFontSize() {
-    const cardEl = this.el.querySelector('.aq-card');
-    if (cardEl) {
-      cardEl.style.fontSize = `${this.fontSize}rem`;
-    }
-  }
-
-  /**
-   * Escape HTML for safe rendering
-   */
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  _confirmDiscardIfDirty() {
+    if (!this.dirty) return true;
+    return confirm('You have unsaved changes. Discard them?');
   }
 
   /**
@@ -559,9 +452,9 @@ export class ShellView extends Component {
       await this._loadRenderMode();
 
       // Initialize Toast UI if starting in Markdown or WYSIWYG
-      if (this.renderMode !== 'raw') {
+      if (this.renderMode !== RENDER_MODES.RAW) {
         const mode = this.renderMode;
-        queueMicrotask(() => this._initTUI(mode));
+        queueMicrotask(() => this.contentEditor._initTUI(mode));
       }
 
       // Load chapter list
@@ -586,11 +479,11 @@ export class ShellView extends Component {
       if (story && story.format) {
         const format = String(story.format).toLowerCase() || 'markdown';
         if (format === 'raw') {
-          this.renderMode = 'raw';
+          this.renderMode = RENDER_MODES.RAW;
         } else if (format === 'wysiwyg') {
-          this.renderMode = 'wysiwyg';
+          this.renderMode = RENDER_MODES.WYSIWYG;
         } else {
-          this.renderMode = 'markdown';
+          this.renderMode = RENDER_MODES.MARKDOWN;
         }
       }
     } catch (e) {
@@ -652,106 +545,8 @@ export class ShellView extends Component {
   }
 
   // ========================================
-  // Story LLM controls
-  // ========================================
-  renderStoryModels() {
-    const select = this.$refs.storyModelSelect || this.el.querySelector('[data-ref="storyModelSelect"]');
-    if (!select) return;
-    const models = Array.isArray(this.storyModels) ? this.storyModels : [];
-    const current = this.storyCurrentModel || '';
-    select.innerHTML = models.map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`).join('');
-  }
-
-  // =====================
-  // Flow mode handlers
-  // =====================
-  async handleFlowStart() {
-    if (this.activeId == null) return;
-    this.flowActive = true;
-    await this._flowFetchPair();
-  }
-
-  handleFlowStop() {
-    this.flowActive = false;
-    this.flowLeft = '';
-    this.flowRight = '';
-  }
-
-  async _flowFetchPair() {
-    if (!this.flowActive || this.activeId == null) return;
-    this.flowBusy = true;
-    try {
-      const payload = { chap_id: this.activeId, model_name: this.storyCurrentModel, current_text: this.content || '' };
-      const data = await fetchJSON('/api/story/suggest_pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      this.flowLeft = data.left || '';
-      this.flowRight = data.right || '';
-    } catch (e) {
-      this.flowLeft = '(error)';
-      this.flowRight = '(error)';
-    } finally {
-      this.flowBusy = false;
-    }
-  }
-
-  _flowAppendSentence(sentence) {
-    if (!sentence) return;
-    const base = this.content || '';
-    let sep = '';
-    if (!base) {
-      sep = '';
-    } else if (/\s$/.test(base)) {
-      sep = '';
-    } else if (/[\.\!\?]$/.test(base.trim())) {
-      sep = ' ';
-    } else {
-      sep = ' ';
-    }
-    this.content = (base + sep + sentence).replace(/\s+$/,' ') ;
-    this.dirty = true;
-    this.renderSaveButton();
-  }
-
-  async _flowPick(side) {
-    if (!this.flowActive || this.flowBusy) return;
-    const sentence = side === 'left' ? this.flowLeft : this.flowRight;
-    this._flowAppendSentence(sentence);
-    // Immediately fetch next pair to keep flow
-    await this._flowFetchPair();
-  }
-
-  async _flowDiscard() {
-    if (!this.flowActive || this.flowBusy) return;
-    this.flowLeft = '';
-    this.flowRight = '';
-    await this._flowFetchPair();
-  }
-
-  // ========================================
   // Story LLM actions (streaming-enabled)
   // ========================================
-
-  // Streaming infra
-  _ensureToastHost() {
-    let host = document.querySelector('.aq-toasts');
-    if (!host) {
-      host = document.createElement('div');
-      host.className = 'aq-toasts';
-      document.body.appendChild(host);
-    }
-    return host;
-  }
-
-  _toast(message, variant = 'info', timeoutMs = 2500) {
-    const host = this._ensureToastHost();
-    const el = document.createElement('div');
-    el.className = `aq-toast ${variant}`;
-    el.textContent = message;
-    host.appendChild(el);
-    window.setTimeout(() => {
-      try { el.remove(); } catch (_) {}
-      if (!host.childElementCount) host.remove();
-    }, timeoutMs);
-  }
 
   cancelStoryAction() {
     if (this._storyAbortController) {
@@ -842,7 +637,7 @@ export class ShellView extends Component {
       // On completion, leave content in editor; user can Save.
       this._originalContent = this.content;
       this.dirty = false;
-      this.renderSaveButton();
+      this.chapterRenderer.renderSaveButton();
     } catch (err) {
       if (err && err.code === 404) {
         // Fallback to non-streaming
@@ -854,7 +649,7 @@ export class ShellView extends Component {
           this.content = data.content || '';
           this._originalContent = this.content;
           this.dirty = false;
-          this.renderSaveButton();
+          this.chapterRenderer.renderSaveButton();
         } catch (e) {
           alert(`Failed to write chapter: ${e.message || e}`);
         }
@@ -876,7 +671,7 @@ export class ShellView extends Component {
       });
       this._originalContent = this.content;
       this.dirty = false;
-      this.renderSaveButton();
+      this.chapterRenderer.renderSaveButton();
     } catch (err) {
       if (err && err.code === 404) {
         try {
@@ -887,7 +682,7 @@ export class ShellView extends Component {
           this.content = data.content || '';
           this._originalContent = this.content;
           this.dirty = false;
-          this.renderSaveButton();
+          this.chapterRenderer.renderSaveButton();
         } catch (e) {
           alert(`Failed to continue chapter: ${e.message || e}`);
         }
@@ -1024,9 +819,9 @@ export class ShellView extends Component {
       this.content = cleanContent;
       this._originalContent = this.content;
       this.dirty = false;
-      this._toast('Saved', 'success');
+      toast(UI_STRINGS.SAVED, 'success');
     } catch (e) {
-      this._toast(`Failed to save: ${e.message || e}`, 'error');
+      toast(UI_STRINGS.FAILED_SAVE + (e.message || e), 'error');
     }
   }
 
@@ -1051,12 +846,12 @@ export class ShellView extends Component {
       this.dirty = false;
 
       queueMicrotask(() => {
-        if (this.renderMode !== 'raw') {
-          this._initTUI(this.renderMode, this.content);
+        if (this.renderMode !== RENDER_MODES.RAW) {
+          this.contentEditor._initTUI(this.renderMode, this.content);
         }
       });
     } catch (e) {
-      this.content = `Error loading chapter: ${e.message || e}`;
+      this.content = UI_STRINGS.ERROR_LOADING + (e.message || e);
       this._originalContent = this.content;
       this.dirty = false;
     }
@@ -1101,18 +896,6 @@ export class ShellView extends Component {
     this.chapters = this.chapters.map(c =>
       c.id === id ? { ...c, expanded: !c.expanded } : c
     );
-  }
-
-  /**
-   * Debounce utility function
-   */
-  _debounce(func, delay) {
-    let timeout;
-    return function(...args) {
-      const context = this;
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(context, args), delay);
-    };
   }
 
   async _saveSummary(event) {
@@ -1185,86 +968,6 @@ export class ShellView extends Component {
     } catch (e) {
       alert(`Failed to create chapter: ${e.message || e}`);
     }
-  }
-
-  // ========================================
-  // View Rendering
-  // ========================================
-
-  renderMainView() {
-    const emptyView = this.el.querySelector('[data-view="empty"]');
-    const chapterView = this.el.querySelector('[data-view="chapter"]');
-    if (!emptyView || !chapterView) return;
-
-    const isChapterOpen = this.activeId !== null;
-    emptyView.style.display = isChapterOpen ? 'none' : 'block';
-    chapterView.style.display = isChapterOpen ? 'flex' : 'none';
-
-    if (isChapterOpen) {
-      const activeIdEl = this.el.querySelector('[data-active-id]');
-      if (activeIdEl) activeIdEl.textContent = this.activeId;
-    }
-  }
-
-  renderDirtyState() {
-    const dirtyIndicator = document.querySelector('[data-dirty-indicator]');
-    if (dirtyIndicator) {
-      dirtyIndicator.style.display = this.dirty ? 'inline' : 'none';
-    }
-    try {
-      document.body?.setAttribute('data-dirty', this.dirty ? 'true' : 'false');
-    } catch (_) {}
-    this.renderSaveButton();
-  }
-
-  renderRawEditorToolbar() {
-    const toolbar = this.el.querySelector('[data-raw-toolbar]');
-    const textarea = this.el.querySelector('[data-ref="rawEditor"]');
-    if (!toolbar || !textarea) return;
-
-    const show = this.renderMode === 'raw';
-    toolbar.style.display = show ? 'flex' : 'none';
-    textarea.style.display = show ? 'block' : 'none';
-  }
-
-  // =============================
-  // Story streaming UX
-  // =============================
-  renderStoryBusy() {
-    const summaryBtn = this.el.querySelector('[data-action="story-write-summary"]');
-    const writeBtn = this.el.querySelector('[data-action="story-write-chapter"]');
-    const continueBtn = this.el.querySelector('[data-action="story-continue-chapter"]');
-    const cancelBtn = this.el.querySelector('[data-action="story-cancel"]');
-    const busy = !!this.storyBusy;
-    [summaryBtn, writeBtn, continueBtn].forEach(btn => { if (btn) btn.disabled = busy; });
-    if (cancelBtn) {
-      cancelBtn.style.display = busy ? 'inline-block' : 'none';
-    }
-  }
-
-  // =============================
-  // Toasts
-  // =============================
-  _ensureToastHost() {
-    let host = document.querySelector('.aq-toasts');
-    if (!host) {
-      host = document.createElement('div');
-      host.className = 'aq-toasts';
-      document.body.appendChild(host);
-    }
-    return host;
-  }
-
-  _toast(message, variant = 'info', timeoutMs = 2500) {
-    const host = this._ensureToastHost();
-    const el = document.createElement('div');
-    el.className = `aq-toast ${variant}`;
-    el.textContent = message;
-    host.appendChild(el);
-    window.setTimeout(() => {
-      try { el.remove(); } catch (_) {}
-      if (!host.childElementCount) host.remove();
-    }, timeoutMs);
   }
 
   // ========================================
