@@ -1,5 +1,6 @@
 import { fetchJSON } from './utils.js';
 import { STORY_ACTIONS, UI_STRINGS } from './editorConstants.js';
+import { toast } from './editorUtils.js';
 
 export class StoryActions {
   /**
@@ -82,10 +83,10 @@ export class StoryActions {
           const textarea = this.shellView.el.querySelector(`[data-chapter-id="${this.shellView.activeId}"][data-ref="summaryInput"]`);
           if (textarea) textarea.value = data.summary || '';
         } catch (e) {
-          alert(UI_STRINGS.FAILED_SUMMARY + (e.message || e));
+          toast(UI_STRINGS.FAILED_SUMMARY + (e.message || e), 'error');
         }
       } else if (!(err && err.name === 'AbortError')) {
-        alert(`Summary request failed: ${err.message || err}`);
+        toast(`Summary request failed: ${err.message || err}`, 'error');
       }
     }
   }
@@ -118,10 +119,10 @@ export class StoryActions {
           this.shellView.dirty = false;
           this.shellView.chapterRenderer.renderSaveButton();
         } catch (e) {
-          alert(UI_STRINGS.FAILED_WRITE + (e.message || e));
+          alert(UI_STRINGS.FAILED_CONTINUE + (e.message || e));
         }
       } else if (!(err && err.name === 'AbortError')) {
-        alert(`Write request failed: ${err.message || err}`);
+        alert(`Continue request failed: ${err.message || err}`);
       }
     }
   }

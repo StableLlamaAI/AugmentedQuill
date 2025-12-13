@@ -46,9 +46,9 @@
                     <span style="font-size:0.85rem; color:var(--muted);">Story model</span>
                     <select data-ref="storyModelSelect" class="aq-select aq-select-sm"></select>
                   </label>
-                  <button class="aq-btn aq-btn-sm" data-action="story-write-summary" title="Write or update summary">✎ Summary</button>
-                  <button class="aq-btn aq-btn-sm" data-action="story-write-chapter" title="Write chapter from summary">📝 Write</button>
-                  <button class="aq-btn aq-btn-sm" data-action="story-continue-chapter" title="Continue chapter to match summary">⏭ Continue</button>
+                  <button class="aq-btn aq-btn-sm" data-action="story-write-summary" title="Write or update summary"><i class="fas fa-edit"></i> Summary</button>
+                  <button class="aq-btn aq-btn-sm" data-action="story-write-chapter" title="Write chapter from summary"><i class="fas fa-file-alt"></i> Write</button>
+                  <button class="aq-btn aq-btn-sm" data-action="story-continue-chapter" title="Continue chapter to match summary"><i class="fas fa-forward"></i> Continue</button>
                   <button class="aq-btn aq-btn-sm" data-action="story-cancel" title="Cancel running LLM action" style="display:none;">■ Stop</button>
                 </div>
               </div>
@@ -116,7 +116,7 @@
           </div>
           <div class="aq-toolbar" style="justify-content: flex-end; margin-top:0.5rem;">
             <button class="aq-btn" data-ref="deleteLast">Delete last</button>
-            <button class="aq-btn aq-btn-primary" data-ref="send">Send</button>
+            <button class="aq-btn aq-btn-primary" data-ref="send">Send <span class="aq-spinner" data-ref="sendSpinner" style="display:none;"></span></button>
             <button class="aq-btn" data-ref="regenerate">Regenerate</button>
           </div>
         </div>

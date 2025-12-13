@@ -6,6 +6,7 @@ import { TOOLS } from './tools.js';
 import { ModelSelector } from './modelSelector.js';
 import { MessageRenderer } from './messageRenderer.js';
 import { RoleSelector } from './roleSelector.js';
+import { toast } from './editorUtils.js';
 
 /**
  * ChatView component for handling chat interactions, model selection, and message rendering.
@@ -38,6 +39,7 @@ export class ChatView extends Component {
     if (!this.el) return;
     this._scanRefs();
     this._bindEvents();
+    this.watch('sending', () => this.render());
     // Load models first (machine configuration), then load chat state (messages, current model)
     this.loadModels();
     this.loadState();
@@ -135,6 +137,19 @@ export class ChatView extends Component {
    */
   render() {
     this.messageRenderer.render();
+    // Update send button and input based on sending state
+    const sendBtn = this.$refs.send;
+    const spinner = this.$refs.sendSpinner;
+    const input = this.$refs.input;
+    if (sendBtn) {
+      sendBtn.disabled = this.sending;
+    }
+    if (spinner) {
+      spinner.style.display = this.sending ? 'inline-block' : 'none';
+    }
+    if (input) {
+      input.disabled = this.sending;
+    }
   }
 
   /**
@@ -365,7 +380,7 @@ export class ChatView extends Component {
       let resp = await this.callChat(this.messages, tools);
       await this.handleResponse(resp);
     } catch (e) {
-      alert(`Chat error: ${e.message || e}`);
+      toast(`Chat error: ${e.message || e}`, 'error');
     } finally {
       this.sending = false;
       try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_SENDING, { detail: { sending: this.sending } })); } catch (e) { console.warn('Failed to dispatch chat sending event:', e); }

@@ -10,6 +10,7 @@ export class FlowMode {
    */
   constructor(shellView) {
     this.shellView = shellView;
+    this.touchStartX = 0;
   }
 
   /**
@@ -29,14 +30,24 @@ export class FlowMode {
     if (startBtn) startBtn.style.display = this.shellView.flowActive ? 'none' : '';
     if (stopBtn) stopBtn.style.display = this.shellView.flowActive ? '' : 'none';
 
-    const loadingText = this.shellView.flowBusy ? UI_STRINGS.LOADING : '';
-    if (leftBox) leftBox.textContent = this.shellView.flowLeft || loadingText;
-    if (rightBox) rightBox.textContent = this.shellView.flowRight || loadingText;
+    const loadingText = this.shellView.flowBusy ? '<div class="aq-spinner"></div>' : '';
+    if (leftBox) leftBox.innerHTML = this.shellView.flowLeft || loadingText;
+    if (rightBox) rightBox.innerHTML = this.shellView.flowRight || loadingText;
     const disabled = this.shellView.flowBusy || !this.shellView.flowActive;
     ['flow-pick-left','flow-pick-right','flow-discard'].forEach(sel => {
       const btn = this.shellView.el.querySelector(`[data-action="${sel}"]`);
       if (btn) btn.disabled = disabled;
     });
+
+    // Add touch swipe for choices
+    if (leftBox && !disabled) {
+      leftBox.addEventListener('touchstart', (e) => this._handleTouchStart(e));
+      leftBox.addEventListener('touchend', (e) => this._handleTouchEnd(e, 'left'));
+    }
+    if (rightBox && !disabled) {
+      rightBox.addEventListener('touchstart', (e) => this._handleTouchStart(e));
+      rightBox.addEventListener('touchend', (e) => this._handleTouchEnd(e, 'right'));
+    }
     if (hint) hint.style.opacity = this.shellView.flowBusy ? '0.6' : '1';
   }
 
@@ -78,25 +89,43 @@ export class FlowMode {
   }
 
   /**
-   * Appends a sentence to content.
-   * @param {string} sentence - The sentence to append.
+   * Handles touch start for swipe detection.
+   * @param {TouchEvent} e - The touch event.
    */
-  _flowAppendSentence(sentence) {
-    if (!sentence) return;
-    const base = this.shellView.content || '';
-    let sep = '';
-    if (!base) {
-      sep = '';
-    } else if (/\s$/.test(base)) {
-      sep = '';
-    } else if (/[\.\!\?]$/.test(base.trim())) {
-      sep = ' ';
-    } else {
-      sep = ' ';
+  _handleTouchStart(e) {
+    this.touchStartX = e.touches[0].clientX;
+  }
+
+  /**
+   * Handles touch end for swipe detection.
+   * @param {TouchEvent} e - The touch event.
+   * @param {string} side - 'left' or 'right'.
+   */
+  _handleTouchEnd(e, side) {
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaX = touchEndX - this.touchStartX;
+    const threshold = 50; // Minimum swipe distance
+    if (Math.abs(deltaX) > threshold) {
+      if (side === 'left' && deltaX < 0) {
+        // Swipe left on left box: pick left
+        this._flowPick('left');
+      } else if (side === 'right' && deltaX > 0) {
+        // Swipe right on right box: pick right
+        this._flowPick('right');
+      }
     }
-    this.shellView.content = (base + sep + sentence).replace(/\s+$/,' ') ;
-    this.shellView.dirty = true;
-    this.shellView.chapterRenderer.renderSaveButton();
+  }
+
+  /**
+   * Picks a flow sentence.
+   * @param {string} side - 'left' or 'right'.
+   */
+  _flowPick(side) {
+    const sentence = side === 'left' ? this.shellView.flowLeft : this.shellView.flowRight;
+    if (sentence) {
+      this._flowAppendSentence(sentence);
+      this._flowFetchPair(); // Get new pair
+    }
   }
 
   /**

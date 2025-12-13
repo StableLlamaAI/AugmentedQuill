@@ -655,10 +655,10 @@ export class ShellView extends Component {
           const textarea = this.el.querySelector(`[data-chapter-id="${this.activeId}"][data-ref="summaryInput"]`);
           if (textarea) textarea.value = data.summary || '';
         } catch (e) {
-          alert(`Failed to write summary: ${e.message || e}`);
+          toast(`Failed to write summary: ${e.message || e}`, 'error');
         }
       } else if (!(err && err.name === 'AbortError')) {
-        alert(`Summary request failed: ${err.message || err}`);
+        toast(`Summary request failed: ${err.message || err}`, 'error');
       }
     }
   }
@@ -688,10 +688,10 @@ export class ShellView extends Component {
           this.dirty = false;
           this.chapterRenderer.renderSaveButton();
         } catch (e) {
-          alert(`Failed to write chapter: ${e.message || e}`);
+          toast(`Failed to write chapter: ${e.message || e}`, 'error');
         }
       } else if (!(err && err.name === 'AbortError')) {
-        alert(`Write request failed: ${err.message || err}`);
+        toast(`Write request failed: ${err.message || err}`, 'error');
       }
     }
   }
@@ -721,10 +721,10 @@ export class ShellView extends Component {
           this.dirty = false;
           this.chapterRenderer.renderSaveButton();
         } catch (e) {
-          alert(`Failed to continue chapter: ${e.message || e}`);
+          toast(`Failed to continue chapter: ${e.message || e}`, 'error');
         }
       } else if (!(err && err.name === 'AbortError')) {
-        alert(`Continue request failed: ${err.message || err}`);
+        toast(`Continue request failed: ${err.message || err}`, 'error');
       }
     }
   }
@@ -917,7 +917,7 @@ export class ShellView extends Component {
         c.id === id ? { ...c, title: data.chapter.title } : c
       );
     } catch (e) {
-      alert(`Failed to save title: ${e.message || e}`);
+      toast(`Failed to save title: ${e.message || e}`, 'error');
     } finally {
       this.editingId = null;
       this.editingTitle = '';
@@ -957,7 +957,7 @@ export class ShellView extends Component {
       this._originalSummaryContent = summary; // Update original content after save
     } catch (e) {
       console.error(`Failed to save summary for chapter ${id}: ${e.message || e}`);
-      alert(`Failed to save summary: ${e.message || e}`);
+      toast(`Failed to save summary: ${e.message || e}`, 'error');
       // Optionally, revert the textarea to _originalSummaryContent or show an error state
     }
   }
@@ -1003,7 +1003,7 @@ export class ShellView extends Component {
         this.startEdit(chapter);
       }
     } catch (e) {
-      alert(`Failed to create chapter: ${e.message || e}`);
+      toast(`Failed to create chapter: ${e.message || e}`, 'error');
     }
   }
 
