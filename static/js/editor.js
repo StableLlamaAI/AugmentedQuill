@@ -9,6 +9,9 @@ import { debounce, toast } from './editorUtils.js';
 
 /**
  * Chapter Editor Component
+ * Provides a comprehensive interface for editing story chapters with multiple rendering modes,
+ * AI-assisted writing features, and real-time collaboration capabilities.
+ * Integrates with backend APIs for persistence and AI services for content generation.
  */
 export class ShellView extends Component {
   /**
@@ -76,7 +79,7 @@ export class ShellView extends Component {
     this.watch('dirty', () => this.chapterRenderer.renderDirtyState());
     this.watch('content', () => this.contentEditor.renderContent());
     this.watch('renderMode', () => {
-      try { localStorage.setItem('aq:renderMode', this.renderMode); } catch (_) {}
+      try { localStorage.setItem('aq:renderMode', this.renderMode); } catch (e) { console.warn('Failed to save render mode to localStorage:', e); }
       this.contentEditor.renderModeButtons();
       this.contentEditor.renderRawEditorToolbar();
     });
@@ -176,7 +179,7 @@ export class ShellView extends Component {
       if (this._onProjectSelected) document.removeEventListener(EVENTS.PROJECT_SELECTED, this._onProjectSelected);
       if (this._onStoryUpdated) document.removeEventListener(EVENTS.STORY_UPDATED, this._onStoryUpdated);
       if (this._onMachineUpdated) document.removeEventListener(EVENTS.MACHINE_UPDATED, this._onMachineUpdated);
-    } catch (_) {}
+    } catch (e) { console.warn('Failed to remove event listeners in destroy:', e); }
     super.destroy();
   }
 
@@ -390,7 +393,7 @@ export class ShellView extends Component {
       storyModelSelect.addEventListener('change', (e) => {
         const val = e.target.value;
         this.storyCurrentModel = val;
-        try { localStorage.setItem('aq.storyModel', val); } catch (_) {}
+        try { localStorage.setItem('aq.storyModel', val); } catch (e) { console.warn('Failed to save story model to localStorage:', e); }
       });
     }
 

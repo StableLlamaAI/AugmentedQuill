@@ -1,8 +1,10 @@
 // AugmentedQuill frontend script bundle
-// - Shared utilities
+// Shared utilities for consistent API interactions and error handling.
 
 /**
  * Fetch helper with consistent error handling
+ * Standardizes API calls across the application, ensuring uniform error responses
+ * and simplifying error handling in components.
  */
 export async function fetchJSON(url, options = {}) {
   const response = await fetch(url, options);
@@ -15,6 +17,8 @@ export async function fetchJSON(url, options = {}) {
 
 /**
  * Safe JSON GET helper: returns {} on error
+ * Prevents application crashes from network failures by providing fallback data,
+ * allowing the UI to remain functional even when backend is unavailable.
  */
 export async function getJSONOrEmpty(url) {
   try {

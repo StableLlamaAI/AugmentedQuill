@@ -2,6 +2,9 @@ import { UI_STRINGS } from './constants.js';
 
 export class RoleSelector {
   /**
+   * Handles role selection for chat messages.
+   * Allows users to specify message roles (user/assistant/system) to control conversation flow,
+   * enabling more precise interactions with the AI for different use cases.
    * @param {ChatView} chatView - The parent ChatView instance.
    */
   constructor(chatView) {

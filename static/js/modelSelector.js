@@ -2,6 +2,9 @@ import { UI_STRINGS } from './constants.js';
 
 export class ModelSelector {
   /**
+   * Manages model selection UI.
+   * Provides a user-friendly interface for choosing AI models,
+   * displaying available options and handling selection changes to update the chat system.
    * @param {ChatView} chatView - The parent ChatView instance.
    */
   constructor(chatView) {

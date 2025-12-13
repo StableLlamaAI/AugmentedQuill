@@ -12,6 +12,8 @@ export class MarkdownRenderer {
 
   /**
    * Converts a subset of Markdown to HTML.
+   * Enables rich text display in chat messages without requiring a full Markdown library,
+   * keeping the bundle size small while supporting essential formatting for AI responses.
    * Supports: code blocks, inline code, bold, italic, links, blockquotes, headings, unordered lists, paragraphs.
    * @param {string} src - The Markdown source.
    * @returns {string} The HTML output.

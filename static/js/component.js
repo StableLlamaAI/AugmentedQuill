@@ -1,6 +1,7 @@
 /**
  * Lightweight reactive component base class
- * Replaces Alpine.js with vanilla JavaScript reactivity
+ * Replaces Alpine.js with vanilla JavaScript reactivity to maintain control over state management
+ * and avoid external dependencies, ensuring consistent behavior across different environments.
  */
 export class Component {
   constructor(element, initialState = {}) {

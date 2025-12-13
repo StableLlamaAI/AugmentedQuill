@@ -2,6 +2,9 @@ import { UI_STRINGS } from './editorConstants.js';
 
 export class ChapterRenderer {
   /**
+   * Handles rendering of the chapter list and main view.
+   * Manages UI updates for chapter navigation and content display,
+   * ensuring the interface reflects the current state of the story project.
    * @param {ShellView} shellView - The parent ShellView instance.
    */
   constructor(shellView) {

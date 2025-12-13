@@ -3,6 +3,9 @@ import { Component } from './component.js';
 
 /**
  * Settings Page Component
+ * Manages configuration of AI models, story settings, and project management.
+ * Provides a centralized interface for all application settings,
+ * ensuring users can customize their writing environment effectively.
  */
 export class ModelsEditor extends Component {
   constructor(element) {
@@ -657,9 +660,7 @@ export class ModelsEditor extends Component {
       if (Array.isArray(data.available)) {
         this.available_projects = data.available;
       }
-    } catch (_) {
-      // Keep existing list on error
-    }
+    } catch (e) { console.warn('Failed to refresh available projects:', e); }
   }
 
   /**
@@ -677,7 +678,7 @@ export class ModelsEditor extends Component {
       // Broadcast that both story and machine context may have changed
       document.dispatchEvent(new CustomEvent('aq:story-updated', { detail: { reason: 'create-project', changedChapters: [] } }));
       document.dispatchEvent(new CustomEvent('aq:machine-updated', { detail: { reason: 'create-project' } }));
-    } catch (_) {}
+    } catch (e) { console.warn('Failed to dispatch events after project creation:', e); }
     return res;
   }
 
@@ -732,7 +733,7 @@ export class ModelsEditor extends Component {
         try {
           document.dispatchEvent(new CustomEvent('aq:story-updated', { detail: { reason: 'delete-project', changedChapters: [] } }));
           document.dispatchEvent(new CustomEvent('aq:machine-updated', { detail: { reason: 'delete-project' } }));
-        } catch (_) {}
+        } catch (e) { console.warn('Failed to dispatch events after project deletion:', e); }
       } catch (e) {
         this.error_msg = `Failed to delete project: ${e.message || e}`;
       }
@@ -748,9 +749,7 @@ export class ModelsEditor extends Component {
         this._initializeStoryState(story);
         this._setBaseline();
       }
-    } catch (_) {
-      // Silent failure - user will see default values
-    }
+    } catch (e) { console.warn('Failed to reload story from API:', e); }
   }
 
   /**
@@ -790,7 +789,7 @@ export class ModelsEditor extends Component {
         try {
           document.dispatchEvent(new CustomEvent('aq:story-updated', { detail: { reason: 'settings-save', changedChapters: [] } }));
           document.dispatchEvent(new CustomEvent('aq:machine-updated', { detail: { reason: 'settings-save' } }));
-        } catch (_) {}
+        } catch (e) { console.warn('Failed to dispatch events after settings save:', e); }
       } catch (e) {
         this.error_msg = `Failed to save: ${e.message || e}`;
       }

@@ -3,6 +3,9 @@ import { MarkdownRenderer } from './markdown.js';
 
 export class MessageRenderer {
   /**
+   * Handles rendering of chat messages.
+   * Separates rendering logic from chat logic to keep components modular,
+   * and filters out tool messages to maintain a clean user interface focused on conversation.
    * @param {ChatView} chatView - The parent ChatView instance.
    */
   constructor(chatView) {

@@ -9,6 +9,8 @@ import { RoleSelector } from './roleSelector.js';
 
 /**
  * ChatView component for handling chat interactions, model selection, and message rendering.
+ * Manages the conversational AI interface, integrating with backend APIs for LLM calls,
+ * tool execution, and state synchronization across the application.
  * @extends Component
  */
 export class ChatView extends Component {
@@ -59,8 +61,9 @@ export class ChatView extends Component {
     this.models = models;
     this.selectedName = openai.selected || (models[0]?.name || '');
     this.modelSelector.render();
-    // notify machine change to other parts of the app
-    try { document.dispatchEvent(new CustomEvent(EVENTS.MACHINE_UPDATED, { detail: {} })); } catch (_) {}
+    // Notify other parts of the app that machine configuration has changed,
+    // allowing components like the editor to reload story models accordingly.
+    try { document.dispatchEvent(new CustomEvent(EVENTS.MACHINE_UPDATED, { detail: {} })); } catch (e) { console.warn('Failed to dispatch machine updated event:', e); }
   }
 
   /**
@@ -80,7 +83,8 @@ export class ChatView extends Component {
       }
       this.modelSelector.render();
       this.messageRenderer.render();
-      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_LOADED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+      // Notify that chat has been loaded, enabling other components to react to the initial state.
+      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_LOADED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat loaded event:', e); }
     } catch (e) {
       console.error('Failed to load chat state:', e);
       // keep existing state
@@ -146,12 +150,12 @@ export class ChatView extends Component {
     if (ta) ta.value = '';
     this.messageRenderer.render();
     // Emit chat-updated so others can react immediately (optional)
-    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event:', e); }
 
     await this._queryAssistant();
 
     // After assistant round finished, broadcast updated messages
-    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event after response:', e); }
   }
 
   /**
@@ -161,7 +165,7 @@ export class ChatView extends Component {
     if (!this.messages || !this.messages.length) return;
     this.messages = this.messages.slice(0, -1);
     this.messageRenderer.render();
-    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event on delete:', e); }
   }
 
   /**
@@ -175,7 +179,7 @@ export class ChatView extends Component {
     this.messages = this.messages.slice(0, -1);
     this.messageRenderer.render();
     await this._queryAssistant();
-    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event on regenerate:', e); }
   }
 
   /**
@@ -259,7 +263,7 @@ export class ChatView extends Component {
             try {
               const args = fn.arguments ? (typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {})) : {};
               if (typeof args.chap_id === 'number') changed.add(args.chap_id);
-            } catch (_) {}
+            } catch (e) { console.warn('Failed to parse tool call arguments:', e); }
           }
         }
         // From tool results (appended_messages)
@@ -271,7 +275,7 @@ export class ChatView extends Component {
               const payload = tm.content ? JSON.parse(tm.content) : {};
               const cid = payload?.chapter?.id;
               if (typeof cid === 'number') changed.add(cid);
-            } catch (_) {}
+            } catch (e) { console.warn('Failed to parse tool result content:', e); }
           }
         }
         // Notify editor and refresh
@@ -283,12 +287,12 @@ export class ChatView extends Component {
             if (ids.includes(window.app.shellView.activeId)) {
               window.app.shellView.openChapter(window.app.shellView.activeId);
             }
-          } catch (_) {}
+          } catch (e) { console.warn('Failed to refresh editor after story mutation:', e); }
         }
         // Broadcast a global event so any component can react
-        try { document.dispatchEvent(new CustomEvent(EVENTS.STORY_UPDATED, { detail: { changedChapters: ids } })); } catch (_) {}
+        try { document.dispatchEvent(new CustomEvent(EVENTS.STORY_UPDATED, { detail: { changedChapters: ids } })); } catch (e) { console.warn('Failed to dispatch story updated event:', e); }
       }
-    } catch (_) {}
+    } catch (e) { console.warn('Failed to handle story mutations:', e); }
   }
 
   /**
@@ -324,7 +328,7 @@ export class ChatView extends Component {
         }
       }
       this.messageRenderer.render();
-      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (_) {}
+      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event after response:', e); }
     }
   }
 
@@ -342,11 +346,11 @@ export class ChatView extends Component {
             if (window.app.shellView.activeId != null) {
               window.app.shellView.openChapter(window.app.shellView.activeId);
             }
-          } catch (_) {}
+          } catch (e) { console.warn('Failed to refresh editor after server mutation:', e); }
         }
-        try { document.dispatchEvent(new CustomEvent(EVENTS.STORY_UPDATED, { detail: { changedChapters: [] } })); } catch (_) {}
+        try { document.dispatchEvent(new CustomEvent(EVENTS.STORY_UPDATED, { detail: { changedChapters: [] } })); } catch (e) { console.warn('Failed to dispatch story updated event from server:', e); }
       }
-    } catch (_) {}
+    } catch (e) { console.warn('Failed to handle server mutations:', e); }
   }
 
   /**
@@ -364,7 +368,7 @@ export class ChatView extends Component {
       alert(`Chat error: ${e.message || e}`);
     } finally {
       this.sending = false;
-      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_SENDING, { detail: { sending: this.sending } })); } catch (_) {}
+      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_SENDING, { detail: { sending: this.sending } })); } catch (e) { console.warn('Failed to dispatch chat sending event:', e); }
     }
   }
 }

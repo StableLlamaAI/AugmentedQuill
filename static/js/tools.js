@@ -1,3 +1,8 @@
+// Tool definitions for AI assistant
+// These tools enable the AI to interact with the story project,
+// providing context-aware assistance by allowing access to chapter information and content.
+// This makes the AI more helpful for writing and editing tasks.
+
 export const TOOLS = [
   {
     type: 'function',

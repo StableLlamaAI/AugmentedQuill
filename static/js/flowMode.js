@@ -3,6 +3,9 @@ import { UI_STRINGS } from './editorConstants.js';
 
 export class FlowMode {
   /**
+   * Manages Flow mode for AI-assisted writing.
+   * Provides interactive sentence suggestions to help writers overcome creative blocks
+   * by offering two-choice continuations, making the writing process more engaging and efficient.
    * @param {ShellView} shellView - The parent ShellView instance.
    */
   constructor(shellView) {

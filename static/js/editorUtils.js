@@ -2,6 +2,8 @@ import { DEFAULTS, UI_STRINGS } from './editorConstants.js';
 
 /**
  * Debounce utility function.
+ * Delays function execution to prevent excessive API calls during rapid user input,
+ * improving performance and reducing server load.
  * @param {Function} func - The function to debounce.
  * @param {number} delay - The delay in ms.
  * @returns {Function} The debounced function.
@@ -31,6 +33,8 @@ export function ensureToastHost() {
 
 /**
  * Shows a toast message.
+ * Provides non-intrusive user feedback for actions like saves and errors,
+ * enhancing UX without blocking the interface.
  * @param {string} message - The message.
  * @param {string} variant - The variant ('info', 'success', 'error').
  * @param {number} timeoutMs - Timeout in ms.

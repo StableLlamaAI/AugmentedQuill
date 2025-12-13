@@ -2,6 +2,9 @@ import { RENDER_MODES, UI_STRINGS } from './editorConstants.js';
 
 export class ContentEditor {
   /**
+   * Manages content editing functionality for the ShellView.
+   * Handles switching between raw text, Markdown preview, and WYSIWYG editing modes
+   * to provide flexible editing experiences while maintaining content integrity.
    * @param {ShellView} shellView - The parent ShellView instance.
    */
   constructor(shellView) {
@@ -200,7 +203,7 @@ export class ContentEditor {
         try {
           this.shellView.content = this.shellView._tui.getMarkdown();
           this.shellView.onChanged();
-        } catch (_) { /* no-op */ }
+        } catch (e) { console.warn('Failed to update content from TUI change:', e); }
       });
 
       return true;

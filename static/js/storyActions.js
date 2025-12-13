@@ -3,6 +3,9 @@ import { STORY_ACTIONS, UI_STRINGS } from './editorConstants.js';
 
 export class StoryActions {
   /**
+   * Manages AI-powered story writing actions.
+   * Provides streaming interfaces for generating summaries and content,
+   * allowing real-time feedback during AI-assisted writing to improve user experience.
    * @param {ShellView} shellView - The parent ShellView instance.
    */
   constructor(shellView) {
