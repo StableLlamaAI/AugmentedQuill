@@ -209,12 +209,12 @@ export class ShellView extends Component {
         if (chapterItem) {
           const id = parseInt(chapterItem.getAttribute('data-chapter-id'), 10);
           if (!isNaN(id)) {
-            if (clickedToggle || clickedSummaryInput) {
+            if (clickedToggle) {
               // Do nothing; handled elsewhere
               return;
             }
             // If clicking the title input on a non-active chapter, open it and then restore focus
-            if (clickedTitleInput) {
+            if (clickedTitleInput || clickedSummaryInput) {
               if (this.activeId !== id) {
                 const caretPos = e.target.selectionStart ?? null;
                 await this.openChapter(id);
@@ -1046,7 +1046,7 @@ export class ShellView extends Component {
       this.activeId = data.id;
       this.content = data.content || '';
       this._originalContent = this.content;
-      this.chapters = this.chapters.map(c => c.id === id ? { ...c, summary: data.summary || '', expanded: false } : c); // Update chapter in list with summary
+      this.chapters = this.chapters.map(c => c.id === id ? { ...c, summary: data.summary || '' } : c); // Update chapter in list with summary
       this._originalSummaryContent = data.summary || ''; // Store original summary for dirty tracking
       this.dirty = false;
 
