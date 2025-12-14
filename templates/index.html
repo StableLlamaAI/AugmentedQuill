@@ -4,7 +4,24 @@
   <div class="aq-shell" data-component="shell-view">
     <aside class="aq-sidebar">
       <div class="aq-sidebar-top">
-        <h3 class="aq-sidebar-title">Chapters</h3>
+        <!-- Story Summary Section -->
+        <div class="aq-story-summary-section">
+          <div class="aq-story-summary-header">
+            <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="toggle-story-summary" title="Toggle Story Summary">
+              ▼
+            </button>
+            <span class="aq-sidebar-title" style="margin:0;">Story Summary</span>
+          </div>
+          <div class="aq-story-summary-content" style="display:block;">
+            <textarea data-ref="storySummaryInput" class="aq-story-summary-input" rows="4" placeholder="Enter overall story summary..."></textarea>
+          </div>
+        </div>
+        <!-- Story Tags Section -->
+        <div class="aq-story-tags-section">
+          <label class="aq-sidebar-title" style="margin:0.5rem 0 0.25rem 0;">Tags</label>
+          <input type="text" data-ref="storyTagsInput" class="aq-story-tags-input" placeholder="e.g., fantasy, mystery, romance">
+        </div>
+        <h3 class="aq-sidebar-title" style="margin-top:0.5rem;">Chapters</h3>
         <ul class="aq-chapters" data-chapter-list>
           <li class="aq-empty">No chapters configured</li>
         </ul>

@@ -121,3 +121,57 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
     new_content = (current + ("\n\n" if current and not current.endswith("\n\n") else "") + add).strip("\n") + "\n"
     path.write_text(new_content, encoding="utf-8")
     return {"ok": True, "appended": add, "chapter": {"id": idx, "filename": path.name}}
+
+
+async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    current_story_summary = story.get("story_summary", "")
+
+    # Collect all chapter summaries
+    chapter_summaries = []
+    for i, chapter in enumerate(chapters_data):
+        summary = chapter.get("summary", "").strip()
+        title = chapter.get("title", "").strip() or f"Chapter {i+1}"
+        if summary:
+            chapter_summaries.append(f"{title}:\n{summary}")
+
+    if not chapter_summaries:
+        raise HTTPException(status_code=400, detail="No chapter summaries available")
+
+    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
+
+    sys_msg = {
+        "role": "system",
+        "content": (
+            "You are an expert story editor. Write a comprehensive summary of the entire story "
+            "based on the chapter summaries provided. Capture the overall plot, main characters, "
+            "themes, tone, and narrative arc."
+        ),
+    }
+    mode_l = (mode or "").lower()
+    if mode_l == "discard" or not current_story_summary:
+        user_prompt = f"Chapter summaries:\n\n" + "\n\n".join(chapter_summaries) + "\n\nTask: Write a comprehensive story summary (10-20 sentences)."
+    else:
+        user_prompt = (
+            "Existing story summary:\n\n" + current_story_summary +
+            "\n\nChapter summaries:\n\n" + "\n\n".join(chapter_summaries) +
+            "\n\nTask: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
+        )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    data = await _llm.openai_chat_complete(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s)
+    choices = (data or {}).get("choices") or []
+    new_summary = ""
+    if choices:
+        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if isinstance(msg, dict):
+            new_summary = msg.get("content", "") or ""
+
+    story["story_summary"] = new_summary
+    story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    return {"ok": True, "summary": new_summary}

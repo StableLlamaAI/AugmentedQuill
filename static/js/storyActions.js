@@ -49,9 +49,59 @@ export class StoryActions {
   }
 
   /**
+   * Handles writing story summary.
+   */
+  async handleWriteStorySummary() {
+    const story = await fetchJSON('/api/story') || {};
+    const hasExisting = !!(story.story_summary && story.story_summary.trim());
+    let mode = 'discard';
+    if (hasExisting) {
+      const answer = confirm('A story summary already exists. Do you want to replace it?');
+      mode = answer ? 'discard' : 'update';
+    }
+
+    // Try streaming endpoint first
+    try {
+      const textarea = this.shellView.el.querySelector('[data-ref="storySummaryInput"]');
+      let accum = '';
+      await this._streamFetch('/api/story/story-summary/stream', { mode, model_name: this.shellView.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        if (textarea) textarea.value = accum;
+      });
+      // On completion, update state
+      this.shellView.storySummary = accum;
+    } catch (err) {
+      if (err && err.code === 404) {
+        // Fallback to non-streaming
+        try {
+          const data = await fetchJSON('/api/story/story-summary', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode, model_name: this.shellView.storyCurrentModel })
+          });
+          this.shellView.storySummary = data.summary || '';
+          const textarea = this.shellView.el.querySelector('[data-ref="storySummaryInput"]');
+          if (textarea) textarea.value = data.summary || '';
+        } catch (e) {
+          toast('Failed to generate story summary: ' + (e.message || e), 'error');
+        }
+      } else if (!(err && err.name === 'AbortError')) {
+        toast(`Story summary request failed: ${err.message || err}`, 'error');
+      }
+    }
+  }
+
+  /**
    * Handles writing summary.
    */
   async handleWriteSummary() {
+    // Check if story summary was the last focused field
+    if (this.shellView.lastFocusedField === 'storySummary') {
+      // Generate story summary
+      await this.handleWriteStorySummary();
+      return;
+    }
+
+    // Otherwise, generate chapter summary
     if (this.shellView.activeId == null) return;
     const chapter = (this.shellView.chapters || []).find(c => c.id === this.shellView.activeId) || {};
     const hasExisting = !!(chapter.summary && chapter.summary.trim());

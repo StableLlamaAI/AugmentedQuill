@@ -12,6 +12,89 @@ import json as _json
 router = APIRouter()
 
 
+@router.post("/api/story/story-summary")
+async def api_story_story_summary(request: Request) -> JSONResponse:
+    """Generate or update the overall story summary based on chapter summaries.
+
+    Body JSON: {"mode": "discard"|"update"|None, "model_name": str | None, overrides...}
+    Returns: {ok: true, summary: str}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    mode = (payload.get("mode") or "").lower()
+    if mode not in ("discard", "update", ""):
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "mode must be discard|update"})
+
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    current_story_summary = story.get("story_summary", "")
+
+    # Collect all chapter summaries
+    chapter_summaries = []
+    for i, chapter in enumerate(chapters_data):
+        summary = chapter.get("summary", "").strip()
+        title = chapter.get("title", "").strip() or f"Chapter {i+1}"
+        if summary:
+            chapter_summaries.append(f"{title}:\n{summary}")
+
+    if not chapter_summaries:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No chapter summaries available"})
+
+    from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {
+        "role": "system",
+        "content": (
+            "You are an expert story editor. Write a comprehensive summary of the entire story "
+            "based on the chapter summaries provided. Capture the overall plot, main characters, "
+            "themes, tone, and narrative arc."
+        ),
+    }
+    if mode == "discard" or not current_story_summary:
+        user_prompt = f"Chapter summaries:\n\n" + "\n\n".join(chapter_summaries) + "\n\nTask: Write a comprehensive story summary (10-20 sentences)."
+    else:
+        user_prompt = (
+            "Existing story summary:\n\n" + current_story_summary +
+            "\n\nChapter summaries:\n\n" + "\n\n".join(chapter_summaries) +
+            "\n\nTask: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
+        )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    try:
+        data = await _openai_chat_complete(
+            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
+        )
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+
+    choices = (data or {}).get("choices") or []
+    new_summary = ""
+    if choices:
+        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if isinstance(msg, dict):
+            new_summary = msg.get("content", "") or ""
+
+    # Persist to story.json
+    story["story_summary"] = new_summary
+    try:
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write story.json: {e}"})
+
+    return JSONResponse(status_code=200, content={
+        "ok": True,
+        "summary": new_summary,
+    })
+
+
 @router.post("/api/story/summary")
 async def api_story_summary(request: Request) -> JSONResponse:
     """Generate or update a chapter summary using the story model.
@@ -471,6 +554,76 @@ async def api_story_continue_stream(request: Request):
             appended = "".join(buf)
             new_content = existing + ("\n" if existing and not existing.endswith("\n") else "") + appended
             path.write_text(new_content, encoding="utf-8")
+        except Exception:
+            pass
+
+    return _as_streaming_response(_gen)
+
+
+@router.post("/api/story/story-summary/stream")
+async def api_story_story_summary_stream(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    mode = (payload.get("mode") or "").lower()
+    if mode not in ("discard", "update", ""):
+        raise HTTPException(status_code=400, detail="mode must be discard|update")
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    current_story_summary = story.get("story_summary", "")
+
+    # Collect all chapter summaries
+    chapter_summaries = []
+    for i, chapter in enumerate(chapters_data):
+        summary = chapter.get("summary", "").strip()
+        title = chapter.get("title", "").strip() or f"Chapter {i+1}"
+        if summary:
+            chapter_summaries.append(f"{title}:\n{summary}")
+
+    if not chapter_summaries:
+        raise HTTPException(status_code=400, detail="No chapter summaries available")
+
+    from app.llm_shims import _resolve_openai_credentials
+    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+
+    sys_msg = {
+        "role": "system",
+        "content": (
+            "You are an expert story editor. Write a comprehensive summary of the entire story "
+            "based on the chapter summaries provided. Capture the overall plot, main characters, "
+            "themes, tone, and narrative arc."
+        ),
+    }
+    if mode == "discard" or not current_story_summary:
+        user_prompt = f"Chapter summaries:\n\n" + "\n\n".join(chapter_summaries) + "\n\nTask: Write a comprehensive story summary (10-20 sentences)."
+    else:
+        user_prompt = (
+            "Existing story summary:\n\n" + current_story_summary +
+            "\n\nChapter summaries:\n\n" + "\n\n".join(chapter_summaries) +
+            "\n\nTask: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
+        )
+    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+
+    async def _gen():
+        buf = []
+        try:
+            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+                buf.append(chunk)
+                yield chunk
+        except asyncio.CancelledError:
+            return
+        # Persist on normal completion
+        try:
+            new_summary = "".join(buf)
+            story["story_summary"] = new_summary
+            story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
         except Exception:
             pass
 

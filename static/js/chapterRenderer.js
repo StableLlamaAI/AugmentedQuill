@@ -12,6 +12,38 @@ export class ChapterRenderer {
   }
 
   /**
+   * Renders the story summary section.
+   */
+  renderStorySummary() {
+    const summaryInput = this.shellView.el?.querySelector('[data-ref="storySummaryInput"]');
+    if (summaryInput) {
+      summaryInput.value = this.shellView.storySummary || '';
+    }
+    const content = this.shellView.el?.querySelector('.aq-story-summary-content');
+    if (content) {
+      content.style.display = this.shellView.storySummaryExpanded ? 'block' : 'none';
+    }
+    const tagsSection = this.shellView.el?.querySelector('.aq-story-tags-section');
+    if (tagsSection) {
+      tagsSection.style.display = this.shellView.storySummaryExpanded ? 'block' : 'none';
+    }
+    const toggleBtn = this.shellView.el?.querySelector('[data-action="toggle-story-summary"]');
+    if (toggleBtn) {
+      toggleBtn.textContent = this.shellView.storySummaryExpanded ? '▼' : '▶';
+    }
+  }
+
+  /**
+   * Renders the story tags section.
+   */
+  renderStoryTags() {
+    const tagsInput = this.shellView.el?.querySelector('[data-ref="storyTagsInput"]');
+    if (tagsInput) {
+      tagsInput.value = this.shellView.storyTags || '';
+    }
+  }
+
+  /**
    * Renders the chapter list.
    */
   renderChapterList() {

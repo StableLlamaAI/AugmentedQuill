@@ -21,6 +21,14 @@ body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu
 .aq-empty { color: var(--muted); font-size: 0.9rem; }
 .aq-sidebar-bottom { padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
 
+/* Story summary and tags sections */
+.aq-story-summary-section { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
+.aq-story-summary-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+.aq-story-summary-content { display: block; }
+.aq-story-summary-input { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; font-family: inherit; font-size: 0.9rem; resize: vertical; }
+.aq-story-tags-section { margin-bottom: 0.5rem; }
+.aq-story-tags-input { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem 0.5rem; font-family: inherit; font-size: 0.9rem; }
+
 /* Inline chapter editing inputs */
 .chapter-title-input,
 .chapter-summary-input {

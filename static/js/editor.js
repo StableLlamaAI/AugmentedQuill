@@ -31,6 +31,11 @@ export class ShellView extends Component {
       editingId: null,
       editingTitle: '',
       _suspendInput: false,
+      // Story summary and tags
+      storySummary: '',
+      storyTags: '',
+      storySummaryExpanded: true,
+      lastFocusedField: null, // Track which field was last focused for Summary button context
       // Story model (separate from chat model)
       storyModels: [],
       storyCurrentModel: '',
@@ -46,6 +51,8 @@ export class ShellView extends Component {
     this._tuiEl = null;
     this._debouncedSaveSummary = debounce(this._saveSummary.bind(this), DEFAULTS.DEBOUNCE_SUMMARY); // Debounce by 1 second
     this._debouncedSaveTitle = debounce(this._saveTitle.bind(this), DEFAULTS.DEBOUNCE_TITLE);
+    this._debouncedSaveStorySummary = debounce(this._saveStorySummary.bind(this), DEFAULTS.DEBOUNCE_SUMMARY);
+    this._debouncedSaveStoryTags = debounce(this._saveStoryTags.bind(this), DEFAULTS.DEBOUNCE_SUMMARY);
     this._storyAbortController = null;
 
     // Flow mode state (two-choice sentence suggestions)
@@ -88,6 +95,9 @@ export class ShellView extends Component {
     this.watch('fontSize', () => this.contentEditor.renderFontSize());
     this.watch('storyModels', () => this.storyActions.renderStoryModels());
     this.watch('storyBusy', () => this.storyActions.renderStoryBusy());
+    this.watch('storySummary', () => this.chapterRenderer.renderStorySummary());
+    this.watch('storyTags', () => this.chapterRenderer.renderStoryTags());
+    this.watch('storySummaryExpanded', () => this.chapterRenderer.renderStorySummary());
 
     // Flow mode watchers
     this.watch('flowActive', () => this.flowMode.renderFlowUI());
@@ -293,6 +303,41 @@ export class ShellView extends Component {
           // Ensure save on blur (debounce already queued)
           this._saveTitle(e);
         }
+      }, true);
+    }
+
+    // Story summary toggle
+    const toggleStorySummaryBtn = this.el.querySelector('[data-action="toggle-story-summary"]');
+    if (toggleStorySummaryBtn) {
+      toggleStorySummaryBtn.addEventListener('click', () => {
+        this.storySummaryExpanded = !this.storySummaryExpanded;
+      });
+    }
+
+    // Story summary and tags inputs
+    const storySummaryInput = this.el.querySelector('[data-ref="storySummaryInput"]');
+    if (storySummaryInput) {
+      storySummaryInput.addEventListener('focus', () => {
+        this.lastFocusedField = 'storySummary';
+      });
+      storySummaryInput.addEventListener('input', (e) => {
+        this._debouncedSaveStorySummary(e);
+      });
+      storySummaryInput.addEventListener('blur', (e) => {
+        this._saveStorySummary(e);
+      }, true);
+    }
+
+    const storyTagsInput = this.el.querySelector('[data-ref="storyTagsInput"]');
+    if (storyTagsInput) {
+      storyTagsInput.addEventListener('focus', () => {
+        this.lastFocusedField = 'storyTags';
+      });
+      storyTagsInput.addEventListener('input', (e) => {
+        this._debouncedSaveStoryTags(e);
+      });
+      storyTagsInput.addEventListener('blur', (e) => {
+        this._saveStoryTags(e);
       }, true);
     }
 
@@ -585,6 +630,12 @@ export class ShellView extends Component {
       const response = await fetch('/api/chapters');
       const data = await response.json();
       this.chapters = Array.isArray(data.chapters) ? data.chapters.map(c => ({...c, expanded: false})) : [];
+
+      // Load story config
+      const storyResponse = await fetch('/api/story');
+      const storyData = await storyResponse.json();
+      this.storySummary = storyData.story_summary || '';
+      this.storyTags = storyData.tags || '';
 
       // Maintain selection if chapter still exists, otherwise select first
       const hasActiveChapter = this.chapters.some(c => c.id === this.activeId);
@@ -979,6 +1030,44 @@ export class ShellView extends Component {
       console.error(`Failed to save summary for chapter ${id}: ${e.message || e}`);
       toast(`Failed to save summary: ${e.message || e}`, 'error');
       // Optionally, revert the textarea to _originalSummaryContent or show an error state
+    }
+  }
+
+  async _saveStorySummary(event) {
+    const textarea = event.target;
+    if (!textarea || !textarea.matches('[data-ref="storySummaryInput"]')) return;
+
+    const summary = textarea.value.trim();
+
+    try {
+      const data = await fetchJSON('/api/story/summary', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary })
+      });
+      this.storySummary = data.story_summary;
+    } catch (e) {
+      console.error(`Failed to save story summary: ${e.message || e}`);
+      toast(`Failed to save story summary: ${e.message || e}`, 'error');
+    }
+  }
+
+  async _saveStoryTags(event) {
+    const input = event.target;
+    if (!input || !input.matches('[data-ref="storyTagsInput"]')) return;
+
+    const tags = input.value.trim();
+
+    try {
+      const data = await fetchJSON('/api/story/tags', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags })
+      });
+      this.storyTags = data.tags;
+    } catch (e) {
+      console.error(`Failed to save story tags: ${e.message || e}`);
+      toast(`Failed to save story tags: ${e.message || e}`, 'error');
     }
   }
 

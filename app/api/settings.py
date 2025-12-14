@@ -40,6 +40,8 @@ async def api_settings_post(request: Request) -> JSONResponse:
         story_cfg = {
             "project_title": (story.get("project_title") or "Untitled Project"),
             "format": (story.get("format") or "markdown"),
+            "story_summary": (story.get("story_summary") or ""),
+            "tags": (story.get("tags") or ""),
             "chapters": normalized_chapters,
             "llm_prefs": {
                 "temperature": float(story.get("llm_prefs", {}).get("temperature", 0.7)),
@@ -88,3 +90,47 @@ async def api_settings_post(request: Request) -> JSONResponse:
         return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write configs: {e}"})
 
     return JSONResponse(status_code=200, content={"ok": True})
+
+
+@router.put("/api/story/summary")
+async def api_story_summary_put(request: Request) -> JSONResponse:
+    """Update story summary in story.json."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    summary = payload.get("summary", "")
+    try:
+        active = get_active_project_dir()
+        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story = load_story_config(story_path) or {}
+        story["story_summary"] = summary
+        _ensure_parent_dir(story_path)
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to update story summary: {e}"})
+
+    return JSONResponse(status_code=200, content={"ok": True, "story_summary": summary})
+
+
+@router.put("/api/story/tags")
+async def api_story_tags_put(request: Request) -> JSONResponse:
+    """Update story tags in story.json."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    tags = payload.get("tags", "")
+    try:
+        active = get_active_project_dir()
+        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story = load_story_config(story_path) or {}
+        story["tags"] = tags
+        _ensure_parent_dir(story_path)
+        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to update story tags: {e}"})
+
+    return JSONResponse(status_code=200, content={"ok": True, "tags": tags})

@@ -7,9 +7,14 @@ from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
 from app.helpers.project_helpers import _project_overview, _chapter_content_slice
 from app.helpers.story_helpers import _story_generate_summary_helper, _story_write_helper, _story_continue_helper
+from app.helpers.chapter_helpers import _chapter_by_id_or_404
 from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete, _openai_completions_stream
 import json as _json
 from typing import Any, Dict
+
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CONFIG_DIR = BASE_DIR / "config"
 
 router = APIRouter()
 
@@ -20,6 +25,44 @@ STORY_TOOLS = [
         "function": {
             "name": "get_project_overview",
             "description": "Get project title and a list of all chapters with their IDs, filenames, titles, and summaries.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_story_summary",
+            "description": "Get the overall story summary.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_story_tags",
+            "description": "Get the story tags that define the style.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_story_tags",
+            "description": "Set or update the story tags that define the style. This is a destructive action that overwrites existing tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tags": {"type": "string", "description": "The new tags for the story, as a comma-separated string."},
+                },
+                "required": ["tags"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_chapter_summaries",
+            "description": "Get summaries of all chapters.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -61,6 +104,24 @@ STORY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "write_story_summary",
+            "description": "Generate and save a new overall story summary based on chapter summaries, or update the existing one. This is a destructive action.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "description": "If 'discard', generate a new summary from scratch. If 'update' or empty, refine the existing one.",
+                        "enum": ["discard", "update"],
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "write_chapter",
             "description": "Write the entire content of a chapter from its summary. This overwrites any existing content.",
             "parameters": {
@@ -91,6 +152,40 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
         if name == "get_project_overview":
             data = _project_overview()
             return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+        if name == "get_story_summary":
+            active = get_active_project_dir()
+            story = load_story_config((active / "story.json") if active else None) or {}
+            summary = story.get("story_summary", "")
+            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"story_summary": summary})}
+        if name == "get_story_tags":
+            active = get_active_project_dir()
+            story = load_story_config((active / "story.json") if active else None) or {}
+            tags = story.get("tags", "")
+            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"tags": tags})}
+        if name == "set_story_tags":
+            tags = str(args_obj.get("tags", "")).strip()
+            active = get_active_project_dir()
+            if not active:
+                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
+            story_path = active / "story.json"
+            story = load_story_config(story_path) or {}
+            story["tags"] = tags
+            with open(story_path, "w", encoding="utf-8") as f:
+                _json.dump(story, f, indent=2, ensure_ascii=False)
+            mutations["story_changed"] = True
+            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"tags": tags, "message": "Story tags updated successfully"})}
+        if name == "get_chapter_summaries":
+            active = get_active_project_dir()
+            story = load_story_config((active / "story.json") if active else None) or {}
+            chapters = story.get("chapters", [])
+            summaries = []
+            for i, chapter in enumerate(chapters):
+                if isinstance(chapter, dict):
+                    title = chapter.get("title", "").strip() or f"Chapter {i+1}"
+                    summary = chapter.get("summary", "").strip()
+                    if summary:
+                        summaries.append({"chapter_id": i, "title": title, "summary": summary})
+            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"chapter_summaries": summaries})}
         if name == "get_chapter_content":
             chap_id = args_obj.get("chap_id")
             if chap_id is None:
@@ -124,6 +219,13 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             if not isinstance(chap_id, int):
                 return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
             data = await _story_continue_helper(chap_id=chap_id)
+            mutations["story_changed"] = True
+            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+        if name == "write_story_summary":
+            mode = str(args_obj.get("mode", "")).lower()
+            # Import the helper function
+            from app.helpers.story_helpers import _story_generate_story_summary_helper
+            data = await _story_generate_story_summary_helper(mode=mode)
             mutations["story_changed"] = True
             return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
         return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Unknown tool: {name}"})}
