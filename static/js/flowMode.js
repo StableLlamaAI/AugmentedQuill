@@ -31,10 +31,16 @@ export class FlowMode {
     if (stopBtn) stopBtn.style.display = this.shellView.flowActive ? '' : 'none';
 
     const loadingText = this.shellView.flowBusy ? '<div class="aq-spinner"></div>' : '';
-    if (leftBox) leftBox.innerHTML = this.shellView.flowLeft || loadingText;
-    if (rightBox) rightBox.innerHTML = this.shellView.flowRight || loadingText;
+    if (leftBox) {
+      leftBox.innerHTML = this.shellView.flowLeft || loadingText;
+      leftBox.onclick = () => this._flowPick('left');
+    }
+    if (rightBox) {
+      rightBox.innerHTML = this.shellView.flowRight || loadingText;
+      rightBox.onclick = () => this._flowPick('right');
+    }
     const disabled = this.shellView.flowBusy || !this.shellView.flowActive;
-    ['flow-pick-left','flow-pick-right','flow-discard'].forEach(sel => {
+    ['flow-discard', 'flow-redo'].forEach(sel => {
       const btn = this.shellView.el.querySelector(`[data-action="${sel}"]`);
       if (btn) btn.disabled = disabled;
     });
@@ -57,6 +63,7 @@ export class FlowMode {
   async handleFlowStart() {
     if (this.shellView.activeId == null) return;
     this.shellView.flowActive = true;
+    this.shellView.contentEditor.scrollToBottom();
     await this._flowFetchPair();
   }
 
@@ -70,6 +77,16 @@ export class FlowMode {
   }
 
   /**
+   * Handles redo (undo last insertion).
+   */
+  handleFlowRedo() {
+    if (!this.shellView.flowActive) return;
+    this._flowUndo();
+    // Restart generation from the undone state
+    this._flowFetchPair();
+  }
+
+  /**
    * Fetches a pair of sentences for Flow mode.
    */
   async _flowFetchPair() {
@@ -77,9 +94,42 @@ export class FlowMode {
     this.shellView.flowBusy = true;
     try {
       const payload = { chap_id: this.shellView.activeId, model_name: this.shellView.storyCurrentModel, current_text: this.shellView.content || '' };
-      const data = await fetchJSON('/api/story/suggest_pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      this.shellView.flowLeft = data.left || '';
-      this.shellView.flowRight = data.right || '';
+      const response = await fetch('/api/story/suggest_pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let flowLeftBuffer = '';
+      let flowRightBuffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep incomplete line
+        for (const line of lines) {
+          if (line === 'left: \n') {
+            // Left suggestion complete
+          } else if (line.startsWith('left: ')) {
+            flowLeftBuffer += line.substring(6);
+            this.shellView.flowLeft = flowLeftBuffer;
+          } else if (line === 'right: \n') {
+            // Right suggestion complete
+          } else if (line.startsWith('right: ')) {
+            flowRightBuffer += line.substring(7);
+            this.shellView.flowRight = flowRightBuffer;
+          }
+        }
+      }
+      // Ensure we have values if not completed
+      if (!this.shellView.flowLeft) this.shellView.flowLeft = '(No suggestion)';
+      if (!this.shellView.flowRight) this.shellView.flowRight = '(No suggestion)';
     } catch (e) {
       this.shellView.flowLeft = '(error)';
       this.shellView.flowRight = '(error)';
@@ -148,5 +198,28 @@ export class FlowMode {
     this.shellView.flowLeft = '';
     this.shellView.flowRight = '';
     await this._flowFetchPair();
+  }
+
+  /**
+   * Appends a sentence to the content.
+   * @param {string} sentence - The sentence to append.
+   */
+  _flowAppendSentence(sentence) {
+    const base = this.shellView.content || '';
+    const sep = base && !base.endsWith('\n') ? ' ' : '';
+    this.shellView._flowLastContent = base; // Store for undo
+    this.shellView.content = base + sep + sentence;
+    this.shellView.contentEditor.scrollToBottom();
+  }
+
+  /**
+   * Undoes the last sentence insertion.
+   */
+  _flowUndo() {
+    if (this.shellView._flowLastContent !== undefined) {
+      this.shellView.content = this.shellView._flowLastContent;
+      this.shellView._flowLastContent = undefined;
+      this.shellView.contentEditor.scrollToBottom();
+    }
   }
 }

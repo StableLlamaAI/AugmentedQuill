@@ -116,6 +116,19 @@ textarea[data-ref="rawEditor"] {
   font-size: inherit;
 }
 
+/* Flow mode choice boxes */
+.aq-flow-choice {
+  flex: 1;
+  max-height: 7.5rem; /* Approximately 5 lines at 1.5rem line height */
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 2rem;
+  background: var(--card);
+  cursor: pointer;
+}
+
 /* Chat bubbles and markdown rendering basics */
 .aq-bubble { border:1px solid var(--border); border-radius: 8px; padding:0.5rem 0.75rem; margin:0.25rem 0; background: #151515; }
 .aq-bubble.user { border-color: #334155; }

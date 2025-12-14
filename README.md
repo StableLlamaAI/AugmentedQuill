@@ -30,18 +30,20 @@ currently selected LLM.
 - Create and activate a virtual environment:
   - python3 -m venv .venv
   - source .venv/bin/activate
-- Install dependencies:
-  - pip install -r requirements.txt
+- Install the project in editable mode:
+  - pip install -e .
+- For development (including testing):
+  - pip install -e ".[dev]"
 
 ## Running the API
 
 This repository includes a minimal FastAPI app with a healthcheck endpoint and a rudimentary GUI.
 
-Option A) Start via normal Python file (provides --help):
-- python -m app.main --help
-- python -m app.main --host 127.0.0.1 --port 8000 --reload
+After installation, start the server:
+- augmentedquill --help
+- augmentedquill --host 127.0.0.1 --port 8000 --reload
 
-Option B) Start with uvicorn CLI directly:
+Alternatively, start with uvicorn CLI directly:
 - uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 Verify it is up:
@@ -87,8 +89,8 @@ This keeps your API key client-provided for development purposes while avoiding 
 
 ## Tests
 
-- Run unit tests using unittest discovery:
-  - python3 -m unittest discover -s tests -p "test_*.py" -v
+After installing with dev dependencies, run tests:
+- pytest
 
 Notes:
 - Current tests focus on configuration parsing and do not call external services.

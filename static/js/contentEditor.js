@@ -258,4 +258,18 @@ export class ContentEditor {
     if (!textarea) return;
     // Raw textarea already reflects content binding
   }
+
+  /**
+   * Scrolls the editor to the bottom.
+   */
+  scrollToBottom() {
+    const editor = this.getEditorEl();
+    if (editor) {
+      if (this.shellView.renderMode === RENDER_MODES.RAW) {
+        editor.scrollTop = editor.scrollHeight;
+      } else if (this.shellView._tuiEl) {
+        this.shellView._tuiEl.scrollTop = this.shellView._tuiEl.scrollHeight;
+      }
+    }
+  }
 }

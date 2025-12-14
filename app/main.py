@@ -4,7 +4,7 @@ import argparse
 import os
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import AsyncIterator, Optional, List, Tuple
 import re
 
 from fastapi import FastAPI, Request, HTTPException, Form, Path as FastAPIPath
@@ -806,6 +806,49 @@ async def _openai_chat_complete(
     )
 
 
+async def _openai_completions(
+    *,
+    prompt: str,
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+    n: int = 1,
+    extra_body: dict | None = None,
+) -> dict:
+    """Delegate to app.llm.openai_completions."""
+    return await _llm.openai_completions(
+        prompt=prompt,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        n=n,
+        extra_body=extra_body,
+    )
+
+
+async def _openai_completions_stream(
+    *,
+    prompt: str,
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+    extra_body: dict | None = None,
+) -> AsyncIterator[str]:
+    """Delegate to app.llm.openai_completions_stream."""
+    async for chunk in _llm.openai_completions_stream(
+        prompt=prompt,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        extra_body=extra_body,
+    ):
+        yield chunk
+
+
 def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
     files = _scan_chapter_files()
     match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
@@ -1187,11 +1230,11 @@ async def api_story_continue(request: Request) -> JSONResponse:
 
 
 @app.post("/api/story/suggest_pair")
-async def api_story_suggest_pair(request: Request) -> JSONResponse:
+async def api_story_suggest_pair(request: Request) -> StreamingResponse:
     """Return two alternative one-sentence suggestions to continue the current chapter.
 
     Body JSON: {"chap_id": int, "model_name": str | None, "current_text": str | None, overrides...}
-    Returns: {ok: true, left: str, right: str}
+    Returns: Streaming text with "left: <sentence>\nright: <sentence>\n"
     """
     try:
         payload = await request.json()
@@ -1200,7 +1243,7 @@ async def api_story_suggest_pair(request: Request) -> JSONResponse:
 
     chap_id = (payload or {}).get("chap_id")
     if not isinstance(chap_id, int):
-        return JSONResponse(status_code=400, content={"ok": False, "detail": "chap_id is required"})
+        raise HTTPException(status_code=400, detail="chap_id is required")
 
     idx, path, pos = _chapter_by_id_or_404(chap_id)
     # Use current_text override if provided (to reflect unsaved editor state); otherwise read from disk
@@ -1213,7 +1256,7 @@ async def api_story_suggest_pair(request: Request) -> JSONResponse:
 
     active = get_active_project_dir()
     if not active:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+        raise HTTPException(status_code=400, detail="No active project")
     story = load_story_config(active / "story.json") or {}
     chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
     if pos >= len(chapters_data):
@@ -1224,74 +1267,50 @@ async def api_story_suggest_pair(request: Request) -> JSONResponse:
 
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {
-        "role": "system",
-        "content": (
-            "You are a concise, creative story writing assistant."
-            " Propose two alternative next sentences to continue the chapter."
-            " Each option MUST be exactly one sentence, natural and non-meta, 5–30 words,"
-            " matching tone, style, POV, tense, and characters."
-            " Do not add numbering or extra commentary."
-            " Respond as strict JSON with keys 'left' and 'right'."
-        ),
+    # Build prompt with title and summary
+    prompt_parts = []
+    if title:
+        prompt_parts.append(title)
+    if summary:
+        prompt_parts.append(summary)
+    if current_text:
+        prompt_parts.append(current_text)
+    prompt = "\n\n".join(prompt_parts)
+
+    extra_body = {
+        "max_tokens": 500,
+        "temperature": 1.0,
+        "top_k": 0,
+        "top_p": 1.0,
+        "min_p": 0.02,
+        "repeat_penalty": 1.0
     }
 
-    user_prompt = (
-        f"Project: {story.get('project_title', 'Story')}\n"
-        f"Title: {title}\n\n"
-        f"Summary (optional):\n{summary}\n\n"
-        "Existing chapter text (may be partial):\n" + current_text + "\n\n"
-        "Task: Return JSON only: {\"left\": \"<one sentence>\", \"right\": \"<one sentence>\"}."
-    )
+    async def generate_suggestions():
+        import asyncio
 
-    messages = [sys_msg, {"role": "user", "content": user_prompt}]
+        async def produce(side, queue):
+            try:
+                async for chunk in _openai_completions_stream(
+                    prompt=prompt, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s, extra_body=extra_body
+                ):
+                    await queue.put(f"{side}: {chunk}\n")
+                await queue.put(f"{side}: \n")
+            except Exception as e:
+                await queue.put(f"{side}: (Error: {str(e)})\n")
 
-    try:
-        data = await _openai_chat_complete(
-            messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
-        )
-    except HTTPException as e:
-        return JSONResponse(status_code=e.status_code, content={"ok": False, "detail": e.detail})
+        queue = asyncio.Queue()
+        left_task = asyncio.create_task(produce("left", queue))
+        right_task = asyncio.create_task(produce("right", queue))
+        tasks = {left_task, right_task}
 
-    # Try to parse JSON strictly; fall back to lenient split if needed
-    left, right = "", ""
-    try:
-        choices = (data or {}).get("choices") or []
-        content = ""
-        if choices:
-            msg = choices[0].get("message") if isinstance(choices[0], dict) else None
-            if isinstance(msg, dict):
-                content = msg.get("content", "") or ""
-        import json as _json
-        parsed = _json.loads(content)
-        if isinstance(parsed, dict):
-            l = parsed.get("left")
-            r = parsed.get("right")
-            left = str(l).strip() if l is not None else ""
-            right = str(r).strip() if r is not None else ""
-    except Exception:
-        # Try to split by a delimiter or lines
-        content = (content if isinstance(content, str) else "").strip()
-        if "\n---\n" in content:
-            parts = [p.strip() for p in content.split("\n---\n") if p.strip()]
-        else:
-            parts = [p.strip(" -\t") for p in content.splitlines() if p.strip()]
-        if parts:
-            left = parts[0]
-        if len(parts) > 1:
-            right = parts[1]
+        while tasks or not queue.empty():
+            if not queue.empty():
+                yield queue.get_nowait()
+            elif tasks:
+                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-    # Final coercion to ensure non-empty strings
-    left = left.strip()
-    right = right.strip()
-    if not left or not right:
-        # As a last resort, fabricate placeholders to avoid blocking the UI
-        if not left:
-            left = "(No suggestion)"
-        if not right:
-            right = "(No suggestion)"
-
-    return JSONResponse(status_code=200, content={"ok": True, "left": left, "right": right})
+    return StreamingResponse(generate_suggestions(), media_type="text/plain")
 
 
 

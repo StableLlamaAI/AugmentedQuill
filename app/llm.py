@@ -136,6 +136,56 @@ async def openai_chat_complete(
         return r.json()
 
 
+async def openai_completions(
+    *,
+    prompt: str,
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+    n: int = 1,
+    extra_body: dict | None = None,
+) -> dict:
+    """Perform a non-streaming completions call for text completion.
+
+    Pulls llm_prefs (temperature, max_tokens) from story.json of active project.
+    """
+    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = prefs.get("temperature", 0.7)
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens")
+
+    url = str(base_url).rstrip("/") + "/completions"
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    body: Dict[str, Any] = {"model": model_id, "prompt": prompt, "temperature": temperature, "n": n}
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+    if extra_body:
+        body.update(extra_body)
+
+    try:
+        timeout_obj = httpx.Timeout(float(timeout_s or 60))
+    except Exception:
+        timeout_obj = httpx.Timeout(60.0)
+
+    if _llm_debug_enabled():
+        print("LLM REQUEST:", {"url": url, "headers": {k: ("***" if k == "Authorization" else v) for k, v in headers.items()}, "body": body})
+
+    async with httpx.AsyncClient(timeout=timeout_obj) as client:
+        r = await client.post(url, headers=headers, json=body)
+        if _llm_debug_enabled():
+            print("LLM RESPONSE:", r.status_code)
+        r.raise_for_status()
+        return r.json()
+
+
 async def openai_chat_complete_stream(
     *,
     messages: list[dict],
@@ -203,6 +253,82 @@ async def openai_chat_complete_stream(
                         continue
                     try:
                         content = obj["choices"][0]["delta"].get("content")
+                    except Exception:
+                        content = None
+                    if content:
+                        yield content
+
+
+async def openai_completions_stream(
+    *,
+    prompt: str,
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+    extra_body: dict | None = None,
+) -> AsyncIterator[str]:
+    """Stream completion content as plain text chunks.
+
+    This wraps the OpenAI streaming completions format and yields concatenated content
+    pieces for simplicity on the caller side.
+    """
+    url = str(base_url).rstrip("/") + "/completions"
+    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = prefs.get("temperature", 0.7)
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens")
+
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    body: Dict[str, Any] = {
+        "model": model_id,
+        "prompt": prompt,
+        "temperature": temperature,
+        "stream": True,
+    }
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+    if extra_body:
+        body.update(extra_body)
+
+    try:
+        timeout_obj = httpx.Timeout(float(timeout_s or 60))
+    except Exception:
+        timeout_obj = httpx.Timeout(60.0)
+
+    async with httpx.AsyncClient(timeout=timeout_obj) as client:
+        async with client.stream("POST", url, headers=headers, json=body) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    data = line[len("data: ") :].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = httpx.Response(200, json={}).json()  # placeholder to keep type checkers happy
+                    except Exception:
+                        obj = None
+                    # We cannot rely on httpx to parse each line; parse minimally
+                    # Fallback: try json module
+                    import json as _json
+
+                    try:
+                        obj = _json.loads(data)
+                    except Exception:
+                        obj = None
+                    if not isinstance(obj, dict):
+                        continue
+                    try:
+                        content = obj["choices"][0]["text"]
                     except Exception:
                         content = None
                     if content:

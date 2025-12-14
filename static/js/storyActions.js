@@ -106,6 +106,7 @@ export class StoryActions {
       this.shellView._originalContent = this.shellView.content;
       this.shellView.dirty = false;
       this.shellView.chapterRenderer.renderSaveButton();
+      this.shellView.contentEditor.scrollToBottom();
     } catch (err) {
       if (err && err.code === 404) {
         // Fallback to non-streaming
@@ -143,6 +144,7 @@ export class StoryActions {
       this.shellView._originalContent = this.shellView.content;
       this.shellView.dirty = false;
       this.shellView.chapterRenderer.renderSaveButton();
+      this.shellView.contentEditor.scrollToBottom();
     } catch (err) {
       if (err && err.code === 404) {
         try {

@@ -53,6 +53,7 @@ export class ShellView extends Component {
     this._defineReactive('flowBusy', false);
     this._defineReactive('flowLeft', '');
     this._defineReactive('flowRight', '');
+    this._flowLastContent = undefined; // For undo functionality
 
     // Sub-components
     this.chapterRenderer = new ChapterRenderer(this);
@@ -436,6 +437,25 @@ export class ShellView extends Component {
     if (flowDiscard) {
       flowDiscard.addEventListener('click', () => this.flowMode._flowDiscard());
     }
+    const flowRedo = this.el.querySelector('[data-action="flow-redo"]');
+    if (flowRedo) {
+      flowRedo.addEventListener('click', () => this.flowMode.handleFlowRedo());
+    }
+
+    // Flow mode keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (!this.flowActive) return;
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.flowMode.handleFlowRedo();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.flowMode.handleFlowStop();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.flowMode._flowDiscard();
+      }
+    });
   }
 
   /**
