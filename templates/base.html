@@ -27,6 +27,26 @@
       <button id="save" class="aq-btn aq-btn-primary" data-action="save" aria-live="polite">Save</button>
       <span class="aq-dirty-badge" data-dirty-indicator aria-hidden="true">● Unsaved</span>
       <div style="margin-left:auto; display:flex; gap:0.5rem; align-items:center;">
+        <!-- LLM Story controls (moved from editor toolbar) -->
+        <div class="aq-llm-group aq-toolbar" style="gap:0.35rem;">
+          <label style="display:inline-flex; align-items:center; gap:0.35rem;">
+            <span style="font-size:0.85rem; color:var(--muted);">Story model</span>
+            <select data-ref="storyModelSelect" class="aq-select aq-select-sm"></select>
+          </label>
+          <button class="aq-btn aq-btn-sm" data-action="story-write-summary" title="Write or update summary"><i class="fas fa-edit"></i> Summary</button>
+          <button class="aq-btn aq-btn-sm" data-action="story-write-chapter" title="Write chapter from summary"><i class="fas fa-file-alt"></i> Write</button>
+          <button class="aq-btn aq-btn-sm" data-action="story-continue-chapter" title="Continue chapter to match summary"><i class="fas fa-forward"></i> Continue</button>
+          <button class="aq-btn aq-btn-sm" data-action="story-cancel" title="Cancel running LLM action" style="display:none;">■ Stop</button>
+        </div>
+        <!-- Separator -->
+        <div style="width:1px; height:1.5rem; background:var(--border); margin:0 0.5rem;"></div>
+        <!-- Size controls (moved from editor toolbar) -->
+        <div class="aq-size-controls aq-toolbar" style="gap:0.25rem;">
+          <button class="aq-btn" data-action="change-width" data-direction="decrease" aria-label="Narrower">− Width</button>
+          <button class="aq-btn" data-action="change-width" data-direction="increase" aria-label="Wider">+ Width</button>
+          <button class="aq-btn" data-action="change-font-size" data-direction="decrease" aria-label="Smaller">A−</button>
+          <button class="aq-btn" data-action="change-font-size" data-direction="increase" aria-label="Bigger">A+</button>
+        </div>
         <button class="aq-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML" data-action="open-settings" aria-controls="aq-modal" aria-label="Open settings">Settings</button>
       </div>
     </div>

@@ -33,24 +33,6 @@
                   <button role="tab" class="aq-seg" data-mode="markdown" aria-selected="false">Markdown</button>
                   <button role="tab" class="aq-seg" data-mode="wysiwyg" aria-selected="false">WYSIWYG</button>
                 </div>
-                <div class="aq-flex-spacer" style="flex:1 1 auto;"></div>
-                <div class="aq-size-controls aq-toolbar" style="gap:0.25rem;">
-                  <button class="aq-btn" data-action="change-width" data-direction="decrease" aria-label="Narrower">− Width</button>
-                  <button class="aq-btn" data-action="change-width" data-direction="increase" aria-label="Wider">+ Width</button>
-                  <button class="aq-btn" data-action="change-font-size" data-direction="decrease" aria-label="Smaller">A−</button>
-                  <button class="aq-btn" data-action="change-font-size" data-direction="increase" aria-label="Bigger">A+</button>
-                </div>
-                <!-- LLM Story controls (visible in all modes) -->
-                <div class="aq-llm-group aq-toolbar" style="gap:0.35rem; margin-left: auto;">
-                  <label style="display:inline-flex; align-items:center; gap:0.35rem;">
-                    <span style="font-size:0.85rem; color:var(--muted);">Story model</span>
-                    <select data-ref="storyModelSelect" class="aq-select aq-select-sm"></select>
-                  </label>
-                  <button class="aq-btn aq-btn-sm" data-action="story-write-summary" title="Write or update summary"><i class="fas fa-edit"></i> Summary</button>
-                  <button class="aq-btn aq-btn-sm" data-action="story-write-chapter" title="Write chapter from summary"><i class="fas fa-file-alt"></i> Write</button>
-                  <button class="aq-btn aq-btn-sm" data-action="story-continue-chapter" title="Continue chapter to match summary"><i class="fas fa-forward"></i> Continue</button>
-                  <button class="aq-btn aq-btn-sm" data-action="story-cancel" title="Cancel running LLM action" style="display:none;">■ Stop</button>
-                </div>
               </div>
               <div data-raw-toolbar class="aq-toolbar" style="gap:0.25rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                 <button class="aq-btn aq-btn-sm" title="Bold" data-action="wrap-selection" data-before="**" data-after="**"><strong>B</strong></button>

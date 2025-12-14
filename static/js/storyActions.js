@@ -17,7 +17,7 @@ export class StoryActions {
    * Renders story models select.
    */
   renderStoryModels() {
-    const select = this.shellView.$refs.storyModelSelect || this.shellView.el.querySelector('[data-ref="storyModelSelect"]');
+    const select = this.shellView.$refs.storyModelSelect || document.querySelector('[data-ref="storyModelSelect"]');
     if (!select) return;
     const models = Array.isArray(this.shellView.storyModels) ? this.shellView.storyModels : [];
     const current = this.shellView.storyCurrentModel || '';
@@ -28,10 +28,10 @@ export class StoryActions {
    * Renders story busy state.
    */
   renderStoryBusy() {
-    const summaryBtn = this.shellView.el.querySelector('[data-action="story-write-summary"]');
-    const writeBtn = this.shellView.el.querySelector('[data-action="story-write-chapter"]');
-    const continueBtn = this.shellView.el.querySelector('[data-action="story-continue-chapter"]');
-    const cancelBtn = this.shellView.el.querySelector('[data-action="story-cancel"]');
+    const summaryBtn = document.querySelector('[data-action="story-write-summary"]');
+    const writeBtn = document.querySelector('[data-action="story-write-chapter"]');
+    const continueBtn = document.querySelector('[data-action="story-continue-chapter"]');
+    const cancelBtn = document.querySelector('[data-action="story-cancel"]');
     const busy = !!this.shellView.storyBusy;
     [summaryBtn, writeBtn, continueBtn].forEach(btn => { if (btn) btn.disabled = busy; });
     if (cancelBtn) {

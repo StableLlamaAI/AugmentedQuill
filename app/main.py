@@ -1229,12 +1229,12 @@ async def api_story_continue(request: Request) -> JSONResponse:
 
 
 
-@app.post("/api/story/suggest_pair")
-async def api_story_suggest_pair(request: Request) -> StreamingResponse:
-    """Return two alternative one-sentence suggestions to continue the current chapter.
+@app.post("/api/story/suggest")
+async def api_story_suggest(request: Request) -> StreamingResponse:
+    """Return one alternative one-paragraph suggestion to continue the current chapter.
 
     Body JSON: {"chap_id": int, "model_name": str | None, "current_text": str | None, overrides...}
-    Returns: Streaming text with "left: <sentence>\nright: <sentence>\n"
+    Returns: Streaming text with the suggestion paragraph.
     """
     try:
         payload = await request.json()
@@ -1273,6 +1273,8 @@ async def api_story_suggest_pair(request: Request) -> StreamingResponse:
         prompt_parts.append(title)
     if summary:
         prompt_parts.append(summary)
+    if len(prompt_parts) > 0:
+        prompt_parts.append("---")
     if current_text:
         prompt_parts.append(current_text)
     prompt = "\n\n".join(prompt_parts)
@@ -1286,33 +1288,26 @@ async def api_story_suggest_pair(request: Request) -> StreamingResponse:
         "repeat_penalty": 1.0
     }
 
-    async def generate_suggestions():
-        import asyncio
+    async def generate_suggestion():
+        startFound = False
+        isNewParagraph = False
+        async for chunk in _openai_completions_stream(
+            prompt=prompt, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s, extra_body=extra_body
+        ):
+            while chunk.lstrip(' \t').startswith("\n") and not startFound:
+                chunk = chunk.lstrip(' \t')[1:]
+                if not isNewParagraph:
+                    yield "\n"
+                isNewParagraph = True
+            if chunk == "":
+                continue
+            startFound = True
+            lines = chunk.splitlines()
+            yield lines[0]
+            if len(lines) > 1:
+                break  # Stop at end of paragraph.
 
-        async def produce(side, queue):
-            try:
-                async for chunk in _openai_completions_stream(
-                    prompt=prompt, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s, extra_body=extra_body
-                ):
-                    await queue.put(f"{side}: {chunk}\n")
-                await queue.put(f"{side}: \n")
-            except Exception as e:
-                await queue.put(f"{side}: (Error: {str(e)})\n")
-
-        queue = asyncio.Queue()
-        left_task = asyncio.create_task(produce("left", queue))
-        right_task = asyncio.create_task(produce("right", queue))
-        tasks = {left_task, right_task}
-
-        while tasks or not queue.empty():
-            if not queue.empty():
-                yield queue.get_nowait()
-            elif tasks:
-                done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
-    return StreamingResponse(generate_suggestions(), media_type="text/plain")
-
-
+    return StreamingResponse(generate_suggestion(), media_type="text/plain")
 
 
 # --- Proxy endpoint for OpenAI model listing (fallback when CORS blocks browser) ---

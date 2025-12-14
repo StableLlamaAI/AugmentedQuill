@@ -315,7 +315,7 @@ export class ShellView extends Component {
     });
 
     // Width mode buttons (scoped)
-    const widthButtons = this.el.querySelectorAll('[data-action="change-width"]');
+    const widthButtons = document.querySelectorAll('[data-action="change-width"]');
     widthButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const direction = btn.dataset.direction;
@@ -332,7 +332,7 @@ export class ShellView extends Component {
     });
 
     // Font size buttons (scoped)
-    const fontSizeButtons = this.el.querySelectorAll('[data-action="change-font-size"]');
+    const fontSizeButtons = document.querySelectorAll('[data-action="change-font-size"]');
     fontSizeButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const direction = btn.dataset.direction;
@@ -389,7 +389,7 @@ export class ShellView extends Component {
     }
 
     // Story model & actions
-    const storyModelSelect = this.$refs.storyModelSelect || this.el.querySelector('[data-ref="storyModelSelect"]');
+    const storyModelSelect = this.$refs.storyModelSelect || document.querySelector('[data-ref="storyModelSelect"]');
     if (storyModelSelect) {
       storyModelSelect.addEventListener('change', (e) => {
         const val = e.target.value;
@@ -398,20 +398,20 @@ export class ShellView extends Component {
       });
     }
 
-    const writeSummaryBtn = this.el.querySelector('[data-action="story-write-summary"]');
+    const writeSummaryBtn = document.querySelector('[data-action="story-write-summary"]');
     if (writeSummaryBtn) {
       writeSummaryBtn.addEventListener('click', () => this.storyActions.handleWriteSummary());
     }
-    const writeChapterBtn = this.el.querySelector('[data-action="story-write-chapter"]');
+    const writeChapterBtn = document.querySelector('[data-action="story-write-chapter"]');
     if (writeChapterBtn) {
       writeChapterBtn.addEventListener('click', () => this.storyActions.handleWriteChapter());
     }
-    const continueChapterBtn = this.el.querySelector('[data-action="story-continue-chapter"]');
+    const continueChapterBtn = document.querySelector('[data-action="story-continue-chapter"]');
     if (continueChapterBtn) {
       continueChapterBtn.addEventListener('click', () => this.storyActions.handleContinueChapter());
     }
 
-    const cancelStoryBtn = this.el.querySelector('[data-action="story-cancel"]');
+    const cancelStoryBtn = document.querySelector('[data-action="story-cancel"]');
     if (cancelStoryBtn) {
       cancelStoryBtn.addEventListener('click', () => this.storyActions.cancelStoryAction());
     }

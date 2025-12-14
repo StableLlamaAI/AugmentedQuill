@@ -79,11 +79,11 @@ export class FlowMode {
   /**
    * Handles redo (undo last insertion).
    */
-  handleFlowRedo() {
+  async handleFlowRedo() {
     if (!this.shellView.flowActive) return;
     this._flowUndo();
     // Restart generation from the undone state
-    this._flowFetchPair();
+    await this._flowFetchPair();
   }
 
   /**
@@ -94,47 +94,44 @@ export class FlowMode {
     this.shellView.flowBusy = true;
     try {
       const payload = { chap_id: this.shellView.activeId, model_name: this.shellView.storyCurrentModel, current_text: this.shellView.content || '' };
-      const response = await fetch('/api/story/suggest_pair', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let flowLeftBuffer = '';
-      let flowRightBuffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep incomplete line
-        for (const line of lines) {
-          if (line === 'left: \n') {
-            // Left suggestion complete
-          } else if (line.startsWith('left: ')) {
-            flowLeftBuffer += line.substring(6);
-            this.shellView.flowLeft = flowLeftBuffer;
-          } else if (line === 'right: \n') {
-            // Right suggestion complete
-          } else if (line.startsWith('right: ')) {
-            flowRightBuffer += line.substring(7);
-            this.shellView.flowRight = flowRightBuffer;
-          }
-        }
-      }
-      // Ensure we have values if not completed
-      if (!this.shellView.flowLeft) this.shellView.flowLeft = '(No suggestion)';
-      if (!this.shellView.flowRight) this.shellView.flowRight = '(No suggestion)';
+      const [left, right] = await Promise.all([
+        this._fetchSuggestion(payload),
+        this._fetchSuggestion(payload)
+      ]);
+      this.shellView.flowLeft = left;
+      this.shellView.flowRight = right;
     } catch (e) {
       this.shellView.flowLeft = '(error)';
       this.shellView.flowRight = '(error)';
     } finally {
       this.shellView.flowBusy = false;
+    }
+  }
+
+  /**
+   * Fetches a single suggestion from the backend.
+   * @param {object} payload - The payload to send.
+   * @returns {string} The suggestion text.
+   */
+  async _fetchSuggestion(payload) {
+    try {
+      const response = await fetch('/api/story/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+      }
+      return buffer; //.trim();
+    } catch (e) {
+      return '(error)';
     }
   }
 
@@ -167,18 +164,6 @@ export class FlowMode {
   }
 
   /**
-   * Picks a flow sentence.
-   * @param {string} side - 'left' or 'right'.
-   */
-  _flowPick(side) {
-    const sentence = side === 'left' ? this.shellView.flowLeft : this.shellView.flowRight;
-    if (sentence) {
-      this._flowAppendSentence(sentence);
-      this._flowFetchPair(); // Get new pair
-    }
-  }
-
-  /**
    * Picks a sentence from Flow mode.
    * @param {string} side - 'left' or 'right'.
    */
@@ -206,7 +191,8 @@ export class FlowMode {
    */
   _flowAppendSentence(sentence) {
     const base = this.shellView.content || '';
-    const sep = base && !base.endsWith('\n') ? ' ' : '';
+    //const sep = base && !base.endsWith('\n') ? ' ' : '';
+    const sep = base && sentence.startsWith('\n') ? '\n' : '';
     this.shellView._flowLastContent = base; // Store for undo
     this.shellView.content = base + sep + sentence;
     this.shellView.contentEditor.scrollToBottom();
