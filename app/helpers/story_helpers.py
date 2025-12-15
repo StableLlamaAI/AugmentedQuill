@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from app.projects import get_active_project_dir
 from app.config import load_story_config
 from app import llm as _llm
+from app.prompts import get_system_message, get_user_prompt, load_model_prompt_overrides
+from app.config import load_machine_config
 from .chapter_helpers import _chapter_by_id_or_404, _normalize_chapter_entry
 
 
@@ -31,21 +33,21 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
 
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(Path(__file__).resolve().parent.parent.parent / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
     sys_msg = {
         "role": "system",
-        "content": (
-            "You are an expert story editor. Write a concise summary capturing plot, characters, tone, and open threads."
-        ),
+        "content": get_system_message("chapter_summarizer", model_overrides),
     }
     mode_l = (mode or "").lower()
     if mode_l == "discard" or not current_summary:
-        user_prompt = f"Chapter text:\n\n{chapter_text}\n\nTask: Write a new summary (5-10 sentences)."
+        user_prompt = get_user_prompt("chapter_summary_new", chapter_text=chapter_text)
     else:
-        user_prompt = (
-            "Existing summary:\n\n" + current_summary +
-            "\n\nChapter text:\n\n" + chapter_text +
-            "\n\nTask: Update the summary to accurately reflect the chapter, keeping style and brevity."
-        )
+        user_prompt = get_user_prompt("chapter_summary_update", existing_summary=current_summary, chapter_text=chapter_text)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     data = await _llm.openai_chat_complete(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s)
@@ -77,10 +79,15 @@ async def _story_write_helper(*, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "")
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
-    sys_msg = {"role": "system", "content": "You are a skilled novelist. Write compelling, coherent prose in the voice and style of the project."}
-    user_prompt = ("Project title: " + (story.get("project_title") or "") +
-                   "\n\nChapter summary:\n" + summary +
-                   "\n\nTask: Write the full chapter as markdown. Keep consistency with previous chapters if implied.")
+    
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(Path(__file__).resolve().parent.parent.parent / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_writer", model_overrides)}
+    user_prompt = get_user_prompt("write_chapter", project_title=story.get("project_title") or "", chapter_summary=summary)
     data = await _llm.openai_chat_complete(messages=[sys_msg, {"role": "user", "content": user_prompt}], base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s)
     choices = (data or {}).get("choices") or []
     content = ""
@@ -107,10 +114,15 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
     current = path.read_text(encoding="utf-8") if path.exists() else ""
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
-    sys_msg = {"role": "system", "content": "You are a helpful writing assistant. Continue the chapter, matching tone, characters, and style."}
-    user_prompt = ("Chapter summary:\n" + summary +
-                   "\n\nExisting chapter text (may be partial):\n" + current +
-                   "\n\nTask: Continue the chapter. Avoid repeating text; ensure transitions are smooth.")
+    
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(Path(__file__).resolve().parent.parent.parent / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_continuer", model_overrides)}
+    user_prompt = get_user_prompt("continue_chapter", chapter_summary=summary, existing_text=current)
     data = await _llm.openai_chat_complete(messages=[sys_msg, {"role": "user", "content": user_prompt}], base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s)
     choices = (data or {}).get("choices") or []
     add = ""
@@ -145,23 +157,21 @@ async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
 
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(Path(__file__).resolve().parent.parent.parent / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
     sys_msg = {
         "role": "system",
-        "content": (
-            "You are an expert story editor. Write a comprehensive summary of the entire story "
-            "based on the chapter summaries provided. Capture the overall plot, main characters, "
-            "themes, tone, and narrative arc."
-        ),
+        "content": get_system_message("story_summarizer", model_overrides),
     }
     mode_l = (mode or "").lower()
     if mode_l == "discard" or not current_story_summary:
-        user_prompt = f"Chapter summaries:\n\n" + "\n\n".join(chapter_summaries) + "\n\nTask: Write a comprehensive story summary (10-20 sentences)."
+        user_prompt = get_user_prompt("story_summary_new", chapter_summaries="\n\n".join(chapter_summaries))
     else:
-        user_prompt = (
-            "Existing story summary:\n\n" + current_story_summary +
-            "\n\nChapter summaries:\n\n" + "\n\n".join(chapter_summaries) +
-            "\n\nTask: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
-        )
+        user_prompt = get_user_prompt("story_summary_update", existing_summary=current_story_summary, chapter_summaries="\n\n".join(chapter_summaries))
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     data = await _llm.openai_chat_complete(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s)

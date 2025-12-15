@@ -89,7 +89,17 @@ export class ModelsEditor extends Component {
             const field = target.dataset.modelField;
 
             if (field && model) {
-                model[field] = target.value;
+                if (field.startsWith('prompt_overrides.')) {
+                    // Handle nested prompt_overrides
+                    const overrideKey = field.split('.', 2)[1];
+                    if (!model.prompt_overrides) {
+                        model.prompt_overrides = {};
+                    }
+                    model.prompt_overrides[overrideKey] = target.value;
+                } else {
+                    model[field] = target.value;
+                }
+
                 if (field === 'name') {
                     const radio = modelCard.querySelector('input[type="radio"][name="openai_selected_name"]');
                     if (radio) {
@@ -276,6 +286,44 @@ export class ModelsEditor extends Component {
             </span>
           </div>
         </div>
+        <details style="margin-top: 1rem;">
+          <summary style="cursor: pointer; font-weight: bold; color: var(--accent);">Expert Settings: Prompt Overrides</summary>
+          <div style="margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary);">
+            <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0.5rem;">
+              Override default prompts for this model. Leave empty to use defaults.
+            </p>
+            <div class="aq-field">
+              <label class="aq-field">
+                <span>Chat LLM System Message</span>
+                <textarea rows="4" data-model-field="prompt_overrides.chat_llm" placeholder="You are an AI writing assistant...">${this.escapeHtml((m.prompt_overrides || {}).chat_llm || '')}</textarea>
+              </label>
+            </div>
+            <div class="aq-field">
+              <label class="aq-field">
+                <span>Story Writer System Message</span>
+                <textarea rows="2" data-model-field="prompt_overrides.story_writer" placeholder="You are a skilled novelist...">${this.escapeHtml((m.prompt_overrides || {}).story_writer || '')}</textarea>
+              </label>
+            </div>
+            <div class="aq-field">
+              <label class="aq-field">
+                <span>Story Continuer System Message</span>
+                <textarea rows="2" data-model-field="prompt_overrides.story_continuer" placeholder="You are a helpful writing assistant...">${this.escapeHtml((m.prompt_overrides || {}).story_continuer || '')}</textarea>
+              </label>
+            </div>
+            <div class="aq-field">
+              <label class="aq-field">
+                <span>Chapter Summarizer System Message</span>
+                <textarea rows="2" data-model-field="prompt_overrides.chapter_summarizer" placeholder="You are an expert story editor...">${this.escapeHtml((m.prompt_overrides || {}).chapter_summarizer || '')}</textarea>
+              </label>
+            </div>
+            <div class="aq-field">
+              <label class="aq-field">
+                <span>Story Summarizer System Message</span>
+                <textarea rows="2" data-model-field="prompt_overrides.story_summarizer" placeholder="You are an expert story editor...">${this.escapeHtml((m.prompt_overrides || {}).story_summarizer || '')}</textarea>
+              </label>
+            </div>
+          </div>
+        </details>
         <div class="aq-toolbar" style="justify-content: space-between;">
           <label style="display:flex; align-items:center; gap:0.4rem;">
             <input type="radio" name="openai_selected_name" value="${this.escapeHtml(m.name)}" ${this.selected_name === m.name ? 'checked' : ''} />

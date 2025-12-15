@@ -9,6 +9,7 @@ from app.helpers.project_helpers import _project_overview, _chapter_content_slic
 from app.helpers.story_helpers import _story_generate_summary_helper, _story_write_helper, _story_continue_helper
 from app.helpers.chapter_helpers import _chapter_by_id_or_404
 from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete, _openai_completions_stream
+from app.prompts import get_system_message, load_model_prompt_overrides
 import json as _json
 from typing import Any, Dict
 
@@ -664,6 +665,18 @@ async def api_chat(request: Request) -> JSONResponse:
     req_messages = _normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
         return JSONResponse(status_code=400, content={"ok": False, "detail": "messages array is required"})
+
+    # Prepend system message if not present
+    has_system = any(msg.get("role") == "system" for msg in req_messages)
+    if not has_system:
+        # Load model-specific prompt overrides
+        machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+        openai_cfg = machine_config.get("openai", {})
+        selected_model_name = selected_name or openai_cfg.get("selected")
+        model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+        
+        system_content = get_system_message("chat_llm", model_overrides)
+        req_messages.insert(0, {"role": "system", "content": system_content})
 
     # Load machine config and pick selected model
     machine = load_machine_config(CONFIG_DIR / "machine.json") or {}

@@ -3,10 +3,11 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.projects import get_active_project_dir
-from app.config import load_story_config
+from app.config import load_story_config, load_machine_config
 from app.helpers.chapter_helpers import _chapter_by_id_or_404, _normalize_chapter_entry
 from app.helpers.story_helpers import _story_generate_summary_helper, _story_write_helper, _story_continue_helper
 from app.llm_shims import _openai_completions_stream, _openai_chat_complete_stream
+from app.prompts import get_system_message, get_user_prompt, load_model_prompt_overrides
 import json as _json
 
 router = APIRouter()
@@ -212,11 +213,14 @@ async def api_story_write(request: Request) -> JSONResponse:
     from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {"role": "system", "content": "You are a skilled novelist writing compelling prose based on a summary."}
-    user_prompt = (
-        f"Project: {story.get('project_title', 'Story')}\nTitle: {title}\n\nSummary:\n\n{summary}\n\n" 
-        "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
-    )
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_writer", model_overrides)}
+    user_prompt = get_user_prompt("write_chapter", project_title=story.get('project_title', 'Story'), chapter_title=title, chapter_summary=summary)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
@@ -275,11 +279,14 @@ async def api_story_continue(request: Request) -> JSONResponse:
     from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {"role": "system", "content": "You are a skilled novelist continuing a chapter. Do not repeat or edit existing text; only continue."}
-    user_prompt = (
-        f"Title: {title}\n\nSummary:\n{summary}\n\nExisting chapter text (do not change):\n\n{existing}\n\n" 
-        "Task: Continue the chapter from where it stops to advance the summary coherently."
-    )
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_continuer", model_overrides)}
+    user_prompt = get_user_prompt("continue_chapter", chapter_title=title, chapter_summary=summary, existing_text=existing)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
@@ -423,15 +430,17 @@ async def api_story_summary_stream(request: Request):
     from app.llm_shims import _resolve_openai_credentials
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {"role": "system", "content": "You are an expert story editor. Write a concise summary capturing plot, characters, tone, and open threads."}
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("chapter_summarizer", model_overrides)}
     if mode == "discard" or not current_summary:
-        user_prompt = f"Chapter text:\n\n{chapter_text}\n\nTask: Write a new summary (5-10 sentences)."
+        user_prompt = get_user_prompt("chapter_summary_new", chapter_text=chapter_text)
     else:
-        user_prompt = (
-            "Existing summary:\n\n" + current_summary +
-            "\n\nChapter text:\n\n" + chapter_text +
-            "\n\nTask: Update the summary to accurately reflect the chapter, keeping style and brevity."
-        )
+        user_prompt = get_user_prompt("chapter_summary_update", existing_summary=current_summary, chapter_text=chapter_text)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     # We'll aggregate to persist at the end if not cancelled
@@ -480,11 +489,14 @@ async def api_story_write_stream(request: Request):
     from app.llm_shims import _resolve_openai_credentials
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {"role": "system", "content": "You are a skilled novelist writing compelling prose based on a summary."}
-    user_prompt = (
-        f"Project: {story.get('project_title', 'Story')}\nTitle: {title}\n\nSummary:\n\n{summary}\n\n"
-        "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
-    )
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_writer", model_overrides)}
+    user_prompt = get_user_prompt("write_chapter", project_title=story.get('project_title', 'Story'), chapter_title=title, chapter_summary=summary)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     async def _gen():
@@ -534,11 +546,14 @@ async def api_story_continue_stream(request: Request):
     from app.llm_shims import _resolve_openai_credentials
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
-    sys_msg = {"role": "system", "content": "You are a skilled novelist continuing a chapter. Do not repeat or edit existing text; only continue."}
-    user_prompt = (
-        f"Title: {title}\n\nSummary:\n{summary}\n\nExisting chapter text (do not change):\n\n{existing}\n\n"
-        "Task: Continue the chapter from where it stops to advance the summary coherently."
-    )
+    # Load model-specific prompt overrides
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    openai_cfg = machine_config.get("openai", {})
+    selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
+    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+
+    sys_msg = {"role": "system", "content": get_system_message("story_continuer", model_overrides)}
+    user_prompt = get_user_prompt("continue_chapter", chapter_title=title, chapter_summary=summary, existing_text=existing)
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     async def _gen():
