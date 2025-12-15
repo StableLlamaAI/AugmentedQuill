@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
@@ -27,6 +28,15 @@ STATIC_DIR = BASE_DIR / "static"
 CONFIG_DIR = BASE_DIR / "config"
 
 app = FastAPI(title="AugmentedQuill")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount static files if folder exists (created in repo)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

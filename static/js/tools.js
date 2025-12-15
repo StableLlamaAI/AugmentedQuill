@@ -31,7 +31,7 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'write_summary',
+      name: 'sync_summary',
       description: 'Generate or update the summary for a chapter.',
       parameters: {
         type: 'object',

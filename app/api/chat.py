@@ -19,6 +19,101 @@ CONFIG_DIR = BASE_DIR / "config"
 router = APIRouter()
 
 
+def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
+    """Parse tool calls from assistant content if not provided in structured format.
+    
+    Handles various formats like:
+    - <tool_call>get_project_overview</tool_call>
+    - <function_call>get_project_overview</function_call>
+    - [TOOL_CALL]get_project_overview[/TOOL_CALL]
+    - Tool: get_project_overview
+    - XML-style tool calls
+    """
+    import re
+    
+    calls = []
+    
+    # Look for <tool_call> or <function_call> tags
+    pattern1 = r'<(tool_call|function_call)>(.*?)</\1>'
+    matches1 = re.findall(pattern1, content, re.IGNORECASE | re.DOTALL)
+    
+    for tag, content_inner in matches1:
+        func_match = re.match(r'(\w+)(?:\((.*)\))?', content_inner.strip())
+        if func_match:
+            name = func_match.group(1)
+            args_str = func_match.group(2) or "{}"
+            try:
+                args_obj = _json.loads(args_str)
+            except:
+                args_obj = {}
+            
+            call = {
+                "id": f"call_{name}_{len(calls)}",
+                "type": "function", 
+                "function": {
+                    "name": name,
+                    "arguments": _json.dumps(args_obj)
+                },
+                "original_text": f'<{tag}>{content_inner}</{tag}>'
+            }
+            calls.append(call)
+    
+    # Look for [TOOL_CALL] tags
+    pattern2 = r'\[TOOL_CALL\](.*?)\[/TOOL_CALL\]'
+    matches2 = re.findall(pattern2, content, re.IGNORECASE | re.DOTALL)
+    
+    for content_inner in matches2:
+        func_match = re.match(r'(\w+)(?:\((.*)\))?', content_inner.strip())
+        if func_match:
+            name = func_match.group(1)
+            args_str = func_match.group(2) or "{}"
+            try:
+                args_obj = _json.loads(args_str)
+            except:
+                args_obj = {}
+            
+            call = {
+                "id": f"call_{name}_{len(calls)}",
+                "type": "function", 
+                "function": {
+                    "name": name,
+                    "arguments": _json.dumps(args_obj)
+                },
+                "original_text": f'[TOOL_CALL]{content_inner}[/TOOL_CALL]'
+            }
+            calls.append(call)
+    
+    # Look for "Tool:" or "Function:" prefixes (must be at start of word)
+    pattern3 = r'(^|(?<=\s))(Tool|Function):\s+(\w+)(?:\(([^)]*)\))?'
+    matches3 = re.findall(pattern3, content, re.IGNORECASE)
+    
+    for match in matches3:
+        _, prefix, name, args_str = match
+        args_str = args_str.strip() if args_str else "{}"
+        try:
+            args_obj = _json.loads(args_str) if args_str != "{}" else {}
+        except:
+            args_obj = {}
+        
+        # Find the original text to remove
+        original_text = f"{prefix}: {name}"
+        if args_str and args_str != "{}":
+            original_text += f"({args_str})"
+        
+        call = {
+            "id": f"call_{name}_{len(calls)}",
+            "type": "function", 
+            "function": {
+                "name": name,
+                "arguments": _json.dumps(args_obj)
+            },
+            "original_text": original_text
+        }
+        calls.append(call)
+    
+    return calls if calls else None
+
+
 STORY_TOOLS = [
     {
         "type": "function",
@@ -85,8 +180,8 @@ STORY_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "write_summary",
-            "description": "Generate and save a new summary for a chapter, or update its existing summary. This is a destructive action.",
+            "name": "sync_summary",
+            "description": "Generate and save a new summary for a chapter, or update its existing summary based on the content of the chapter. This is a destructive action.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -104,7 +199,7 @@ STORY_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "write_story_summary",
+            "name": "sync_story_summary",
             "description": "Generate and save a new overall story summary based on chapter summaries, or update the existing one. This is a destructive action.",
             "parameters": {
                 "type": "object",
@@ -199,7 +294,7 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             max_chars = max(1, min(8000, max_chars))
             data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
             return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
-        if name == "write_summary":
+        if name == "sync_summary":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
                 return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
@@ -221,7 +316,7 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             data = await _story_continue_helper(chap_id=chap_id)
             mutations["story_changed"] = True
             return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
-        if name == "write_story_summary":
+        if name == "sync_story_summary":
             mode = str(args_obj.get("mode", "")).lower()
             # Import the helper function
             from app.helpers.story_helpers import _story_generate_story_summary_helper
@@ -499,6 +594,19 @@ async def api_chat(request: Request) -> JSONResponse:
                                 args = "{}"
                         tool_calls = [{"id": f"call_{name}", "type": "function", "function": {"name": name, "arguments": args}}]
 
+                # Try to parse tool calls from content if not already present
+                content = message.get("content", "") or ""
+                if not tool_calls and content.strip():
+                    parsed_calls = _parse_tool_calls_from_content(content)
+                    if parsed_calls:
+                        tool_calls = parsed_calls
+                        # Remove all tool call texts from content
+                        for call in parsed_calls:
+                            original_text = call.get("original_text", "")
+                            if original_text:
+                                content = content.replace(original_text, "", 1)
+                        message["content"] = content.strip()
+
                 if not tool_calls or not isinstance(tool_calls, list):
                     # No tool calls, we are done. Return the last message.
                     usage = (data or {}).get("usage")
@@ -509,19 +617,31 @@ async def api_chat(request: Request) -> JSONResponse:
                 # We have tool calls, execute them
                 tool_messages = []
                 for call in tool_calls:
-                    if not (isinstance(call, dict) and call.get("type") == "function"): continue
-                    call_id = str(call.get("id") or "")
-                    func = call.get("function") or {}
-                    name = (func.get("name") if isinstance(func, dict) else "") or ""
-                    args_raw = (func.get("arguments") if isinstance(func, dict) else "") or "{}"
                     try:
-                        args_obj = _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
-                    except Exception:
-                        args_obj = {}
-                    if not name or not call_id: continue
+                        if not (isinstance(call, dict) and call.get("type") == "function"): continue
+                        call_id = str(call.get("id") or "")
+                        func = call.get("function") or {}
+                        name = (func.get("name") if isinstance(func, dict) else "") or ""
+                        args_raw = (func.get("arguments") if isinstance(func, dict) else "") or "{}"
+                        try:
+                            args_obj = _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+                        except Exception as e:
+                            print(f"Failed to parse tool arguments for {name}: {e}")
+                            args_obj = {}
+                        if not name or not call_id: continue
 
-                    tool_result_msg = await _exec_chat_tool(name, args_obj, call_id, payload, mutations)
-                    tool_messages.append(tool_result_msg)
+                        tool_result_msg = await _exec_chat_tool(name, args_obj, call_id, payload, mutations)
+                        tool_messages.append(tool_result_msg)
+                    except Exception as e:
+                        # Log tool execution errors but continue with other tools
+                        print(f"Tool execution error for {name}: {e}")
+                        error_msg = {
+                            "role": "tool", 
+                            "tool_call_id": call_id, 
+                            "name": name, 
+                            "content": _json.dumps({"error": f"Tool execution failed: {str(e)}"})
+                        }
+                        tool_messages.append(error_msg)
 
                 req_messages.extend(tool_messages)
                 body["messages"] = req_messages
@@ -530,6 +650,16 @@ async def api_chat(request: Request) -> JSONResponse:
             return JSONResponse(status_code=500, content={"ok": False, "detail": "Exceeded maximum tool call attempts"})
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Chat request failed: {e}")
+    except Exception as e:
+        # Log the full exception for debugging
+        import traceback
+        error_details = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+        print(f"Chat API error: {error_details}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Internal server error: {str(e)}", "error_type": type(e).__name__})
 
 
 @router.post("/api/chat/tools")

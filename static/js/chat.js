@@ -274,7 +274,7 @@ export class ChatView extends Component {
           const fn = tc?.function || {};
           const name = fn?.name || '';
           if (!name) continue;
-          if (name === 'write_summary' || name === 'write_chapter' || name === 'continue_chapter') {
+          if (name === 'sync_summary' || name === 'write_chapter' || name === 'continue_chapter') {
             try {
               const args = fn.arguments ? (typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {})) : {};
               if (typeof args.chap_id === 'number') changed.add(args.chap_id);
@@ -285,7 +285,7 @@ export class ChatView extends Component {
         const appended = result?.appended_messages || [];
         for (const tm of appended) {
           if (!tm || tm.role !== ROLES.TOOL) continue;
-          if (tm.name === 'write_summary' || tm.name === 'write_chapter') {
+          if (tm.name === 'sync_summary' || tm.name === 'write_chapter') {
             try {
               const payload = tm.content ? JSON.parse(tm.content) : {};
               const cid = payload?.chapter?.id;

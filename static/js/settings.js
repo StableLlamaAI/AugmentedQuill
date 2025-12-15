@@ -433,7 +433,7 @@ export class ModelsEditor extends Component {
 
   /**
    * Load available models from remote endpoint.
-   * Tries direct connection first, falls back to proxy if CORS blocks it.
+   * Uses backend proxy to avoid CORS issues.
    */
   async loadRemoteModels(idx) {
       const model = this.models[idx];
@@ -442,14 +442,8 @@ export class ModelsEditor extends Component {
       model.endpoint_ok = undefined;
 
       try {
-        // Try direct connection first (may fail due to CORS)
-        let data;
-        try {
-          data = await this._fetchModelsDirect(model);
-        } catch (_) {
-          // Fallback to backend proxy
-          data = await this._fetchModelsViaProxy(model);
-        }
+        // Use backend proxy to avoid CORS issues
+        const data = await this._fetchModelsViaProxy(model);
 
         // Extract and sort model names
         const list = Array.isArray(data.data) ? data.data : [];
