@@ -8,6 +8,10 @@ import { ShellView } from './editor.js';
 import { registry } from './components/component.js';
 import { ChatView } from './chat.js';
 
+// Global Variables
+let isSidebarOpen = false;
+let isChatOpen = true;
+
 // ========================================
 // Application State
 // ========================================
@@ -21,9 +25,171 @@ window.app = {
   registry
 };
 
-// ========================================
-// Component Initialization
-// ========================================
+// Handle input changes
+document.addEventListener('input', function (e) {
+  const target = e.target;
+  if (target.id === 'brightness-slider') {
+    const value = target.value;
+    document.getElementById('brightness-value').textContent = value + '%';
+    // Apply brightness
+    const textarea = document.querySelector('[data-ref="rawEditor"]');
+    if (textarea) {
+      textarea.style.filter = `brightness(${value}%)`;
+    }
+  } else if (target.id === 'contrast-slider') {
+    const value = target.value;
+    document.getElementById('contrast-value').textContent = value + '%';
+    const textarea = document.querySelector('[data-ref="rawEditor"]');
+    if (textarea) {
+      textarea.style.filter = `contrast(${value}%)`;
+    }
+  } else if (target.id === 'font-size-slider') {
+    const value = target.value;
+    document.getElementById('font-size-value').textContent = value + 'px';
+    const textarea = document.querySelector('[data-ref="rawEditor"]');
+    if (textarea) {
+      textarea.style.fontSize = `${value}px`;
+    }
+  } else if (target.id === 'line-width-slider') {
+    const value = target.value;
+    document.getElementById('line-width-value').textContent = value + 'ch';
+    const textarea = document.querySelector('[data-ref="rawEditor"]');
+    if (textarea) {
+      textarea.style.maxWidth = `${value}ch`;
+    }
+  }
+});
+
+// Handle global actions
+document.addEventListener('click', function (e) {
+  const action = e.target.closest('[data-action]');
+  if (!action) return;
+
+  const actionName = action.getAttribute('data-action');
+
+  switch (actionName) {
+    case 'toggle-sidebar':
+      toggleSidebar();
+      break;
+    case 'toggle-chat':
+      toggleChat();
+      break;
+    case 'toggle-appearance':
+      toggleAppearance();
+      break;
+    case 'close-appearance':
+      closeAppearance();
+      break;
+    case 'open-settings':
+      openSettings();
+      break;
+    case 'close-settings':
+      closeSettings();
+      break;
+    case 'save':
+      if (window.app.shellView) window.app.shellView.save();
+      break;
+    case 'undo':
+      if (window.app.shellView) window.app.shellView.undo();
+      break;
+    case 'redo':
+      if (window.app.shellView) window.app.shellView.redo();
+      break;
+    case 'create-chapter':
+      if (window.app.shellView) window.app.shellView.createChapter();
+      break;
+    case 'update-summary':
+      if (window.app.shellView) window.app.shellView.updateSummary();
+      break;
+    case 'select-chapter':
+      if (window.app.shellView) {
+        const chapterId = action.getAttribute('data-chapter-id');
+        window.app.shellView.chapterManager.openChapter(chapterId);
+      }
+      break;
+    case 'delete-chapter':
+      if (window.app.shellView) {
+        const chapterId = action.getAttribute('data-chapter-id');
+        window.app.shellView.chapterManager.deleteChapter(chapterId);
+      }
+      break;
+  }
+});
+
+// Sidebar toggle
+function toggleSidebar() {
+  isSidebarOpen = !isSidebarOpen;
+  updateSidebarClass();
+}
+
+function updateSidebarClass() {
+  const sidebar = document.getElementById('sidebar');
+  if (isSidebarOpen) {
+    sidebar.classList.remove('-translate-x-full');
+    sidebar.classList.add('translate-x-0');
+  } else {
+    sidebar.classList.remove('translate-x-0');
+    sidebar.classList.add('-translate-x-full');
+  }
+  const overlay = document.getElementById('sidebar-overlay');
+  if (isSidebarOpen) {
+    overlay.classList.remove('hidden');
+  } else {
+    overlay.classList.add('hidden');
+  }
+}
+
+// Chat toggle
+function toggleChat() {
+  isChatOpen = !isChatOpen;
+  updateChatClass();
+  updateChatIcon();
+}
+
+function updateChatClass() {
+  const chatPanel = document.getElementById('chat-panel');
+  if (isChatOpen) {
+    chatPanel.classList.remove('translate-x-full');
+    chatPanel.classList.add('translate-x-0');
+  } else {
+    chatPanel.classList.remove('translate-x-0');
+    chatPanel.classList.add('translate-x-full');
+  }
+}
+
+function updateChatIcon() {
+  const closeIcon = document.querySelector('.chat-icon-close');
+  const openIcon = document.querySelector('.chat-icon-open');
+  if (isChatOpen) {
+    closeIcon.classList.remove('hidden');
+    openIcon.classList.add('hidden');
+  } else {
+    closeIcon.classList.add('hidden');
+    openIcon.classList.remove('hidden');
+  }
+}
+
+// Appearance panel toggle
+function toggleAppearance() {
+  const panel = document.getElementById('appearance-panel');
+  panel.classList.toggle('hidden');
+}
+
+function closeAppearance() {
+  const panel = document.getElementById('appearance-panel');
+  panel.classList.add('hidden');
+}
+
+// Settings dialog
+function openSettings() {
+  const dialog = document.getElementById('settings-dialog');
+  dialog.classList.remove('hidden');
+}
+
+function closeSettings() {
+  const dialog = document.getElementById('settings-dialog');
+  dialog.classList.add('hidden');
+}
 
 /**
  * Initialize all components on the page
@@ -72,6 +238,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize all components
   initComponents();
+
+  // Update initial classes
+  updateSidebarClass();
+  updateChatClass();
+  updateChatIcon();
 });
 
 // Re-initialize components on HTMX content swaps

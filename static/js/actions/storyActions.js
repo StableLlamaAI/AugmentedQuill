@@ -260,4 +260,45 @@ export class StoryActions {
       this.shellView._storyAbortController = null;
     }
   }
+
+  /**
+   * Update chapter summary using AI
+   */
+  async updateChapterSummary(chap_id) {
+    try {
+      this.shellView.storyBusy = true;
+      await this._streamFetch('/api/story/summary/stream', { chap_id, mode: 'update', model_name: this.shellView.storyCurrentModel }, (chunk) => {
+        const chapter = this.shellView.chapters.find(c => c.id === chap_id);
+        if (chapter) {
+          chapter.summary = chunk;
+          this.shellView.chapterRenderer.renderChapterList();
+        }
+      });
+    } catch (e) {
+      console.error('Failed to update summary:', e);
+    } finally {
+      this.shellView.storyBusy = false;
+    }
+  }
+
+  /**
+   * Continue chapter using AI
+   */
+  async continueChapter(chap_id) {
+    try {
+      this.shellView.storyBusy = true;
+      let accum = '';
+      const base = this.shellView.content || '';
+      await this._streamFetch('/api/story/continue/stream', { chap_id, model_name: this.shellView.storyCurrentModel }, (chunk) => {
+        accum += chunk;
+        const sep = base && !base.endsWith('\n') ? '\n' : '';
+        this.shellView.content = base + sep + accum;
+        this.shellView.onChanged();
+      });
+    } catch (e) {
+      console.error('Failed to continue chapter:', e);
+    } finally {
+      this.shellView.storyBusy = false;
+    }
+  }
 }

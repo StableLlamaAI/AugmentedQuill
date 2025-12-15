@@ -12,6 +12,16 @@ export class ChapterRenderer {
   }
 
   /**
+   * Renders the story title.
+   */
+  renderStoryTitle() {
+    const titleInput = this.shellView.el?.querySelector('[data-ref="storyTitleInput"]');
+    if (titleInput) {
+      titleInput.value = this.shellView.storyTitle || '';
+    }
+  }
+
+  /**
    * Renders the story summary section.
    */
   renderStorySummary() {
@@ -50,35 +60,23 @@ export class ChapterRenderer {
     const list = this.shellView.el?.querySelector('[data-chapter-list]');
     if (!list) return;
 
+    if (this.shellView.chapters.length === 0) {
+      list.innerHTML = '<li class="text-stone-500 text-sm">No chapters yet</li>';
+      return;
+    }
+
     list.innerHTML = this.shellView.chapters.map(chapter => `
-      <li class="chapter-item ${chapter.id === this.shellView.activeId ? 'active' : ''} ${chapter.expanded ? 'expanded' : ''}"
-          data-chapter-id="${chapter.id}">
-        <div class="chapter-header">
-            <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="toggle-summary" title="Toggle Summary">
-                ${chapter.expanded ? '▼' : '▶'}
-            </button>
-            <div class="chapter-edit-container" style="flex:1;">
-              <input type="text"
-                     value="${this.escapeHtml(chapter.title || '')}"
-                     placeholder="${UI_STRINGS.UNTITLED}"
-                     data-ref="titleInput"
-                     class="chapter-title-input">
-            </div>
-            <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="delete-chapter" data-chapter-id="${chapter.id}" title="Delete Chapter">
-                🗑️
-            </button>
-        </div>
-        ${chapter.expanded ? `
-            <div class="chapter-summary-section">
-                <div class="summary-edit-container">
-                    <textarea data-chapter-id="${chapter.id}"
-                              data-ref="summaryInput"
-                              class="chapter-summary-input"
-                              rows="3"
-                              placeholder="${UI_STRINGS.ENTER_SUMMARY}">${this.escapeHtml(chapter.summary || '')}</textarea>
-                </div>
-            </div>
-        ` : ''}
+      <li class="flex items-center justify-between p-2 rounded hover:bg-stone-800 cursor-pointer ${chapter.id === this.shellView.activeId ? 'bg-stone-800' : ''}"
+          data-chapter-id="${chapter.id}" data-action="select-chapter">
+        <span class="text-stone-200 truncate">${this.escapeHtml(chapter.title || 'Untitled')}</span>
+        <button class="text-stone-400 hover:text-stone-200 p-1" data-action="delete-chapter" data-chapter-id="${chapter.id}" title="Delete Chapter">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3,6 5,6 21,6"/>
+            <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
       </li>
     `).join('');
     // Refresh refs
@@ -94,8 +92,8 @@ export class ChapterRenderer {
     if (!emptyView || !chapterView) return;
 
     const isChapterOpen = this.shellView.activeId !== null;
-    emptyView.style.display = isChapterOpen ? 'none' : 'block';
-    chapterView.style.display = isChapterOpen ? 'flex' : 'none';
+    emptyView.classList.toggle('hidden', isChapterOpen);
+    chapterView.classList.toggle('hidden', !isChapterOpen);
 
     if (isChapterOpen) {
       const activeIdEl = this.shellView.el.querySelector('[data-active-id]');

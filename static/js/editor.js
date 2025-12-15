@@ -39,6 +39,7 @@ export class ShellView extends Component {
       // Story summary and tags
       storySummary: '',
       storyTags: '',
+      storyTitle: '',
       storySummaryExpanded: true,
       lastFocusedField: null, // Track which field was last focused for Summary button context
       // Story model (separate from chat model)
@@ -106,7 +107,6 @@ export class ShellView extends Component {
     this.watch('renderMode', () => {
       try { localStorage.setItem('aq:renderMode', this.renderMode); } catch (e) { console.warn('Failed to save render mode to localStorage:', e); }
       this.contentEditor.renderModeButtons();
-      this.contentEditor.renderRawEditorToolbar();
     });
     this.watch('contentWidth', () => this.contentEditor.renderContentWidth());
     this.watch('fontSize', () => this.contentEditor.renderFontSize());
@@ -114,6 +114,7 @@ export class ShellView extends Component {
     this.watch('storyBusy', () => this.storyActions.renderStoryBusy());
     this.watch('storySummary', () => this.chapterRenderer.renderStorySummary());
     this.watch('storyTags', () => this.chapterRenderer.renderStoryTags());
+    this.watch('storyTitle', () => this.chapterRenderer.renderStoryTitle());
     this.watch('storySummaryExpanded', () => this.chapterRenderer.renderStorySummary());
 
     // Flow mode watchers
@@ -348,6 +349,14 @@ export class ShellView extends Component {
     if (toggleStorySummaryBtn) {
       toggleStorySummaryBtn.addEventListener('click', () => {
         this.storySummaryExpanded = !this.storySummaryExpanded;
+      });
+    }
+
+    // Story title input
+    const storyTitleInput = this.el.querySelector('[data-ref="storyTitleInput"]');
+    if (storyTitleInput) {
+      storyTitleInput.addEventListener('input', (e) => {
+        this.updateStoryMetadata(e.target.value, this.storySummary, this.storyTags);
       });
     }
 
@@ -981,6 +990,61 @@ export class ShellView extends Component {
    */
   onChanged() {
     this.dirty = this.content !== this._originalContent;
+  }
+
+  /**
+   * Public method to update story metadata
+   */
+  updateStoryMetadata(title, summary, tags) {
+    this.storyTitle = title;
+    this.storySummary = summary;
+    this.storyTags = tags;
+    // Save to server
+    this._debouncedSaveStorySummary({ target: { value: summary } });
+    this._debouncedSaveStoryTags({ target: { value: tags } });
+    // For title, save immediately
+    fetch('/api/story/title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    }).catch(e => console.error('Failed to save story title:', e));
+  }
+
+  /**
+   * Public method to undo
+   */
+  undo() {
+    // Implement undo
+  }
+
+  /**
+   * Public method to redo
+   */
+  redo() {
+    // Implement redo
+  }
+
+  /**
+   * Public method to create chapter
+   */
+  createChapter() {
+    this.chapterManager.createChapter();
+  }
+
+  /**
+   * Public method to update summary
+   */
+  updateSummary() {
+    if (!this.activeId) return;
+    this.storyActions.updateChapterSummary(this.activeId);
+  }
+
+  /**
+   * Public method to AI extend
+   */
+  aiExtend() {
+    if (!this.activeId) return;
+    this.storyActions.continueChapter(this.activeId);
   }
 
   /**

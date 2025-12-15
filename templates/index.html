@@ -1,125 +1,195 @@
 {% extends "base.html" %}
 {% block title %}AugmentedQuill — Prototype{% endblock %}
 {% block content %}
-  <div class="aq-shell" data-component="shell-view">
-    <aside class="aq-sidebar">
-      <div class="aq-sidebar-top">
-        <!-- Story Summary Section -->
-        <div class="aq-story-summary-section">
-          <div class="aq-story-summary-header">
-            <button class="aq-btn aq-btn-sm aq-btn-icon" data-action="toggle-story-summary" title="Toggle Story Summary">
-              ▼
+  <!-- Settings Dialog -->
+  <div id="settings-dialog" class="fixed inset-0 bg-black/60 z-50 hidden">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-stone-900 border border-stone-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div class="flex justify-between items-center p-5 border-b border-stone-800">
+          <h2 class="text-lg font-semibold text-stone-200">Settings</h2>
+          <button class="text-stone-500 hover:text-stone-300" data-action="close-settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div id="settings-content" class="p-5 overflow-y-auto max-h-[calc(90vh-120px)]">
+          <!-- Settings content will be loaded here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Appearance Panel -->
+  <div id="appearance-panel" class="fixed top-14 right-4 mt-2 w-80 bg-stone-900 border border-stone-700 rounded-lg shadow-2xl p-5 z-50 hidden">
+    <div class="flex justify-between items-center mb-4 border-b border-stone-800 pb-2">
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wider">Page Appearance</h3>
+      <button class="text-stone-500 hover:text-stone-300" data-action="close-appearance">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="space-y-5">
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm text-stone-300">
+          <span>Brightness</span>
+          <span class="font-mono text-xs text-stone-500" id="brightness-value">95%</span>
+        </div>
+        <input type="range" min="50" max="100" value="95" id="brightness-slider" class="w-full h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"/>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm text-stone-300">
+          <span>Contrast</span>
+          <span class="font-mono text-xs text-stone-500" id="contrast-value">90%</span>
+        </div>
+        <input type="range" min="50" max="100" value="90" id="contrast-slider" class="w-full h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"/>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm text-stone-300">
+          <span>Font Size</span>
+          <span class="font-mono text-xs text-stone-500" id="font-size-value">18px</span>
+        </div>
+        <input type="range" min="12" max="32" value="18" id="font-size-slider" class="w-full h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"/>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm text-stone-300">
+          <span>Line Width</span>
+          <span class="font-mono text-xs text-stone-500" id="line-width-value">60ch</span>
+        </div>
+        <input type="range" min="40" max="100" value="60" id="line-width-slider" class="w-full h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="flex-1 flex overflow-hidden relative" data-component="shell-view">
+    <!-- Mobile sidebar overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden hidden"></div>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="fixed inset-y-0 left-0 top-14 w-80 flex flex-col border-r border-stone-800 flex-shrink-0 bg-stone-900 z-40 transition-transform duration-300 ease-in-out md:relative md:top-auto md:translate-x-0 -translate-x-full">
+      <!-- Story Metadata -->
+      <div class="p-4 border-b border-stone-800">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Title</label>
+            <input type="text" data-ref="storyTitleInput" class="w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-stone-200 placeholder-stone-500 focus:outline-none focus:border-indigo-500" placeholder="Story title...">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Summary</label>
+            <textarea data-ref="storySummaryInput" class="w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-stone-200 placeholder-stone-500 focus:outline-none focus:border-indigo-500 resize-none" rows="4" placeholder="Story summary..."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Tags</label>
+            <input type="text" data-ref="storyTagsInput" class="w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-stone-200 placeholder-stone-500 focus:outline-none focus:border-indigo-500" placeholder="fantasy, mystery, romance">
+          </div>
+        </div>
+      </div>
+
+      <!-- Chapter List -->
+      <div class="flex-1 overflow-y-auto">
+        <div class="p-4">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-sm font-semibold text-stone-300">Chapters</h3>
+            <button class="p-1 text-stone-400 hover:text-stone-200" data-action="create-chapter">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
             </button>
-            <span class="aq-sidebar-title" style="margin:0;">Story Summary</span>
           </div>
-          <div class="aq-story-summary-content" style="display:block;">
-            <textarea data-ref="storySummaryInput" class="aq-story-summary-input" rows="4" placeholder="Enter overall story summary..."></textarea>
-          </div>
-        </div>
-        <!-- Story Tags Section -->
-        <div class="aq-story-tags-section">
-          <label class="aq-sidebar-title" style="margin:0.5rem 0 0.25rem 0;">Tags</label>
-          <input type="text" data-ref="storyTagsInput" class="aq-story-tags-input" placeholder="e.g., fantasy, mystery, romance">
-        </div>
-        <h3 class="aq-sidebar-title" style="margin-top:0.5rem;">Chapters</h3>
-        <ul class="aq-chapters" data-chapter-list>
-          <li class="aq-empty">No chapters configured</li>
-        </ul>
-        <div style="padding: 0.5rem 0.5rem 0;">
-          <button class="aq-btn" style="width:100%;" data-action="create-chapter">+ New chapter</button>
+          <ul class="space-y-2" data-chapter-list>
+            <li class="text-stone-500 text-sm">No chapters yet</li>
+          </ul>
         </div>
       </div>
-      <div class="aq-sidebar-bottom">
-        <!-- Settings moved to header modal opener; duplicate removed -->
-      </div>
-    </aside>
+    </div>
 
-    <section id="main" class="aq-mainpane">
-      <div class="aq-panel">
-        <div class="aq-content">
-          <div class="aq-card">
-            <div data-view="empty">
-              <div class="aq-empty">Select a chapter to view its content.</div>
-            </div>
-            <div data-view="chapter" style="display:none;">
-              <div style="font-weight:600; margin-bottom:0.5rem;">Chapter <span data-active-id></span></div>
-              <!-- Scoped editor toolbar -->
-              <div class="aq-editor-toolbar aq-toolbar" style="gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem; align-items:center;">
-                <div role="tablist" aria-label="Editor mode" class="aq-toolbar" style="gap:0.25rem;">
-                  <button role="tab" class="aq-seg" data-mode="raw" aria-selected="true">Raw</button>
-                  <button role="tab" class="aq-seg" data-mode="markdown" aria-selected="false">Markdown</button>
-                  <button role="tab" class="aq-seg" data-mode="wysiwyg" aria-selected="false">WYSIWYG</button>
-                </div>
-              </div>
-              <div data-raw-toolbar class="aq-toolbar" style="gap:0.25rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-                <button class="aq-btn aq-btn-sm" title="Bold" data-action="wrap-selection" data-before="**" data-after="**"><strong>B</strong></button>
-                <button class="aq-btn aq-btn-sm" title="Italic" data-action="wrap-selection" data-before="*" data-after="*"><em>I</em></button>
-                <button class="aq-btn aq-btn-sm" title="Heading" data-action="insert-heading">H1</button>
-                <button class="aq-btn aq-btn-sm" title="Link" data-action="insert-link">Link</button>
-                <button class="aq-btn aq-btn-sm" title="Code" data-action="wrap-selection" data-before="`" data-after="`">Code</button>
-                <button class="aq-btn aq-btn-sm" title="Bullet list" data-action="toggle-list" data-prefix="- ">• List</button>
-                <button class="aq-btn aq-btn-sm" title="Quote" data-action="toggle-prefix" data-prefix="> ">❝ Quote</button>
-              </div>
-              <textarea data-ref="rawEditor"></textarea>
-            </div>
-          </div>
-          <!-- Flow writing mode: simple, low-distraction, two-choice sentence generator -->
-          <div class="aq-card" data-component="flow-mode" style="margin-top:0.5rem;">
-            <div class="aq-toolbar" style="align-items:center; gap:0.5rem; flex-wrap:wrap;">
-              <strong style="font-size:0.95rem;">Flow mode</strong>
-              <span class="aq-tip" style="margin:0;">Pick between two one-sentence suggestions to continue the chapter.</span>
-              <div class="aq-flex-spacer" style="flex:1 1 auto;"></div>
-              <button class="aq-btn aq-btn-sm" data-action="flow-start">Start</button>
-              <button class="aq-btn aq-btn-sm" data-action="flow-stop" style="display:none;">Stop</button>
-            </div>
-            <div data-ref="flowArea" style="display:none; margin-top:0.5rem;">
-              <div class="aq-toolbar" style="gap:0.25rem; justify-content:center; flex-wrap:wrap;">
-                <button class="aq-btn aq-btn-sm" data-action="flow-stop" title="Stop Flow mode (Esc)">Stop</button>
-                <button class="aq-btn aq-btn-sm" data-action="flow-discard" title="Get new suggestions (↓)">New</button>
-                <button class="aq-btn aq-btn-sm" data-action="flow-redo" title="Undo last insertion and restart (↑)">Redo</button>
-              </div>
-              <div class="aq-flow-choices" style="display:flex; gap:0.5rem; margin-top:0.25rem;">
-                <div class="aq-flow-choice" data-ref="flowLeft" tabindex="0" title="Click to pick this suggestion"></div>
-                <div class="aq-flow-choice" data-ref="flowRight" tabindex="0" title="Click to pick this suggestion"></div>
-              </div>
-              <div class="aq-tip" data-ref="flowHint" style="text-align:center; margin-top:0.25rem; font-size:0.85rem;">Click suggestion to pick, ↓ for new, ↑ to undo, Esc to stop.</div>
-            </div>
-          </div>
-        </div>
+    <!-- Main Editor Area -->
+    <div class="flex-1 flex flex-col relative bg-stone-950 overflow-hidden w-full">
+      <!-- Editor Toolbar (floating) -->
+      <div class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex space-x-2 opacity-0 hover:opacity-100 transition-opacity duration-300">
+        <button class="px-3 py-1 bg-stone-800 text-stone-300 rounded text-sm hover:bg-stone-700 flex items-center space-x-1" data-action="update-summary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M8 16H3v5"/>
+          </svg>
+          <span>Update Summary</span>
+        </button>
+        <button class="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 flex items-center space-x-1" data-action="ai-extend">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/>
+            <path d="m14 7 3 3"/>
+            <path d="M5 6v4"/>
+            <path d="M19 14v4"/>
+            <path d="M10 2v2"/>
+            <path d="M7 8H3"/>
+            <path d="M21 16h-4"/>
+            <path d="M11 3H9"/>
+          </svg>
+          <span>AI Extend</span>
+        </button>
       </div>
-    </section>
 
-    <!-- Right sidebar: Chat -->
-    <aside class="aq-rightbar">
-      <div class="aq-rightbar-top" data-component="chat-view">
-        <h3 class="aq-sidebar-title">Chat</h3>
-        <div class="aq-field" style="margin-top:0.25rem;">
-          <label>
-            <span style="display:block; font-size:0.85rem; color:var(--muted); margin-bottom:0.25rem;">Model</span>
-            <select data-ref="modelSelect"></select>
-          </label>
+      <div class="flex-1 overflow-hidden h-full flex flex-col">
+        <div data-view="empty" class="flex flex-col items-center justify-center h-full text-stone-600">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mb-4 opacity-50">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14,2 14,8 20,8"/>
+          </svg>
+          <p>Select or create a chapter to start writing.</p>
         </div>
-        <div class="aq-chat" data-ref="chatList">
-          <div class="aq-empty">No messages</div>
-        </div>
-        <div class="aq-chat-input">
-          <div class="aq-field" style="margin:0;">
-            <div class="aq-chat-input-row">
-              <select class="aq-role-select" data-ref="roleSelect">
-                <option value="user" selected>user</option>
-                <option value="system">system</option>
-                <option value="assistant">assistant</option>
-              </select>
-              <textarea rows="3" placeholder="Type a message… (Enter to send, Shift+Enter for newline)" data-ref="input"></textarea>
+
+        <div data-view="chapter" class="flex-1 overflow-hidden flex flex-col hidden">
+          <!-- Chapter Header -->
+          <div class="p-4 border-b border-stone-800">
+            <div class="flex items-center space-x-4">
+              <h2 class="text-lg font-semibold text-stone-200">Chapter <span data-active-id></span></h2>
+              <input type="text" data-ref="chapterTitleInput" class="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-1 text-stone-200 placeholder-stone-500 focus:outline-none focus:border-indigo-500" placeholder="Chapter title...">
             </div>
           </div>
-          <div class="aq-toolbar" style="justify-content: flex-end; margin-top:0.5rem;">
-            <button class="aq-btn" data-ref="deleteLast">Delete last</button>
-            <button class="aq-btn aq-btn-primary" data-ref="send">Send <span class="aq-spinner" data-ref="sendSpinner" style="display:none;"></span></button>
-            <button class="aq-btn" data-ref="regenerate">Regenerate</button>
+
+          <!-- Editor -->
+          <div class="flex-1 overflow-hidden">
+            <textarea data-ref="rawEditor" class="w-full h-full bg-stone-950 text-stone-200 p-4 resize-none focus:outline-none font-mono text-lg leading-relaxed" style="max-width: 60ch; margin: 0 auto; display: block;"></textarea>
           </div>
         </div>
       </div>
-    </aside>
+    </div>
+
+    <!-- Chat Panel -->
+    <div id="chat-panel" class="fixed inset-y-0 right-0 top-14 w-full sm:w-96 flex-shrink-0 border-l border-stone-800 flex flex-col z-40 shadow-xl transition-all duration-300 ease-in-out md:relative md:top-auto md:z-20 md:h-full translate-x-0">
+      <div class="p-4 border-b border-stone-800">
+        <h3 class="text-sm font-semibold text-stone-300">AI Chat</h3>
+        <select data-ref="modelSelect" class="mt-2 w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-stone-200 focus:outline-none focus:border-indigo-500">
+          <!-- Models will be populated by JS -->
+        </select>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 space-y-4" data-ref="chatList">
+        <div class="text-stone-500 text-sm text-center">No messages yet</div>
+      </div>
+
+      <div class="p-4 border-t border-stone-800">
+        <div class="flex space-x-2 mb-2">
+          <select class="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-stone-200 text-sm focus:outline-none focus:border-indigo-500" data-ref="roleSelect">
+            <option value="user">User</option>
+            <option value="system">System</option>
+            <option value="assistant">Assistant</option>
+          </select>
+        </div>
+        <textarea rows="3" placeholder="Type a message..." data-ref="chatInput" class="w-full bg-stone-800 border border-stone-700 rounded px-3 py-2 text-stone-200 placeholder-stone-500 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+        <div class="flex justify-end space-x-2 mt-2">
+          <button class="px-3 py-1 bg-stone-800 text-stone-300 rounded text-sm hover:bg-stone-700" data-ref="deleteLast">Delete</button>
+          <button class="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700" data-ref="send">Send</button>
+          <button class="px-3 py-1 bg-stone-800 text-stone-300 rounded text-sm hover:bg-stone-700" data-ref="regenerate">Regenerate</button>
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}

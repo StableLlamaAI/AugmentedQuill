@@ -643,3 +643,31 @@ async def api_story_story_summary_stream(request: Request):
             pass
 
     return _as_streaming_response(_gen)
+
+
+@router.post("/api/story/title")
+async def api_story_title(request: Request) -> JSONResponse:
+    """Update the project title.
+
+    Body JSON: {"title": str}
+    Returns: {"ok": true}
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    title = str(payload.get("title", "")).strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "Title cannot be empty"})
+
+    active = get_active_project_dir()
+    if not active:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": "No active project"})
+
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    story["project_title"] = title
+    story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+
+    return JSONResponse(content={"ok": True})

@@ -27,30 +27,36 @@ export class ContentEditor {
    * Renders the mode buttons.
    */
   renderModeButtons() {
-    [RENDER_MODES.RAW, RENDER_MODES.MARKDOWN, RENDER_MODES.WYSIWYG].forEach(mode => {
-      const btn = this.shellView.el.querySelector(`[data-mode="${mode}"]`);
-      if (btn) {
-        const active = this.shellView.renderMode === mode;
-        btn.classList.toggle('active', active);
-        btn.setAttribute('aria-selected', active ? 'true' : 'false');
-      }
+    // Remove active from all
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.classList.remove('bg-indigo-600', 'text-white');
+      btn.classList.add('text-stone-400', 'hover:text-stone-200');
     });
+    // Add active to current
+    const activeBtn = document.querySelector(`[data-mode="${this.shellView.renderMode}"]`);
+    if (activeBtn) {
+      activeBtn.classList.remove('text-stone-400', 'hover:text-stone-200');
+      activeBtn.classList.add('bg-indigo-600', 'text-white');
+    }
   }
 
   /**
    * Renders the content width.
    */
   renderContentWidth() {
-    this.shellView.el.style.gridTemplateColumns = `1fr ${this.shellView.contentWidth + 2}em 1fr`;
+    const textarea = this.shellView.$refs.rawEditor;
+    if (textarea) {
+      textarea.style.maxWidth = `${this.shellView.contentWidth}ch`;
+    }
   }
 
   /**
    * Renders the font size.
    */
   renderFontSize() {
-    const cardEl = this.shellView.el.querySelector('.aq-card');
-    if (cardEl) {
-      cardEl.style.fontSize = `${this.shellView.fontSize}rem`;
+    const textarea = this.shellView.$refs.rawEditor;
+    if (textarea) {
+      textarea.style.fontSize = `${this.shellView.fontSize}px`;
     }
   }
 

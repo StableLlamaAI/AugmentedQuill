@@ -139,6 +139,7 @@ export class ChapterManager {
       const storyData = await storyResponse.json();
       this.shellView.storySummary = storyData.story_summary || '';
       this.shellView.storyTags = storyData.tags || '';
+      this.shellView.storyTitle = storyData.project_title || '';
 
       // Maintain selection if chapter still exists, otherwise select first
       const hasActiveChapter = this.shellView.chapters.some(c => c.id === this.shellView.activeId);
