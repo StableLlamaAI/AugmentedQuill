@@ -1,7 +1,7 @@
 import os
 import httpx
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir, write_chapter_content, write_chapter_summary
@@ -611,327 +611,6 @@ async def api_get_chat() -> dict:
     }
 
 
-@router.post("/api/chat")
-async def api_chat(request: Request) -> JSONResponse:
-    """Chat with the configured OpenAI-compatible model.
-
-    Body JSON:
-      {
-        "model_name": "name-of-configured-entry" | null,
-        "messages": [{"role": "system|user|assistant", "content": str}, ...],
-        // optional overrides (otherwise pulled from config/machine.json)
-        "base_url": str,
-        "api_key": str,
-        "model": str,
-        "timeout_s": int
-      }
-
-    Returns: { ok: true, message: {role:"assistant", content: str}, usage?: {...} }
-    """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-
-    def _normalize_chat_messages(val: Any) -> list[dict]:
-        """Preserve OpenAI message fields including tool calls.
-
-        Keeps: role, content (may be None), name, tool_call_id, tool_calls.
-        """
-        arr = val if isinstance(val, list) else []
-        out: list[dict] = []
-        for m in arr:
-            if not isinstance(m, dict):
-                continue
-            role = str(m.get("role", "")).strip().lower() or "user"
-            msg: dict = {"role": role}
-            # content can be None (e.g., assistant with tool_calls)
-            if "content" in m:
-                c = m.get("content")
-                msg["content"] = (None if c is None else str(c))
-            # pass-through optional tool fields
-            name = m.get("name")
-            if isinstance(name, str) and name:
-                msg["name"] = name
-            tcid = m.get("tool_call_id")
-            if isinstance(tcid, str) and tcid:
-                msg["tool_call_id"] = tcid
-            tcs = m.get("tool_calls")
-            if isinstance(tcs, list) and tcs:
-                msg["tool_calls"] = tcs
-            out.append(msg)
-        return out
-
-    req_messages = _normalize_chat_messages((payload or {}).get("messages"))
-    if not req_messages:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": "messages array is required"})
-
-    # Prepend system message if not present
-    has_system = any(msg.get("role") == "system" for msg in req_messages)
-    if not has_system:
-        # Load model-specific prompt overrides
-        machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
-        openai_cfg = machine_config.get("openai", {})
-        selected_model_name = selected_name or openai_cfg.get("selected")
-        model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
-        
-        system_content = get_system_message("chat_llm", model_overrides)
-        req_messages.insert(0, {"role": "system", "content": system_content})
-
-    # Load machine config and pick selected model
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
-    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
-    selected_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
-
-    base_url = (payload or {}).get("base_url")
-    api_key = (payload or {}).get("api_key")
-    model_id = (payload or {}).get("model")
-    timeout_s = (payload or {}).get("timeout_s")
-
-    # If models list exists and a name is provided or selected, use it
-    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
-    if isinstance(models, list) and models:
-        chosen = None
-        if selected_name:
-            for m in models:
-                if isinstance(m, dict) and (m.get("name") == selected_name):
-                    chosen = m
-                    break
-        if chosen is None:
-            chosen = models[0]
-        base_url = chosen.get("base_url") or base_url
-        api_key = chosen.get("api_key") or api_key
-        model_id = chosen.get("model") or model_id
-        timeout_s = chosen.get("timeout_s", 60) or timeout_s
-
-    if not base_url or not model_id:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": "Missing base_url or model in configuration"})
-
-    url = str(base_url).rstrip("/") + "/chat/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    # Pull llm preferences for sensible defaults
-    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = float(prefs.get("temperature", 0.7)) if isinstance(prefs.get("temperature", 0.7), (int, float, str)) else 0.7
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens", None)
-
-    body: Dict[str, Any] = {
-        "model": model_id,
-        "messages": req_messages,
-        "temperature": temperature,
-    }
-    if isinstance(max_tokens, int):
-        body["max_tokens"] = max_tokens
-    # Pass through OpenAI tool-calling fields if provided
-    # Always include the available tools for the model to use.
-    body["tools"] = STORY_TOOLS
-    tool_choice = (payload or {}).get("tool_choice")
-    if tool_choice:
-        body["tool_choice"] = tool_choice
-    else:
-        body["tool_choice"] = "auto"
-
-    # Backward-compat with legacy function calling (OpenAI functions API)
-    # Some providers only recognize `functions` and `function_call`.
-    # If tools of type function are provided, mirror them into `functions`.
-    try:
-        current_tools = body.get("tools")
-        if isinstance(current_tools, list) and current_tools:
-            functions: list[dict] = []
-            for t in current_tools:
-                if isinstance(t, dict) and t.get("type") == "function":
-                    fn = t.get("function") or {}
-                    name = fn.get("name")
-                    if isinstance(name, str) and name:
-                        # Keep only legacy-compatible fields
-                        fdef = {
-                            "name": name,
-                        }
-                        desc = fn.get("description")
-                        if isinstance(desc, str) and desc:
-                            fdef["description"] = desc
-                        params = fn.get("parameters")
-                        if isinstance(params, dict):
-                            fdef["parameters"] = params
-                        functions.append(fdef)
-            if functions:
-                body["functions"] = functions
-                # Map tool_choice to function_call where meaningful
-                fc = None
-                current_tool_choice = body.get("tool_choice")
-                if isinstance(current_tool_choice, str):
-                    if current_tool_choice in ("auto", "none"):
-                        fc = current_tool_choice
-                elif isinstance(current_tool_choice, dict):
-                    # {"type":"function","function":{"name":"..."}}
-                    if current_tool_choice.get("type") == "function":
-                        fn2 = (current_tool_choice.get("function") or {})
-                        name2 = fn2.get("name")
-                        if isinstance(name2, str) and name2:
-                            fc = {"name": name2}
-                if fc is None:
-                    # default to auto if tools provided
-                    fc = "auto"
-                body["function_call"] = fc
-    except Exception:
-        # If anything goes wrong, we silently ignore and proceed with modern tools fields
-        pass
-
-    def _llm_debug_enabled() -> bool:
-        env = os.getenv("AUGQ_DEBUG_LLM", "").strip()
-        if env and env not in ("0", "false", "False"):
-            return True
-        try:
-            machine_cfg = load_machine_config(CONFIG_DIR / "machine.json") or {}
-            openai_cfg = (machine_cfg.get("openai") or {}) if isinstance(machine_cfg, dict) else {}
-            return bool(openai_cfg.get("debug_llm"))
-        except Exception:
-            return False
-
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(float(timeout_s or 60))) as client:
-            mutations = {"story_changed": False}
-            # Limit tool call loops to prevent infinite cycles
-            for _ in range(10):
-                if _llm_debug_enabled():
-                    try:
-                        print("AUGQ DEBUG LLM → POST", url)
-                        print("Headers:", headers)
-                        print("Body:", _json.dumps(body, indent=2))
-                    except Exception:
-                        pass
-                resp = await client.post(url, headers=headers, json=body)
-                # Try to parse JSON regardless of status
-                data = None
-                try:
-                    data = resp.json()
-                except Exception:
-                    data = {"raw": resp.text}
-
-                if _llm_debug_enabled():
-                    try:
-                        print("AUGQ DEBUG LLM ← Status:", resp.status_code)
-                        print("Response Text:", resp.text)
-                    except Exception:
-                        pass
-                if resp.status_code >= 400:
-                    return JSONResponse(status_code=resp.status_code, content={"ok": False, "detail": data})
-
-                choices = (data or {}).get("choices") or []
-                if not choices:
-                    return JSONResponse(status_code=500, content={"ok": False, "detail": "LLM returned no choices"})
-
-                message = choices[0].get("message")
-                if not isinstance(message, dict):
-                    return JSONResponse(status_code=500, content={"ok": False, "detail": "Invalid message format from LLM"})
-
-                # Append assistant's response to messages
-                req_messages.append(message)
-                body["messages"] = req_messages
-
-                # Decide if we need to call tools
-                tool_calls = message.get("tool_calls")
-                # Also handle legacy function_call
-                if not tool_calls and isinstance(message.get("function_call"), dict):
-                    fn_call = message["function_call"]
-                    if isinstance(fn_call.get("name"), str):
-                        name = fn_call.get("name")
-                        args = fn_call.get("arguments", "{}")
-                        if not isinstance(args, str):
-                            try:
-                                args = _json.dumps(args or "{}")
-                            except Exception:
-                                args = "{}"
-                        tool_calls = [{"id": f"call_{name}", "type": "function", "function": {"name": name, "arguments": args}}]
-
-                # Try to parse tool calls from content if not already present
-                content = message.get("content", "") or ""
-                if not tool_calls and content.strip():
-                    parsed_calls = _parse_tool_calls_from_content(content)
-                    if parsed_calls:
-                        tool_calls = parsed_calls
-                        # Remove all tool call texts from content
-                        for call in parsed_calls:
-                            original_text = call.get("original_text", "")
-                            if original_text:
-                                content = content.replace(original_text, "", 1)
-                        message["content"] = content.strip()
-                    else:
-                        # If no structured tool calls found, still clean up any tool call syntax
-                        import re
-                        content = re.sub(r'<tool_call>[^<]*</tool_call>', '', content, flags=re.IGNORECASE)
-                        content = re.sub(r'<function_call>[^<]*</function_call>', '', content, flags=re.IGNORECASE)
-                        content = re.sub(r'\[TOOL_CALL\][^\[]*\[/TOOL_CALL\]', '', content, flags=re.IGNORECASE)
-                        content = re.sub(r'^Tool:\s*\w+.*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
-                        content = re.sub(r'^Function:\s*\w+.*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
-                        # Remove incomplete tool call tags
-                        content = re.sub(r'<tool_call>[^<]*$', '', content, flags=re.IGNORECASE)
-                        content = re.sub(r'<function_call>[^<]*$', '', content, flags=re.IGNORECASE)
-                        content = re.sub(r'\[TOOL_CALL\][^\[]*$', '', content, flags=re.IGNORECASE)
-                        message["content"] = content.strip()
-
-                if not tool_calls or not isinstance(tool_calls, list):
-                    # No tool calls, we are done. Return the last message.
-                    usage = (data or {}).get("usage")
-                    # Clean up response message for client
-                    final_msg = {"role": "assistant", "content": message.get("content", "") or ""}
-                    return JSONResponse(status_code=200, content={"ok": True, "message": final_msg, "usage": usage, "mutations": mutations})
-
-                # We have tool calls, execute them
-                tool_messages = []
-                for call in tool_calls:
-                    try:
-                        if not (isinstance(call, dict) and call.get("type") == "function"): continue
-                        call_id = str(call.get("id") or "")
-                        func = call.get("function") or {}
-                        name = (func.get("name") if isinstance(func, dict) else "") or ""
-                        args_raw = (func.get("arguments") if isinstance(func, dict) else "") or "{}"
-                        try:
-                            args_obj = _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
-                        except Exception as e:
-                            print(f"Failed to parse tool arguments for {name}: {e}")
-                            args_obj = {}
-                        if not name or not call_id: continue
-
-                        tool_result_msg = await _exec_chat_tool(name, args_obj, call_id, payload, mutations)
-                        tool_messages.append(tool_result_msg)
-                    except Exception as e:
-                        # Log tool execution errors but continue with other tools
-                        print(f"Tool execution error for {name}: {e}")
-                        error_msg = {
-                            "role": "tool", 
-                            "tool_call_id": call_id, 
-                            "name": name, 
-                            "content": _json.dumps({"error": f"Tool execution failed: {str(e)}"})
-                        }
-                        tool_messages.append(error_msg)
-
-                req_messages.extend(tool_messages)
-                body["messages"] = req_messages
-
-            # If loop finishes (e.g. too many tool calls), return an error
-            return JSONResponse(status_code=500, content={"ok": False, "detail": "Exceeded maximum tool call attempts"})
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Chat request failed: {e}")
-    except Exception as e:
-        # Log the full exception for debugging
-        import traceback
-        error_details = {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
-        print(f"Chat API error: {error_details}")
-        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Internal server error: {str(e)}", "error_type": type(e).__name__})
-
-
 @router.post("/api/chat/tools")
 async def api_chat_tools(request: Request) -> JSONResponse:
     """Execute OpenAI-style tool calls and return tool messages.
@@ -984,6 +663,349 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         appended.append(msg)
 
     return JSONResponse(status_code=200, content={"ok": True, "appended_messages": appended, "mutations": mutations})
+
+
+@router.post("/api/chat/stream")
+async def api_chat_stream(request: Request) -> StreamingResponse:
+    """Stream chat with the configured OpenAI-compatible model.
+
+    Body JSON:
+      {
+        "model_name": "name-of-configured-entry" | null,
+        "messages": [{"role": "system|user|assistant", "content": str}, ...],
+        // optional overrides (otherwise pulled from config/machine.json)
+        "base_url": str,
+        "api_key": str,
+        "model": str,
+        "timeout_s": int
+      }
+
+    Returns: Streaming text response with the assistant's message.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    def _normalize_chat_messages(val: Any) -> list[dict]:
+        """Preserve OpenAI message fields including tool calls.
+
+        Keeps: role, content (may be None), name, tool_call_id, tool_calls.
+        """
+        arr = val if isinstance(val, list) else []
+        out: list[dict] = []
+        for m in arr:
+            if not isinstance(m, dict):
+                continue
+            role = str(m.get("role", "")).strip().lower() or "user"
+            msg: dict = {"role": role}
+            # content can be None (e.g., assistant with tool_calls)
+            if "content" in m:
+                c = m.get("content")
+                msg["content"] = (None if c is None else str(c))
+            # pass-through optional tool fields
+            name = m.get("name")
+            if isinstance(name, str) and name:
+                msg["name"] = name
+            tcid = m.get("tool_call_id")
+            if isinstance(tcid, str) and tcid:
+                msg["tool_call_id"] = tcid
+            tcs = m.get("tool_calls")
+            if isinstance(tcs, list) and tcs:
+                msg["tool_calls"] = tcs
+            out.append(msg)
+        return out
+
+    req_messages = _normalize_chat_messages((payload or {}).get("messages"))
+    if not req_messages:
+        raise HTTPException(status_code=400, detail="messages array is required")
+
+    # Prepend system message if not present
+    has_system = any(msg.get("role") == "system" for msg in req_messages)
+    if not has_system:
+        # Load model-specific prompt overrides
+        machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+        openai_cfg = machine_config.get("openai", {})
+        selected_model_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
+        model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
+        
+        system_content = get_system_message("chat_llm", model_overrides)
+        req_messages.insert(0, {"role": "system", "content": system_content})
+
+    # Load machine config and pick selected model
+    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
+    selected_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
+
+    base_url = (payload or {}).get("base_url")
+    api_key = (payload or {}).get("api_key")
+    model_id = (payload or {}).get("model")
+    timeout_s = (payload or {}).get("timeout_s")
+
+    # If models list exists and a name is provided or selected, use it
+    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
+    if isinstance(models, list) and models:
+        chosen = None
+        if selected_name:
+            for m in models:
+                if isinstance(m, dict) and (m.get("name") == selected_name):
+                    chosen = m
+                    break
+        if chosen is None:
+            chosen = models[0]
+        base_url = chosen.get("base_url") or base_url
+        api_key = chosen.get("api_key") or api_key
+        model_id = chosen.get("model") or model_id
+        timeout_s = chosen.get("timeout_s", 60) or timeout_s
+
+    if not base_url or not model_id:
+        raise HTTPException(status_code=400, detail="Missing base_url or model in configuration")
+
+    url = str(base_url).rstrip("/") + "/chat/completions"
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    # Pull llm preferences for sensible defaults
+    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = float(prefs.get("temperature", 0.7)) if isinstance(prefs.get("temperature", 0.7), (int, float, str)) else 0.7
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens", None)
+
+    body: Dict[str, Any] = {
+        "model": model_id,
+        "messages": req_messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+    # Pass through OpenAI tool-calling fields if provided
+    # Always include the available tools for the model to use.
+    body["tools"] = STORY_TOOLS
+    tool_choice = (payload or {}).get("tool_choice")
+    if tool_choice:
+        body["tool_choice"] = tool_choice
+    else:
+        body["tool_choice"] = "auto"
+
+    # Backward-compat with legacy function calling (OpenAI functions API)
+    # If tools of type function are provided, mirror them into `functions`.
+    try:
+        current_tools = body.get("tools")
+        if isinstance(current_tools, list) and current_tools:
+            functions: list[dict] = []
+            for t in current_tools:
+                if isinstance(t, dict) and t.get("type") == "function":
+                    fn = t.get("function") or {}
+                    name = fn.get("name")
+                    if isinstance(name, str) and name:
+                        # Keep only legacy-compatible fields
+                        fdef = {
+                            "name": name,
+                        }
+                        desc = fn.get("description")
+                        if isinstance(desc, str) and desc:
+                            fdef["description"] = desc
+                        params = fn.get("parameters")
+                        if isinstance(params, dict):
+                            fdef["parameters"] = params
+                        functions.append(fdef)
+            if functions:
+                body["functions"] = functions
+                # Map tool_choice to function_call where meaningful
+                fc = None
+                current_tool_choice = body.get("tool_choice")
+                if isinstance(current_tool_choice, str):
+                    if current_tool_choice in ("auto", "none"):
+                        fc = current_tool_choice
+                elif isinstance(current_tool_choice, dict):
+                    # {"type":"function","function":{"name":"..."}}
+                    if current_tool_choice.get("type") == "function":
+                        fn2 = (current_tool_choice.get("function") or {})
+                        name2 = fn2.get("name")
+                        if isinstance(name2, str) and name2:
+                            fc = {"name": name2}
+                if fc is None:
+                    # default to auto if tools provided
+                    fc = "auto"
+                body["function_call"] = fc
+    except Exception:
+        # If anything goes wrong, we silently ignore and proceed with modern tools fields
+        pass
+
+    async def _gen():
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(float(timeout_s or 60))) as client:
+                async with client.stream("POST", url, headers=headers, json=body) as resp:
+                    if resp.status_code >= 400:
+                        error_content = await resp.aread()
+                        try:
+                            error_data = _json.loads(error_content)
+                            yield f"data: {{\"error\": \"Upstream error\", \"status\": {resp.status_code}, \"data\": {_json.dumps(error_data)}}}\n\n"
+                        except:
+                            yield f"data: {{\"error\": \"Upstream error\", \"status\": {resp.status_code}, \"data\": \"{_json.dumps(error_content.decode('utf-8', errors='ignore'))}\"}}\n\n"
+                        return
+
+                    # Check if response is SSE or regular JSON
+                    content_type = resp.headers.get("content-type", "")
+                    if "text/event-stream" not in content_type:
+                        # Not SSE, treat as regular JSON response
+                        try:
+                            response_data = await resp.json()
+                            if "choices" in response_data and response_data["choices"]:
+                                choice = response_data["choices"][0]
+                                if "message" in choice and "content" in choice["message"]:
+                                    content = choice["message"]["content"]
+                                    if content:
+                                        # Check if content contains tool call syntax and parse tool calls
+                                        import re
+                                        content_lower = content.lower()
+                                        has_tool_syntax = ('<tool_call' in content_lower or 
+                                                         '<function_call' in content_lower or 
+                                                         '[tool_call' in content_lower or
+                                                         content_lower.startswith('tool:') or
+                                                         content_lower.startswith('function:'))
+                                        if has_tool_syntax:
+                                            # Parse tool calls from content
+                                            parsed_tool_calls = _parse_tool_calls_from_content(content)
+                                            if parsed_tool_calls:
+                                                # Send parsed tool calls
+                                                yield f"data: {{\"tool_calls\": {_json.dumps(parsed_tool_calls)}}}\n\n"
+                                        
+                                        # Clean content of tool call syntax only if it contains tool call patterns
+                                        if has_tool_syntax:
+                                            clean_content = re.sub(r'<tool_call>([^<]*)</tool_call>', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'<function_call>([^<]*)</function_call>', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'<function=([^>]*)>([^<]*)</function>', lambda m: f'Calling function {m.group(1).replace("_", " ")}: {m.group(2)}', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'<tool_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'</tool_call>', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'<function_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'</function_call>', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'^Tool:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
+                                            clean_content = re.sub(r'^Function:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
+                                            clean_content = re.sub(r'<tool_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'<function_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(r'\[TOOL_CALL\][^\[]*$', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = clean_content.strip()
+                                        else:
+                                            clean_content = content
+                                        
+                                        if clean_content:
+                                            yield f"data: {{\"content\": {_json.dumps(clean_content)}}}\n\n"
+                                
+                                # Handle tool_calls or function_call in the final message
+                                message = choice.get("message", {})
+                                if "tool_calls" in message and message["tool_calls"]:
+                                    yield f"data: {{\"tool_calls\": {_json.dumps(message['tool_calls'])}}}\n\n"
+                                elif "function_call" in message and message["function_call"]:
+                                    # Convert function_call to tool_calls format
+                                    func_call = message["function_call"]
+                                    tool_call = {
+                                        "index": 0,
+                                        "id": func_call.get("id", f"call_{func_call.get('name', 'unknown')}"),
+                                        "type": "function",
+                                        "function": {
+                                            "name": func_call.get("name", ""),
+                                            "arguments": func_call.get("arguments", "")
+                                        }
+                                    }
+                                    yield f"data: {{\"tool_calls\": {_json.dumps([tool_call])}}}\n\n"
+                            yield f"data: {{\"done\": true}}\n\n"
+                        except Exception as e:
+                            yield f"data: {{\"error\": \"Failed to parse response\", \"message\": \"{_json.dumps(str(e))}\"}}\n\n"
+                        return
+
+                    buffer = ""
+                    async for line in resp.aiter_lines():
+                        if line.strip():
+                            if line.startswith("data: "):
+                                data_str = line[6:]  # Remove "data: " prefix
+                                if data_str.strip() == "[DONE]":
+                                    yield f"data: {{\"done\": true}}\n\n"
+                                    break
+                                try:
+                                    chunk = _json.loads(data_str)
+                                    # Extract content from the chunk
+                                    if "choices" in chunk and chunk["choices"]:
+                                        choice = chunk["choices"][0]
+                                        if "delta" in choice:
+                                            delta = choice["delta"]
+                                            # Handle content
+                                            if "content" in delta:
+                                                content = delta["content"]
+                                                if content:
+                                                    # Check if content contains tool call syntax and parse tool calls
+                                                    import re
+                                                    content_lower = content.lower()
+                                                    has_tool_syntax = ('<tool_call' in content_lower or 
+                                                                     '<function_call' in content_lower or 
+                                                                     '[tool_call' in content_lower or
+                                                                     content_lower.startswith('tool:') or
+                                                                     content_lower.startswith('function:'))
+                                                    if has_tool_syntax:
+                                                        # Parse tool calls from content
+                                                        parsed_tool_calls = _parse_tool_calls_from_content(content)
+                                                        if parsed_tool_calls:
+                                                            # Send parsed tool calls
+                                                            yield f"data: {{\"tool_calls\": {_json.dumps(parsed_tool_calls)}}}\n\n"
+                                                    
+                                                    # Clean content of tool call syntax only if it contains tool call patterns
+                                                    if has_tool_syntax:
+                                                        clean_content = re.sub(r'<tool_call>([^<]*)</tool_call>', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'<function_call>([^<]*)</function_call>', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'<function=([^>]*)>([^<]*)</function>', lambda m: f'Calling function {m.group(1).replace("_", " ")}: {m.group(2)}', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'<tool_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'</tool_call>', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'<function_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'</function_call>', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'^Tool:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
+                                                        clean_content = re.sub(r'^Function:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
+                                                        clean_content = re.sub(r'<tool_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'<function_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = re.sub(r'\[TOOL_CALL\][^\[]*$', '', clean_content, flags=re.IGNORECASE)
+                                                        clean_content = clean_content.strip()
+                                                    else:
+                                                        clean_content = content
+                                                    
+                                                    if clean_content:
+                                                        buffer += clean_content
+                                                        # Send incremental cleaned content chunk
+                                                        yield f"data: {{\"content\": {_json.dumps(clean_content)}}}\n\n"
+                                            # Handle tool calls
+                                            if "tool_calls" in delta and delta["tool_calls"]:
+                                                # Send tool calls chunk
+                                                yield f"data: {{\"tool_calls\": {_json.dumps(delta['tool_calls'])}}}\n\n"
+                                            # Handle legacy function_call format
+                                            if "function_call" in delta and delta["function_call"]:
+                                                # Convert to tool_calls format for consistency
+                                                func_call = delta["function_call"]
+                                                tool_call = {
+                                                    "index": 0,  # Assume single function call
+                                                    "id": func_call.get("id", f"call_{func_call.get('name', 'unknown')}"),
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": func_call.get("name", ""),
+                                                        "arguments": func_call.get("arguments", "")
+                                                    }
+                                                }
+                                                yield f"data: {{\"tool_calls\": {_json.dumps([tool_call])}}}\n\n"
+                                        # Check for finish_reason to end streaming
+                                        if "finish_reason" in choice and choice["finish_reason"]:
+                                            yield f"data: {{\"done\": true}}\n\n"
+                                            break
+                                except _json.JSONDecodeError:
+                                    continue
+        except Exception as e:
+            yield f"data: {{\"error\": \"Request failed\", \"message\": \"{_json.dumps(str(e))}\"}}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 @router.post("/api/openai/models")

@@ -38,17 +38,30 @@ export class MessageRenderer {
       content.className = 'aq-bubble-body';
       // Clean content of tool call syntax before rendering
       let cleanContent = (m.content || '').trim();
-      // Remove various tool call formats (complete and incomplete)
-      cleanContent = cleanContent.replace(/<tool_call>[^<]*<\/tool_call>/gi, '');
-      cleanContent = cleanContent.replace(/<function_call>[^<]*<\/function_call>/gi, '');
-      cleanContent = cleanContent.replace(/\[TOOL_CALL\][^\[]*\[\/TOOL_CALL\]/gi, '');
-      cleanContent = cleanContent.replace(/^Tool:\s*\w+.*$/gm, '');
-      cleanContent = cleanContent.replace(/^Function:\s*\w+.*$/gm, '');
-      // Remove incomplete tool call tags
-      cleanContent = cleanContent.replace(/<tool_call>[^<]*$/gi, '');
-      cleanContent = cleanContent.replace(/<function_call>[^<]*$/gi, '');
-      cleanContent = cleanContent.replace(/\[TOOL_CALL\][^\[]*$/gi, '');
-      cleanContent = cleanContent.trim();
+      // Only apply cleaning if content contains tool call syntax
+      const contentLower = cleanContent.toLowerCase();
+      const hasToolSyntax = contentLower.includes('<tool_call') || 
+                           contentLower.includes('<function_call') || 
+                           contentLower.includes('[tool_call') ||
+                           contentLower.startsWith('tool:') ||
+                           contentLower.startsWith('function:');
+      if (hasToolSyntax) {
+        // Replace tool call formats with readable messages
+        cleanContent = cleanContent.replace(/<tool_call>([^<]*)<\/tool_call>/gi, (match, toolName) => `Calling tool: ${toolName.replace(/_/g, ' ')}`);
+        cleanContent = cleanContent.replace(/<function_call>([^<]*)<\/function_call>/gi, (match, funcName) => `Calling function: ${funcName.replace(/_/g, ' ')}`);
+        cleanContent = cleanContent.replace(/<function=([^>]*)>([^<]*)<\/function>/gi, (match, funcName, args) => `Calling function ${funcName.replace(/_/g, ' ')}: ${args}`);
+        cleanContent = cleanContent.replace(/<tool_call[^>]*>/gi, '');
+        cleanContent = cleanContent.replace(/<\/tool_call>/gi, '');
+        cleanContent = cleanContent.replace(/<function_call[^>]*>/gi, '');
+        cleanContent = cleanContent.replace(/<\/function_call>/gi, '');
+        cleanContent = cleanContent.replace(/\[TOOL_CALL\]([^\[]*)\[\/TOOL_CALL\]/gi, (match, toolName) => `Calling tool: ${toolName.replace(/_/g, ' ')}`);
+        cleanContent = cleanContent.replace(/^Tool:\s*(\w+)(?:\(([^)]*)\))?/gm, (match, toolName) => `Calling tool: ${toolName.replace(/_/g, ' ')}`);
+        cleanContent = cleanContent.replace(/^Function:\s*(\w+)(?:\(([^)]*)\))?/gm, (match, funcName) => `Calling function: ${funcName.replace(/_/g, ' ')}`);
+        // Remove incomplete tool call tags
+        cleanContent = cleanContent.replace(/<tool_call[^>]*$/gi, '');
+        cleanContent = cleanContent.replace(/<function_call[^>]*$/gi, '');
+        cleanContent = cleanContent.replace(/\[TOOL_CALL\][^\[]*$/gi, '');
+      }
       // Render assistant messages as basic markdown, others as plain text
       if (m.role === ROLES.ASSISTANT) {
         content.innerHTML = MarkdownRenderer.toHtml(cleanContent);

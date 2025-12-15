@@ -206,18 +206,15 @@ export class ChatView extends Component {
   }
 
   /**
-   * Calls the chat API with the given messages and tools.
+   * Calls the streaming chat API with the given messages and tools.
    * @param {Array} messages - The messages to send.
    * @param {Array} tools - The tools to include.
-   * @returns {Promise<Object>} The API response.
+   * @param {Function} onChunk - Callback for each streaming chunk.
+   * @returns {Promise<Object>} The final API response.
    */
-  async callChat(messages, tools) {
-    const sysPreamble = {
-      role: ROLES.SYSTEM,
-      content: 'You can use tools to access the project context. Use get_project_overview to list chapters and their summaries. Use get_chapter_content to fetch chapter text by id. You can also create new chapters, write or continue chapters, and delete chapters using the available tools.'
-    };
+  async callChatStreaming(messages, tools, onChunk) {
     const hasSystem = messages.some(m => m.role === ROLES.SYSTEM);
-    const chatMessages = (hasSystem ? [] : [sysPreamble]).concat(
+    const chatMessages = (hasSystem ? [] : []).concat(
       messages.map(m => ({ role: m.role, content: m.content, tool_call_id: m.tool_call_id, name: m.name, tool_calls: m.tool_calls }))
     );
     const body = {
@@ -228,11 +225,102 @@ export class ChatView extends Component {
       // Provide the active chapter id so server-side tools can default to it
       active_chapter_id: (window.app?.shellView?.activeId ?? null)
     };
-    return await fetchJSON('/api/chat', {
+
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let toolCalls = [];
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const chunk = JSON.parse(data);
+              if (chunk.error) {
+                throw new Error(chunk.error);
+              }
+              if (chunk.done) {
+                return { ok: true, message: { role: ROLES.ASSISTANT, content: fullContent, tool_calls: toolCalls } };
+              }
+              
+              // Handle direct content format (from backend when not using OpenAI streaming)
+              if (chunk.content) {
+                fullContent += chunk.content;
+                if (onChunk) {
+                  onChunk(fullContent);
+                }
+              }
+              
+              // Handle tool calls from backend
+              if (chunk.tool_calls) {
+                for (const toolCall of chunk.tool_calls) {
+                  const index = toolCall.index;
+                  if (!toolCalls[index]) {
+                    toolCalls[index] = { id: '', function: { name: '', arguments: '' }, type: 'function' };
+                  }
+                  if (toolCall.id) toolCalls[index].id += toolCall.id;
+                  if (toolCall.function) {
+                    if (toolCall.function.name) toolCalls[index].function.name += toolCall.function.name;
+                    if (toolCall.function.arguments) toolCalls[index].function.arguments += toolCall.function.arguments;
+                  }
+                }
+              }
+              
+              // Handle OpenAI streaming format
+              if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) {
+                const delta = chunk.choices[0].delta;
+                if (delta.content) {
+                  fullContent += delta.content;
+                  if (onChunk) {
+                    onChunk(fullContent);
+                  }
+                }
+                if (delta.tool_calls) {
+                  // Accumulate tool calls from streaming chunks
+                  for (const toolCall of delta.tool_calls) {
+                    const index = toolCall.index;
+                    if (!toolCalls[index]) {
+                      toolCalls[index] = { id: '', function: { name: '', arguments: '' }, type: 'function' };
+                    }
+                    if (toolCall.id) toolCalls[index].id += toolCall.id;
+                    if (toolCall.function) {
+                      if (toolCall.function.name) toolCalls[index].function.name += toolCall.function.name;
+                      if (toolCall.function.arguments) toolCalls[index].function.arguments += toolCall.function.arguments;
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to parse streaming chunk:', e);
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return { ok: true, message: { role: ROLES.ASSISTANT, content: fullContent, tool_calls: toolCalls } };
   }
 
   /**
@@ -376,11 +464,59 @@ export class ChatView extends Component {
     this.sending = true;
     try {
       const tools = this.getTools();
-      // First LLM call
-      let resp = await this.callChat(this.messages, tools);
-      await this.handleResponse(resp);
+      // Add a placeholder assistant message
+      const assistantMessage = { role: ROLES.ASSISTANT, content: '' };
+      this.messages = [...(this.messages || []), assistantMessage];
+      this.messageRenderer.render();
+
+      let currentMessages = this.messages.slice(0, -1); // Messages up to the user input
+      let hasToolCalls = true;
+      let finalResponse = null;
+
+      // Continue the conversation until no more tool calls
+      while (hasToolCalls) {
+        // Use streaming chat
+        const resp = await this.callChatStreaming(currentMessages, tools, (content) => {
+          assistantMessage.content = content;
+          this.messageRenderer.render();
+        });
+
+        // Update the assistant message content
+        assistantMessage.content = resp.message.content;
+        this.messageRenderer.render();
+
+        finalResponse = resp;
+        hasToolCalls = resp.message.tool_calls && resp.message.tool_calls.length > 0;
+
+        if (hasToolCalls) {
+          // Run the tools
+          const toolResult = await this.runTools(resp.message);
+          const appended = toolResult?.appended_messages || [];
+          if (appended.length) {
+            // Add tool messages to the conversation
+            appended.forEach(tm => {
+              const toolMessage = { role: ROLES.TOOL, content: tm.content || '', name: tm.name || '', tool_call_id: tm.tool_call_id };
+              this.messages = [...(this.messages || []), toolMessage];
+              currentMessages = [...currentMessages, assistantMessage, ...appended]; // Include assistant message and tool results for next call
+            });
+            this.messageRenderer.render();
+          } else {
+            // No tool results, break the loop
+            hasToolCalls = false;
+          }
+        }
+      }
+
+      this.handleServerMutations(finalResponse);
+      this.messageRenderer.render();
+      try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_UPDATED, { detail: { messages: this.messages.slice() } })); } catch (e) { console.warn('Failed to dispatch chat updated event after response:', e); }
     } catch (e) {
       toast(`Chat error: ${e.message || e}`, 'error');
+      // Remove the failed assistant message
+      if (this.messages.length > 0 && this.messages[this.messages.length - 1].role === ROLES.ASSISTANT && !this.messages[this.messages.length - 1].content) {
+        this.messages = this.messages.slice(0, -1);
+        this.messageRenderer.render();
+      }
     } finally {
       this.sending = false;
       try { document.dispatchEvent(new CustomEvent(EVENTS.CHAT_SENDING, { detail: { sending: this.sending } })); } catch (e) { console.warn('Failed to dispatch chat sending event:', e); }
