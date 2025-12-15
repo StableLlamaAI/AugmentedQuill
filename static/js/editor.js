@@ -97,7 +97,12 @@ export class ShellView extends Component {
     });
     this.watch('editingId', () => this.chapterRenderer.renderChapterList());
     this.watch('dirty', () => this.chapterRenderer.renderDirtyState());
-    this.watch('content', () => this.contentEditor.renderContent());
+    this.watch('content', async () => {
+      this.contentEditor.renderContent();
+      if (this.renderMode !== 'raw') {
+        await this.renderingManager.setEditorHtmlFromContent();
+      }
+    });
     this.watch('renderMode', () => {
       try { localStorage.setItem('aq:renderMode', this.renderMode); } catch (e) { console.warn('Failed to save render mode to localStorage:', e); }
       this.contentEditor.renderModeButtons();
