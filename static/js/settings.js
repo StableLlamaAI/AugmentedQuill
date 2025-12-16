@@ -199,8 +199,14 @@ export class ModelsEditor extends Component {
             const idx = parseInt(modelCard.dataset.modelIndex, 10);
             if (!isNaN(idx) && this.models[idx]) {
               this.selected_name = this.models[idx].name;
+              // update selection UI immediately
               this.renderModels();
               this.renderProviderConfig();
+              // probe remote models for availability and refresh UI when done
+              this.loadRemoteModels(idx).then(() => {
+                try { this.renderModels(); } catch (_) {}
+                try { this.renderProviderConfig(); } catch (_) {}
+              }).catch(() => {});
             }
           }
         });
@@ -351,7 +357,8 @@ export class ModelsEditor extends Component {
     const m = this.models[idx];
     const active = this.selected_name === m.name;
     const endpointOk = m.endpoint_ok === true;
-    const modelAvailable = m.remote_model && Array.isArray(m.remote_models) && m.remote_models.includes(m.remote_model);
+    // Only mark model available when endpoint probe succeeded
+    const modelAvailable = endpointOk && m.remote_model && Array.isArray(m.remote_models) && m.remote_models.includes(m.remote_model);
 
     const endpoint_html = endpointOk ? '<span class="inline-flex items-center gap-2 text-green-400"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Endpoint OK</span>' : '<span class="inline-flex items-center gap-2 text-amber-400"><span class="w-2 h-2 rounded-full bg-stone-600 inline-block"></span>Endpoint Unknown</span>';
     const model_available_html = modelAvailable ? '<span class="text-green-400">Model available</span>' : '<span class="text-amber-400">Model not found</span>';
@@ -438,6 +445,8 @@ export class ModelsEditor extends Component {
 
     const updateField = (field, val) => {
       if (!this.models[idx]) return;
+      // preserve old name so we can update selected_name when renaming
+      const oldName = this.models[idx].name;
       if (field === 'name') this.models[idx].name = val;
       else if (field === 'provider') this.models[idx].provider = val;
       else if (field === 'base_url') this.models[idx].base_url = val;
@@ -452,13 +461,52 @@ export class ModelsEditor extends Component {
       if (['base_url','api_key','timeout_s'].includes(field)) {
         this.models[idx].endpoint_ok = undefined;
       }
-      this.renderModels();
+      // If we're renaming the currently selected provider, keep it selected
+      if (field === 'name' && this.selected_name === oldName) {
+        this.selected_name = val;
+      }
+      // Avoid full re-render here to prevent input blur while editing.
+      // Lightweight UI updates (status indicators, save button) will be handled
+      // elsewhere or on explicit save.
+      // If the remote_model was changed via a SELECT, probe immediately to
+      // refresh availability and the models list.
+      if (field === 'remote_model' && typeof modelIdInp !== 'undefined' && modelIdInp && modelIdInp.tagName === 'SELECT') {
+        try { doImmediateProbe(); } catch (_) {}
+      }
     };
 
     if (nameInp) nameInp.addEventListener('input', (e)=> updateField('name', e.target.value));
     if (typeSel) typeSel.addEventListener('change', (e)=> updateField('provider', e.target.value));
-    if (baseInp) baseInp.addEventListener('input', (e)=> updateField('base_url', e.target.value));
-    if (keyInp) keyInp.addEventListener('input', (e)=> updateField('api_key', e.target.value));
+    // Debounced probe for endpoint when editing base URL or API key
+    let probeDebounce = null;
+    const scheduleProbe = () => {
+      // mark unknown immediately
+      if (this.models[idx]) this.models[idx].endpoint_ok = undefined;
+      if (probeDebounce) clearTimeout(probeDebounce);
+      probeDebounce = setTimeout(async () => {
+        try {
+          await this.loadRemoteModels(idx);
+        } catch (_) {}
+        try { this.renderModels(); } catch (_) {}
+      }, 700);
+    };
+
+    // Immediate probe helper (useful on blur or explicit test button)
+    const doImmediateProbe = async () => {
+      if (probeDebounce) { clearTimeout(probeDebounce); probeDebounce = null; }
+      if (this.models[idx]) this.models[idx].endpoint_ok = undefined;
+      try {
+        await this.loadRemoteModels(idx);
+      } catch (_) {}
+      try { this.renderModels(); } catch (_) {}
+      try { this.renderProviderConfig(); } catch (_) {}
+    };
+
+    if (baseInp) baseInp.addEventListener('input', (e)=> { updateField('base_url', e.target.value); scheduleProbe(); });
+    if (keyInp) keyInp.addEventListener('input', (e)=> { updateField('api_key', e.target.value); scheduleProbe(); });
+    if (keyInp) keyInp.addEventListener('blur', () => doImmediateProbe());
+
+    // No explicit test button: probing is triggered on input debounce, blur, or selection.
     if (modelIdInp) {
       modelIdInp.addEventListener('input', (e)=> updateField('remote_model', e.target.value));
       modelIdInp.addEventListener('change', (e)=> updateField('remote_model', e.target.value));
@@ -634,7 +682,7 @@ export class ModelsEditor extends Component {
    * Add a new model configuration
    */
   add() {
-      this.models.push({
+      const newModel = {
         name: `model-${this.models.length + 1}`,
         base_url: 'https://api.openai.com/v1',
         api_key: '',
@@ -642,7 +690,12 @@ export class ModelsEditor extends Component {
         remote_model: '',
         remote_models: [],
         endpoint_ok: undefined
-      });
+      };
+      this.models.push(newModel);
+      // Select and render the new model immediately so user sees changes
+      this.selected_name = newModel.name;
+      try { this.renderModels(); } catch (_) {}
+      try { this.renderProviderConfig(); } catch (_) {}
   }
 
   /**
@@ -672,13 +725,19 @@ export class ModelsEditor extends Component {
 
         // Extract and sort model names
         const list = Array.isArray(data.data) ? data.data : [];
-        model.remote_models = list
+        const mapped = list
         .map(x => typeof x === 'string' ? x : (x.id || x.name || ''))
         .filter(Boolean)
         .sort();
+        model.remote_models = mapped;
 
-        // Preserve current selection to avoid UI reset
-        model.remote_model = currentSelection;
+        // If the previously selected model exists in the fetched list, keep it.
+        // Otherwise, pick the first available model (or empty).
+        if (currentSelection && mapped.includes(currentSelection)) {
+          model.remote_model = currentSelection;
+        } else {
+          model.remote_model = mapped.length ? mapped[0] : '';
+        }
         model.endpoint_ok = true;
       } catch (_) {
         model.remote_model = currentSelection;

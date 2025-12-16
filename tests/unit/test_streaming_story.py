@@ -43,6 +43,11 @@ class StreamingStoryTest(TestCase):
         self._orig_resolve = getattr(main, "_resolve_openai_credentials")
         self._orig_stream = getattr(main, "_openai_chat_complete_stream")
 
+        # Also patch the llm_shims resolver so endpoints that import the shim
+        # directly will receive the fake credentials.
+        import app.llm_shims as shims
+        self._orig_shims_resolve = getattr(shims, "_resolve_openai_credentials", None)
+
         def fake_resolve(payload):  # type: ignore
             return ("https://fake/v1", None, "fake-model", 5)
 
@@ -53,10 +58,18 @@ class StreamingStoryTest(TestCase):
 
         main._resolve_openai_credentials = fake_resolve  # type: ignore
         main._openai_chat_complete_stream = fake_stream  # type: ignore
+        shims._resolve_openai_credentials = fake_resolve  # type: ignore
 
         def _undo():
             main._resolve_openai_credentials = self._orig_resolve  # type: ignore
             main._openai_chat_complete_stream = self._orig_stream  # type: ignore
+            if self._orig_shims_resolve is None:
+                try:
+                    delattr(shims, "_resolve_openai_credentials")
+                except Exception:
+                    pass
+            else:
+                shims._resolve_openai_credentials = self._orig_shims_resolve  # type: ignore
 
         self.addCleanup(_undo)
 

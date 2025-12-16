@@ -114,8 +114,8 @@
 
       <div class="flex-1 overflow-hidden h-full flex flex-col">
         <div data-view="empty" class="flex flex-col items-center justify-center h-full text-stone-600">
-          <i data-lucide="file-text" style="width:48px;height:48px" class="mb-4 opacity-50"></i>
-          <p>Select or create a chapter to start writing.</p>
+          <img src="/static/images/logo_2048.png" alt="AugmentedQuill" class="mb-4 opacity-80" style="max-width:320px; width:40%; height:auto;"/>
+          <p class="mt-4 text-sm">Select or create a chapter to start writing.</p>
         </div>
 
         <div data-view="chapter" class="flex-1 overflow-hidden flex flex-col hidden">
@@ -129,7 +129,26 @@
 
           <!-- Editor -->
           <div class="flex-1 overflow-hidden">
-            <textarea data-ref="rawEditor" class="w-full h-full bg-stone-950 text-stone-200 p-4 resize-none focus:outline-none font-mono text-lg leading-relaxed" style="max-width: 60ch; margin: 0 auto; display: block;"></textarea>
+            <div class="page-viewport relative h-full flex items-stretch">
+              <div class="page-content mx-auto w-full max-w-[60ch] h-full flex flex-col">
+                <textarea data-ref="rawEditor" class="w-full h-full bg-stone-950 text-stone-200 p-4 resize-none focus:outline-none font-mono text-lg leading-relaxed" style="display:block;"></textarea>
+              </div>
+
+              <!-- Per-page Suggest Footer (centred under the page container) -->
+              <div class="page-suggest z-50" aria-hidden="true" data-ref="pageSuggest">
+                <div class="aq-suggest-inner">
+                  <div class="p-3 flex justify-center items-center">
+                    <button type="button" data-action="story-suggest" class="group flex items-center space-x-3 px-6 py-3 bg-stone-800 border border-stone-700 text-stone-300 transition-all">
+                      <i data-lucide="sparkles" style="width:16px;height:16px"></i>
+                      <span class="font-medium text-sm">Suggest Next Paragraphs</span>
+                    </button>
+                  </div>
+                  <div data-ref="continuationsContainer" class="p-4 hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-ref="continuationsList"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

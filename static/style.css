@@ -85,9 +85,11 @@
 * { box-sizing: border-box; }
 body { margin:0; font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--fg); }
 .aq-header { display: flex; align-items: center; justify-content: space-between; }
+/* Ensure header stays above fixed side panels */
+header { position: relative; z-index: 60; }
 .aq-header, .aq-footer { padding: 0.75rem 1rem; background: var(--card); border-bottom: 1px solid var(--border); }
 .aq-footer { border-top: 1px solid var(--border); border-bottom: none; color: var(--muted); }
-.aq-main { padding: 1rem; }
+.aq-main { padding: 1rem; flex: 1 1 auto; min-height: 0; display: block; }
 
 /* Shell layout with left sidebar */
 .aq-shell { display: grid; grid-template-columns: 1fr 40rem 1fr; gap: 1rem; align-items: start; }
@@ -219,6 +221,94 @@ i[data-lucide] {
   max-height: 3rem;
 }
 
+/* Per-page suggest footer (centered under the page container) */
+
+.page-suggest { display: block; position: fixed; bottom: 1.25rem; left: calc(20rem + 1rem); right: calc(24rem + 1rem); z-index: 60; pointer-events: auto; }
+.page-suggest[aria-hidden="true"] { display: none; }
+.page-suggest[aria-hidden="false"] { display: block; }
+.page-suggest .aq-suggest-inner {
+  background: transparent;
+  border: none;
+  border-radius: 0px;
+  box-shadow: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+}
+
+/* Header above suggestion cards: short blue title */
+.page-suggest .aq-suggest-header {
+  color: rgba(99,102,241,0.95);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+/* Container that spans between sidebars and holds two cards */
+.page-suggest .aq-suggest-list {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+/* Individual suggestion card */
+.aq-suggest-card {
+  position: relative;
+  flex: 1 1 48%;
+  min-width: 36ch;
+  max-width: 55ch;
+  background: linear-gradient(180deg, rgba(28,25,23,0.98), rgba(15,13,12,0.98));
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.03);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+  overflow: hidden;
+}
+
+/* Suggestion text uses a serif for the mockup look */
+.aq-suggest-card .aq-suggest-text {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #e7e4e2;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* Accept/choose button (circular purple) */
+.aq-suggest-card .aq-suggest-accept {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(99,102,241,1), rgba(79,70,229,1));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(79,70,229,0.18);
+}
+
+/* Dismiss small control at top-right of the whole suggest area */
+.page-suggest .aq-suggest-dismiss {
+  position: absolute;
+  top: -8px;
+  right: calc(50% - 550px);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Hide legacy footer (prototype) */
+.aq-footer { display: none !important; }
+
 /* Utility classes for larger icons when needed */
 .lucide-lg { width: 2rem !important; height: 2rem !important; }
 .lucide-xl { width: 3rem !important; height: 3rem !important; }
@@ -236,6 +326,96 @@ i[data-lucide] {
 .aq-rightbar .p-4 { padding: 1rem; }
 .aq-rightbar h3 { margin:0; font-size:0.95rem; color: var(--fg); }
 .aq-rightbar select[data-ref="modelSelect"] { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.03); color: var(--fg); padding: 0.45rem 0.6rem; border-radius: 8px; }
+
+/* Fixed left sidebar and chat panel layout under the header (header height = 3.5rem) */
+#sidebar {
+  position: fixed;
+  left: 0;
+  top: 3.5rem; /* header height */
+  width: 20rem; /* matches template w-80 */
+  height: calc(100vh - 3.5rem);
+  overflow: hidden;
+  z-index: 40;
+}
+
+/* Ensure the sidebar's scrollable area uses the available height */
+#sidebar .flex-1.overflow-y-auto, #sidebar .flex-1 { height: calc(100% - 6rem); overflow-y: auto; }
+
+/* Chat panel fixed on the right */
+#chat-panel {
+  position: fixed;
+  right: 0;
+  top: 3.5rem; /* header height */
+  width: 24rem; /* matches sm:w-96 */
+  height: calc(100vh - 3.5rem);
+  overflow: hidden;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chat messages area should scroll independently */
+#chat-panel [data-ref="chatList"] { flex: 1 1 auto; overflow-y: auto; }
+#chat-panel .p-4.bg-stone-900 { flex: 0 0 auto; }
+
+/* Center content (shell view) should avoid overlapping fixed panes */
+[data-component="shell-view"] {
+  margin-left: 20rem;
+  margin-right: 24rem;
+  min-height: calc(100vh - 3.5rem);
+}
+
+/* page-viewport helpers */
+
+.page-viewport { position: relative; height: 100%; display: flex; flex-direction: column; }
+.page-content {
+  padding-bottom: 6rem; /* room for suggest footer */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto; /* allow center content to scroll independently */
+  -webkit-overflow-scrolling: touch;
+}
+.page-content textarea, .page-content [data-ref="rawEditor"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+/* Ensure the shell view and its flex children can shrink/grow correctly
+   so the center editor fills available vertical space and scrolls internally. */
+[data-component="shell-view"] {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 3.5rem);
+}
+[data-component="shell-view"] .flex-1 { min-height: 0; }
+[data-view="chapter"] { min-height: 0; display: flex; flex-direction: column; }
+.page-viewport { min-height: 0; }
+
+/* Constrain Toast UI / WYSIWYG editor containers to the available area
+   and enable internal scrolling when content overflows. */
+.toastui-editor, .toastui-editor-defaultUI, .toastui-editor-main {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: 100%;
+}
+.toastui-editor .tui-editor-contents, .toastui-editor-defaultUI .tui-editor-contents, .tui-editor-contents {
+  max-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Some TUI wrappers use different class names; be defensive. */
+.tui-editor-contents-wrap, .tui-editor-contents-wrap .tui-editor-contents {
+  max-height: 100%;
+  overflow: auto;
+}
+
+/* Ensure shell view occupies viewport height under header so children can stretch */
+[data-component="shell-view"] { margin-left: 20rem; margin-right: 24rem; min-height: calc(100vh - 3.5rem); }
 
 .aq-chat { background: transparent; padding: 0.75rem; }
 .aq-empty { color: var(--muted); }

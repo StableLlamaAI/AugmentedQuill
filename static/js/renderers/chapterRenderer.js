@@ -10,6 +10,8 @@ export class ChapterRenderer {
    */
   constructor(shellView) {
     this.shellView = shellView;
+    // Keep footer positioned correctly on resize
+    try { window.addEventListener('resize', () => this.renderMainView()); } catch (_) {}
   }
 
   /**
@@ -85,26 +87,27 @@ export class ChapterRenderer {
     if (!list) return;
     if (this.shellView.chapters.length === 0) {
       const tpl = await renderTemplate('chapter-empty');
-      list.innerHTML = '';
-      list.insertAdjacentHTML('beforeend', tpl);
+      // Set atomically to avoid interleaved renders
+      list.innerHTML = tpl;
       try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch (_) {}
+      // Refresh refs
+      this.shellView._scanRefs();
       return;
     }
 
-    // Build list using templates
-    list.innerHTML = '';
-    // Render each chapter via template for clarity and reuse
-    for (const chapter of this.shellView.chapters) {
+    // Build list HTML first, then set in one atomic update to avoid concurrent render races
+    const parts = await Promise.all(this.shellView.chapters.map(async (chapter) => {
       const active = chapter.id === this.shellView.activeId;
-      const tpl = await renderTemplate('chapter-item', {
+      return await renderTemplate('chapter-item', {
         id: chapter.id,
         wrapperClass: active ? 'bg-stone-800 border-indigo-500/50 shadow-sm' : 'bg-transparent border-transparent hover:bg-stone-800',
         titleClass: active ? 'text-indigo-400' : 'text-stone-300',
         title: this.escapeHtml(chapter.title || 'Untitled Chapter'),
         summary: this.escapeHtml(chapter.summary || 'No summary available...')
       });
-      list.insertAdjacentHTML('beforeend', tpl);
-    }
+    }));
+
+    list.innerHTML = parts.join('');
     // Refresh refs
     this.shellView._scanRefs();
   }
@@ -125,6 +128,22 @@ export class ChapterRenderer {
       const activeIdEl = this.shellView.el.querySelector('[data-active-id]');
       if (activeIdEl) activeIdEl.textContent = this.shellView.activeId;
     }
+
+    // Show/hide the per-page suggestion footer (rendered inside chapter view)
+    try {
+      const suggest = this.shellView.el.querySelector('[data-ref="pageSuggest"]');
+      if (suggest) {
+        const editorExists = !!(this.shellView.getEditorEl());
+        const show = isChapterOpen && editorExists;
+        suggest.setAttribute('aria-hidden', show ? 'false' : 'true');
+        if (!show) {
+          const cont = suggest.querySelector('[data-ref="continuationsContainer"]');
+          if (cont) cont.classList.add('hidden');
+          const list = suggest.querySelector('[data-ref="continuationsList"]');
+          if (list) list.innerHTML = '';
+        }
+      }
+    } catch (_) {}
   }
 
   /**

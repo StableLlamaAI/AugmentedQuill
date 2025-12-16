@@ -14,6 +14,86 @@ export class StoryActions {
   }
 
   /**
+   * Handles suggesting one or more paragraph continuations.
+   * Fetches two suggestions in parallel and displays them for user selection.
+   */
+  async handleSuggestParagraphs() {
+    if (this.shellView.activeId == null) return;
+    const container = this.shellView.shellView?.el?.querySelector('[data-ref="continuationsContainer"]') || this.shellView.el.querySelector('[data-ref="continuationsContainer"]');
+    const list = this.shellView.shellView?.el?.querySelector('[data-ref="continuationsList"]') || this.shellView.el.querySelector('[data-ref="continuationsList"]');
+    const btn = document.querySelector('[data-action="story-suggest"]');
+    if (btn) btn.disabled = true;
+    try {
+      const payload = { chap_id: this.shellView.activeId, model_name: this.shellView.storyCurrentModel, current_text: this.shellView.content || '' };
+      const [a, b] = await Promise.all([
+        this._fetchPlainSuggestion(payload),
+        this._fetchPlainSuggestion(payload)
+      ]);
+      if (!list) throw new Error('No continuations list available');
+      list.innerHTML = '';
+      [a, b].forEach((text, idx) => {
+        const card = document.createElement('div');
+        card.className = 'group relative p-5 rounded-lg border border-stone-700 bg-stone-800 hover:bg-stone-750 cursor-pointer transition-all';
+        const inner = document.createElement('div');
+        inner.className = 'font-serif text-base leading-relaxed text-stone-300';
+        inner.innerHTML = this._escapeHtml(text).replace(/\n/g, '<br/>');
+        card.appendChild(inner);
+        card.addEventListener('click', () => this._acceptContinuation(text));
+        list.appendChild(card);
+      });
+      if (container) container.classList.remove('hidden');
+    } catch (e) {
+      toast('Failed to fetch suggestions: ' + (e.message || e), 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async _fetchPlainSuggestion(payload) {
+    try {
+      const resp = await fetch('/api/story/suggest', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      if (resp.status === 404) {
+        throw new Error('Suggest endpoint not found (404). Is the backend running?');
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      // prefer streaming reader if available
+      if (resp.body && typeof resp.body.getReader === 'function') {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+        }
+        return buf;
+      }
+      return await resp.text();
+    } catch (e) {
+      return '(error)';
+    }
+  }
+
+  _acceptContinuation(text) {
+    try {
+      const base = this.shellView.content || '';
+      const sep = base && !base.endsWith('\n') ? '\n\n' : '\n\n';
+      this.shellView.content = base + sep + text;
+      // hide continuation container
+      const container = this.shellView.el.querySelector('[data-ref="continuationsContainer"]');
+      if (container) container.classList.add('hidden');
+      // scroll editor into view if possible
+      try { this.shellView.contentEditor.scrollToBottom(); } catch (_) {}
+    } catch (e) {
+      console.error('Failed to accept continuation:', e);
+    }
+  }
+
+  _escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  /**
    * Renders story models select.
    */
   renderStoryModels() {

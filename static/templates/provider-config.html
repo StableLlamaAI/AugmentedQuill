@@ -6,7 +6,7 @@
     </div>
     <div class="flex space-x-2 items-center">
       <button id="set-active-provider" class="px-3 py-1 rounded bg-stone-800 text-stone-200">{{activeText}}</button>
-      <button id="delete-provider" class="p-2 text-stone-600 hover:text-red-400 rounded"><i data-lucide="trash-2" style="width:16px;height:16px"></i></button>
+      <button id="delete-provider" class="p-2 text-stone-600 hover:text-red-400 hover:bg-red-950/30 rounded transition-colors" title="Delete provider"><i data-lucide="trash-2" style="width:16px;height:16px"></i></button>
     </div>
   </div>
 
@@ -23,7 +23,9 @@
 
     <div class="space-y-1">
       <label class="text-xs font-medium text-stone-500 uppercase">API Key</label>
-      <input id="prov-key" value="{{prov_key}}" type="password" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200" />
+      <div class="flex gap-2">
+        <input id="prov-key" value="{{prov_key}}" type="text" class="flex-1 bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200" />
+      </div>
     </div>
 
     <div class="flex items-center gap-4 text-sm text-stone-400">
