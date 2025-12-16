@@ -4,7 +4,7 @@ from fastapi import HTTPException
 
 from app.projects import get_active_project_dir
 from app.config import load_story_config
-from .chapter_helpers import _scan_chapter_files, _normalize_chapter_entry
+from .chapter_helpers import _scan_chapter_files, _normalize_chapter_entry, _chapter_by_id_or_404
 
 
 def _project_overview() -> dict:

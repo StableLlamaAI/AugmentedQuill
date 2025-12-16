@@ -12,6 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
+# Expose config and LLM helpers on the main module for tests and runtime
+from app import llm_shims as _llm_shims
+
+# Provide module-level aliases so tests can patch these via `app.main`
+_resolve_openai_credentials = _llm_shims._resolve_openai_credentials
+_openai_chat_complete = _llm_shims._openai_chat_complete
+_openai_chat_complete_stream = _llm_shims._openai_chat_complete_stream
+_openai_completions_stream = _llm_shims._openai_completions_stream
 
 # Import API routers
 from app.api.settings import router as settings_router

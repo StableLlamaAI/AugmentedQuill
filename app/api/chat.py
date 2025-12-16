@@ -19,6 +19,17 @@ CONFIG_DIR = BASE_DIR / "config"
 
 router = APIRouter()
 
+# Prefer using `app.main.load_machine_config` when available so tests can monkeypatch it.
+try:
+    import app.main as _app_main  # type: ignore
+except Exception:
+    _app_main = None
+
+def _load_machine_config(path):
+    if _app_main and hasattr(_app_main, 'load_machine_config'):
+        return _app_main.load_machine_config(path)
+    return load_machine_config(path)
+
 
 def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
     """Parse tool calls from assistant content if not provided in structured format.
@@ -578,7 +589,7 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
 @router.get("/api/chat")
 async def api_get_chat() -> dict:
     """Return initial state for chat view: models and current selection."""
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = _load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg = (machine.get("openai") or {}) if isinstance(machine, dict) else {}
     models_list = openai_cfg.get("models") if isinstance(openai_cfg, dict) else []
 
@@ -724,7 +735,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     has_system = any(msg.get("role") == "system" for msg in req_messages)
     if not has_system:
         # Load model-specific prompt overrides
-        machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+        machine_config = _load_machine_config(CONFIG_DIR / "machine.json") or {}
         openai_cfg = machine_config.get("openai", {})
         selected_model_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
         model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -733,7 +744,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         req_messages.insert(0, {"role": "system", "content": system_content})
 
     # Load machine config and pick selected model
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = _load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
     selected_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
 

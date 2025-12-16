@@ -12,6 +12,42 @@ import json as _json
 
 router = APIRouter()
 
+# Base/config helper (used for machine config resolution)
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CONFIG_DIR = BASE_DIR / "config"
+
+# Prefer using `app.main.load_machine_config` when available so tests can monkeypatch it.
+try:
+    import app.main as _app_main  # type: ignore
+except Exception:
+    _app_main = None
+
+def _load_machine_config(path):
+    if _app_main and hasattr(_app_main, 'load_machine_config'):
+        return _app_main.load_machine_config(path)
+    return load_machine_config(path)
+
+
+# LLM shim accessors: prefer functions patched on app.main during tests
+def _get_resolve_fn():
+    if _app_main and hasattr(_app_main, '_resolve_openai_credentials'):
+        return _app_main._resolve_openai_credentials
+    from app.llm_shims import _resolve_openai_credentials as _fn
+    return _fn
+
+def _get_chat_complete_fn():
+    if _app_main and hasattr(_app_main, '_openai_chat_complete'):
+        return _app_main._openai_chat_complete
+    from app.llm_shims import _openai_chat_complete as _fn
+    return _fn
+
+def _get_chat_complete_stream_fn():
+    if _app_main and hasattr(_app_main, '_openai_chat_complete_stream'):
+        return _app_main._openai_chat_complete_stream
+    from app.llm_shims import _openai_chat_complete_stream as _fn
+    return _fn
+
 
 @router.post("/api/story/story-summary")
 async def api_story_story_summary(request: Request) -> JSONResponse:
@@ -48,8 +84,9 @@ async def api_story_story_summary(request: Request) -> JSONResponse:
     if not chapter_summaries:
         return JSONResponse(status_code=400, content={"ok": False, "detail": "No chapter summaries available"})
 
-    from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    _resolve = _get_resolve_fn()
+    _complete = _get_chat_complete_fn()
+    base_url, api_key, model_id, timeout_s = _resolve(payload)
 
     sys_msg = {
         "role": "system",
@@ -70,7 +107,7 @@ async def api_story_story_summary(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _openai_chat_complete(
+        data = await _complete(
             messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
         )
     except HTTPException as e:
@@ -133,8 +170,9 @@ async def api_story_summary(request: Request) -> JSONResponse:
         chapters_data.extend([{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1))
     current_summary = chapters_data[pos].get("summary", "")
 
-    from app.llm_shims import _resolve_openai_credentials
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    _resolve = _get_resolve_fn()
+    _complete = _get_chat_complete_fn()
+    base_url, api_key, model_id, timeout_s = _resolve(payload)
 
     # Build messages
     sys_msg = {
@@ -154,7 +192,7 @@ async def api_story_summary(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _openai_chat_complete(
+        data = await _complete(
             messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
         )
     except HTTPException as e:
@@ -210,11 +248,12 @@ async def api_story_write(request: Request) -> JSONResponse:
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
 
-    from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    _resolve = _get_resolve_fn()
+    _complete = _get_chat_complete_fn()
+    base_url, api_key, model_id, timeout_s = _resolve(payload)
 
     # Load model-specific prompt overrides
-    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -224,7 +263,7 @@ async def api_story_write(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _openai_chat_complete(
+        data = await _complete(
             messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
         )
     except HTTPException as e:
@@ -276,11 +315,12 @@ async def api_story_continue(request: Request) -> JSONResponse:
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    _resolve = _get_resolve_fn()
+    _complete = _get_chat_complete_fn()
+    base_url, api_key, model_id, timeout_s = _resolve(payload)
 
     # Load model-specific prompt overrides
-    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -290,7 +330,7 @@ async def api_story_continue(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _openai_chat_complete(
+        data = await _complete(
             messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s
         )
     except HTTPException as e:
@@ -431,7 +471,7 @@ async def api_story_summary_stream(request: Request):
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -447,7 +487,8 @@ async def api_story_summary_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+            _stream_fn = _get_chat_complete_stream_fn()
+            async for chunk in _stream_fn(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
                 buf.append(chunk)
                 yield chunk
         except asyncio.CancelledError:
@@ -490,7 +531,7 @@ async def api_story_write_stream(request: Request):
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -502,7 +543,8 @@ async def api_story_write_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+            _stream_fn = _get_chat_complete_stream_fn()
+            async for chunk in _stream_fn(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
                 buf.append(chunk)
                 yield chunk
         except asyncio.CancelledError:
@@ -547,7 +589,7 @@ async def api_story_continue_stream(request: Request):
     base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -559,7 +601,8 @@ async def api_story_continue_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+            _stream_fn = _get_chat_complete_stream_fn()
+            async for chunk in _stream_fn(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
                 buf.append(chunk)
                 yield chunk
         except asyncio.CancelledError:
@@ -629,7 +672,8 @@ async def api_story_story_summary_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            async for chunk in _openai_chat_complete_stream(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
+            _stream_fn = _get_chat_complete_stream_fn()
+            async for chunk in _stream_fn(messages=messages, base_url=base_url, api_key=api_key, model_id=model_id, timeout_s=timeout_s):
                 buf.append(chunk)
                 yield chunk
         except asyncio.CancelledError:
