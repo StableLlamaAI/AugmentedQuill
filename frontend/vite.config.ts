@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
       build: {
         outDir: '../static/dist',
         emptyOutDir: true,
+        minify: false,
       },
       server: {
         port: 3000,

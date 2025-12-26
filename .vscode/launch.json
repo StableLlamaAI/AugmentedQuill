@@ -24,8 +24,8 @@
     "compounds": [
         {
             "name": "Full Stack Dev (Backend + Frontend)",
-            "configurations": ["Backend (FastAPI)", "Frontend (Chrome)"],
-            "preLaunchTask": "frontend: dev"
+            "configurations": ["Backend (FastAPI)"],
+            "preLaunchTask": "frontend: build"
         }
     ]
 }
