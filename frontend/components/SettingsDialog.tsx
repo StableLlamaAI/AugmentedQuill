@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Trash2, Save, X, RotateCw, CheckCircle2, AlertCircle, Edit2, Play, HardDrive, Cpu, Terminal, Key, MessageSquare, BookOpen } from 'lucide-react';
-import { LLMConfig, ProjectMetadata, AppSettings } from '../types';
+import { LLMConfig, ProjectMetadata, AppSettings, AppTheme } from '../types';
 import { testConnection } from '../services/geminiService';
 import { Button } from './Button';
 
@@ -15,6 +15,7 @@ interface SettingsDialogProps {
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newName: string) => void;
+  theme: AppTheme;
 }
 
 const DEFAULT_CONFIG: LLMConfig = {
@@ -36,7 +37,7 @@ const DEFAULT_CONFIG: LLMConfig = {
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   isOpen, onClose, settings, onSaveSettings,
-  projects, activeProjectId, onLoadProject, onCreateProject, onDeleteProject, onRenameProject
+  projects, activeProjectId, onLoadProject, onCreateProject, onDeleteProject, onRenameProject, theme
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -44,6 +45,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [connectionStatus, setConnectionStatus] = useState<{[key: string]: 'idle' | 'success' | 'error' | 'loading'}>({});
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
+
+  const isLight = theme === 'light';
 
   // Reset local state when opening
   useEffect(() => {
@@ -102,17 +105,17 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4">
-      <div className="bg-stone-900 w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border border-stone-700 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className={`w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-700'}`}>
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-stone-800 bg-stone-900 shrink-0">
+        <div className={`flex items-center justify-between p-4 border-b shrink-0 ${isLight ? 'border-stone-200 bg-white' : 'border-stone-800 bg-stone-900'}`}>
           <div className="flex items-center space-x-3">
              <div className="p-2 bg-amber-600 rounded-lg">
                 <Settings className="text-white" size={20} />
              </div>
-             <h2 className="text-xl font-bold text-stone-200">Settings</h2>
+             <h2 className={`text-xl font-bold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>Settings</h2>
           </div>
-          <button onClick={onClose} className="text-stone-500 hover:text-stone-300 transition-colors">
+          <button onClick={onClose} className={`transition-colors ${isLight ? 'text-stone-500 hover:text-stone-700' : 'text-stone-500 hover:text-stone-300'}`}>
             <X size={24} />
           </button>
         </div>
@@ -120,17 +123,17 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         {/* Content */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Sidebar / Navigation Tabs */}
-          <div className="w-full md:w-64 bg-stone-950 border-b md:border-b-0 md:border-r border-stone-800 p-2 md:p-4 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto">
+          <div className={`w-full md:w-64 border-b md:border-b-0 md:border-r p-2 md:p-4 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto ${isLight ? 'border-stone-200 bg-stone-50' : 'border-stone-800 bg-stone-950'}`}>
             <button 
                 onClick={() => setActiveTab('projects')}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${activeTab === 'projects' ? 'bg-stone-800 text-amber-400 border border-stone-700' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'}`}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${activeTab === 'projects' ? 'bg-amber-600 text-white border border-amber-500' : isLight ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'}`}
             >
                 <HardDrive size={18} />
                 <span>Projects</span>
             </button>
             <button 
                 onClick={() => setActiveTab('machine')}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${activeTab === 'machine' ? 'bg-stone-800 text-amber-400 border border-stone-700' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'}`}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${activeTab === 'machine' ? 'bg-amber-600 text-white border border-amber-500' : isLight ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'}`}
             >
                 <Cpu size={18} />
                 <span>Machine Settings</span>
@@ -138,30 +141,30 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto bg-stone-900 p-4 md:p-8">
+          <div className={`flex-1 overflow-y-auto p-4 md:p-8 ${isLight ? 'bg-white' : 'bg-stone-900'}`}>
             
             {activeTab === 'projects' && (
               <div className="space-y-6">
                  <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h3 className="text-lg md:text-2xl font-bold text-stone-200 mb-1">Your Projects</h3>
-                        <p className="text-stone-500 text-sm">Manage your stories and creative works.</p>
+                        <h3 className={`text-lg md:text-2xl font-bold mb-1 ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>Your Projects</h3>
+                        <p className={`text-sm ${isLight ? 'text-stone-500' : 'text-stone-500'}`}>Manage your stories and creative works.</p>
                     </div>
                     <Button onClick={onCreateProject} icon={<Plus size={16}/>}>New Project</Button>
                  </div>
 
                  <div className="grid grid-cols-1 gap-3">
                     {projects.map(proj => (
-                       <div key={proj.id} className={`group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-all gap-3 ${proj.id === activeProjectId ? 'bg-amber-900/20 border-amber-500/50' : 'bg-stone-800 border-stone-700 hover:border-stone-600'}`}>
+                       <div key={proj.id} className={`group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-all gap-3 ${proj.id === activeProjectId ? 'bg-amber-50 border-amber-500/50' : isLight ? 'bg-stone-50 border-stone-200 hover:border-stone-300' : 'bg-stone-800 border-stone-700 hover:border-stone-600'}`}>
                           <div className="flex items-center space-x-4">
-                             <div className={`hidden sm:block w-2 h-12 rounded-full ${proj.id === activeProjectId ? 'bg-amber-500' : 'bg-stone-600'}`}></div>
+                             <div className={`hidden sm:block w-2 h-12 rounded-full ${proj.id === activeProjectId ? 'bg-amber-500' : isLight ? 'bg-stone-300' : 'bg-stone-600'}`}></div>
                              <div className="flex-1">
                                 {editingNameId === proj.id ? (
                                     <div className="flex items-center space-x-2">
                                         <input 
                                             value={tempName} 
                                             onChange={(e) => setTempName(e.target.value)}
-                                            className="bg-stone-950 border border-stone-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500 w-full"
+                                            className={`border rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-full ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-600 text-white'}`}
                                             autoFocus
                                             onKeyDown={(e) => {
                                                 if(e.key === 'Enter') {
@@ -174,8 +177,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                     </div>
                                 ) : (
                                     <div className="flex items-center space-x-2 group/title">
-                                        <h4 className="font-bold text-stone-200">{proj.title}</h4>
-                                        <button onClick={() => { setEditingNameId(proj.id); setTempName(proj.title); }} className="opacity-0 group-hover/title:opacity-100 text-stone-500 hover:text-stone-300 transition-opacity">
+                                        <h4 className={`font-bold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{proj.title}</h4>
+                                        <button onClick={() => { setEditingNameId(proj.id); setTempName(proj.title); }} className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${isLight ? 'text-stone-500 hover:text-stone-700' : 'text-stone-500 hover:text-stone-300'}`}>
                                             <Edit2 size={12} />
                                         </button>
                                     </div>
@@ -188,8 +191,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                              {proj.id !== activeProjectId && (
                                  <Button size="sm" variant="secondary" onClick={() => { onLoadProject(proj.id); onClose(); }}>Open</Button>
                              )}
-                             {proj.id === activeProjectId && <span className="text-xs font-medium text-amber-400 bg-amber-950/50 px-2 py-1 rounded">Active</span>}
-                             <button onClick={() => onDeleteProject(proj.id)} className="p-2 text-stone-600 hover:text-red-400 hover:bg-red-950/30 rounded transition-colors" title="Delete">
+                             {proj.id === activeProjectId && <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded">Active</span>}
+                             <button onClick={() => onDeleteProject(proj.id)} className={`p-2 rounded transition-colors ${isLight ? 'text-stone-400 hover:text-red-500 hover:bg-red-50' : 'text-stone-600 hover:text-red-400 hover:bg-red-950/30'}`} title="Delete">
                                 <Trash2 size={18} />
                              </button>
                           </div>
@@ -202,21 +205,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {activeTab === 'machine' && (
               <div className="flex flex-col md:flex-row h-full gap-4 md:gap-6">
                  {/* Provider List */}
-                 <div className="w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r border-stone-800 md:pr-6 overflow-y-auto shrink-0">
+                 <div className={`w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r md:pr-6 overflow-y-auto shrink-0 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-stone-300">Providers</h3>
-                        <button onClick={addProvider} className="p-1 rounded bg-stone-800 text-stone-400 hover:text-amber-400 transition-colors"><Plus size={18}/></button>
+                        <h3 className={`font-bold ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Providers</h3>
+                        <button onClick={addProvider} className={`p-1 rounded transition-colors ${isLight ? 'bg-stone-100 text-stone-600 hover:text-amber-600' : 'bg-stone-800 text-stone-400 hover:text-amber-400'}`}><Plus size={18}/></button>
                     </div>
                     <div className="space-y-2">
                         {localSettings.providers.map(p => (
                             <div 
                                 key={p.id}
                                 onClick={() => setEditingProviderId(p.id)}
-                                className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 ${editingProviderId === p.id ? 'bg-amber-900/20 border-amber-500/50' : 'bg-stone-800 border-stone-700 hover:bg-stone-750'}`}
+                                className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 ${editingProviderId === p.id ? 'bg-amber-50 border-amber-500/50' : isLight ? 'bg-stone-50 border-stone-200 hover:bg-stone-100' : 'bg-stone-800 border-stone-700 hover:bg-stone-750'}`}
                             >
                                 <div className="flex justify-between items-center w-full">
                                     <div className="truncate flex-1">
-                                        <div className="font-medium text-sm text-stone-200">{p.name}</div>
+                                        <div className={`font-medium text-sm ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{p.name}</div>
                                         <div className="text-xs text-stone-500 uppercase">{p.provider}</div>
                                     </div>
                                     <div className="flex items-center space-x-2">
@@ -226,12 +229,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 </div>
                                 <div className="flex gap-2">
                                     {p.id === localSettings.activeChatProviderId && (
-                                        <span className="text-[10px] bg-amber-900/50 text-amber-400 px-1.5 py-0.5 rounded border border-amber-800/50 flex items-center gap-1">
+                                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
                                             <MessageSquare size={10} /> Chat
                                         </span>
                                     )}
                                     {p.id === localSettings.activeStoryProviderId && (
-                                        <span className="text-[10px] bg-emerald-900/50 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-800/50 flex items-center gap-1">
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                                             <BookOpen size={10} /> Story
                                         </span>
                                     )}
@@ -247,7 +250,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                              <div className="flex justify-between items-start">
                                  <div>
-                                     <h3 className="text-xl font-bold text-stone-200">{activeProvider.name}</h3>
+                                     <h3 className={`text-xl font-bold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{activeProvider.name}</h3>
                                      <p className="text-xs text-stone-500 mt-1">ID: {activeProvider.id}</p>
                                  </div>
                                  <div className="flex space-x-2">
@@ -256,17 +259,17 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                              </div>
 
                              {/* Role Selection Buttons */}
-                             <div className="grid grid-cols-2 gap-3 p-3 bg-stone-950 rounded-lg border border-stone-800">
+                             <div className={`grid grid-cols-2 gap-3 p-3 rounded-lg border ${isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-950 border-stone-800'}`}>
                                 <button 
                                     onClick={() => setLocalSettings(s => ({ ...s, activeChatProviderId: activeProvider.id }))}
-                                    className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${localSettings.activeChatProviderId === activeProvider.id ? 'bg-amber-600 text-white shadow-md' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}
+                                    className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${localSettings.activeChatProviderId === activeProvider.id ? 'bg-amber-600 text-white shadow-md' : isLight ? 'bg-stone-100 text-stone-600 hover:bg-stone-200' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}
                                 >
                                     <MessageSquare size={14} />
                                     Use for Chat
                                 </button>
                                 <button 
                                     onClick={() => setLocalSettings(s => ({ ...s, activeStoryProviderId: activeProvider.id }))}
-                                    className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${localSettings.activeStoryProviderId === activeProvider.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}
+                                    className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${localSettings.activeStoryProviderId === activeProvider.id ? 'bg-emerald-600 text-white shadow-md' : isLight ? 'bg-stone-100 text-stone-600 hover:bg-stone-200' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}
                                 >
                                     <BookOpen size={14} />
                                     Use for Story
@@ -280,7 +283,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                          <input 
                                              value={activeProvider.name}
                                              onChange={(e) => updateProvider(activeProvider.id, { name: e.target.value })}
-                                             className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                                             className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                          />
                                      </div>
                                      <div className="space-y-1">
@@ -288,7 +291,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                          <select 
                                              value={activeProvider.provider}
                                              onChange={(e) => updateProvider(activeProvider.id, { provider: e.target.value as any })}
-                                             className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                                             className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                          >
                                              <option value="gemini">Google Gemini SDK</option>
                                              <option value="openai">OpenAI Compatible (HTTP)</option>
@@ -305,7 +308,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                          onChange={(e) => updateProvider(activeProvider.id, { baseUrl: e.target.value })}
                                          placeholder={activeProvider.provider === 'openai' ? 'https://api.openai.com/v1' : 'N/A'}
                                          disabled={activeProvider.provider === 'gemini'}
-                                         className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none disabled:opacity-50"
+                                         className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none disabled:opacity-50 ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                      />
                                  </div>
 
@@ -319,7 +322,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                             value={activeProvider.apiKey}
                                             onChange={(e) => updateProvider(activeProvider.id, { apiKey: e.target.value })}
                                             placeholder="sk-..."
-                                            className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                                            className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                         />
                                         <div className="absolute right-2 top-1.5">
                                             <Button 
@@ -343,7 +346,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                          <input 
                                              value={activeProvider.modelId}
                                              onChange={(e) => updateProvider(activeProvider.id, { modelId: e.target.value })}
-                                             className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                                             className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                          />
                                      </div>
                                      <div className="space-y-1">
@@ -352,27 +355,27 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                              type="number"
                                              value={activeProvider.timeout}
                                              onChange={(e) => updateProvider(activeProvider.id, { timeout: Number(e.target.value) })}
-                                             className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                                             className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-200'}`}
                                          />
                                      </div>
                                  </div>
                                  
-                                 <div className="pt-4 border-t border-stone-800">
-                                     <h4 className="text-sm font-bold text-stone-400 mb-3 uppercase tracking-wider">Parameters</h4>
+                                 <div className={`pt-4 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                                     <h4 className={`text-sm font-bold mb-3 uppercase tracking-wider ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>Parameters</h4>
                                      <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <div className="flex justify-between text-xs text-stone-400"><span>Temperature</span> <span>{activeProvider.temperature}</span></div>
+                                            <div className={`flex justify-between text-xs ${isLight ? 'text-stone-600' : 'text-stone-400'}`}><span>Temperature</span> <span>{activeProvider.temperature}</span></div>
                                             <input type="range" min="0" max="2" step="0.1" value={activeProvider.temperature} onChange={(e) => updateProvider(activeProvider.id, { temperature: Number(e.target.value) })} className="w-full accent-amber-500"/>
                                         </div>
                                         <div className="space-y-2">
-                                            <div className="flex justify-between text-xs text-stone-400"><span>Top P</span> <span>{activeProvider.topP}</span></div>
+                                            <div className={`flex justify-between text-xs ${isLight ? 'text-stone-600' : 'text-stone-400'}`}><span>Top P</span> <span>{activeProvider.topP}</span></div>
                                             <input type="range" min="0" max="1" step="0.05" value={activeProvider.topP} onChange={(e) => updateProvider(activeProvider.id, { topP: Number(e.target.value) })} className="w-full accent-amber-500"/>
                                         </div>
                                      </div>
                                  </div>
 
-                                 <div className="pt-4 border-t border-stone-800">
-                                     <h4 className="text-sm font-bold text-stone-400 mb-3 uppercase tracking-wider">Expert: Prompt Overrides</h4>
+                                 <div className={`pt-4 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                                     <h4 className={`text-sm font-bold mb-3 uppercase tracking-wider ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>Expert: Prompt Overrides</h4>
                                      <div className="space-y-4">
                                          <div className="space-y-1">
                                              <label className="text-xs font-medium text-stone-500">System Instruction (Chat Persona)</label>
@@ -381,7 +384,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                                 value={activeProvider.prompts?.system || ''}
                                                 onChange={(e) => updateProvider(activeProvider.id, { prompts: { ...activeProvider.prompts, system: e.target.value } })}
                                                 placeholder="Default persona..."
-                                                className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-xs text-stone-300 focus:border-amber-500 focus:outline-none"
+                                                className={`w-full border rounded p-2 text-xs focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-300'}`}
                                              />
                                          </div>
                                          <div className="space-y-1">
@@ -391,7 +394,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                                 value={activeProvider.prompts?.continuation || ''}
                                                 onChange={(e) => updateProvider(activeProvider.id, { prompts: { ...activeProvider.prompts, continuation: e.target.value } })}
                                                 placeholder="Instruction for generating next paragraphs..."
-                                                className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-xs text-stone-300 focus:border-amber-500 focus:outline-none"
+                                                className={`w-full border rounded p-2 text-xs focus:border-amber-500 focus:outline-none ${isLight ? 'bg-white border-stone-300 text-stone-800' : 'bg-stone-950 border-stone-700 text-stone-300'}`}
                                              />
                                          </div>
                                      </div>
@@ -410,7 +413,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-800 bg-stone-900 flex justify-end shrink-0">
+        <div className={`p-4 border-t shrink-0 flex justify-end ${isLight ? 'border-stone-200 bg-white' : 'border-stone-800 bg-stone-900'}`}>
             <Button onClick={handleSave} icon={<Save size={16}/>}>Save & Close</Button>
         </div>
       </div>

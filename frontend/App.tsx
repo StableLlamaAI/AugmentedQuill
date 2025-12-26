@@ -411,6 +411,7 @@ Always prioritize the user's creative vision.`;
         onCreateProject={handleCreateProject}
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
+        theme={currentTheme}
       />
 
       {/* Header / Toolbar */}
