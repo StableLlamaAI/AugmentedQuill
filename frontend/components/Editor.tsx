@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useImperativeHandle, useCallback } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, useCallback, useState } from 'react';
 import { Chapter, EditorSettings, ViewMode } from '../types';
 import { Sparkles, Loader2, SplitSquareHorizontal, RefreshCw, PenLine, Wand2, FileEdit, BookOpen } from 'lucide-react';
 import { Button } from './Button';
@@ -11,6 +11,8 @@ interface EditorProps {
   chapter: Chapter;
   settings: EditorSettings;
   viewMode: ViewMode;
+    showWhitespace?: boolean;
+    onToggleShowWhitespace?: () => void;
   onChange: (id: string, updates: Partial<Chapter>) => void;
   continuations: string[];
   isSuggesting: boolean;
@@ -29,21 +31,33 @@ interface EditorProps {
 }
 
 // Internal component for auto-growing plain text editing
-const PlainTextEditable = React.forwardRef<HTMLDivElement, any>(({ value, onChange, className, onKeyDown, onSelect, placeholder, style, ...props }, ref) => {
+const PlainTextEditable = React.forwardRef<HTMLDivElement, any>(({ value, onChange, className, onKeyDown, onSelect, placeholder, style, showWhitespace = false, ...props }, ref) => {
     const elementRef = useRef<HTMLDivElement>(null);
     useImperativeHandle(ref, () => elementRef.current);
 
     // Sync external value to innerText only if significantly different to avoid cursor jumps
     useEffect(() => {
-        if (elementRef.current && elementRef.current.innerText !== value) {
-            elementRef.current.innerText = value;
+        const display = showWhitespace ? (value || '').replace(/\t/g, '→\t').replace(/ /g, '·\u200b').replace(/\r?\n/g, '¶\n') : (value || '');
+        if (elementRef.current && elementRef.current.innerText !== display) {
+            elementRef.current.innerText = display;
         }
-    }, [value]);
+    }, [value, showWhitespace]);
 
     const onPaste = (e: React.ClipboardEvent) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
+        // insert raw text; onInput handler will convert display when needed
         document.execCommand('insertText', false, text);
+    };
+
+    const fromDisplay = (s: string) => {
+        return s.replace(/·\u200b?/g, ' ').replace(/→\t/g, '\t').replace(/¶\n/g, '\n');
+    };
+
+    const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+        const displayed = e.currentTarget.innerText;
+        const raw = showWhitespace ? fromDisplay(displayed) : displayed;
+        onChange(raw);
     };
 
     return (
@@ -51,7 +65,7 @@ const PlainTextEditable = React.forwardRef<HTMLDivElement, any>(({ value, onChan
             ref={elementRef}
             contentEditable
             className={`${className} empty:before:content-[attr(data-placeholder)] empty:before:text-inherit empty:before:opacity-40 outline-none`}
-            onInput={(e) => onChange(e.currentTarget.innerText)}
+            onInput={handleInput}
             onPaste={onPaste}
             onKeyDown={onKeyDown}
             onSelect={onSelect}
@@ -70,6 +84,8 @@ export const Editor = React.forwardRef<any, EditorProps>(({
   chapter, 
   settings, 
   viewMode, 
+    showWhitespace,
+    onToggleShowWhitespace,
   onChange,
   continuations,
   isSuggesting,
@@ -83,8 +99,8 @@ export const Editor = React.forwardRef<any, EditorProps>(({
   onToggleSummary,
   onContextChange
 }, ref) => {
-  const textareaRef = useRef<HTMLDivElement>(null);
-  const wysiwygRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLDivElement>(null);
+    const wysiwygRef = useRef<HTMLDivElement>(null);
   
   const turndownService = useRef<any>(null);
   if (!turndownService.current) {
@@ -446,25 +462,30 @@ export const Editor = React.forwardRef<any, EditorProps>(({
              />
 
              {/* Raw / Markdown View */}
-             {(viewMode === 'raw' || viewMode === 'markdown') && (
-                 <div id="raw-markdown-editor" className="relative w-full flex flex-col">
-                     <PlainTextEditable
-                        ref={textareaRef}
-                        value={chapter.content}
-                        onChange={(val: string) => {
-                            onChange(chapter.id, { content: val });
-                            checkContext();
-                        }}
-                        onSelect={checkContext}
-                        onKeyDown={handleKeyDown}
-                        className="w-full bg-transparent text-inherit outline-none"
-                        placeholder="Start writing your chapter here..."
-                        style={{ 
-                            ...commonTextStyle, 
-                        }}
-                      />
-                 </div>
-             )}
+                         {(viewMode === 'raw' || viewMode === 'markdown') && (
+                                 <div id="raw-markdown-editor" className="relative w-full flex flex-col">
+                                         <PlainTextEditable
+                                            ref={textareaRef}
+                                            value={chapter.content}
+                                            onChange={(val: string) => {
+                                                onChange(chapter.id, { content: val });
+                                                checkContext();
+                                            }}
+                                            onSelect={checkContext}
+                                            onKeyDown={handleKeyDown}
+                                            className="w-full bg-transparent text-inherit outline-none"
+                                            placeholder="Start writing your chapter here..."
+                                            showWhitespace={showWhitespace}
+                                            style={{ 
+                                                ...commonTextStyle,
+                                                color: showWhitespace ? 'inherit' : 'inherit',
+                                                caretColor: textColor,
+                                            }}
+                                          />
+
+                                         
+                                 </div>
+                         )}
           </div>
         </div>
         
@@ -472,7 +493,7 @@ export const Editor = React.forwardRef<any, EditorProps>(({
       </div>
 
       {/* Persistent Footer */}
-      <div className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}>
+    <div className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}>
          {continuations.length > 0 ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
                <div className="flex items-center justify-between mb-3 px-1">
@@ -492,13 +513,14 @@ export const Editor = React.forwardRef<any, EditorProps>(({
                </div>
             </div>
          ) : (
-            <div className="p-3 flex justify-center items-center">
-               <button onClick={onTriggerSuggestions} disabled={isSuggesting || isAiLoading} className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${settings.theme === 'light' ? 'bg-white border-stone-200 hover:bg-stone-50 text-stone-600' : 'bg-stone-800 border-stone-700 hover:bg-stone-700 hover:border-amber-500/30 text-stone-300'}`}>
-                  {isSuggesting || isAiLoading ? (<><Loader2 className="animate-spin text-amber-500" size={18} /><span className="font-medium text-sm">Working...</span></>) : (<><div className="bg-amber-100 dark:bg-amber-900/50 p-1 rounded-md text-amber-600 dark:text-amber-400"><Sparkles size={16} /></div><span className="font-medium text-sm">Suggest next paragraph</span></>)}
-               </button>
-            </div>
+                            <div className="p-3 flex justify-center items-center space-x-3">
+                                <button onClick={onTriggerSuggestions} disabled={isSuggesting || isAiLoading} className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${settings.theme === 'light' ? 'bg-white border-stone-200 hover:bg-stone-50 text-stone-600' : 'bg-stone-800 border-stone-700 hover:bg-stone-700 hover:border-amber-500/30 text-stone-300'}`}>
+                                     {isSuggesting || isAiLoading ? (<><Loader2 className="animate-spin text-amber-500" size={18} /><span className="font-medium text-sm">Working...</span></>) : (<><div className="bg-amber-100 dark:bg-amber-900/50 p-1 rounded-md text-amber-600 dark:text-amber-400"><Sparkles size={16} /></div><span className="font-medium text-sm">Suggest next paragraph</span></>)}
+                                </button>
+                            </div>
          )}
       </div>
+            
     </div>
   );
 });

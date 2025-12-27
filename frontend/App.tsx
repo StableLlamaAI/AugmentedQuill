@@ -82,6 +82,7 @@ const App: React.FC = () => {
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('raw');
+  const [showWhitespace, setShowWhitespace] = useState<boolean>(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [activeFormats, setActiveFormats] = useState<string[]>([]);
 
@@ -343,7 +344,59 @@ Always prioritize the user's creative vision.`;
     const c = clampCursor(suggestCursor ?? currentContent.length, currentContent);
     const prefix = currentContent.slice(0, c);
     const suffix = currentContent.slice(c);
-    const separator = prefix.length > 0 && !prefix.endsWith('\n') ? '\n\n' : '';
+
+    // Preserve all whitespace provided by the model. Compute only the minimal
+    // extra characters required so the resulting Markdown is valid and not
+    // accidentally concatenated.
+    const startsWithWhitespace = text.length > 0 && /^\s/.test(text);
+    const endsWithWhitespace = prefix.length > 0 && /\s$/.test(prefix);
+
+    const needsTokenBoundary = prefix.length > 0 && !endsWithWhitespace && !startsWithWhitespace;
+
+    const countTrailingNewlines = (s: string) => {
+      let i = s.length - 1;
+      let count = 0;
+      while (i >= 0 && s[i] === '\n') { count++; i--; }
+      return count;
+    };
+    const countLeadingNewlines = (s: string) => {
+      let i = 0;
+      let count = 0;
+      while (i < s.length && s[i] === '\n') { count++; i++; }
+      return count;
+    };
+
+    let separator = '';
+
+    if (prefix.length === 0) {
+      // Inserting at document start: do not prepend newlines.
+      separator = '';
+    } else if (viewMode === 'raw') {
+      // Raw mode: preserve model whitespace and only add a single space if
+      // concatenation would merge tokens unintentionally.
+      separator = needsTokenBoundary ? ' ' : '';
+    } else {
+      // Markdown / WYSIWYG rules: paragraphs need an empty line ("\n\n");
+      // single line breaks are ignored in Markdown rendering. Compute how
+      // many newlines already exist at the boundary and add the minimal
+      // amount (or a single space if continuation should be inline).
+      const preNewlines = countTrailingNewlines(prefix);
+      const textNewlines = countLeadingNewlines(text);
+      const totalBoundaryNewlines = preNewlines + textNewlines;
+
+      if (totalBoundaryNewlines >= 2) {
+        separator = '';
+      } else if (preNewlines > 0 || textNewlines > 0) {
+        // One side already has at least one newline: add the remainder.
+        separator = '\n'.repeat(Math.max(0, 2 - totalBoundaryNewlines));
+      } else {
+        // No newlines on either side. If this looks like an inline
+        // continuation (no surrounding whitespace), add a space. Otherwise
+        // start a new paragraph.
+        separator = needsTokenBoundary ? ' ' : '\n\n';
+      }
+    }
+
     const newContent = prefix + separator + text + suffix;
 
     setSuggestUndoStack(prev => [...prev, { content: currentContent, cursor: c }]);
@@ -559,6 +612,7 @@ Always prioritize the user's creative vision.`;
                     <button onClick={() => setViewMode('raw')} className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'raw' ? 'bg-amber-600 text-white' : `${iconColor} ${iconHover}`}`}><FileText size={13} /><span>Raw</span></button>
                     <button onClick={() => setViewMode('markdown')} className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'markdown' ? 'bg-amber-600 text-white' : `${iconColor} ${iconHover}`}`}><Code size={13} /><span>MD</span></button>
                     <button onClick={() => setViewMode('wysiwyg')} className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'wysiwyg' ? 'bg-amber-600 text-white' : `${iconColor} ${iconHover}`}`}><Eye size={13} /><span>Visual</span></button>
+                    <button onClick={() => setShowWhitespace(s => !s)} title="Show whitespace" className={`flex items-center px-2 py-1 ml-2 rounded-md text-xs font-medium transition-all ${showWhitespace ? 'bg-amber-600 text-white' : `${iconColor} ${iconHover}`}`}>{showWhitespace ? 'WS On' : 'WS'}</button>
                 </div>
                 
                 {/* Mobile/Tablet View Mode Dropdown */}
@@ -785,6 +839,8 @@ Always prioritize the user's creative vision.`;
                         isSummaryOpen={isSummaryOpen}
                         onToggleSummary={() => setIsSummaryOpen(!isSummaryOpen)}
                         onContextChange={setActiveFormats}
+                        showWhitespace={showWhitespace}
+                        onToggleShowWhitespace={() => setShowWhitespace(s => !s)}
                     />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-stone-500"><FileText size={48} className="mb-4 opacity-50"/><p>Select or create a chapter to start writing.</p></div>
