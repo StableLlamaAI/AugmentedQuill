@@ -1,6 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, AppTheme } from '../types';
-import { Send, Loader2, Bot, User, Sparkles, RefreshCw, Trash2, Edit2, Save, X, Settings2 } from 'lucide-react';
+import {
+  Send,
+  Loader2,
+  Bot,
+  User,
+  Sparkles,
+  RefreshCw,
+  Trash2,
+  Edit2,
+  Save,
+  X,
+  Settings2,
+} from 'lucide-react';
 import { Button } from './Button';
 import { MarkdownView } from './MarkdownView';
 
@@ -16,16 +28,16 @@ interface ChatProps {
   theme?: AppTheme;
 }
 
-export const Chat: React.FC<ChatProps> = ({ 
-  messages, 
-  isLoading, 
+export const Chat: React.FC<ChatProps> = ({
+  messages,
+  isLoading,
   systemPrompt,
   onSendMessage,
   onRegenerate,
   onEditMessage,
   onDeleteMessage,
   onUpdateSystemPrompt,
-  theme = 'mixed'
+  theme = 'mixed',
 }) => {
   const [input, setInput] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -41,8 +53,12 @@ export const Chat: React.FC<ChatProps> = ({
   const textMain = isLight ? 'text-stone-800' : 'text-stone-300';
   const headerBg = isLight ? 'bg-stone-100' : 'bg-stone-900';
   const msgUserBg = 'bg-amber-600 text-white';
-  const msgBotBg = isLight ? 'bg-white border border-stone-200 shadow-sm' : 'bg-stone-800 border border-stone-700 shadow-sm';
-  const inputBg = isLight ? 'bg-white border-stone-300 text-stone-900' : 'bg-stone-800 border-stone-700 text-stone-200';
+  const msgBotBg = isLight
+    ? 'bg-white border border-stone-200 shadow-sm'
+    : 'bg-stone-800 border border-stone-700 shadow-sm';
+  const inputBg = isLight
+    ? 'bg-white border-stone-300 text-stone-900'
+    : 'bg-stone-800 border-stone-700 text-stone-200';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -91,15 +107,23 @@ export const Chat: React.FC<ChatProps> = ({
   const canRegenerate = !isLoading && lastMessage?.role === 'model';
 
   return (
-    <div className={`flex flex-col h-full border-l ${bgMain} ${borderMain} ${textMain}`}>
-      <div className={`p-4 border-b flex items-center justify-between ${headerBg} ${borderMain}`}>
+    <div
+      className={`flex flex-col h-full border-l ${bgMain} ${borderMain} ${textMain}`}
+    >
+      <div
+        className={`p-4 border-b flex items-center justify-between ${headerBg} ${borderMain}`}
+      >
         <div className="flex items-center space-x-2">
           <Sparkles className="text-amber-500" size={20} />
           <h2 className="font-semibold">Writing Partner</h2>
         </div>
-        <button 
+        <button
           onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-          className={`p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors ${showSystemPrompt ? 'bg-stone-200 dark:bg-stone-800 text-amber-600' : 'text-stone-500'}`}
+          className={`p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors ${
+            showSystemPrompt
+              ? 'bg-stone-200 dark:bg-stone-800 text-amber-600'
+              : 'text-stone-500'
+          }`}
           title="Chat Settings"
         >
           <Settings2 size={16} />
@@ -107,7 +131,9 @@ export const Chat: React.FC<ChatProps> = ({
       </div>
 
       {showSystemPrompt && (
-        <div className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}>
+        <div
+          className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}
+        >
           <label className="block text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
             System Instruction
           </label>
@@ -118,22 +144,41 @@ export const Chat: React.FC<ChatProps> = ({
             placeholder="Define the AI's persona and rules..."
           />
           <div className="flex justify-end space-x-2">
-            <Button size="sm" variant="ghost" onClick={() => setShowSystemPrompt(false)} theme={theme}>Cancel</Button>
-            <Button size="sm" variant="primary" onClick={handleSystemPromptSave} theme={theme}>Update Persona</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowSystemPrompt(false)}
+              theme={theme}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleSystemPromptSave}
+              theme={theme}
+            >
+              Update Persona
+            </Button>
           </div>
         </div>
       )}
 
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isLight ? 'bg-stone-50' : 'bg-stone-950/30'}`}>
+      <div
+        className={`flex-1 overflow-y-auto p-4 space-y-4 ${
+          isLight ? 'bg-stone-50' : 'bg-stone-950/30'
+        }`}
+      >
         {messages.length === 0 && !showSystemPrompt && (
           <div className="text-center text-stone-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
             <p className="text-sm">
-              I'm your AI co-author. Ask me to write, edit, or brainstorm ideas for your story!
+              I'm your AI co-author. Ask me to write, edit, or brainstorm ideas for your
+              story!
             </p>
           </div>
         )}
-        
+
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -141,46 +186,74 @@ export const Chat: React.FC<ChatProps> = ({
               msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
             }`}
           >
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
-              msg.role === 'user' 
-                ? 'bg-amber-100 border-amber-200 text-amber-700' 
-                : isLight ? 'bg-white border-stone-200 text-stone-500' : 'bg-stone-800 border-stone-700 text-stone-400'
-            }`}>
+            <div
+              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
+                msg.role === 'user'
+                  ? 'bg-amber-100 border-amber-200 text-amber-700'
+                  : isLight
+                  ? 'bg-white border-stone-200 text-stone-500'
+                  : 'bg-stone-800 border-stone-700 text-stone-400'
+              }`}
+            >
               {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
             </div>
-            
+
             <div className={`flex-1 max-w-[85%] relative`}>
               {editingMessageId === msg.id ? (
-                <div className={`border rounded-lg p-3 shadow-lg ${isLight ? 'bg-white border-stone-200' : 'bg-stone-800 border-stone-600'}`}>
+                <div
+                  className={`border rounded-lg p-3 shadow-lg ${
+                    isLight
+                      ? 'bg-white border-stone-200'
+                      : 'bg-stone-800 border-stone-600'
+                  }`}
+                >
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                     className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-amber-500 min-h-[100px] ${inputBg}`}
                   />
                   <div className="flex justify-end space-x-2 mt-2">
-                    <button onClick={cancelEdit} className="p-1 text-stone-400 hover:text-stone-600"><X size={14} /></button>
-                    <button onClick={() => saveEdit(msg.id)} className="p-1 text-emerald-500 hover:text-emerald-600"><Save size={14} /></button>
+                    <button
+                      onClick={cancelEdit}
+                      className="p-1 text-stone-400 hover:text-stone-600"
+                    >
+                      <X size={14} />
+                    </button>
+                    <button
+                      onClick={() => saveEdit(msg.id)}
+                      className="p-1 text-emerald-500 hover:text-emerald-600"
+                    >
+                      <Save size={14} />
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div className={`rounded-lg p-3 text-sm leading-relaxed ${
-                  msg.role === 'user' ? msgUserBg : msgBotBg
-                }`}>
+                <div
+                  className={`rounded-lg p-3 text-sm leading-relaxed ${
+                    msg.role === 'user' ? msgUserBg : msgBotBg
+                  }`}
+                >
                   <MarkdownView content={msg.text} />
                 </div>
               )}
-              
+
               {!editingMessageId && !isLoading && (
-                <div className={`absolute top-0 ${msg.role === 'user' ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1`}>
-                  <button 
-                    onClick={() => startEditing(msg)} 
+                <div
+                  className={`absolute top-0 ${
+                    msg.role === 'user'
+                      ? 'left-0 -translate-x-full pr-2'
+                      : 'right-0 translate-x-full pl-2'
+                  } opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1`}
+                >
+                  <button
+                    onClick={() => startEditing(msg)}
                     className="p-1 text-stone-400 hover:text-stone-600 bg-black/5 rounded"
                     title="Edit"
                   >
                     <Edit2 size={12} />
                   </button>
-                  <button 
-                    onClick={() => onDeleteMessage(msg.id)} 
+                  <button
+                    onClick={() => onDeleteMessage(msg.id)}
                     className="p-1 text-stone-400 hover:text-red-500 bg-black/5 rounded"
                     title="Delete"
                   >
@@ -191,13 +264,23 @@ export const Chat: React.FC<ChatProps> = ({
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex items-center space-x-3">
-             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${isLight ? 'bg-white border-stone-200' : 'bg-stone-900/30 border-stone-800'}`}>
+            <div
+              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
+                isLight
+                  ? 'bg-white border-stone-200'
+                  : 'bg-stone-900/30 border-stone-800'
+              }`}
+            >
               <Bot size={16} className="text-stone-400" />
             </div>
-            <div className={`px-4 py-2 rounded-lg shadow-sm border ${isLight ? 'bg-white border-stone-200' : 'bg-stone-800 border-stone-700'}`}>
+            <div
+              className={`px-4 py-2 rounded-lg shadow-sm border ${
+                isLight ? 'bg-white border-stone-200' : 'bg-stone-800 border-stone-700'
+              }`}
+            >
               <Loader2 className="animate-spin text-amber-500" size={16} />
             </div>
           </div>
@@ -208,19 +291,19 @@ export const Chat: React.FC<ChatProps> = ({
       <div className={`p-4 border-t ${bgMain} ${borderMain}`}>
         {canRegenerate && (
           <div className="flex justify-center mb-4">
-             <Button 
-                size="sm" 
-                variant="secondary" 
-                onClick={onRegenerate}
-                icon={<RefreshCw size={12}/>}
-                className="text-xs py-1 h-7 border-dashed"
-                theme={theme}
-             >
-                Regenerate last response
-             </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onRegenerate}
+              icon={<RefreshCw size={12} />}
+              className="text-xs py-1 h-7 border-dashed"
+              theme={theme}
+            >
+              Regenerate last response
+            </Button>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="relative">
           <input
             type="text"

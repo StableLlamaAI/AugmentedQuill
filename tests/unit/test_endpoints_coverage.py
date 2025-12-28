@@ -29,12 +29,17 @@ class EndpointsCoverageTest(TestCase):
         (chdir / "0001.txt").write_text("Chapter one text", encoding="utf-8")
         (chdir / "0002.txt").write_text("Chapter two text", encoding="utf-8")
         (pdir / "story.json").write_text(
-            json.dumps({
-                "project_title": "Coverage",
-                "format": "markdown",
-                "chapters": [{"title": "T1", "summary": "S1"}, {"title": "T2", "summary": "S2"}],
-                "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
-            }),
+            json.dumps(
+                {
+                    "project_title": "Coverage",
+                    "format": "markdown",
+                    "chapters": [
+                        {"title": "T1", "summary": "S1"},
+                        {"title": "T2", "summary": "S2"},
+                    ],
+                    "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -47,7 +52,12 @@ class EndpointsCoverageTest(TestCase):
         self._orig_complete_stream = getattr(m, "_openai_chat_complete_stream", None)
         self._orig_completions_stream = getattr(m, "_openai_completions_stream", None)
 
-        m._resolve_openai_credentials = lambda payload: ("https://fake", None, "fake", 5)  # type: ignore
+        m._resolve_openai_credentials = lambda payload: (
+            "https://fake",
+            None,
+            "fake",
+            5,
+        )  # type: ignore
 
         async def fake_complete(**kwargs):
             return {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}

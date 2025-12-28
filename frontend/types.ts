@@ -70,7 +70,8 @@ export interface ProjectMetadata {
 export const TOOLS = [
   {
     name: 'update_chapter_content',
-    description: 'Update the text content of the currently selected chapter. Use this when the user asks to write, rewrite, or edit the story text.',
+    description:
+      'Update the text content of the currently selected chapter. Use this when the user asks to write, rewrite, or edit the story text.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -93,25 +94,25 @@ export const TOOLS = [
           description: 'The title of the new chapter.',
         },
         summary: {
-            type: 'STRING',
-            description: 'A brief summary of what happens in this chapter.',
-        }
+          type: 'STRING',
+          description: 'A brief summary of what happens in this chapter.',
+        },
       },
       required: ['title'],
     },
   },
   {
-      name: 'update_chapter_summary',
-      description: 'Update the summary of the current chapter.',
-      parameters: {
-          type: 'OBJECT',
-          properties: {
-              summary: {
-                  type: 'STRING',
-                  description: 'The new summary of the chapter.'
-              }
-          },
-          required: ['summary']
-      }
-  }
+    name: 'update_chapter_summary',
+    description: 'Update the summary of the current chapter.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        summary: {
+          type: 'STRING',
+          description: 'The new summary of the chapter.',
+        },
+      },
+      required: ['summary'],
+    },
+  },
 ];

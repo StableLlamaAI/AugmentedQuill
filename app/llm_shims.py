@@ -2,7 +2,9 @@ from typing import Any, Dict, AsyncIterator
 from app import llm as _llm
 
 
-def _resolve_openai_credentials(payload: Dict[str, Any]) -> tuple[str, str | None, str, int]:
+def _resolve_openai_credentials(
+    payload: Dict[str, Any],
+) -> tuple[str, str | None, str, int]:
     """Delegate to app.llm.resolve_openai_credentials."""
     return _llm.resolve_openai_credentials(payload)
 

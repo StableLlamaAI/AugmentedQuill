@@ -60,16 +60,17 @@ frontend/                # React Frontend Source
 └── vite.config.ts
 ```
 
-
 ## Quickstart
 
 ### Prerequisites
+
 - Python 3.11+
 - Node.js 18+ (required to build the frontend)
 
 ### Installation
 
 1.  **Backend Setup**:
+
     ```bash
     python3 -m venv .venv
     source .venv/bin/activate
@@ -78,11 +79,13 @@ frontend/                # React Frontend Source
 
 2.  **Frontend Setup & Build**:
     The frontend must be built before running the application, as build artifacts are not checked into the repository.
+
     ```bash
     cd frontend
     npm install
     npm run build
     ```
+
     This generates the necessary static files in `static/dist` and `templates/index.html`.
 
 3.  **Run the Application**:
@@ -96,17 +99,18 @@ frontend/                # React Frontend Source
 If you want to modify the frontend and see changes on the fly:
 
 1.  **Install Dev Dependencies**:
+
     ```bash
     pip install -e ".[dev]"
     cd frontend && npm install
     ```
 
 2.  **Run in Development Mode**:
-    *   **Option A (VS Code)**: Use the "Full Stack Dev" launch configuration. This starts the backend and the frontend dev server automatically.
-    *   **Option B (Terminal)**:
-        *   Terminal 1 (Backend): `augmentedquill --reload`
-        *   Terminal 2 (Frontend): `cd frontend && npm run dev`
-        *   Open http://localhost:3000 (Vite Dev Server) for hot-reloading. API requests are proxied to port 8000.
+    - **Option A (VS Code)**: Use the "Full Stack Dev" launch configuration. This starts the backend and the frontend dev server automatically.
+    - **Option B (Terminal)**:
+      - Terminal 1 (Backend): `augmentedquill --reload`
+      - Terminal 2 (Frontend): `cd frontend && npm run dev`
+      - Open http://localhost:3000 (Vite Dev Server) for hot-reloading. API requests are proxied to port 8000.
 
 ## Configuration
 
@@ -117,10 +121,12 @@ Configuration is JSON-based with environment variable precedence and interpolati
 - Environment variables always override JSON values. JSON may include placeholders like ${OPENAI_API_KEY}.
 
 Sample files can be found under config/examples/:
+
 - config/examples/machine.json
 - config/examples/story.json
 
 Machine config supports multiple OpenAI model endpoints:
+
 - openai.models: array of endpoints with fields {name, base_url, api_key, model, timeout_s}
 - openai.selected: the name of the active endpoint
 - Legacy single fields (openai.api_key/base_url/model/timeout_s) are kept in sync with the selected endpoint for backward compatibility.
@@ -128,6 +134,7 @@ Machine config supports multiple OpenAI model endpoints:
 In the Settings UI, you can add multiple endpoints, test availability, and load the list of remote models from an endpoint, then select which to use. All calls to the OpenAI API are done from the browser, not the backend.
 
 Environment variables recognized for OpenAI (legacy/selected mirror):
+
 - OPENAI_API_KEY
 - OPENAI_BASE_URL
 - OPENAI_MODEL
@@ -136,7 +143,9 @@ Environment variables recognized for OpenAI (legacy/selected mirror):
 Note: Direct browser access to third-party APIs requires proper CORS headers from the API. If your endpoint does not allow browser calls from your origin, you will need to configure an allowed origin or use a CORS-enabled proxy under your control.
 
 ### CORS and model loading
+
 The Settings UI tries to load models directly from your OpenAI-compatible endpoint in the browser. If that direct call is blocked by CORS, the UI will automatically fall back to a same-origin proxy endpoint provided by this app:
+
 - POST /api/openai/models with JSON body: {"base_url":"...","api_key":"...","timeout_s":60}
 - The server fetches `${base_url}/models` and relays the JSON back to the browser.
 
@@ -145,8 +154,10 @@ This keeps your API key client-provided for development purposes while avoiding 
 ## Tests
 
 After installing with dev dependencies, run tests:
+
 - pytest
 
 Notes:
+
 - Current tests focus on configuration parsing and do not call external services.
 - Avoid committing real secrets. Use environment variables or placeholders.

@@ -14,7 +14,10 @@ from app.helpers.chapter_helpers import _scan_chapter_files, _normalize_chapter_
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 PROJECTS_ROOT = BASE_DIR / "projects"
-REGISTRY_PATH = Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
+REGISTRY_PATH = Path(
+    os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))
+)
+
 
 def get_registry_path() -> Path:
     # Re-evaluate environment at call time to make tests able to redirect location
@@ -58,7 +61,10 @@ def load_registry() -> Dict:
         recent = []
     # normalize to strings
     recent = [str(x) for x in recent if isinstance(x, (str, Path))]
-    return {"current": str(cur) if isinstance(cur, (str, Path)) else "", "recent": recent}
+    return {
+        "current": str(cur) if isinstance(cur, (str, Path)) else "",
+        "recent": recent,
+    }
 
 
 def save_registry(current: str, recent: List[str]) -> None:
@@ -118,7 +124,11 @@ def delete_project(name: str) -> Tuple[bool, str]:
     """
     if not name:
         return False, "Project name is required"
-    if any(ch in name for ch in ("/", "\\")) or name.strip() != name or name in (".", ".."):
+    if (
+        any(ch in name for ch in ("/", "\\"))
+        or name.strip() != name
+        or name in (".", "..")
+    ):
         return False, "Invalid project name"
     root = get_projects_root()
     p = root / name
@@ -176,11 +186,22 @@ def validate_project_dir(path: Path) -> ProjectInfo:
 
     story_path = path / "story.json"
     chapters_dir = path / "chapters"
-    if story_path.exists() and story_path.is_file() and chapters_dir.exists() and chapters_dir.is_dir():
+    if (
+        story_path.exists()
+        and story_path.is_file()
+        and chapters_dir.exists()
+        and chapters_dir.is_dir()
+    ):
         # Chapters may be empty; .txt/.md are valid
-        has_txt_md = any((f.suffix.lower() in (".txt", ".md")) for f in chapters_dir.glob("**/*") if f.is_file())
+        has_txt_md = any(
+            (f.suffix.lower() in (".txt", ".md"))
+            for f in chapters_dir.glob("**/*")
+            if f.is_file()
+        )
         # Consider valid even if empty; the UI can add chapters later
-        return ProjectInfo(path, is_valid=True, reason="ok" if has_txt_md else "ok_empty_chapters")
+        return ProjectInfo(
+            path, is_valid=True, reason="ok" if has_txt_md else "ok_empty_chapters"
+        )
     return ProjectInfo(path, is_valid=False, reason="missing_files")
 
 
@@ -224,7 +245,9 @@ def list_projects() -> List[Dict[str, str | bool]]:
 def write_chapter_content(chap_id: int, content: str) -> None:
     """Write content to a chapter by its ID."""
     files = _scan_chapter_files()
-    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    match = next(
+        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
+    )
     if not match:
         raise ValueError(f"Chapter {chap_id} not found")
     _, path, _ = match
@@ -241,7 +264,9 @@ def write_chapter_summary(chap_id: int, summary: str) -> None:
 
     # Locate chapter by id
     files = _scan_chapter_files()
-    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    match = next(
+        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
+    )
     if not match:
         raise ValueError(f"Chapter {chap_id} not found")
     _, path, pos = match
@@ -255,7 +280,9 @@ def write_chapter_summary(chap_id: int, summary: str) -> None:
     # Ensure alignment with number of files
     count = len(files)
     if len(chapters_data) < count:
-        chapters_data.extend([{"title": "", "summary": ""}] * (count - len(chapters_data)))
+        chapters_data.extend(
+            [{"title": "", "summary": ""}] * (count - len(chapters_data))
+        )
 
     # Update summary at position
     if pos < len(chapters_data):
@@ -282,7 +309,11 @@ def select_project(name: str) -> Tuple[bool, str]:
     if not name:
         return False, "Project name is required"
     # Reject any separators or traversal
-    if any(ch in name for ch in ("/", "\\")) or name.strip() != name or name in (".", ".."):
+    if (
+        any(ch in name for ch in ("/", "\\"))
+        or name.strip() != name
+        or name in (".", "..")
+    ):
         return False, "Invalid project name"
     root = get_projects_root()
     p = root / name
@@ -313,7 +344,10 @@ def create_new_chapter(title: str = "") -> int:
     if not active:
         raise ValueError("No active project")
 
-    from app.helpers.chapter_helpers import _scan_chapter_files, _normalize_chapter_entry
+    from app.helpers.chapter_helpers import (
+        _scan_chapter_files,
+        _normalize_chapter_entry,
+    )
 
     # Determine next index and path
     files = _scan_chapter_files()
@@ -333,7 +367,9 @@ def create_new_chapter(title: str = "") -> int:
     # Ensure chapters_data length aligns with existing files count before new chapter
     count_before = len(files)
     if len(chapters_data) < count_before:
-        chapters_data.extend([{"title": "", "summary": ""}] * (count_before - len(chapters_data)))
+        chapters_data.extend(
+            [{"title": "", "summary": ""}] * (count_before - len(chapters_data))
+        )
 
     # Append new chapter entry with title and empty summary
     chapters_data.append({"title": title, "summary": ""})

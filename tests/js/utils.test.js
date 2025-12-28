@@ -13,7 +13,7 @@ describe('utils', () => {
       const mockData = { test: 'data' };
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockData)
+        json: () => Promise.resolve(mockData),
       });
 
       const result = await fetchJSON('/api/test');
@@ -25,7 +25,7 @@ describe('utils', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        json: () => Promise.resolve({ error: 'Not found' })
+        json: () => Promise.resolve({ error: 'Not found' }),
       });
 
       await expect(fetchJSON('/api/test')).rejects.toThrow('HTTP 404: Not Found');
@@ -37,7 +37,7 @@ describe('utils', () => {
       const mockData = { test: 'data' };
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockData)
+        json: () => Promise.resolve(mockData),
       });
 
       const result = await getJSONOrEmpty('/api/test');
@@ -54,7 +54,7 @@ describe('utils', () => {
     test('returns empty object on non-ok response', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
-        json: () => Promise.resolve({ error: 'Failed' })
+        json: () => Promise.resolve({ error: 'Failed' }),
       });
 
       const result = await getJSONOrEmpty('/api/test');
@@ -67,7 +67,7 @@ describe('utils', () => {
       const mockData = { story: 'data' };
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockData)
+        json: () => Promise.resolve(mockData),
       });
 
       const result = await API.loadStory();
@@ -79,7 +79,7 @@ describe('utils', () => {
       const mockData = { projects: [] };
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockData)
+        json: () => Promise.resolve(mockData),
       });
 
       const result = await API.loadProjects();

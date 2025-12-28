@@ -46,6 +46,7 @@ class StreamingStoryTest(TestCase):
         # Also patch the llm_shims resolver so endpoints that import the shim
         # directly will receive the fake credentials.
         import app.llm_shims as shims
+
         self._orig_shims_resolve = getattr(shims, "_resolve_openai_credentials", None)
 
         def fake_resolve(payload):  # type: ignore
@@ -76,18 +77,24 @@ class StreamingStoryTest(TestCase):
     def test_summary_stream_persists_on_complete(self):
         pdir = self._make_project()
         self._patch_stream()
-        r = self.client.post("/api/story/summary/stream", json={"chap_id": 1, "mode": "update", "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/summary/stream",
+            json={"chap_id": 1, "mode": "update", "model_name": "fake"},
+        )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.text, "ABC")
         # Persisted
         import json
+
         story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "ABC")
 
     def test_write_stream_overwrites_file(self):
         pdir = self._make_project()
         self._patch_stream()
-        r = self.client.post("/api/story/write/stream", json={"chap_id": 1, "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/write/stream", json={"chap_id": 1, "model_name": "fake"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.text, "ABC")
         text = (pdir / "chapters" / "0001.txt").read_text(encoding="utf-8")
@@ -96,7 +103,9 @@ class StreamingStoryTest(TestCase):
     def test_continue_stream_appends(self):
         pdir = self._make_project()
         self._patch_stream()
-        r = self.client.post("/api/story/continue/stream", json={"chap_id": 1, "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/continue/stream", json={"chap_id": 1, "model_name": "fake"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.text, "ABC")
         text = (pdir / "chapters" / "0001.txt").read_text(encoding="utf-8")

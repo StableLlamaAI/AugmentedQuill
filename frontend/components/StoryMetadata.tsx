@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Edit2, Save, X } from 'lucide-react';
 import { Button } from './Button';
-import { MarkdownView, hasUnsupportedSummaryMarkdown, SummaryWarning } from './MarkdownView';
+import {
+  MarkdownView,
+  hasUnsupportedSummaryMarkdown,
+  SummaryWarning,
+} from './MarkdownView';
 import { AppTheme } from '../types';
 
 interface StoryMetadataProps {
@@ -12,16 +16,28 @@ interface StoryMetadataProps {
   theme?: AppTheme;
 }
 
-export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, tags, onUpdate, theme = 'mixed' }) => {
+export const StoryMetadata: React.FC<StoryMetadataProps> = ({
+  title,
+  summary,
+  tags,
+  onUpdate,
+  theme = 'mixed',
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
   const [editSummary, setEditSummary] = useState(summary);
   const [editTags, setEditTags] = useState(tags.join(', '));
 
   const isLight = theme === 'light';
-  const containerClass = isLight ? 'bg-stone-50 text-stone-800 border-stone-200' : 'bg-stone-900 text-stone-100 border-stone-800';
-  const inputClass = isLight ? 'bg-white border-stone-300 text-stone-900' : 'bg-stone-800 border-stone-700 text-stone-200';
-  const tagClass = isLight ? 'bg-white text-stone-600 border-stone-200' : 'bg-stone-800 text-stone-400 border-stone-700';
+  const containerClass = isLight
+    ? 'bg-stone-50 text-stone-800 border-stone-200'
+    : 'bg-stone-900 text-stone-100 border-stone-800';
+  const inputClass = isLight
+    ? 'bg-white border-stone-300 text-stone-900'
+    : 'bg-stone-800 border-stone-700 text-stone-200';
+  const tagClass = isLight
+    ? 'bg-white text-stone-600 border-stone-200'
+    : 'bg-stone-800 text-stone-400 border-stone-700';
 
   useEffect(() => {
     setEditTitle(title);
@@ -30,7 +46,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, ta
   }, [title, summary, tags]);
 
   const handleSave = () => {
-    const processedTags = editTags.split(',').map(t => t.trim()).filter(Boolean);
+    const processedTags = editTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
     onUpdate(editTitle, editSummary, processedTags);
     setIsEditing(false);
   };
@@ -60,9 +79,9 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, ta
             placeholder="Story Summary..."
           />
           {hasUnsupportedSummaryMarkdown(editSummary) && (
-              <div className="text-xs text-amber-500 flex items-center">
-                  <SummaryWarning />
-              </div>
+            <div className="text-xs text-amber-500 flex items-center">
+              <SummaryWarning />
+            </div>
           )}
           <div className="flex items-center space-x-2">
             <Tag size={16} className="text-stone-500" />
@@ -74,8 +93,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, ta
             />
           </div>
           <div className="flex justify-end space-x-2 mt-2">
-            <Button size="sm" variant="ghost" onClick={handleCancel} theme={theme}><X size={14} /></Button>
-            <Button size="sm" variant="primary" onClick={handleSave} theme={theme}><Save size={14} /></Button>
+            <Button size="sm" variant="ghost" onClick={handleCancel} theme={theme}>
+              <X size={14} />
+            </Button>
+            <Button size="sm" variant="primary" onClick={handleSave} theme={theme}>
+              <Save size={14} />
+            </Button>
           </div>
         </div>
       </div>
@@ -86,7 +109,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, ta
     <div className={`p-6 border-b ${containerClass}`}>
       <div className="flex justify-between items-start mb-3">
         <h1 className="text-xl font-bold font-serif tracking-wide">{title}</h1>
-        <button 
+        <button
           onClick={() => setIsEditing(true)}
           className="text-stone-500 hover:text-stone-400 transition-colors"
         >
@@ -95,11 +118,13 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({ title, summary, ta
       </div>
       <div className="text-sm text-stone-500 mb-4 leading-relaxed">
         {summary ? (
-            <div className="flex flex-col gap-1">
-                <MarkdownView content={summary} simple />
-                {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
-            </div>
-        ) : <span className="italic">No description yet.</span>}
+          <div className="flex flex-col gap-1">
+            <MarkdownView content={summary} simple />
+            {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
+          </div>
+        ) : (
+          <span className="italic">No description yet.</span>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         {tags.map((tag, i) => (

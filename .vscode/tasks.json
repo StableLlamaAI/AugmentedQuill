@@ -1,70 +1,74 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "frontend: install",
-			"type": "shell",
-			"command": "npm",
-			"args": ["install"],
-			"options": {
-				"cwd": "${workspaceFolder}/frontend"
-			},
-			"group": "build",
-			"presentation": {
-				"reveal": "silent"
-			}
-		},
-		{
-			"label": "frontend: build",
-			"type": "shell",
-			"command": "npm",
-			"args": ["run", "build"],
-			"options": {
-				"cwd": "${workspaceFolder}/frontend"
-			},
-			"group": "build",
-			"dependsOn": "frontend: install",
-			"problemMatcher": []
-		},
-		{
-			"label": "frontend: dev",
-			"type": "shell",
-			"command": "npm",
-			"args": ["run", "dev", "--", "--host", "127.0.0.1", "--port", "8000", "--strictPort"],
-			"options": {
-				"cwd": "${workspaceFolder}/frontend"
-			},
-			"dependsOn": "frontend: install",
-			"isBackground": true,
-			"problemMatcher": {
-				"owner": "custom",
-				"pattern": {
-					"regexp": "^$"
-				},
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": "VITE v",
-					"endsPattern": "ready in"
-				}
-			},
-			"presentation": {
-				"group": "frontend",
-				"reveal": "always"
-			}
-		},
-		{
-			"label": "frontend: build (run now)",
-			"type": "shell",
-			"command": "npm",
-			"args": [
-				"run",
-				"build"
-			],
-			"isBackground": false,
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "frontend: install",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "frontend: build",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": "build",
+      "dependsOn": "frontend: install",
+      "problemMatcher": []
+    },
+    {
+      "label": "frontend: dev",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "dev",
+        "--",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--strictPort"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "dependsOn": "frontend: install",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "ready in"
+        }
+      },
+      "presentation": {
+        "group": "frontend",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "frontend: build (run now)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "isBackground": false,
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    }
+  ]
 }

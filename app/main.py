@@ -9,8 +9,8 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import load_machine_config, load_story_config
-from app.projects import get_active_project_dir
+from app.config import load_machine_config
+
 # Expose config and LLM helpers on the main module for tests and runtime
 from app import llm_shims as _llm_shims
 
@@ -21,11 +21,11 @@ _openai_chat_complete_stream = _llm_shims._openai_chat_complete_stream
 _openai_completions_stream = _llm_shims._openai_completions_stream
 
 # Import API routers
-from app.api.settings import router as settings_router
-from app.api.projects import router as projects_router
-from app.api.chapters import router as chapters_router
-from app.api.story import router as story_router
-from app.api.chat import router as chat_router
+from app.api.settings import router as settings_router  # noqa: E402
+from app.api.projects import router as projects_router  # noqa: E402
+from app.api.chapters import router as chapters_router  # noqa: E402
+from app.api.story import router as story_router  # noqa: E402
+from app.api.chat import router as chat_router  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -90,18 +90,17 @@ async def api_machine() -> dict:
     return machine or {}
 
 
-
-
-
-
-
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="augmentedquill",
         description="Run the AugmentedQuill FastAPI server",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind (default: 8000)")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to bind (default: 8000)"
+    )
     parser.add_argument(
         "--reload",
         action="store_true",
@@ -137,7 +136,9 @@ def main(argv: Optional[list[str]] = None) -> None:
 
     # Prefer passing the in-process app instance to avoid re-import differences.
     # Uvicorn's reload/multi-worker modes require an import string.
-    use_import_string = bool(args.reload) or (isinstance(args.workers, int) and args.workers > 1)
+    use_import_string = bool(args.reload) or (
+        isinstance(args.workers, int) and args.workers > 1
+    )
     app_target = "app.main:app" if use_import_string else app
 
     uvicorn.run(

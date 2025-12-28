@@ -21,8 +21,14 @@
     "transform": {
       "^.+\\.js$": "babel-jest"
     },
-    "moduleFileExtensions": ["js"],
-    "testMatch": ["**/tests/js/**/*.test.js"],
-    "setupFilesAfterEnv": ["<rootDir>/tests/js/setup.js"]
+    "moduleFileExtensions": [
+      "js"
+    ],
+    "testMatch": [
+      "**/tests/js/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/js/setup.js"
+    ]
   }
 }

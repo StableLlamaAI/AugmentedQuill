@@ -1,41 +1,41 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Backend (FastAPI)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "app.main",
-            "args": ["--host", "127.0.0.1", "--port", "8000"],
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "Backend (Dev API 8001)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "app.main",
-            "args": ["--host", "127.0.0.1", "--port", "8001"],
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "Frontend (Chrome)",
-            "type": "chrome",
-            "request": "launch",
-            "url": "http://127.0.0.1:8000",
-            "webRoot": "${workspaceFolder}/frontend",
-            "sourceMapPathOverrides": {
-                "vite:///*": "${webRoot}/*",
-                "/@fs/*": "${workspaceFolder}/*"
-            }
-        }
-    ],
-    "compounds": [
-        {
-            "name": "Full Stack Dev (Backend + Frontend)",
-            "configurations": ["Backend (Dev API 8001)"],
-            "preLaunchTask": "frontend: dev"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "args": ["--host", "127.0.0.1", "--port", "28000"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Backend (Dev API 28001)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "args": ["--host", "127.0.0.1", "--port", "28001"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Frontend (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:28000",
+      "webRoot": "${workspaceFolder}/frontend",
+      "sourceMapPathOverrides": {
+        "vite:///*": "${webRoot}/*",
+        "/@fs/*": "${workspaceFolder}/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack Dev (Backend + Frontend)",
+      "configurations": ["Backend (Dev API 28001)"],
+      "preLaunchTask": "frontend: dev"
+    }
+  ]
 }

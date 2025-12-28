@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 import json as _json
-from typing import Any, Dict
 
-from app.config import load_machine_config, load_story_config
+from app.config import load_story_config
 from app.projects import get_active_project_dir
 from pathlib import Path
 
@@ -35,7 +34,10 @@ async def api_settings_post(request: Request) -> JSONResponse:
     try:
         # Normalize incoming chapters data to the {"title": "...", "summary": "..."} format
         from app.helpers.chapter_helpers import _normalize_chapter_entry
-        normalized_chapters = [_normalize_chapter_entry(c) for c in (story.get("chapters") or [])]
+
+        normalized_chapters = [
+            _normalize_chapter_entry(c) for c in (story.get("chapters") or [])
+        ]
 
         story_cfg = {
             "project_title": (story.get("project_title") or "Untitled Project"),
@@ -44,7 +46,9 @@ async def api_settings_post(request: Request) -> JSONResponse:
             "tags": (story.get("tags") or ""),
             "chapters": normalized_chapters,
             "llm_prefs": {
-                "temperature": float(story.get("llm_prefs", {}).get("temperature", 0.7)),
+                "temperature": float(
+                    story.get("llm_prefs", {}).get("temperature", 0.7)
+                ),
                 "max_tokens": int(story.get("llm_prefs", {}).get("max_tokens", 2048)),
             },
         }
@@ -63,11 +67,23 @@ async def api_settings_post(request: Request) -> JSONResponse:
                 continue
             name = (m.get("name", "") or "").strip()
             if not name:
-                return JSONResponse(status_code=400, content={"ok": False, "detail": "Each model must have a unique, non-empty name."})
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "ok": False,
+                        "detail": "Each model must have a unique, non-empty name.",
+                    },
+                )
             name_counts[name] = name_counts.get(name, 0) + 1
         dups = [n for n, c in name_counts.items() if c > 1]
         if dups:
-            return JSONResponse(status_code=400, content={"ok": False, "detail": f"Duplicate model name(s) not allowed: {', '.join(sorted(set(dups)))}"})
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "detail": f"Duplicate model name(s) not allowed: {', '.join(sorted(set(dups)))}",
+                },
+            )
         # default selected
         if not selected:
             selected = models[0].get("name", "") if models else ""
@@ -87,7 +103,10 @@ async def api_settings_post(request: Request) -> JSONResponse:
         story_path.write_text(_json.dumps(story_cfg, indent=2), encoding="utf-8")
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
-        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to write configs: {e}"})
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Failed to write configs: {e}"},
+        )
 
     return JSONResponse(status_code=200, content={"ok": True})
 
@@ -109,7 +128,10 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
         _ensure_parent_dir(story_path)
         story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
     except Exception as e:
-        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to update story summary: {e}"})
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Failed to update story summary: {e}"},
+        )
 
     return JSONResponse(status_code=200, content={"ok": True, "story_summary": summary})
 
@@ -131,6 +153,9 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
         _ensure_parent_dir(story_path)
         story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
     except Exception as e:
-        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Failed to update story tags: {e}"})
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Failed to update story tags: {e}"},
+        )
 
     return JSONResponse(status_code=200, content={"ok": True, "tags": tags})

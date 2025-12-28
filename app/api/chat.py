@@ -1,19 +1,25 @@
-import os
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import load_machine_config, load_story_config
-from app.projects import get_active_project_dir, write_chapter_content, write_chapter_summary
+from app.projects import (
+    get_active_project_dir,
+    write_chapter_content,
+    write_chapter_summary,
+)
 from app.helpers.project_helpers import _project_overview, _chapter_content_slice
-from app.helpers.story_helpers import _story_generate_summary_helper, _story_write_helper, _story_continue_helper
-from app.helpers.chapter_helpers import _chapter_by_id_or_404
-from app.llm_shims import _resolve_openai_credentials, _openai_chat_complete, _openai_completions_stream
+from app.helpers.story_helpers import (
+    _story_generate_summary_helper,
+    _story_write_helper,
+    _story_continue_helper,
+)
 from app.prompts import get_system_message, load_model_prompt_overrides
 import json as _json
 from typing import Any, Dict
 
 from pathlib import Path
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
@@ -25,15 +31,16 @@ try:
 except Exception:
     _app_main = None
 
+
 def _load_machine_config(path):
-    if _app_main and hasattr(_app_main, 'load_machine_config'):
+    if _app_main and hasattr(_app_main, "load_machine_config"):
         return _app_main.load_machine_config(path)
     return load_machine_config(path)
 
 
 def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
     """Parse tool calls from assistant content if not provided in structured format.
-    
+
     Handles various formats like:
     - <tool_call>get_project_overview</tool_call>
     - <function_call>get_project_overview</function_call>
@@ -42,87 +49,78 @@ def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
     - XML-style tool calls
     """
     import re
-    
+
     calls = []
-    
+
     # Look for <tool_call> or <function_call> tags
-    pattern1 = r'<(tool_call|function_call)>(.*?)</\1>'
+    pattern1 = r"<(tool_call|function_call)>(.*?)</\1>"
     matches1 = re.findall(pattern1, content, re.IGNORECASE | re.DOTALL)
-    
+
     for tag, content_inner in matches1:
-        func_match = re.match(r'(\w+)(?:\((.*)\))?', content_inner.strip())
+        func_match = re.match(r"(\w+)(?:\((.*)\))?", content_inner.strip())
         if func_match:
             name = func_match.group(1)
             args_str = func_match.group(2) or "{}"
             try:
                 args_obj = _json.loads(args_str)
-            except:
+            except Exception:
                 args_obj = {}
-            
+
             call = {
                 "id": f"call_{name}_{len(calls)}",
-                "type": "function", 
-                "function": {
-                    "name": name,
-                    "arguments": _json.dumps(args_obj)
-                },
-                "original_text": f'<{tag}>{content_inner}</{tag}>'
+                "type": "function",
+                "function": {"name": name, "arguments": _json.dumps(args_obj)},
+                "original_text": f"<{tag}>{content_inner}</{tag}>",
             }
             calls.append(call)
-    
+
     # Look for [TOOL_CALL] tags
-    pattern2 = r'\[TOOL_CALL\](.*?)\[/TOOL_CALL\]'
+    pattern2 = r"\[TOOL_CALL\](.*?)\[/TOOL_CALL\]"
     matches2 = re.findall(pattern2, content, re.IGNORECASE | re.DOTALL)
-    
+
     for content_inner in matches2:
-        func_match = re.match(r'(\w+)(?:\((.*)\))?', content_inner.strip())
+        func_match = re.match(r"(\w+)(?:\((.*)\))?", content_inner.strip())
         if func_match:
             name = func_match.group(1)
             args_str = func_match.group(2) or "{}"
             try:
                 args_obj = _json.loads(args_str)
-            except:
+            except Exception:
                 args_obj = {}
-            
+
             call = {
                 "id": f"call_{name}_{len(calls)}",
-                "type": "function", 
-                "function": {
-                    "name": name,
-                    "arguments": _json.dumps(args_obj)
-                },
-                "original_text": f'[TOOL_CALL]{content_inner}[/TOOL_CALL]'
+                "type": "function",
+                "function": {"name": name, "arguments": _json.dumps(args_obj)},
+                "original_text": f"[TOOL_CALL]{content_inner}[/TOOL_CALL]",
             }
             calls.append(call)
-    
+
     # Look for "Tool:" or "Function:" prefixes (must be at start of word)
-    pattern3 = r'(^|(?<=\s))(Tool|Function):\s+(\w+)(?:\(([^)]*)\))?'
+    pattern3 = r"(^|(?<=\s))(Tool|Function):\s+(\w+)(?:\(([^)]*)\))?"
     matches3 = re.findall(pattern3, content, re.IGNORECASE)
-    
+
     for match in matches3:
         _, prefix, name, args_str = match
         args_str = args_str.strip() if args_str else "{}"
         try:
             args_obj = _json.loads(args_str) if args_str != "{}" else {}
-        except:
+        except Exception:
             args_obj = {}
-        
+
         # Find the original text to remove
         original_text = f"{prefix}: {name}"
         if args_str and args_str != "{}":
             original_text += f"({args_str})"
-        
+
         call = {
             "id": f"call_{name}_{len(calls)}",
-            "type": "function", 
-            "function": {
-                "name": name,
-                "arguments": _json.dumps(args_obj)
-            },
-            "original_text": original_text
+            "type": "function",
+            "function": {"name": name, "arguments": _json.dumps(args_obj)},
+            "original_text": original_text,
         }
         calls.append(call)
-    
+
     return calls if calls else None
 
 
@@ -159,7 +157,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "tags": {"type": "string", "description": "The new tags for the story, as a comma-separated string."},
+                    "tags": {
+                        "type": "string",
+                        "description": "The new tags for the story, as a comma-separated string.",
+                    },
                 },
                 "required": ["tags"],
             },
@@ -181,9 +182,18 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "The ID of the chapter to read."},
-                    "start": {"type": "integer", "description": "The starting character index. Default 0."},
-                    "max_chars": {"type": "integer", "description": "Max characters to read. Default 8000, max 8000."},
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter to read.",
+                    },
+                    "start": {
+                        "type": "integer",
+                        "description": "The starting character index. Default 0.",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Max characters to read. Default 8000, max 8000.",
+                    },
                 },
                 "required": [],
             },
@@ -197,8 +207,14 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "Chapter numeric id."},
-                    "content": {"type": "string", "description": "New content for the chapter."}
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "Chapter numeric id.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New content for the chapter.",
+                    },
                 },
                 "required": ["chap_id", "content"],
             },
@@ -212,8 +228,14 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "Chapter numeric id."},
-                    "summary": {"type": "string", "description": "New summary for the chapter."}
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "Chapter numeric id.",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "New summary for the chapter.",
+                    },
                 },
                 "required": ["chap_id", "summary"],
             },
@@ -227,7 +249,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "The ID of the chapter to summarize."},
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter to summarize.",
+                    },
                     "mode": {
                         "type": "string",
                         "description": "If 'discard', generate a new summary from scratch. If 'update' or empty, refine the existing one.",
@@ -264,7 +289,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "summary": {"type": "string", "description": "The new story summary."}
+                    "summary": {
+                        "type": "string",
+                        "description": "The new story summary.",
+                    }
                 },
                 "required": ["summary"],
             },
@@ -278,7 +306,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string", "description": "The title for the new chapter."}
+                    "title": {
+                        "type": "string",
+                        "description": "The title for the new chapter.",
+                    }
                 },
                 "required": [],
             },
@@ -292,7 +323,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "The ID of the chapter."}
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter.",
+                    }
                 },
                 "required": ["chap_id"],
             },
@@ -306,8 +340,14 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "The ID of the chapter."},
-                    "heading": {"type": "string", "description": "The new heading for the chapter."}
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter.",
+                    },
+                    "heading": {
+                        "type": "string",
+                        "description": "The new heading for the chapter.",
+                    },
                 },
                 "required": ["chap_id", "heading"],
             },
@@ -321,7 +361,10 @@ STORY_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chap_id": {"type": "integer", "description": "The ID of the chapter."}
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter.",
+                    }
                 },
                 "required": ["chap_id"],
             },
@@ -334,7 +377,12 @@ STORY_TOOLS = [
             "description": "Write the entire content of a chapter from its summary. This overwrites any existing content.",
             "parameters": {
                 "type": "object",
-                "properties": {"chap_id": {"type": "integer", "description": "The ID of the chapter to write."}},
+                "properties": {
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter to write.",
+                    }
+                },
                 "required": ["chap_id"],
             },
         },
@@ -346,7 +394,12 @@ STORY_TOOLS = [
             "description": "Append new content to a chapter, continuing from where it left off. This does not modify existing text.",
             "parameters": {
                 "type": "object",
-                "properties": {"chap_id": {"type": "integer", "description": "The ID of the chapter to continue."}},
+                "properties": {
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter to continue.",
+                    }
+                },
                 "required": ["chap_id"],
             },
         },
@@ -358,7 +411,12 @@ STORY_TOOLS = [
             "description": "Delete a chapter by its ID. This removes the chapter file and updates the story metadata.",
             "parameters": {
                 "type": "object",
-                "properties": {"chap_id": {"type": "integer", "description": "The ID of the chapter to delete."}},
+                "properties": {
+                    "chap_id": {
+                        "type": "integer",
+                        "description": "The ID of the chapter to delete.",
+                    }
+                },
                 "required": ["chap_id"],
             },
         },
@@ -366,34 +424,63 @@ STORY_TOOLS = [
 ]
 
 
-async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict) -> dict:
+async def _exec_chat_tool(
+    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+) -> dict:
     """Helper to execute a single tool call."""
     try:
         if name == "get_project_overview":
             data = _project_overview()
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "get_story_summary":
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
             summary = story.get("story_summary", "")
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"story_summary": summary})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"story_summary": summary}),
+            }
         if name == "get_story_tags":
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
             tags = story.get("tags", "")
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"tags": tags})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"tags": tags}),
+            }
         if name == "set_story_tags":
             tags = str(args_obj.get("tags", "")).strip()
             active = get_active_project_dir()
             if not active:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
             story_path = active / "story.json"
             story = load_story_config(story_path) or {}
             story["tags"] = tags
             with open(story_path, "w", encoding="utf-8") as f:
                 _json.dump(story, f, indent=2, ensure_ascii=False)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"tags": tags, "message": "Story tags updated successfully"})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(
+                    {"tags": tags, "message": "Story tags updated successfully"}
+                ),
+            }
         if name == "get_chapter_summaries":
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
@@ -401,11 +488,18 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             summaries = []
             for i, chapter in enumerate(chapters):
                 if isinstance(chapter, dict):
-                    title = chapter.get("title", "").strip() or f"Chapter {i+1}"
+                    title = chapter.get("title", "").strip() or f"Chapter {i + 1}"
                     summary = chapter.get("summary", "").strip()
                     if summary:
-                        summaries.append({"chapter_id": i, "title": title, "summary": summary})
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"chapter_summaries": summaries})}
+                        summaries.append(
+                            {"chapter_id": i, "title": title, "summary": summary}
+                        )
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"chapter_summaries": summaries}),
+            }
         if name == "get_chapter_content":
             chap_id = args_obj.get("chap_id")
             if chap_id is None:
@@ -413,95 +507,231 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
                 if isinstance(ac, int):
                     chap_id = ac
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             start = int(args_obj.get("start", 0) or 0)
             max_chars = int(args_obj.get("max_chars", 8000) or 8000)
             max_chars = max(1, min(8000, max_chars))
             data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "write_chapter_content":
             chap_id = args_obj.get("chap_id")
             content = args_obj.get("content")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             if not isinstance(content, str):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "content is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "content is required"}),
+                }
             try:
                 write_chapter_content(chap_id, content)
                 mutations["story_changed"] = True
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"message": f"Content written to chapter {chap_id} successfully"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "message": f"Content written to chapter {chap_id} successfully"
+                        }
+                    ),
+                }
             except ValueError as e:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": str(e)})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
         if name == "write_chapter_summary":
             chap_id = args_obj.get("chap_id")
             summary = args_obj.get("summary")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             if not isinstance(summary, str):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "summary is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "summary is required"}),
+                }
             try:
                 write_chapter_summary(chap_id, summary)
                 mutations["story_changed"] = True
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"message": f"Summary written to chapter {chap_id} successfully"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "message": f"Summary written to chapter {chap_id} successfully"
+                        }
+                    ),
+                }
             except ValueError as e:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": str(e)})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
         if name == "sync_summary":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             mode = str(args_obj.get("mode", "")).lower()
             data = await _story_generate_summary_helper(chap_id=chap_id, mode=mode)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "write_chapter":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             data = await _story_write_helper(chap_id=chap_id)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "continue_chapter":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             data = await _story_continue_helper(chap_id=chap_id)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "sync_story_summary":
             mode = str(args_obj.get("mode", "")).lower()
             # Import the helper function
             from app.helpers.story_helpers import _story_generate_story_summary_helper
+
             data = await _story_generate_story_summary_helper(mode=mode)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps(data)}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(data),
+            }
         if name == "write_story_summary":
             summary = str(args_obj.get("summary", "")).strip()
             active = get_active_project_dir()
             if not active:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
             story_path = active / "story.json"
             story = load_story_config(story_path) or {}
             story["story_summary"] = summary
             with open(story_path, "w", encoding="utf-8") as f:
                 _json.dump(story, f, indent=2, ensure_ascii=False)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"summary": summary, "message": "Story summary updated successfully"})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(
+                    {
+                        "summary": summary,
+                        "message": "Story summary updated successfully",
+                    }
+                ),
+            }
         if name == "create_new_chapter":
             title = str(args_obj.get("title", "")).strip()
             active = get_active_project_dir()
             if not active:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
             from app.projects import create_new_chapter
+
             try:
                 chap_id = create_new_chapter(title)
                 mutations["story_changed"] = True
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"chap_id": chap_id, "title": title, "message": f"New chapter {chap_id} created successfully"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "chap_id": chap_id,
+                            "title": title,
+                            "message": f"New chapter {chap_id} created successfully",
+                        }
+                    ),
+                }
             except Exception as e:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": str(e)})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
         if name == "get_chapter_heading":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
             chapters = story.get("chapters", [])
@@ -509,15 +739,30 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
                 heading = chapters[chap_id].get("title", "")
             else:
                 heading = ""
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"heading": heading})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"heading": heading}),
+            }
         if name == "write_chapter_heading":
             chap_id = args_obj.get("chap_id")
             heading = str(args_obj.get("heading", "")).strip()
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             active = get_active_project_dir()
             if not active:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
             story_path = active / "story.json"
             story = load_story_config(story_path) or {}
             chapters = story.get("chapters", [])
@@ -530,11 +775,26 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             with open(story_path, "w", encoding="utf-8") as f:
                 _json.dump(story, f, indent=2, ensure_ascii=False)
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"heading": heading, "message": f"Heading for chapter {chap_id} updated successfully"})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(
+                    {
+                        "heading": heading,
+                        "message": f"Heading for chapter {chap_id} updated successfully",
+                    }
+                ),
+            }
         if name == "get_chapter_summary":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
             chapters = story.get("chapters", [])
@@ -542,25 +802,59 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
                 summary = chapters[chap_id].get("summary", "")
             else:
                 summary = ""
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"summary": summary})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"summary": summary}),
+            }
         if name == "delete_chapter":
             chap_id = args_obj.get("chap_id")
             if not isinstance(chap_id, int):
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "chap_id is required"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
             active = get_active_project_dir()
             if not active:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "No active project"})}
-            from app.helpers.chapter_helpers import _scan_chapter_files, _normalize_chapter_entry
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
+            from app.helpers.chapter_helpers import (
+                _scan_chapter_files,
+                _normalize_chapter_entry,
+            )
+
             files = _scan_chapter_files()
-            match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+            match = next(
+                ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id),
+                None,
+            )
             if not match:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": "Chapter not found"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Chapter not found"}),
+                }
             _, path, pos = match
             # Delete the file
             try:
                 path.unlink()
             except Exception as e:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Failed to delete chapter file: {e}"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {"error": f"Failed to delete chapter file: {e}"}
+                    ),
+                }
             # Update story.json
             story_path = active / "story.json"
             story = load_story_config(story_path) or {}
@@ -568,7 +862,9 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
             chapters_data = [_normalize_chapter_entry(c) for c in chapters_data]
             count = len(files)
             if len(chapters_data) < count:
-                chapters_data.extend([{"title": "", "summary": ""}] * (count - len(chapters_data)))
+                chapters_data.extend(
+                    [{"title": "", "summary": ""}] * (count - len(chapters_data))
+                )
             if pos < len(chapters_data):
                 chapters_data.pop(pos)
             story["chapters"] = chapters_data
@@ -576,14 +872,45 @@ async def _exec_chat_tool(name: str, args_obj: dict, call_id: str, payload: dict
                 with open(story_path, "w", encoding="utf-8") as f:
                     _json.dump(story, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Failed to update story.json: {e}"})}
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {"error": f"Failed to update story.json: {e}"}
+                    ),
+                }
             mutations["story_changed"] = True
-            return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"message": f"Chapter {chap_id} deleted successfully"})}
-        return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Unknown tool: {name}"})}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(
+                    {"message": f"Chapter {chap_id} deleted successfully"}
+                ),
+            }
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps({"error": f"Unknown tool: {name}"}),
+        }
     except HTTPException as e:
-        return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Tool failed: {e.detail}"})}
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps({"error": f"Tool failed: {e.detail}"}),
+        }
     except Exception as e:
-        return {"role": "tool", "tool_call_id": call_id, "name": name, "content": _json.dumps({"error": f"Tool failed with unexpected error: {e}"})}
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps(
+                {"error": f"Tool failed with unexpected error: {e}"}
+            ),
+        }
 
 
 @router.get("/api/chat")
@@ -645,7 +972,10 @@ async def api_chat_tools(request: Request) -> JSONResponse:
 
     messages = payload.get("messages") or []
     if not isinstance(messages, list):
-        return JSONResponse(status_code=400, content={"ok": False, "detail": "messages must be an array"})
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "detail": "messages must be an array"},
+        )
 
     last = messages[-1] if messages else None
     tool_calls: list = []
@@ -665,7 +995,9 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         name = (func.get("name") if isinstance(func, dict) else None) or ""
         args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
         try:
-            args_obj = _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+            args_obj = (
+                _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+            )
         except Exception:
             args_obj = {}
         if not name or not call_id:
@@ -673,7 +1005,10 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         msg = await _exec_chat_tool(name, args_obj, call_id, payload, mutations)
         appended.append(msg)
 
-    return JSONResponse(status_code=200, content={"ok": True, "appended_messages": appended, "mutations": mutations})
+    return JSONResponse(
+        status_code=200,
+        content={"ok": True, "appended_messages": appended, "mutations": mutations},
+    )
 
 
 @router.post("/api/chat/stream")
@@ -713,7 +1048,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             # content can be None (e.g., assistant with tool_calls)
             if "content" in m:
                 c = m.get("content")
-                msg["content"] = (None if c is None else str(c))
+                msg["content"] = None if c is None else str(c)
             # pass-through optional tool fields
             name = m.get("name")
             if isinstance(name, str) and name:
@@ -737,9 +1072,13 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         # Load model-specific prompt overrides
         machine_config = _load_machine_config(CONFIG_DIR / "machine.json") or {}
         openai_cfg = machine_config.get("openai", {})
-        selected_model_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
-        model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
-        
+        selected_model_name = (payload or {}).get("model_name") or openai_cfg.get(
+            "selected"
+        )
+        model_overrides = load_model_prompt_overrides(
+            machine_config, selected_model_name
+        )
+
         system_content = get_system_message("chat_llm", model_overrides)
         req_messages.insert(0, {"role": "system", "content": system_content})
 
@@ -770,7 +1109,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         timeout_s = chosen.get("timeout_s", 60) or timeout_s
 
     if not base_url or not model_id:
-        raise HTTPException(status_code=400, detail="Missing base_url or model in configuration")
+        raise HTTPException(
+            status_code=400, detail="Missing base_url or model in configuration"
+        )
 
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
@@ -778,9 +1119,15 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         headers["Authorization"] = f"Bearer {api_key}"
 
     # Pull llm preferences for sensible defaults
-    story = load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    story = (
+        load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    )
     prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = float(prefs.get("temperature", 0.7)) if isinstance(prefs.get("temperature", 0.7), (int, float, str)) else 0.7
+    temperature = (
+        float(prefs.get("temperature", 0.7))
+        if isinstance(prefs.get("temperature", 0.7), (int, float, str))
+        else 0.7
+    )
     try:
         temperature = float(temperature)
     except Exception:
@@ -837,7 +1184,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 elif isinstance(current_tool_choice, dict):
                     # {"type":"function","function":{"name":"..."}}
                     if current_tool_choice.get("type") == "function":
-                        fn2 = (current_tool_choice.get("function") or {})
+                        fn2 = current_tool_choice.get("function") or {}
                         name2 = fn2.get("name")
                         if isinstance(name2, str) and name2:
                             fc = {"name": name2}
@@ -851,15 +1198,19 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     async def _gen():
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(float(timeout_s or 60))) as client:
-                async with client.stream("POST", url, headers=headers, json=body) as resp:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(float(timeout_s or 60))
+            ) as client:
+                async with client.stream(
+                    "POST", url, headers=headers, json=body
+                ) as resp:
                     if resp.status_code >= 400:
                         error_content = await resp.aread()
                         try:
                             error_data = _json.loads(error_content)
-                            yield f"data: {{\"error\": \"Upstream error\", \"status\": {resp.status_code}, \"data\": {_json.dumps(error_data)}}}\n\n"
-                        except:
-                            yield f"data: {{\"error\": \"Upstream error\", \"status\": {resp.status_code}, \"data\": \"{_json.dumps(error_content.decode('utf-8', errors='ignore'))}\"}}\n\n"
+                            yield f'data: {{"error": "Upstream error", "status": {resp.status_code}, "data": {_json.dumps(error_data)}}}\n\n'
+                        except Exception:
+                            yield f'data: {{"error": "Upstream error", "status": {resp.status_code}, "data": "{_json.dumps(error_content.decode("utf-8", errors="ignore"))}"}}\n\n'
                         return
 
                     # Check if response is SSE or regular JSON
@@ -870,66 +1221,145 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                             response_data = await resp.json()
                             if "choices" in response_data and response_data["choices"]:
                                 choice = response_data["choices"][0]
-                                if "message" in choice and "content" in choice["message"]:
+                                if (
+                                    "message" in choice
+                                    and "content" in choice["message"]
+                                ):
                                     content = choice["message"]["content"]
                                     if content:
                                         # Check if content contains tool call syntax and parse tool calls
                                         import re
+
                                         content_lower = content.lower()
-                                        has_tool_syntax = ('<tool_call' in content_lower or 
-                                                         '<function_call' in content_lower or 
-                                                         '[tool_call' in content_lower or
-                                                         content_lower.startswith('tool:') or
-                                                         content_lower.startswith('function:'))
+                                        has_tool_syntax = (
+                                            "<tool_call" in content_lower
+                                            or "<function_call" in content_lower
+                                            or "[tool_call" in content_lower
+                                            or content_lower.startswith("tool:")
+                                            or content_lower.startswith("function:")
+                                        )
                                         if has_tool_syntax:
                                             # Parse tool calls from content
-                                            parsed_tool_calls = _parse_tool_calls_from_content(content)
+                                            parsed_tool_calls = (
+                                                _parse_tool_calls_from_content(content)
+                                            )
                                             if parsed_tool_calls:
                                                 # Send parsed tool calls
-                                                yield f"data: {{\"tool_calls\": {_json.dumps(parsed_tool_calls)}}}\n\n"
-                                        
+                                                yield f'data: {{"tool_calls": {_json.dumps(parsed_tool_calls)}}}\n\n'
+
                                         # Clean content of tool call syntax only if it contains tool call patterns
                                         if has_tool_syntax:
-                                            clean_content = re.sub(r'<tool_call>([^<]*)</tool_call>', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'<function_call>([^<]*)</function_call>', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'<function=([^>]*)>([^<]*)</function>', lambda m: f'Calling function {m.group(1).replace("_", " ")}: {m.group(2)}', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'<tool_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'</tool_call>', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'<function_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'</function_call>', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'^Tool:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
-                                            clean_content = re.sub(r'^Function:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
-                                            clean_content = re.sub(r'<tool_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'<function_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
-                                            clean_content = re.sub(r'\[TOOL_CALL\][^\[]*$', '', clean_content, flags=re.IGNORECASE)
+                                            clean_content = re.sub(
+                                                r"<tool_call>([^<]*)</tool_call>",
+                                                lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<function_call>([^<]*)</function_call>",
+                                                lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<function=([^>]*)>([^<]*)</function>",
+                                                lambda m: f"Calling function {m.group(1).replace('_', ' ')}: {m.group(2)}",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<tool_call[^>]*>",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"</tool_call>",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<function_call[^>]*>",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"</function_call>",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]",
+                                                lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"^Tool:\s*(\w+)(?:\(([^)]*)\))?",
+                                                lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                clean_content,
+                                                flags=re.IGNORECASE | re.MULTILINE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"^Function:\s*(\w+)(?:\(([^)]*)\))?",
+                                                lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
+                                                clean_content,
+                                                flags=re.IGNORECASE | re.MULTILINE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<tool_call[^>]*$",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"<function_call[^>]*$",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
+                                            clean_content = re.sub(
+                                                r"\[TOOL_CALL\][^\[]*$",
+                                                "",
+                                                clean_content,
+                                                flags=re.IGNORECASE,
+                                            )
                                             clean_content = clean_content.strip()
                                         else:
                                             clean_content = content
-                                        
+
                                         if clean_content:
-                                            yield f"data: {{\"content\": {_json.dumps(clean_content)}}}\n\n"
-                                
+                                            yield f'data: {{"content": {_json.dumps(clean_content)}}}\n\n'
+
                                 # Handle tool_calls or function_call in the final message
                                 message = choice.get("message", {})
                                 if "tool_calls" in message and message["tool_calls"]:
-                                    yield f"data: {{\"tool_calls\": {_json.dumps(message['tool_calls'])}}}\n\n"
-                                elif "function_call" in message and message["function_call"]:
+                                    yield f'data: {{"tool_calls": {_json.dumps(message["tool_calls"])}}}\n\n'
+                                elif (
+                                    "function_call" in message
+                                    and message["function_call"]
+                                ):
                                     # Convert function_call to tool_calls format
                                     func_call = message["function_call"]
                                     tool_call = {
                                         "index": 0,
-                                        "id": func_call.get("id", f"call_{func_call.get('name', 'unknown')}"),
+                                        "id": func_call.get(
+                                            "id",
+                                            f"call_{func_call.get('name', 'unknown')}",
+                                        ),
                                         "type": "function",
                                         "function": {
                                             "name": func_call.get("name", ""),
-                                            "arguments": func_call.get("arguments", "")
-                                        }
+                                            "arguments": func_call.get("arguments", ""),
+                                        },
                                     }
-                                    yield f"data: {{\"tool_calls\": {_json.dumps([tool_call])}}}\n\n"
-                            yield f"data: {{\"done\": true}}\n\n"
+                                    yield f'data: {{"tool_calls": {_json.dumps([tool_call])}}}\n\n'
+                            yield 'data: {"done": true}\n\n'
                         except Exception as e:
-                            yield f"data: {{\"error\": \"Failed to parse response\", \"message\": \"{_json.dumps(str(e))}\"}}\n\n"
+                            yield f'data: {{"error": "Failed to parse response", "message": "{_json.dumps(str(e))}"}}\n\n'
                         return
 
                     buffer = ""
@@ -938,7 +1368,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                             if line.startswith("data: "):
                                 data_str = line[6:]  # Remove "data: " prefix
                                 if data_str.strip() == "[DONE]":
-                                    yield f"data: {{\"done\": true}}\n\n"
+                                    yield 'data: {"done": true}\n\n'
                                     break
                                 try:
                                     chunk = _json.loads(data_str)
@@ -953,68 +1383,163 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                 if content:
                                                     # Check if content contains tool call syntax and parse tool calls
                                                     import re
+
                                                     content_lower = content.lower()
-                                                    has_tool_syntax = ('<tool_call' in content_lower or 
-                                                                     '<function_call' in content_lower or 
-                                                                     '[tool_call' in content_lower or
-                                                                     content_lower.startswith('tool:') or
-                                                                     content_lower.startswith('function:'))
+                                                    has_tool_syntax = (
+                                                        "<tool_call" in content_lower
+                                                        or "<function_call"
+                                                        in content_lower
+                                                        or "[tool_call" in content_lower
+                                                        or content_lower.startswith(
+                                                            "tool:"
+                                                        )
+                                                        or content_lower.startswith(
+                                                            "function:"
+                                                        )
+                                                    )
                                                     if has_tool_syntax:
                                                         # Parse tool calls from content
-                                                        parsed_tool_calls = _parse_tool_calls_from_content(content)
+                                                        parsed_tool_calls = _parse_tool_calls_from_content(
+                                                            content
+                                                        )
                                                         if parsed_tool_calls:
                                                             # Send parsed tool calls
-                                                            yield f"data: {{\"tool_calls\": {_json.dumps(parsed_tool_calls)}}}\n\n"
-                                                    
+                                                            yield f'data: {{"tool_calls": {_json.dumps(parsed_tool_calls)}}}\n\n'
+
                                                     # Clean content of tool call syntax only if it contains tool call patterns
                                                     if has_tool_syntax:
-                                                        clean_content = re.sub(r'<tool_call>([^<]*)</tool_call>', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'<function_call>([^<]*)</function_call>', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'<function=([^>]*)>([^<]*)</function>', lambda m: f'Calling function {m.group(1).replace("_", " ")}: {m.group(2)}', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'<tool_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'</tool_call>', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'<function_call[^>]*>', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'</function_call>', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'^Tool:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling tool: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
-                                                        clean_content = re.sub(r'^Function:\s*(\w+)(?:\(([^)]*)\))?', lambda m: f'Calling function: {m.group(1).replace("_", " ")}', clean_content, flags=re.IGNORECASE | re.MULTILINE)
-                                                        clean_content = re.sub(r'<tool_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'<function_call[^>]*$', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = re.sub(r'\[TOOL_CALL\][^\[]*$', '', clean_content, flags=re.IGNORECASE)
-                                                        clean_content = clean_content.strip()
+                                                        clean_content = re.sub(
+                                                            r"<tool_call>([^<]*)</tool_call>",
+                                                            lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                            content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<function_call>([^<]*)</function_call>",
+                                                            lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<function=([^>]*)>([^<]*)</function>",
+                                                            lambda m: f"Calling function {m.group(1).replace('_', ' ')}: {m.group(2)}",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<tool_call[^>]*>",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"</tool_call>",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<function_call[^>]*>",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"</function_call>",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"\[TOOL_CALL\]([^\[]*)\[/TOOL_CALL\]",
+                                                            lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"^Tool:\s*(\w+)(?:\(([^)]*)\))?",
+                                                            lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE
+                                                            | re.MULTILINE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"^Function:\s*(\w+)(?:\(([^)]*)\))?",
+                                                            lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE
+                                                            | re.MULTILINE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<tool_call[^>]*$",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"<function_call[^>]*$",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = re.sub(
+                                                            r"\[TOOL_CALL\][^\[]*$",
+                                                            "",
+                                                            clean_content,
+                                                            flags=re.IGNORECASE,
+                                                        )
+                                                        clean_content = (
+                                                            clean_content.strip()
+                                                        )
                                                     else:
                                                         clean_content = content
-                                                    
+
                                                     if clean_content:
                                                         buffer += clean_content
                                                         # Send incremental cleaned content chunk
-                                                        yield f"data: {{\"content\": {_json.dumps(clean_content)}}}\n\n"
+                                                        yield f'data: {{"content": {_json.dumps(clean_content)}}}\n\n'
                                             # Handle tool calls
-                                            if "tool_calls" in delta and delta["tool_calls"]:
+                                            if (
+                                                "tool_calls" in delta
+                                                and delta["tool_calls"]
+                                            ):
                                                 # Send tool calls chunk
-                                                yield f"data: {{\"tool_calls\": {_json.dumps(delta['tool_calls'])}}}\n\n"
+                                                yield f'data: {{"tool_calls": {_json.dumps(delta["tool_calls"])}}}\n\n'
                                             # Handle legacy function_call format
-                                            if "function_call" in delta and delta["function_call"]:
+                                            if (
+                                                "function_call" in delta
+                                                and delta["function_call"]
+                                            ):
                                                 # Convert to tool_calls format for consistency
                                                 func_call = delta["function_call"]
                                                 tool_call = {
                                                     "index": 0,  # Assume single function call
-                                                    "id": func_call.get("id", f"call_{func_call.get('name', 'unknown')}"),
+                                                    "id": func_call.get(
+                                                        "id",
+                                                        f"call_{func_call.get('name', 'unknown')}",
+                                                    ),
                                                     "type": "function",
                                                     "function": {
-                                                        "name": func_call.get("name", ""),
-                                                        "arguments": func_call.get("arguments", "")
-                                                    }
+                                                        "name": func_call.get(
+                                                            "name", ""
+                                                        ),
+                                                        "arguments": func_call.get(
+                                                            "arguments", ""
+                                                        ),
+                                                    },
                                                 }
-                                                yield f"data: {{\"tool_calls\": {_json.dumps([tool_call])}}}\n\n"
+                                                yield f'data: {{"tool_calls": {_json.dumps([tool_call])}}}\n\n'
                                         # Check for finish_reason to end streaming
-                                        if "finish_reason" in choice and choice["finish_reason"]:
-                                            yield f"data: {{\"done\": true}}\n\n"
+                                        if (
+                                            "finish_reason" in choice
+                                            and choice["finish_reason"]
+                                        ):
+                                            yield 'data: {"done": true}\n\n'
                                             break
                                 except _json.JSONDecodeError:
                                     continue
         except Exception as e:
-            yield f"data: {{\"error\": \"Request failed\", \"message\": \"{_json.dumps(str(e))}\"}}\n\n"
+            yield f'data: {{"error": "Request failed", "message": "{_json.dumps(str(e))}"}}\n\n'
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
@@ -1049,9 +1574,20 @@ async def proxy_list_models(request: Request) -> JSONResponse:
         async with httpx.AsyncClient(timeout=httpx.Timeout(float(timeout_s))) as client:
             resp = await client.get(url, headers=headers)
             # Relay status code if not 2xx
-            content = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"raw": resp.text}
+            content = (
+                resp.json()
+                if resp.headers.get("content-type", "").startswith("application/json")
+                else {"raw": resp.text}
+            )
             if resp.status_code >= 400:
-                return JSONResponse(status_code=resp.status_code, content={"error": "Upstream error", "status": resp.status_code, "data": content})
+                return JSONResponse(
+                    status_code=resp.status_code,
+                    content={
+                        "error": "Upstream error",
+                        "status": resp.status_code,
+                        "data": content,
+                    },
+                )
             return JSONResponse(status_code=200, content=content)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Upstream request failed: {e}")

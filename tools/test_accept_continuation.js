@@ -1,18 +1,25 @@
 function computeNewContent(prefix, text, viewMode) {
   const startsWithWhitespace = text.length > 0 && /^\s/.test(text);
   const endsWithWhitespace = prefix.length > 0 && /\s$/.test(prefix);
-  const needsTokenBoundary = prefix.length > 0 && !endsWithWhitespace && !startsWithWhitespace;
+  const needsTokenBoundary =
+    prefix.length > 0 && !endsWithWhitespace && !startsWithWhitespace;
 
   const countTrailingNewlines = (s) => {
     let i = s.length - 1;
     let count = 0;
-    while (i >= 0 && s[i] === '\n') { count++; i--; }
+    while (i >= 0 && s[i] === '\n') {
+      count++;
+      i--;
+    }
     return count;
   };
   const countLeadingNewlines = (s) => {
     let i = 0;
     let count = 0;
-    while (i < s.length && s[i] === '\n') { count++; i++; }
+    while (i < s.length && s[i] === '\n') {
+      count++;
+      i++;
+    }
     return count;
   };
 
@@ -43,12 +50,32 @@ const cases = [
   { name: 'startDocument', prefix: '', text: 'Hello world', mode: 'markdown' },
   { name: 'concatWords', prefix: 'Hello', text: 'world', mode: 'markdown' },
   { name: 'spaceBetween', prefix: 'Hello ', text: 'world', mode: 'markdown' },
-  { name: 'prefixEndsWithNewline', prefix: 'Line\n', text: 'Continuation', mode: 'markdown' },
-  { name: 'prefixEndsWithTwoNewlines', prefix: 'Para\n\n', text: 'NextPara', mode: 'markdown' },
-  { name: 'textStartsWithNewline', prefix: 'Para', text: '\nNewLine', mode: 'markdown' },
+  {
+    name: 'prefixEndsWithNewline',
+    prefix: 'Line\n',
+    text: 'Continuation',
+    mode: 'markdown',
+  },
+  {
+    name: 'prefixEndsWithTwoNewlines',
+    prefix: 'Para\n\n',
+    text: 'NextPara',
+    mode: 'markdown',
+  },
+  {
+    name: 'textStartsWithNewline',
+    prefix: 'Para',
+    text: '\nNewLine',
+    mode: 'markdown',
+  },
   { name: 'raw_no_boundary', prefix: 'Hello', text: ' world', mode: 'raw' },
   { name: 'raw_need_space', prefix: 'Hello', text: 'world', mode: 'raw' },
-  { name: 'preserve_model_whitespace', prefix: 'Hello', text: '\n\nModelProvided\n', mode: 'markdown' },
+  {
+    name: 'preserve_model_whitespace',
+    prefix: 'Hello',
+    text: '\n\nModelProvided\n',
+    mode: 'markdown',
+  },
 ];
 
 for (const c of cases) {

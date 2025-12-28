@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -26,20 +26,20 @@
                 800: '#292524',
                 900: '#1c1917',
                 950: '#0c0a09',
-              }
-            }
-          }
-        }
-      }
+              },
+            },
+          },
+        },
+      };
     </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap');
-      
+
       body {
         font-family: 'Inter', sans-serif;
         background-color: #0c0a09;
       }
-      
+
       /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
         width: 8px;
@@ -81,14 +81,36 @@
         color: #d97706;
         text-decoration: underline;
       }
-      .prose-editor h1 { font-size: 1.875rem; font-weight: 700; color: #d97706; margin-top: 1.5em; margin-bottom: 0.5em; }
-      .prose-editor h2 { font-size: 1.5rem; font-weight: 700; color: #b45309; margin-top: 1.5em; margin-bottom: 0.5em; }
-      .prose-editor h3 { font-size: 1.25rem; font-weight: 700; color: #b45309; margin-top: 1em; margin-bottom: 0.5em; }
-      .prose-editor img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+      .prose-editor h1 {
+        font-size: 1.875rem;
+        font-weight: 700;
+        color: #d97706;
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+      }
+      .prose-editor h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #b45309;
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+      }
+      .prose-editor h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #b45309;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+      }
+      .prose-editor img {
+        max-width: 100%;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+      }
     </style>
-</head>
+  </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

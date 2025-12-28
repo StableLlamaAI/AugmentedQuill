@@ -2,7 +2,13 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
 
-from app.projects import load_registry, select_project, delete_project, list_projects, get_active_project_dir
+from app.projects import (
+    load_registry,
+    select_project,
+    delete_project,
+    list_projects,
+    get_active_project_dir,
+)
 from app.config import load_story_config
 
 router = APIRouter()
@@ -21,7 +27,11 @@ async def api_projects() -> dict:
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
     available = list_projects()
-    return {"current": normalized_reg["current"], "recent": normalized_reg["recent"][:5], "available": available}
+    return {
+        "current": normalized_reg["current"],
+        "recent": normalized_reg["recent"][:5],
+        "available": available,
+    }
 
 
 @router.post("/api/projects/delete")
@@ -38,7 +48,15 @@ async def api_projects_delete(request: Request) -> JSONResponse:
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
     available = list_projects()
-    return JSONResponse(status_code=200, content={"ok": True, "message": msg, "registry": normalized_reg, "available": available})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "message": msg,
+            "registry": normalized_reg,
+            "available": available,
+        },
+    )
 
 
 @router.post("/api/projects/select")
@@ -56,4 +74,12 @@ async def api_projects_select(request: Request) -> JSONResponse:
     normalized_reg = normalize_registry(reg)
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None)
-    return JSONResponse(status_code=200, content={"ok": True, "message": msg, "registry": normalized_reg, "story": story})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "message": msg,
+            "registry": normalized_reg,
+            "story": story,
+        },
+    )

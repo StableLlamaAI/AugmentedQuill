@@ -6,23 +6,25 @@ jest.mock('../../static/js/utils/utils.js', () => ({
   API: {
     loadStory: jest.fn(),
     loadProjects: jest.fn(),
-    loadChat: jest.fn()
-  }
+    loadChat: jest.fn(),
+  },
 }));
 
 jest.mock('../../static/js/components/component.js', () => {
   return {
-    Component: jest.fn().mockImplementation(function(element, initialState) {
+    Component: jest.fn().mockImplementation(function (element, initialState) {
       this.el = element;
       this._state = { ...initialState };
       this._bindings = new Map();
       this._refs = {};
       // Define reactive properties
-      Object.keys(initialState).forEach(key => {
+      Object.keys(initialState).forEach((key) => {
         Object.defineProperty(this, key, {
           get: () => this._state[key],
-          set: (value) => { this._state[key] = value; },
-          enumerable: true
+          set: (value) => {
+            this._state[key] = value;
+          },
+          enumerable: true,
         });
       });
       this.watch = jest.fn();
@@ -31,11 +33,13 @@ jest.mock('../../static/js/components/component.js', () => {
         this._state[key] = value;
         Object.defineProperty(this, key, {
           get: () => this._state[key],
-          set: (val) => { this._state[key] = val; },
-          enumerable: true
+          set: (val) => {
+            this._state[key] = val;
+          },
+          enumerable: true,
         });
       });
-    })
+    }),
   };
 });
 jest.mock('../../static/js/renderers/chapterRenderer.js');
@@ -49,30 +53,30 @@ jest.mock('../../static/js/managers/renderingManager.js');
 jest.mock('../../static/js/managers/stateManager.js');
 jest.mock('../../static/js/utils/editorUtils.js', () => ({
   debounce: jest.fn((fn) => fn),
-  toast: jest.fn()
+  toast: jest.fn(),
 }));
 jest.mock('../../static/js/constants/editorConstants.js', () => ({
   RENDER_MODES: {
     RAW: 'raw',
     MARKDOWN: 'markdown',
-    WYSIWYG: 'wysiwyg'
+    WYSIWYG: 'wysiwyg',
   },
   EVENTS: {
     PROJECT_SELECTED: 'project-selected',
     STORY_UPDATED: 'story-updated',
-    MACHINE_UPDATED: 'machine-updated'
+    MACHINE_UPDATED: 'machine-updated',
   },
   DEFAULTS: {
     CONTENT_WIDTH: 50,
     FONT_SIZE: 1.0,
     DEBOUNCE_SUMMARY: 1000,
-    DEBOUNCE_TITLE: 500
+    DEBOUNCE_TITLE: 500,
   },
   UI_STRINGS: {
     SAVED: 'Saved',
     FAILED_SAVE: 'Failed to save',
-    ERROR_LOADING: 'Error loading chapter'
-  }
+    ERROR_LOADING: 'Error loading chapter',
+  },
 }));
 
 describe('ShellView', () => {
@@ -91,7 +95,7 @@ describe('ShellView', () => {
     // Mock localStorage
     global.localStorage = {
       getItem: jest.fn(),
-      setItem: jest.fn()
+      setItem: jest.fn(),
     };
 
     shellView = new ShellView(element);

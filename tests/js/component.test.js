@@ -15,7 +15,7 @@ describe('Component', () => {
 
     component = new Component(element, {
       testProp: 'initial',
-      count: 0
+      count: 0,
     });
   });
 
@@ -37,7 +37,9 @@ describe('Component', () => {
   });
 
   test('scans and provides refs', () => {
-    expect(component.$refs.testInput).toBe(element.querySelector('[data-ref="testInput"]'));
+    expect(component.$refs.testInput).toBe(
+      element.querySelector('[data-ref="testInput"]')
+    );
     expect(component.$refs.testDiv).toBe(element.querySelector('[data-ref="testDiv"]'));
   });
 

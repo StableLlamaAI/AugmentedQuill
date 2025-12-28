@@ -48,6 +48,7 @@ class StoryEndpointsTest(TestCase):
         self.assertEqual(data["chapter"]["summary"], "New summary")
         # Verify persisted
         import json
+
         story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "New summary")
 
@@ -60,6 +61,7 @@ class StoryEndpointsTest(TestCase):
     def _patch_llm(self):
         # Patch credentials and completion in app.main
         import app.main as m
+
         # Also patch llm_shims resolver so streaming endpoints that import
         # the shim directly (instead of going through app.main) will find
         # our fake credentials during tests.
@@ -84,8 +86,18 @@ class StoryEndpointsTest(TestCase):
             return {"choices": [{"message": {"role": "assistant", "content": txt}}]}
 
         # assign
-        m._resolve_openai_credentials = lambda payload: ("https://fake.local/v1", None, "fake-model", 5)  # type: ignore
-        shims._resolve_openai_credentials = lambda payload: ("https://fake.local/v1", None, "fake-model", 5)  # type: ignore
+        m._resolve_openai_credentials = lambda payload: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+        )  # type: ignore
+        shims._resolve_openai_credentials = lambda payload: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+        )  # type: ignore
         m._openai_chat_complete = fake_complete  # type: ignore
 
         def _undo():
@@ -97,12 +109,16 @@ class StoryEndpointsTest(TestCase):
     def test_story_summary_updates_and_persists(self):
         pdir = self._make_project()
         self._patch_llm()
-        r = self.client.post("/api/story/summary", json={"chap_id": 1, "mode": "update", "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/summary",
+            json={"chap_id": 1, "mode": "update", "model_name": "fake"},
+        )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
         self.assertEqual(data["summary"], "AI summary")
         import json
+
         story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "AI summary")
 
@@ -110,7 +126,9 @@ class StoryEndpointsTest(TestCase):
         pdir = self._make_project()
         self._patch_llm()
         # Ensure summary exists
-        r = self.client.post("/api/story/write", json={"chap_id": 1, "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/write", json={"chap_id": 1, "model_name": "fake"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertEqual(data.get("content"), "AI chapter body")
@@ -121,7 +139,9 @@ class StoryEndpointsTest(TestCase):
         pdir = self._make_project()
         self._patch_llm()
         # continue
-        r = self.client.post("/api/story/continue", json={"chap_id": 1, "model_name": "fake"})
+        r = self.client.post(
+            "/api/story/continue", json={"chap_id": 1, "model_name": "fake"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertIn("AI continuation", data.get("content", ""))
@@ -137,7 +157,7 @@ class StoryEndpointsTest(TestCase):
 
     def test_suggest_endpoint_streams_paragraph(self):
         """Ensure `/api/story/suggest` is registered and returns streaming text."""
-        pdir = self._make_project()
+        self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
         import app.llm_shims as shims
@@ -154,11 +174,17 @@ class StoryEndpointsTest(TestCase):
         # Also patch the symbol the story module imported at import-time so
         # the handler uses our fake stream (story.py does a `from app.llm_shims import _openai_completions_stream`).
         import app.api.story as story_mod
+
         orig_story_stream = getattr(story_mod, "_openai_completions_stream", None)
         story_mod._openai_completions_stream = fake_stream  # type: ignore
         # Also ensure credential resolution succeeds for this test
         orig_shims_resolve = getattr(shims, "_resolve_openai_credentials", None)
-        shims._resolve_openai_credentials = lambda payload: ("https://fake.local/v1", None, "fake-model", 5)  # type: ignore
+        shims._resolve_openai_credentials = lambda payload: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+        )  # type: ignore
 
         def _undo():
             if orig_stream is None:
@@ -188,7 +214,9 @@ class StoryEndpointsTest(TestCase):
         self.addCleanup(_undo)
 
         # Call the suggest endpoint
-        r = self.client.post("/api/story/suggest", json={"chap_id": 1, "current_text": "Hello"})
+        r = self.client.post(
+            "/api/story/suggest", json={"chap_id": 1, "current_text": "Hello"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         # Response should be plain text and return non-empty content
         self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))

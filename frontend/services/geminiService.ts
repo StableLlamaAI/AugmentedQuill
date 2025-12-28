@@ -1,43 +1,47 @@
-import { LLMConfig } from "../types";
+import { LLMConfig } from '../types';
 
 export interface UnifiedChat {
-  sendMessage(message: string | { message: any }): Promise<{ text: string; functionCalls?: any[] }>;
+  sendMessage(
+    message: string | { message: any }
+  ): Promise<{ text: string; functionCalls?: any[] }>;
 }
 
 export const testConnection = async (config: LLMConfig): Promise<boolean> => {
-    return true;
+  return true;
 };
 
-async function readSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<string> {
-    let text = '';
-    let buffer = '';
-    const decoder = new TextDecoder();
+async function readSSEStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<string> {
+  let text = '';
+  let buffer = '';
+  const decoder = new TextDecoder();
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-                const dataStr = trimmed.slice(6);
-                if (dataStr === '[DONE]') continue;
-                try {
-                    const data = JSON.parse(dataStr);
-                    if (data.content) {
-                        text += data.content;
-                    }
-                } catch (e) {
-                    console.error('Failed to parse SSE data', e);
-                }
-            }
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data: ')) {
+        const dataStr = trimmed.slice(6);
+        if (dataStr === '[DONE]') continue;
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.content) {
+            text += data.content;
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE data', e);
         }
+      }
     }
-    return text;
+  }
+  return text;
 }
 
 export const createChatSession = (
@@ -45,65 +49,72 @@ export const createChatSession = (
   history: { role: string; parts: { text: string }[] }[],
   config: LLMConfig
 ): UnifiedChat => {
-    return {
-        sendMessage: async (msg) => {
-            const userMsgText = typeof msg === 'string' ? msg : (msg as any).message;
-            
-            const messages = [
-                { role: 'system', content: systemInstruction },
-                ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.parts[0].text })),
-                { role: 'user', content: userMsgText }
-            ];
-            
-            try {
-                const res = await fetch('/api/chat/stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages })
-                });
-                
-                if (!res.ok) throw new Error('Chat request failed');
+  return {
+    sendMessage: async (msg) => {
+      const userMsgText = typeof msg === 'string' ? msg : (msg as any).message;
 
-                const reader = res.body?.getReader();
-                if (!reader) return { text: '' };
-                
-                const text = await readSSEStream(reader);
-                return { text };
-            } catch (e) {
-                console.error("Chat failed", e);
-                throw e;
-            }
-        }
-    };
-};
-
-export const generateSimpleContent = async (prompt: string, systemInstruction: string, config: LLMConfig) => {
-    const messages = [
+      const messages = [
         { role: 'system', content: systemInstruction },
-        { role: 'user', content: prompt }
-    ];
-    
-    try {
+        ...history.map((h) => ({
+          role: h.role === 'model' ? 'assistant' : 'user',
+          content: h.parts[0].text,
+        })),
+        { role: 'user', content: userMsgText },
+      ];
+
+      try {
         const res = await fetch('/api/chat/stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages }),
         });
-        
-        if (!res.ok) throw new Error('Generation failed');
+
+        if (!res.ok) throw new Error('Chat request failed');
 
         const reader = res.body?.getReader();
-        if (!reader) return '';
-        
-        return await readSSEStream(reader);
-    } catch (e) {
-        console.error("Generation failed", e);
-        return '';
-    }
-}
+        if (!reader) return { text: '' };
+
+        const text = await readSSEStream(reader);
+        return { text };
+      } catch (e) {
+        console.error('Chat failed', e);
+        throw e;
+      }
+    },
+  };
+};
+
+export const generateSimpleContent = async (
+  prompt: string,
+  systemInstruction: string,
+  config: LLMConfig
+) => {
+  const messages = [
+    { role: 'system', content: systemInstruction },
+    { role: 'user', content: prompt },
+  ];
+
+  try {
+    const res = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+
+    if (!res.ok) throw new Error('Generation failed');
+
+    const reader = res.body?.getReader();
+    if (!reader) return '';
+
+    return await readSSEStream(reader);
+  } catch (e) {
+    console.error('Generation failed', e);
+    return '';
+  }
+};
 
 export const generateContinuations = async (
-  currentContent: string, 
+  currentContent: string,
   storyContext: string,
   systemInstruction: string,
   config: LLMConfig,
@@ -112,33 +123,33 @@ export const generateContinuations = async (
   if (!chapterId) return [];
 
   const fetchSuggestion = async () => {
-      try {
-        const res = await fetch('/api/story/suggest', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                chap_id: Number(chapterId),
-                current_text: currentContent
-            })
-        });
-        
-        if (!res.ok) return '';
+    try {
+      const res = await fetch('/api/story/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chap_id: Number(chapterId),
+          current_text: currentContent,
+        }),
+      });
 
-        const reader = res.body?.getReader();
-        let text = '';
-        if (reader) {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                text += new TextDecoder().decode(value);
-            }
+      if (!res.ok) return '';
+
+      const reader = res.body?.getReader();
+      let text = '';
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += new TextDecoder().decode(value);
         }
-        return text;
-      } catch (e) {
-          return '';
       }
+      return text;
+    } catch (e) {
+      return '';
+    }
   };
-  
+
   const [opt1, opt2] = await Promise.all([fetchSuggestion(), fetchSuggestion()]);
-  return [opt1, opt2].filter(s => s);
+  return [opt1, opt2].filter((s) => s);
 };

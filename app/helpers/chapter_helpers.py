@@ -13,6 +13,7 @@ def _scan_chapter_files() -> List[Tuple[int, Path]]:
     Sorted by numeric index ascending.
     """
     from app.projects import get_active_project_dir
+
     active = get_active_project_dir()
     if not active:
         return []
@@ -46,6 +47,7 @@ def _load_chapter_titles(count: int) -> List[str]:
     Do not pad; callers decide fallbacks (e.g., filename).
     """
     from app.projects import get_active_project_dir
+
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     titles = story.get("chapters") or []
@@ -81,7 +83,9 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, str]:
 
 def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
     files = _scan_chapter_files()
-    match = next(((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None)
+    match = next(
+        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
+    )
     if not match:
         raise HTTPException(status_code=404, detail="Chapter not found")
     return match  # (idx, path, pos)

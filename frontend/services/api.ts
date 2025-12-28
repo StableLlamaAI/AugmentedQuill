@@ -13,7 +13,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/projects/select`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error('Failed to select project');
       return res.json();
@@ -22,11 +22,11 @@ export const api = {
       const res = await fetch(`${API_BASE}/projects/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error('Failed to delete project');
       return res.json();
-    }
+    },
   },
   chapters: {
     list: async () => {
@@ -43,7 +43,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/chapters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content })
+        body: JSON.stringify({ title, content }),
       });
       if (!res.ok) throw new Error('Failed to create chapter');
       return res.json();
@@ -52,7 +52,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/chapters/${id}/content`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content }),
       });
       if (!res.ok) throw new Error('Failed to update chapter content');
       return res.json();
@@ -61,7 +61,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/chapters/${id}/title`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
+        body: JSON.stringify({ title }),
       });
       if (!res.ok) throw new Error('Failed to update chapter title');
       return res.json();
@@ -70,25 +70,25 @@ export const api = {
       const res = await fetch(`${API_BASE}/chapters/${id}/summary`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary })
+        body: JSON.stringify({ summary }),
       });
       if (!res.ok) throw new Error('Failed to update chapter summary');
       return res.json();
     },
     delete: async (id: number) => {
       const res = await fetch(`${API_BASE}/chapters/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete chapter');
       return res.json();
-    }
+    },
   },
   story: {
     updateSummary: async (summary: string) => {
       const res = await fetch(`${API_BASE}/story/summary`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary })
+        body: JSON.stringify({ summary }),
       });
       if (!res.ok) throw new Error('Failed to update story summary');
       return res.json();
@@ -97,10 +97,10 @@ export const api = {
       const res = await fetch(`${API_BASE}/story/tags`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags })
+        body: JSON.stringify({ tags }),
       });
       if (!res.ok) throw new Error('Failed to update story tags');
       return res.json();
-    }
-  }
+    },
+  },
 };
