@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:28000',
           changeOrigin: true,
         },
+        '/static': {
+          target: 'http://127.0.0.1:28000',
+          changeOrigin: true,
+        },
       },
     },
     plugins: [react()],

@@ -724,8 +724,12 @@ Always prioritize the user's creative vision.`;
             className="flex items-center space-x-2 cursor-pointer"
             onClick={() => setIsSettingsOpen(true)}
           >
-            <div className="bg-amber-600 rounded-md p-1.5 shadow-lg shadow-amber-900/20">
-              <Wand2 className="text-white" size={18} />
+            <div className="bg-amber-600 rounded-md p-1 shadow-lg shadow-amber-900/20">
+              <img
+                src="/static/images/icon.svg"
+                className="w-6 h-6"
+                alt="AugmentedQuill Logo"
+              />
             </div>
             <div className="flex flex-col">
               <span
@@ -1569,8 +1573,14 @@ Always prioritize the user's creative vision.`;
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-stone-500">
-                <FileText size={48} className="mb-4 opacity-50" />
-                <p>Select or create a chapter to start writing.</p>
+                <img
+                  src="/static/images/logo_2048.png"
+                  className="w-64 h-64 mb-8 opacity-20"
+                  alt="AugmentedQuill Logo"
+                />
+                <p className="text-lg font-medium">
+                  Select or create a chapter to start writing.
+                </p>
               </div>
             )}
           </div>
