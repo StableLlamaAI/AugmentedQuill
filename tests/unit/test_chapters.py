@@ -30,10 +30,8 @@ class ChaptersApiTest(TestCase):
         pdir = self.projects_root / name
         chdir = pdir / "chapters"
         chdir.mkdir(parents=True, exist_ok=True)
-        # Create a legacy-style and a 4-digit file
-        (chdir / "chapter01.txt").write_text(
-            "Legacy Chapter One\nHello world.", encoding="utf-8"
-        )
+        # Create two 4-digit files
+        (chdir / "0001.txt").write_text("Chapter One\nHello world.", encoding="utf-8")
         (chdir / "0002.txt").write_text(
             "Second Chapter\nMore content.", encoding="utf-8"
         )

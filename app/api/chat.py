@@ -43,20 +43,18 @@ def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
 
     Handles various formats like:
     - <tool_call>get_project_overview</tool_call>
-    - <function_call>get_project_overview</function_call>
     - [TOOL_CALL]get_project_overview[/TOOL_CALL]
     - Tool: get_project_overview
-    - XML-style tool calls
     """
     import re
 
     calls = []
 
-    # Look for <tool_call> or <function_call> tags
-    pattern1 = r"<(tool_call|function_call)>(.*?)</\1>"
+    # Look for <tool_call> tags
+    pattern1 = r"<tool_call>(.*?)</tool_call>"
     matches1 = re.findall(pattern1, content, re.IGNORECASE | re.DOTALL)
 
-    for tag, content_inner in matches1:
+    for content_inner in matches1:
         func_match = re.match(r"(\w+)(?:\((.*)\))?", content_inner.strip())
         if func_match:
             name = func_match.group(1)
@@ -70,7 +68,7 @@ def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
                 "id": f"call_{name}_{len(calls)}",
                 "type": "function",
                 "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                "original_text": f"<{tag}>{content_inner}</{tag}>",
+                "original_text": f"<tool_call>{content_inner}</tool_call>",
             }
             calls.append(call)
 
@@ -96,8 +94,8 @@ def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
             }
             calls.append(call)
 
-    # Look for "Tool:" or "Function:" prefixes (must be at start of word)
-    pattern3 = r"(^|(?<=\s))(Tool|Function):\s+(\w+)(?:\(([^)]*)\))?"
+    # Look for "Tool:" prefix (must be at start of word)
+    pattern3 = r"(^|(?<=\s))(Tool):\s+(\w+)(?:\(([^)]*)\))?"
     matches3 = re.findall(pattern3, content, re.IGNORECASE)
 
     for match in matches3:
@@ -926,14 +924,6 @@ async def api_get_chat() -> dict:
             m.get("name") for m in models_list if isinstance(m, dict) and m.get("name")
         ]
 
-    # If no named models configured, but legacy single model fields exist,
-    # surface a synthetic default entry so the UI has a selectable option.
-    if not model_names:
-        legacy_model = openai_cfg.get("model")
-        legacy_base = openai_cfg.get("base_url")
-        if legacy_model or legacy_base:
-            model_names = ["default"]
-
     selected = openai_cfg.get("selected", "") if isinstance(openai_cfg, dict) else ""
     # Coerce to a valid selection
     if model_names:
@@ -1151,51 +1141,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     else:
         body["tool_choice"] = "auto"
 
-    # Backward-compat with legacy function calling (OpenAI functions API)
-    # If tools of type function are provided, mirror them into `functions`.
-    try:
-        current_tools = body.get("tools")
-        if isinstance(current_tools, list) and current_tools:
-            functions: list[dict] = []
-            for t in current_tools:
-                if isinstance(t, dict) and t.get("type") == "function":
-                    fn = t.get("function") or {}
-                    name = fn.get("name")
-                    if isinstance(name, str) and name:
-                        # Keep only legacy-compatible fields
-                        fdef = {
-                            "name": name,
-                        }
-                        desc = fn.get("description")
-                        if isinstance(desc, str) and desc:
-                            fdef["description"] = desc
-                        params = fn.get("parameters")
-                        if isinstance(params, dict):
-                            fdef["parameters"] = params
-                        functions.append(fdef)
-            if functions:
-                body["functions"] = functions
-                # Map tool_choice to function_call where meaningful
-                fc = None
-                current_tool_choice = body.get("tool_choice")
-                if isinstance(current_tool_choice, str):
-                    if current_tool_choice in ("auto", "none"):
-                        fc = current_tool_choice
-                elif isinstance(current_tool_choice, dict):
-                    # {"type":"function","function":{"name":"..."}}
-                    if current_tool_choice.get("type") == "function":
-                        fn2 = current_tool_choice.get("function") or {}
-                        name2 = fn2.get("name")
-                        if isinstance(name2, str) and name2:
-                            fc = {"name": name2}
-                if fc is None:
-                    # default to auto if tools provided
-                    fc = "auto"
-                body["function_call"] = fc
-    except Exception:
-        # If anything goes wrong, we silently ignore and proceed with modern tools fields
-        pass
-
     async def _gen():
         try:
             async with httpx.AsyncClient(
@@ -1233,10 +1178,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                         content_lower = content.lower()
                                         has_tool_syntax = (
                                             "<tool_call" in content_lower
-                                            or "<function_call" in content_lower
                                             or "[tool_call" in content_lower
                                             or content_lower.startswith("tool:")
-                                            or content_lower.startswith("function:")
                                         )
                                         if has_tool_syntax:
                                             # Parse tool calls from content
@@ -1256,18 +1199,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                 flags=re.IGNORECASE,
                                             )
                                             clean_content = re.sub(
-                                                r"<function_call>([^<]*)</function_call>",
-                                                lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"<function=([^>]*)>([^<]*)</function>",
-                                                lambda m: f"Calling function {m.group(1).replace('_', ' ')}: {m.group(2)}",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
                                                 r"<tool_call[^>]*>",
                                                 "",
                                                 clean_content,
@@ -1275,18 +1206,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                             )
                                             clean_content = re.sub(
                                                 r"</tool_call>",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"<function_call[^>]*>",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"</function_call>",
                                                 "",
                                                 clean_content,
                                                 flags=re.IGNORECASE,
@@ -1304,19 +1223,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                 flags=re.IGNORECASE | re.MULTILINE,
                                             )
                                             clean_content = re.sub(
-                                                r"^Function:\s*(\w+)(?:\(([^)]*)\))?",
-                                                lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
-                                                clean_content,
-                                                flags=re.IGNORECASE | re.MULTILINE,
-                                            )
-                                            clean_content = re.sub(
                                                 r"<tool_call[^>]*$",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"<function_call[^>]*$",
                                                 "",
                                                 clean_content,
                                                 flags=re.IGNORECASE,
@@ -1334,29 +1241,10 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                         if clean_content:
                                             yield f'data: {{"content": {_json.dumps(clean_content)}}}\n\n'
 
-                                # Handle tool_calls or function_call in the final message
+                                # Handle tool_calls in the final message
                                 message = choice.get("message", {})
                                 if "tool_calls" in message and message["tool_calls"]:
                                     yield f'data: {{"tool_calls": {_json.dumps(message["tool_calls"])}}}\n\n'
-                                elif (
-                                    "function_call" in message
-                                    and message["function_call"]
-                                ):
-                                    # Convert function_call to tool_calls format
-                                    func_call = message["function_call"]
-                                    tool_call = {
-                                        "index": 0,
-                                        "id": func_call.get(
-                                            "id",
-                                            f"call_{func_call.get('name', 'unknown')}",
-                                        ),
-                                        "type": "function",
-                                        "function": {
-                                            "name": func_call.get("name", ""),
-                                            "arguments": func_call.get("arguments", ""),
-                                        },
-                                    }
-                                    yield f'data: {{"tool_calls": {_json.dumps([tool_call])}}}\n\n'
                             yield 'data: {"done": true}\n\n'
                         except Exception as e:
                             yield f'data: {{"error": "Failed to parse response", "message": "{_json.dumps(str(e))}"}}\n\n'
@@ -1387,14 +1275,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                     content_lower = content.lower()
                                                     has_tool_syntax = (
                                                         "<tool_call" in content_lower
-                                                        or "<function_call"
-                                                        in content_lower
                                                         or "[tool_call" in content_lower
                                                         or content_lower.startswith(
                                                             "tool:"
-                                                        )
-                                                        or content_lower.startswith(
-                                                            "function:"
                                                         )
                                                     )
                                                     if has_tool_syntax:
@@ -1415,18 +1298,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                             flags=re.IGNORECASE,
                                                         )
                                                         clean_content = re.sub(
-                                                            r"<function_call>([^<]*)</function_call>",
-                                                            lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE,
-                                                        )
-                                                        clean_content = re.sub(
-                                                            r"<function=([^>]*)>([^<]*)</function>",
-                                                            lambda m: f"Calling function {m.group(1).replace('_', ' ')}: {m.group(2)}",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE,
-                                                        )
-                                                        clean_content = re.sub(
                                                             r"<tool_call[^>]*>",
                                                             "",
                                                             clean_content,
@@ -1434,18 +1305,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                         )
                                                         clean_content = re.sub(
                                                             r"</tool_call>",
-                                                            "",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE,
-                                                        )
-                                                        clean_content = re.sub(
-                                                            r"<function_call[^>]*>",
-                                                            "",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE,
-                                                        )
-                                                        clean_content = re.sub(
-                                                            r"</function_call>",
                                                             "",
                                                             clean_content,
                                                             flags=re.IGNORECASE,
@@ -1464,20 +1323,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                             | re.MULTILINE,
                                                         )
                                                         clean_content = re.sub(
-                                                            r"^Function:\s*(\w+)(?:\(([^)]*)\))?",
-                                                            lambda m: f"Calling function: {m.group(1).replace('_', ' ')}",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE
-                                                            | re.MULTILINE,
-                                                        )
-                                                        clean_content = re.sub(
                                                             r"<tool_call[^>]*$",
-                                                            "",
-                                                            clean_content,
-                                                            flags=re.IGNORECASE,
-                                                        )
-                                                        clean_content = re.sub(
-                                                            r"<function_call[^>]*$",
                                                             "",
                                                             clean_content,
                                                             flags=re.IGNORECASE,
@@ -1505,30 +1351,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                             ):
                                                 # Send tool calls chunk
                                                 yield f'data: {{"tool_calls": {_json.dumps(delta["tool_calls"])}}}\n\n'
-                                            # Handle legacy function_call format
-                                            if (
-                                                "function_call" in delta
-                                                and delta["function_call"]
-                                            ):
-                                                # Convert to tool_calls format for consistency
-                                                func_call = delta["function_call"]
-                                                tool_call = {
-                                                    "index": 0,  # Assume single function call
-                                                    "id": func_call.get(
-                                                        "id",
-                                                        f"call_{func_call.get('name', 'unknown')}",
-                                                    ),
-                                                    "type": "function",
-                                                    "function": {
-                                                        "name": func_call.get(
-                                                            "name", ""
-                                                        ),
-                                                        "arguments": func_call.get(
-                                                            "arguments", ""
-                                                        ),
-                                                    },
-                                                }
-                                                yield f'data: {{"tool_calls": {_json.dumps([tool_call])}}}\n\n'
                                         # Check for finish_reason to end streaming
                                         if (
                                             "finish_reason" in choice

@@ -6,6 +6,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.llm as llm
 from app.projects import select_project
 
 
@@ -59,19 +60,9 @@ class StoryEndpointsTest(TestCase):
 
     # ---- Story LLM endpoints with fakes ----
     def _patch_llm(self):
-        # Patch credentials and completion in app.main
-        import app.main as m
-
-        # Also patch llm_shims resolver so streaming endpoints that import
-        # the shim directly (instead of going through app.main) will find
-        # our fake credentials during tests.
-        import app.llm_shims as shims
-
-        self._orig_resolve = getattr(m, "_resolve_openai_credentials")
-        self._orig_complete = getattr(m, "_openai_chat_complete")
-
-        async def fake_resolve(payload):  # type: ignore
-            return ("https://fake.local/v1", None, "fake-model", 5)
+        # Patch credentials and completion in app.llm
+        self._orig_resolve = llm.resolve_openai_credentials
+        self._orig_complete = llm.openai_chat_complete
 
         async def fake_complete(**kwargs):  # type: ignore
             # Return a minimal OpenAI-like response
@@ -85,24 +76,17 @@ class StoryEndpointsTest(TestCase):
                 txt = "AI summary"
             return {"choices": [{"message": {"role": "assistant", "content": txt}}]}
 
-        # assign
-        m._resolve_openai_credentials = lambda payload: (
+        llm.resolve_openai_credentials = lambda payload: (
             "https://fake.local/v1",
             None,
             "fake-model",
             5,
         )  # type: ignore
-        shims._resolve_openai_credentials = lambda payload: (
-            "https://fake.local/v1",
-            None,
-            "fake-model",
-            5,
-        )  # type: ignore
-        m._openai_chat_complete = fake_complete  # type: ignore
+        llm.openai_chat_complete = fake_complete  # type: ignore
 
         def _undo():
-            m._resolve_openai_credentials = self._orig_resolve  # type: ignore
-            m._openai_chat_complete = self._orig_complete  # type: ignore
+            llm.resolve_openai_credentials = self._orig_resolve  # type: ignore
+            llm.openai_chat_complete = self._orig_complete  # type: ignore
 
         self.addCleanup(_undo)
 
@@ -160,26 +144,17 @@ class StoryEndpointsTest(TestCase):
         self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
-        import app.llm_shims as shims
-
-        orig_stream = getattr(shims, "_openai_completions_stream", None)
+        orig_stream = llm.openai_completions_stream
 
         async def fake_stream(prompt: str, **kwargs):
             # Yield a few chunks as the real stream would
             yield "First chunk of suggestion"
             yield " and the rest of the paragraph.\n"
 
-        shims._openai_completions_stream = fake_stream  # type: ignore
-
-        # Also patch the symbol the story module imported at import-time so
-        # the handler uses our fake stream (story.py does a `from app.llm_shims import _openai_completions_stream`).
-        import app.api.story as story_mod
-
-        orig_story_stream = getattr(story_mod, "_openai_completions_stream", None)
-        story_mod._openai_completions_stream = fake_stream  # type: ignore
+        llm.openai_completions_stream = fake_stream  # type: ignore
         # Also ensure credential resolution succeeds for this test
-        orig_shims_resolve = getattr(shims, "_resolve_openai_credentials", None)
-        shims._resolve_openai_credentials = lambda payload: (
+        orig_resolve = llm.resolve_openai_credentials
+        llm.resolve_openai_credentials = lambda payload: (
             "https://fake.local/v1",
             None,
             "fake-model",
@@ -187,29 +162,8 @@ class StoryEndpointsTest(TestCase):
         )  # type: ignore
 
         def _undo():
-            if orig_stream is None:
-                try:
-                    delattr(shims, "_openai_completions_stream")
-                except Exception:
-                    pass
-            else:
-                shims._openai_completions_stream = orig_stream  # type: ignore
-            # restore shims resolver
-            if orig_shims_resolve is None:
-                try:
-                    delattr(shims, "_resolve_openai_credentials")
-                except Exception:
-                    pass
-            else:
-                shims._resolve_openai_credentials = orig_shims_resolve  # type: ignore
-            # restore story module symbol
-            if orig_story_stream is None:
-                try:
-                    delattr(story_mod, "_openai_completions_stream")
-                except Exception:
-                    pass
-            else:
-                story_mod._openai_completions_stream = orig_story_stream  # type: ignore
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
 
         self.addCleanup(_undo)
 

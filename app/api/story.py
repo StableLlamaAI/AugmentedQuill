@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.projects import get_active_project_dir
 from app.config import load_story_config, load_machine_config
 from app.helpers.chapter_helpers import _chapter_by_id_or_404, _normalize_chapter_entry
-from app.llm_shims import _openai_completions_stream
+from app import llm
 from app.prompts import get_system_message, get_user_prompt, load_model_prompt_overrides
 import json as _json
 from pathlib import Path
@@ -15,50 +15,12 @@ router = APIRouter()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
-# Prefer using `app.main.load_machine_config` when available so tests can monkeypatch it.
-try:
-    import app.main as _app_main  # type: ignore
-except Exception:
-    _app_main = None
-
-
-def _load_machine_config(path):
-    if _app_main and hasattr(_app_main, "load_machine_config"):
-        return _app_main.load_machine_config(path)
-    return load_machine_config(path)
-
-
-# LLM shim accessors: prefer functions patched on app.main during tests
-def _get_resolve_fn():
-    if _app_main and hasattr(_app_main, "_resolve_openai_credentials"):
-        return _app_main._resolve_openai_credentials
-    from app.llm_shims import _resolve_openai_credentials as _fn
-
-    return _fn
-
-
-def _get_chat_complete_fn():
-    if _app_main and hasattr(_app_main, "_openai_chat_complete"):
-        return _app_main._openai_chat_complete
-    from app.llm_shims import _openai_chat_complete as _fn
-
-    return _fn
-
-
-def _get_chat_complete_stream_fn():
-    if _app_main and hasattr(_app_main, "_openai_chat_complete_stream"):
-        return _app_main._openai_chat_complete_stream
-    from app.llm_shims import _openai_chat_complete_stream as _fn
-
-    return _fn
-
 
 @router.post("/api/story/story-summary")
 async def api_story_story_summary(request: Request) -> JSONResponse:
     """Generate or update the overall story summary based on chapter summaries.
 
     Body JSON: {"mode": "discard"|"update"|None, "model_name": str | None, overrides...}
-    Returns: {ok: true, summary: str}
     """
     try:
         payload = await request.json()
@@ -96,9 +58,7 @@ async def api_story_story_summary(request: Request) -> JSONResponse:
             content={"ok": False, "detail": "No chapter summaries available"},
         )
 
-    _resolve = _get_resolve_fn()
-    _complete = _get_chat_complete_fn()
-    base_url, api_key, model_id, timeout_s = _resolve(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     sys_msg = {
         "role": "system",
@@ -125,7 +85,7 @@ async def api_story_story_summary(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _complete(
+        data = await llm.openai_chat_complete(
             messages=messages,
             base_url=base_url,
             api_key=api_key,
@@ -168,7 +128,7 @@ async def api_story_summary(request: Request) -> JSONResponse:
     """Generate or update a chapter summary using the story model.
 
     Body JSON:
-      {"chap_id": int, "mode": "discard"|"update"|None, "model_name": str | None,
+       data = await llm.openai_chat_complete(
        // optional overrides: base_url, api_key, model, timeout_s}
     Returns: {ok: true, summary: str, chapter: {...}}
     """
@@ -209,9 +169,7 @@ async def api_story_summary(request: Request) -> JSONResponse:
         )
     current_summary = chapters_data[pos].get("summary", "")
 
-    _resolve = _get_resolve_fn()
-    _complete = _get_chat_complete_fn()
-    base_url, api_key, model_id, timeout_s = _resolve(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Build messages
     sys_msg = {
@@ -233,7 +191,7 @@ async def api_story_summary(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _complete(
+        data = await llm.openai_chat_complete(
             messages=messages,
             base_url=base_url,
             api_key=api_key,
@@ -285,7 +243,7 @@ async def api_story_write(request: Request) -> JSONResponse:
     """Write/overwrite the full chapter from its summary using the story model.
 
     Body JSON: {"chap_id": int, "model_name": str | None, overrides...}
-    Returns: {ok: true, content: str}
+       data = await llm.openai_chat_complete(
     """
     try:
         payload = await request.json()
@@ -313,12 +271,10 @@ async def api_story_write(request: Request) -> JSONResponse:
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
 
-    _resolve = _get_resolve_fn()
-    _complete = _get_chat_complete_fn()
-    base_url, api_key, model_id, timeout_s = _resolve(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -336,7 +292,7 @@ async def api_story_write(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _complete(
+        data = await llm.openai_chat_complete(
             messages=messages,
             base_url=base_url,
             api_key=api_key,
@@ -371,7 +327,7 @@ async def api_story_continue(request: Request) -> JSONResponse:
     """Continue the current chapter without modifying existing text, to align with the summary.
 
     Body JSON: {"chap_id": int, "model_name": str | None, overrides...}
-    Returns: {ok: true, appended: str, content: str}
+       data = await llm.openai_chat_complete(
     """
     try:
         payload = await request.json()
@@ -404,12 +360,10 @@ async def api_story_continue(request: Request) -> JSONResponse:
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    _resolve = _get_resolve_fn()
-    _complete = _get_chat_complete_fn()
-    base_url, api_key, model_id, timeout_s = _resolve(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -427,7 +381,7 @@ async def api_story_continue(request: Request) -> JSONResponse:
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
     try:
-        data = await _complete(
+        data = await llm.openai_chat_complete(
             messages=messages,
             base_url=base_url,
             api_key=api_key,
@@ -468,7 +422,6 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     """Return one alternative one-paragraph suggestion to continue the current chapter.
 
     Body JSON: {"chap_id": int, "model_name": str | None, "current_text": str | None, overrides...}
-    Returns: Streaming text with the suggestion paragraph.
     """
     try:
         payload = await request.json()
@@ -501,9 +454,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    from app.llm_shims import _resolve_openai_credentials
-
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Build prompt with title and summary
     prompt_parts = []
@@ -529,7 +480,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     async def generate_suggestion():
         startFound = False
         isNewParagraph = False
-        async for chunk in _openai_completions_stream(
+        async for chunk in llm.openai_completions_stream(
             prompt=prompt,
             base_url=base_url,
             api_key=api_key,
@@ -588,12 +539,10 @@ async def api_story_summary_stream(request: Request):
         )
     current_summary = chapters_data[pos].get("summary", "")
 
-    from app.llm_shims import _resolve_openai_credentials
-
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -616,8 +565,7 @@ async def api_story_summary_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            _stream_fn = _get_chat_complete_stream_fn()
-            async for chunk in _stream_fn(
+            async for chunk in llm.openai_chat_complete_stream(
                 messages=messages,
                 base_url=base_url,
                 api_key=api_key,
@@ -664,12 +612,10 @@ async def api_story_write_stream(request: Request):
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
 
-    from app.llm_shims import _resolve_openai_credentials
-
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -689,8 +635,7 @@ async def api_story_write_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            _stream_fn = _get_chat_complete_stream_fn()
-            async for chunk in _stream_fn(
+            async for chunk in llm.openai_chat_complete_stream(
                 messages=messages,
                 base_url=base_url,
                 api_key=api_key,
@@ -739,12 +684,10 @@ async def api_story_continue_stream(request: Request):
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    from app.llm_shims import _resolve_openai_credentials
-
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     # Load model-specific prompt overrides
-    machine_config = _load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     openai_cfg = machine_config.get("openai", {})
     selected_model_name = payload.get("model_name") or openai_cfg.get("selected")
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
@@ -764,8 +707,7 @@ async def api_story_continue_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            _stream_fn = _get_chat_complete_stream_fn()
-            async for chunk in _stream_fn(
+            async for chunk in llm.openai_chat_complete_stream(
                 messages=messages,
                 base_url=base_url,
                 api_key=api_key,
@@ -821,9 +763,7 @@ async def api_story_story_summary_stream(request: Request):
     if not chapter_summaries:
         raise HTTPException(status_code=400, detail="No chapter summaries available")
 
-    from app.llm_shims import _resolve_openai_credentials
-
-    base_url, api_key, model_id, timeout_s = _resolve_openai_credentials(payload)
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(payload)
 
     sys_msg = {
         "role": "system",
@@ -852,8 +792,7 @@ async def api_story_story_summary_stream(request: Request):
     async def _gen():
         buf = []
         try:
-            _stream_fn = _get_chat_complete_stream_fn()
-            async for chunk in _stream_fn(
+            async for chunk in llm.openai_chat_complete_stream(
                 messages=messages,
                 base_url=base_url,
                 api_key=api_key,

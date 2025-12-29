@@ -11,15 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import load_machine_config
 
-# Expose config and LLM helpers on the main module for tests and runtime
-from app import llm_shims as _llm_shims
-
-# Provide module-level aliases so tests can patch these via `app.main`
-_resolve_openai_credentials = _llm_shims._resolve_openai_credentials
-_openai_chat_complete = _llm_shims._openai_chat_complete
-_openai_chat_complete_stream = _llm_shims._openai_chat_complete_stream
-_openai_completions_stream = _llm_shims._openai_completions_stream
-
 # Import API routers
 from app.api.settings import router as settings_router  # noqa: E402
 from app.api.projects import router as projects_router  # noqa: E402
@@ -70,16 +61,6 @@ def healthcheck() -> dict:
 @app.get("/api/health")
 async def api_health() -> dict:
     return {"status": "ok"}
-
-
-# @app.get("/api/story")
-# async def api_story() -> dict:
-#     active = get_active_project_dir()
-#     if active:
-#         story = load_story_config(active / "story.json")
-#     else:
-#         story = load_story_config(CONFIG_DIR / "story.json")
-#     return story or {}
 
 
 @app.get("/api/machine")

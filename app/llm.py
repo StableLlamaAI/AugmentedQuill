@@ -7,7 +7,6 @@ the rest of the application can remain provider-agnostic.
 Design goals:
 - Single responsibility: Only LLM concerns live here.
 - Testability: Functions are small and deterministic given inputs.
-- Backward compatibility: app.main re-exports wrappers with legacy names.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ def resolve_openai_credentials(
     Precedence:
     1. Environment variables OPENAI_BASE_URL / OPENAI_API_KEY
     2. Payload overrides: base_url, api_key, model, timeout_s or model_name (by name)
-    3. machine.json -> openai.models[] (selected by name) or legacy single-model fields
+    3. machine.json -> openai.models[] (selected by name)
     """
     machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
@@ -46,25 +45,27 @@ def resolve_openai_credentials(
     timeout_s = payload.get("timeout_s")
 
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
-    if isinstance(models, list) and models:
-        chosen = None
-        if selected_name:
-            for m in models:
-                if isinstance(m, dict) and (m.get("name") == selected_name):
-                    chosen = m
-                    break
-        if chosen is None:
-            chosen = models[0]
-        base_url = chosen.get("base_url") or base_url
-        api_key = chosen.get("api_key") or api_key
-        model_id = chosen.get("model") or model_id
-        timeout_s = chosen.get("timeout_s", 60) or timeout_s
-    else:
-        # Legacy single-model fields
-        base_url = base_url or openai_cfg.get("base_url")
-        api_key = api_key or openai_cfg.get("api_key")
-        model_id = model_id or openai_cfg.get("model")
-        timeout_s = timeout_s or openai_cfg.get("timeout_s", 60)
+    if not (isinstance(models, list) and models):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400,
+            detail="No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    chosen = None
+    if selected_name:
+        for m in models:
+            if isinstance(m, dict) and (m.get("name") == selected_name):
+                chosen = m
+                break
+    if chosen is None:
+        chosen = models[0]
+
+    base_url = chosen.get("base_url") or base_url
+    api_key = chosen.get("api_key") or api_key
+    model_id = chosen.get("model") or model_id
+    timeout_s = chosen.get("timeout_s", 60) or timeout_s
 
     # Environment wins
     env_base = os.getenv("OPENAI_BASE_URL")

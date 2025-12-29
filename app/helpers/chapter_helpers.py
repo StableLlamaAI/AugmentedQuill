@@ -9,7 +9,7 @@ from app.config import load_story_config
 def _scan_chapter_files() -> List[Tuple[int, Path]]:
     """Return list of (index, path) for chapter files under active project.
 
-    Supports files like '0001.txt' (preferred) and legacy like 'chapter01.txt'.
+    Supports files like '0001.txt'.
     Sorted by numeric index ascending.
     """
     from app.projects import get_active_project_dir
@@ -30,14 +30,6 @@ def _scan_chapter_files() -> List[Tuple[int, Path]]:
             idx = int(m.group(1))
             items.append((idx, p))
             continue
-        # legacy chapter01.txt -> index 1
-        m2 = re.match(r"^chapter(\d+)\.txt$", name, re.IGNORECASE)
-        if m2:
-            try:
-                idx = int(m2.group(1))
-                items.append((idx, p))
-            except ValueError:
-                pass
     items.sort(key=lambda t: t[0])
     return items
 

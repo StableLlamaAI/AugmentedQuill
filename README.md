@@ -134,11 +134,10 @@ Machine config supports multiple OpenAI model endpoints:
 
 - openai.models: array of endpoints with fields {name, base_url, api_key, model, timeout_s}
 - openai.selected: the name of the active endpoint
-- Legacy single fields (openai.api_key/base_url/model/timeout_s) are kept in sync with the selected endpoint for backward compatibility.
 
 In the Settings UI, you can add multiple endpoints, test availability, and load the list of remote models from an endpoint, then select which to use. All calls to the OpenAI API are done from the browser, not the backend.
 
-Environment variables recognized for OpenAI (legacy/selected mirror):
+Environment variables recognized for OpenAI:
 
 - OPENAI_API_KEY
 - OPENAI_BASE_URL

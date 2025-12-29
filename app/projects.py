@@ -87,13 +87,13 @@ def save_registry(current: str, recent: List[str]) -> None:
 def set_active_project(path: Path) -> None:
     reg = load_registry()
     current = str(path)
-    # Remove any existing entries matching this project (by path or by name, for backwards compatibility)
+    # Remove any existing entries matching this project.
     recent: List[str] = []
     for x in reg.get("recent", []) or []:
         if not x:
             continue
         try:
-            if str(x) == current or Path(str(x)).name == path.name:
+            if str(x) == current:
                 continue
         except Exception:
             pass
@@ -105,15 +105,12 @@ def get_active_project_dir() -> Path | None:
     reg = load_registry()
     cur = reg.get("current") or ""
     if cur:
-        # New format: registry stores a full path.
         try:
             p = Path(cur)
             if p.is_absolute():
                 return p
         except Exception:
             pass
-        # Backwards compatibility: registry stored just the project name.
-        return get_projects_root() / str(cur)
     return None
 
 
@@ -145,12 +142,12 @@ def delete_project(name: str) -> Tuple[bool, str]:
     reg = load_registry()
     current = reg.get("current") or ""
     recent = [x for x in reg.get("recent", []) if x]
-    # Handle both path-based and legacy name-based registry entries
+    # Registry entries are path-based.
     try:
         current_name = Path(str(current)).name if current else ""
     except Exception:
-        current_name = str(current) if current else ""
-    if current_name == name:
+        current_name = ""
+    if current_name and current_name == name:
         current = ""
     filtered_recent: List[str] = []
     for x in recent:
@@ -158,8 +155,7 @@ def delete_project(name: str) -> Tuple[bool, str]:
             if Path(str(x)).name == name:
                 continue
         except Exception:
-            if str(x) == name:
-                continue
+            continue
         filtered_recent.append(str(x))
     recent = filtered_recent
     save_registry(current, recent)

@@ -6,6 +6,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 import app.main as main
+import app.llm as llm
 from app.projects import select_project
 
 
@@ -40,14 +41,8 @@ class StreamingStoryTest(TestCase):
 
     def _patch_stream(self):
         # Patch credential resolver to avoid needing config
-        self._orig_resolve = getattr(main, "_resolve_openai_credentials")
-        self._orig_stream = getattr(main, "_openai_chat_complete_stream")
-
-        # Also patch the llm_shims resolver so endpoints that import the shim
-        # directly will receive the fake credentials.
-        import app.llm_shims as shims
-
-        self._orig_shims_resolve = getattr(shims, "_resolve_openai_credentials", None)
+        self._orig_resolve = llm.resolve_openai_credentials
+        self._orig_stream = llm.openai_chat_complete_stream
 
         def fake_resolve(payload):  # type: ignore
             return ("https://fake/v1", None, "fake-model", 5)
@@ -57,20 +52,12 @@ class StreamingStoryTest(TestCase):
             for part in ("A", "B", "C"):
                 yield part
 
-        main._resolve_openai_credentials = fake_resolve  # type: ignore
-        main._openai_chat_complete_stream = fake_stream  # type: ignore
-        shims._resolve_openai_credentials = fake_resolve  # type: ignore
+        llm.resolve_openai_credentials = fake_resolve  # type: ignore
+        llm.openai_chat_complete_stream = fake_stream  # type: ignore
 
         def _undo():
-            main._resolve_openai_credentials = self._orig_resolve  # type: ignore
-            main._openai_chat_complete_stream = self._orig_stream  # type: ignore
-            if self._orig_shims_resolve is None:
-                try:
-                    delattr(shims, "_resolve_openai_credentials")
-                except Exception:
-                    pass
-            else:
-                shims._resolve_openai_credentials = self._orig_shims_resolve  # type: ignore
+            llm.resolve_openai_credentials = self._orig_resolve  # type: ignore
+            llm.openai_chat_complete_stream = self._orig_stream  # type: ignore
 
         self.addCleanup(_undo)
 

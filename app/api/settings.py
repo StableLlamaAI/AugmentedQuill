@@ -89,8 +89,13 @@ async def api_settings_post(request: Request) -> JSONResponse:
             selected = models[0].get("name", "") if models else ""
         openai_cfg["selected"] = selected
     else:
-        # tolerate legacy single model structure
-        pass
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "detail": "At least one model must be configured in openai.models[].",
+            },
+        )
 
     machine_cfg = {"openai": openai_cfg}
 

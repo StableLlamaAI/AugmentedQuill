@@ -7,6 +7,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.llm as llm
 from app.projects import select_project
 
 
@@ -43,16 +44,13 @@ class EndpointsCoverageTest(TestCase):
             encoding="utf-8",
         )
 
-        # Patch LLM shims to deterministic fakes to avoid network calls
-        import app.main as m
+        # Patch LLM module to deterministic fakes to avoid network calls
+        self._orig_resolve = llm.resolve_openai_credentials
+        self._orig_complete = llm.openai_chat_complete
+        self._orig_complete_stream = llm.openai_chat_complete_stream
+        self._orig_completions_stream = llm.openai_completions_stream
 
-        # Save and patch
-        self._orig_resolve = getattr(m, "_resolve_openai_credentials", None)
-        self._orig_complete = getattr(m, "_openai_chat_complete", None)
-        self._orig_complete_stream = getattr(m, "_openai_chat_complete_stream", None)
-        self._orig_completions_stream = getattr(m, "_openai_completions_stream", None)
-
-        m._resolve_openai_credentials = lambda payload: (
+        llm.resolve_openai_credentials = lambda payload: (
             "https://fake",
             None,
             "fake",
@@ -69,43 +67,19 @@ class EndpointsCoverageTest(TestCase):
         async def fake_completions_stream(**kwargs):
             yield "suggestion chunk"
 
-        m._openai_chat_complete = fake_complete  # type: ignore
-        m._openai_chat_complete_stream = fake_complete_stream  # type: ignore
-        m._openai_completions_stream = fake_completions_stream  # type: ignore
+        llm.openai_chat_complete = fake_complete  # type: ignore
+        llm.openai_chat_complete_stream = fake_complete_stream  # type: ignore
+        llm.openai_completions_stream = fake_completions_stream  # type: ignore
 
-        self.addCleanup(self._undo_patches, m)
+        self.addCleanup(self._undo_patches)
 
         self.client = TestClient(app)
 
-    def _undo_patches(self, m):
-        if self._orig_resolve is None:
-            try:
-                delattr(m, "_resolve_openai_credentials")
-            except Exception:
-                pass
-        else:
-            m._resolve_openai_credentials = self._orig_resolve  # type: ignore
-        if self._orig_complete is None:
-            try:
-                delattr(m, "_openai_chat_complete")
-            except Exception:
-                pass
-        else:
-            m._openai_chat_complete = self._orig_complete  # type: ignore
-        if self._orig_complete_stream is None:
-            try:
-                delattr(m, "_openai_chat_complete_stream")
-            except Exception:
-                pass
-        else:
-            m._openai_chat_complete_stream = self._orig_complete_stream  # type: ignore
-        if self._orig_completions_stream is None:
-            try:
-                delattr(m, "_openai_completions_stream")
-            except Exception:
-                pass
-        else:
-            m._openai_completions_stream = self._orig_completions_stream  # type: ignore
+    def _undo_patches(self):
+        llm.resolve_openai_credentials = self._orig_resolve  # type: ignore
+        llm.openai_chat_complete = self._orig_complete  # type: ignore
+        llm.openai_chat_complete_stream = self._orig_complete_stream  # type: ignore
+        llm.openai_completions_stream = self._orig_completions_stream  # type: ignore
 
     def test_all_registered_routes_have_methods(self):
         """Assert every registered FastAPI route has a path and allowed methods.
