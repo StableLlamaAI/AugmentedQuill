@@ -22,27 +22,27 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   const isLight = theme === 'light';
 
   const bgClass = isLight
-    ? 'bg-stone-50 border-stone-200'
-    : 'bg-stone-900 border-stone-800';
-  const textHeader = isLight ? 'text-stone-500' : 'text-stone-400';
+    ? 'bg-brand-gray-50 border-brand-gray-200'
+    : 'bg-brand-gray-900 border-brand-gray-800';
+  const textHeader = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
   const btnHover = isLight
-    ? 'hover:bg-stone-200 text-stone-500 hover:text-stone-700'
-    : 'hover:bg-stone-800 text-stone-500 hover:text-stone-300';
+    ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
+    : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
 
   const itemActive = isLight
-    ? 'bg-white border-amber-400 shadow-sm'
-    : 'bg-stone-800 border-amber-500/50 shadow-sm';
+    ? 'bg-brand-gray-50 border-brand-400 shadow-sm'
+    : 'bg-brand-gray-800/50 border-brand-800 shadow-sm';
   const itemInactive = isLight
-    ? 'bg-transparent border-transparent hover:bg-stone-100'
-    : 'bg-transparent border-transparent hover:bg-stone-800';
-  const titleActive = isLight ? 'text-amber-700' : 'text-amber-400';
-  const titleInactive = isLight ? 'text-stone-700' : 'text-stone-300';
+    ? 'bg-transparent border-transparent hover:bg-brand-gray-100'
+    : 'bg-transparent border-transparent hover:bg-brand-gray-800/50';
+  const titleActive = isLight ? 'text-brand-700' : 'text-brand-300';
+  const titleInactive = isLight ? 'text-brand-gray-700' : 'text-brand-gray-400';
 
   return (
     <div className={`flex flex-col h-full border-r ${bgClass}`}>
       <div
         className={`p-4 border-b flex justify-between items-center sticky top-0 z-10 ${bgClass} ${
-          isLight ? 'border-stone-200' : 'border-stone-800'
+          isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
         }`}
       >
         <h2 className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}>
@@ -79,19 +79,19 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   e.stopPropagation();
                   onDelete(chapter.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-500 transition-opacity"
+                className="opacity-0 group-hover:opacity-100 p-1 text-brand-gray-400 hover:text-red-500 transition-opacity"
               >
                 <Trash2 size={14} />
               </button>
             </div>
-            <p className="text-xs text-stone-500 line-clamp-2">
+            <p className="text-xs text-brand-gray-500 line-clamp-2">
               {chapter.summary || 'No summary available...'}
             </p>
           </div>
         ))}
 
         {chapters.length === 0 && (
-          <div className="text-center py-10 text-stone-500">
+          <div className="text-center py-10 text-brand-gray-500">
             <FileText className="mx-auto mb-2 opacity-30" size={32} />
             <p className="text-sm">No chapters yet.</p>
           </div>

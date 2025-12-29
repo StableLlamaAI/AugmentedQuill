@@ -359,25 +359,36 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4">
       <div
         className={`w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
-          isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-700'
+          isLight
+            ? 'bg-brand-gray-50 border-brand-gray-200'
+            : 'bg-brand-gray-900 border-brand-gray-700'
         }`}
       >
         {/* Header */}
         <div
           className={`flex items-center justify-between p-4 border-b shrink-0 ${
-            isLight ? 'border-stone-200 bg-white' : 'border-stone-800 bg-stone-900'
+            isLight
+              ? 'border-brand-gray-200 bg-brand-gray-50'
+              : 'border-brand-gray-800 bg-brand-gray-900'
           }`}
         >
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-amber-600 rounded-lg">
-              <Settings className="text-white" size={20} />
+            <div
+              className={`p-2 rounded-lg ${
+                isLight ? 'bg-brand-600' : 'bg-brand-900/40 border border-brand-800/50'
+              }`}
+            >
+              <Settings
+                className={isLight ? 'text-white' : 'text-brand-300'}
+                size={20}
+              />
             </div>
             <h2
               className={`text-xl font-bold ${
-                isLight ? 'text-stone-800' : 'text-stone-200'
+                isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
               }`}
             >
               Settings
@@ -387,8 +398,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             onClick={onClose}
             className={`transition-colors ${
               isLight
-                ? 'text-stone-500 hover:text-stone-700'
-                : 'text-stone-500 hover:text-stone-300'
+                ? 'text-brand-gray-500 hover:text-brand-gray-700'
+                : 'text-brand-gray-500 hover:text-brand-gray-300'
             }`}
           >
             <X size={24} />
@@ -400,17 +411,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           {/* Sidebar / Navigation Tabs */}
           <div
             className={`w-full md:w-64 border-b md:border-b-0 md:border-r p-2 md:p-4 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto ${
-              isLight ? 'border-stone-200 bg-stone-50' : 'border-stone-800 bg-stone-950'
+              isLight
+                ? 'border-brand-gray-200 bg-brand-gray-50'
+                : 'border-brand-gray-800 bg-brand-gray-950'
             }`}
           >
             <button
               onClick={() => setActiveTab('projects')}
               className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
                 activeTab === 'projects'
-                  ? 'bg-amber-600 text-white border border-amber-500'
+                  ? isLight
+                    ? 'bg-brand-600 text-white border border-brand-500'
+                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
                   : isLight
-                  ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                  ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+                  : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
               }`}
             >
               <HardDrive size={18} />
@@ -420,10 +435,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               onClick={() => setActiveTab('machine')}
               className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
                 activeTab === 'machine'
-                  ? 'bg-amber-600 text-white border border-amber-500'
+                  ? isLight
+                    ? 'bg-brand-600 text-white border border-brand-500'
+                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
                   : isLight
-                  ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                  ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+                  : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
               }`}
             >
               <Cpu size={18} />
@@ -434,7 +451,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           {/* Tab Content */}
           <div
             className={`flex-1 overflow-y-auto p-4 md:p-8 ${
-              isLight ? 'bg-white' : 'bg-stone-900'
+              isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900'
             }`}
           >
             {activeTab === 'projects' && (
@@ -443,20 +460,24 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   <div>
                     <h3
                       className={`text-lg md:text-2xl font-bold mb-1 ${
-                        isLight ? 'text-stone-800' : 'text-stone-200'
+                        isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
                       }`}
                     >
                       Your Projects
                     </h3>
                     <p
                       className={`text-sm ${
-                        isLight ? 'text-stone-500' : 'text-stone-500'
+                        isLight ? 'text-brand-gray-500' : 'text-brand-gray-500'
                       }`}
                     >
                       Manage your stories and creative works.
                     </p>
                   </div>
-                  <Button onClick={onCreateProject} icon={<Plus size={16} />}>
+                  <Button
+                    theme={theme}
+                    onClick={onCreateProject}
+                    icon={<Plus size={16} />}
+                  >
                     New Project
                   </Button>
                 </div>
@@ -467,20 +488,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       key={proj.id}
                       className={`group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-all gap-3 ${
                         proj.id === activeProjectId
-                          ? 'bg-amber-50 border-amber-500/50'
+                          ? 'bg-brand-50 border-brand-500/50'
                           : isLight
-                          ? 'bg-stone-50 border-stone-200 hover:border-stone-300'
-                          : 'bg-stone-800 border-stone-700 hover:border-stone-600'
+                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:border-brand-gray-300'
+                          : 'bg-brand-gray-800 border-brand-gray-700 hover:border-brand-gray-600'
                       }`}
                     >
                       <div className="flex items-center space-x-4">
                         <div
                           className={`hidden sm:block w-2 h-12 rounded-full ${
                             proj.id === activeProjectId
-                              ? 'bg-amber-500'
+                              ? 'bg-brand-500'
                               : isLight
-                              ? 'bg-stone-300'
-                              : 'bg-stone-600'
+                              ? 'bg-brand-gray-300'
+                              : 'bg-brand-gray-600'
                           }`}
                         ></div>
                         <div className="flex-1">
@@ -489,10 +510,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               <input
                                 value={tempName}
                                 onChange={(e) => setTempName(e.target.value)}
-                                className={`border rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-full ${
+                                className={`border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 w-full ${
                                   isLight
-                                    ? 'bg-white border-stone-300 text-stone-800'
-                                    : 'bg-stone-950 border-stone-600 text-white'
+                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                    : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
                                 }`}
                                 autoFocus
                                 onKeyDown={(e) => {
@@ -507,7 +528,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   onRenameProject(proj.id, tempName);
                                   setEditingNameId(null);
                                 }}
-                                className="text-green-500 hover:text-green-400"
+                                className="text-brand-600 hover:text-brand-700"
                               >
                                 <Save size={16} />
                               </button>
@@ -516,7 +537,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             <div className="flex items-center space-x-2 group/title">
                               <h4
                                 className={`font-bold ${
-                                  isLight ? 'text-stone-800' : 'text-stone-200'
+                                  isLight
+                                    ? 'text-brand-gray-800'
+                                    : 'text-brand-gray-300'
                                 }`}
                               >
                                 {proj.title}
@@ -528,15 +551,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 }}
                                 className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${
                                   isLight
-                                    ? 'text-stone-500 hover:text-stone-700'
-                                    : 'text-stone-500 hover:text-stone-300'
+                                    ? 'text-brand-gray-500 hover:text-brand-gray-700'
+                                    : 'text-brand-gray-500 hover:text-brand-gray-300'
                                 }`}
                               >
                                 <Edit2 size={12} />
                               </button>
                             </div>
                           )}
-                          <p className="text-xs text-stone-500 mt-1">
+                          <p className="text-xs text-brand-gray-500 mt-1">
                             Last edited: {new Date(proj.updatedAt).toLocaleDateString()}
                           </p>
                         </div>
@@ -545,6 +568,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       <div className="flex items-center space-x-3 justify-end">
                         {proj.id !== activeProjectId && (
                           <Button
+                            theme={theme}
                             size="sm"
                             variant="secondary"
                             onClick={() => {
@@ -556,7 +580,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           </Button>
                         )}
                         {proj.id === activeProjectId && (
-                          <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                          <span className="text-xs font-medium text-brand-700 bg-brand-100 px-2 py-1 rounded">
                             Active
                           </span>
                         )}
@@ -564,8 +588,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           onClick={() => onDeleteProject(proj.id)}
                           className={`p-2 rounded transition-colors ${
                             isLight
-                              ? 'text-stone-400 hover:text-red-500 hover:bg-red-50'
-                              : 'text-stone-600 hover:text-red-400 hover:bg-red-950/30'
+                              ? 'text-brand-gray-600 hover:text-red-600 hover:bg-red-50'
+                              : 'text-brand-gray-500 hover:text-red-400 hover:bg-red-950/30'
                           }`}
                           title="Delete"
                         >
@@ -583,13 +607,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 {/* Provider List */}
                 <div
                   className={`w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r md:pr-6 overflow-y-auto shrink-0 ${
-                    isLight ? 'border-stone-200' : 'border-stone-800'
+                    isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
                   }`}
                 >
                   <div className="flex justify-between items-center mb-4">
                     <h3
                       className={`font-bold ${
-                        isLight ? 'text-stone-700' : 'text-stone-300'
+                        isLight ? 'text-brand-gray-700' : 'text-brand-gray-300'
                       }`}
                     >
                       Providers
@@ -598,8 +622,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       onClick={addProvider}
                       className={`p-1 rounded transition-colors ${
                         isLight
-                          ? 'bg-stone-100 text-stone-600 hover:text-amber-600'
-                          : 'bg-stone-800 text-stone-400 hover:text-amber-400'
+                          ? 'bg-brand-gray-100 text-brand-gray-600 hover:text-brand-600'
+                          : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-400'
                       }`}
                     >
                       <Plus size={18} />
@@ -612,22 +636,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         onClick={() => setEditingProviderId(p.id)}
                         className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 ${
                           editingProviderId === p.id
-                            ? 'bg-amber-50 border-amber-500/50'
+                            ? 'bg-brand-50 border-brand-500/50'
                             : isLight
-                            ? 'bg-stone-50 border-stone-200 hover:bg-stone-100'
-                            : 'bg-stone-800 border-stone-700 hover:bg-stone-750'
+                            ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-100'
+                            : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750'
                         }`}
                       >
                         <div className="flex justify-between items-center w-full">
                           <div className="truncate flex-1">
                             <div
                               className={`font-medium text-sm ${
-                                isLight ? 'text-stone-800' : 'text-stone-200'
+                                isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
                               }`}
                             >
                               {p.name}
                             </div>
-                            <div className="text-xs text-stone-500" />
+                            <div className="text-xs text-brand-gray-500" />
                           </div>
                           <div className="flex items-center space-x-2">
                             <span
@@ -637,10 +661,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   : connectionStatus[p.id] === 'error'
                                   ? 'bg-red-500 border-red-500'
                                   : connectionStatus[p.id] === 'loading'
-                                  ? 'bg-amber-500 border-amber-500'
+                                  ? 'bg-brand-500 border-brand-500'
                                   : isLight
-                                  ? 'bg-stone-200 border-stone-300'
-                                  : 'bg-stone-700 border-stone-600'
+                                  ? 'bg-brand-gray-200 border-brand-gray-300'
+                                  : 'bg-brand-gray-700 border-brand-gray-600'
                               }`}
                               title={connectionStatus[p.id] || 'idle'}
                             />
@@ -648,7 +672,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         </div>
                         <div className="flex gap-2">
                           {p.id === localSettings.activeChatProviderId && (
-                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                            <span className="text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded border border-brand-200 flex items-center gap-1">
                               <MessageSquare size={10} /> Chat
                             </span>
                           )}
@@ -671,17 +695,18 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         <div>
                           <h3
                             className={`text-xl font-bold ${
-                              isLight ? 'text-stone-800' : 'text-stone-200'
+                              isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
                             }`}
                           >
                             {activeProvider.name}
                           </h3>
-                          <p className="text-xs text-stone-500 mt-1">
+                          <p className="text-xs text-brand-gray-500 mt-1">
                             ID: {activeProvider.id}
                           </p>
                         </div>
                         <div className="flex space-x-2">
                           <Button
+                            theme={theme}
                             size="sm"
                             variant="danger"
                             onClick={() => removeProvider(activeProvider.id)}
@@ -695,8 +720,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       <div
                         className={`grid grid-cols-2 gap-3 p-3 rounded-lg border ${
                           isLight
-                            ? 'bg-stone-50 border-stone-200'
-                            : 'bg-stone-950 border-stone-800'
+                            ? 'bg-brand-gray-50 border-brand-gray-200'
+                            : 'bg-brand-gray-950 border-brand-gray-800'
                         }`}
                       >
                         <button
@@ -708,10 +733,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           }
                           className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${
                             localSettings.activeChatProviderId === activeProvider.id
-                              ? 'bg-amber-600 text-white shadow-md'
+                              ? isLight
+                                ? 'bg-brand-600 text-white shadow-md'
+                                : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
                               : isLight
-                              ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                              : 'bg-stone-800 text-stone-400 hover:bg-stone-700'
+                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <MessageSquare size={14} />
@@ -726,10 +753,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           }
                           className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${
                             localSettings.activeStoryProviderId === activeProvider.id
-                              ? 'bg-emerald-600 text-white shadow-md'
+                              ? isLight
+                                ? 'bg-emerald-600 text-white shadow-md'
+                                : 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/50'
                               : isLight
-                              ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                              : 'bg-stone-800 text-stone-400 hover:bg-stone-700'
+                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <BookOpen size={14} />
@@ -740,7 +769,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="text-xs font-medium text-stone-500 uppercase">
+                            <label className="text-xs font-medium text-brand-gray-500 uppercase">
                               Name
                             </label>
                             <input
@@ -750,10 +779,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   name: e.target.value,
                                 })
                               }
-                              className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
+                              className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
                                 isLight
-                                  ? 'bg-white border-stone-300 text-stone-800'
-                                  : 'bg-stone-950 border-stone-700 text-stone-200'
+                                  ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                  : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                               }`}
                             />
                           </div>
@@ -761,7 +790,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-stone-500 uppercase flex items-center gap-2">
+                          <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2">
                             <Terminal size={12} /> Base URL
                           </label>
                           <input
@@ -772,16 +801,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               })
                             }
                             placeholder={'https://api.openai.com/v1'}
-                            className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none disabled:opacity-50 ${
+                            className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-50 ${
                               isLight
-                                ? 'bg-white border-stone-300 text-stone-800'
-                                : 'bg-stone-950 border-stone-700 text-stone-200'
+                                ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                             }`}
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-stone-500 uppercase flex items-center gap-2">
+                          <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2">
                             <Key size={12} /> API Key
                           </label>
                           <div className="relative">
@@ -794,10 +823,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 })
                               }
                               placeholder="sk... (visible)"
-                              className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
+                              className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
                                 isLight
-                                  ? 'bg-white border-stone-300 text-stone-800'
-                                  : 'bg-stone-950 border-stone-700 text-stone-200'
+                                  ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                  : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                               }`}
                             />
                           </div>
@@ -809,10 +838,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   : connectionStatus[activeProvider.id] === 'error'
                                   ? 'bg-red-500'
                                   : connectionStatus[activeProvider.id] === 'loading'
-                                  ? 'bg-amber-500'
+                                  ? 'bg-brand-500'
                                   : isLight
-                                  ? 'bg-stone-300'
-                                  : 'bg-stone-600'
+                                  ? 'bg-brand-gray-300'
+                                  : 'bg-brand-gray-600'
                               }`}
                             />
                             {connectionStatus[activeProvider.id] === 'success' && (
@@ -822,20 +851,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               <span className="text-red-500">Connection failed</span>
                             )}
                             {connectionStatus[activeProvider.id] === 'loading' && (
-                              <span className="text-amber-600">Testing…</span>
+                              <span className="text-brand-600">Testing…</span>
                             )}
                             {(!connectionStatus[activeProvider.id] ||
                               connectionStatus[activeProvider.id] === 'idle') && (
-                              <span className="text-stone-500">Idle</span>
+                              <span className="text-brand-gray-500">Idle</span>
                             )}
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="text-xs font-medium text-stone-500 uppercase flex items-center justify-between">
+                            <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between">
                               <span>Model ID</span>
-                              <span className="text-xs text-stone-400">
+                              <span className="text-xs text-brand-gray-400">
                                 You can type a custom model id
                               </span>
                             </label>
@@ -853,10 +882,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   });
                                 }}
                                 placeholder="Select or type a model id"
-                                className={`w-full border rounded p-2 pr-9 text-sm focus:border-amber-500 focus:outline-none ${
+                                className={`w-full border rounded p-2 pr-9 text-sm focus:border-brand-500 focus:outline-none ${
                                   isLight
-                                    ? 'bg-white border-stone-300 text-stone-800'
-                                    : 'bg-stone-950 border-stone-700 text-stone-200'
+                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                                 }`}
                               />
                               <button
@@ -874,8 +903,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 }
                                 className={`absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded border text-xs transition-colors disabled:opacity-50 ${
                                   isLight
-                                    ? 'bg-white border-stone-300 text-stone-500 hover:bg-stone-50'
-                                    : 'bg-stone-950 border-stone-700 text-stone-400 hover:bg-stone-900'
+                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-500 hover:bg-brand-gray-50'
+                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-400 hover:bg-brand-gray-900'
                                 }`}
                                 title={
                                   (modelLists[activeProvider.id] || []).length === 0
@@ -891,8 +920,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   <div
                                     className={`absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded border shadow-lg ${
                                       isLight
-                                        ? 'bg-white border-stone-200'
-                                        : 'bg-stone-950 border-stone-800'
+                                        ? 'bg-brand-gray-50 border-brand-gray-200'
+                                        : 'bg-brand-gray-950 border-brand-gray-800'
                                     }`}
                                   >
                                     {(modelLists[activeProvider.id] || []).map(
@@ -912,11 +941,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                             className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                                               isSelected
                                                 ? isLight
-                                                  ? 'bg-amber-50 text-stone-900'
-                                                  : 'bg-stone-900 text-stone-100'
+                                                  ? 'bg-brand-50 text-brand-gray-900'
+                                                  : 'bg-brand-gray-900 text-brand-gray-300'
                                                 : isLight
-                                                ? 'text-stone-800 hover:bg-stone-50'
-                                                : 'text-stone-200 hover:bg-stone-900'
+                                                ? 'text-brand-gray-800 hover:bg-brand-gray-50'
+                                                : 'text-brand-gray-300 hover:bg-brand-gray-900'
                                             }`}
                                           >
                                             {m}
@@ -936,10 +965,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                     : modelStatus[activeProvider.id] === 'error'
                                     ? 'bg-red-500'
                                     : modelStatus[activeProvider.id] === 'loading'
-                                    ? 'bg-amber-500'
+                                    ? 'bg-brand-500'
                                     : isLight
-                                    ? 'bg-stone-300'
-                                    : 'bg-stone-600'
+                                    ? 'bg-brand-gray-300'
+                                    : 'bg-brand-gray-600'
                                 }`}
                               />
                               {modelStatus[activeProvider.id] === 'success' && (
@@ -949,16 +978,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 <span className="text-red-500">Model unavailable</span>
                               )}
                               {modelStatus[activeProvider.id] === 'loading' && (
-                                <span className="text-amber-600">Checking…</span>
+                                <span className="text-brand-600">Checking…</span>
                               )}
                               {(!modelStatus[activeProvider.id] ||
                                 modelStatus[activeProvider.id] === 'idle') && (
-                                <span className="text-stone-500">Idle</span>
+                                <span className="text-brand-gray-500">Idle</span>
                               )}
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-xs font-medium text-stone-500 uppercase">
+                            <label className="text-xs font-medium text-brand-gray-500 uppercase">
                               Timeout (ms)
                             </label>
                             <input
@@ -969,10 +998,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   timeout: Number(e.target.value),
                                 })
                               }
-                              className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
+                              className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
                                 isLight
-                                  ? 'bg-white border-stone-300 text-stone-800'
-                                  : 'bg-stone-950 border-stone-700 text-stone-200'
+                                  ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                  : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                               }`}
                             />
                           </div>
@@ -980,12 +1009,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                         <div
                           className={`pt-4 border-t ${
-                            isLight ? 'border-stone-200' : 'border-stone-800'
+                            isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
                           }`}
                         >
                           <h4
                             className={`text-sm font-bold mb-3 uppercase tracking-wider ${
-                              isLight ? 'text-stone-600' : 'text-stone-400'
+                              isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
                             }`}
                           >
                             Parameters
@@ -994,7 +1023,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             <div className="space-y-2">
                               <div
                                 className={`flex justify-between text-xs ${
-                                  isLight ? 'text-stone-600' : 'text-stone-400'
+                                  isLight
+                                    ? 'text-brand-gray-600'
+                                    : 'text-brand-gray-400'
                                 }`}
                               >
                                 <span>Temperature</span>{' '}
@@ -1011,13 +1042,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                     temperature: Number(e.target.value),
                                   })
                                 }
-                                className="w-full accent-amber-500"
+                                className="w-full accent-brand-500"
                               />
                             </div>
                             <div className="space-y-2">
                               <div
                                 className={`flex justify-between text-xs ${
-                                  isLight ? 'text-stone-600' : 'text-stone-400'
+                                  isLight
+                                    ? 'text-brand-gray-600'
+                                    : 'text-brand-gray-400'
                                 }`}
                               >
                                 <span>Top P</span> <span>{activeProvider.topP}</span>
@@ -1033,7 +1066,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                     topP: Number(e.target.value),
                                   })
                                 }
-                                className="w-full accent-amber-500"
+                                className="w-full accent-brand-500"
                               />
                             </div>
                           </div>
@@ -1041,19 +1074,19 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                         <div
                           className={`pt-4 border-t ${
-                            isLight ? 'border-stone-200' : 'border-stone-800'
+                            isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
                           }`}
                         >
                           <h4
                             className={`text-sm font-bold mb-3 uppercase tracking-wider ${
-                              isLight ? 'text-stone-600' : 'text-stone-400'
+                              isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
                             }`}
                           >
                             Expert: Prompt Overrides
                           </h4>
                           <div className="space-y-4">
                             <div className="space-y-1">
-                              <label className="text-xs font-medium text-stone-500">
+                              <label className="text-xs font-medium text-brand-gray-500">
                                 System Instruction (Chat Persona)
                               </label>
                               <textarea
@@ -1068,15 +1101,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   })
                                 }
                                 placeholder="Default persona..."
-                                className={`w-full border rounded p-2 text-xs focus:border-amber-500 focus:outline-none ${
+                                className={`w-full border rounded p-2 text-xs focus:border-brand-500 focus:outline-none ${
                                   isLight
-                                    ? 'bg-white border-stone-300 text-stone-800'
-                                    : 'bg-stone-950 border-stone-700 text-stone-300'
+                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                                 }`}
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs font-medium text-stone-500">
+                              <label className="text-xs font-medium text-brand-gray-500">
                                 Continuation Prompt
                               </label>
                               <textarea
@@ -1091,10 +1124,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   })
                                 }
                                 placeholder="Instruction for generating next paragraphs..."
-                                className={`w-full border rounded p-2 text-xs focus:border-amber-500 focus:outline-none ${
+                                className={`w-full border rounded p-2 text-xs focus:border-brand-500 focus:outline-none ${
                                   isLight
-                                    ? 'bg-white border-stone-300 text-stone-800'
-                                    : 'bg-stone-950 border-stone-700 text-stone-300'
+                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                                 }`}
                               />
                             </div>
@@ -1103,7 +1136,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-stone-600">
+                    <div className="h-full flex items-center justify-center text-brand-gray-600">
                       <p>Select a provider to configure</p>
                     </div>
                   )}
@@ -1116,7 +1149,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         {/* Footer */}
         <div
           className={`p-4 border-t shrink-0 flex justify-end ${
-            isLight ? 'border-stone-200 bg-white' : 'border-stone-800 bg-stone-900'
+            isLight
+              ? 'border-brand-gray-200 bg-brand-gray-50'
+              : 'border-brand-gray-800 bg-brand-gray-900'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -1127,6 +1162,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               </div>
             )}
             <Button
+              theme={theme}
               onClick={handleSave}
               icon={saveLoading ? <CheckCircle2 size={16} /> : <Save size={16} />}
               disabled={saveLoading}

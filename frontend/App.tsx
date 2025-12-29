@@ -653,28 +653,28 @@ Always prioritize the user's creative vision.`;
   const isLight = currentTheme === 'light';
 
   // Styles based on theme (Light vs Dark/Mixed for UI elements)
-  const bgMain = isLight ? 'bg-white' : 'bg-stone-950';
-  const textMain = isLight ? 'text-stone-800' : 'text-stone-200';
+  const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
+  const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
   const headerBg = isLight
-    ? 'bg-white border-stone-200'
-    : 'bg-stone-900 border-stone-800';
-  const iconColor = isLight ? 'text-stone-600' : 'text-stone-400';
-  const iconHover = isLight ? 'hover:text-stone-900' : 'hover:text-stone-200';
-  const dividerColor = isLight ? 'bg-stone-300' : 'bg-stone-800';
+    ? 'bg-brand-gray-50 border-brand-gray-200'
+    : 'bg-brand-gray-900 border-brand-gray-800';
+  const iconColor = isLight ? 'text-brand-gray-600' : 'text-brand-gray-400';
+  const iconHover = isLight ? 'hover:text-brand-gray-900' : 'hover:text-brand-gray-300';
+  const dividerColor = isLight ? 'bg-brand-gray-300' : 'bg-brand-gray-800';
   const buttonBg = isLight
-    ? 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-    : 'bg-stone-800 text-stone-300 hover:bg-stone-700';
+    ? 'bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200'
+    : 'bg-brand-gray-800/50 text-brand-gray-400 hover:bg-brand-gray-800 hover:text-brand-gray-300';
   const buttonActive = isLight
-    ? 'bg-amber-100 text-amber-700'
-    : 'bg-amber-700 text-white';
+    ? 'bg-brand-100 text-brand-700'
+    : 'bg-brand-900/40 text-brand-300 border border-brand-800/50';
 
   const getFormatButtonClass = (type: string) => {
     const isActive = activeFormats.includes(type);
     if (isActive) return `p-1.5 rounded-md transition-colors ${buttonActive}`;
     return `p-1.5 rounded-md transition-colors ${
       isLight
-        ? 'text-stone-500 hover:bg-stone-100 hover:text-stone-700'
-        : 'text-stone-500 hover:bg-stone-800 hover:text-stone-300'
+        ? 'text-brand-gray-500 hover:bg-brand-gray-100 hover:text-brand-gray-700'
+        : 'text-brand-gray-500 hover:bg-brand-gray-800 hover:text-brand-gray-300'
     }`;
   };
 
@@ -682,8 +682,10 @@ Always prioritize the user's creative vision.`;
     setEditorSettings((prev) => ({ ...prev, theme: t }));
   };
 
-  const sliderClass = `w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-amber-500 ${
-    isLight ? 'bg-stone-200' : 'bg-stone-800'
+  const sliderClass = `w-full h-1.5 rounded-lg appearance-none cursor-pointer ${
+    isLight
+      ? 'bg-brand-gray-200 accent-brand-600'
+      : 'bg-brand-gray-800 accent-brand-gray-500'
   }`;
 
   return (
@@ -724,7 +726,13 @@ Always prioritize the user's creative vision.`;
             className="flex items-center space-x-2 cursor-pointer"
             onClick={() => setIsSettingsOpen(true)}
           >
-            <div className="bg-amber-600 rounded-md p-1 shadow-lg shadow-amber-900/20">
+            <div
+              className={`rounded-md p-1 shadow-lg ${
+                isLight
+                  ? 'bg-brand-gray-100 border border-brand-gray-200 shadow-brand-900/10'
+                  : 'bg-brand-gray-800 border border-brand-gray-700 shadow-none'
+              }`}
+            >
               <img
                 src="/static/images/icon.svg"
                 className="w-6 h-6"
@@ -737,7 +745,7 @@ Always prioritize the user's creative vision.`;
               >
                 AugmentedQuill
               </span>
-              <span className="text-[10px] text-stone-500 font-mono leading-none hidden sm:inline">
+              <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden sm:inline">
                 {story.title}
               </span>
             </div>
@@ -747,6 +755,7 @@ Always prioritize the user's creative vision.`;
 
           <div className="flex space-x-1">
             <Button
+              theme={currentTheme}
               variant="ghost"
               size="sm"
               onClick={undo}
@@ -757,6 +766,7 @@ Always prioritize the user's creative vision.`;
               <Undo size={16} />
             </Button>
             <Button
+              theme={currentTheme}
               variant="ghost"
               size="sm"
               onClick={redo}
@@ -770,10 +780,11 @@ Always prioritize the user's creative vision.`;
 
           <div
             className={`hidden xl:flex items-center animate-in fade-in pl-2 border-l ${
-              isLight ? 'border-stone-200' : 'border-stone-800'
+              isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
             }`}
           >
             <Button
+              theme={currentTheme}
               variant={isSummaryOpen ? 'primary' : 'secondary'}
               size="sm"
               onClick={() => setIsSummaryOpen(!isSummaryOpen)}
@@ -793,16 +804,14 @@ Always prioritize the user's creative vision.`;
             <div
               className={`hidden lg:flex items-center p-1 rounded-lg border ${
                 isLight
-                  ? 'bg-stone-100 border-stone-200'
-                  : 'bg-stone-800 border-stone-700'
+                  ? 'bg-brand-gray-100 border-brand-gray-200'
+                  : 'bg-brand-gray-800 border-brand-gray-700'
               }`}
             >
               <button
                 onClick={() => setViewMode('raw')}
                 className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === 'raw'
-                    ? 'bg-amber-600 text-white'
-                    : `${iconColor} ${iconHover}`
+                  viewMode === 'raw' ? buttonActive : `${iconColor} ${iconHover}`
                 }`}
               >
                 <FileText size={13} />
@@ -811,9 +820,7 @@ Always prioritize the user's creative vision.`;
               <button
                 onClick={() => setViewMode('markdown')}
                 className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === 'markdown'
-                    ? 'bg-amber-600 text-white'
-                    : `${iconColor} ${iconHover}`
+                  viewMode === 'markdown' ? buttonActive : `${iconColor} ${iconHover}`
                 }`}
               >
                 <Code size={13} />
@@ -822,9 +829,7 @@ Always prioritize the user's creative vision.`;
               <button
                 onClick={() => setViewMode('wysiwyg')}
                 className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === 'wysiwyg'
-                    ? 'bg-amber-600 text-white'
-                    : `${iconColor} ${iconHover}`
+                  viewMode === 'wysiwyg' ? buttonActive : `${iconColor} ${iconHover}`
                 }`}
               >
                 <Eye size={13} />
@@ -834,9 +839,7 @@ Always prioritize the user's creative vision.`;
                 onClick={() => setShowWhitespace((s) => !s)}
                 title="Show whitespace"
                 className={`flex items-center px-2 py-1 ml-2 rounded-md text-xs font-medium transition-all ${
-                  showWhitespace
-                    ? 'bg-amber-600 text-white'
-                    : `${iconColor} ${iconHover}`
+                  showWhitespace ? buttonActive : `${iconColor} ${iconHover}`
                 }`}
               >
                 {showWhitespace ? 'WS On' : 'WS'}
@@ -849,8 +852,8 @@ Always prioritize the user's creative vision.`;
                 onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
                 className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium border ${
                   isLight
-                    ? 'bg-white border-stone-200 text-stone-700'
-                    : 'bg-stone-900 border-stone-700 text-stone-200'
+                    ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700'
+                    : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-300'
                 }`}
               >
                 {viewMode === 'raw' && (
@@ -883,8 +886,8 @@ Always prioritize the user's creative vision.`;
                   <div
                     className={`absolute top-full left-0 mt-2 w-32 rounded-lg shadow-lg border p-1 z-20 flex flex-col gap-1 ${
                       isLight
-                        ? 'bg-white border-stone-200'
-                        : 'bg-stone-800 border-stone-700'
+                        ? 'bg-brand-gray-50 border-brand-gray-200'
+                        : 'bg-brand-gray-800 border-brand-gray-700'
                     }`}
                   >
                     <button
@@ -894,8 +897,8 @@ Always prioritize the user's creative vision.`;
                       }}
                       className={`flex items-center space-x-2 px-2 py-1.5 rounded text-xs text-left ${
                         viewMode === 'raw'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          : 'hover:bg-stone-100 dark:hover:bg-stone-700'
+                          ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                          : 'hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700'
                       }`}
                     >
                       <FileText size={14} />
@@ -908,8 +911,8 @@ Always prioritize the user's creative vision.`;
                       }}
                       className={`flex items-center space-x-2 px-2 py-1.5 rounded text-xs text-left ${
                         viewMode === 'markdown'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          : 'hover:bg-stone-100 dark:hover:bg-stone-700'
+                          ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                          : 'hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700'
                       }`}
                     >
                       <Code size={14} />
@@ -922,8 +925,8 @@ Always prioritize the user's creative vision.`;
                       }}
                       className={`flex items-center space-x-2 px-2 py-1.5 rounded text-xs text-left ${
                         viewMode === 'wysiwyg'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          : 'hover:bg-stone-100 dark:hover:bg-stone-700'
+                          ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                          : 'hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700'
                       }`}
                     >
                       <Eye size={14} />
@@ -1028,8 +1031,8 @@ Always prioritize the user's creative vision.`;
                   isFormatMenuOpen
                     ? buttonActive
                     : isLight
-                    ? 'text-stone-500 hover:bg-stone-100'
-                    : 'text-stone-400 hover:bg-stone-800'
+                    ? 'text-brand-gray-500 hover:bg-brand-gray-100'
+                    : 'text-brand-gray-400 hover:bg-brand-gray-800'
                 }`}
                 title="Formatting"
               >
@@ -1045,8 +1048,8 @@ Always prioritize the user's creative vision.`;
                   <div
                     className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 rounded-lg shadow-xl border p-2 z-20 grid grid-cols-3 gap-1 ${
                       isLight
-                        ? 'bg-white border-stone-200'
-                        : 'bg-stone-800 border-stone-700'
+                        ? 'bg-brand-gray-50 border-brand-gray-200'
+                        : 'bg-brand-gray-800 border-brand-gray-700'
                     }`}
                   >
                     <button
@@ -1105,8 +1108,8 @@ Always prioritize the user's creative vision.`;
                 isMobileFormatMenuOpen
                   ? buttonActive
                   : isLight
-                  ? 'bg-white border-stone-200 text-stone-700'
-                  : 'bg-stone-900 border-stone-700 text-stone-200'
+                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700'
+                  : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-300'
               }`}
             >
               <Type size={16} />
@@ -1122,12 +1125,12 @@ Always prioritize the user's creative vision.`;
                 <div
                   className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 rounded-xl shadow-2xl border p-3 z-50 flex flex-col gap-3 ${
                     isLight
-                      ? 'bg-white border-stone-200'
-                      : 'bg-stone-900 border-stone-700'
+                      ? 'bg-brand-gray-50 border-brand-gray-200'
+                      : 'bg-brand-gray-900 border-brand-gray-700'
                   }`}
                 >
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-stone-500 mb-1">
+                    <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
                       Style
                     </div>
                     <div className="flex gap-1 justify-between">
@@ -1159,11 +1162,11 @@ Always prioritize the user's creative vision.`;
                   </div>
                   <div
                     className={`h-px w-full ${
-                      isLight ? 'bg-stone-100' : 'bg-stone-800'
+                      isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-800'
                     }`}
                   ></div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-stone-500 mb-1">
+                    <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
                       Paragraph
                     </div>
                     <div className="grid grid-cols-4 gap-1">
@@ -1203,11 +1206,11 @@ Always prioritize the user's creative vision.`;
                   </div>
                   <div
                     className={`h-px w-full ${
-                      isLight ? 'bg-stone-100' : 'bg-stone-800'
+                      isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-800'
                     }`}
                   ></div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase text-stone-500 mb-1">
+                    <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
                       Lists
                     </div>
                     <div className="flex gap-1">
@@ -1240,19 +1243,20 @@ Always prioritize the user's creative vision.`;
             <div
               className={`flex items-center rounded-md p-1 space-x-1 border ${
                 isLight
-                  ? 'bg-stone-100 border-stone-200'
-                  : 'bg-stone-800 border-stone-700'
+                  ? 'bg-brand-gray-100 border-brand-gray-200'
+                  : 'bg-brand-gray-800 border-brand-gray-700'
               }`}
             >
-              <span className="hidden 2xl:inline text-[10px] text-stone-500 font-bold uppercase px-2">
+              <span className="hidden 2xl:inline text-[10px] text-brand-gray-500 font-bold uppercase px-2">
                 Chapter AI
               </span>
               <div
                 className={`hidden 2xl:block w-px h-4 ${
-                  isLight ? 'bg-stone-300' : 'bg-stone-700'
+                  isLight ? 'bg-brand-gray-300' : 'bg-brand-gray-700'
                 }`}
               ></div>
               <Button
+                theme={currentTheme}
                 size="sm"
                 variant="ghost"
                 className="text-xs h-6"
@@ -1265,6 +1269,7 @@ Always prioritize the user's creative vision.`;
                 <span className="hidden xl:inline">Extend</span>
               </Button>
               <Button
+                theme={currentTheme}
                 size="sm"
                 variant="ghost"
                 className="text-xs h-6"
@@ -1283,6 +1288,7 @@ Always prioritize the user's creative vision.`;
         {/* Right: Settings & Panels */}
         <div className="flex items-center space-x-2 shrink-0">
           <Button
+            theme={currentTheme}
             variant="ghost"
             size="sm"
             onClick={() => setIsSettingsOpen(true)}
@@ -1294,6 +1300,7 @@ Always prioritize the user's creative vision.`;
           </Button>
           <div className="relative">
             <Button
+              theme={currentTheme}
               variant={isAppearanceOpen ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
@@ -1309,21 +1316,21 @@ Always prioritize the user's creative vision.`;
               <div
                 className={`absolute top-full right-0 mt-2 w-80 border rounded-lg shadow-2xl p-5 z-50 ${
                   isLight
-                    ? 'bg-white border-stone-200'
-                    : 'bg-stone-900 border-stone-700'
+                    ? 'bg-brand-gray-50 border-brand-gray-200'
+                    : 'bg-brand-gray-900 border-brand-gray-700'
                 }`}
               >
                 <div
                   className={`flex justify-between items-center mb-4 border-b pb-2 ${
-                    isLight ? 'border-stone-200' : 'border-stone-800'
+                    isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
                   }`}
                 >
-                  <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-brand-gray-500 uppercase tracking-wider">
                     Page Appearance
                   </h3>
                   <button
                     onClick={() => setIsAppearanceOpen(false)}
-                    className="text-stone-500 hover:text-stone-400"
+                    className="text-brand-gray-500 hover:text-brand-gray-400"
                   >
                     <X size={14} />
                   </button>
@@ -1337,13 +1344,13 @@ Always prioritize the user's creative vision.`;
                         <Palette size={14} /> Design Mode
                       </span>
                     </div>
-                    <div className="flex rounded-lg overflow-hidden border border-stone-700">
+                    <div className="flex rounded-lg overflow-hidden border border-brand-gray-700">
                       <button
                         onClick={() => setAppTheme('light')}
                         className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                           currentTheme === 'light'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-stone-800 text-stone-400 hover:text-stone-200'
+                            ? buttonActive
+                            : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
                         }`}
                       >
                         <Sun size={12} /> Light
@@ -1352,8 +1359,8 @@ Always prioritize the user's creative vision.`;
                         onClick={() => setAppTheme('mixed')}
                         className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                           currentTheme === 'mixed'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-stone-800 text-stone-400 hover:text-stone-200'
+                            ? buttonActive
+                            : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
                         }`}
                       >
                         <LayoutTemplate size={12} /> Mixed
@@ -1362,8 +1369,8 @@ Always prioritize the user's creative vision.`;
                         onClick={() => setAppTheme('dark')}
                         className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                           currentTheme === 'dark'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-stone-800 text-stone-400 hover:text-stone-200'
+                            ? buttonActive
+                            : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
                         }`}
                       >
                         <Moon size={12} /> Dark
@@ -1377,7 +1384,7 @@ Always prioritize the user's creative vision.`;
                       <span className="flex items-center gap-2">
                         <Sun size={14} /> Brightness
                       </span>
-                      <span className="font-mono text-xs text-stone-500">
+                      <span className="font-mono text-xs text-brand-gray-500">
                         {Math.round(editorSettings.brightness * 100)}%
                       </span>
                     </div>
@@ -1402,7 +1409,7 @@ Always prioritize the user's creative vision.`;
                       <span className="flex items-center gap-2">
                         <Moon size={14} /> Contrast
                       </span>
-                      <span className="font-mono text-xs text-stone-500">
+                      <span className="font-mono text-xs text-brand-gray-500">
                         {Math.round(editorSettings.contrast * 100)}%
                       </span>
                     </div>
@@ -1427,7 +1434,7 @@ Always prioritize the user's creative vision.`;
                       <span className="flex items-center gap-2">
                         <Type size={14} /> Font Size
                       </span>
-                      <span className="font-mono text-xs text-stone-500">
+                      <span className="font-mono text-xs text-brand-gray-500">
                         {editorSettings.fontSize}px
                       </span>
                     </div>
@@ -1452,7 +1459,7 @@ Always prioritize the user's creative vision.`;
                       <span className="flex items-center gap-2">
                         <Monitor size={14} /> Line Width
                       </span>
-                      <span className="font-mono text-xs text-stone-500">
+                      <span className="font-mono text-xs text-brand-gray-500">
                         {editorSettings.maxWidth}ch
                       </span>
                     </div>
@@ -1477,7 +1484,7 @@ Always prioritize the user's creative vision.`;
                       <span className="flex items-center gap-2">
                         <SplitSquareHorizontal size={14} /> Sidebar Width
                       </span>
-                      <span className="font-mono text-xs text-stone-500">
+                      <span className="font-mono text-xs text-brand-gray-500">
                         {editorSettings.sidebarWidth}px
                       </span>
                     </div>
@@ -1502,6 +1509,7 @@ Always prioritize the user's creative vision.`;
           </div>
 
           <Button
+            theme={currentTheme}
             variant="secondary"
             size="sm"
             onClick={() => setIsChatOpen(!isChatOpen)}
@@ -1519,7 +1527,7 @@ Always prioritize the user's creative vision.`;
       <div className="flex-1 flex overflow-hidden relative">
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+            className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           ></div>
         )}
@@ -1527,7 +1535,9 @@ Always prioritize the user's creative vision.`;
           className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex ${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } ${
-            isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-900 border-stone-800'
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-200'
+              : 'bg-brand-gray-900 border-brand-gray-800'
           }`}
         >
           <StoryMetadata
@@ -1572,7 +1582,7 @@ Always prioritize the user's creative vision.`;
                 onToggleShowWhitespace={() => setShowWhitespace((s) => !s)}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-stone-500">
+              <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
                 <img
                   src="/static/images/logo_2048.png"
                   className="w-64 h-64 mb-8 opacity-20"

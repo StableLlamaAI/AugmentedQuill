@@ -23,17 +23,18 @@ export const Button: React.FC<ButtonProps> = ({
   const isLight = theme === 'light';
 
   const variants = {
-    primary:
-      'bg-amber-600 text-white border-transparent hover:bg-amber-700 focus:ring-amber-500',
+    primary: isLight
+      ? 'bg-brand-700 text-white border-transparent hover:bg-brand-800 focus:ring-brand-500'
+      : 'bg-brand-900/30 text-brand-300 border-brand-800/50 hover:bg-brand-900/50 hover:text-brand-200 focus:ring-brand-500',
     secondary: isLight
-      ? 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50 focus:ring-amber-500'
-      : 'bg-stone-800 text-stone-200 border-stone-700 hover:bg-stone-700 focus:ring-amber-500',
+      ? 'bg-brand-gray-100 text-brand-gray-800 border-brand-gray-300 hover:bg-brand-gray-200 focus:ring-brand-500'
+      : 'bg-brand-gray-800/50 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-800 hover:text-brand-gray-200 focus:ring-brand-500',
     danger: isLight
-      ? 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200 focus:ring-red-500'
-      : 'bg-red-900/50 text-red-200 border-red-900 hover:bg-red-900 focus:ring-red-500',
+      ? 'bg-red-600 text-white border-transparent hover:bg-red-700 focus:ring-red-500'
+      : 'bg-red-950/30 text-red-300 border-red-900/50 hover:bg-red-950/50 focus:ring-red-500',
     ghost: isLight
-      ? 'text-stone-500 border-transparent hover:bg-stone-200 hover:text-stone-900 focus:ring-stone-400'
-      : 'text-stone-400 border-transparent hover:bg-stone-800 hover:text-stone-200 focus:ring-stone-500',
+      ? 'text-brand-gray-600 border-transparent hover:bg-brand-gray-200 hover:text-brand-gray-900 focus:ring-brand-gray-400'
+      : 'text-brand-gray-400 border-transparent hover:bg-brand-gray-800 hover:text-brand-gray-200 focus:ring-brand-gray-500',
   };
 
   const sizes = {

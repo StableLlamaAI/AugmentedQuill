@@ -19,8 +19,8 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
       const level = headerMatch[1].length;
       const sizeClass = level === 1 ? 'text-2xl' : level === 2 ? 'text-xl' : 'text-lg';
       return (
-        <div key={i} className={`font-bold text-amber-700/90 ${sizeClass} mt-4 mb-2`}>
-          <span className="text-amber-500/40 font-mono text-sm mr-1">
+        <div key={i} className={`font-bold text-brand-700/90 ${sizeClass} mt-4 mb-2`}>
+          <span className="text-brand-500/40 font-mono text-sm mr-1">
             {headerMatch[1]}
           </span>
           {renderInline(headerMatch[3])}
@@ -34,9 +34,11 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
       return (
         <div
           key={i}
-          className="text-stone-500 italic pl-3 border-l-4 border-stone-600/30 my-2"
+          className="text-brand-gray-500 italic pl-3 border-l-4 border-brand-gray-600/30 my-2"
         >
-          <span className="text-stone-700/30 select-none mr-1">{quoteMatch[1]}</span>
+          <span className="text-brand-gray-700/30 select-none mr-1">
+            {quoteMatch[1]}
+          </span>
           {renderInline(quoteMatch[3])}
         </div>
       );
@@ -47,7 +49,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
     if (ulMatch && !simple) {
       return (
         <div key={i} className="pl-4 relative">
-          <span className="absolute left-0 text-amber-600 font-bold font-mono">
+          <span className="absolute left-0 text-brand-600 font-bold font-mono">
             {ulMatch[1]}
           </span>
           <span className="ml-4">{renderInline(ulMatch[3])}</span>
@@ -60,7 +62,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
     if (olMatch && !simple) {
       return (
         <div key={i} className="pl-4 relative">
-          <span className="absolute left-0 text-amber-600 font-bold font-mono">
+          <span className="absolute left-0 text-brand-600 font-bold font-mono">
             {olMatch[1]}
           </span>
           <span className="ml-5">{renderInline(olMatch[3])}</span>
@@ -74,16 +76,16 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
       return (
         <div
           key={i}
-          className="my-2 p-2 bg-stone-900/50 rounded border border-stone-800 flex items-center gap-2 text-stone-400 text-sm font-mono"
+          className="my-2 p-2 bg-brand-gray-900/50 rounded border border-brand-gray-800 flex items-center gap-2 text-brand-gray-400 text-sm font-mono"
         >
-          <ImageIcon size={14} className="text-amber-500" />
-          <span className="text-stone-500">![</span>
-          <span className="text-stone-300">{imgMatch[1]}</span>
-          <span className="text-stone-500">](</span>
-          <span className="text-blue-400 underline truncate max-w-[200px]">
+          <ImageIcon size={14} className="text-brand-500" />
+          <span className="text-brand-gray-500">![</span>
+          <span className="text-brand-gray-300">{imgMatch[1]}</span>
+          <span className="text-brand-gray-500">](</span>
+          <span className="text-brand-500 underline truncate max-w-[200px]">
             {imgMatch[2]}
           </span>
-          <span className="text-stone-500">)</span>
+          <span className="text-brand-gray-500">)</span>
         </div>
       );
     }
@@ -92,8 +94,8 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
     const fnMatch = line.match(/^(\[\^.*?\]:)(\s)(.*)/);
     if (fnMatch && !simple) {
       return (
-        <div key={i} className="text-xs text-stone-500 mt-1">
-          <span className="text-amber-600 font-mono">{fnMatch[1]}</span>
+        <div key={i} className="text-xs text-brand-gray-500 mt-1">
+          <span className="text-brand-600 font-mono">{fnMatch[1]}</span>
           {renderInline(fnMatch[3])}
         </div>
       );
@@ -130,7 +132,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
         return (
           <span
             key={index}
-            className="text-stone-400 font-mono text-sm bg-stone-800/50 rounded px-1"
+            className="text-brand-gray-400 font-mono text-sm bg-brand-gray-800/50 rounded px-1"
           >
             {part}
           </span>
@@ -143,7 +145,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
         return (
           <span
             key={index}
-            className="text-amber-600 underline decoration-amber-600/30"
+            className="text-brand-600 underline decoration-brand-600/30"
           >
             {part}
           </span>
@@ -153,7 +155,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
       // Footnote Ref
       if (part.startsWith('[^') && part.endsWith(']')) {
         return (
-          <sup key={index} className="text-amber-600 font-mono text-xs">
+          <sup key={index} className="text-brand-600 font-mono text-xs">
             {part}
           </sup>
         );
@@ -165,7 +167,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
         (part.startsWith('__') && part.endsWith('__'))
       ) {
         return (
-          <span key={index} className="font-bold text-amber-700">
+          <span key={index} className="font-bold text-brand-700">
             {part}
           </span>
         );
@@ -177,7 +179,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
         (part.startsWith('_') && part.endsWith('_'))
       ) {
         return (
-          <span key={index} className="italic text-amber-600">
+          <span key={index} className="italic text-brand-600">
             {part}
           </span>
         );
@@ -188,7 +190,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
         return (
           <span
             key={index}
-            className="font-mono text-stone-400 bg-stone-800 rounded px-1 text-sm"
+            className="font-mono text-brand-gray-400 bg-brand-gray-800 rounded px-1 text-sm"
           >
             {part}
           </span>
@@ -221,7 +223,7 @@ export const hasUnsupportedSummaryMarkdown = (text: string): boolean => {
 
 export const SummaryWarning: React.FC = () => (
   <div
-    className="inline-flex items-center space-x-1 text-amber-500 bg-amber-950/30 px-2 py-1 rounded text-[10px] border border-amber-500/20 ml-2"
+    className="inline-flex items-center space-x-1 text-brand-500 bg-brand-950/30 px-2 py-1 rounded text-[10px] border border-brand-500/20 ml-2"
     title="Summaries should mostly use Bold and Italic. Other formatting might distract."
   >
     <AlertTriangle size={10} />

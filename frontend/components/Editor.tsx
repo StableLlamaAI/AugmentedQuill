@@ -437,11 +437,12 @@ export const Editor = React.forwardRef<any, EditorProps>(
       const b = settings.brightness * 20; // range 10-20% lightness
       pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
       textColor = `rgba(231, 229, 228, ${settings.contrast})`;
-      editorContainerBg = 'bg-stone-950';
+      editorContainerBg = 'bg-brand-gray-950';
     } else {
       pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
       textColor = `rgba(20, 15, 10, ${settings.contrast})`;
-      editorContainerBg = settings.theme === 'light' ? 'bg-stone-100' : 'bg-stone-950';
+      editorContainerBg =
+        settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
     }
 
     const isMonospace = viewMode === 'raw';
@@ -466,21 +467,22 @@ export const Editor = React.forwardRef<any, EditorProps>(
 
     const toolbarBg =
       settings.theme === 'light'
-        ? 'bg-white border-b border-stone-200 shadow-sm'
-        : 'bg-stone-900 border-b border-stone-800 shadow-sm';
+        ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
+        : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
     const summaryBg =
       settings.theme === 'light'
-        ? 'bg-white border-b border-stone-200'
-        : 'bg-stone-900 border-b border-stone-800';
+        ? 'bg-brand-gray-50 border-b border-brand-gray-200'
+        : 'bg-brand-gray-900 border-b border-brand-gray-800';
     const inputBg =
       settings.theme === 'light'
-        ? 'bg-stone-50 border-stone-300 text-stone-900'
-        : 'bg-stone-950 border-stone-800 text-stone-300';
-    const textMuted = settings.theme === 'light' ? 'text-stone-500' : 'text-stone-500';
+        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
+        : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
+    const textMuted =
+      settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
     const footerBg =
       settings.theme === 'light'
-        ? 'bg-white border-t border-stone-200'
-        : 'bg-stone-900 border-t border-stone-800';
+        ? 'bg-brand-gray-50 border-t border-brand-gray-200'
+        : 'bg-brand-gray-900 border-t border-brand-gray-800';
 
     return (
       <div
@@ -491,6 +493,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
           <div className="h-14 flex items-center justify-between px-4">
             <div className="flex items-center space-x-3">
               <Button
+                theme={settings.theme}
                 variant={isSummaryOpen ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={onToggleSummary}
@@ -504,7 +507,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
             <div className="flex items-center space-x-2">
               <div
                 className={`flex items-center rounded-md p-1 space-x-1 ${
-                  settings.theme === 'light' ? 'bg-stone-100' : 'bg-stone-800'
+                  settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-800'
                 }`}
               >
                 <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
@@ -512,10 +515,13 @@ export const Editor = React.forwardRef<any, EditorProps>(
                 </span>
                 <div
                   className={`w-px h-4 ${
-                    settings.theme === 'light' ? 'bg-stone-300' : 'bg-stone-700'
+                    settings.theme === 'light'
+                      ? 'bg-brand-gray-300'
+                      : 'bg-brand-gray-700'
                   }`}
                 ></div>
                 <Button
+                  theme={settings.theme}
                   size="sm"
                   variant="ghost"
                   className="text-xs h-7"
@@ -527,6 +533,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
                   Extend
                 </Button>
                 <Button
+                  theme={settings.theme}
                   size="sm"
                   variant="ghost"
                   className="text-xs h-7"
@@ -556,6 +563,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
                 </label>
                 <div className="flex space-x-2">
                   <Button
+                    theme={settings.theme}
                     size="sm"
                     variant="secondary"
                     className="text-xs h-6 py-0 px-2"
@@ -567,6 +575,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
                     AI Update
                   </Button>
                   <Button
+                    theme={settings.theme}
                     size="sm"
                     variant="secondary"
                     className="text-xs h-6 py-0 px-2"
@@ -582,7 +591,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
               <textarea
                 value={chapter.summary}
                 onChange={(e) => onChange(chapter.id, { summary: e.target.value })}
-                className={`w-full text-sm font-sans rounded p-3 focus:outline-none resize-y min-h-[80px] border ${inputBg} focus:border-amber-500`}
+                className={`w-full text-sm font-sans rounded p-3 focus:outline-none resize-y min-h-[80px] border ${inputBg} focus:border-brand-500`}
                 placeholder="Write a brief summary of this chapter (used by AI for context)..."
               />
             </div>
@@ -608,7 +617,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
             <PlainTextEditable
               value={chapter.title}
               onChange={(val: string) => onChange(chapter.id, { title: val })}
-              className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-stone-400/50 transition-colors block"
+              className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors block"
               placeholder="Chapter Title"
               style={{
                 ...commonTextStyle,
@@ -673,7 +682,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
           {continuations.length > 0 ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center space-x-2 text-amber-500">
+                <div className="flex items-center space-x-2 text-brand-500">
                   <SplitSquareHorizontal size={18} />
                   <span className="text-xs font-bold uppercase tracking-wider">
                     Choose a continuation
@@ -681,7 +690,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
                 </div>
                 <button
                   onClick={() => onAcceptContinuation('')}
-                  className={`${textMuted} hover:text-stone-800 text-xs`}
+                  className={`${textMuted} hover:text-brand-gray-800 text-xs`}
                 >
                   Dismiss
                 </button>
@@ -694,15 +703,15 @@ export const Editor = React.forwardRef<any, EditorProps>(
                     onClick={() => onAcceptContinuation(option)}
                     className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
                       settings.theme === 'light'
-                        ? 'bg-stone-50 border-stone-200 hover:bg-white hover:border-amber-300'
-                        : 'bg-stone-800 border-stone-700 hover:bg-stone-750 hover:border-amber-500/50'
+                        ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
+                        : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
                     }`}
                   >
                     <div
                       className={`font-serif text-lg leading-relaxed ${
                         settings.theme === 'light'
-                          ? 'text-stone-800'
-                          : 'text-stone-300 group-hover:text-stone-100'
+                          ? 'text-brand-gray-800'
+                          : 'text-brand-gray-300 group-hover:text-brand-gray-200'
                       }`}
                     >
                       {option}
@@ -718,18 +727,18 @@ export const Editor = React.forwardRef<any, EditorProps>(
                 disabled={isSuggesting || isAiLoading}
                 className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.theme === 'light'
-                    ? 'bg-white border-stone-200 hover:bg-stone-50 text-stone-600'
-                    : 'bg-stone-800 border-stone-700 hover:bg-stone-700 hover:border-amber-500/30 text-stone-300'
+                    ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
+                    : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
                 }`}
               >
                 {isSuggesting || isAiLoading ? (
                   <>
-                    <Loader2 className="animate-spin text-amber-500" size={18} />
+                    <Loader2 className="animate-spin text-brand-500" size={18} />
                     <span className="font-medium text-sm">Working...</span>
                   </>
                 ) : (
                   <>
-                    <div className="bg-amber-100 dark:bg-amber-900/50 p-1 rounded-md text-amber-600 dark:text-amber-400">
+                    <div className="bg-brand-100 dark:bg-brand-gray-700 p-1 rounded-md text-brand-600 dark:text-brand-gray-300">
                       <Sparkles size={16} />
                     </div>
                     <span className="font-medium text-sm">Suggest next paragraph</span>

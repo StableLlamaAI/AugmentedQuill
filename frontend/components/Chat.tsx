@@ -48,17 +48,19 @@ export const Chat: React.FC<ChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isLight = theme === 'light';
-  const bgMain = isLight ? 'bg-stone-50' : 'bg-stone-900';
-  const borderMain = isLight ? 'border-stone-200' : 'border-stone-800';
-  const textMain = isLight ? 'text-stone-800' : 'text-stone-300';
-  const headerBg = isLight ? 'bg-stone-100' : 'bg-stone-900';
-  const msgUserBg = 'bg-amber-600 text-white';
+  const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
+  const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
+  const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-400';
+  const headerBg = isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900';
+  const msgUserBg = isLight
+    ? 'bg-brand-600 text-white'
+    : 'bg-brand-900/40 text-brand-300 border border-brand-800/50';
   const msgBotBg = isLight
-    ? 'bg-white border border-stone-200 shadow-sm'
-    : 'bg-stone-800 border border-stone-700 shadow-sm';
+    ? 'bg-brand-gray-50 border border-brand-gray-200 shadow-sm'
+    : 'bg-brand-gray-800/50 border border-brand-gray-700 shadow-sm';
   const inputBg = isLight
-    ? 'bg-white border-stone-300 text-stone-900'
-    : 'bg-stone-800 border-stone-700 text-stone-200';
+    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
+    : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -114,15 +116,15 @@ export const Chat: React.FC<ChatProps> = ({
         className={`p-4 border-b flex items-center justify-between ${headerBg} ${borderMain}`}
       >
         <div className="flex items-center space-x-2">
-          <Sparkles className="text-amber-500" size={20} />
+          <Sparkles className="text-brand-500" size={20} />
           <h2 className="font-semibold">Writing Partner</h2>
         </div>
         <button
           onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-          className={`p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors ${
+          className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
             showSystemPrompt
-              ? 'bg-stone-200 dark:bg-stone-800 text-amber-600'
-              : 'text-stone-500'
+              ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
+              : 'text-brand-gray-500'
           }`}
           title="Chat Settings"
         >
@@ -134,17 +136,18 @@ export const Chat: React.FC<ChatProps> = ({
         <div
           className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}
         >
-          <label className="block text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
+          <label className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2">
             System Instruction
           </label>
           <textarea
             value={tempSystemPrompt}
             onChange={(e) => setTempSystemPrompt(e.target.value)}
-            className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-amber-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
+            className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
             placeholder="Define the AI's persona and rules..."
           />
           <div className="flex justify-end space-x-2">
             <Button
+              theme={theme}
               size="sm"
               variant="ghost"
               onClick={() => setShowSystemPrompt(false)}
@@ -153,6 +156,7 @@ export const Chat: React.FC<ChatProps> = ({
               Cancel
             </Button>
             <Button
+              theme={theme}
               size="sm"
               variant="primary"
               onClick={handleSystemPromptSave}
@@ -166,11 +170,11 @@ export const Chat: React.FC<ChatProps> = ({
 
       <div
         className={`flex-1 overflow-y-auto p-4 space-y-4 ${
-          isLight ? 'bg-stone-50' : 'bg-stone-950/30'
+          isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
       >
         {messages.length === 0 && !showSystemPrompt && (
-          <div className="text-center text-stone-500 mt-10 p-4">
+          <div className="text-center text-brand-gray-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
             <p className="text-sm">
               I'm your AI co-author. Ask me to write, edit, or brainstorm ideas for your
@@ -189,10 +193,10 @@ export const Chat: React.FC<ChatProps> = ({
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
                 msg.role === 'user'
-                  ? 'bg-amber-100 border-amber-200 text-amber-700'
+                  ? 'bg-brand-100 border-brand-200 text-brand-700'
                   : isLight
-                  ? 'bg-white border-stone-200 text-stone-500'
-                  : 'bg-stone-800 border-stone-700 text-stone-400'
+                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-500'
+                  : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-400'
               }`}
             >
               {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
@@ -203,25 +207,25 @@ export const Chat: React.FC<ChatProps> = ({
                 <div
                   className={`border rounded-lg p-3 shadow-lg ${
                     isLight
-                      ? 'bg-white border-stone-200'
-                      : 'bg-stone-800 border-stone-600'
+                      ? 'bg-brand-gray-50 border-brand-gray-200'
+                      : 'bg-brand-gray-800 border-brand-gray-600'
                   }`}
                 >
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-amber-500 min-h-[100px] ${inputBg}`}
+                    className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
                   />
                   <div className="flex justify-end space-x-2 mt-2">
                     <button
                       onClick={cancelEdit}
-                      className="p-1 text-stone-400 hover:text-stone-600"
+                      className="p-1 text-brand-gray-400 hover:text-brand-gray-600"
                     >
                       <X size={14} />
                     </button>
                     <button
                       onClick={() => saveEdit(msg.id)}
-                      className="p-1 text-emerald-500 hover:text-emerald-600"
+                      className="p-1 text-brand-500 hover:opacity-80"
                     >
                       <Save size={14} />
                     </button>
@@ -247,14 +251,14 @@ export const Chat: React.FC<ChatProps> = ({
                 >
                   <button
                     onClick={() => startEditing(msg)}
-                    className="p-1 text-stone-400 hover:text-stone-600 bg-black/5 rounded"
+                    className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
                     title="Edit"
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
                     onClick={() => onDeleteMessage(msg.id)}
-                    className="p-1 text-stone-400 hover:text-red-500 bg-black/5 rounded"
+                    className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
                     title="Delete"
                   >
                     <Trash2 size={12} />
@@ -270,18 +274,20 @@ export const Chat: React.FC<ChatProps> = ({
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
                 isLight
-                  ? 'bg-white border-stone-200'
-                  : 'bg-stone-900/30 border-stone-800'
+                  ? 'bg-brand-gray-50 border-brand-gray-200'
+                  : 'bg-brand-gray-900/30 border-brand-gray-800'
               }`}
             >
-              <Bot size={16} className="text-stone-400" />
+              <Bot size={16} className="text-brand-gray-400" />
             </div>
             <div
               className={`px-4 py-2 rounded-lg shadow-sm border ${
-                isLight ? 'bg-white border-stone-200' : 'bg-stone-800 border-stone-700'
+                isLight
+                  ? 'bg-brand-gray-50 border-brand-gray-200'
+                  : 'bg-brand-gray-800 border-brand-gray-700'
               }`}
             >
-              <Loader2 className="animate-spin text-amber-500" size={16} />
+              <Loader2 className="animate-spin text-brand-500" size={16} />
             </div>
           </div>
         )}
@@ -292,6 +298,7 @@ export const Chat: React.FC<ChatProps> = ({
         {canRegenerate && (
           <div className="flex justify-center mb-4">
             <Button
+              theme={theme}
               size="sm"
               variant="secondary"
               onClick={onRegenerate}
@@ -310,13 +317,13 @@ export const Chat: React.FC<ChatProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your instruction..."
-            className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all text-sm placeholder-stone-400 border ${inputBg}`}
+            className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border ${inputBg}`}
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-amber-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-200 dark:hover:bg-stone-700 rounded-full transition-colors"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-gray-200 dark:hover:bg-brand-gray-700 rounded-full transition-colors"
           >
             <Send size={18} />
           </button>
