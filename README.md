@@ -53,9 +53,14 @@ app/
 ├── config.py            # Configuration loading
 ├── projects.py          # Project management
 └── llm.py               # LLM client implementation
-frontend/                # React Frontend Source
-├── src/
-├── public/
+frontend/                # React/Vite frontend (SPA)
+├── App.tsx
+├── index.html
+├── index.tsx
+├── components/
+├── hooks/
+├── services/
+├── types.ts
 ├── package.json
 └── vite.config.ts
 ```
@@ -72,13 +77,13 @@ frontend/                # React Frontend Source
 1.  **Backend Setup**:
 
     ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
+    python3 -m venv venv
+    source venv/bin/activate
     pip install -e .
     ```
 
 2.  **Frontend Setup & Build**:
-    The frontend must be built before running the application, as build artifacts are not checked into the repository.
+    The frontend must be built before running the application.
 
     ```bash
     cd frontend
@@ -86,7 +91,7 @@ frontend/                # React Frontend Source
     npm run build
     ```
 
-    This generates the necessary static files in `static/dist` and `templates/index.html`.
+    This generates the static SPA bundle in `static/dist`.
 
 3.  **Run the Application**:
     ```bash
@@ -110,7 +115,7 @@ If you want to modify the frontend and see changes on the fly:
     - **Option B (Terminal)**:
       - Terminal 1 (Backend): `augmentedquill --reload`
       - Terminal 2 (Frontend): `cd frontend && npm run dev`
-      - Open http://localhost:3000 (Vite Dev Server) for hot-reloading. API requests are proxied to port 8000.
+    - Open http://127.0.0.1:28001 (Vite Dev Server) for hot-reloading. API requests are proxied to port 28000.
 
 ## Configuration
 
@@ -155,7 +160,7 @@ This keeps your API key client-provided for development purposes while avoiding 
 
 After installing with dev dependencies, run tests:
 
-- pytest
+- `source venv/bin/activate && pytest`
 
 Notes:
 

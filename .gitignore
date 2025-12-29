@@ -210,11 +210,9 @@ marimo/_lsp/
 __marimo__/
 
 #tmp
-demosample/
-frontend/node_modules/
 config/*.json
 !config/examples/*.json
 
 # Build artifacts
 static/dist/
-templates/index.html
+

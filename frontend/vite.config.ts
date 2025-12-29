@@ -17,22 +17,21 @@ export default defineConfig(({ mode }) => {
       devSourcemap: true,
     },
     server: {
-      // During development we keep the browser URL on :8000.
-      // The FastAPI backend should run on :8001 and is reached via proxy.
-      port: 8000,
+      // Frontend dev server (Vite). Backend runs separately (default :8000).
+      port: 28001,
       strictPort: true,
-      host: '0.0.0.0',
+      host: '127.0.0.1',
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:28000',
           changeOrigin: true,
         },
       },
     },
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.API_KEY': JSON.stringify(env.OPENAI_API_KEY),
+      'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY),
     },
     resolve: {
       alias: {

@@ -2,40 +2,28 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Backend (FastAPI)",
+      "name": "Backend (Dev API 28000)",
       "type": "debugpy",
       "request": "launch",
       "module": "app.main",
-      "args": ["--host", "127.0.0.1", "--port", "28000"],
+      "args": ["--host", "127.0.0.1", "--port", "28000", "--reload"],
       "console": "integratedTerminal",
       "justMyCode": true
     },
     {
-      "name": "Backend (Dev API 28001)",
-      "type": "debugpy",
+      "name": "Frontend (Vite 28001)",
+      "type": "node-terminal",
       "request": "launch",
-      "module": "app.main",
-      "args": ["--host", "127.0.0.1", "--port", "28001"],
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
-      "name": "Frontend (Chrome)",
-      "type": "chrome",
-      "request": "launch",
-      "url": "http://127.0.0.1:28000",
-      "webRoot": "${workspaceFolder}/frontend",
-      "sourceMapPathOverrides": {
-        "vite:///*": "${webRoot}/*",
-        "/@fs/*": "${workspaceFolder}/*"
-      }
+      "preLaunchTask": "frontend: install",
+      "command": "npm run dev -- --host 127.0.0.1 --port 28001 --strictPort",
+      "cwd": "${workspaceFolder}/frontend"
     }
   ],
   "compounds": [
     {
       "name": "Full Stack Dev (Backend + Frontend)",
-      "configurations": ["Backend (Dev API 28001)"],
-      "preLaunchTask": "frontend: dev"
+      "configurations": ["Backend (Dev API 28000)", "Frontend (Vite 28001)"],
+      "stopAll": true
     }
   ]
 }

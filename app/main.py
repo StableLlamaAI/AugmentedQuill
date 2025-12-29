@@ -28,7 +28,6 @@ from app.api.story import router as story_router  # noqa: E402
 from app.api.chat import router as chat_router  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 CONFIG_DIR = BASE_DIR / "config"
 
@@ -60,7 +59,6 @@ async def index(request: Request):
     built_index = STATIC_DIR / "dist" / "index.html"
     if built_index.exists():
         return FileResponse(str(built_index))
-    return FileResponse(str(TEMPLATES_DIR / "index.html"))
 
 
 @app.get("/health")

@@ -18,7 +18,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { LLMConfig, ProjectMetadata, AppSettings, AppTheme } from '../types';
-import { testConnection } from '../services/geminiService';
+import { testConnection, getModels } from '../services/openaiService';
 import { Button } from './Button';
 
 interface SettingsDialogProps {
@@ -36,13 +36,13 @@ interface SettingsDialogProps {
 }
 
 const DEFAULT_CONFIG: LLMConfig = {
-  id: 'default-gemini',
-  name: 'Default Gemini',
-  provider: 'gemini',
-  baseUrl: '',
+  id: 'default-openai',
+  name: 'Default OpenAI',
+  provider: 'openai',
+  baseUrl: 'https://api.openai.com/v1',
   apiKey: '',
   timeout: 30000,
-  modelId: 'gemini-2.5-flash',
+  modelId: 'gpt-4o',
   temperature: 0.7,
   topP: 0.95,
   prompts: {
@@ -83,6 +83,38 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setEditingProviderId(settings.activeChatProviderId); // Default to editing current chat provider
     }
   }, [isOpen, settings]);
+
+  // Auto-test and fetch models when baseUrl or apiKey change for the active provider
+  useEffect(() => {
+    let cancelled = false;
+    const provider = localSettings.providers.find((p) => p.id === editingProviderId);
+    if (!provider) return;
+
+    // Only attempt if baseUrl and apiKey are present
+    if (!provider.baseUrl || !provider.apiKey) {
+      setConnectionStatus((s) => ({ ...s, [provider.id]: 'idle' }));
+      return;
+    }
+
+    const run = async () => {
+      setConnectionStatus((s) => ({ ...s, [provider.id]: 'loading' }));
+      const ok = await testConnection(provider);
+      if (cancelled) return;
+      setConnectionStatus((s) => ({ ...s, [provider.id]: ok ? 'success' : 'error' }));
+      if (ok) {
+        const models = await getModels(provider);
+        if (cancelled) return;
+        // store models on provider as a private field
+        updateProvider(provider.id, { ['_modelList' as any]: models as any });
+      }
+    };
+
+    const t = setTimeout(run, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [editingProviderId, localSettings.providers]);
 
   if (!isOpen) return null;
 
@@ -136,6 +168,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       ...prev,
       [provider.id]: result ? 'success' : 'error',
     }));
+    if (result) {
+      const models = await getModels(provider);
+      updateProvider(provider.id, { ['_modelList' as any]: models as any });
+    }
   };
 
   const activeProvider = localSettings.providers.find(
@@ -535,35 +571,26 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               }`}
                             />
                           </div>
+                          {/* Type is no longer relevant - show static provider label */}
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-stone-500 uppercase">
-                              Type
+                              Provider
                             </label>
-                            <select
-                              value={activeProvider.provider}
-                              onChange={(e) =>
-                                updateProvider(activeProvider.id, {
-                                  provider: e.target.value as any,
-                                })
-                              }
-                              className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
+                            <div
+                              className={`w-full border rounded p-2 text-sm ${
                                 isLight
                                   ? 'bg-white border-stone-300 text-stone-800'
                                   : 'bg-stone-950 border-stone-700 text-stone-200'
                               }`}
                             >
-                              <option value="gemini">Google Gemini SDK</option>
-                              <option value="openai">OpenAI Compatible (HTTP)</option>
-                            </select>
+                              OpenAI-compatible HTTP
+                            </div>
                           </div>
                         </div>
 
                         <div className="space-y-1">
                           <label className="text-xs font-medium text-stone-500 uppercase flex items-center gap-2">
-                            <Terminal size={12} /> Base URL{' '}
-                            {activeProvider.provider === 'gemini' && (
-                              <span className="text-stone-600">(Not used for SDK)</span>
-                            )}
+                            <Terminal size={12} /> Base URL
                           </label>
                           <input
                             value={activeProvider.baseUrl}
@@ -572,12 +599,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 baseUrl: e.target.value,
                               })
                             }
-                            placeholder={
-                              activeProvider.provider === 'openai'
-                                ? 'https://api.openai.com/v1'
-                                : 'N/A'
-                            }
-                            disabled={activeProvider.provider === 'gemini'}
+                            placeholder={'https://api.openai.com/v1'}
                             className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none disabled:opacity-50 ${
                               isLight
                                 ? 'bg-white border-stone-300 text-stone-800'
@@ -592,14 +614,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           </label>
                           <div className="relative">
                             <input
-                              type="password"
+                              type="text"
                               value={activeProvider.apiKey}
                               onChange={(e) =>
                                 updateProvider(activeProvider.id, {
                                   apiKey: e.target.value,
                                 })
                               }
-                              placeholder="sk-..."
+                              placeholder="sk... (visible)"
                               className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
                                 isLight
                                   ? 'bg-white border-stone-300 text-stone-800'
@@ -634,14 +656,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               Connection failed.
                             </p>
                           )}
+                          {connectionStatus[activeProvider.id] === 'idle' && (
+                            <p className="text-xs text-stone-500 mt-1">Idle</p>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="text-xs font-medium text-stone-500 uppercase">
-                              Model ID
+                            <label className="text-xs font-medium text-stone-500 uppercase flex items-center justify-between">
+                              <span>Model ID</span>
+                              <span className="text-xs text-stone-400">
+                                You can type a custom model id
+                              </span>
                             </label>
                             <input
+                              list={`models-${activeProvider.id}`}
                               value={activeProvider.modelId}
                               onChange={(e) =>
                                 updateProvider(activeProvider.id, {
@@ -654,6 +683,28 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   : 'bg-stone-950 border-stone-700 text-stone-200'
                               }`}
                             />
+                            <datalist id={`models-${activeProvider.id}`}>
+                              {(activeProvider['_modelList'] || []).map((m: string) => (
+                                <option key={m} value={m} />
+                              ))}
+                            </datalist>
+                            {/* Model availability indicator */}
+                            {activeProvider['_modelList'] &&
+                              activeProvider['_modelList'].length > 0 && (
+                                <div className="mt-1 text-xs">
+                                  {(activeProvider['_modelList'] || []).includes(
+                                    activeProvider.modelId
+                                  ) ? (
+                                    <span className="text-green-500">
+                                      Model available
+                                    </span>
+                                  ) : (
+                                    <span className="text-orange-500">
+                                      Model not in the fetched list (allowed)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                           </div>
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-stone-500 uppercase">

@@ -40,7 +40,7 @@ export interface EditorSettings {
 export interface LLMConfig {
   id: string;
   name: string;
-  provider: 'gemini' | 'openai';
+  provider: 'openai';
   baseUrl: string;
   apiKey: string;
   timeout: number;
@@ -66,7 +66,7 @@ export interface ProjectMetadata {
   updatedAt: number;
 }
 
-// Tool definitions for Gemini
+// Tool definitions
 export const TOOLS = [
   {
     name: 'update_chapter_content',

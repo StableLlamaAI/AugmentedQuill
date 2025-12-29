@@ -21,7 +21,7 @@ import {
   createChatSession,
   generateSimpleContent,
   generateContinuations,
-} from './services/geminiService';
+} from './services/openaiService';
 import {
   Undo,
   Redo,
@@ -62,12 +62,12 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   providers: [
     {
       id: 'default',
-      name: 'Gemini (Default)',
-      provider: 'gemini',
-      baseUrl: '',
-      apiKey: '', // Uses process.env
+      name: 'OpenAI (Default)',
+      provider: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: '',
       timeout: 30000,
-      modelId: 'gemini-2.5-flash',
+      modelId: 'gpt-4o',
       temperature: 0.7,
       topP: 0.95,
       prompts: { system: '', continuation: '', summary: '' },
