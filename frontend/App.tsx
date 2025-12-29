@@ -63,7 +63,6 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     {
       id: 'default',
       name: 'OpenAI (Default)',
-      provider: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       apiKey: '',
       timeout: 30000,

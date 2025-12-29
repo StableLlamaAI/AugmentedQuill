@@ -40,7 +40,6 @@ export interface EditorSettings {
 export interface LLMConfig {
   id: string;
   name: string;
-  provider: 'openai';
   baseUrl: string;
   apiKey: string;
   timeout: number;

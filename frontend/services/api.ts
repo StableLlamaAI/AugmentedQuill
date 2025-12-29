@@ -3,6 +3,54 @@ import { Chapter, ProjectMetadata, StoryState } from '../types';
 const API_BASE = '/api';
 
 export const api = {
+  machine: {
+    get: async () => {
+      const res = await fetch(`${API_BASE}/machine`);
+      if (!res.ok) throw new Error('Failed to load machine config');
+      return res.json();
+    },
+    save: async (machine: any) => {
+      const res = await fetch(`${API_BASE}/machine`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(machine),
+      });
+      if (!res.ok) throw new Error('Failed to save machine config');
+      return res.json();
+    },
+    test: async (payload: {
+      base_url: string;
+      api_key?: string;
+      timeout_s?: number;
+    }) => {
+      const res = await fetch(`${API_BASE}/machine/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to test connection');
+      return res.json() as Promise<{ ok: boolean; models: string[]; detail?: string }>;
+    },
+    testModel: async (payload: {
+      base_url: string;
+      api_key?: string;
+      timeout_s?: number;
+      model_id: string;
+    }) => {
+      const res = await fetch(`${API_BASE}/machine/test_model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to test model');
+      return res.json() as Promise<{
+        ok: boolean;
+        model_ok: boolean;
+        models: string[];
+        detail?: string;
+      }>;
+    },
+  },
   projects: {
     list: async () => {
       const res = await fetch(`${API_BASE}/projects`);

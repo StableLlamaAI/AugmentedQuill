@@ -1,24 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings,
   Plus,
   Trash2,
   Save,
   X,
-  RotateCw,
+  Edit2,
   CheckCircle2,
   AlertCircle,
-  Edit2,
-  Play,
   HardDrive,
   Cpu,
   Terminal,
   Key,
   MessageSquare,
   BookOpen,
+  ChevronDown,
 } from 'lucide-react';
 import { LLMConfig, ProjectMetadata, AppSettings, AppTheme } from '../types';
-import { testConnection, getModels } from '../services/openaiService';
+import { api } from '../services/api';
 import { Button } from './Button';
 
 interface SettingsDialogProps {
@@ -38,7 +37,6 @@ interface SettingsDialogProps {
 const DEFAULT_CONFIG: LLMConfig = {
   id: 'default-openai',
   name: 'Default OpenAI',
-  provider: 'openai',
   baseUrl: 'https://api.openai.com/v1',
   apiKey: '',
   timeout: 30000,
@@ -71,41 +69,203 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [connectionStatus, setConnectionStatus] = useState<{
     [key: string]: 'idle' | 'success' | 'error' | 'loading';
   }>({});
+  const [modelStatus, setModelStatus] = useState<{
+    [key: string]: 'idle' | 'success' | 'error' | 'loading';
+  }>({});
+  const [modelLists, setModelLists] = useState<Record<string, string[]>>({});
+  const [saveError, setSaveError] = useState<string>('');
+  const [saveLoading, setSaveLoading] = useState<boolean>(false);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
+  const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
+
+  const lastConnTestKeyRef = useRef<Record<string, string>>({});
+  const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
   const isLight = theme === 'light';
 
-  // Reset local state when opening
+  // Reset local state when opening + load machine config from backend
   useEffect(() => {
     if (isOpen) {
       setLocalSettings(settings);
       setEditingProviderId(settings.activeChatProviderId); // Default to editing current chat provider
+      setSaveError('');
+      setModelLists({});
+
+      // Reset "already tested" caches so opening the dialog triggers one test.
+      lastConnTestKeyRef.current = {};
+      prevModelIdRef.current = {};
+
+      let cancelled = false;
+      (async () => {
+        try {
+          const machine = await api.machine.get();
+          const openai = machine?.openai || {};
+          const models = Array.isArray(openai?.models) ? openai.models : [];
+          const selectedName = (openai?.selected || '') as string;
+
+          const providers: LLMConfig[] = models
+            .filter((m: any) => m && typeof m === 'object')
+            .map((m: any) => {
+              const name = String(m.name || '').trim() || 'Unnamed';
+              const timeoutS = Number(m.timeout_s ?? 60);
+              return {
+                ...DEFAULT_CONFIG,
+                id: name,
+                name,
+                baseUrl: String(m.base_url || '').trim(),
+                apiKey: String(m.api_key || ''),
+                timeout: Number.isFinite(timeoutS)
+                  ? Math.max(1, timeoutS) * 1000
+                  : 60000,
+                modelId: String(m.model || '').trim(),
+              };
+            });
+
+          if (cancelled) return;
+
+          if (providers.length > 0) {
+            const selectedId =
+              providers.find((p) => p.id === selectedName)?.id || providers[0].id;
+            setLocalSettings((prev) => ({
+              ...prev,
+              providers,
+              activeChatProviderId: selectedId,
+              activeStoryProviderId: selectedId,
+            }));
+            setEditingProviderId(selectedId);
+
+            // Treat backend-loaded values as initial (do not auto-trigger model test)
+            prevModelIdRef.current[selectedId] = providers.find(
+              (p) => p.id === selectedId
+            )?.modelId;
+          }
+        } catch (e) {
+          console.error('Failed to load machine config', e);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
     }
   }, [isOpen, settings]);
 
-  // Auto-test and fetch models when baseUrl or apiKey change for the active provider
+  // Auto-test connection and fetch models only when:
+  // - dialog opens
+  // - active provider changes (user selects another provider)
+  // - baseUrl/apiKey/timeout for active provider changes
   useEffect(() => {
-    let cancelled = false;
     const provider = localSettings.providers.find((p) => p.id === editingProviderId);
     if (!provider) return;
 
+    const providerId = provider.id;
+    const baseUrl = (provider.baseUrl || '').trim();
+    const apiKey = (provider.apiKey || '').trim();
+    const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
+    const testKey = `${baseUrl}|${apiKey}|${timeoutS}`;
+
     // Only attempt if baseUrl and apiKey are present
-    if (!provider.baseUrl || !provider.apiKey) {
-      setConnectionStatus((s) => ({ ...s, [provider.id]: 'idle' }));
+    if (!baseUrl || !apiKey) {
+      setConnectionStatus((s) => ({ ...s, [providerId]: 'idle' }));
+      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
+      setModelLists((prev) => ({ ...prev, [providerId]: [] }));
       return;
     }
 
+    // Avoid re-testing unless the relevant inputs changed or dialog just opened.
+    if (lastConnTestKeyRef.current[providerId] === testKey) {
+      return;
+    }
+    lastConnTestKeyRef.current[providerId] = testKey;
+
+    let cancelled = false;
+
     const run = async () => {
-      setConnectionStatus((s) => ({ ...s, [provider.id]: 'loading' }));
-      const ok = await testConnection(provider);
-      if (cancelled) return;
-      setConnectionStatus((s) => ({ ...s, [provider.id]: ok ? 'success' : 'error' }));
-      if (ok) {
-        const models = await getModels(provider);
+      setConnectionStatus((s) => ({ ...s, [providerId]: 'loading' }));
+      try {
+        const res = await api.machine.test({
+          base_url: baseUrl,
+          api_key: apiKey,
+          timeout_s: timeoutS,
+        });
         if (cancelled) return;
-        // store models on provider as a private field
-        updateProvider(provider.id, { ['_modelList' as any]: models as any });
+        setConnectionStatus((s) => ({
+          ...s,
+          [providerId]: res?.ok ? 'success' : 'error',
+        }));
+        if (res?.ok) {
+          setModelLists((prev) => ({ ...prev, [providerId]: res.models || [] }));
+        } else {
+          setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setConnectionStatus((s) => ({ ...s, [providerId]: 'error' }));
+        setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+      }
+    };
+
+    const t = setTimeout(run, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [isOpen, editingProviderId, localSettings.providers]);
+
+  // Test model availability only when the user changes Model ID (no polling).
+  useEffect(() => {
+    const provider = localSettings.providers.find((p) => p.id === editingProviderId);
+    if (!provider) return;
+
+    const providerId = provider.id;
+    const modelId = (provider.modelId || '').trim();
+    const prevModelId = prevModelIdRef.current[providerId];
+
+    // Track changes; skip initial load.
+    if (prevModelId === undefined) {
+      prevModelIdRef.current[providerId] = modelId;
+      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
+      return;
+    }
+
+    if (prevModelId === modelId) {
+      return;
+    }
+    prevModelIdRef.current[providerId] = modelId;
+
+    // Only test if connection is OK.
+    if (connectionStatus[providerId] !== 'success' || !modelId) {
+      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
+      return;
+    }
+
+    const baseUrl = (provider.baseUrl || '').trim();
+    const apiKey = (provider.apiKey || '').trim();
+    const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
+
+    let cancelled = false;
+
+    const run = async () => {
+      setModelStatus((s) => ({ ...s, [providerId]: 'loading' }));
+      try {
+        const res = await api.machine.testModel({
+          base_url: baseUrl,
+          api_key: apiKey,
+          timeout_s: timeoutS,
+          model_id: modelId,
+        });
+        if (cancelled) return;
+        if (Array.isArray(res?.models)) {
+          setModelLists((prev) => ({ ...prev, [providerId]: res.models }));
+        }
+        setModelStatus((s) => ({
+          ...s,
+          [providerId]: res?.ok && res?.model_ok ? 'success' : 'error',
+        }));
+      } catch (e) {
+        if (cancelled) return;
+        setModelStatus((s) => ({ ...s, [providerId]: 'error' }));
       }
     };
 
@@ -114,13 +274,46 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [editingProviderId, localSettings.providers]);
+  }, [isOpen, editingProviderId, localSettings.providers, connectionStatus]);
+
+  // Close model dropdown when switching providers
+  useEffect(() => {
+    setModelPickerOpenFor(null);
+  }, [editingProviderId]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    onSaveSettings(localSettings);
-    onClose();
+  const handleSave = async () => {
+    setSaveError('');
+    setSaveLoading(true);
+    try {
+      const providers = localSettings.providers || [];
+      const active =
+        providers.find((p) => p.id === localSettings.activeChatProviderId) ||
+        providers[0];
+
+      const machinePayload = {
+        openai: {
+          selected: active?.name || '',
+          models: providers.map((p) => ({
+            name: (p.name || '').trim(),
+            base_url: (p.baseUrl || '').trim(),
+            api_key: p.apiKey || '',
+            timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
+            model: (p.modelId || '').trim(),
+          })),
+        },
+      };
+
+      await api.machine.save(machinePayload);
+      onSaveSettings(localSettings);
+      onClose();
+    } catch (e: any) {
+      console.error('Failed to save machine settings', e);
+      setSaveError(String(e?.message || e || 'Failed to save'));
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   const addProvider = () => {
@@ -159,19 +352,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       };
     });
     if (editingProviderId === id) setEditingProviderId(null);
-  };
-
-  const handleTestConnection = async (provider: LLMConfig) => {
-    setConnectionStatus((prev) => ({ ...prev, [provider.id]: 'loading' }));
-    const result = await testConnection(provider);
-    setConnectionStatus((prev) => ({
-      ...prev,
-      [provider.id]: result ? 'success' : 'error',
-    }));
-    if (result) {
-      const models = await getModels(provider);
-      updateProvider(provider.id, { ['_modelList' as any]: models as any });
-    }
   };
 
   const activeProvider = localSettings.providers.find(
@@ -447,17 +627,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             >
                               {p.name}
                             </div>
-                            <div className="text-xs text-stone-500 uppercase">
-                              {p.provider}
-                            </div>
+                            <div className="text-xs text-stone-500" />
                           </div>
                           <div className="flex items-center space-x-2">
-                            {connectionStatus[p.id] === 'success' && (
-                              <CheckCircle2 size={14} className="text-green-500" />
-                            )}
-                            {connectionStatus[p.id] === 'error' && (
-                              <AlertCircle size={14} className="text-red-500" />
-                            )}
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full border ${
+                                connectionStatus[p.id] === 'success'
+                                  ? 'bg-emerald-500 border-emerald-500'
+                                  : connectionStatus[p.id] === 'error'
+                                  ? 'bg-red-500 border-red-500'
+                                  : connectionStatus[p.id] === 'loading'
+                                  ? 'bg-amber-500 border-amber-500'
+                                  : isLight
+                                  ? 'bg-stone-200 border-stone-300'
+                                  : 'bg-stone-700 border-stone-600'
+                              }`}
+                              title={connectionStatus[p.id] || 'idle'}
+                            />
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -571,21 +757,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               }`}
                             />
                           </div>
-                          {/* Type is no longer relevant - show static provider label */}
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-stone-500 uppercase">
-                              Provider
-                            </label>
-                            <div
-                              className={`w-full border rounded p-2 text-sm ${
-                                isLight
-                                  ? 'bg-white border-stone-300 text-stone-800'
-                                  : 'bg-stone-950 border-stone-700 text-stone-200'
-                              }`}
-                            >
-                              OpenAI-compatible HTTP
-                            </div>
-                          </div>
+                          {/* PROVIDER removed (OpenAI-compatible only) */}
                         </div>
 
                         <div className="space-y-1">
@@ -628,37 +800,35 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   : 'bg-stone-950 border-stone-700 text-stone-200'
                               }`}
                             />
-                            <div className="absolute right-2 top-1.5">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-7 text-xs"
-                                onClick={() => handleTestConnection(activeProvider)}
-                                disabled={
-                                  connectionStatus[activeProvider.id] === 'loading'
-                                }
-                              >
-                                {connectionStatus[activeProvider.id] === 'loading' ? (
-                                  <RotateCw className="animate-spin" size={12} />
-                                ) : (
-                                  'Test'
-                                )}
-                              </Button>
-                            </div>
                           </div>
-                          {connectionStatus[activeProvider.id] === 'success' && (
-                            <p className="text-xs text-green-500 mt-1">
-                              Connection verified.
-                            </p>
-                          )}
-                          {connectionStatus[activeProvider.id] === 'error' && (
-                            <p className="text-xs text-red-500 mt-1">
-                              Connection failed.
-                            </p>
-                          )}
-                          {connectionStatus[activeProvider.id] === 'idle' && (
-                            <p className="text-xs text-stone-500 mt-1">Idle</p>
-                          )}
+                          <div className="mt-1 flex items-center gap-2 text-xs">
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                connectionStatus[activeProvider.id] === 'success'
+                                  ? 'bg-emerald-500'
+                                  : connectionStatus[activeProvider.id] === 'error'
+                                  ? 'bg-red-500'
+                                  : connectionStatus[activeProvider.id] === 'loading'
+                                  ? 'bg-amber-500'
+                                  : isLight
+                                  ? 'bg-stone-300'
+                                  : 'bg-stone-600'
+                              }`}
+                            />
+                            {connectionStatus[activeProvider.id] === 'success' && (
+                              <span className="text-emerald-600">Connected</span>
+                            )}
+                            {connectionStatus[activeProvider.id] === 'error' && (
+                              <span className="text-red-500">Connection failed</span>
+                            )}
+                            {connectionStatus[activeProvider.id] === 'loading' && (
+                              <span className="text-amber-600">Testing…</span>
+                            )}
+                            {(!connectionStatus[activeProvider.id] ||
+                              connectionStatus[activeProvider.id] === 'idle') && (
+                              <span className="text-stone-500">Idle</span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -669,42 +839,123 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 You can type a custom model id
                               </span>
                             </label>
-                            <input
-                              list={`models-${activeProvider.id}`}
-                              value={activeProvider.modelId}
-                              onChange={(e) =>
-                                updateProvider(activeProvider.id, {
-                                  modelId: e.target.value,
-                                })
-                              }
-                              className={`w-full border rounded p-2 text-sm focus:border-amber-500 focus:outline-none ${
-                                isLight
-                                  ? 'bg-white border-stone-300 text-stone-800'
-                                  : 'bg-stone-950 border-stone-700 text-stone-200'
-                              }`}
-                            />
-                            <datalist id={`models-${activeProvider.id}`}>
-                              {(activeProvider['_modelList'] || []).map((m: string) => (
-                                <option key={m} value={m} />
-                              ))}
-                            </datalist>
+                            <div className="relative">
+                              <input
+                                value={activeProvider.modelId}
+                                onFocus={() => setModelPickerOpenFor(activeProvider.id)}
+                                onBlur={() => {
+                                  // allow click selection to run first
+                                  setTimeout(() => setModelPickerOpenFor(null), 120);
+                                }}
+                                onChange={(e) => {
+                                  updateProvider(activeProvider.id, {
+                                    modelId: e.target.value,
+                                  });
+                                }}
+                                placeholder="Select or type a model id"
+                                className={`w-full border rounded p-2 pr-9 text-sm focus:border-amber-500 focus:outline-none ${
+                                  isLight
+                                    ? 'bg-white border-stone-300 text-stone-800'
+                                    : 'bg-stone-950 border-stone-700 text-stone-200'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  const models = modelLists[activeProvider.id] || [];
+                                  if (models.length === 0) return;
+                                  setModelPickerOpenFor((cur) =>
+                                    cur === activeProvider.id ? null : activeProvider.id
+                                  );
+                                }}
+                                disabled={
+                                  (modelLists[activeProvider.id] || []).length === 0
+                                }
+                                className={`absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded border text-xs transition-colors disabled:opacity-50 ${
+                                  isLight
+                                    ? 'bg-white border-stone-300 text-stone-500 hover:bg-stone-50'
+                                    : 'bg-stone-950 border-stone-700 text-stone-400 hover:bg-stone-900'
+                                }`}
+                                title={
+                                  (modelLists[activeProvider.id] || []).length === 0
+                                    ? 'No models loaded'
+                                    : 'Show available models'
+                                }
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+
+                              {modelPickerOpenFor === activeProvider.id &&
+                                (modelLists[activeProvider.id] || []).length > 0 && (
+                                  <div
+                                    className={`absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded border shadow-lg ${
+                                      isLight
+                                        ? 'bg-white border-stone-200'
+                                        : 'bg-stone-950 border-stone-800'
+                                    }`}
+                                  >
+                                    {(modelLists[activeProvider.id] || []).map(
+                                      (m: string) => {
+                                        const isSelected = m === activeProvider.modelId;
+                                        return (
+                                          <button
+                                            type="button"
+                                            key={m}
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              updateProvider(activeProvider.id, {
+                                                modelId: m,
+                                              });
+                                              setModelPickerOpenFor(null);
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                              isSelected
+                                                ? isLight
+                                                  ? 'bg-amber-50 text-stone-900'
+                                                  : 'bg-stone-900 text-stone-100'
+                                                : isLight
+                                                ? 'text-stone-800 hover:bg-stone-50'
+                                                : 'text-stone-200 hover:bg-stone-900'
+                                            }`}
+                                          >
+                                            {m}
+                                          </button>
+                                        );
+                                      }
+                                    )}
+                                  </div>
+                                )}
+                            </div>
                             {/* Model availability indicator */}
-                            {activeProvider['_modelList'] &&
-                              activeProvider['_modelList'].length > 0 && (
-                                <div className="mt-1 text-xs">
-                                  {(activeProvider['_modelList'] || []).includes(
-                                    activeProvider.modelId
-                                  ) ? (
-                                    <span className="text-green-500">
-                                      Model available
-                                    </span>
-                                  ) : (
-                                    <span className="text-orange-500">
-                                      Model not in the fetched list (allowed)
-                                    </span>
-                                  )}
-                                </div>
+                            <div className="mt-1 flex items-center gap-2 text-xs">
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  modelStatus[activeProvider.id] === 'success'
+                                    ? 'bg-emerald-500'
+                                    : modelStatus[activeProvider.id] === 'error'
+                                    ? 'bg-red-500'
+                                    : modelStatus[activeProvider.id] === 'loading'
+                                    ? 'bg-amber-500'
+                                    : isLight
+                                    ? 'bg-stone-300'
+                                    : 'bg-stone-600'
+                                }`}
+                              />
+                              {modelStatus[activeProvider.id] === 'success' && (
+                                <span className="text-emerald-600">Model OK</span>
                               )}
+                              {modelStatus[activeProvider.id] === 'error' && (
+                                <span className="text-red-500">Model unavailable</span>
+                              )}
+                              {modelStatus[activeProvider.id] === 'loading' && (
+                                <span className="text-amber-600">Checking…</span>
+                              )}
+                              {(!modelStatus[activeProvider.id] ||
+                                modelStatus[activeProvider.id] === 'idle') && (
+                                <span className="text-stone-500">Idle</span>
+                              )}
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-stone-500 uppercase">
@@ -868,9 +1119,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             isLight ? 'border-stone-200 bg-white' : 'border-stone-800 bg-stone-900'
           }`}
         >
-          <Button onClick={handleSave} icon={<Save size={16} />}>
-            Save & Close
-          </Button>
+          <div className="flex items-center gap-3">
+            {saveError && (
+              <div className="flex items-center gap-1 text-xs text-red-500">
+                <AlertCircle size={14} />
+                <span>{saveError}</span>
+              </div>
+            )}
+            <Button
+              onClick={handleSave}
+              icon={saveLoading ? <CheckCircle2 size={16} /> : <Save size={16} />}
+              disabled={saveLoading}
+            >
+              Save & Close
+            </Button>
+          </div>
         </div>
       </div>
     </div>
