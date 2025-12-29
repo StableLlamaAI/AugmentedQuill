@@ -22,51 +22,60 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 CONFIG_DIR = BASE_DIR / "config"
 
-app = FastAPI(title="AugmentedQuill")
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def create_app() -> FastAPI:
+    """Create the FastAPI app.
 
-# Mount static files if folder exists (created in repo)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    Uvicorn's reload mode requires an import string; using an app factory keeps
+    route registration consistent across reload subprocesses.
+    """
 
-# Include API routers
-app.include_router(settings_router)
-app.include_router(projects_router)
-app.include_router(chapters_router)
-app.include_router(story_router)
-app.include_router(chat_router)
+    app = FastAPI(title="AugmentedQuill")
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # In production, specify allowed origins
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Mount static files if folder exists (created in repo)
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Include API routers
+    app.include_router(settings_router)
+    app.include_router(projects_router)
+    app.include_router(chapters_router)
+    app.include_router(story_router)
+    app.include_router(chat_router)
+
+    @app.get("/", response_class=HTMLResponse)
+    async def index(request: Request):
+        # Prefer the built frontend (static/dist/index.html) so hashed asset references match.
+        built_index = STATIC_DIR / "dist" / "index.html"
+        if built_index.exists():
+            return FileResponse(str(built_index))
+
+    @app.get("/health")
+    def healthcheck() -> dict:
+        return {"status": "ok"}
+
+    # JSON REST APIs to serve dynamic data to the frontend (no server-side injection in HTML)
+    @app.get("/api/health")
+    async def api_health() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/api/machine")
+    async def api_machine() -> dict:
+        machine = load_machine_config(CONFIG_DIR / "machine.json")
+        return machine or {}
+
+    return app
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    # Prefer the built frontend (static/dist/index.html) so hashed asset references match.
-    built_index = STATIC_DIR / "dist" / "index.html"
-    if built_index.exists():
-        return FileResponse(str(built_index))
-
-
-@app.get("/health")
-def healthcheck() -> dict:
-    return {"status": "ok"}
-
-
-# JSON REST APIs to serve dynamic data to the frontend (no server-side injection in HTML)
-@app.get("/api/health")
-async def api_health() -> dict:
-    return {"status": "ok"}
-
-
-@app.get("/api/machine")
-async def api_machine() -> dict:
-    machine = load_machine_config(CONFIG_DIR / "machine.json")
-    return machine or {}
+app = create_app()
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -118,7 +127,12 @@ def main(argv: Optional[list[str]] = None) -> None:
     use_import_string = bool(args.reload) or (
         isinstance(args.workers, int) and args.workers > 1
     )
-    app_target = "app.main:app" if use_import_string else app
+    if use_import_string:
+        app_target = "app.main:create_app"
+        factory = True
+    else:
+        app_target = app
+        factory = False
 
     uvicorn.run(
         app_target,
@@ -127,8 +141,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         reload=bool(args.reload) if args.workers in (None, 0) else False,
         workers=args.workers,
         log_level=args.log_level,
-        # Set factory=False because we pass an import string to app
-        factory=False,
+        factory=factory,
     )
 
 
