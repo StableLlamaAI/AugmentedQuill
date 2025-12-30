@@ -4,9 +4,16 @@ import json as _json
 import httpx
 import datetime
 
-from app.config import load_story_config
+from app.config import load_story_config, load_machine_config
 from app.projects import get_active_project_dir
 from app.llm import add_llm_log, create_log_entry
+from app.prompts import (
+    get_system_message,
+    load_model_prompt_overrides,
+    DEFAULT_SYSTEM_MESSAGES,
+    DEFAULT_USER_PROMPTS,
+    ensure_string,
+)
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -247,6 +254,37 @@ async def api_settings_post(request: Request) -> JSONResponse:
     return JSONResponse(status_code=200, content={"ok": True})
 
 
+@router.get("/api/prompts")
+async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
+    """Get all resolved prompts (defaults + global overrides + model overrides)."""
+    machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    if not model_name:
+        model_name = machine_config.get("openai", {}).get("selected")
+
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+
+    # Resolve all system messages
+    system_messages = {}
+    for key in DEFAULT_SYSTEM_MESSAGES.keys():
+        system_messages[key] = get_system_message(key, model_overrides)
+
+    # Resolve all user prompts (templates)
+    user_prompts = {}
+    for key in DEFAULT_USER_PROMPTS.keys():
+        user_prompts[key] = ensure_string(
+            model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "system_messages": system_messages,
+            "user_prompts": user_prompts,
+        },
+    )
+
+
 @router.post("/api/machine/test")
 async def api_machine_test(request: Request) -> JSONResponse:
     """Test base_url + api_key and return available remote model ids.
@@ -394,6 +432,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
         model = (m.get("model") or "").strip()
         api_key = m.get("api_key")
         timeout_s = m.get("timeout_s", 60)
+        prompt_overrides = m.get("prompt_overrides", {})
 
         if not name:
             return JSONResponse(
@@ -428,6 +467,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
                 "api_key": api_key,
                 "timeout_s": timeout_s_int,
                 "model": model,
+                "prompt_overrides": prompt_overrides,
             }
         )
 

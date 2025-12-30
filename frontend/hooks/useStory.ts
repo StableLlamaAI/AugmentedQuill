@@ -53,6 +53,7 @@ export const useStory = () => {
           summary: res.story.summary || '',
           styleTags: res.story.tags || [],
           chapters: chapters,
+          llm_prefs: res.story.llm_prefs,
           currentChapterId: currentChapterId,
           lastUpdated: Date.now(),
         };
@@ -109,6 +110,7 @@ export const useStory = () => {
             summary: res.story.summary || '',
             styleTags: res.story.tags || [],
             chapters: chapters,
+            llm_prefs: res.story.llm_prefs,
             currentChapterId: chapters.length > 0 ? chapters[0].id : null,
             lastUpdated: Date.now(),
           };

@@ -151,6 +151,20 @@ export const api = {
       return res.json();
     },
   },
+  settings: {
+    getPrompts: async (modelName?: string) => {
+      const url = modelName
+        ? `${API_BASE}/prompts?model_name=${encodeURIComponent(modelName)}`
+        : `${API_BASE}/prompts`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch prompts');
+      return res.json() as Promise<{
+        ok: boolean;
+        system_messages: Record<string, string>;
+        user_prompts: Record<string, string>;
+      }>;
+    },
+  },
   chat: {
     executeTools: async (payload: {
       messages: any[];

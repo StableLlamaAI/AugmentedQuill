@@ -51,12 +51,17 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
     }
     mode_l = (mode or "").lower()
     if mode_l == "discard" or not current_summary:
-        user_prompt = get_user_prompt("chapter_summary_new", chapter_text=chapter_text)
+        user_prompt = get_user_prompt(
+            "chapter_summary_new",
+            chapter_text=chapter_text,
+            user_prompt_overrides=model_overrides,
+        )
     else:
         user_prompt = get_user_prompt(
             "chapter_summary_update",
             existing_summary=current_summary,
             chapter_text=chapter_text,
+            user_prompt_overrides=model_overrides,
         )
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 
@@ -126,6 +131,7 @@ async def _story_write_helper(*, chap_id: int) -> dict:
         "write_chapter",
         project_title=story.get("project_title") or "",
         chapter_summary=summary,
+        user_prompt_overrides=model_overrides,
     )
     data = await _llm.openai_chat_complete(
         messages=[sys_msg, {"role": "user", "content": user_prompt}],
@@ -182,7 +188,10 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
         "content": get_system_message("story_continuer", model_overrides),
     }
     user_prompt = get_user_prompt(
-        "continue_chapter", chapter_summary=summary, existing_text=current
+        "continue_chapter",
+        chapter_summary=summary,
+        existing_text=current,
+        user_prompt_overrides=model_overrides,
     )
     data = await _llm.openai_chat_complete(
         messages=[sys_msg, {"role": "user", "content": user_prompt}],
@@ -244,13 +253,16 @@ async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
     mode_l = (mode or "").lower()
     if mode_l == "discard" or not current_story_summary:
         user_prompt = get_user_prompt(
-            "story_summary_new", chapter_summaries="\n\n".join(chapter_summaries)
+            "story_summary_new",
+            chapter_summaries="\n\n".join(chapter_summaries),
+            user_prompt_overrides=model_overrides,
         )
     else:
         user_prompt = get_user_prompt(
             "story_summary_update",
             existing_summary=current_story_summary,
             chapter_summaries="\n\n".join(chapter_summaries),
+            user_prompt_overrides=model_overrides,
         )
     messages = [sys_msg, {"role": "user", "content": user_prompt}]
 

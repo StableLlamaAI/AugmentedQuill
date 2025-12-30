@@ -32,6 +32,10 @@ interface SettingsDialogProps {
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newName: string) => void;
   theme: AppTheme;
+  defaultPrompts?: {
+    system_messages: Record<string, string>;
+    user_prompts: Record<string, string>;
+  };
 }
 
 const DEFAULT_CONFIG: LLMConfig = {
@@ -50,6 +54,52 @@ const DEFAULT_CONFIG: LLMConfig = {
   },
 };
 
+const PROMPT_GROUPS = [
+  {
+    title: 'System Messages',
+    prompts: [
+      { id: 'story_writer', label: 'Story Writer' },
+      { id: 'story_continuer', label: 'Story Continuer' },
+      { id: 'chapter_summarizer', label: 'Chapter Summarizer' },
+      { id: 'story_summarizer', label: 'Story Summarizer' },
+      { id: 'chat_llm', label: 'Chat Assistant' },
+      { id: 'ai_action_summary_update', label: 'AI Action: Update Summary' },
+      { id: 'ai_action_summary_rewrite', label: 'AI Action: Rewrite Summary' },
+      { id: 'ai_action_chapter_extend', label: 'AI Action: Extend Chapter' },
+      { id: 'ai_action_chapter_rewrite', label: 'AI Action: Rewrite Chapter' },
+    ],
+  },
+  {
+    title: 'User Prompts',
+    prompts: [
+      { id: 'chapter_summary_new', label: 'New Chapter Summary' },
+      { id: 'chapter_summary_update', label: 'Update Chapter Summary' },
+      { id: 'write_chapter', label: 'Write Chapter' },
+      { id: 'continue_chapter', label: 'Continue Chapter' },
+      { id: 'story_summary_new', label: 'New Story Summary' },
+      { id: 'story_summary_update', label: 'Update Story Summary' },
+      { id: 'suggest_continuation', label: 'Suggest Continuation (Autocomplete)' },
+      { id: 'chat_user_context', label: 'Chat User Context' },
+      {
+        id: 'ai_action_summary_update_user',
+        label: 'AI Action: Update Summary (User)',
+      },
+      {
+        id: 'ai_action_summary_rewrite_user',
+        label: 'AI Action: Rewrite Summary (User)',
+      },
+      {
+        id: 'ai_action_chapter_extend_user',
+        label: 'AI Action: Extend Chapter (User)',
+      },
+      {
+        id: 'ai_action_chapter_rewrite_user',
+        label: 'AI Action: Rewrite Chapter (User)',
+      },
+    ],
+  },
+];
+
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   isOpen,
   onClose,
@@ -62,6 +112,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onDeleteProject,
   onRenameProject,
   theme,
+  defaultPrompts = { system_messages: {}, user_prompts: {} },
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -119,6 +170,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   ? Math.max(1, timeoutS) * 1000
                   : 60000,
                 modelId: String(m.model || '').trim(),
+                prompts: m.prompt_overrides || {},
               };
             });
 
@@ -301,6 +353,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             api_key: p.apiKey || '',
             timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
             model: (p.modelId || '').trim(),
+            prompt_overrides: p.prompts || {},
           })),
         },
       };
@@ -1085,52 +1138,54 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             Expert: Prompt Overrides
                           </h4>
                           <div className="space-y-4">
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium text-brand-gray-500">
-                                System Instruction (Chat Persona)
-                              </label>
-                              <textarea
-                                rows={3}
-                                value={activeProvider.prompts?.system || ''}
-                                onChange={(e) =>
-                                  updateProvider(activeProvider.id, {
-                                    prompts: {
-                                      ...activeProvider.prompts,
-                                      system: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder="Default persona..."
-                                className={`w-full border rounded p-2 text-xs focus:border-brand-500 focus:outline-none ${
-                                  isLight
-                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                                }`}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium text-brand-gray-500">
-                                Continuation Prompt
-                              </label>
-                              <textarea
-                                rows={2}
-                                value={activeProvider.prompts?.continuation || ''}
-                                onChange={(e) =>
-                                  updateProvider(activeProvider.id, {
-                                    prompts: {
-                                      ...activeProvider.prompts,
-                                      continuation: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder="Instruction for generating next paragraphs..."
-                                className={`w-full border rounded p-2 text-xs focus:border-brand-500 focus:outline-none ${
-                                  isLight
-                                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                                }`}
-                              />
-                            </div>
+                            {PROMPT_GROUPS.map((group) => (
+                              <div key={group.title} className="space-y-3">
+                                <h5
+                                  className={`text-[10px] font-bold uppercase tracking-widest ${
+                                    isLight
+                                      ? 'text-brand-gray-400'
+                                      : 'text-brand-gray-500'
+                                  }`}
+                                >
+                                  {group.title}
+                                </h5>
+                                <div className="space-y-3">
+                                  {group.prompts.map((prompt) => (
+                                    <div key={prompt.id} className="space-y-1">
+                                      <label className="text-[10px] font-medium text-brand-gray-500">
+                                        {prompt.label}
+                                      </label>
+                                      <textarea
+                                        rows={5}
+                                        value={
+                                          (activeProvider.prompts as any)?.[
+                                            prompt.id
+                                          ] || ''
+                                        }
+                                        onChange={(e) =>
+                                          updateProvider(activeProvider.id, {
+                                            prompts: {
+                                              ...(activeProvider.prompts || {}),
+                                              [prompt.id]: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        placeholder={
+                                          defaultPrompts.system_messages[prompt.id] ||
+                                          defaultPrompts.user_prompts[prompt.id] ||
+                                          'Default instruction...'
+                                        }
+                                        className={`w-full border rounded p-2 text-[11px] focus:border-brand-500 focus:outline-none ${
+                                          isLight
+                                            ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                            : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                                        }`}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>

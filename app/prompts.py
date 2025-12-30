@@ -2,60 +2,63 @@
 Centralized prompts configuration for LLM interactions.
 
 This module contains all system messages and user prompt templates used throughout the application.
-Prompts can be overridden on a per-model basis through the settings.
+Prompts can be overridden on a per-model basis through the settings or per-project.
 """
 
+import json
+from pathlib import Path
 from typing import Dict, Any, Optional
 
-
-# Default system messages
-DEFAULT_SYSTEM_MESSAGES = {
-    "story_writer": "You are a skilled novelist. Write compelling, coherent prose in the voice and style of the project.",
-    "story_continuer": "You are a helpful writing assistant. Continue the chapter, matching tone, characters, and style.",
-    "chapter_summarizer": "You are an expert story editor. Write a concise summary capturing plot, characters, tone, and open threads.",
-    "story_summarizer": (
-        "You are an expert story editor. Write a comprehensive summary of the entire story "
-        "based on the chapter summaries provided. Capture the overall plot, main characters, "
-        "themes, tone, and narrative arc."
-    ),
-    "chat_llm": (
-        "You are an AI writing assistant for creative story writing.\n\n"
-        "For story writing:\n"
-        "1. Check existing content first\n"
-        "2. Create story tags (like style, genre) if missing\n"
-        "3. Create story summary and ask for user feedback if the summary is missing\n"
-        "4. Create chapter summaries/outlines and ask for user feedback if those were missing\n"
-        "5. Write chapter content one after the other and ask for user feedback after each newly written chapter\n\n"
-        "TOOL USAGE:\n"
-        "- When you need to access story information, use the available tools instead of guessing\n"
-        "- Do NOT output any tool call syntax like <tool_call>, </tool_call>, [TOOL_CALL], or similar in your responses\n"
-        "- Tools will be executed automatically and their results will be provided to you\n"
-        "- Simply make normal conversational responses and tools will be called as needed"
-    ),
-}
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULTS_JSON_PATH = Path(__file__).resolve().parent / "prompts_defaults.json"
+USER_PROMPTS_JSON_PATH = BASE_DIR / "config" / "prompts.json"
 
 
-# User prompt templates
-DEFAULT_USER_PROMPTS = {
-    "chapter_summary_new": "Chapter text:\n\n{chapter_text}\n\nTask: Write a new summary (5-10 sentences).",
-    "chapter_summary_update": (
-        "Existing summary:\n\n{existing_summary}\n\nChapter text:\n\n{chapter_text}\n\n"
-        "Task: Update the summary to accurately reflect the chapter, keeping style and brevity."
-    ),
-    "write_chapter": (
-        "Project: {project_title}\nTitle: {chapter_title}\n\nSummary:\n\n{chapter_summary}\n\n"
-        "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
-    ),
-    "continue_chapter": (
-        "Title: {chapter_title}\n\nSummary:\n{chapter_summary}\n\nExisting chapter text (do not change):\n\n{existing_text}\n\n"
-        "Task: Continue the chapter from where it stops to advance the summary coherently."
-    ),
-    "story_summary_new": "Chapter summaries:\n\n{chapter_summaries}\n\nTask: Write a comprehensive story summary (10-20 sentences).",
-    "story_summary_update": (
-        "Existing story summary:\n\n{existing_summary}\n\nChapter summaries:\n\n{chapter_summaries}\n\n"
-        "Task: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
-    ),
-}
+def _load_prompts() -> Dict[str, Any]:
+    # 1. Load internal defaults
+    prompts = {"system_messages": {}, "user_prompts": {}}
+    if DEFAULTS_JSON_PATH.exists():
+        try:
+            with open(DEFAULTS_JSON_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+                # Convert arrays to strings
+                for section in ["system_messages", "user_prompts"]:
+                    if section in raw:
+                        for k, v in raw[section].items():
+                            if isinstance(v, list):
+                                prompts[section][k] = "\n".join(v)
+                            else:
+                                prompts[section][k] = v
+        except Exception:
+            pass
+
+    # 2. Overlay user global overrides from config/prompts.json
+    if USER_PROMPTS_JSON_PATH.exists():
+        try:
+            with open(USER_PROMPTS_JSON_PATH, "r", encoding="utf-8") as f:
+                user_overrides = json.load(f)
+                for section in ["system_messages", "user_prompts"]:
+                    if section in user_overrides:
+                        for k, v in user_overrides[section].items():
+                            if isinstance(v, list):
+                                prompts[section][k] = "\n".join(v)
+                            else:
+                                prompts[section][k] = v
+        except Exception:
+            pass
+
+    return prompts
+
+
+_PROMPTS = _load_prompts()
+DEFAULT_SYSTEM_MESSAGES = _PROMPTS.get("system_messages", {})
+DEFAULT_USER_PROMPTS = _PROMPTS.get("user_prompts", {})
+
+
+def ensure_string(v: Any) -> str:
+    if isinstance(v, list):
+        return "\n".join(v)
+    return str(v) if v is not None else ""
 
 
 def get_system_message(
@@ -72,9 +75,9 @@ def get_system_message(
         The system message string
     """
     if model_overrides and message_type in model_overrides:
-        return model_overrides[message_type]
+        return ensure_string(model_overrides[message_type])
 
-    return DEFAULT_SYSTEM_MESSAGES.get(message_type, "")
+    return ensure_string(DEFAULT_SYSTEM_MESSAGES.get(message_type, ""))
 
 
 def get_user_prompt(prompt_type: str, **kwargs) -> str:
@@ -88,18 +91,28 @@ def get_user_prompt(prompt_type: str, **kwargs) -> str:
     Returns:
         The formatted user prompt string
     """
-    template = DEFAULT_USER_PROMPTS.get(prompt_type, "")
+    # Check for overrides in kwargs if they were passed as 'user_prompt_overrides'
+    overrides = kwargs.get("user_prompt_overrides", {})
+    template = overrides.get(prompt_type) or DEFAULT_USER_PROMPTS.get(prompt_type, "")
+
     if not template:
         return ""
 
+    template = ensure_string(template)
+
     try:
-        return template.format(**kwargs)
+        # Remove user_prompt_overrides from kwargs before formatting
+        format_kwargs = {
+            k: v for k, v in kwargs.items() if k != "user_prompt_overrides"
+        }
+        return template.format(**format_kwargs)
     except KeyError as e:
         raise ValueError(f"Missing required parameter for prompt {prompt_type}: {e}")
 
 
 def load_model_prompt_overrides(
-    machine_config: Dict[str, Any], selected_model: Optional[str] = None
+    machine_config: Dict[str, Any],
+    selected_model: Optional[str] = None,
 ) -> Dict[str, str]:
     """
     Load prompt overrides for a specific model from machine config.
@@ -109,16 +122,20 @@ def load_model_prompt_overrides(
         selected_model: The selected model name
 
     Returns:
-        Dictionary of prompt overrides for the model
+        Dictionary of prompt overrides
     """
-    if not selected_model:
-        return {}
+    overrides = {}
 
-    openai_cfg = machine_config.get("openai", {})
-    models = openai_cfg.get("models", [])
+    # 1. Load from machine config (provider/model-specific)
+    if selected_model:
+        openai_cfg = machine_config.get("openai", {})
+        models = openai_cfg.get("models", [])
 
-    for model in models:
-        if isinstance(model, dict) and model.get("name") == selected_model:
-            return model.get("prompt_overrides", {})
+        for model in models:
+            if isinstance(model, dict) and model.get("name") == selected_model:
+                model_overrides = model.get("prompt_overrides", {})
+                for k, v in model_overrides.items():
+                    overrides[k] = ensure_string(v)
+                break
 
-    return {}
+    return overrides

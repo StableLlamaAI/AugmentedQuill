@@ -1104,6 +1104,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         selected_model_name = (payload or {}).get("model_name") or openai_cfg.get(
             "selected"
         )
+
         model_overrides = load_model_prompt_overrides(
             machine_config, selected_model_name
         )
