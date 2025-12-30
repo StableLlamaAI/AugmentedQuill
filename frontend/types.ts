@@ -10,6 +10,9 @@ export interface Story {
   summary: string;
   styleTags: string[];
   chapters: Chapter[];
+  llm_prefs?: {
+    prompt_overrides?: Record<string, string>;
+  };
 }
 
 export interface StoryState extends Story {

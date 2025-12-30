@@ -1,0 +1,147 @@
+{
+  "system_messages": {
+    "story_writer": [
+      "You are a skilled novelist.",
+      "Write compelling, coherent prose in the voice and style of the project."
+    ],
+    "story_continuer": [
+      "You are a helpful writing assistant.",
+      "Continue the chapter, matching tone, characters, and style."
+    ],
+    "chapter_summarizer": [
+      "You are an expert story editor.",
+      "Write a concise summary capturing plot, characters, tone, and open threads."
+    ],
+    "story_summarizer": [
+      "You are an expert story editor.",
+      "Write a comprehensive summary of the entire story based on the chapter summaries provided.",
+      "Capture the overall plot, main characters, themes, tone, and narrative arc."
+    ],
+    "chat_llm": [
+      "You are a professional creative writing partner and editor.",
+      "You are helping the user write a story.",
+      "",
+      "Your goal is to assist with writing, editing, brainstorming, and structuring.",
+      "You have tools to directly modify the story content if the user explicitly asks.",
+      "Always prioritize the user's creative vision.",
+      "",
+      "TOOL USAGE:",
+      "- When you need to access story information, use the available tools instead of guessing",
+      "- Do NOT output any tool call syntax like <tool_call>, </tool_call>, [TOOL_CALL], or similar in your responses",
+      "- Tools will be executed automatically and their results will be provided to you",
+      "- Simply make normal conversational responses and tools will be called as needed"
+    ],
+    "ai_action_summary_update": [
+      "You are an expert story editor.",
+      "Read the chapter content and the current summary.",
+      "Update the summary to better reflect the content. Keep it concise."
+    ],
+    "ai_action_summary_rewrite": [
+      "You are an expert story editor.",
+      "Read the chapter content and generate a concise summary."
+    ],
+    "ai_action_chapter_extend": [
+      "You are a skilled novelist.",
+      "Continue the story chapter based on the existing content and the summary.",
+      "Append the new text to the end. Do not repeat existing content."
+    ],
+    "ai_action_chapter_rewrite": [
+      "You are a skilled novelist.",
+      "Rewrite the FULL content for this chapter based strictly on the following summary."
+    ]
+  },
+  "user_prompts": {
+    "chapter_summary_new": [
+      "Chapter text:",
+      "",
+      "{chapter_text}",
+      "",
+      "Task: Write a new summary (5-10 sentences)."
+    ],
+    "chapter_summary_update": [
+      "Existing summary:",
+      "",
+      "{existing_summary}",
+      "",
+      "Chapter text:",
+      "",
+      "{chapter_text}",
+      "",
+      "Task: Update the summary to accurately reflect the chapter, keeping style and brevity."
+    ],
+    "write_chapter": [
+      "Project: {project_title}",
+      "Title: {chapter_title}",
+      "",
+      "Summary:",
+      "",
+      "{chapter_summary}",
+      "",
+      "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
+    ],
+    "continue_chapter": [
+      "Title: {chapter_title}",
+      "",
+      "Summary:",
+      "{chapter_summary}",
+      "",
+      "Existing chapter text (do not change):",
+      "",
+      "{existing_text}",
+      "",
+      "Task: Continue the chapter from where it stops to advance the summary coherently."
+    ],
+    "story_summary_new": [
+      "Chapter summaries:",
+      "",
+      "{chapter_summaries}",
+      "",
+      "Task: Write a comprehensive story summary (10-20 sentences)."
+    ],
+    "story_summary_update": [
+      "Existing story summary:",
+      "",
+      "{existing_summary}",
+      "",
+      "Chapter summaries:",
+      "",
+      "{chapter_summaries}",
+      "",
+      "Task: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
+    ],
+    "suggest_continuation": [
+      "{chapter_title}",
+      "",
+      "{chapter_summary}",
+      "",
+      "---",
+      "",
+      "{current_text}"
+    ],
+    "chat_user_context": [
+      "[Current Chapter Context: ID={chapter_id}, Title=\"{chapter_title}\"]",
+      "[Current Content Start]",
+      "{chapter_content}",
+      "[Current Content End]",
+      "",
+      "User Request: {user_text}"
+    ],
+    "ai_action_summary_update_user": [
+      "Current Summary: {current_summary}",
+      "",
+      "Chapter Content:",
+      "{chapter_content}"
+    ],
+    "ai_action_summary_rewrite_user": ["Chapter Content:", "{chapter_content}"],
+    "ai_action_chapter_extend_user": [
+      "Summary: {chapter_summary}",
+      "",
+      "Existing Content:",
+      "{chapter_content}"
+    ],
+    "ai_action_chapter_rewrite_user": [
+      "Summary: {chapter_summary}",
+      "Style: {style_tags}"
+    ]
+  }
+}

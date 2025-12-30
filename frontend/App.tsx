@@ -154,6 +154,29 @@ const App: React.FC = () => {
     Array<{ content: string; cursor: number }>
   >([]);
 
+  // Prompts State
+  const [prompts, setPrompts] = useState<{
+    system_messages: Record<string, string>;
+    user_prompts: Record<string, string>;
+  }>({ system_messages: {}, user_prompts: {} });
+
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      try {
+        const data = await api.settings.getPrompts();
+        if (data.ok) {
+          setPrompts({
+            system_messages: data.system_messages,
+            user_prompts: data.user_prompts,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to fetch prompts', e);
+      }
+    };
+    fetchPrompts();
+  }, [story.id]); // Re-fetch when project changes
+
   // Editor Appearance Settings
   const [editorSettings, setEditorSettings] = useState<EditorSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_editor_settings');
@@ -272,21 +295,24 @@ const App: React.FC = () => {
     appSettings.providers[0];
 
   const getSystemPrompt = () => {
-    return `You are a professional creative writing partner and editor.
+    return (
+      prompts.system_messages.chat_llm ||
+      `You are a professional creative writing partner and editor.
 You are helping the user write a story titled "${story.title}".
 Story Summary: ${story.summary}
 Style Tags: ${story.styleTags.join(', ')}
 
 Your goal is to assist with writing, editing, brainstorming, and structuring.
 You have tools to directly modify the story content if the user explicitly asks.
-Always prioritize the user's creative vision.`;
+Always prioritize the user's creative vision.`
+    );
   };
 
   const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt());
 
   useEffect(() => {
     setSystemPrompt(getSystemPrompt());
-  }, [story.title, story.summary, story.styleTags]);
+  }, [story.title, story.summary, story.styleTags, prompts]);
 
   const executeChatRequest = async (userText: string, history: ChatMessage[]) => {
     setIsChatLoading(true);
@@ -296,14 +322,15 @@ Always prioritize the user's creative vision.`;
 
       let promptWithContext = userText;
       if (currentChapter) {
-        promptWithContext = `[Current Chapter Context: ID=${
-          currentChapter.id
-        }, Title="${
-          currentChapter.title
-        }"]\n[Current Content Start]\n${currentChapter.content.slice(
-          0,
-          5000
-        )}\n[Current Content End]\n\nUser Request: ${userText}`;
+        const template =
+          prompts.user_prompts.chat_user_context ||
+          '[Current Chapter Context: ID={chapter_id}, Title="{chapter_title}"]\n[Current Content Start]\n{chapter_content}\n[Current Content End]\n\nUser Request: {user_text}';
+
+        promptWithContext = template
+          .replace('{chapter_id}', String(currentChapter.id))
+          .replace('{chapter_title}', currentChapter.title)
+          .replace('{chapter_content}', currentChapter.content.slice(0, 5000))
+          .replace('{user_text}', userText);
       }
 
       let result = await session.sendMessage({ message: promptWithContext });
@@ -608,32 +635,49 @@ Always prioritize the user's creative vision.`;
     if (!currentChapter) return;
     setIsAiActionLoading(true);
     let prompt = '';
+    let sysMsg = systemPrompt;
 
     if (target === 'summary') {
       if (action === 'update') {
-        prompt = `Read the chapter content and the current summary. Update the summary to better reflect the content. Keep it concise.\n\nCurrent Summary: ${currentChapter.summary}\n\nChapter Content:\n${currentChapter.content}`;
+        sysMsg = prompts.system_messages.ai_action_summary_update || systemPrompt;
+        const template =
+          prompts.user_prompts.ai_action_summary_update_user ||
+          'Current Summary: {current_summary}\n\nChapter Content:\n{chapter_content}';
+        prompt = template
+          .replace('{current_summary}', currentChapter.summary)
+          .replace('{chapter_content}', currentChapter.content);
       } else {
         // rewrite
-        prompt = `Read the chapter content and generate a concise summary.\n\nChapter Content:\n${currentChapter.content}`;
+        sysMsg = prompts.system_messages.ai_action_summary_rewrite || systemPrompt;
+        const template =
+          prompts.user_prompts.ai_action_summary_rewrite_user ||
+          'Chapter Content:\n{chapter_content}';
+        prompt = template.replace('{chapter_content}', currentChapter.content);
       }
     } else {
       // chapter
       if (action === 'extend') {
-        prompt = `Continue the story chapter based on the existing content and the summary. Append the new text to the end. Do not repeat existing content.\n\nSummary: ${currentChapter.summary}\n\nExisting Content:\n${currentChapter.content}`;
+        sysMsg = prompts.system_messages.ai_action_chapter_extend || systemPrompt;
+        const template =
+          prompts.user_prompts.ai_action_chapter_extend_user ||
+          'Summary: {chapter_summary}\n\nExisting Content:\n{chapter_content}';
+        prompt = template
+          .replace('{chapter_summary}', currentChapter.summary)
+          .replace('{chapter_content}', currentChapter.content);
       } else {
         // rewrite
-        prompt = `Rewrite the FULL content for this chapter based strictly on the following summary. The style should be: ${story.styleTags.join(
-          ', '
-        )}.\n\nSummary: ${currentChapter.summary}`;
+        sysMsg = prompts.system_messages.ai_action_chapter_rewrite || systemPrompt;
+        const template =
+          prompts.user_prompts.ai_action_chapter_rewrite_user ||
+          'Summary: {chapter_summary}\nStyle: {style_tags}';
+        prompt = template
+          .replace('{chapter_summary}', currentChapter.summary)
+          .replace('{style_tags}', story.styleTags.join(', '));
       }
     }
 
     try {
-      const result = await generateSimpleContent(
-        prompt,
-        systemPrompt,
-        activeStoryConfig
-      );
+      const result = await generateSimpleContent(prompt, sysMsg, activeStoryConfig);
 
       if (target === 'summary') {
         updateChapter(currentChapter.id, { summary: result });
@@ -734,6 +778,7 @@ Always prioritize the user's creative vision.`;
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
         theme={currentTheme}
+        defaultPrompts={prompts}
       />
 
       {/* Header / Toolbar */}
