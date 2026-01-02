@@ -76,7 +76,8 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
     },
   ],
   activeChatProviderId: 'default',
-  activeStoryProviderId: 'default',
+  activeWritingProviderId: 'default',
+  activeEditingProviderId: 'default',
 };
 
 const App: React.FC = () => {
@@ -105,14 +106,24 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (!parsed.activeStoryProviderId && parsed.activeProviderId) {
+        // Migration: if we have activeStoryProviderId but not the new ones
+        if (parsed.activeStoryProviderId && !parsed.activeWritingProviderId) {
           return {
             ...parsed,
-            activeStoryProviderId: parsed.activeProviderId,
-            activeChatProviderId: parsed.activeProviderId,
+            activeWritingProviderId: parsed.activeStoryProviderId,
+            activeEditingProviderId: parsed.activeStoryProviderId,
           };
         }
-        return parsed.activeStoryProviderId ? parsed : DEFAULT_APP_SETTINGS;
+        // Migration: if we only have activeProviderId (very old)
+        if (!parsed.activeWritingProviderId && parsed.activeProviderId) {
+          return {
+            ...parsed,
+            activeChatProviderId: parsed.activeProviderId,
+            activeWritingProviderId: parsed.activeProviderId,
+            activeEditingProviderId: parsed.activeProviderId,
+          };
+        }
+        return parsed.activeWritingProviderId ? parsed : DEFAULT_APP_SETTINGS;
       } catch (e) {
         return DEFAULT_APP_SETTINGS;
       }
@@ -290,8 +301,11 @@ const App: React.FC = () => {
   const activeChatConfig =
     appSettings.providers.find((p) => p.id === appSettings.activeChatProviderId) ||
     appSettings.providers[0];
-  const activeStoryConfig =
-    appSettings.providers.find((p) => p.id === appSettings.activeStoryProviderId) ||
+  const activeWritingConfig =
+    appSettings.providers.find((p) => p.id === appSettings.activeWritingProviderId) ||
+    appSettings.providers[0];
+  const activeEditingConfig =
+    appSettings.providers.find((p) => p.id === appSettings.activeEditingProviderId) ||
     appSettings.providers[0];
 
   const getSystemPrompt = () => {
@@ -318,7 +332,12 @@ Always prioritize the user's creative vision.`
     setIsChatLoading(true);
     try {
       let currentHistory = [...history];
-      const session = createChatSession(systemPrompt, currentHistory, activeChatConfig);
+      const session = createChatSession(
+        systemPrompt,
+        currentHistory,
+        activeChatConfig,
+        'CHAT'
+      );
 
       let promptWithContext = userText;
       if (currentChapter) {
@@ -386,7 +405,8 @@ Always prioritize the user's creative vision.`
           const nextSession = createChatSession(
             systemPrompt,
             currentHistory,
-            activeChatConfig
+            activeChatConfig,
+            'CHAT'
           );
           result = await nextSession.sendMessage({ message: '' });
         } else {
@@ -476,7 +496,7 @@ Always prioritize the user's creative vision.`
         baseContent.slice(0, c),
         storyContext,
         systemPrompt,
-        activeStoryConfig,
+        activeWritingConfig,
         currentChapter.id
       );
       setContinuations(options);
@@ -677,7 +697,9 @@ Always prioritize the user's creative vision.`
     }
 
     try {
-      const result = await generateSimpleContent(prompt, sysMsg, activeStoryConfig);
+      const modelType = target === 'summary' ? 'EDITING' : 'WRITING';
+      const config = target === 'summary' ? activeEditingConfig : activeWritingConfig;
+      const result = await generateSimpleContent(prompt, sysMsg, config, modelType);
 
       if (target === 'summary') {
         updateChapter(currentChapter.id, { summary: result });
@@ -1332,7 +1354,7 @@ Always prioritize the user's creative vision.`
                 onClick={() => handleAiAction('chapter', 'extend')}
                 disabled={isAiActionLoading}
                 icon={<Wand2 size={12} />}
-                title="Extend"
+                title="Extend Chapter (WRITING model)"
               >
                 <span className="hidden xl:inline">Extend</span>
               </Button>
@@ -1344,7 +1366,7 @@ Always prioritize the user's creative vision.`
                 onClick={() => handleAiAction('chapter', 'rewrite')}
                 disabled={isAiActionLoading}
                 icon={<FileEdit size={12} />}
-                title="Rewrite"
+                title="Rewrite Chapter (WRITING model)"
               >
                 <span className="hidden xl:inline">Rewrite</span>
               </Button>

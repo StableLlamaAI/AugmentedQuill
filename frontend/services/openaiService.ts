@@ -99,7 +99,8 @@ async function readSSEStream(
 export const createChatSession = (
   systemInstruction: string,
   history: any[],
-  config: LLMConfig
+  config: LLMConfig,
+  modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT'
 ): UnifiedChat => {
   return {
     sendMessage: async (msg) => {
@@ -137,7 +138,7 @@ export const createChatSession = (
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages }),
+          body: JSON.stringify({ messages, model_type: modelType }),
         });
 
         if (!res.ok) throw new Error('Chat request failed');
@@ -193,7 +194,8 @@ export const createChatSession = (
 export const generateSimpleContent = async (
   prompt: string,
   systemInstruction: string,
-  config: LLMConfig
+  config: LLMConfig,
+  modelType?: 'CHAT' | 'WRITING' | 'EDITING'
 ) => {
   const messages = [
     { role: 'system', content: systemInstruction },
@@ -204,7 +206,7 @@ export const generateSimpleContent = async (
     const res = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, model_type: modelType }),
     });
 
     if (!res.ok) throw new Error('Generation failed');

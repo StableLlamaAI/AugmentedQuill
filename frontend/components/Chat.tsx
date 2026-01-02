@@ -78,8 +78,8 @@ export const Chat: React.FC<ChatProps> = ({
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-400';
   const headerBg = isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900';
   const msgUserBg = isLight
-    ? 'bg-brand-600 text-white'
-    : 'bg-brand-900/40 text-brand-300 border border-brand-800/50';
+    ? 'bg-blue-600 text-white'
+    : 'bg-blue-900/40 text-blue-300 border border-blue-800/50';
   const msgBotBg = isLight
     ? 'bg-brand-gray-50 border border-brand-gray-200 shadow-sm'
     : 'bg-brand-gray-800/50 border border-brand-gray-700 shadow-sm';
@@ -216,7 +216,7 @@ export const Chat: React.FC<ChatProps> = ({
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
                 msg.role === 'user'
-                  ? 'bg-brand-100 border-brand-200 text-brand-700'
+                  ? 'bg-blue-100 border-blue-200 text-blue-700'
                   : msg.role === 'tool'
                   ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
                   : isLight
@@ -370,6 +370,7 @@ export const Chat: React.FC<ChatProps> = ({
               onClick={onRegenerate}
               icon={<RefreshCw size={12} />}
               className="text-xs py-1 h-7 border-dashed"
+              title="Regenerate last response (CHAT model)"
             >
               Regenerate last response
             </Button>
@@ -389,6 +390,7 @@ export const Chat: React.FC<ChatProps> = ({
             type="submit"
             disabled={!input.trim() || isLoading}
             className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-gray-200 dark:hover:bg-brand-gray-700 rounded-full transition-colors"
+            title="Send Message (CHAT model)"
           >
             <Send size={18} />
           </button>

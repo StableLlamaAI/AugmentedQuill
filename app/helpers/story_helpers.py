@@ -32,7 +32,9 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
         )
     current_summary = chapters_data[pos].get("summary", "")
 
-    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
+    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
+        {}, model_type="EDITING"
+    )
 
     # Load model-specific prompt overrides
     machine_config = (
@@ -42,7 +44,9 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
         or {}
     )
     openai_cfg = machine_config.get("openai", {})
-    selected_model_name = openai_cfg.get("selected")
+    selected_model_name = openai_cfg.get("selected_editing") or openai_cfg.get(
+        "selected"
+    )
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
 
     sys_msg = {
@@ -110,7 +114,9 @@ async def _story_write_helper(*, chap_id: int) -> dict:
         )
     summary = chapters_data[pos].get("summary", "")
 
-    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
+    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
+        {}, model_type="WRITING"
+    )
 
     # Load model-specific prompt overrides
     machine_config = (
@@ -120,7 +126,9 @@ async def _story_write_helper(*, chap_id: int) -> dict:
         or {}
     )
     openai_cfg = machine_config.get("openai", {})
-    selected_model_name = openai_cfg.get("selected")
+    selected_model_name = openai_cfg.get("selected_writing") or openai_cfg.get(
+        "selected"
+    )
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
 
     sys_msg = {
@@ -170,7 +178,9 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "")
     current = path.read_text(encoding="utf-8") if path.exists() else ""
 
-    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
+    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
+        {}, model_type="WRITING"
+    )
 
     # Load model-specific prompt overrides
     machine_config = (
@@ -180,7 +190,9 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
         or {}
     )
     openai_cfg = machine_config.get("openai", {})
-    selected_model_name = openai_cfg.get("selected")
+    selected_model_name = openai_cfg.get("selected_writing") or openai_cfg.get(
+        "selected"
+    )
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
 
     sys_msg = {
@@ -233,7 +245,9 @@ async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
     if not chapter_summaries:
         raise HTTPException(status_code=400, detail="No chapter summaries available")
 
-    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials({})
+    base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
+        {}, model_type="EDITING"
+    )
 
     # Load model-specific prompt overrides
     machine_config = (
@@ -243,7 +257,9 @@ async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
         or {}
     )
     openai_cfg = machine_config.get("openai", {})
-    selected_model_name = openai_cfg.get("selected")
+    selected_model_name = openai_cfg.get("selected_editing") or openai_cfg.get(
+        "selected"
+    )
     model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
 
     sys_msg = {

@@ -64,20 +64,43 @@ def create_log_entry(
     }
 
 
+def get_selected_model_name(
+    payload: Dict[str, Any], model_type: str | None = None
+) -> str | None:
+    """Get the selected model name based on payload and model_type."""
+    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
+
+    selected_name = payload.get("model_name")
+    if not selected_name and model_type:
+        if model_type == "WRITING":
+            selected_name = openai_cfg.get("selected_writing")
+        elif model_type == "CHAT":
+            selected_name = openai_cfg.get("selected_chat")
+        elif model_type == "EDITING":
+            selected_name = openai_cfg.get("selected_editing")
+
+    if not selected_name:
+        selected_name = openai_cfg.get("selected")
+    return selected_name
+
+
 def resolve_openai_credentials(
     payload: Dict[str, Any],
+    model_type: str | None = None,
 ) -> Tuple[str, str | None, str, int]:
     """Resolve (base_url, api_key, model_id, timeout_s) from machine config and overrides.
 
     Precedence:
     1. Environment variables OPENAI_BASE_URL / OPENAI_API_KEY
     2. Payload overrides: base_url, api_key, model, timeout_s or model_name (by name)
-    3. machine.json -> openai.models[] (selected by name)
+    3. machine.json -> openai.models[] (selected by name based on model_type)
     """
     machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
-    selected_name = payload.get("model_name") or openai_cfg.get("selected")
+    selected_name = get_selected_model_name(payload, model_type)
+
     base_url = payload.get("base_url")
     api_key = payload.get("api_key")
     model_id = payload.get("model")

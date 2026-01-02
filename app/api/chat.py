@@ -1047,6 +1047,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     Body JSON:
       {
         "model_name": "name-of-configured-entry" | null,
+        "model_type": "CHAT" | "WRITING" | "EDITING" | null,
         "messages": [{"role": "system|user|assistant", "content": str}, ...],
         // optional overrides (otherwise pulled from config/machine.json)
         "base_url": str,
@@ -1101,21 +1102,38 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         # Load model-specific prompt overrides
         machine_config = _load_machine_config(CONFIG_DIR / "machine.json") or {}
         openai_cfg = machine_config.get("openai", {})
-        selected_model_name = (payload or {}).get("model_name") or openai_cfg.get(
-            "selected"
+        model_type = (payload or {}).get("model_type") or "CHAT"
+
+        # Map model_type to system message key
+        sys_msg_key = "chat_llm"
+        if model_type == "WRITING":
+            sys_msg_key = "writing_llm"
+        elif model_type == "EDITING":
+            sys_msg_key = "editing_llm"
+
+        selected_model_name = (
+            (payload or {}).get("model_name")
+            or openai_cfg.get(f"selected_{model_type.lower()}")
+            or openai_cfg.get("selected")
         )
 
         model_overrides = load_model_prompt_overrides(
             machine_config, selected_model_name
         )
 
-        system_content = get_system_message("chat_llm", model_overrides)
+        system_content = get_system_message(sys_msg_key, model_overrides)
         req_messages.insert(0, {"role": "system", "content": system_content})
 
     # Load machine config and pick selected model
     machine = _load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
-    selected_name = (payload or {}).get("model_name") or openai_cfg.get("selected")
+
+    model_type = (payload or {}).get("model_type") or "CHAT"
+    selected_name = (
+        (payload or {}).get("model_name")
+        or openai_cfg.get(f"selected_{model_type.lower()}")
+        or openai_cfg.get("selected")
+    )
 
     base_url = (payload or {}).get("base_url")
     api_key = (payload or {}).get("api_key")

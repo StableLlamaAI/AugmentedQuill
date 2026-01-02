@@ -58,43 +58,72 @@ const PROMPT_GROUPS = [
   {
     title: 'System Messages',
     prompts: [
-      { id: 'story_writer', label: 'Story Writer' },
-      { id: 'story_continuer', label: 'Story Continuer' },
-      { id: 'chapter_summarizer', label: 'Chapter Summarizer' },
-      { id: 'story_summarizer', label: 'Story Summarizer' },
-      { id: 'chat_llm', label: 'Chat Assistant' },
-      { id: 'ai_action_summary_update', label: 'AI Action: Update Summary' },
-      { id: 'ai_action_summary_rewrite', label: 'AI Action: Rewrite Summary' },
-      { id: 'ai_action_chapter_extend', label: 'AI Action: Extend Chapter' },
-      { id: 'ai_action_chapter_rewrite', label: 'AI Action: Rewrite Chapter' },
+      { id: 'chat_llm', label: 'Chat Assistant', type: 'CHAT' },
+      { id: 'editing_llm', label: 'Editing Assistant', type: 'EDITING' },
+      { id: 'story_writer', label: 'Story Writer', type: 'WRITING' },
+      { id: 'story_continuer', label: 'Story Continuer', type: 'WRITING' },
+      { id: 'chapter_summarizer', label: 'Chapter Summarizer', type: 'EDITING' },
+      { id: 'story_summarizer', label: 'Story Summarizer', type: 'EDITING' },
+      {
+        id: 'ai_action_summary_update',
+        label: 'AI Action: Update Summary',
+        type: 'EDITING',
+      },
+      {
+        id: 'ai_action_summary_rewrite',
+        label: 'AI Action: Rewrite Summary',
+        type: 'EDITING',
+      },
+      {
+        id: 'ai_action_chapter_extend',
+        label: 'AI Action: Extend Chapter',
+        type: 'WRITING',
+      },
+      {
+        id: 'ai_action_chapter_rewrite',
+        label: 'AI Action: Rewrite Chapter',
+        type: 'WRITING',
+      },
     ],
   },
   {
     title: 'User Prompts',
     prompts: [
-      { id: 'chapter_summary_new', label: 'New Chapter Summary' },
-      { id: 'chapter_summary_update', label: 'Update Chapter Summary' },
-      { id: 'write_chapter', label: 'Write Chapter' },
-      { id: 'continue_chapter', label: 'Continue Chapter' },
-      { id: 'story_summary_new', label: 'New Story Summary' },
-      { id: 'story_summary_update', label: 'Update Story Summary' },
-      { id: 'suggest_continuation', label: 'Suggest Continuation (Autocomplete)' },
-      { id: 'chat_user_context', label: 'Chat User Context' },
+      { id: 'chapter_summary_new', label: 'New Chapter Summary', type: 'EDITING' },
+      {
+        id: 'chapter_summary_update',
+        label: 'Update Chapter Summary',
+        type: 'EDITING',
+      },
+      { id: 'write_chapter', label: 'Write Chapter', type: 'WRITING' },
+      { id: 'continue_chapter', label: 'Continue Chapter', type: 'WRITING' },
+      { id: 'story_summary_new', label: 'New Story Summary', type: 'EDITING' },
+      { id: 'story_summary_update', label: 'Update Story Summary', type: 'EDITING' },
+      {
+        id: 'suggest_continuation',
+        label: 'Suggest Continuation (Autocomplete)',
+        type: 'WRITING',
+      },
+      { id: 'chat_user_context', label: 'Chat User Context', type: 'CHAT' },
       {
         id: 'ai_action_summary_update_user',
         label: 'AI Action: Update Summary (User)',
+        type: 'EDITING',
       },
       {
         id: 'ai_action_summary_rewrite_user',
         label: 'AI Action: Rewrite Summary (User)',
+        type: 'EDITING',
       },
       {
         id: 'ai_action_chapter_extend_user',
         label: 'AI Action: Extend Chapter (User)',
+        type: 'WRITING',
       },
       {
         id: 'ai_action_chapter_rewrite_user',
         label: 'AI Action: Rewrite Chapter (User)',
+        type: 'WRITING',
       },
     ],
   },
@@ -183,7 +212,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               ...prev,
               providers,
               activeChatProviderId: selectedId,
-              activeStoryProviderId: selectedId,
+              activeWritingProviderId: selectedId,
+              activeEditingProviderId: selectedId,
             }));
             setEditingProviderId(selectedId);
 
@@ -340,13 +370,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setSaveLoading(true);
     try {
       const providers = localSettings.providers || [];
-      const active =
+      const activeChat =
         providers.find((p) => p.id === localSettings.activeChatProviderId) ||
+        providers[0];
+      const activeWriting =
+        providers.find((p) => p.id === localSettings.activeWritingProviderId) ||
+        providers[0];
+      const activeEditing =
+        providers.find((p) => p.id === localSettings.activeEditingProviderId) ||
         providers[0];
 
       const machinePayload = {
         openai: {
-          selected: active?.name || '',
+          selected: activeChat?.name || '',
+          selected_chat: activeChat?.name || '',
+          selected_writing: activeWriting?.name || '',
+          selected_editing: activeEditing?.name || '',
           models: providers.map((p) => ({
             name: (p.name || '').trim(),
             base_url: (p.baseUrl || '').trim(),
@@ -379,7 +418,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       ...prev,
       providers: [...prev.providers, newProvider],
       activeChatProviderId: prev.activeChatProviderId || newProvider.id,
-      activeStoryProviderId: prev.activeStoryProviderId || newProvider.id,
+      activeWritingProviderId: prev.activeWritingProviderId || newProvider.id,
+      activeEditingProviderId: prev.activeEditingProviderId || newProvider.id,
     }));
     setEditingProviderId(newProvider.id);
   };
@@ -400,8 +440,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         providers: remaining,
         activeChatProviderId:
           prev.activeChatProviderId === id ? fallbackId : prev.activeChatProviderId,
-        activeStoryProviderId:
-          prev.activeStoryProviderId === id ? fallbackId : prev.activeStoryProviderId,
+        activeWritingProviderId:
+          prev.activeWritingProviderId === id
+            ? fallbackId
+            : prev.activeWritingProviderId,
+        activeEditingProviderId:
+          prev.activeEditingProviderId === id
+            ? fallbackId
+            : prev.activeEditingProviderId,
       };
     });
     if (editingProviderId === id) setEditingProviderId(null);
@@ -723,15 +769,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             />
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-1">
                           {p.id === localSettings.activeChatProviderId && (
-                            <span className="text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded border border-brand-200 flex items-center gap-1">
+                            <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
                               <MessageSquare size={10} /> Chat
                             </span>
                           )}
-                          {p.id === localSettings.activeStoryProviderId && (
-                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                              <BookOpen size={10} /> Story
+                          {p.id === localSettings.activeWritingProviderId && (
+                            <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
+                              <BookOpen size={10} /> Writing
+                            </span>
+                          )}
+                          {p.id === localSettings.activeEditingProviderId && (
+                            <span className="text-[9px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded border border-fuchsia-200 flex items-center gap-1">
+                              <Edit2 size={10} /> Editing
                             </span>
                           )}
                         </div>
@@ -771,7 +822,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                       {/* Role Selection Buttons */}
                       <div
-                        className={`grid grid-cols-2 gap-3 p-3 rounded-lg border ${
+                        className={`grid grid-cols-3 gap-3 p-3 rounded-lg border ${
                           isLight
                             ? 'bg-brand-gray-50 border-brand-gray-200'
                             : 'bg-brand-gray-950 border-brand-gray-800'
@@ -784,38 +835,58 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               activeChatProviderId: activeProvider.id,
                             }))
                           }
-                          className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${
+                          className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
                             localSettings.activeChatProviderId === activeProvider.id
                               ? isLight
-                                ? 'bg-brand-600 text-white shadow-md'
-                                : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'bg-blue-900/40 text-blue-300 border border-blue-800/50'
                               : isLight
                               ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
                               : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <MessageSquare size={14} />
-                          Use for Chat
+                          Chat
                         </button>
                         <button
                           onClick={() =>
                             setLocalSettings((s) => ({
                               ...s,
-                              activeStoryProviderId: activeProvider.id,
+                              activeWritingProviderId: activeProvider.id,
                             }))
                           }
-                          className={`flex items-center justify-center gap-2 py-2 rounded text-xs font-bold uppercase transition-all ${
-                            localSettings.activeStoryProviderId === activeProvider.id
+                          className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
+                            localSettings.activeWritingProviderId === activeProvider.id
                               ? isLight
-                                ? 'bg-emerald-600 text-white shadow-md'
-                                : 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/50'
+                                ? 'bg-violet-600 text-white shadow-md'
+                                : 'bg-violet-900/40 text-violet-300 border border-violet-800/50'
                               : isLight
                               ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
                               : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <BookOpen size={14} />
-                          Use for Story
+                          Writing
+                        </button>
+                        <button
+                          onClick={() =>
+                            setLocalSettings((s) => ({
+                              ...s,
+                              activeEditingProviderId: activeProvider.id,
+                            }))
+                          }
+                          className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
+                            localSettings.activeEditingProviderId === activeProvider.id
+                              ? isLight
+                                ? 'bg-fuchsia-600 text-white shadow-md'
+                                : 'bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-800/50'
+                              : isLight
+                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
+                          }`}
+                        >
+                          <Edit2 size={14} />
+                          Editing
                         </button>
                       </div>
 
@@ -1150,39 +1221,80 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   {group.title}
                                 </h5>
                                 <div className="space-y-3">
-                                  {group.prompts.map((prompt) => (
-                                    <div key={prompt.id} className="space-y-1">
-                                      <label className="text-[10px] font-medium text-brand-gray-500">
-                                        {prompt.label}
-                                      </label>
-                                      <textarea
-                                        rows={5}
-                                        value={
-                                          (activeProvider.prompts as any)?.[
-                                            prompt.id
-                                          ] || ''
-                                        }
-                                        onChange={(e) =>
-                                          updateProvider(activeProvider.id, {
-                                            prompts: {
-                                              ...(activeProvider.prompts || {}),
-                                              [prompt.id]: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        placeholder={
-                                          defaultPrompts.system_messages[prompt.id] ||
-                                          defaultPrompts.user_prompts[prompt.id] ||
-                                          'Default instruction...'
-                                        }
-                                        className={`w-full border rounded p-2 text-[11px] focus:border-brand-500 focus:outline-none ${
-                                          isLight
-                                            ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                                            : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                                        }`}
-                                      />
-                                    </div>
-                                  ))}
+                                  {group.prompts.map((prompt) => {
+                                    const Icon =
+                                      prompt.type === 'CHAT'
+                                        ? MessageSquare
+                                        : prompt.type === 'WRITING'
+                                        ? BookOpen
+                                        : Edit2;
+                                    const colorClass =
+                                      prompt.type === 'CHAT'
+                                        ? 'text-blue-600'
+                                        : prompt.type === 'WRITING'
+                                        ? 'text-violet-600'
+                                        : 'text-fuchsia-600';
+                                    const bgColorClass =
+                                      prompt.type === 'CHAT'
+                                        ? 'bg-blue-50'
+                                        : prompt.type === 'WRITING'
+                                        ? 'bg-violet-50'
+                                        : 'bg-fuchsia-50';
+                                    const darkBgColorClass =
+                                      prompt.type === 'CHAT'
+                                        ? 'dark:bg-blue-900/20'
+                                        : prompt.type === 'WRITING'
+                                        ? 'dark:bg-violet-900/20'
+                                        : 'dark:bg-fuchsia-900/20';
+
+                                    return (
+                                      <div key={prompt.id} className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                          <div
+                                            className={`p-1 rounded ${bgColorClass} ${darkBgColorClass}`}
+                                          >
+                                            <Icon size={10} className={colorClass} />
+                                          </div>
+                                          <label
+                                            className={`text-[10px] font-bold uppercase tracking-tight ${colorClass}`}
+                                          >
+                                            {prompt.label}
+                                            <span
+                                              className={`ml-2 text-[8px] px-1 rounded border border-current opacity-70`}
+                                            >
+                                              {prompt.type}
+                                            </span>
+                                          </label>
+                                        </div>
+                                        <textarea
+                                          rows={5}
+                                          value={
+                                            (activeProvider.prompts as any)?.[
+                                              prompt.id
+                                            ] || ''
+                                          }
+                                          onChange={(e) =>
+                                            updateProvider(activeProvider.id, {
+                                              prompts: {
+                                                ...(activeProvider.prompts || {}),
+                                                [prompt.id]: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          placeholder={
+                                            defaultPrompts.system_messages[prompt.id] ||
+                                            defaultPrompts.user_prompts[prompt.id] ||
+                                            'Default instruction...'
+                                          }
+                                          className={`w-full border rounded p-2 text-[11px] focus:border-brand-500 focus:outline-none ${
+                                            isLight
+                                              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                                              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                                          }`}
+                                        />
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             ))}

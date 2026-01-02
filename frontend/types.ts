@@ -62,8 +62,9 @@ export interface LLMConfig {
 
 export interface AppSettings {
   providers: LLMConfig[];
-  activeStoryProviderId: string;
+  activeWritingProviderId: string;
   activeChatProviderId: string;
+  activeEditingProviderId: string;
 }
 
 export interface ProjectMetadata {
