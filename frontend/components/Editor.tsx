@@ -598,7 +598,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
         )}
 
         {/* Main Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center scroll-smooth">
+        <div className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center">
           {/* The Paper - Grows infinitely */}
           <div
             className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none"

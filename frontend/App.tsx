@@ -765,6 +765,10 @@ Always prioritize the user's creative vision.`
   const currentTheme = editorSettings.theme || 'mixed';
   const isLight = currentTheme === 'light';
 
+  useEffect(() => {
+    document.body.className = currentTheme;
+  }, [currentTheme]);
+
   // Styles based on theme (Light vs Dark/Mixed for UI elements)
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
@@ -1648,7 +1652,7 @@ Always prioritize the user's creative vision.`
           ></div>
         )}
         <div
-          className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex ${
+          className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } ${
             isLight
@@ -1673,7 +1677,7 @@ Always prioritize the user's creative vision.`
           />
         </div>
         <div
-          className={`flex-1 flex flex-col relative overflow-hidden w-full ${bgMain}`}
+          className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
         >
           <div className="flex-1 overflow-hidden h-full flex flex-col">
             {currentChapter ? (
@@ -1712,7 +1716,7 @@ Always prioritize the user's creative vision.`
           </div>
         </div>
         {isChatOpen && (
-          <div className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:z-20 md:h-full">
+          <div className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full">
             <Chat
               messages={chatMessages}
               isLoading={isChatLoading}
