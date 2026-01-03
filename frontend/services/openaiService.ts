@@ -82,9 +82,8 @@ async function readSSEStream(
         try {
           const data = JSON.parse(dataStr);
           if (data.error) {
-            throw new Error(
-              `Upstream error: ${data.error}${data.status ? ` (${data.status})` : ''}`
-            );
+            const msg = data.message || data.error;
+            throw new Error(`${msg}${data.status ? ` (Status: ${data.status})` : ''}`);
           }
           if (data.content) {
             text += data.content;
@@ -93,7 +92,11 @@ async function readSSEStream(
             onToolCalls(data.tool_calls);
           }
         } catch (e) {
-          if (e instanceof Error && e.message.startsWith('Upstream error:')) {
+          if (
+            e instanceof Error &&
+            (e.message.includes('Status:') || e.message.includes('error'))
+          ) {
+            // Re-throw handled errors from backend
             throw e;
           }
           console.error('Failed to parse SSE data', e);
@@ -192,7 +195,6 @@ export const createChatSession = (
           functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
         };
       } catch (e) {
-        console.error('Chat failed', e);
         throw e;
       }
     },
@@ -223,9 +225,9 @@ export const generateSimpleContent = async (
     if (!reader) return '';
 
     return await readSSEStream(reader);
-  } catch (e) {
-    console.error('Generation failed', e);
-    return '';
+  } catch (e: any) {
+    // Re-throw so the caller can handle it and show it to the user
+    throw e;
   }
 };
 

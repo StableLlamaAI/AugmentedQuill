@@ -1341,7 +1341,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                     yield f'data: {{"tool_calls": {_json.dumps(message["tool_calls"])}}}\n\n'
                             yield 'data: {"done": true}\n\n'
                         except Exception as e:
-                            yield f'data: {{"error": "Failed to parse response", "message": "{_json.dumps(str(e))}"}}\n\n'
+                            log_entry["response"]["error"] = str(e)
+                            yield f'data: {{"error": "Failed to parse response", "message": {_json.dumps(str(e))}}}\n\n'
                         return
 
                     buffer = ""
@@ -1582,7 +1583,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                     continue
         except Exception as e:
             log_entry["response"]["error"] = str(e)
-            yield f'data: {{"error": "Request failed", "message": "{_json.dumps(str(e))}"}}\n\n'
+            yield f'data: {{"error": "Request failed", "message": {_json.dumps(str(e))}}}\n\n'
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
 

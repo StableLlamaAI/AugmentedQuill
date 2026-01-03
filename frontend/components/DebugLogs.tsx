@@ -335,6 +335,18 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                               <span className="text-blue-400">status_code:</span>{' '}
                               {log.response.status_code}
                             </div>
+                            {log.response.error && (
+                              <div className="space-y-1">
+                                <span className="text-red-400">error:</span>
+                                <div
+                                  className={`mt-1 p-2 rounded border border-red-500/30 bg-red-500/5 text-red-500 whitespace-pre-wrap font-sans text-sm`}
+                                >
+                                  {typeof log.response.error === 'string'
+                                    ? log.response.error
+                                    : JSON.stringify(log.response.error, null, 2)}
+                                </div>
+                              </div>
+                            )}
                             <div className="space-y-1">
                               <span className="text-blue-400">full_content:</span>
                               <div

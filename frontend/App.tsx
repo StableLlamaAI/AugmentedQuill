@@ -462,13 +462,10 @@ Always prioritize the user's creative vision.`
       };
       setChatMessages((prev) => [...prev, botMessage]);
     } catch (error: any) {
-      console.error(error);
       const errorMessage: ChatMessage = {
         id: uuidv4(),
         role: 'model',
-        text: error?.message?.startsWith('Upstream error:')
-          ? `AI Error: ${error.message.replace('Upstream error: ', '')}`
-          : 'Sorry, I encountered an error processing your request. Please check your AI settings.',
+        text: `AI Error: ${error.message || 'An unexpected error occurred'}`,
         isError: true,
       };
       setChatMessages((prev) => [...prev, errorMessage]);
@@ -542,8 +539,14 @@ Always prioritize the user's creative vision.`
         currentChapter.id
       );
       setContinuations(options);
-    } catch (e) {
-      console.error('Failed to generate suggestions', e);
+    } catch (e: any) {
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: 'model',
+        text: `Suggestion Error: ${e.message || 'Failed to generate suggestions'}`,
+        isError: true,
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsSuggesting(false);
     }
@@ -758,8 +761,14 @@ Always prioritize the user's creative vision.`
           updateChapter(currentChapter.id, { content: result });
         }
       }
-    } catch (e) {
-      console.error('AI Action failed', e);
+    } catch (e: any) {
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: 'model',
+        text: `AI Action Error: ${e.message || 'Failed to perform AI action'}`,
+        isError: true,
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsAiActionLoading(false);
     }

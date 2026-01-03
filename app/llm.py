@@ -382,6 +382,9 @@ async def openai_chat_complete_stream(
                         if content:
                             log_entry["response"]["full_content"] += content
                             yield content
+        except Exception as e:
+            log_entry["response"]["error"] = str(e)
+            raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
 
@@ -464,5 +467,8 @@ async def openai_completions_stream(
                         if content:
                             log_entry["response"]["full_content"] += content
                             yield content
+        except Exception as e:
+            log_entry["response"]["error"] = str(e)
+            raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
