@@ -6,17 +6,73 @@ from fastapi import HTTPException
 from app.config import load_story_config
 
 
-def _scan_chapter_files() -> List[Tuple[int, Path]]:
-    """Return list of (index, path) for chapter files under active project.
+def _scan_chapter_files() -> List[Tuple[str, Path]]:
+    """Return list of (global_id, path) for chapter files.
 
-    Supports files like '0001.txt'.
-    Sorted by numeric index ascending.
+    For Medium projects: global_id is likely the string of int '1', '2'.
+    For Large projects: global_id could be 'book_id:chap_idx' or just linear index.
+
+    COMPATIBILITY NOTE: The rest of the app expects integer IDs often.
+    However, for Large projects, file names overlap (0001.txt in Book 1 and Book 2).
+
+    To maintain minimal changes elsewhere, we will return a linear list where
+    the returned 'ID' is the 1-based index in the *full sequence*.
+
+    Returns: List of (virtual_id, path).
     """
     from app.projects import get_active_project_dir
 
     active = get_active_project_dir()
     if not active:
         return []
+
+    story = load_story_config(active / "story.json") or {}
+    p_type = story.get("project_type", "medium")
+
+    if p_type == "small":
+        p = active / "content.md"
+        return [(1, p)]
+
+    if p_type == "large":
+        books = story.get("books", [])
+        items = []
+        global_idx = 1
+        for book in books:
+            bid = book.get("id")
+            if not bid:
+                continue
+
+            # Use 'chapters' dir inside the book dir
+            # Requirement: "each book should have its own directory where the chapter files ... are stored"
+            b_dir = active / "books" / bid
+            if not b_dir.exists():
+                continue
+
+            chapters_dir = b_dir / "chapters"
+            if not chapters_dir.exists():
+                continue
+
+            # Scan book chapters
+            book_items = []
+            for p in chapters_dir.glob("*.txt"):
+                if not p.is_file():
+                    continue
+                name = p.name
+                m = re.match(r"^(\d{4})\.txt$", name)
+                if m:
+                    idx = int(m.group(1))
+                    book_items.append((idx, p))
+
+            # Sort by local filename index
+            book_items.sort(key=lambda t: t[0])
+
+            # Assign global ID
+            for _, path in book_items:
+                items.append((global_idx, path))
+                global_idx += 1
+        return items
+
+    # Medium
     chapters_dir = active / "chapters"
     if not chapters_dir.exists() or not chapters_dir.is_dir():
         return []
@@ -31,6 +87,11 @@ def _scan_chapter_files() -> List[Tuple[int, Path]]:
             items.append((idx, p))
             continue
     items.sort(key=lambda t: t[0])
+
+    # Remap to linear 1-based index to be safe?
+    # Current system relies on ID matching filename for writes.
+    # But `write_chapter_content` uses this scan function to find path.
+    # So if we return `(idx, p)` where idx is from filename, it works for Medium.
     return items
 
 

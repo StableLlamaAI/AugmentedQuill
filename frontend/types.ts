@@ -3,6 +3,14 @@ export interface Chapter {
   title: string;
   summary: string;
   content: string;
+  filename?: string;
+  book_id?: string;
+}
+
+export interface Book {
+  id: string;
+  title: string;
+  chapters: Chapter[];
 }
 
 export interface Story {
@@ -10,6 +18,8 @@ export interface Story {
   summary: string;
   styleTags: string[];
   chapters: Chapter[];
+  projectType: 'small' | 'medium' | 'large';
+  books?: Book[];
   llm_prefs?: {
     prompt_overrides?: Record<string, string>;
   };
@@ -72,6 +82,7 @@ export interface AppSettings {
 export interface ProjectMetadata {
   id: string;
   title: string;
+  type: 'small' | 'medium' | 'large';
   updatedAt: number;
 }
 

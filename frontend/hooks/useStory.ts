@@ -8,6 +8,8 @@ const INITIAL_STORY: StoryState = {
   summary: '',
   styleTags: [],
   chapters: [],
+  projectType: 'medium',
+  books: [],
   currentChapterId: null,
   lastUpdated: Date.now(),
 };
@@ -45,6 +47,8 @@ export const useStory = () => {
           title: c.title,
           summary: c.summary,
           content: '',
+          filename: c.filename,
+          book_id: c.book_id,
         }));
 
         const newStory: StoryState = {
@@ -53,6 +57,8 @@ export const useStory = () => {
           summary: res.story.story_summary || '',
           styleTags: res.story.tags || [],
           chapters: chapters,
+          projectType: res.story.project_type || 'medium',
+          books: res.story.books || [],
           llm_prefs: res.story.llm_prefs,
           currentChapterId: currentChapterId,
           lastUpdated: Date.now(),
@@ -102,6 +108,8 @@ export const useStory = () => {
             title: c.title,
             summary: c.summary,
             content: '',
+            filename: c.filename,
+            book_id: c.book_id,
           }));
 
           const newStory: StoryState = {
@@ -110,6 +118,8 @@ export const useStory = () => {
             summary: res.story.story_summary || '',
             styleTags: res.story.tags || [],
             chapters: chapters,
+            projectType: res.story.project_type || 'medium',
+            books: res.story.books || [],
             llm_prefs: res.story.llm_prefs,
             currentChapterId: chapters.length > 0 ? chapters[0].id : null,
             lastUpdated: Date.now(),
@@ -171,15 +181,21 @@ export const useStory = () => {
     }
   };
 
-  const addChapter = async (title: string = 'New Chapter', summary: string = '') => {
+  const addChapter = async (
+    title: string = 'New Chapter',
+    summary: string = '',
+    bookId?: string
+  ) => {
     try {
-      await api.chapters.create(title);
+      await api.chapters.create(title, '', bookId);
       const chaptersRes = await api.chapters.list();
       const newChapters = chaptersRes.chapters.map((c: any) => ({
         id: String(c.id),
         title: c.title,
         summary: c.summary,
         content: '',
+        filename: c.filename,
+        book_id: c.book_id,
       }));
 
       const newChapter = newChapters[newChapters.length - 1];
@@ -215,10 +231,24 @@ export const useStory = () => {
 
   const loadStory = useCallback(
     (newStory: StoryState) => {
-      if (newStory.id !== story.id) {
-        api.projects.select(newStory.id).then(() => {
-          fetchStory();
-        });
+      // Always select project to ensure backend active state matches frontend
+      if (newStory.id) {
+        api.projects
+          .select(newStory.id)
+          .then(() => fetchStory())
+          .catch((e) => console.error('Failed to select project', e));
+      }
+
+      // Update local state
+      setStory(newStory);
+      setHistory([newStory]);
+      setCurrentIndex(0);
+      if (newStory.currentChapterId) {
+        setCurrentChapterId(newStory.currentChapterId);
+      } else if (newStory.chapters.length > 0) {
+        setCurrentChapterId(newStory.chapters[0].id);
+      } else {
+        setCurrentChapterId(null);
       }
     },
     [story.id, fetchStory]

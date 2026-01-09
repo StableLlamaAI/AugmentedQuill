@@ -17,19 +17,82 @@ async def api_chapters() -> dict:
     files = _scan_chapter_files()
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
-    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+
+    p_type = story.get("project_type", "medium")
+    chapters_data = []
+
+    if p_type == "large":
+        for book in story.get("books", []):
+            bid = book.get("id")
+            for c in book.get("chapters", []):
+                norm = _normalize_chapter_entry(c)
+                norm["book_id"] = bid
+                chapters_data.append(norm)
+    else:
+        chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
 
     result = []
+    # Note: This assumes 1-to-1 mapping between file scan order and metadata order.
+    # scan_chapters_files for Large iterates books then files.
+    # Metadata iteration above iterates books then chapters.
+    # If a file exists but metadata is missing, we pad.
+    # If metadata exists but file is missing, scan skips file, so we might lose sync if we just zip.
+    # Ideally we should match by filename if possible.
+    # But files return (id, path). Path has filename.
+    # Metadata for Large currently stores filename? create_new_chapter adds "filename".
+
     for i, (idx, p) in enumerate(files):
-        # Get chapter details from story_config, falling back to filename
-        chap_entry = (
-            chapters_data[i] if i < len(chapters_data) else {"title": "", "summary": ""}
-        )
-        title = (chap_entry.get("title") or "").strip() or p.name
+        # Try to find metadata by filename matching if possible
+        fname = p.name
+        match_data = None
+
+        # Simple heuristic: try index first, checking if filename matches
+        if i < len(chapters_data):
+            candidate = chapters_data[i]
+            # If candidate has filename and it matches
+            if candidate.get("filename") == fname:
+                match_data = candidate
+            elif not candidate.get("filename"):
+                # If metadata has no filename (legacy or manual edit), assume index match
+                match_data = candidate
+
+        # If strict index match failed or wasn't trusted, search?
+        # Searching is safer but O(N^2). N is small.
+        if not match_data:
+            match_data = next(
+                (c for c in chapters_data if c.get("filename") == fname), None
+            )
+
+        # Fallback to index if still no match and valid index
+        if not match_data and i < len(chapters_data):
+            match_data = chapters_data[i]
+
+        chap_entry = match_data or {"title": "", "summary": ""}
+
+        raw_title = (chap_entry.get("title") or "").strip()
+        if raw_title:
+            title = raw_title
+        else:
+            # General fallback: pretty print the filename stem
+            stem = p.stem
+            if stem.isdigit():
+                # Keep numeric names simple
+                title = stem
+            else:
+                # content -> Content, my_chapter -> My Chapter
+                title = stem.replace("_", " ").replace("-", " ").title()
+
         summary = (chap_entry.get("summary") or "").strip()
+        book_id = chap_entry.get("book_id")
 
         result.append(
-            {"id": idx, "title": title, "filename": p.name, "summary": summary}
+            {
+                "id": idx,
+                "title": title,
+                "filename": p.name,
+                "summary": summary,
+                "book_id": book_id,
+            }
         )
     return {"chapters": result}
 
@@ -52,7 +115,19 @@ async def api_chapter_content(chap_id: int = FastAPIPath(..., ge=0)) -> dict:
     chap_entry = (
         chapters_data[pos] if pos < len(chapters_data) else {"title": "", "summary": ""}
     )
-    title = (chap_entry.get("title") or "").strip() or path.name
+
+    # Consistent fallback logic with the list endpoint
+    raw_title = (chap_entry.get("title") or "").strip()
+    if raw_title:
+        title = raw_title
+    else:
+        # General fallback: pretty print the filename stem
+        stem = path.stem
+        if stem.isdigit():
+            title = stem
+        else:
+            title = stem.replace("_", " ").replace("-", " ").title()
+
     summary = (chap_entry.get("summary") or "").strip()
 
     try:
@@ -150,7 +225,7 @@ async def api_update_chapter_title(
 @router.post("/api/chapters")
 async def api_create_chapter(request: Request) -> JSONResponse:
     """Create a new chapter file at the end and update titles list.
-    Body: {"title": str | None, "content": str | None}
+    Body: {"title": str | None, "content": str | None, "book_id": str | None}
     """
     active = get_active_project_dir()
     if not active:
@@ -162,63 +237,49 @@ async def api_create_chapter(request: Request) -> JSONResponse:
     except Exception:
         payload = {}
     title = str(payload.get("title", "")).strip() if isinstance(payload, dict) else ""
-    content = payload.get("content") if isinstance(payload, dict) else None
+    content = (
+        payload.get("content") if isinstance(payload, dict) else ""
+    )  # Default content?
     if content is None:
         content = ""
 
-    # Determine next index and path
-    files = _scan_chapter_files()
-    next_idx = (files[-1][0] + 1) if files else 1
-    filename = f"{next_idx:04d}.txt"
-    chapters_dir = active / "chapters"
-    chapters_dir.mkdir(parents=True, exist_ok=True)
-    path = chapters_dir / filename
-    try:
-        path.write_text(str(content), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to write chapter file: {e}"},
-        )
+    book_id = payload.get("book_id") if isinstance(payload, dict) else None
 
-    # Update story.json chapters array (append as last)
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    chapters_data = story.get("chapters") or []
-
-    chapters_data = [_normalize_chapter_entry(c) for c in chapters_data]
-
-    # Ensure chapters_data length aligns with existing files count before new chapter
-    count_before = len(files)
-    if len(chapters_data) < count_before:
-        chapters_data.extend(
-            [{"title": "", "summary": ""}] * (count_before - len(chapters_data))
-        )
-
-    # Append new chapter entry with title and empty summary
-    chapters_data.append({"title": title, "summary": ""})
-    story["chapters"] = chapters_data
+    # Use centralized logic
+    from app.projects import create_new_chapter, write_chapter_content
 
     try:
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to update story.json: {e}"},
-        )
+        # Create chapter entry & file
+        chap_id = create_new_chapter(title, book_id=book_id)
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "chapter": {
-                "id": next_idx,
-                "title": title or filename,
-                "filename": filename,
+        # If content provided, write it
+        if content:
+            write_chapter_content(chap_id, str(content))
+
+        # Re-fetch info to return compliant response
+        # Currently the response expects {ok: true, id: ..., title: ..., ...}
+        # But frontend `addChapter` calls api then `api.chapters.list()`.
+        # Frontend API `create` returns `res.json()`.
+        # Let's return the new chapter object.
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": True,
+                "id": chap_id,
+                "title": title,
+                "book_id": book_id,
                 "summary": "",
+                "message": "Chapter created",
             },
-        },
-    )
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Failed to create chapter: {e}"},
+        )
 
 
 @router.put("/api/chapters/{chap_id}/content")

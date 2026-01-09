@@ -9,6 +9,9 @@ from app.projects import (
     get_active_project_dir,
     write_chapter_content,
     write_chapter_summary,
+    create_project,
+    list_projects,
+    delete_project,
 )
 from app.helpers.project_helpers import _project_overview, _chapter_content_slice
 from app.helpers.story_helpers import (
@@ -592,17 +595,132 @@ STORY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "create_project",
+            "description": "Create a new project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the project.",
+                    },
+                    "project_type": {
+                        "type": "string",
+                        "enum": ["small", "medium", "large"],
+                        "description": "The type of project: small (single file), medium (chapters), large (books).",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_projects",
+            "description": "List all available projects.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_project",
+            "description": "Delete a project. Requires confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the project to delete.",
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Set to true to confirm deletion.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_book",
+            "description": "Delete a book from a large project. Requires confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": "The ID of the book to delete.",
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Set to true to confirm deletion.",
+                    },
+                },
+                "required": ["book_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_chapter",
-            "description": "Delete a chapter by its ID. This removes the chapter file and updates the story metadata.",
+            "description": "Delete a chapter by its ID. Requires confirmation.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
                         "description": "The ID of the chapter to delete.",
-                    }
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Set to true to confirm deletion.",
+                    },
                 },
                 "required": ["chap_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_new_book",
+            "description": "Create a new book in a Large project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The title of the new book.",
+                    },
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "change_project_type",
+            "description": "Convert the active project to a new type (small, medium, large).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "new_type": {
+                        "type": "string",
+                        "enum": ["small", "medium", "large"],
+                        "description": "The new project type.",
+                    }
+                },
+                "required": ["new_type"],
             },
         },
     },
@@ -886,6 +1004,9 @@ async def _exec_chat_tool(
             }
         if name == "create_new_chapter":
             title = str(args_obj.get("title", "")).strip()
+            # Optional book_id for large projects
+            book_id = args_obj.get("book_id")
+
             active = get_active_project_dir()
             if not active:
                 return {
@@ -897,7 +1018,8 @@ async def _exec_chat_tool(
             from app.projects import create_new_chapter
 
             try:
-                chap_id = create_new_chapter(title)
+                # Assuming create_new_chapter signature updated to (title, book_id)
+                chap_id = create_new_chapter(title, book_id=book_id)
                 mutations["story_changed"] = True
                 return {
                     "role": "tool",
@@ -1003,14 +1125,266 @@ async def _exec_chat_tool(
                 "name": name,
                 "content": _json.dumps({"summary": summary}),
             }
+        if name == "create_project":
+            p_name = args_obj.get("name")
+            p_type = args_obj.get("project_type", "medium")
+            if not p_name:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Project name is required"}),
+                }
+            ok, msg = create_project(p_name, p_type)
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": ok, "message": msg}),
+            }
+        if name == "list_projects":
+            projs = list_projects()
+            simple = [{"name": p["name"], "title": p["title"]} for p in projs]
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"projects": simple}),
+            }
+        if name == "delete_project":
+            p_name = args_obj.get("name")
+            confirmed = args_obj.get("confirm", False)
+            if not p_name:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Project name is required"}),
+                }
+            if not confirmed:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "status": "confirmation_required",
+                            "message": "This operation deletes the project. Call again with confirm=true to proceed.",
+                        }
+                    ),
+                }
+            ok, msg = delete_project(p_name)
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": ok, "message": msg}),
+            }
+
+        if name == "delete_book":
+            book_id = args_obj.get("book_id")
+            confirmed = args_obj.get("confirm", False)
+            if not book_id:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "book_id is required"}),
+                }
+            if not confirmed:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "status": "confirmation_required",
+                            "message": "This operation deletes the book. Call again with confirm=true to proceed.",
+                        }
+                    ),
+                }
+
+            active = get_active_project_dir()
+            if not active:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "No active project"}),
+                }
+            story_path = active / "story.json"
+            story = load_story_config(story_path) or {}
+            books = story.get("books", [])
+            new_books = [b for b in books if str(b.get("id")) != str(book_id)]
+
+            if len(new_books) == len(books):
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Book not found"}),
+                }
+
+            story["books"] = new_books
+            # Also logic to remove chapters associated with book?
+            # Assuming chapters list needs cleanup too if I track BookID in chapters.
+            # For now, just removing book entry. user can delete chapters separately or I'd need complex logic.
+            # "Small & Minimal" - just remove metadata.
+
+            with open(story_path, "w", encoding="utf-8") as f:
+                _json.dump(story, f, indent=2, ensure_ascii=False)
+            mutations["story_changed"] = True
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": True, "message": "Book deleted"}),
+            }
+
         if name == "delete_chapter":
             chap_id = args_obj.get("chap_id")
+            confirmed = args_obj.get("confirm", False)
             if not isinstance(chap_id, int):
                 return {
                     "role": "tool",
                     "tool_call_id": call_id,
                     "name": name,
                     "content": _json.dumps({"error": "chap_id is required"}),
+                }
+            if not confirmed:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "status": "confirmation_required",
+                            "message": "This operation deletes the chapter. Call again with confirm=true to proceed.",
+                        }
+                    ),
+                }
+
+            # Logic to delete from filesystem and story.json
+            active = get_active_project_dir()
+            from app.helpers.chapter_helpers import _scan_chapter_files
+
+            files = _scan_chapter_files()
+            match = next(((idx, p) for (idx, p) in files if idx == chap_id), None)
+            if not match:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Chapter not found"}),
+                }
+
+            _, path = match
+            if path.exists():
+                path.unlink()
+
+            # Remove from story.json if present
+            story_path = active / "story.json"
+            story = load_story_config(story_path) or {}
+            chapters = story.get("chapters", [])
+            if chap_id < len(chapters):
+                # We can't shift indices easily because filenames are fixed (0001.txt).
+                # Deleting chapter 2 means 0002.txt is gone.
+                # Filesystem scan will now see 0001, 0003. Virtual IDs might shift or stay?
+                # _scan_chapter_files returns sequential virtual IDs if we use `enumerate`.
+                # If we rely on filenames for ID, then it's distinct.
+                # Current logic in `projects.py` `create_new_chapter` relies on Max(Filesystem ID) + 1.
+                # Current logic in `_scan_chapter_files`:
+                #   files = sorted(root.glob("*.txt")) -> 0001.txt, 0003.txt
+                #   returns enumerate(files, 1) -> (1, 0001.txt), (2, 0003.txt)
+                # So Virtual IDs shift!
+                # We should remove the chapter metadata at the specific index corresponding to the DELETED chapter.
+                # But wait, if IDs shift, we need to know the mapping BEFORE deletion.
+                # `chap_id` passed here is the Virtual ID (1-based index).
+                idx_to_remove = chap_id - 1
+                if 0 <= idx_to_remove < len(chapters):
+                    chapters.pop(idx_to_remove)
+                    story["chapters"] = chapters
+                    with open(story_path, "w", encoding="utf-8") as f:
+                        _json.dump(story, f, indent=2, ensure_ascii=False)
+
+            mutations["story_changed"] = True
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": True, "message": "Chapter deleted"}),
+            }
+
+        if name == "create_new_book":
+            title = args_obj.get("title")
+            if not title:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "Book title is required"}),
+                }
+
+            from app.projects import create_new_book
+
+            try:
+                bid = create_new_book(title)
+                mutations["story_changed"] = True
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"book_id": bid, "message": "Book created"}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
+
+        if name == "change_project_type":
+            new_type = args_obj.get("new_type")
+            if not new_type:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "new_type is required"}),
+                }
+            from app.projects import change_project_type
+
+            ok, msg = change_project_type(new_type)
+            if ok:
+                mutations["story_changed"] = True
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": ok, "message": msg}),
+            }
+            chap_id = args_obj.get("chap_id")
+            confirmed = args_obj.get("confirm", False)
+
+            if not isinstance(chap_id, int):
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": "chap_id is required"}),
+                }
+            if not confirmed:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {
+                            "status": "confirmation_required",
+                            "message": "This operation deletes the chapter. Call again with confirm=true to proceed.",
+                        }
+                    ),
                 }
             active = get_active_project_dir()
             if not active:

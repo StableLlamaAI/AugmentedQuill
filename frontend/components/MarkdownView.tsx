@@ -9,6 +9,17 @@ interface MarkdownViewProps {
   simple?: boolean; // If true, only highlights bold/italic, shows source for others
 }
 
+// Configure marked once
+const renderer = new marked.Renderer();
+renderer.image = (obj: { href: string | null; title: string | null; text: string }) => {
+  let { href, title, text } = obj;
+  if (href && !href.startsWith('http') && !href.startsWith('/')) {
+    href = `/api/projects/images/${href}`;
+  }
+  return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full h-auto rounded shadow-lg my-4" />`;
+};
+marked.use({ renderer });
+
 export const MarkdownView: React.FC<MarkdownViewProps> = ({
   content,
   className = '',
