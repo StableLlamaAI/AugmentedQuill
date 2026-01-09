@@ -1,0 +1,215 @@
+import json
+import io
+import zipfile
+import os
+import tempfile
+from pathlib import Path
+from unittest import TestCase
+
+from app.projects import (
+    create_project,
+    select_project,
+    change_project_type,
+    get_active_project_dir,
+    load_story_config,
+)
+from app.helpers.project_helpers import _project_overview
+from fastapi.testclient import TestClient
+from app.main import app
+
+
+class ProjectFeaturesTest(TestCase):
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.addCleanup(self.td.cleanup)
+        self.projects_root = Path(self.td.name) / "projects"
+        self.projects_root.mkdir(parents=True, exist_ok=True)
+        self.registry_path = Path(self.td.name) / "projects.json"
+
+        # Set environment variables for the app to use our temp dirs
+        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
+        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
+
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
+        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+
+    def test_convert_small_to_medium(self):
+        # 1. Create Small project
+        create_project("test_sm", project_type="small")
+        select_project("test_sm")
+        active = get_active_project_dir()
+
+        # Write content
+        (active / "content.md").write_text("Small Content", encoding="utf-8")
+
+        # 2. Convert to Medium
+        ok, msg = change_project_type("medium")
+        self.assertTrue(ok, msg)
+
+        # 3. Verify
+        story = load_story_config(active / "story.json")
+        self.assertEqual(story["project_type"], "medium")
+        self.assertFalse((active / "content.md").exists())
+        self.assertTrue((active / "chapters" / "0001.txt").exists())
+        text = (active / "chapters" / "0001.txt").read_text(encoding="utf-8")
+        self.assertEqual(text, "Small Content")
+
+    def test_convert_medium_to_small_success(self):
+        # 1. Create Medium project
+        create_project("test_med", project_type="medium")
+        select_project("test_med")
+        active = get_active_project_dir()
+
+        # Write one chapter
+        (active / "chapters").mkdir(exist_ok=True)
+        (active / "chapters" / "0001.txt").write_text(
+            "Chapter Content", encoding="utf-8"
+        )
+
+        # 2. Convert to Small
+        ok, msg = change_project_type("small")
+        self.assertTrue(ok, msg)
+
+        # 3. Verify
+        story = load_story_config(active / "story.json")
+        self.assertEqual(story["project_type"], "small")
+        self.assertTrue((active / "content.md").exists())
+        self.assertFalse((active / "chapters").exists())
+        text = (active / "content.md").read_text(encoding="utf-8")
+        self.assertEqual(text, "Chapter Content")
+
+    def test_convert_medium_to_small_fails_if_multiple_chapters(self):
+        create_project("test_med_multi", project_type="medium")
+        select_project("test_med_multi")
+        active = get_active_project_dir()
+
+        (active / "chapters").mkdir(exist_ok=True)
+        (active / "chapters" / "0001.txt").write_text("C1", encoding="utf-8")
+        (active / "chapters" / "0002.txt").write_text("C2", encoding="utf-8")
+
+        ok, msg = change_project_type("small")
+        self.assertFalse(ok)
+        self.assertIn("multiple chapters", msg.lower())
+
+    def test_small_project_overview_with_metadata(self):
+        """Test the regression fix: Small project using story.json metadata for title/summary."""
+        create_project("test_sm_meta", project_type="small")
+        select_project("test_sm_meta")
+        active = get_active_project_dir()
+
+        # Simulate LLM adding a summary to story.json
+        story = load_story_config(active / "story.json")
+        story["chapters"] = [{"title": "The Beginning", "summary": "A great start"}]
+        (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
+
+        # Check overview
+        overview = _project_overview()
+
+        chapters = overview["chapters"]
+        self.assertEqual(len(chapters), 1)
+        self.assertEqual(chapters[0]["title"], "The Beginning")
+        self.assertEqual(chapters[0]["summary"], "A great start")
+        self.assertEqual(chapters[0]["filename"], "content.md")
+
+    def test_small_project_overview_defaults(self):
+        """Test fallback when no metadata exists."""
+        create_project("test_sm_def", project_type="small")
+        select_project("test_sm_def")
+
+        overview = _project_overview()
+        chapters = overview["chapters"]
+        self.assertEqual(len(chapters), 1)
+        self.assertEqual(chapters[0]["title"], "Story Content")
+        self.assertEqual(chapters[0]["summary"], "Full content of the story")
+
+    def test_export_import_zip(self):
+        # 1. Setup a project
+        create_project("export_me", project_type="medium")
+        select_project("export_me")
+        active = get_active_project_dir()
+        (active / "chapters").mkdir(exist_ok=True)
+        (active / "chapters" / "0001.txt").write_text(
+            "Exported Content", encoding="utf-8"
+        )
+
+        # 2. Export (Manually zip it as the API would)
+        # We mimic `api_projects_export` logic here since we are testing core logic/interop
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for root, dirs, files in os.walk(active):
+                for file in files:
+                    file_path = Path(root) / file
+                    archive_name = file_path.relative_to(active)
+                    zf.write(file_path, arcname=archive_name)
+
+        zip_bytes = mem_zip.getvalue()
+
+        # 3. Import (We mimic `api_projects_import` logic or use a helper if we extracted it)
+        # Since `api_projects_import` is in `api/projects.py` and logic is embedded in the route,
+        # we will basically reimplement the extraction/verification logic to ensure it works on valid zip.
+
+        # Create temp extraction
+        temp_dir = self.projects_root / "temp_import"
+        temp_dir.mkdir()
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            zf.extractall(temp_dir)
+
+        self.assertTrue((temp_dir / "story.json").exists())
+        self.assertTrue((temp_dir / "chapters" / "0001.txt").exists())
+
+        # Simulate final move
+        final_name = "imported_proj"
+        final_path = self.projects_root / final_name
+        temp_dir.rename(final_path)
+
+        select_project(final_name)
+        active_new = get_active_project_dir()
+        self.assertEqual(active_new.name, final_name)
+        self.assertEqual(
+            (active_new / "chapters" / "0001.txt").read_text(encoding="utf-8"),
+            "Exported Content",
+        )
+
+    def test_api_import_workflow(self):
+        """Test the actual API endpoint for import."""
+        # Setup source project
+        create_project("api_export", project_type="medium")
+        select_project("api_export")
+        active = get_active_project_dir()
+        (active / "story.json").write_text(
+            json.dumps({"project_title": "API Imported", "tags": ["imported"]}),
+            encoding="utf-8",
+        )
+
+        # Create ZIP
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                "story.json", (active / "story.json").read_text(encoding="utf-8")
+            )
+
+        mem_zip.seek(0)
+
+        # Call API
+        response = self.client.post(
+            "/api/projects/import",
+            files={"file": ("project.zip", mem_zip, "application/zip")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertIn("Imported as", data["message"])
+
+        # Verify result on disk
+        # imported_name = "API Imported"
+        # Note: Sanitization logic might change "API Imported" to "APIImported" or similar.
+        # current logic: "".join(x for x in proposed_name if x.isalnum() or x in " -_").strip()
+        # "API Imported" -> "API Imported"
+
+        imported_path = self.projects_root / "API Imported"
+        self.assertTrue(imported_path.exists())
+        self.assertTrue((imported_path / "story.json").exists())

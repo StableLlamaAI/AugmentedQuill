@@ -82,10 +82,10 @@ class ChaptersApiTest(TestCase):
         data = r.json()
         chs = data.get("chapters")
         self.assertEqual([c["id"] for c in chs], [1, 2])
-        # Titles should fall back to the filename when no titles provided
-        self.assertEqual([c["title"] for c in chs], ["0001.txt", "0002.txt"])
+        # Titles should fall back to the filename STEM when no titles provided
+        self.assertEqual([c["title"] for c in chs], ["0001", "0002"])
 
         r1 = self.client.get("/api/chapters/1")
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
-        self.assertEqual(d1["title"], "0001.txt")
+        self.assertEqual(d1["title"], "0001")
