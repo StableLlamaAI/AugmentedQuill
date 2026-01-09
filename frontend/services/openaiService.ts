@@ -1,10 +1,36 @@
 import { LLMConfig } from '../types';
 
+export class ChatError extends Error {
+  traceback?: string;
+  status?: number;
+  data?: any;
+
+  constructor(
+    message: string,
+    options?: { traceback?: string; status?: number; data?: any }
+  ) {
+    super(message);
+    this.name = 'ChatError';
+    this.traceback = options?.traceback;
+    this.status = options?.status;
+    this.data = options?.data;
+  }
+}
+
 export interface UnifiedChat {
   sendMessage(
     message: string | { message: any },
-    onUpdate?: (update: { text?: string; thinking?: string }) => void
-  ): Promise<{ text: string; thinking?: string; functionCalls?: any[] }>;
+    onUpdate?: (update: {
+      text?: string;
+      thinking?: string;
+      traceback?: string;
+    }) => void
+  ): Promise<{
+    text: string;
+    thinking?: string;
+    functionCalls?: any[];
+    traceback?: string;
+  }>;
 }
 
 export const testConnection = async (config: LLMConfig): Promise<boolean> => {
@@ -85,8 +111,12 @@ async function readSSEStream(
         try {
           const data = JSON.parse(dataStr);
           if (data.error) {
-            const msg = data.message || data.error;
-            throw new Error(`${msg}${data.status ? ` (Status: ${data.status})` : ''}`);
+            let msg = data.message || data.error;
+            throw new ChatError(msg, {
+              traceback: data.traceback,
+              status: data.status,
+              data: data.data,
+            });
           }
           if (data.content) {
             text += data.content;
@@ -99,12 +129,17 @@ async function readSSEStream(
             onToolCalls(data.tool_calls);
           }
         } catch (e) {
-          if (
-            e instanceof Error &&
-            (e.message.includes('Status:') || e.message.includes('error'))
-          ) {
-            // Re-throw handled errors from backend
-            throw e;
+          if (e instanceof Error) {
+            const msg = e.message.toLowerCase();
+            if (
+              msg.includes('status:') ||
+              msg.includes('error') ||
+              msg.includes('failed') ||
+              msg.includes('traceback')
+            ) {
+              // Re-throw handled errors from backend
+              throw e;
+            }
           }
           console.error('Failed to parse SSE data', e);
         }
@@ -219,8 +254,9 @@ export const createChatSession = (
           text,
           thinking: thinking || undefined,
           functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+          traceback: undefined, // Or capture if needed
         };
-      } catch (e) {
+      } catch (e: any) {
         throw e;
       }
     },

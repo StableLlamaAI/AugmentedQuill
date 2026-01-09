@@ -30,6 +30,7 @@ export interface ChatMessage {
   name?: string;
   tool_call_id?: string;
   tool_calls?: any[];
+  traceback?: string;
 }
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';

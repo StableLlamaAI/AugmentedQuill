@@ -228,11 +228,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               activeEditingProviderId: selectedId,
             }));
             setEditingProviderId(selectedId);
-
-            // Treat backend-loaded values as initial (do not auto-trigger model test)
-            prevModelIdRef.current[selectedId] = providers.find(
-              (p) => p.id === selectedId
-            )?.modelId;
           }
         } catch (e) {
           console.error('Failed to load machine config', e);
@@ -245,133 +240,144 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }
   }, [isOpen, settings]);
 
-  // Auto-test connection and fetch models only when:
-  // - dialog opens
-  // - active provider changes (user selects another provider)
-  // - baseUrl/apiKey/timeout for active provider changes
+  // Auto-test connection and fetch models for all providers.
   useEffect(() => {
-    const provider = localSettings.providers.find((p) => p.id === editingProviderId);
-    if (!provider) return;
-
-    const providerId = provider.id;
-    const baseUrl = (provider.baseUrl || '').trim();
-    const apiKey = (provider.apiKey || '').trim();
-    const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
-    const testKey = `${baseUrl}|${apiKey}|${timeoutS}`;
-
-    // Only attempt if baseUrl and apiKey are present
-    if (!baseUrl || !apiKey) {
-      setConnectionStatus((s) => ({ ...s, [providerId]: 'idle' }));
-      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
-      setModelLists((prev) => ({ ...prev, [providerId]: [] }));
-      return;
-    }
-
-    // Avoid re-testing unless the relevant inputs changed or dialog just opened.
-    if (lastConnTestKeyRef.current[providerId] === testKey) {
-      return;
-    }
-    lastConnTestKeyRef.current[providerId] = testKey;
+    if (!isOpen) return;
 
     let cancelled = false;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    const run = async () => {
-      setConnectionStatus((s) => ({ ...s, [providerId]: 'loading' }));
-      try {
-        const res = await api.machine.test({
-          base_url: baseUrl,
-          api_key: apiKey,
-          timeout_s: timeoutS,
-        });
+    localSettings.providers.forEach((provider) => {
+      const providerId = provider.id;
+      const baseUrl = (provider.baseUrl || '').trim();
+      const apiKey = (provider.apiKey || '').trim();
+      const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
+      const testKey = `${baseUrl}|${apiKey}|${timeoutS}`;
+
+      // Only attempt if baseUrl and apiKey are present
+      if (!baseUrl || !apiKey) {
+        setConnectionStatus((s) => ({ ...s, [providerId]: 'idle' }));
+        setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
+        setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+        return;
+      }
+
+      // Avoid re-testing unless the relevant inputs changed or dialog just opened.
+      if (lastConnTestKeyRef.current[providerId] === testKey) {
+        return;
+      }
+
+      const run = async () => {
         if (cancelled) return;
-        setConnectionStatus((s) => ({
-          ...s,
-          [providerId]: res?.ok ? 'success' : 'error',
-        }));
-        if (res?.ok) {
-          setModelLists((prev) => ({
-            ...prev,
-            [providerId]: res.models || [],
+        setConnectionStatus((s) => ({ ...s, [providerId]: 'loading' }));
+        try {
+          const res = await api.machine.test({
+            base_url: baseUrl,
+            api_key: apiKey,
+            timeout_s: timeoutS,
+          });
+          if (cancelled) return;
+          lastConnTestKeyRef.current[providerId] = testKey;
+          setConnectionStatus((s) => ({
+            ...s,
+            [providerId]: res?.ok ? 'success' : 'error',
           }));
-        } else {
+          if (res?.ok) {
+            setModelLists((prev) => ({
+              ...prev,
+              [providerId]: res.models || [],
+            }));
+          } else {
+            setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+          }
+        } catch (e) {
+          if (cancelled) return;
+          lastConnTestKeyRef.current[providerId] = testKey;
+          setConnectionStatus((s) => ({ ...s, [providerId]: 'error' }));
           setModelLists((prev) => ({ ...prev, [providerId]: [] }));
         }
-      } catch (e) {
-        if (cancelled) return;
-        setConnectionStatus((s) => ({ ...s, [providerId]: 'error' }));
-        setModelLists((prev) => ({ ...prev, [providerId]: [] }));
-      }
-    };
+      };
 
-    const t = setTimeout(run, 600);
+      timeouts.push(setTimeout(run, 600));
+    });
+
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      timeouts.forEach(clearTimeout);
     };
-  }, [isOpen, editingProviderId, localSettings.providers]);
+  }, [isOpen, localSettings.providers]);
 
-  // Test model availability only when the user changes Model ID (no polling).
+  // Test model availability for all providers.
   useEffect(() => {
-    const provider = localSettings.providers.find((p) => p.id === editingProviderId);
-    if (!provider) return;
-
-    const providerId = provider.id;
-    const modelId = (provider.modelId || '').trim();
-    const prevModelId = prevModelIdRef.current[providerId];
-
-    // Track changes; skip initial load.
-    if (prevModelId === undefined) {
-      prevModelIdRef.current[providerId] = modelId;
-      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
-      return;
-    }
-
-    if (prevModelId === modelId) {
-      return;
-    }
-    prevModelIdRef.current[providerId] = modelId;
-
-    // Only test if connection is OK.
-    if (connectionStatus[providerId] !== 'success' || !modelId) {
-      setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
-      return;
-    }
-
-    const baseUrl = (provider.baseUrl || '').trim();
-    const apiKey = (provider.apiKey || '').trim();
-    const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
+    if (!isOpen) return;
 
     let cancelled = false;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    const run = async () => {
-      setModelStatus((s) => ({ ...s, [providerId]: 'loading' }));
-      try {
-        const res = await api.machine.testModel({
-          base_url: baseUrl,
-          api_key: apiKey,
-          timeout_s: timeoutS,
-          model_id: modelId,
-        });
-        if (cancelled) return;
-        if (Array.isArray(res?.models)) {
-          setModelLists((prev) => ({ ...prev, [providerId]: res.models }));
-        }
-        setModelStatus((s) => ({
-          ...s,
-          [providerId]: res?.ok && res?.model_ok ? 'success' : 'error',
-        }));
-      } catch (e) {
-        if (cancelled) return;
-        setModelStatus((s) => ({ ...s, [providerId]: 'error' }));
+    localSettings.providers.forEach((provider) => {
+      const providerId = provider.id;
+      const modelId = (provider.modelId || '').trim();
+      const prevId = prevModelIdRef.current[providerId];
+
+      // If nothing changed and we already have a status, skip.
+      if (
+        prevId === modelId &&
+        modelStatus[providerId] &&
+        modelStatus[providerId] !== 'idle'
+      ) {
+        return;
       }
-    };
 
-    const t = setTimeout(run, 500);
+      // If no modelId, it's idle.
+      if (!modelId) {
+        prevModelIdRef.current[providerId] = modelId;
+        setModelStatus((s) => ({ ...s, [providerId]: 'idle' }));
+        return;
+      }
+
+      // Only test if connection is OK.
+      if (connectionStatus[providerId] !== 'success') {
+        return;
+      }
+
+      const baseUrl = (provider.baseUrl || '').trim();
+      const apiKey = (provider.apiKey || '').trim();
+      const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
+
+      const run = async () => {
+        if (cancelled) return;
+        setModelStatus((s) => ({ ...s, [providerId]: 'loading' }));
+        try {
+          const res = await api.machine.testModel({
+            base_url: baseUrl,
+            api_key: apiKey,
+            timeout_s: timeoutS,
+            model_id: modelId,
+          });
+          if (cancelled) return;
+          prevModelIdRef.current[providerId] = modelId;
+          if (Array.isArray(res?.models)) {
+            setModelLists((prev) => ({ ...prev, [providerId]: res.models }));
+          }
+          setModelStatus((s) => ({
+            ...s,
+            [providerId]: res?.ok && res?.model_ok ? 'success' : 'error',
+          }));
+        } catch (e) {
+          if (cancelled) return;
+          prevModelIdRef.current[providerId] = modelId;
+          setModelStatus((s) => ({ ...s, [providerId]: 'error' }));
+        }
+      };
+
+      timeouts.push(setTimeout(run, 500));
+    });
+
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      timeouts.forEach(clearTimeout);
     };
-  }, [isOpen, editingProviderId, localSettings.providers, connectionStatus]);
+  }, [isOpen, localSettings.providers, connectionStatus]);
 
   // Close model dropdown when switching providers
   useEffect(() => {
@@ -767,7 +773,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             </div>
                             <div className="text-xs text-brand-gray-500" />
                           </div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             <span
                               className={`h-2.5 w-2.5 rounded-full border ${
                                 connectionStatus[p.id] === 'success'
@@ -780,7 +786,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                         ? 'bg-brand-gray-200 border-brand-gray-300'
                                         : 'bg-brand-gray-700 border-brand-gray-600'
                               }`}
-                              title={connectionStatus[p.id] || 'idle'}
+                              title={`Connection: ${connectionStatus[p.id] || 'idle'}`}
+                            />
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full border ${
+                                modelStatus[p.id] === 'success'
+                                  ? 'bg-emerald-500 border-emerald-500'
+                                  : modelStatus[p.id] === 'error'
+                                    ? 'bg-red-500 border-red-500'
+                                    : modelStatus[p.id] === 'loading'
+                                      ? 'bg-brand-500 border-brand-500'
+                                      : isLight
+                                        ? 'bg-brand-gray-200 border-brand-gray-300'
+                                        : 'bg-brand-gray-700 border-brand-gray-600'
+                              }`}
+                              title={`Model: ${modelStatus[p.id] || 'idle'}`}
                             />
                           </div>
                         </div>
@@ -1275,7 +1295,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                           >
                                             {prompt.label}
                                             <span
-                                              className={`ml-2 text-[8px] px-1 rounded border border-current opacity-70`}
+                                              className={
+                                                'ml-2 text-[8px] px-1 rounded border border-current opacity-70'
+                                              }
                                             >
                                               {prompt.type}
                                             </span>

@@ -237,7 +237,7 @@ export const Chat: React.FC<ChatProps> = ({
               )}
             </div>
 
-            <div className={`flex-1 max-w-[85%] relative`}>
+            <div className={'flex-1 max-w-[85%] relative'}>
               {editingMessageId === msg.id ? (
                 <div
                   className={`border rounded-lg p-3 shadow-lg ${
@@ -293,6 +293,16 @@ export const Chat: React.FC<ChatProps> = ({
                         </CollapsibleToolSection>
                       )}
                       <MarkdownView content={msg.text} />
+                      {msg.traceback && (
+                        <CollapsibleToolSection
+                          title="Stack Trace"
+                          defaultExpanded={false}
+                        >
+                          <div className="text-[10px] font-mono bg-black/5 dark:bg-black/40 p-2 rounded overflow-x-auto whitespace-pre border border-black/10 dark:border-white/10 text-red-600 dark:text-red-400">
+                            {msg.traceback}
+                          </div>
+                        </CollapsibleToolSection>
+                      )}
                       {msg.tool_calls && msg.tool_calls.length > 0 && (
                         <CollapsibleToolSection
                           title={`${msg.tool_calls.length} Tool Call${

@@ -394,7 +394,7 @@ Always prioritize the user's creative vision.`
 
       const updateMessage = (
         msgId: string,
-        update: { text?: string; thinking?: string }
+        update: { text?: string; thinking?: string; traceback?: string }
       ) => {
         setChatMessages((prev) => {
           const idx = prev.findIndex((m) => m.id === msgId);
@@ -404,6 +404,7 @@ Always prioritize the user's creative vision.`
               ...newMsgs[idx],
               text: update.text ?? newMsgs[idx].text,
               thinking: update.thinking ?? newMsgs[idx].thinking,
+              traceback: update.traceback ?? newMsgs[idx].traceback,
             };
             return newMsgs;
           } else {
@@ -414,6 +415,7 @@ Always prioritize the user's creative vision.`
                 role: 'model',
                 text: update.text ?? '',
                 thinking: update.thinking ?? '',
+                traceback: update.traceback ?? '',
               },
             ];
           }
@@ -521,11 +523,21 @@ Always prioritize the user's creative vision.`
         return [...prev, botMessage];
       });
     } catch (error: any) {
+      let errorText = `AI Error: ${error.message || 'An unexpected error occurred'}`;
+      if (error.data) {
+        const detail =
+          typeof error.data === 'string'
+            ? error.data
+            : JSON.stringify(error.data, null, 2);
+        errorText += `\n\n**Details:**\n${detail}`;
+      }
+
       const errorMessage: ChatMessage = {
         id: uuidv4(),
         role: 'model',
-        text: `AI Error: ${error.message || 'An unexpected error occurred'}`,
+        text: errorText,
         isError: true,
+        traceback: error.traceback,
       };
       setChatMessages((prev) => [...prev, errorMessage]);
     } finally {

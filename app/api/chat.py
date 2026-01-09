@@ -1372,6 +1372,10 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     async def _gen():
         channel_filter = ChannelFilter()
+        # Initialize variables to avoid UnboundLocalError in case of early stream failure
+        has_tool_syntax = False
+        content = ""
+        chunk_content = ""
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(float(timeout_s or 60))
@@ -1537,78 +1541,17 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                 if clean_content:
                                                     yield f'data: {{"content": {_json.dumps(clean_content)}}}\n\n'
 
-                                        # Clean content of tool call syntax only if it contains tool call patterns
-                                        if has_tool_syntax:
-
-                                            def _get_tool_name(inner):
-                                                inner = inner.strip()
-                                                xml_m = re.search(
-                                                    r"<function=(\w+)>", inner, re.I
-                                                )
-                                                if xml_m:
-                                                    return xml_m.group(1)
-                                                name_m = re.match(r"(\w+)", inner)
-                                                if name_m:
-                                                    return name_m.group(1)
-                                                return "tool"
-
-                                            clean_content = re.sub(
-                                                r"<tool_call>(.*?)</tool_call>",
-                                                lambda m: f"Calling tool: {_get_tool_name(m.group(1)).replace('_', ' ')}",
-                                                content,
-                                                flags=re.IGNORECASE | re.DOTALL,
-                                            )
-                                            clean_content = re.sub(
-                                                r"<tool_call[^>]*>",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"</tool_call>",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"\[TOOL_CALL\](.*?)\[/TOOL_CALL\]",
-                                                lambda m: f"Calling tool: {_get_tool_name(m.group(1)).replace('_', ' ')}",
-                                                clean_content,
-                                                flags=re.IGNORECASE | re.DOTALL,
-                                            )
-                                            clean_content = re.sub(
-                                                r"^Tool:\s*(\w+)(?:\(([^)]*)\))?",
-                                                lambda m: f"Calling tool: {m.group(1).replace('_', ' ')}",
-                                                clean_content,
-                                                flags=re.IGNORECASE | re.MULTILINE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"<tool_call[^>]*$",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = re.sub(
-                                                r"\[TOOL_CALL\][^\[]*$",
-                                                "",
-                                                clean_content,
-                                                flags=re.IGNORECASE,
-                                            )
-                                            clean_content = clean_content.strip()
-                                        else:
-                                            clean_content = content
-
-                                        if clean_content:
-                                            yield f'data: {{"content": {_json.dumps(clean_content)}}}\n\n'
-
                                 # Handle tool_calls in the final message
                                 message = choice.get("message", {})
                                 if "tool_calls" in message and message["tool_calls"]:
                                     yield f'data: {{"tool_calls": {_json.dumps(message["tool_calls"])}}}\n\n'
                             yield 'data: {"done": true}\n\n'
                         except Exception as e:
-                            log_entry["response"]["error"] = str(e)
-                            yield f'data: {{"error": "Failed to parse response", "message": {_json.dumps(str(e))}}}\n\n'
+                            import traceback
+
+                            tb = traceback.format_exc()
+                            log_entry["response"]["error"] = f"{str(e)}\n\n{tb}"
+                            yield f'data: {{"error": "Failed to parse response", "message": {_json.dumps(str(e))}, "traceback": {_json.dumps(tb)}}}\n\n'
                         return
 
                     buffer = ""
@@ -1972,8 +1915,11 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                 except _json.JSONDecodeError:
                                     continue
         except Exception as e:
-            log_entry["response"]["error"] = str(e)
-            yield f'data: {{"error": "Request failed", "message": {_json.dumps(str(e))}}}\n\n'
+            import traceback
+
+            tb = traceback.format_exc()
+            log_entry["response"]["error"] = f"{str(e)}\n\n{tb}"
+            yield f'data: {{"error": "Request failed", "message": {_json.dumps(str(e))}, "traceback": {_json.dumps(tb)}}}\n\n'
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
 
