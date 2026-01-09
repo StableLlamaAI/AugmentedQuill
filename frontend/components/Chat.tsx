@@ -25,6 +25,10 @@ const CollapsibleToolSection: React.FC<{
 }> = ({ title, children, defaultExpanded = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
+  useEffect(() => {
+    setIsExpanded(defaultExpanded);
+  }, [defaultExpanded]);
+
   return (
     <div className="mt-2 border border-black/10 dark:border-white/10 rounded overflow-hidden">
       <button
@@ -206,7 +210,7 @@ export const Chat: React.FC<ChatProps> = ({
           </div>
         )}
 
-        {messages.map((msg) => (
+        {messages.map((msg, i) => (
           <div
             key={msg.id}
             className={`group flex items-start space-x-3 ${
@@ -218,10 +222,10 @@ export const Chat: React.FC<ChatProps> = ({
                 msg.role === 'user'
                   ? 'bg-blue-100 border-blue-200 text-blue-700'
                   : msg.role === 'tool'
-                  ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
-                  : isLight
-                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-500'
-                  : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-400'
+                    ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
+                    : isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-500'
+                      : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-400'
               }`}
             >
               {msg.role === 'user' ? (
@@ -268,8 +272,8 @@ export const Chat: React.FC<ChatProps> = ({
                     msg.role === 'user'
                       ? msgUserBg
                       : msg.role === 'tool'
-                      ? 'bg-blue-500/5 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-mono text-xs'
-                      : msgBotBg
+                        ? 'bg-blue-500/5 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-mono text-xs'
+                        : msgBotBg
                   }`}
                 >
                   {msg.role === 'tool' ? (
@@ -278,6 +282,16 @@ export const Chat: React.FC<ChatProps> = ({
                     </CollapsibleToolSection>
                   ) : (
                     <>
+                      {msg.thinking && (
+                        <CollapsibleToolSection
+                          title="Thinking Process"
+                          defaultExpanded={isLoading && i === messages.length - 1}
+                        >
+                          <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
+                            {msg.thinking}
+                          </div>
+                        </CollapsibleToolSection>
+                      )}
                       <MarkdownView content={msg.text} />
                       {msg.tool_calls && msg.tool_calls.length > 0 && (
                         <CollapsibleToolSection

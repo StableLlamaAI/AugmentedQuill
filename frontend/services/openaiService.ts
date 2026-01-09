@@ -2,8 +2,9 @@ import { LLMConfig } from '../types';
 
 export interface UnifiedChat {
   sendMessage(
-    message: string | { message: any }
-  ): Promise<{ text: string; functionCalls?: any[] }>;
+    message: string | { message: any },
+    onUpdate?: (update: { text?: string; thinking?: string }) => void
+  ): Promise<{ text: string; thinking?: string; functionCalls?: any[] }>;
 }
 
 export const testConnection = async (config: LLMConfig): Promise<boolean> => {
@@ -60,7 +61,9 @@ export const getModels = async (config: LLMConfig): Promise<string[]> => {
 
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  onToolCalls?: (toolCalls: any[]) => void
+  onToolCalls?: (toolCalls: any[]) => void,
+  onThinking?: (thinking: string) => void,
+  onContent?: (content: string) => void
 ): Promise<string> {
   let text = '';
   let buffer = '';
@@ -87,6 +90,10 @@ async function readSSEStream(
           }
           if (data.content) {
             text += data.content;
+            if (onContent) onContent(data.content);
+          }
+          if (data.thinking && onThinking) {
+            onThinking(data.thinking);
           }
           if (data.tool_calls && onToolCalls) {
             onToolCalls(data.tool_calls);
@@ -114,7 +121,7 @@ export const createChatSession = (
   modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT'
 ): UnifiedChat => {
   return {
-    sendMessage: async (msg) => {
+    sendMessage: async (msg, onUpdate) => {
       const userMsgText = typeof msg === 'string' ? msg : (msg as any).message;
 
       const messages = [
@@ -158,21 +165,39 @@ export const createChatSession = (
         if (!reader) return { text: '' };
 
         const toolCallsAccumulator: any[] = [];
-        const text = await readSSEStream(reader, (calls) => {
-          for (const call of calls) {
-            const index = call.index ?? 0;
-            if (!toolCallsAccumulator[index]) {
-              toolCallsAccumulator[index] = { id: '', name: '', args: '' };
+        let thinking = '';
+        let fullText = '';
+        const text = await readSSEStream(
+          reader,
+          (calls) => {
+            for (const call of calls) {
+              const index = call.index ?? 0;
+              if (!toolCallsAccumulator[index]) {
+                toolCallsAccumulator[index] = { id: '', name: '', args: '' };
+              }
+              if (call.id) toolCallsAccumulator[index].id = call.id;
+              if (call.function) {
+                if (call.function.name) {
+                  // Only append if it's not exactly the same as what we already have.
+                  // This prevents doubling up if the backend sends the full name twice.
+                  if (toolCallsAccumulator[index].name !== call.function.name) {
+                    toolCallsAccumulator[index].name += call.function.name;
+                  }
+                }
+                if (call.function.arguments)
+                  toolCallsAccumulator[index].args += call.function.arguments;
+              }
             }
-            if (call.id) toolCallsAccumulator[index].id = call.id;
-            if (call.function) {
-              if (call.function.name)
-                toolCallsAccumulator[index].name += call.function.name;
-              if (call.function.arguments)
-                toolCallsAccumulator[index].args += call.function.arguments;
-            }
+          },
+          (t) => {
+            thinking += t;
+            if (onUpdate) onUpdate({ thinking });
+          },
+          (chunk) => {
+            fullText += chunk;
+            if (onUpdate) onUpdate({ text: fullText });
           }
-        });
+        );
 
         const functionCalls = toolCallsAccumulator
           .filter((c) => c && (c.name || c.args))
@@ -192,6 +217,7 @@ export const createChatSession = (
 
         return {
           text,
+          thinking: thinking || undefined,
           functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
         };
       } catch (e) {

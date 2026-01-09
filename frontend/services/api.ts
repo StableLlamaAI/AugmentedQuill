@@ -29,7 +29,11 @@ export const api = {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Failed to test connection');
-      return res.json() as Promise<{ ok: boolean; models: string[]; detail?: string }>;
+      return res.json() as Promise<{
+        ok: boolean;
+        models: string[];
+        detail?: string;
+      }>;
     },
     testModel: async (payload: {
       base_url: string;
@@ -196,7 +200,9 @@ export const api = {
       return res.json();
     },
     clearLogs: async () => {
-      const res = await fetch(`${API_BASE}/debug/llm_logs`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/debug/llm_logs`, {
+        method: 'DELETE',
+      });
       if (!res.ok) throw new Error('Failed to clear debug logs');
       return res.json();
     },

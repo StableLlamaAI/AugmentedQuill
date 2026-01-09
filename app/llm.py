@@ -18,6 +18,7 @@ import datetime
 import uuid
 
 import httpx
+import re
 
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
@@ -28,6 +29,38 @@ CONFIG_DIR = BASE_DIR / "config"
 
 # Global list to store LLM communication logs for the current session
 llm_logs: List[Dict[str, Any]] = []
+
+
+def strip_thinking_tags(content: str) -> str:
+    """Strip thinking/analysis tags from content, returning only the final message."""
+    if not content:
+        return content
+
+    # Handle <|channel|>analysis<|message|>...<|end|><|start|>assistant<|channel|>final<|message|>
+    if "<|channel|>analysis<|message|>" in content:
+        # Try to find the final channel
+        final_match = re.search(
+            r"<\|channel\|>final<\|message\|>(.*)", content, re.DOTALL
+        )
+        if final_match:
+            return final_match.group(1).strip()
+        # If no final channel found but analysis is present, it might be just analysis or incomplete
+        # Remove the analysis part
+        content = re.sub(
+            r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>",
+            "",
+            content,
+            flags=re.DOTALL,
+        )
+        content = re.sub(
+            r"<\|start\|>assistant<\|channel\|>final<\|message\|>", "", content
+        )
+        return content.strip()
+
+    # Handle <thought>...</thought> or <thinking>...</thinking>
+    content = re.sub(r"<(thought|thinking)>.*?</\1>", "", content, flags=re.DOTALL)
+
+    return content.strip()
 
 
 def add_llm_log(log_entry: Dict[str, Any]):

@@ -314,7 +314,9 @@ export const Editor = React.forwardRef<any, EditorProps>(
       };
       window.addEventListener('keydown', onKeyDown, { capture: true });
       return () =>
-        window.removeEventListener('keydown', onKeyDown, { capture: true } as any);
+        window.removeEventListener('keydown', onKeyDown, {
+          capture: true,
+        } as any);
     }, [maybeHandleSuggestionHotkey]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {

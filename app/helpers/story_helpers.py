@@ -82,6 +82,7 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
         msg = choices[0].get("message") if isinstance(choices[0], dict) else None
         if isinstance(msg, dict):
             new_summary = msg.get("content", "") or ""
+            new_summary = _llm.strip_thinking_tags(new_summary)
 
     chapters_data[pos]["summary"] = new_summary
     story["chapters"] = chapters_data
@@ -154,6 +155,7 @@ async def _story_write_helper(*, chap_id: int) -> dict:
         msg = choices[0].get("message") if isinstance(choices[0], dict) else None
         if isinstance(msg, dict):
             content = msg.get("content", "") or ""
+            content = _llm.strip_thinking_tags(content)
     path.write_text(content, encoding="utf-8")
     return {
         "ok": True,
@@ -218,6 +220,7 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
         msg = choices[0].get("message") if isinstance(choices[0], dict) else None
         if isinstance(msg, dict):
             add = msg.get("content", "") or ""
+            add = _llm.strip_thinking_tags(add)
     new_content = (
         current + ("\n\n" if current and not current.endswith("\n\n") else "") + add
     ).strip("\n") + "\n"
@@ -295,6 +298,7 @@ async def _story_generate_story_summary_helper(*, mode: str = "") -> dict:
         msg = choices[0].get("message") if isinstance(choices[0], dict) else None
         if isinstance(msg, dict):
             new_summary = msg.get("content", "") or ""
+            new_summary = _llm.strip_thinking_tags(new_summary)
 
     story["story_summary"] = new_summary
     story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")

@@ -25,6 +25,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'tool';
   text: string;
+  thinking?: string;
   isError?: boolean;
   name?: string;
   tool_call_id?: string;

@@ -62,7 +62,11 @@ const PROMPT_GROUPS = [
       { id: 'editing_llm', label: 'Editing Assistant', type: 'EDITING' },
       { id: 'story_writer', label: 'Story Writer', type: 'WRITING' },
       { id: 'story_continuer', label: 'Story Continuer', type: 'WRITING' },
-      { id: 'chapter_summarizer', label: 'Chapter Summarizer', type: 'EDITING' },
+      {
+        id: 'chapter_summarizer',
+        label: 'Chapter Summarizer',
+        type: 'EDITING',
+      },
       { id: 'story_summarizer', label: 'Story Summarizer', type: 'EDITING' },
       {
         id: 'ai_action_summary_update',
@@ -89,7 +93,11 @@ const PROMPT_GROUPS = [
   {
     title: 'User Prompts',
     prompts: [
-      { id: 'chapter_summary_new', label: 'New Chapter Summary', type: 'EDITING' },
+      {
+        id: 'chapter_summary_new',
+        label: 'New Chapter Summary',
+        type: 'EDITING',
+      },
       {
         id: 'chapter_summary_update',
         label: 'Update Chapter Summary',
@@ -98,7 +106,11 @@ const PROMPT_GROUPS = [
       { id: 'write_chapter', label: 'Write Chapter', type: 'WRITING' },
       { id: 'continue_chapter', label: 'Continue Chapter', type: 'WRITING' },
       { id: 'story_summary_new', label: 'New Story Summary', type: 'EDITING' },
-      { id: 'story_summary_update', label: 'Update Story Summary', type: 'EDITING' },
+      {
+        id: 'story_summary_update',
+        label: 'Update Story Summary',
+        type: 'EDITING',
+      },
       {
         id: 'suggest_continuation',
         label: 'Suggest Continuation (Autocomplete)',
@@ -277,7 +289,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           [providerId]: res?.ok ? 'success' : 'error',
         }));
         if (res?.ok) {
-          setModelLists((prev) => ({ ...prev, [providerId]: res.models || [] }));
+          setModelLists((prev) => ({
+            ...prev,
+            [providerId]: res.models || [],
+          }));
         } else {
           setModelLists((prev) => ({ ...prev, [providerId]: [] }));
         }
@@ -523,8 +538,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     ? 'bg-brand-600 text-white border border-brand-500'
                     : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
                   : isLight
-                  ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                  : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
+                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
               }`}
             >
               <HardDrive size={18} />
@@ -538,8 +553,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     ? 'bg-brand-600 text-white border border-brand-500'
                     : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
                   : isLight
-                  ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                  : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
+                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
               }`}
             >
               <Cpu size={18} />
@@ -589,8 +604,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         proj.id === activeProjectId
                           ? 'bg-brand-50 border-brand-500/50'
                           : isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:border-brand-gray-300'
-                          : 'bg-brand-gray-800 border-brand-gray-700 hover:border-brand-gray-600'
+                            ? 'bg-brand-gray-50 border-brand-gray-200 hover:border-brand-gray-300'
+                            : 'bg-brand-gray-800 border-brand-gray-700 hover:border-brand-gray-600'
                       }`}
                     >
                       <div className="flex items-center space-x-4">
@@ -599,8 +614,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             proj.id === activeProjectId
                               ? 'bg-brand-500'
                               : isLight
-                              ? 'bg-brand-gray-300'
-                              : 'bg-brand-gray-600'
+                                ? 'bg-brand-gray-300'
+                                : 'bg-brand-gray-600'
                           }`}
                         ></div>
                         <div className="flex-1">
@@ -737,8 +752,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           editingProviderId === p.id
                             ? 'bg-brand-50 border-brand-500/50'
                             : isLight
-                            ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-100'
-                            : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750'
+                              ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-100'
+                              : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750'
                         }`}
                       >
                         <div className="flex justify-between items-center w-full">
@@ -758,12 +773,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 connectionStatus[p.id] === 'success'
                                   ? 'bg-emerald-500 border-emerald-500'
                                   : connectionStatus[p.id] === 'error'
-                                  ? 'bg-red-500 border-red-500'
-                                  : connectionStatus[p.id] === 'loading'
-                                  ? 'bg-brand-500 border-brand-500'
-                                  : isLight
-                                  ? 'bg-brand-gray-200 border-brand-gray-300'
-                                  : 'bg-brand-gray-700 border-brand-gray-600'
+                                    ? 'bg-red-500 border-red-500'
+                                    : connectionStatus[p.id] === 'loading'
+                                      ? 'bg-brand-500 border-brand-500'
+                                      : isLight
+                                        ? 'bg-brand-gray-200 border-brand-gray-300'
+                                        : 'bg-brand-gray-700 border-brand-gray-600'
                               }`}
                               title={connectionStatus[p.id] || 'idle'}
                             />
@@ -841,8 +856,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 ? 'bg-blue-600 text-white shadow-md'
                                 : 'bg-blue-900/40 text-blue-300 border border-blue-800/50'
                               : isLight
-                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
-                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
+                                ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                                : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <MessageSquare size={14} />
@@ -861,8 +876,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 ? 'bg-violet-600 text-white shadow-md'
                                 : 'bg-violet-900/40 text-violet-300 border border-violet-800/50'
                               : isLight
-                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
-                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
+                                ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                                : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <BookOpen size={14} />
@@ -881,8 +896,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 ? 'bg-fuchsia-600 text-white shadow-md'
                                 : 'bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-800/50'
                               : isLight
-                              ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
-                              : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
+                                ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                                : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
                           }`}
                         >
                           <Edit2 size={14} />
@@ -960,12 +975,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 connectionStatus[activeProvider.id] === 'success'
                                   ? 'bg-emerald-500'
                                   : connectionStatus[activeProvider.id] === 'error'
-                                  ? 'bg-red-500'
-                                  : connectionStatus[activeProvider.id] === 'loading'
-                                  ? 'bg-brand-500'
-                                  : isLight
-                                  ? 'bg-brand-gray-300'
-                                  : 'bg-brand-gray-600'
+                                    ? 'bg-red-500'
+                                    : connectionStatus[activeProvider.id] === 'loading'
+                                      ? 'bg-brand-500'
+                                      : isLight
+                                        ? 'bg-brand-gray-300'
+                                        : 'bg-brand-gray-600'
                               }`}
                             />
                             {connectionStatus[activeProvider.id] === 'success' && (
@@ -1068,8 +1083,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                                   ? 'bg-brand-50 text-brand-gray-900'
                                                   : 'bg-brand-gray-900 text-brand-gray-300'
                                                 : isLight
-                                                ? 'text-brand-gray-800 hover:bg-brand-gray-50'
-                                                : 'text-brand-gray-300 hover:bg-brand-gray-900'
+                                                  ? 'text-brand-gray-800 hover:bg-brand-gray-50'
+                                                  : 'text-brand-gray-300 hover:bg-brand-gray-900'
                                             }`}
                                           >
                                             {m}
@@ -1087,12 +1102,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                   modelStatus[activeProvider.id] === 'success'
                                     ? 'bg-emerald-500'
                                     : modelStatus[activeProvider.id] === 'error'
-                                    ? 'bg-red-500'
-                                    : modelStatus[activeProvider.id] === 'loading'
-                                    ? 'bg-brand-500'
-                                    : isLight
-                                    ? 'bg-brand-gray-300'
-                                    : 'bg-brand-gray-600'
+                                      ? 'bg-red-500'
+                                      : modelStatus[activeProvider.id] === 'loading'
+                                        ? 'bg-brand-500'
+                                        : isLight
+                                          ? 'bg-brand-gray-300'
+                                          : 'bg-brand-gray-600'
                                 }`}
                               />
                               {modelStatus[activeProvider.id] === 'success' && (
@@ -1226,26 +1241,26 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                       prompt.type === 'CHAT'
                                         ? MessageSquare
                                         : prompt.type === 'WRITING'
-                                        ? BookOpen
-                                        : Edit2;
+                                          ? BookOpen
+                                          : Edit2;
                                     const colorClass =
                                       prompt.type === 'CHAT'
                                         ? 'text-blue-600'
                                         : prompt.type === 'WRITING'
-                                        ? 'text-violet-600'
-                                        : 'text-fuchsia-600';
+                                          ? 'text-violet-600'
+                                          : 'text-fuchsia-600';
                                     const bgColorClass =
                                       prompt.type === 'CHAT'
                                         ? 'bg-blue-50'
                                         : prompt.type === 'WRITING'
-                                        ? 'bg-violet-50'
-                                        : 'bg-fuchsia-50';
+                                          ? 'bg-violet-50'
+                                          : 'bg-fuchsia-50';
                                     const darkBgColorClass =
                                       prompt.type === 'CHAT'
                                         ? 'dark:bg-blue-900/20'
                                         : prompt.type === 'WRITING'
-                                        ? 'dark:bg-violet-900/20'
-                                        : 'dark:bg-fuchsia-900/20';
+                                          ? 'dark:bg-violet-900/20'
+                                          : 'dark:bg-fuchsia-900/20';
 
                                     return (
                                       <div key={prompt.id} className="space-y-1">

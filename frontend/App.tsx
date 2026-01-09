@@ -392,24 +392,67 @@ Always prioritize the user's creative vision.`
           .replace('{user_text}', userText);
       }
 
-      let result = await session.sendMessage({ message: promptWithContext });
+      const updateMessage = (
+        msgId: string,
+        update: { text?: string; thinking?: string }
+      ) => {
+        setChatMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === msgId);
+          if (idx !== -1) {
+            const newMsgs = [...prev];
+            newMsgs[idx] = {
+              ...newMsgs[idx],
+              text: update.text ?? newMsgs[idx].text,
+              thinking: update.thinking ?? newMsgs[idx].thinking,
+            };
+            return newMsgs;
+          } else {
+            return [
+              ...prev,
+              {
+                id: msgId,
+                role: 'model',
+                text: update.text ?? '',
+                thinking: update.thinking ?? '',
+              },
+            ];
+          }
+        });
+      };
+
+      let currentMsgId = uuidv4();
+      let result = await session.sendMessage({ message: promptWithContext }, (update) =>
+        updateMessage(currentMsgId, update)
+      );
 
       while (result.functionCalls && result.functionCalls.length > 0) {
-        // 1. Add assistant message with tool calls to history
+        // 1. Update assistant message with tool calls in history
         const assistantMsg: ChatMessage = {
-          id: uuidv4(),
+          id: currentMsgId,
           role: 'model',
           text: result.text || '',
+          thinking: result.thinking,
           tool_calls: result.functionCalls,
         };
+
+        // Replace or add
+        setChatMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === currentMsgId);
+          if (idx !== -1) {
+            const newMsgs = [...prev];
+            newMsgs[idx] = assistantMsg;
+            return newMsgs;
+          }
+          return [...prev, assistantMsg];
+        });
+
         currentHistory.push(assistantMsg);
-        setChatMessages([...currentHistory]);
 
         // 2. Execute tools via backend
         const toolResponse = await api.chat.executeTools({
           messages: currentHistory.map((m) => ({
             role: m.role === 'model' ? 'assistant' : m.role,
-            content: m.text,
+            content: m.text || null, // Ensure content is null if empty for tool calls
             tool_calls: m.tool_calls?.map((tc) => ({
               id: tc.id,
               type: 'function',
@@ -448,19 +491,35 @@ Always prioritize the user's creative vision.`
             activeChatConfig,
             'CHAT'
           );
-          result = await nextSession.sendMessage({ message: '' });
+          currentMsgId = uuidv4();
+          result = await nextSession.sendMessage({ message: '' }, (update) =>
+            updateMessage(currentMsgId, update)
+          );
+
+          // If the new result also has function calls, the while loop continues.
+          // If it's just text, the loop ends and we fall through to final update.
         } else {
           break;
         }
       }
 
-      // Final message
+      // Final message update
       const botMessage: ChatMessage = {
-        id: uuidv4(),
+        id: currentMsgId,
         role: 'model',
         text: result.text || '',
+        thinking: result.thinking,
+        tool_calls: result.functionCalls, // Ensure tool calls are preserved in final state
       };
-      setChatMessages((prev) => [...prev, botMessage]);
+      setChatMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === currentMsgId);
+        if (idx !== -1) {
+          const newMsgs = [...prev];
+          newMsgs[idx] = botMessage;
+          return newMsgs;
+        }
+        return [...prev, botMessage];
+      });
     } catch (error: any) {
       const errorMessage: ChatMessage = {
         id: uuidv4(),
@@ -840,7 +899,9 @@ Always prioritize the user's creative vision.`
     <div
       className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
       style={
-        { '--sidebar-width': `${editorSettings.sidebarWidth}px` } as React.CSSProperties
+        {
+          '--sidebar-width': `${editorSettings.sidebarWidth}px`,
+        } as React.CSSProperties
       }
     >
       <SettingsDialog
@@ -1177,8 +1238,8 @@ Always prioritize the user's creative vision.`
                   isFormatMenuOpen
                     ? buttonActive
                     : isLight
-                    ? 'text-brand-gray-500 hover:bg-brand-gray-100'
-                    : 'text-brand-gray-400 hover:bg-brand-gray-800'
+                      ? 'text-brand-gray-500 hover:bg-brand-gray-100'
+                      : 'text-brand-gray-400 hover:bg-brand-gray-800'
                 }`}
                 title="Formatting"
               >
@@ -1254,8 +1315,8 @@ Always prioritize the user's creative vision.`
                 isMobileFormatMenuOpen
                   ? buttonActive
                   : isLight
-                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700'
-                  : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-300'
+                    ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700'
+                    : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-300'
               }`}
             >
               <Type size={16} />
