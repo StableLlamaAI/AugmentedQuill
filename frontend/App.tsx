@@ -1500,6 +1500,122 @@ Always prioritize the user's creative vision.`
               </Button>
             </div>
           </div>
+
+          {/* Quick Model Selectors */}
+          <div
+            className={`hidden 2xl:flex items-center space-x-3 ml-2 pl-2 border-l h-8 ${
+              isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
+            }`}
+          >
+            <div className="flex flex-col justify-center">
+              <label
+                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
+                  isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'
+                }`}
+              >
+                Editing
+              </label>
+              <select
+                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
+                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
+                }`}
+                value={appSettings.activeEditingProviderId}
+                onChange={(e) =>
+                  setAppSettings((prev) => ({
+                    ...prev,
+                    activeEditingProviderId: e.target.value,
+                  }))
+                }
+                title="Active Editing Model"
+              >
+                {appSettings.providers.map((p) => (
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    className={
+                      isLight
+                        ? 'bg-white text-brand-gray-900'
+                        : 'bg-brand-gray-900 text-brand-gray-100'
+                    }
+                  >
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col justify-center">
+              <label
+                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
+                  isLight ? 'text-violet-600' : 'text-violet-400'
+                }`}
+              >
+                Writing
+              </label>
+              <select
+                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
+                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
+                }`}
+                value={appSettings.activeWritingProviderId}
+                onChange={(e) =>
+                  setAppSettings((prev) => ({
+                    ...prev,
+                    activeWritingProviderId: e.target.value,
+                  }))
+                }
+                title="Active Writing Model"
+              >
+                {appSettings.providers.map((p) => (
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    className={
+                      isLight
+                        ? 'bg-white text-brand-gray-900'
+                        : 'bg-brand-gray-900 text-brand-gray-100'
+                    }
+                  >
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col justify-center">
+              <label
+                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
+                  isLight ? 'text-blue-600' : 'text-blue-400'
+                }`}
+              >
+                Chat
+              </label>
+              <select
+                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
+                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
+                }`}
+                value={appSettings.activeChatProviderId}
+                onChange={(e) =>
+                  setAppSettings((prev) => ({
+                    ...prev,
+                    activeChatProviderId: e.target.value,
+                  }))
+                }
+                title="Active Chat Model"
+              >
+                {appSettings.providers.map((p) => (
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    className={
+                      isLight
+                        ? 'bg-white text-brand-gray-900'
+                        : 'bg-brand-gray-900 text-brand-gray-100'
+                    }
+                  >
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Right: Settings & Panels */}

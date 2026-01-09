@@ -218,16 +218,51 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           if (cancelled) return;
 
           if (providers.length > 0) {
-            const selectedId =
+            const fallbackId =
               providers.find((p) => p.id === selectedName)?.id || providers[0].id;
-            setLocalSettings((prev) => ({
-              ...prev,
-              providers,
-              activeChatProviderId: selectedId,
-              activeWritingProviderId: selectedId,
-              activeEditingProviderId: selectedId,
-            }));
-            setEditingProviderId(selectedId);
+
+            const getValidId = (
+              currentId: string | undefined,
+              specificSaved: string | undefined
+            ) => {
+              // 1. Prefer current in-memory value if valid
+              if (currentId && providers.some((p) => p.id === currentId)) {
+                return currentId;
+              }
+              // 2. Prefer specific saved value (selected_chat, etc) if valid
+              if (specificSaved && providers.some((p) => p.id === specificSaved)) {
+                return specificSaved;
+              }
+              // 3. Fallback to generic selected or first
+              return fallbackId;
+            };
+
+            setLocalSettings((prev) => {
+              const newChatId = getValidId(
+                prev.activeChatProviderId,
+                (openai as any).selected_chat
+              );
+              // Update editing provider to match chat if untracked, or keep if valid
+              setEditingProviderId((currEdit) => {
+                if (currEdit && providers.some((p) => p.id === currEdit))
+                  return currEdit;
+                return newChatId;
+              });
+
+              return {
+                ...prev,
+                providers,
+                activeChatProviderId: newChatId,
+                activeWritingProviderId: getValidId(
+                  prev.activeWritingProviderId,
+                  (openai as any).selected_writing
+                ),
+                activeEditingProviderId: getValidId(
+                  prev.activeEditingProviderId,
+                  (openai as any).selected_editing
+                ),
+              };
+            });
           }
         } catch (e) {
           console.error('Failed to load machine config', e);
