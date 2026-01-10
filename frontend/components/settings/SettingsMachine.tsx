@@ -7,6 +7,7 @@ import {
   Terminal,
   Key,
   ChevronDown,
+  Plus,
 } from 'lucide-react';
 import { AppTheme, AppSettings, LLMConfig } from '../../types';
 import { Button } from '../Button';
@@ -76,7 +77,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-400'
             }`}
           >
-            <PlusIcon size={18} />
+            <Plus size={18} />
           </button>
         </div>
         <div className="space-y-2">
@@ -567,4 +568,3 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
     </div>
   );
 };
-import { Plus as PlusIcon } from 'lucide-react';
