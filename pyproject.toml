@@ -24,6 +24,8 @@ dependencies = [
 dev = [
     "pytest",
     "ruff",
+    "black",
+    "pre-commit",
 ]
 
 [project.scripts]
