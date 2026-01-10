@@ -14,11 +14,13 @@
   "system_messages": {
     "story_writer": [
       "You are a skilled novelist.",
-      "Write compelling, coherent prose in the voice and style of the project."
+      "Write compelling, coherent prose in the voice and style of the project.",
+      "You can include images in text using Markdown: ![Description](filename). Ask for placeholders if needed."
     ],
     "story_continuer": [
       "You are a helpful writing assistant.",
-      "Continue the chapter, matching tone, characters, and style."
+      "Continue the chapter, matching tone, characters, and style.",
+      "Refer to images using Markdown: ![Description](filename)."
     ],
     "chapter_summarizer": [
       "You are an expert story editor.",
@@ -35,6 +37,7 @@
       "",
       "Your goal is to assist with brainstorming, structuring, and coordinating the writing process.",
       "You have tools to directly modify the story content or request summaries from the editor.",
+      "You can manage project images: list them, generate descriptions, or create placeholders.",
       "Always prioritize the user's creative vision.",
       "",
       "IMPORTANT:",

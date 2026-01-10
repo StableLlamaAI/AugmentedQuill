@@ -23,6 +23,12 @@ from app.projects import (
     get_projects_root,
 )
 from app.config import load_story_config
+from app.helpers.image_helpers import (
+    load_image_metadata,
+    save_image_metadata,
+    update_image_description,
+    get_project_images,
+)
 
 router = APIRouter()
 
@@ -237,27 +243,51 @@ async def api_books_delete(request: Request) -> JSONResponse:
 
 @router.get("/api/projects/images/list")
 async def api_list_images() -> JSONResponse:
+    images = get_project_images()
+    return JSONResponse(status_code=200, content={"images": images})
+
+
+@router.post("/api/projects/images/update_description")
+async def api_update_image_description(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    filename = payload.get("filename")
+    description = payload.get("description")
+
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename required")
+
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    images_dir = active / "images"
-    if not images_dir.exists():
-        return JSONResponse(status_code=200, content={"images": []})
+    update_image_description(filename, description)
+    return JSONResponse(status_code=200, content={"ok": True})
 
-    images = []
-    for f in images_dir.iterdir():
-        if f.is_file() and f.suffix.lower() in (
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".gif",
-            ".webp",
-            ".svg",
-        ):
-            images.append({"filename": f.name, "url": f"/api/projects/images/{f.name}"})
 
-    return JSONResponse(status_code=200, content={"images": images})
+@router.post("/api/projects/images/create_placeholder")
+async def api_create_image_placeholder(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    description = payload.get("description")
+    if not description:
+        raise HTTPException(status_code=400, detail="Description required")
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+
+    filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
+
+    update_image_description(filename, description)
+
+    return JSONResponse(status_code=200, content={"ok": True, "filename": filename})
 
 
 @router.post("/api/projects/images/upload")
@@ -314,6 +344,13 @@ async def api_delete_image(request: Request) -> JSONResponse:
     img_path = active / "images" / Path(filename).name
     if img_path.exists():
         img_path.unlink()
+
+    # Remove from metadata if exists
+    meta = load_image_metadata()
+    clean_filename = Path(filename).name
+    if clean_filename in meta:
+        del meta[clean_filename]
+        save_image_metadata(meta)
 
     return JSONResponse(status_code=200, content={"ok": True})
 

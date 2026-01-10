@@ -8,6 +8,7 @@
 import httpx
 import datetime
 import re
+import base64
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -620,7 +621,122 @@ STORY_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image_description",
+            "description": "Generate a description for an existing image using the EDIT LLM.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "The filename of the image.",
+                    },
+                },
+                "required": ["filename"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_images",
+            "description": "List all images including placeholders, with their descriptions.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_image_placeholder",
+            "description": "Create a new placeholder image with a description.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the image content.",
+                    }
+                },
+                "required": ["description"],
+            },
+        },
+    },
 ]
+
+
+async def _tool_generate_image_description(filename: str, payload: dict) -> str:
+    from app import llm
+    from app.helpers.image_helpers import get_images_dir, update_image_description
+
+    # Check if image exists
+    images_dir = get_images_dir()
+    if not images_dir:
+        return "Error: No active project."
+
+    # Filename might be a path, sanitize it
+    filename = Path(filename).name
+    img_path = images_dir / filename
+
+    if not img_path.exists():
+        return f"Error: Image {filename} does not exist on disk."
+
+    # Prepare request to EDIT LLM
+    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(
+        payload, model_type="EDITING"
+    )
+
+    try:
+        mime_type = "image/png"
+        s = img_path.suffix.lower()
+        if s in [".jpg", ".jpeg"]:
+            mime_type = "image/jpeg"
+        elif s == ".webp":
+            mime_type = "image/webp"
+        elif s == ".gif":
+            mime_type = "image/gif"
+
+        with open(img_path, "rb") as f:
+            base64_image = base64.b64encode(f.read()).decode("utf-8")
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that describes images. Provide a detailed description of the image.",
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image."},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                    },
+                ],
+            },
+        ]
+
+        data = await llm.openai_chat_complete(
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+        )
+
+        choices = (data or {}).get("choices") or []
+        if choices:
+            msg = choices[0].get("message")
+            content = msg.get("content") if msg else ""
+            if content:
+                # Save description
+                update_image_description(filename, content)
+                return content
+        return "Error: Failed to generate description."
+
+    except Exception as e:
+        return f"Error generating description: {str(e)}"
 
 
 async def _exec_chat_tool(
@@ -636,6 +752,48 @@ async def _exec_chat_tool(
                 "name": name,
                 "content": _json.dumps(data),
             }
+        if name == "list_images":
+            from app.helpers.image_helpers import get_project_images
+
+            imgs = get_project_images()
+            simple = [
+                {
+                    "filename": i["filename"],
+                    "description": i["description"],
+                    "is_placeholder": i["is_placeholder"],
+                }
+                for i in imgs
+            ]
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps(simple),
+            }
+        if name == "generate_image_description":
+            filename = args_obj.get("filename")
+            desc = await _tool_generate_image_description(filename, payload)
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"description": desc}),
+            }
+        if name == "create_image_placeholder":
+            desc = args_obj.get("description")
+            from app.helpers.image_helpers import update_image_description
+            import uuid
+
+            filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
+            update_image_description(filename, desc)
+
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"filename": filename, "description": desc}),
+            }
+
         if name == "get_story_summary":
             active = get_active_project_dir()
             story = load_story_config((active / "story.json") if active else None) or {}
@@ -1478,6 +1636,64 @@ async def api_chat_tools(request: Request) -> JSONResponse:
     )
 
 
+async def _inject_project_images(messages: list[dict]):
+    if not messages:
+        return
+
+    last_msg = messages[-1]
+    if last_msg.get("role") != "user":
+        return
+
+    content = last_msg.get("content")
+    if not isinstance(content, str):
+        return
+
+    active = get_active_project_dir()
+    if not active:
+        return
+
+    images_dir = active / "images"
+    if not images_dir.exists():
+        return
+
+    found_images = []
+    # Scan for common image extensions
+    allowed = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+    for f in images_dir.iterdir():
+        if f.is_file() and f.suffix.lower() in allowed:
+            # Check if filename is in content
+            if f.name in content:
+                found_images.append(f)
+
+    if not found_images:
+        return
+
+    # Construct new content
+    new_content = [{"type": "text", "text": content}]
+
+    for path in found_images:
+        try:
+            mime = "image/png"
+            if path.suffix.lower() in [".jpg", ".jpeg"]:
+                mime = "image/jpeg"
+            elif path.suffix.lower() == ".webp":
+                mime = "image/webp"
+            elif path.suffix.lower() == ".gif":
+                mime = "image/gif"
+
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            new_content.append(
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+            )
+        except Exception:
+            pass
+
+    last_msg["content"] = new_content
+
+
 @router.post("/api/chat/stream")
 async def api_chat_stream(request: Request) -> StreamingResponse:
     """Stream chat with the configured OpenAI-compatible model.
@@ -1533,6 +1749,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     req_messages = _normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
         raise HTTPException(status_code=400, detail="messages array is required")
+
+    # Inject images if referenced in the last user message
+    await _inject_project_images(req_messages)
 
     # Prepend system message if not present
     has_system = any(msg.get("role") == "system" for msg in req_messages)
