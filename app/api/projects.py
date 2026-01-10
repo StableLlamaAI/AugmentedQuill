@@ -228,6 +228,89 @@ async def api_books_delete(request: Request) -> JSONResponse:
     )
 
 
+@router.get("/api/projects/images/list")
+async def api_list_images() -> JSONResponse:
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+
+    images_dir = active / "images"
+    if not images_dir.exists():
+        return JSONResponse(status_code=200, content={"images": []})
+
+    images = []
+    for f in images_dir.iterdir():
+        if f.is_file() and f.suffix.lower() in (
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".svg",
+        ):
+            images.append({"filename": f.name, "url": f"/api/projects/images/{f.name}"})
+
+    return JSONResponse(status_code=200, content={"images": images})
+
+
+@router.post("/api/projects/images/upload")
+async def api_upload_image(file: UploadFile = File(...)) -> JSONResponse:
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+
+    images_dir = active / "images"
+    images_dir.mkdir(exist_ok=True)
+
+    original_name = Path(file.filename).name
+    safe_name = "".join(c for c in original_name if c.isalnum() or c in "._-").strip()
+    if not safe_name:
+        safe_name = f"image_{uuid.uuid4().hex[:8]}.png"
+
+    target_path = images_dir / safe_name
+    if target_path.exists():
+        stem = target_path.stem
+        suffix = target_path.suffix
+        target_path = images_dir / f"{stem}_{uuid.uuid4().hex[:6]}{suffix}"
+
+    try:
+        content = await file.read()
+        target_path.write_bytes(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {e}")
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ok": True,
+            "filename": target_path.name,
+            "url": f"/api/projects/images/{target_path.name}",
+        },
+    )
+
+
+@router.post("/api/projects/images/delete")
+async def api_delete_image(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    filename = payload.get("filename")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename required")
+
+    active = get_active_project_dir()
+    if not active:
+        raise HTTPException(status_code=400, detail="No active project")
+
+    img_path = active / "images" / Path(filename).name
+    if img_path.exists():
+        img_path.unlink()
+
+    return JSONResponse(status_code=200, content={"ok": True})
+
+
 @router.get("/api/projects/images/{filename}")
 async def api_projects_get_image(filename: str):
     active = get_active_project_dir()

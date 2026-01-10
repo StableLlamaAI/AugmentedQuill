@@ -21,10 +21,12 @@ repos:
         # Check-only via default behavior; do not auto-format on commit
         files: "\\.(js|ts|tsx|jsx|json|css|scss|md|html)$"
 
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v10.0.0-beta.0
+  - repo: local
     hooks:
       - id: eslint
-        # Do not fix automatically; fail on any warnings to enforce manual fixes
-        args: ['--max-warnings=0', '--config', 'frontend/eslint.config.cjs']
-        files: '^frontend/.*'
+        name: eslint
+        language: system
+        # Run eslint using the local installation in frontend/node_modules
+        # This ensures it uses the correct version and plugins
+        entry: frontend/node_modules/.bin/eslint --config frontend/eslint.config.cjs
+        files: ^frontend/.*\.(js|jsx|ts|tsx)$

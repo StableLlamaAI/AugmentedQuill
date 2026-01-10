@@ -125,6 +125,30 @@ export const api = {
       }
       return res.json();
     },
+    uploadImage: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/projects/images/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload image');
+      return res.json();
+    },
+    listImages: async () => {
+      const res = await fetch(`${API_BASE}/projects/images/list`);
+      if (!res.ok) throw new Error('Failed to list images');
+      return res.json();
+    },
+    deleteImage: async (filename: string) => {
+      const res = await fetch(`${API_BASE}/projects/images/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      if (!res.ok) throw new Error('Failed to delete image');
+      return res.json();
+    },
   },
   books: {
     create: async (title: string) => {
@@ -147,6 +171,30 @@ export const api = {
         body: JSON.stringify({ book_id: id }),
       });
       if (!res.ok) throw new Error('Failed to delete book');
+      return res.json();
+    },
+    uploadImage: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/projects/images/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload image');
+      return res.json();
+    },
+    listImages: async () => {
+      const res = await fetch(`${API_BASE}/projects/images/list`);
+      if (!res.ok) throw new Error('Failed to list images');
+      return res.json();
+    },
+    deleteImage: async (filename: string) => {
+      const res = await fetch(`${API_BASE}/projects/images/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      if (!res.ok) throw new Error('Failed to delete image');
       return res.json();
     },
   },

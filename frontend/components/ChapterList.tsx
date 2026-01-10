@@ -6,6 +6,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Image as ImageIcon,
   Book as BookIcon,
 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ interface ChapterListProps {
   onBookCreate?: (title: string) => void;
   onBookDelete?: (id: string) => void;
   theme?: AppTheme;
+  onOpenImages?: () => void;
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -33,6 +35,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onBookCreate,
   onBookDelete,
   theme = 'mixed',
+  onOpenImages,
 }) => {
   const isLight = theme === 'light';
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
@@ -76,15 +79,29 @@ export const ChapterList: React.FC<ChapterListProps> = ({
         >
           {chapter.title || 'Untitled Chapter'}
         </h3>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(chapter.id);
-          }}
-          className="opacity-0 group-hover:opacity-100 p-1 text-brand-gray-400 hover:text-red-500 transition-opacity"
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          {currentChapterId === chapter.id && onOpenImages && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenImages();
+              }}
+              className="p-1 text-brand-gray-400 hover:text-brand-500 mr-1"
+              title="Manage Images"
+            >
+              <ImageIcon size={14} />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(chapter.id);
+            }}
+            className="p-1 text-brand-gray-400 hover:text-red-500"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
       <p className="text-xs text-brand-gray-500 line-clamp-2">
         {chapter.summary || 'No summary available...'}

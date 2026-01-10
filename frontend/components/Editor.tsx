@@ -15,7 +15,12 @@ import {
   Wand2,
   FileEdit,
   BookOpen,
+  Image as ImageIcon,
+  Trash2,
+  X,
+  Upload,
 } from 'lucide-react';
+import { api } from '../services/api';
 import { Button } from './Button';
 // @ts-ignore
 import { marked } from 'marked';
@@ -146,6 +151,80 @@ export const Editor = React.forwardRef<any, EditorProps>(
   ) => {
     const textareaRef = useRef<HTMLDivElement>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [isImageManagerOpen, setIsImageManagerOpen] = useState(false);
+    const [projectImages, setProjectImages] = useState<
+      { filename: string; url: string }[]
+    >([]);
+    const [isDragging, setIsDragging] = useState(false);
+
+    useEffect(() => {
+      if (isImageManagerOpen) {
+        api.projects
+          .listImages()
+          .then((res) => setProjectImages(res.images || []))
+          .catch(console.error);
+      }
+    }, [isImageManagerOpen]);
+
+    const handleImageUpload = async (file: File) => {
+      try {
+        const res = await api.projects.uploadImage(file);
+        if (res.ok) {
+          insertImageMarkdown(res.filename, res.url);
+          if (isImageManagerOpen) {
+            const list = await api.projects.listImages();
+            setProjectImages(list.images || []);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Failed to upload image');
+      }
+    };
+
+    const insertImageMarkdown = (filename: string, url: string) => {
+      if (viewMode === 'wysiwyg') {
+        const html = `<img src="${url}" alt="${filename}" />`;
+        if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
+          document.execCommand('insertHTML', false, html);
+          wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          const markdown = `\n![${filename}](${url})`;
+          onChange(chapter.id, { content: chapter.content + markdown });
+        }
+      } else {
+        const markdown = `![${filename}](${url})`;
+        if (document.activeElement === textareaRef.current) {
+          document.execCommand('insertText', false, markdown);
+        } else {
+          onChange(chapter.id, { content: chapter.content + '\n' + markdown });
+        }
+      }
+      setIsImageManagerOpen(false);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith('image/')) {
+          await handleImageUpload(file);
+        }
+      }
+    };
 
     const turndownService = useRef<any>(null);
     if (!turndownService.current) {
@@ -423,6 +502,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
     };
 
     useImperativeHandle(ref, () => ({
+      openImageManager: () => setIsImageManagerOpen(true),
       focus: () => {
         if (viewMode === 'wysiwyg') wysiwygRef.current?.focus();
         else textareaRef.current?.focus();
@@ -600,7 +680,20 @@ export const Editor = React.forwardRef<any, EditorProps>(
         )}
 
         {/* Main Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center">
+        <div
+          className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
+                <Upload className="w-8 h-8 mb-2 text-blue-500" />
+                <span className="font-bold text-blue-500">Drop image to upload</span>
+              </div>
+            </div>
+          )}
           {/* The Paper - Grows infinitely */}
           <div
             className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none"
@@ -614,6 +707,7 @@ export const Editor = React.forwardRef<any, EditorProps>(
               minHeight: '100%',
             }}
           >
+            {/* Toolbar - Removed Image Icon here */}
             {/* Title Input */}
             <PlainTextEditable
               value={chapter.title}
@@ -752,6 +846,125 @@ export const Editor = React.forwardRef<any, EditorProps>(
             </div>
           )}
         </div>
+        {isImageManagerOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div
+              className={`rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col border ${
+                settings.theme === 'light'
+                  ? 'bg-white border-brand-gray-200'
+                  : 'bg-brand-gray-900 border-brand-gray-800'
+              }`}
+            >
+              <div
+                className={`flex justify-between items-center p-4 border-b ${
+                  settings.theme === 'light'
+                    ? 'border-brand-gray-100 text-brand-gray-800'
+                    : 'border-brand-gray-800 text-brand-gray-100'
+                }`}
+              >
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <ImageIcon size={20} /> Image Manager
+                </h3>
+                <button
+                  onClick={() => setIsImageManagerOpen(false)}
+                  className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div
+                className={`p-4 border-b ${
+                  settings.theme === 'light'
+                    ? 'border-brand-gray-100 bg-brand-gray-50'
+                    : 'border-brand-gray-800 bg-brand-gray-800/50'
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={(e) =>
+                    e.target.files?.[0] && handleImageUpload(e.target.files[0])
+                  }
+                  accept="image/*"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full"
+                  variant="primary"
+                >
+                  <Upload size={16} className="mr-2" /> Upload New Image
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                {projectImages.length === 0 ? (
+                  <div className="text-center py-12 text-brand-gray-400">
+                    <ImageIcon size={48} className="mx-auto mb-4 opacity-20" />
+                    <p>No images in this project yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {projectImages.map((img) => (
+                      <div
+                        key={img.filename}
+                        className={`group relative border rounded-lg overflow-hidden aspect-square ${
+                          settings.theme === 'light'
+                            ? 'bg-brand-gray-100 border-brand-gray-200'
+                            : 'bg-brand-gray-950 border-brand-gray-700'
+                        }`}
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.filename}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="text-white text-xs truncate mb-2">
+                            {img.filename}
+                          </div>
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              onClick={() => insertImageMarkdown(img.filename, img.url)}
+                              className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded shadow-sm"
+                              title="Insert"
+                            >
+                              <Upload size={14} className="rotate-180" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (
+                                  !confirm(
+                                    "Delete this image? This won't remove it from the text."
+                                  )
+                                )
+                                  return;
+                                try {
+                                  await api.projects.deleteImage(img.filename);
+                                  setProjectImages((prev) =>
+                                    prev.filter((p) => p.filename !== img.filename)
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="p-1.5 bg-red-500 hover:bg-red-600 text-white rounded shadow-sm"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

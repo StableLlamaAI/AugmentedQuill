@@ -1023,6 +1023,12 @@ Always prioritize the user's creative vision.`
     }
   };
 
+  const handleOpenImages = () => {
+    if (editorRef.current && editorRef.current.openImageManager) {
+      editorRef.current.openImageManager();
+    }
+  };
+
   const setAppTheme = (t: AppTheme) => {
     setEditorSettings((prev) => ({ ...prev, theme: t }));
   };
@@ -2038,6 +2044,7 @@ Always prioritize the user's creative vision.`
             onBookCreate={handleBookCreate}
             onBookDelete={handleBookDelete}
             theme={currentTheme}
+            onOpenImages={handleOpenImages}
           />
         </div>
         <div
