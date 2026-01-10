@@ -15,6 +15,11 @@ import {
   MessageSquare,
   BookOpen,
   ChevronDown,
+  Upload,
+  Download,
+  FileText,
+  Library,
+  Archive,
 } from 'lucide-react';
 import { LLMConfig, ProjectMetadata, AppSettings, AppTheme } from '../types';
 import { api } from '../services/api';
@@ -31,6 +36,13 @@ interface SettingsDialogProps {
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, newName: string) => void;
+  onConvertProject: (newType: string) => void;
+  onImportProject: (file: File) => Promise<void>;
+  activeProjectType?: 'small' | 'medium' | 'large';
+  activeProjectStats?: {
+    chapterCount: number;
+    bookCount: number;
+  };
   theme: AppTheme;
   defaultPrompts?: {
     system_messages: Record<string, string>;
@@ -152,6 +164,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onCreateProject,
   onDeleteProject,
   onRenameProject,
+  onConvertProject,
+  onImportProject,
+  activeProjectType,
+  activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
   defaultPrompts = { system_messages: {}, user_prompts: {} },
 }) => {
@@ -170,11 +186,68 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
   const isLight = theme === 'light';
+
+  const canConvertTo = (target: string) => {
+    if (!activeProjectType) return false;
+    if (target === activeProjectType) return true;
+
+    const rank = (t: string) => {
+      if (t === 'small') return 0;
+      if (t === 'medium') return 1;
+      if (t === 'large') return 2;
+      return 1;
+    };
+
+    const curr = rank(activeProjectType);
+    const dest = rank(target);
+
+    // Upscale always allowed
+    if (dest > curr) return true;
+
+    // Downscale checks
+    if (activeProjectType === 'large') {
+      if (activeProjectStats.bookCount > 1) return false;
+      if (target === 'small' && activeProjectStats.chapterCount > 1) return false;
+    }
+
+    if (activeProjectType === 'medium') {
+      if (target === 'small' && activeProjectStats.chapterCount > 1) return false;
+    }
+
+    return true;
+  };
+
+  const getProjectIcon = (type: string) => {
+    switch (type) {
+      case 'small':
+        return <FileText size={16} />;
+      case 'large':
+        return <Library size={16} />;
+      default:
+        return <BookOpen size={16} />;
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    try {
+      const blob = await api.projects.export(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed');
+    }
+  };
 
   // Reset local state when opening + load machine config from backend
   useEffect(() => {
@@ -628,13 +701,34 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       Manage your stories and creative works.
                     </p>
                   </div>
-                  <Button
-                    theme={theme}
-                    onClick={onCreateProject}
-                    icon={<Plus size={16} />}
-                  >
-                    New Project
-                  </Button>
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept=".zip"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) onImportProject(e.target.files[0]);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                    />
+                    <Button
+                      theme={theme}
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="secondary"
+                      icon={<Upload size={16} />}
+                      title="Import Project (ZIP)"
+                    >
+                      Import
+                    </Button>
+                    <Button
+                      theme={theme}
+                      onClick={onCreateProject}
+                      icon={<Plus size={16} />}
+                    >
+                      New Project
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
@@ -689,38 +783,65 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-2 group/title">
-                              <h4
-                                className={`font-bold ${
-                                  isLight
-                                    ? 'text-brand-gray-800'
-                                    : 'text-brand-gray-300'
-                                }`}
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`mt-1 opacity-50 ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}`}
                               >
-                                {proj.title}
-                              </h4>
-                              <button
-                                onClick={() => {
-                                  setEditingNameId(proj.id);
-                                  setTempName(proj.title);
-                                }}
-                                className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${
-                                  isLight
-                                    ? 'text-brand-gray-500 hover:text-brand-gray-700'
-                                    : 'text-brand-gray-500 hover:text-brand-gray-300'
-                                }`}
-                              >
-                                <Edit2 size={12} />
-                              </button>
+                                {getProjectIcon(proj.type)}
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-2 group/title">
+                                  <h4
+                                    className={`font-bold ${
+                                      isLight
+                                        ? 'text-brand-gray-800'
+                                        : 'text-brand-gray-300'
+                                    }`}
+                                  >
+                                    {proj.title}
+                                  </h4>
+                                  <button
+                                    onClick={() => {
+                                      setEditingNameId(proj.id);
+                                      setTempName(proj.title);
+                                    }}
+                                    className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${
+                                      isLight
+                                        ? 'text-brand-gray-500 hover:text-brand-gray-700'
+                                        : 'text-brand-gray-500 hover:text-brand-gray-300'
+                                    }`}
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-brand-gray-500 mt-0.5">
+                                  <span className="capitalize">
+                                    {proj.type} Project
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    Last edited:{' '}
+                                    {new Date(proj.updatedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           )}
-                          <p className="text-xs text-brand-gray-500 mt-1">
-                            Last edited: {new Date(proj.updatedAt).toLocaleDateString()}
-                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-3 justify-end">
+                        <button
+                          className={`p-2 rounded transition-colors ${
+                            isLight
+                              ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-100'
+                              : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-800'
+                          }`}
+                          onClick={() => handleExport(proj.id)}
+                          title="Export Project (ZIP)"
+                        >
+                          <Download size={18} />
+                        </button>
                         {proj.id !== activeProjectId && (
                           <Button
                             theme={theme}
@@ -735,9 +856,52 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           </Button>
                         )}
                         {proj.id === activeProjectId && (
-                          <span className="text-xs font-medium text-brand-700 bg-brand-100 px-2 py-1 rounded">
-                            Active
-                          </span>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="text-xs font-medium text-brand-700 bg-brand-100 px-2 py-1 rounded">
+                              Active
+                            </span>
+                            {activeProjectType && (
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs ${isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}`}
+                                >
+                                  Size:
+                                </span>
+                                <select
+                                  className={`text-xs p-1 rounded border ${
+                                    isLight
+                                      ? 'bg-white border-brand-gray-300'
+                                      : 'bg-brand-gray-950 border-brand-gray-700'
+                                  }`}
+                                  value={activeProjectType}
+                                  onChange={(e) => {
+                                    onConvertProject(e.target.value);
+                                  }}
+                                >
+                                  <option
+                                    value="small"
+                                    disabled={!canConvertTo('small')}
+                                  >
+                                    Small{' '}
+                                    {!canConvertTo('small') ? '(Too many items)' : ''}
+                                  </option>
+                                  <option
+                                    value="medium"
+                                    disabled={!canConvertTo('medium')}
+                                  >
+                                    Medium{' '}
+                                    {!canConvertTo('medium') ? '(Too many items)' : ''}
+                                  </option>
+                                  <option
+                                    value="large"
+                                    disabled={!canConvertTo('large')}
+                                  >
+                                    Large
+                                  </option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
                         )}
                         <button
                           onClick={() => onDeleteProject(proj.id)}

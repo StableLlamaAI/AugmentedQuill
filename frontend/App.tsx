@@ -8,6 +8,7 @@ import { Chat } from './components/Chat';
 import { DebugLogs } from './components/DebugLogs';
 import { Button } from './components/Button';
 import { SettingsDialog } from './components/SettingsDialog';
+import { CreateProjectDialog } from './components/CreateProjectDialog';
 import {
   ChatMessage,
   Chapter,
@@ -165,6 +166,7 @@ const App: React.FC = () => {
   }, [isAppearanceOpen]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isDebugLogsOpen, setIsDebugLogsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('raw');
   const [showWhitespace, setShowWhitespace] = useState<boolean>(false);
@@ -212,11 +214,12 @@ const App: React.FC = () => {
     const fetchProjects = async () => {
       try {
         const data = await api.projects.list();
-        if (data.projects) {
+        if (data.available) {
           setProjects(
-            data.projects.map((p: any) => ({
-              id: p.id,
+            data.available.map((p: any) => ({
+              id: p.name,
               title: p.title || p.name,
+              type: p.type || 'medium',
               updatedAt: Date.now(),
             }))
           );
@@ -267,16 +270,35 @@ const App: React.FC = () => {
       localStorage.setItem(`project_${story.id}`, JSON.stringify(story));
       setProjects((prev) => {
         const exists = prev.find((p) => p.id === story.id);
-        if (exists && exists.title === story.title) {
+        if (
+          exists &&
+          exists.title === story.title &&
+          exists.type === story.projectType
+        ) {
           return prev.map((p) =>
             p.id === story.id ? { ...p, updatedAt: Date.now() } : p
           );
         } else if (exists) {
           return prev.map((p) =>
-            p.id === story.id ? { ...p, title: story.title, updatedAt: Date.now() } : p
+            p.id === story.id
+              ? {
+                  ...p,
+                  title: story.title,
+                  type: story.projectType,
+                  updatedAt: Date.now(),
+                }
+              : p
           );
         } else {
-          return [...prev, { id: story.id, title: story.title, updatedAt: Date.now() }];
+          return [
+            ...prev,
+            {
+              id: story.id,
+              title: story.title,
+              type: story.projectType,
+              updatedAt: Date.now(),
+            },
+          ];
         }
       });
     }
@@ -287,28 +309,103 @@ const App: React.FC = () => {
   }, [projects]);
 
   // Project Management Functions
-  const handleLoadProject = (id: string) => {
-    const saved = localStorage.getItem(`project_${id}`);
-    if (saved) {
-      const loadedStory = JSON.parse(saved);
-      loadStory(loadedStory);
-      setChatMessages([]);
+  const handleLoadProject = async (id: string) => {
+    try {
+      const res = await api.projects.select(id);
+      if (res.ok) {
+        await refreshStory();
+        setChatMessages([]);
+      }
+    } catch (e) {
+      console.error('Failed to load project', e);
+    }
+  };
+
+  const handleImportProject = async (file: File) => {
+    try {
+      const res = await api.projects.import(file);
+      if (res.ok) {
+        const available = res.available;
+        if (available) {
+          setProjects(
+            available.map((p: any) => ({
+              id: p.name,
+              title: p.title || p.name,
+              type: p.type || 'medium',
+              updatedAt: Date.now(),
+            }))
+          );
+        }
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Import failed: ${e.message}`);
     }
   };
 
   const handleCreateProject = () => {
-    const newId = uuidv4();
-    const newStory: StoryState = {
-      id: newId,
-      title: 'New Project',
-      summary: '',
-      styleTags: [],
-      chapters: [],
-      currentChapterId: null,
-      lastUpdated: Date.now(),
-    };
-    loadStory(newStory);
-    setChatMessages([]);
+    setIsCreateProjectOpen(true);
+  };
+
+  const handleCreateProjectConfirm = async (name: string, type: string) => {
+    try {
+      const result = await api.projects.create(name, type);
+      if (result.ok) {
+        // Refresh list
+        const data = await api.projects.list();
+        if (data.projects) {
+          setProjects(
+            data.projects.map((p: any) => ({
+              id: p.name, // Use folder name as ID if ID not in metadata?
+              // Wait, backend list_projects returns {name:..., path:..., title:...}
+              // Previously App used story.id. Backend story.json doesn't strictly enforce ID but frontend uses uuid.
+              // Let's rely on backend 'story' object returned by create.
+              title: p.title || p.name,
+              updatedAt: Date.now(),
+            }))
+          );
+        }
+        if (result.story) {
+          // Ensure story object has the correct ID (folder name) and matches StoryState structure
+          const mappedStory: StoryState = {
+            id: name, // Vital: Use the directory name as ID for subsequent API calls
+            title: result.story.project_title || name,
+            summary: result.story.story_summary || '',
+            styleTags: result.story.tags || [],
+            chapters: (result.story.chapters || []).map((c: any, i: number) => ({
+              id: String(i + 1),
+              title: c.title || '',
+              summary: c.summary || '',
+              content: '',
+            })),
+            currentChapterId: null,
+            lastUpdated: Date.now(),
+          };
+
+          // For small projects (empty chapters in JSON), add the virtual chapter manually
+          // so the UI doesn't look empty before fetchStory kicks in
+          if (type === 'small' && mappedStory.chapters.length === 0) {
+            mappedStory.chapters = [
+              {
+                id: '1',
+                title: mappedStory.title,
+                summary: '',
+                content: '',
+              },
+            ];
+            mappedStory.currentChapterId = '1';
+          }
+
+          loadStory(mappedStory as any);
+          setChatMessages([]);
+        }
+        setIsCreateProjectOpen(false);
+        if (isSettingsOpen) setIsSettingsOpen(false);
+      }
+    } catch (e) {
+      console.error('Failed to create project', e);
+      alert('Failed to create project: ' + e);
+    }
   };
 
   const handleDeleteProject = (id: string) => {
@@ -897,6 +994,41 @@ Always prioritize the user's creative vision.`
     }`;
   };
 
+  const handleConvertProject = async (newType: string) => {
+    try {
+      await api.projects.convert(newType);
+      await refreshStory();
+    } catch (e: any) {
+      alert(`Failed to convert project: ${e.message}`);
+    }
+  };
+
+  const handleBookCreate = async (title: string) => {
+    try {
+      await api.books.create(title);
+      await refreshStory();
+    } catch (e: any) {
+      console.error(e);
+      alert(`Failed to create book: ${e.message}`);
+    }
+  };
+
+  const handleBookDelete = async (id: string) => {
+    try {
+      await api.books.delete(id);
+      await refreshStory();
+    } catch (e: any) {
+      console.error(e);
+      alert(`Failed to delete book: ${e.message}`);
+    }
+  };
+
+  const handleOpenImages = () => {
+    if (editorRef.current && editorRef.current.openImageManager) {
+      editorRef.current.openImageManager();
+    }
+  };
+
   const setAppTheme = (t: AppTheme) => {
     setEditorSettings((prev) => ({ ...prev, theme: t }));
   };
@@ -925,10 +1057,24 @@ Always prioritize the user's creative vision.`
         activeProjectId={story.id}
         onLoadProject={handleLoadProject}
         onCreateProject={handleCreateProject}
+        onImportProject={handleImportProject}
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
+        onConvertProject={handleConvertProject}
+        activeProjectType={story.projectType}
+        activeProjectStats={{
+          chapterCount: story.chapters.length,
+          bookCount: story.books?.length || 0,
+        }}
         theme={currentTheme}
         defaultPrompts={prompts}
+      />
+
+      <CreateProjectDialog
+        isOpen={isCreateProjectOpen}
+        onClose={() => setIsCreateProjectOpen(false)}
+        onCreate={handleCreateProjectConfirm}
+        theme={currentTheme}
       />
 
       {/* Header / Toolbar */}
@@ -1889,11 +2035,16 @@ Always prioritize the user's creative vision.`
           />
           <ChapterList
             chapters={story.chapters}
+            books={story.books}
+            projectType={story.projectType}
             currentChapterId={currentChapterId}
             onSelect={handleChapterSelect}
             onDelete={deleteChapter}
-            onCreate={() => addChapter()}
+            onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
+            onBookCreate={handleBookCreate}
+            onBookDelete={handleBookDelete}
             theme={currentTheme}
+            onOpenImages={handleOpenImages}
           />
         </div>
         <div

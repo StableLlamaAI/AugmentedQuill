@@ -70,6 +70,27 @@ export const api = {
       if (!res.ok) throw new Error('Failed to select project');
       return res.json();
     },
+    create: async (name: string, type: string) => {
+      const res = await fetch(`${API_BASE}/projects/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type }),
+      });
+      if (!res.ok) throw new Error('Failed to create project');
+      return res.json();
+    },
+    convert: async (new_type: string) => {
+      const res = await fetch(`${API_BASE}/projects/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_type }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.detail || 'Failed to convert project');
+      }
+      return res.json();
+    },
     delete: async (name: string) => {
       const res = await fetch(`${API_BASE}/projects/delete`, {
         method: 'POST',
@@ -77,6 +98,103 @@ export const api = {
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error('Failed to delete project');
+      return res.json();
+    },
+    export: async (name?: string) => {
+      const url = name
+        ? `${API_BASE}/projects/export?name=${encodeURIComponent(name)}`
+        : `${API_BASE}/projects/export`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to export project');
+      return res.blob();
+    },
+    import: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/projects/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        try {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to import project');
+        } catch (e: any) {
+          throw new Error(e.message || 'Failed to import project');
+        }
+      }
+      return res.json();
+    },
+    uploadImage: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/projects/images/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload image');
+      return res.json();
+    },
+    listImages: async () => {
+      const res = await fetch(`${API_BASE}/projects/images/list`);
+      if (!res.ok) throw new Error('Failed to list images');
+      return res.json();
+    },
+    deleteImage: async (filename: string) => {
+      const res = await fetch(`${API_BASE}/projects/images/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      if (!res.ok) throw new Error('Failed to delete image');
+      return res.json();
+    },
+  },
+  books: {
+    create: async (title: string) => {
+      // Create via Chat Tool or dedicated endpoint?
+      // Since I didn't add a dedicated REST endpoint in api/projects.py, I should add one OR use the chat tool.
+      // But using Chat Tool from GUI is weird.
+      // Let's assume I WILL add the endpoint in api/projects.py now because it's cleaner.
+      const res = await fetch(`${API_BASE}/books/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error('Failed to create book');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE}/books/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: id }),
+      });
+      if (!res.ok) throw new Error('Failed to delete book');
+      return res.json();
+    },
+    uploadImage: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/projects/images/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload image');
+      return res.json();
+    },
+    listImages: async () => {
+      const res = await fetch(`${API_BASE}/projects/images/list`);
+      if (!res.ok) throw new Error('Failed to list images');
+      return res.json();
+    },
+    deleteImage: async (filename: string) => {
+      const res = await fetch(`${API_BASE}/projects/images/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      if (!res.ok) throw new Error('Failed to delete image');
       return res.json();
     },
   },
@@ -91,11 +209,11 @@ export const api = {
       if (!res.ok) throw new Error('Failed to get chapter');
       return res.json();
     },
-    create: async (title: string, content: string = '') => {
+    create: async (title: string, content: string = '', book_id?: string) => {
       const res = await fetch(`${API_BASE}/chapters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify({ title, content, book_id }),
       });
       if (!res.ok) throw new Error('Failed to create chapter');
       return res.json();

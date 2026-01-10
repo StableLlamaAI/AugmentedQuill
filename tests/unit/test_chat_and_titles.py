@@ -80,10 +80,10 @@ class ChatAndTitlesTest(TestCase):
         r = self.client.get("/api/chapters")
         self.assertEqual(r.status_code, 200)
         chs = r.json().get("chapters")
-        self.assertEqual([c["title"] for c in chs], ["0001.txt", "0002.txt"])
+        self.assertEqual([c["title"] for c in chs], ["0001", "0002"])
 
         # Fetch single should also fallback
         r1 = self.client.get("/api/chapters/1")
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
-        self.assertEqual(d1.get("title"), "0001.txt")
+        self.assertEqual(d1.get("title"), "0001")

@@ -11,19 +11,72 @@ def _project_overview() -> dict:
     """Return project title and a list of chapters with id, filename, title, summary."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
+    p_type = story.get("project_type", "medium")
+
+    base_info = {
+        "project_title": story.get("project_title") or (active.name if active else ""),
+        "project_type": p_type,
+    }
+
+    if p_type == "small":
+        fn = story.get("content_file", "content.md")
+
+        # Use metadata from story.json if available
+        chapters = story.get("chapters", [])
+        title = "Story Content"
+        summary = "Full content of the story"
+
+        if chapters and len(chapters) > 0:
+            c0 = chapters[0]
+            if isinstance(c0, dict):
+                t = c0.get("title")
+                if t and str(t).strip():
+                    title = str(t).strip()
+                s = c0.get("summary")
+                if s and str(s).strip():
+                    summary = str(s).strip()
+
+        return {
+            **base_info,
+            "content_file": fn,
+            "chapters": [
+                {
+                    "id": 1,
+                    "filename": fn,
+                    "title": title,
+                    "summary": summary,
+                }
+            ],
+        }
+
+    if p_type == "large":
+        files = _scan_chapter_files()
+        books = story.get("books", [])
+        enriched_books = []
+        for b in books:
+            bid = b.get("id")
+            b_chapters = []
+            # Find chapters belonging to this book
+            for vid, path in files:
+                # Naive path check for book ID in path
+                # Path should be .../books/<BID>/chapters/...
+                if f"books/{bid}/" in str(path):
+                    # Could also extract title/summary from b.get("chapters") if we synced it
+                    # For now just list IDs and filenames
+                    b_chapters.append({"id": vid, "filename": path.name})
+            enriched_books.append({**b, "active_chapters": b_chapters})
+        return {**base_info, "books": enriched_books}
+
     chapters_meta = [_normalize_chapter_entry(c) for c in (story.get("chapters") or [])]
     files = _scan_chapter_files()
     out: list[dict] = []
     for idx, path in files:
-        # Position in story.json may be different than numeric filename; map by ordering
-        # We use enumeration order from _scan_chapter_files as position
         pos = next((i for i, (cid, _) in enumerate(files) if cid == idx), None)
         title = None
         summary = ""
         if isinstance(pos, int) and pos < len(chapters_meta):
             title = chapters_meta[pos].get("title")
             summary = chapters_meta[pos].get("summary") or ""
-        # Fallback for bogus title values
         if not title or str(title).strip() in ("[object Object]", "object Object"):
             title = path.name
         out.append(
@@ -34,10 +87,7 @@ def _project_overview() -> dict:
                 "summary": summary,
             }
         )
-    return {
-        "project_title": story.get("project_title") or (active.name if active else ""),
-        "chapters": out,
-    }
+    return {**base_info, "chapters": out}
 
 
 def _chapter_content_slice(chap_id: int, start: int = 0, max_chars: int = 8000) -> dict:
