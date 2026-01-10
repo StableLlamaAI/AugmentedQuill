@@ -1,69 +1,33 @@
 # AugmentedQuill
 
-NOTE: This is under heavy development, do NOT try to use it, yet.
-
 <img src="static/images/logo_2048.png" alt="Augmented Quill - Your Words, Amplified" width="1024">
 
-Web GUI for LLM assisted prose writing
+**AugmentedQuill** is a modern, web-based GUI for AI-assisted prose writing. It leverages Large Language Models (LLMs) via the OpenAI-compatible API to act as a writing partner, editor, and continuation engine.
 
-The project is using Python with FastAPI on the backend and React/Vite
-on the frontend. The LLMs are accessed via the OpenAI API.
+It is designed for writers who want to maintain creative control while using AI to overcome writer's block, brainstorm ideas, or edit text.
 
-The project features a simple user interface for writing prose like novels.
-They can be short with a few paragraphs or long with a few hundred paragraphs
-in multiple chapters.
+## Features
 
-There are settings for machine-specific environment (like how to access the
-OpenAI API) and there are story-specific settings in a separate config file.
-All configuration is done via JSON files.
-
-The GUI is an interactive web page that can be accessed via a web browser.
-In the main window the story or the current chapter is displayed. In the
-sidebar the user can select the other chapters. The user can also select to
-view the text as it is (raw) or as a formatted markdown text.
-
-There is also an option to switch the main window to a simple chat with the
-currently selected LLM.
+- **Project Management**: Organize your work into projects.
+- **Chapter-Based Writing**: Structure your story with multiple chapters.
+- **Dual View Modes**:
+  - **Raw**: Distraction-free text editing.
+  - **Visual**: Markdown-rendered reading view.
+- **AI Writing Partner**: A dedicated chat interface ("Writing Partner") to brainstorm, ask questions about your story, or get feedback.
+- **Smart Editing Tools**:
+  - **Text Generation**: Continue writing from where you left off.
+  - **Prompt Overrides**: Customize system prompts for different AI personas (Editor, Writer, Chat).
+- **Visual Helpers**: Toggle whitespace characters to spot layout issues.
+- **Dark/Light Mode**: Fully themable UI.
 
 ## Architecture
 
 The application follows a modular FastAPI architecture:
 
-- **Backend**: FastAPI with modular routers for different API endpoints
-- **Frontend**: React SPA served by FastAPI (built with Vite)
-- **Configuration**: JSON-based config files with environment variable support
-- **LLM Integration**: OpenAI API with support for multiple endpoints
-
-### Code Structure
-
-```
-app/
-├── main.py              # FastAPI app initialization and server startup
-├── api/                 # API routers
-│   ├── settings.py      # Settings management endpoints
-│   ├── projects.py      # Project management endpoints
-│   ├── chapters.py      # Chapter CRUD operations
-│   ├── story.py         # Story generation and streaming
-│   └── chat.py          # Chat API with tools
-├── helpers/             # Shared utility functions
-│   ├── chapter_helpers.py
-│   ├── project_helpers.py
-│   └── story_helpers.py
-├── llm_shims.py         # LLM operation wrappers
-├── config.py            # Configuration loading
-├── projects.py          # Project management
-└── llm.py               # LLM client implementation
-frontend/                # React/Vite frontend (SPA)
-├── App.tsx
-├── index.html
-├── index.tsx
-├── components/
-├── hooks/
-├── services/
-├── types.ts
-├── package.json
-└── vite.config.ts
-```
+- **Backend**: FastAPI with modular routers for different API endpoints (Python 3.11+).
+- **Frontend**: React SPA served by FastAPI (built with Vite, TypeScript).
+- **Configuration**: JSON-based config files with environment variable support.
+- **LLM Integration**: Client-side integration with OpenAI-compatible APIs (OpenAI, local models like Ollama/vLLM).
 
 ## Quickstart
 
@@ -165,3 +129,9 @@ Notes:
 
 - Current tests focus on configuration parsing and do not call external services.
 - Avoid committing real secrets. Use environment variables or placeholders.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPLv3). See the [LICENSE](LICENSE) file for details.
+
+Copyright (C) 2026 StableLlama
