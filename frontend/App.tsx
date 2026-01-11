@@ -16,6 +16,7 @@ import { DebugLogs } from './components/DebugLogs';
 import { Button } from './components/Button';
 import { SettingsDialog } from './components/SettingsDialog';
 import { CreateProjectDialog } from './components/CreateProjectDialog';
+import { ModelSelector } from './components/ModelSelector';
 import {
   ChatMessage,
   Chapter,
@@ -140,6 +141,77 @@ const App: React.FC = () => {
     }
     return DEFAULT_APP_SETTINGS;
   });
+
+  const [modelConnectionStatus, setModelConnectionStatus] = useState<
+    Record<string, 'idle' | 'success' | 'error' | 'loading'>
+  >({});
+  const [detectedCapabilities, setDetectedCapabilities] = useState<
+    Record<string, { is_multimodal: boolean; supports_function_calling: boolean }>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkProviders = async () => {
+      // Check active providers first, or all. Checking all might be slow if many.
+      // Let's check unique active providers.
+      const activeIds = new Set([
+        appSettings.activeChatProviderId,
+        appSettings.activeWritingProviderId,
+        appSettings.activeEditingProviderId,
+      ]);
+
+      const providersToCheck = appSettings.providers.filter((p) => activeIds.has(p.id));
+
+      for (const p of providersToCheck) {
+        if (cancelled) return;
+        // Don't re-check if already success? User says "currently working or not", implying live check on load.
+        // We will check.
+        setModelConnectionStatus((prev) => ({ ...prev, [p.id]: 'loading' }));
+
+        try {
+          // 1. Connection check
+          const modelId = p.modelId || '';
+          if (!modelId) {
+            setModelConnectionStatus((prev) => ({ ...prev, [p.id]: 'idle' }));
+            continue;
+          }
+
+          const res = await api.machine.testModel({
+            base_url: p.baseUrl,
+            api_key: p.apiKey,
+            timeout_s: Math.round((p.timeout || 10000) / 1000),
+            model_id: modelId,
+          });
+
+          if (cancelled) return;
+
+          if (res.model_ok && res.capabilities) {
+            setDetectedCapabilities((prev) => ({ ...prev, [p.id]: res.capabilities! }));
+          }
+
+          setModelConnectionStatus((prev) => ({
+            ...prev,
+            [p.id]: res.model_ok ? 'success' : 'error',
+          }));
+        } catch (e) {
+          if (cancelled) return;
+          setModelConnectionStatus((prev) => ({ ...prev, [p.id]: 'error' }));
+        }
+      }
+    };
+
+    // Simple debounce/dedupe: only run if providers change or IDs change
+    checkProviders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    appSettings.providers,
+    appSettings.activeChatProviderId,
+    appSettings.activeEditingProviderId,
+    appSettings.activeWritingProviderId,
+  ]);
 
   const [projects, setProjects] = useState<ProjectMetadata[]>(() => {
     const saved = localStorage.getItem('augmentedquill_projects_meta');
@@ -1667,114 +1739,51 @@ Always prioritize the user's creative vision.`
               isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
             }`}
           >
-            <div className="flex flex-col justify-center">
-              <label
-                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
-                  isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'
-                }`}
-              >
-                Editing
-              </label>
-              <select
-                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
-                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
-                }`}
-                value={appSettings.activeEditingProviderId}
-                onChange={(e) =>
-                  setAppSettings((prev) => ({
-                    ...prev,
-                    activeEditingProviderId: e.target.value,
-                  }))
-                }
-                title="Active Editing Model"
-              >
-                {appSettings.providers.map((p) => (
-                  <option
-                    key={p.id}
-                    value={p.id}
-                    className={
-                      isLight
-                        ? 'bg-white text-brand-gray-900'
-                        : 'bg-brand-gray-900 text-brand-gray-100'
-                    }
-                  >
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col justify-center">
-              <label
-                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
-                  isLight ? 'text-violet-600' : 'text-violet-400'
-                }`}
-              >
-                Writing
-              </label>
-              <select
-                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
-                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
-                }`}
-                value={appSettings.activeWritingProviderId}
-                onChange={(e) =>
-                  setAppSettings((prev) => ({
-                    ...prev,
-                    activeWritingProviderId: e.target.value,
-                  }))
-                }
-                title="Active Writing Model"
-              >
-                {appSettings.providers.map((p) => (
-                  <option
-                    key={p.id}
-                    value={p.id}
-                    className={
-                      isLight
-                        ? 'bg-white text-brand-gray-900'
-                        : 'bg-brand-gray-900 text-brand-gray-100'
-                    }
-                  >
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col justify-center">
-              <label
-                className={`text-[8px] font-bold uppercase leading-none mb-0.5 ${
-                  isLight ? 'text-blue-600' : 'text-blue-400'
-                }`}
-              >
-                Chat
-              </label>
-              <select
-                className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 truncate font-medium ${
-                  isLight ? 'text-brand-gray-600' : 'text-brand-gray-300'
-                }`}
-                value={appSettings.activeChatProviderId}
-                onChange={(e) =>
-                  setAppSettings((prev) => ({
-                    ...prev,
-                    activeChatProviderId: e.target.value,
-                  }))
-                }
-                title="Active Chat Model"
-              >
-                {appSettings.providers.map((p) => (
-                  <option
-                    key={p.id}
-                    value={p.id}
-                    className={
-                      isLight
-                        ? 'bg-white text-brand-gray-900'
-                        : 'bg-brand-gray-900 text-brand-gray-100'
-                    }
-                  >
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ModelSelector
+              label="Editing"
+              value={appSettings.activeEditingProviderId}
+              onChange={(v) =>
+                setAppSettings((prev) => ({
+                  ...prev,
+                  activeEditingProviderId: v,
+                }))
+              }
+              options={appSettings.providers}
+              theme={currentTheme}
+              connectionStatus={modelConnectionStatus}
+              detectedCapabilities={detectedCapabilities}
+              labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
+            />
+            <ModelSelector
+              label="Writing"
+              value={appSettings.activeWritingProviderId}
+              onChange={(v) =>
+                setAppSettings((prev) => ({
+                  ...prev,
+                  activeWritingProviderId: v,
+                }))
+              }
+              options={appSettings.providers}
+              theme={currentTheme}
+              connectionStatus={modelConnectionStatus}
+              detectedCapabilities={detectedCapabilities}
+              labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+            />
+            <ModelSelector
+              label="Chat"
+              value={appSettings.activeChatProviderId}
+              onChange={(v) =>
+                setAppSettings((prev) => ({
+                  ...prev,
+                  activeChatProviderId: v,
+                }))
+              }
+              options={appSettings.providers}
+              theme={currentTheme}
+              connectionStatus={modelConnectionStatus}
+              detectedCapabilities={detectedCapabilities}
+              labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
+            />
           </div>
         </div>
 

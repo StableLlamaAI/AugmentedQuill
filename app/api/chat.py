@@ -1750,42 +1750,12 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     if not req_messages:
         raise HTTPException(status_code=400, detail="messages array is required")
 
-    # Inject images if referenced in the last user message
-    await _inject_project_images(req_messages)
-
-    # Prepend system message if not present
-    has_system = any(msg.get("role") == "system" for msg in req_messages)
-    if not has_system:
-        # Load model-specific prompt overrides
-        machine_config = _load_machine_config(CONFIG_DIR / "machine.json") or {}
-        openai_cfg = machine_config.get("openai", {})
-        model_type = (payload or {}).get("model_type") or "CHAT"
-
-        # Map model_type to system message key
-        sys_msg_key = "chat_llm"
-        if model_type == "WRITING":
-            sys_msg_key = "writing_llm"
-        elif model_type == "EDITING":
-            sys_msg_key = "editing_llm"
-
-        selected_model_name = (
-            (payload or {}).get("model_name")
-            or openai_cfg.get(f"selected_{model_type.lower()}")
-            or openai_cfg.get("selected")
-        )
-
-        model_overrides = load_model_prompt_overrides(
-            machine_config, selected_model_name
-        )
-
-        system_content = get_system_message(sys_msg_key, model_overrides)
-        req_messages.insert(0, {"role": "system", "content": system_content})
-
-    # Load machine config and pick selected model
+    # Load config to determine model capabilities and overrides
     machine = _load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     model_type = (payload or {}).get("model_type") or "CHAT"
+    # Resolve selected name
     selected_name = (
         (payload or {}).get("model_name")
         or openai_cfg.get(f"selected_{model_type.lower()}")
@@ -1797,21 +1767,52 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     model_id = (payload or {}).get("model")
     timeout_s = (payload or {}).get("timeout_s")
 
-    # If models list exists and a name is provided or selected, use it
+    # Resolve actual model entry
+    chosen = None
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
     if isinstance(models, list) and models:
-        chosen = None
+        allowed_models = models
         if selected_name:
-            for m in models:
+            for m in allowed_models:
                 if isinstance(m, dict) and (m.get("name") == selected_name):
                     chosen = m
                     break
         if chosen is None:
-            chosen = models[0]
+            chosen = allowed_models[0]
+
         base_url = chosen.get("base_url") or base_url
         api_key = chosen.get("api_key") or api_key
         model_id = chosen.get("model") or model_id
         timeout_s = chosen.get("timeout_s", 60) or timeout_s
+
+    # Capability checks
+    # Default to True/Auto unless explicitly disabled
+    is_multimodal = True
+    supports_function_calling = True
+    if chosen:
+        if chosen.get("is_multimodal") is False:
+            is_multimodal = False
+        if chosen.get("supports_function_calling") is False:
+            supports_function_calling = False
+
+    # Inject images if referenced in the last user message and supported
+    if is_multimodal:
+        await _inject_project_images(req_messages)
+
+    # Prepend system message if not present
+    has_system = any(msg.get("role") == "system" for msg in req_messages)
+    if not has_system:
+        # Map model_type to system message key
+        sys_msg_key = "chat_llm"
+        if model_type == "WRITING":
+            sys_msg_key = "writing_llm"
+        elif model_type == "EDITING":
+            sys_msg_key = "editing_llm"
+
+        model_overrides = load_model_prompt_overrides(machine, selected_name)
+
+        system_content = get_system_message(sys_msg_key, model_overrides)
+        req_messages.insert(0, {"role": "system", "content": system_content})
 
     if not base_url or not model_id:
         raise HTTPException(
@@ -1849,12 +1850,13 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         body["max_tokens"] = max_tokens
     # Pass through OpenAI tool-calling fields if provided
     # Always include the available tools for the model to use.
-    body["tools"] = STORY_TOOLS
-    tool_choice = (payload or {}).get("tool_choice")
-    if tool_choice:
-        body["tool_choice"] = tool_choice
-    else:
-        body["tool_choice"] = "auto"
+    if supports_function_calling:
+        body["tools"] = STORY_TOOLS
+        tool_choice = (payload or {}).get("tool_choice")
+        if tool_choice:
+            body["tool_choice"] = tool_choice
+        else:
+            body["tool_choice"] = "auto"
 
     log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
     add_llm_log(log_entry)

@@ -59,6 +59,10 @@ export const api = {
         model_ok: boolean;
         models: string[];
         detail?: string;
+        capabilities?: {
+          is_multimodal: boolean;
+          supports_function_calling: boolean;
+        };
       }>;
     },
   },

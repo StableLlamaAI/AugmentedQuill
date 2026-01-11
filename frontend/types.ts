@@ -72,6 +72,8 @@ export interface LLMConfig {
   modelId: string;
   temperature?: number;
   topP?: number;
+  isMultimodal?: boolean | null; // null/undefined = auto-detect
+  supportsFunctionCalling?: boolean | null; // null/undefined = auto-detect
   prompts: {
     system: string;
     continuation: string;

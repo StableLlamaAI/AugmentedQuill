@@ -1,5 +1,7 @@
 # AugmentedQuill
 
+**NOTE:** This project is under heavy development. Do not try to use it for any productive work.
+
 <img src="static/images/logo_2048.png" alt="Augmented Quill - Your Words, Amplified" width="1024">
 
 **AugmentedQuill** is a modern, web-based GUI for AI-assisted prose writing. It leverages Large Language Models (LLMs) via the OpenAI-compatible API to act as a writing partner, editor, and continuation engine.
