@@ -95,15 +95,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 flex items-center justify-between font-medium truncate ${
+        className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 flex items-center justify-start font-medium truncate ${
           isLight
             ? 'text-brand-gray-600 hover:text-brand-gray-900'
             : 'text-brand-gray-300 hover:text-brand-gray-100'
         }`}
         title={`Selected: ${selectedOption?.name}`}
       >
-        <span className="truncate mr-1">{selectedOption?.name || 'Select...'}</span>
         {getStatusIcon(value)}
+        <span className="truncate ml-1">{selectedOption?.name || 'Select...'}</span>
       </button>
 
       {isOpen && (
