@@ -150,13 +150,22 @@ export const api = {
       if (!res.ok) throw new Error('Failed to upload image');
       return res.json();
     },
-    updateImageDescription: async (filename: string, description: string) => {
+    updateImage: async (filename: string, description?: string, title?: string) => {
       const res = await fetch(`${API_BASE}/projects/images/update_description`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, description }),
+        body: JSON.stringify({ filename, description, title }),
       });
-      if (!res.ok) throw new Error('Failed to update description');
+      if (!res.ok) throw new Error('Failed to update image metadata');
+      return res.json();
+    },
+    createImagePlaceholder: async (description: string, title?: string) => {
+      const res = await fetch(`${API_BASE}/projects/images/create_placeholder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, title }),
+      });
+      if (!res.ok) throw new Error('Failed to create placeholder');
       return res.json();
     },
     listImages: async () => {

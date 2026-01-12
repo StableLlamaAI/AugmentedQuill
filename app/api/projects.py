@@ -24,9 +24,8 @@ from app.projects import (
 )
 from app.config import load_story_config
 from app.helpers.image_helpers import (
-    load_image_metadata,
-    save_image_metadata,
-    update_image_description,
+    update_image_metadata,
+    delete_image_metadata,
     get_project_images,
 )
 
@@ -256,6 +255,7 @@ async def api_update_image_description(request: Request) -> JSONResponse:
 
     filename = payload.get("filename")
     description = payload.get("description")
+    title = payload.get("title")
 
     if not filename:
         raise HTTPException(status_code=400, detail="Filename required")
@@ -264,7 +264,7 @@ async def api_update_image_description(request: Request) -> JSONResponse:
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    update_image_description(filename, description)
+    update_image_metadata(filename, description=description, title=title)
     return JSONResponse(status_code=200, content={"ok": True})
 
 
@@ -275,9 +275,8 @@ async def api_create_image_placeholder(request: Request) -> JSONResponse:
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    description = payload.get("description")
-    if not description:
-        raise HTTPException(status_code=400, detail="Description required")
+    description = payload.get("description") or ""
+    title = payload.get("title") or "Untitled Placeholder"
 
     active = get_active_project_dir()
     if not active:
@@ -285,7 +284,7 @@ async def api_create_image_placeholder(request: Request) -> JSONResponse:
 
     filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
 
-    update_image_description(filename, description)
+    update_image_metadata(filename, description=description, title=title)
 
     return JSONResponse(status_code=200, content={"ok": True, "filename": filename})
 
@@ -365,11 +364,8 @@ async def api_delete_image(request: Request) -> JSONResponse:
         img_path.unlink()
 
     # Remove from metadata if exists
-    meta = load_image_metadata()
     clean_filename = Path(filename).name
-    if clean_filename in meta:
-        del meta[clean_filename]
-        save_image_metadata(meta)
+    delete_image_metadata(clean_filename)
 
     return JSONResponse(status_code=200, content={"ok": True})
 

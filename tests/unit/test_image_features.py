@@ -20,7 +20,7 @@ from app.projects import select_project, create_project
 from app.helpers.image_helpers import (
     load_image_metadata,
     get_project_images,
-    update_image_description,
+    update_image_metadata,
 )
 from app.api.chat import _inject_project_images, _exec_chat_tool
 
@@ -64,22 +64,29 @@ class ImageFeaturesTest(TestCase):
         self.assertEqual(imgs[0]["filename"], "test1.png")
         self.assertFalse(imgs[0]["is_placeholder"])
         self.assertEqual(imgs[0]["description"], "")
+        self.assertEqual(imgs[0]["title"], "test1.png")
 
-        # Update description
-        update_image_description("test1.png", "A nice test image")
+        # Update description and title
+        update_image_metadata(
+            "test1.png", description="A nice test image", title="My Title"
+        )
 
         # Check metadata file created
         meta_file = self.images_dir / "metadata.json"
         self.assertTrue(meta_file.exists())
         meta = json.loads(meta_file.read_text())
         self.assertEqual(meta["test1.png"]["description"], "A nice test image")
+        self.assertEqual(meta["test1.png"]["title"], "My Title")
 
         # Check list again
         imgs = get_project_images()
         self.assertEqual(imgs[0]["description"], "A nice test image")
+        self.assertEqual(imgs[0]["title"], "My Title")
 
         # Create placeholder via helper
-        update_image_description("placeholder.png", "Just a dream")
+        update_image_metadata(
+            "placeholder.png", description="Just a dream", title="Dreamy"
+        )
         imgs = get_project_images()  # Should now have 2 items
         self.assertEqual(len(imgs), 2)
 
@@ -87,6 +94,7 @@ class ImageFeaturesTest(TestCase):
         ph = next(i for i in imgs if i.get("is_placeholder"))
         self.assertEqual(ph["filename"], "placeholder.png")
         self.assertEqual(ph["description"], "Just a dream")
+        self.assertEqual(ph["title"], "Dreamy")
         self.assertIsNone(ph["url"])
 
     def test_endpoints_crud(self):
@@ -104,7 +112,8 @@ class ImageFeaturesTest(TestCase):
 
         # 3. Create Placeholder
         resp = self.client.post(
-            "/api/projects/images/create_placeholder", json={"description": "A sketch"}
+            "/api/projects/images/create_placeholder",
+            json={"description": "A sketch", "title": "Sketchy"},
         )
         self.assertEqual(resp.status_code, 200)
         ph_filename = resp.json()["filename"]
@@ -114,11 +123,17 @@ class ImageFeaturesTest(TestCase):
         resp = self.client.get("/api/projects/images/list")
         images = resp.json()["images"]
         self.assertEqual(len(images), 2)
+        ph = next(i for i in images if i["filename"] == ph_filename)
+        self.assertEqual(ph["title"], "Sketchy")
 
         # 5. Update description
         resp = self.client.post(
             "/api/projects/images/update_description",
-            json={"filename": filename, "description": "Real Upload"},
+            json={
+                "filename": filename,
+                "description": "Real Upload",
+                "title": "Real Title",
+            },
         )
         self.assertEqual(resp.status_code, 200)
 
@@ -127,6 +142,7 @@ class ImageFeaturesTest(TestCase):
         images = resp.json()["images"]
         upl = next(i for i in images if i["filename"] == filename)
         self.assertEqual(upl["description"], "Real Upload")
+        self.assertEqual(upl["title"], "Real Title")
 
         # 6. Delete Upload
         resp = self.client.post(
@@ -226,7 +242,7 @@ class ImageFeaturesTest(TestCase):
             # Test Tool 3: create_image_placeholder
             res = await _exec_chat_tool(
                 "create_image_placeholder",
-                {"description": "A ghost"},
+                {"description": "A ghost", "title": "Ghost"},
                 call_id,
                 payload,
                 mutations,
@@ -237,6 +253,7 @@ class ImageFeaturesTest(TestCase):
             meta = load_image_metadata()
             fname = resp_content["filename"]
             self.assertEqual(meta[fname]["description"], "A ghost")
+            self.assertEqual(meta[fname]["title"], "Ghost")
 
     def test_tools_async(self):
         import asyncio

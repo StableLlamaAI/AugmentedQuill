@@ -42,12 +42,24 @@ def get_image_entry(filename: str) -> dict:
     return meta.get(filename, {})
 
 
-def update_image_description(filename: str, description: str):
+def update_image_metadata(filename: str, description: str = None, title: str = None):
     meta = load_image_metadata()
     if filename not in meta:
         meta[filename] = {}
-    meta[filename]["description"] = description
+
+    if description is not None:
+        meta[filename]["description"] = description
+    if title is not None:
+        meta[filename]["title"] = title
+
     save_image_metadata(meta)
+
+
+def delete_image_metadata(filename: str):
+    meta = load_image_metadata()
+    if filename in meta:
+        del meta[filename]
+        save_image_metadata(meta)
 
 
 def get_project_images() -> list[dict]:
@@ -79,12 +91,15 @@ def get_project_images() -> list[dict]:
     images = []
     # Add existing files
     for fname in sorted(files_map.keys()):
-        desc = meta.get(fname, {}).get("description", "")
+        m = meta.get(fname, {})
+        desc = m.get("description", "")
+        title = m.get("title", fname)
         images.append(
             {
                 "filename": fname,
                 "url": f"/api/projects/images/{fname}",
                 "description": desc,
+                "title": title,
                 "is_placeholder": False,
             }
         )
@@ -93,12 +108,16 @@ def get_project_images() -> list[dict]:
     for fname in sorted(meta.keys()):
         if fname not in files_map:
             info = meta[fname]
+            # Verify if it's meant to be a placeholder or just stale metadata?
+            # Any metadata without a file is effectively a placeholder in this system.
             images.append(
                 {
                     "filename": fname,
                     "url": None,
                     "description": info.get("description", ""),
+                    "title": info.get("title", fname),
                     "is_placeholder": True,
                 }
             )
+
     return images

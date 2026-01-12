@@ -453,6 +453,7 @@ const App: React.FC = () => {
             id: name, // Vital: Use the directory name as ID for subsequent API calls
             title: result.story.project_title || name,
             summary: result.story.story_summary || '',
+            projectType: result.story.project_type || 'medium',
             styleTags: result.story.tags || [],
             chapters: (result.story.chapters || []).map((c: any, i: number) => ({
               id: String(i + 1),

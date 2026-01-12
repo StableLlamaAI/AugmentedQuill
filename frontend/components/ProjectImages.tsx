@@ -89,7 +89,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     if (newDesc === undefined) return;
 
     try {
-      await api.projects.updateImageDescription(filename, newDesc);
+      await api.projects.updateImage(filename, newDesc);
       // Update local state
       setImages((prev) =>
         prev.map((img) =>

@@ -75,6 +75,33 @@ def _parse_tool_calls_from_content(content: str) -> list[dict] | None:
     for m in matches1:
         content_inner = m.group(1).strip()
 
+        # Try JSON format: {"name": "...", "arguments": ...}
+        if content_inner.startswith("{"):
+            try:
+                json_obj = _json.loads(content_inner)
+                if isinstance(json_obj, dict) and "name" in json_obj:
+                    name = json_obj["name"]
+                    args_obj = json_obj.get("arguments", {})
+
+                    call_id = f"call_{name}"
+                    if any(c["id"] == call_id for c in calls):
+                        call_id = f"{call_id}_{len(calls)}"
+
+                    calls.append(
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {
+                                "name": name,
+                                "arguments": _json.dumps(args_obj),
+                            },
+                            "original_text": m.group(0),
+                        }
+                    )
+                    continue
+            except Exception:
+                pass
+
         # Try XML-like format: <function=NAME>ARGS</function>
         xml_match = re.search(
             r"<function=(\w+)>(.*?)</function>",
@@ -642,7 +669,7 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "list_images",
-            "description": "List all images including placeholders, with their descriptions.",
+            "description": "List all images including placeholders, with their descriptions and titles.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -650,16 +677,45 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_image_placeholder",
-            "description": "Create a new placeholder image with a description.",
+            "description": "Create a new placeholder image with a description and optional title.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "description": {
                         "type": "string",
                         "description": "Description of the image content.",
-                    }
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Title for the image.",
+                    },
                 },
                 "required": ["description"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_image_metadata",
+            "description": "Update the title or description of an image or placeholder.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "The filename of the image.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "The new title.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "The new description.",
+                    },
+                },
+                "required": ["filename"],
             },
         },
     },
@@ -668,7 +724,7 @@ STORY_TOOLS = [
 
 async def _tool_generate_image_description(filename: str, payload: dict) -> str:
     from app import llm
-    from app.helpers.image_helpers import get_images_dir, update_image_description
+    from app.helpers.image_helpers import get_images_dir, update_image_metadata
 
     # Check if image exists
     images_dir = get_images_dir()
@@ -731,7 +787,7 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
             content = msg.get("content") if msg else ""
             if content:
                 # Save description
-                update_image_description(filename, content)
+                update_image_metadata(filename, description=content)
                 return content
         return "Error: Failed to generate description."
 
@@ -760,6 +816,7 @@ async def _exec_chat_tool(
                 {
                     "filename": i["filename"],
                     "description": i["description"],
+                    "title": i.get("title", ""),
                     "is_placeholder": i["is_placeholder"],
                 }
                 for i in imgs
@@ -781,17 +838,33 @@ async def _exec_chat_tool(
             }
         if name == "create_image_placeholder":
             desc = args_obj.get("description")
-            from app.helpers.image_helpers import update_image_description
+            title = args_obj.get("title")
+            from app.helpers.image_helpers import update_image_metadata
             import uuid
 
             filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
-            update_image_description(filename, desc)
+            update_image_metadata(filename, description=desc, title=title)
 
             return {
                 "role": "tool",
                 "tool_call_id": call_id,
                 "name": name,
-                "content": _json.dumps({"filename": filename, "description": desc}),
+                "content": _json.dumps(
+                    {"filename": filename, "description": desc, "title": title}
+                ),
+            }
+        if name == "set_image_metadata":
+            filename = args_obj.get("filename")
+            title = args_obj.get("title")
+            desc = args_obj.get("description")
+            from app.helpers.image_helpers import update_image_metadata
+
+            update_image_metadata(filename, description=desc, title=title)
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": _json.dumps({"ok": True}),
             }
 
         if name == "get_story_summary":
@@ -2015,19 +2088,50 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                                     inner = res["content"].strip()
                                                     import re
 
-                                                    func_match = re.match(
-                                                        r"(\w+)(?:\((.*)\))?",
-                                                        inner,
-                                                        re.DOTALL,
-                                                    )
-                                                    if func_match:
-                                                        func_name = func_match.group(1)
-                                                        args_raw = (
-                                                            func_match.group(2) or "{}"
-                                                        )
-                                                        if not args_raw.strip():
-                                                            args_raw = "{}"
+                                                    # Try JSON parsing first
+                                                    func_name = None
+                                                    args_raw = "{}"
 
+                                                    if inner.startswith("{"):
+                                                        try:
+                                                            jobj = _json.loads(inner)
+                                                            if "name" in jobj:
+                                                                func_name = jobj["name"]
+                                                                # Arguments can be dict or string in JSON tool call
+                                                                args_val = jobj.get(
+                                                                    "arguments", {}
+                                                                )
+                                                                if isinstance(
+                                                                    args_val, str
+                                                                ):
+                                                                    args_raw = args_val
+                                                                else:
+                                                                    args_raw = (
+                                                                        _json.dumps(
+                                                                            args_val
+                                                                        )
+                                                                    )
+                                                        except Exception:
+                                                            pass
+
+                                                    if not func_name:
+                                                        func_match = re.match(
+                                                            r"(\w+)(?:\((.*)\))?",
+                                                            inner,
+                                                            re.DOTALL,
+                                                        )
+                                                        if func_match:
+                                                            func_name = (
+                                                                func_match.group(1)
+                                                            )
+                                                            args_raw = (
+                                                                func_match.group(2)
+                                                                or "{}"
+                                                            )
+                                                            if not args_raw.strip():
+                                                                args_raw = "{}"
+
+                                                    if func_name:
                                                         tool_call = {
                                                             "id": f"call_{func_name}",
                                                             "type": "function",
