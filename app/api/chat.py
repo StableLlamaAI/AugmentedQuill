@@ -17,6 +17,7 @@ from app.projects import (
     get_active_project_dir,
     write_chapter_content,
     write_chapter_summary,
+    write_chapter_title,
     create_project,
     list_projects,
     delete_project,
@@ -24,6 +25,7 @@ from app.projects import (
 from app.helpers.project_helpers import _project_overview, _chapter_content_slice
 from app.helpers.chapter_helpers import (
     _normalize_chapter_entry,
+    _chapter_by_id_or_404,
 )
 from app.helpers.story_helpers import (
     _story_generate_summary_helper,
@@ -243,7 +245,7 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_project_overview",
-            "description": "Get project title and a list of all chapters with their IDs, filenames, titles, and summaries.",
+            "description": "Get project title, type, and a structured list of all books (for series) or chapters (for novels). Use this to find the correct NUMERIC chapter IDs and UUID book IDs. Never assume an ID based on a title.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -293,13 +295,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_chapter_content",
-            "description": "Get a slice of a chapter's content. If 'chap_id' is omitted, the application will attempt to use the currently active chapter.",
+            "description": "Get a slice of a chapter's content. ALWAYS use the numeric 'chap_id' from get_project_overview. Never guess.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "The ID of the chapter to read.",
+                        "description": "The numeric ID of the chapter to read.",
                     },
                     "start": {
                         "type": "integer",
@@ -318,13 +320,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "write_chapter_content",
-            "description": "Set the content of a chapter.",
+            "description": "Set the content of a chapter. You MUST use the numeric ID retrieved from get_project_overview.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "Chapter numeric id.",
+                        "description": "Chapter numeric id (global index from project overview).",
                     },
                     "content": {
                         "type": "string",
@@ -339,13 +341,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "write_chapter_summary",
-            "description": "Set the summary of a chapter.",
+            "description": "Set the summary of a chapter. You MUST use the numeric ID retrieved from get_project_overview.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "Chapter numeric id.",
+                        "description": "Chapter numeric ID.",
                     },
                     "summary": {
                         "type": "string",
@@ -360,13 +362,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "sync_summary",
-            "description": "Generate and save a new summary for a chapter, or update its existing summary based on the content of the chapter. This is a destructive action.",
+            "description": "Generate and save a new summary for a chapter, or update its existing summary based on the content of the chapter. This is a destructive action. You MUST use the numeric chapter ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "The ID of the chapter to summarize.",
+                        "description": "The numeric ID of the chapter to summarize.",
                     },
                     "mode": {
                         "type": "string",
@@ -434,13 +436,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_chapter_heading",
-            "description": "Get the heading (title) of a specific chapter.",
+            "description": "Get the heading (title) of a specific chapter. You MUST use the numeric chapter ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "The ID of the chapter.",
+                        "description": "The numeric ID of the chapter.",
                     }
                 },
                 "required": ["chap_id"],
@@ -451,13 +453,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "write_chapter_heading",
-            "description": "Set the heading (title) of a specific chapter.",
+            "description": "Set the heading (title) of a specific chapter. You MUST use the numeric chapter ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "The ID of the chapter.",
+                        "description": "The numeric ID of the chapter.",
                     },
                     "heading": {
                         "type": "string",
@@ -472,13 +474,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_chapter_summary",
-            "description": "Get the summary of a specific chapter.",
+            "description": "Get the summary of a specific chapter. You MUST use the numeric chapter ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chap_id": {
                         "type": "integer",
-                        "description": "The ID of the chapter.",
+                        "description": "The numeric ID of the chapter.",
                     }
                 },
                 "required": ["chap_id"],
@@ -578,13 +580,13 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "delete_book",
-            "description": "Delete a book from a series project. Requires confirmation.",
+            "description": "Delete a book from a series project. Requires confirmation. Use the book UUID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "book_id": {
                         "type": "string",
-                        "description": "The ID of the book to delete.",
+                        "description": "The UUID of the book to delete.",
                     },
                     "confirm": {
                         "type": "boolean",
@@ -726,18 +728,18 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "reorder_chapters",
-            "description": "Reorder chapters in a novel project or within a specific book in a series project.",
+            "description": "Reorder chapters in a novel project or within a specific book in a series project. To move a chapter between books, provide the chapter ID in the list for the target book. ONLY use numeric chapter IDs and UUID book IDs.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "chapter_ids": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "List of chapter IDs in the desired order.",
+                        "description": "List of numeric chapter IDs in the desired order.",
                     },
                     "book_id": {
                         "type": "string",
-                        "description": "Book ID (required for series projects, omit for novel projects).",
+                        "description": "The UUID of the book (required for series projects, omit for novel projects).",
                     },
                 },
                 "required": ["chapter_ids"],
@@ -748,14 +750,14 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "reorder_books",
-            "description": "Reorder books in a series project.",
+            "description": "Reorder books in a series project. Use the UUIDs for each book.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "book_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of book IDs in the desired order.",
+                        "description": "List of book UUIDs in the desired order.",
                     },
                 },
                 "required": ["book_ids"],
@@ -1219,13 +1221,16 @@ async def _exec_chat_tool(
                     "name": name,
                     "content": _json.dumps({"error": "chap_id is required"}),
                 }
-            active = get_active_project_dir()
-            story = load_story_config((active / "story.json") if active else None) or {}
-            chapters = story.get("chapters", [])
-            if chap_id < len(chapters) and isinstance(chapters[chap_id], dict):
-                heading = chapters[chap_id].get("title", "")
+            _chapter_by_id_or_404(chap_id)
+            ov = _project_overview()
+            chapters = []
+            if ov.get("project_type") == "series":
+                for b in ov.get("books", []):
+                    chapters.extend(b.get("chapters", []))
             else:
-                heading = ""
+                chapters = ov.get("chapters", [])
+            chapter = next((c for c in chapters if c["id"] == chap_id), None)
+            heading = chapter.get("title", "") if chapter else ""
             return {
                 "role": "tool",
                 "tool_call_id": call_id,
@@ -1242,25 +1247,7 @@ async def _exec_chat_tool(
                     "name": name,
                     "content": _json.dumps({"error": "chap_id is required"}),
                 }
-            active = get_active_project_dir()
-            if not active:
-                return {
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "name": name,
-                    "content": _json.dumps({"error": "No active project"}),
-                }
-            story_path = active / "story.json"
-            story = load_story_config(story_path) or {}
-            chapters = story.get("chapters", [])
-            if chap_id >= len(chapters):
-                chapters.extend([{}] * (chap_id - len(chapters) + 1))
-            if not isinstance(chapters[chap_id], dict):
-                chapters[chap_id] = {}
-            chapters[chap_id]["title"] = heading
-            story["chapters"] = chapters
-            with open(story_path, "w", encoding="utf-8") as f:
-                _json.dump(story, f, indent=2, ensure_ascii=False)
+            write_chapter_title(chap_id, heading)
             mutations["story_changed"] = True
             return {
                 "role": "tool",
@@ -1282,13 +1269,16 @@ async def _exec_chat_tool(
                     "name": name,
                     "content": _json.dumps({"error": "chap_id is required"}),
                 }
-            active = get_active_project_dir()
-            story = load_story_config((active / "story.json") if active else None) or {}
-            chapters = story.get("chapters", [])
-            if chap_id < len(chapters) and isinstance(chapters[chap_id], dict):
-                summary = chapters[chap_id].get("summary", "")
+            _chapter_by_id_or_404(chap_id)
+            ov = _project_overview()
+            chapters = []
+            if ov.get("project_type") == "series":
+                for b in ov.get("books", []):
+                    chapters.extend(b.get("chapters", []))
             else:
-                summary = ""
+                chapters = ov.get("chapters", [])
+            chapter = next((c for c in chapters if c["id"] == chap_id), None)
+            summary = chapter.get("summary", "") if chapter else ""
             return {
                 "role": "tool",
                 "tool_call_id": call_id,

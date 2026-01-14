@@ -60,18 +60,56 @@ def _project_overview() -> dict:
         files = _scan_chapter_files()
         books = story.get("books", [])
         enriched_books = []
+
+        # Build ID -> Metadata mapping for series
+        all_meta = []
+        for b in books:
+            bid = b.get("id")
+            for c in b.get("chapters", []):
+                norm = _normalize_chapter_entry(c)
+                norm["_parent_book_id"] = bid
+                all_meta.append(norm)
+
+        id_to_meta = {}
+        used_m_ids = set()
+        for i, (idx, p) in enumerate(files):
+            fname = p.name
+            f_bid = p.parent.parent.name
+            match = next(
+                (
+                    c
+                    for c in all_meta
+                    if c.get("filename") == fname
+                    and c.get("_parent_book_id") == f_bid
+                    and id(c) not in used_m_ids
+                ),
+                None,
+            )
+            if match:
+                used_m_ids.add(id(match))
+                id_to_meta[idx] = match
+
         for b in books:
             bid = b.get("id")
             b_chapters = []
-            # Find chapters belonging to this book
             for vid, path in files:
-                # Naive path check for book ID in path
-                # Path should be .../books/<BID>/chapters/...
                 if f"books/{bid}/" in str(path):
-                    # Could also extract title/summary from b.get("chapters") if we synced it
-                    # For now just list IDs and filenames
-                    b_chapters.append({"id": vid, "filename": path.name})
-            enriched_books.append({**b, "active_chapters": b_chapters})
+                    meta = id_to_meta.get(vid, {})
+                    b_chapters.append(
+                        {
+                            "id": vid,
+                            "filename": path.name,
+                            "title": meta.get("title") or path.stem,
+                            "summary": meta.get("summary") or "",
+                        }
+                    )
+            enriched_books.append(
+                {
+                    "id": bid,
+                    "title": b.get("title", ""),
+                    "chapters": b_chapters,
+                }
+            )
         return {**base_info, "books": enriched_books}
 
     chapters_meta = [_normalize_chapter_entry(c) for c in (story.get("chapters") or [])]

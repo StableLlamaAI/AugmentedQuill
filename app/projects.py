@@ -16,7 +16,12 @@ import shutil
 import os
 
 from app.config import load_story_config
-from app.helpers.chapter_helpers import _scan_chapter_files, _normalize_chapter_entry
+from app.helpers.chapter_helpers import (
+    _scan_chapter_files,
+    _normalize_chapter_entry,
+    _chapter_by_id_or_404,
+    _get_chapter_metadata_entry,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
@@ -304,53 +309,156 @@ def list_projects() -> List[Dict[str, str | bool]]:
 
 def write_chapter_content(chap_id: int, content: str) -> None:
     """Write content to a chapter by its ID."""
-    files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise ValueError(f"Chapter {chap_id} not found")
-    _, path, _ = match
+    _, path, _ = _chapter_by_id_or_404(chap_id)
     path.write_text(content, encoding="utf-8")
 
 
 def write_chapter_summary(chap_id: int, summary: str) -> None:
-    """Write summary to a chapter by its ID."""
+    """Write summary to a chapter by its ID across all project types."""
     active = get_active_project_dir()
     if not active:
         raise ValueError("No active project")
 
-    new_summary = summary.strip()
-
-    # Locate chapter by id
+    _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise ValueError(f"Chapter {chap_id} not found")
-    _, path, pos = match
 
-    # Load and normalize story.json
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
-    chapters_data = story.get("chapters") or []
-    chapters_data = [_normalize_chapter_entry(c) for c in chapters_data]
 
-    # Ensure alignment with number of files
-    count = len(files)
-    if len(chapters_data) < count:
-        chapters_data.extend(
-            [{"title": "", "summary": ""}] * (count - len(chapters_data))
-        )
+    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
 
-    # Update summary at position
-    if pos < len(chapters_data):
-        chapters_data[pos]["summary"] = new_summary
+    if target_entry is not None:
+        target_entry["summary"] = summary.strip()
+        import json
+
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
     else:
-        chapters_data.append({"title": "", "summary": new_summary})
+        # If no entry was found in story.json, we might want to add one but for now just raise error
+        raise ValueError(f"Could not find metadata entry for chapter {chap_id}")
 
-    story["chapters"] = chapters_data
+
+def write_chapter_title(chap_id: int, title: str) -> None:
+    """Update the title of a chapter in the story.json across all project types."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+
+    new_title_str = str(title).strip()
+    if new_title_str.lower() == "[object object]":
+        new_title_str = ""
+
+    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+
+    if target_entry is not None:
+        target_entry["title"] = new_title_str
+        import json
+
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    else:
+        # If no entry was found in story.json, we might want to add one but for now just raise error
+        raise ValueError(f"Could not find metadata entry for chapter {chap_id}")
+
+
+def delete_chapter(chap_id: int) -> None:
+    """Delete a chapter file and remove its metadata from story.json."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+
+    # Delete the file
+    path.unlink()
+
+    # Update story.json
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    p_type = story.get("project_type", "novel")
+
+    if p_type == "series":
+        book_id = path.parent.parent.name
+        books = story.get("books", [])
+        book = next((b for b in books if b.get("id") == book_id), None)
+        if book:
+            book_chapters = book.get("chapters", [])
+            book_files = [f for f in files if f[1].parent.parent.name == book_id]
+
+            target_id = None
+            used_ids = set()
+            for i, (f_idx, f_p) in enumerate(book_files):
+                fname = f_p.name
+                curr_match = next(
+                    (
+                        c
+                        for c in book_chapters
+                        if isinstance(c, dict)
+                        and c.get("filename") == fname
+                        and id(c) not in used_ids
+                    ),
+                    None,
+                )
+                if not curr_match and i < len(book_chapters):
+                    candidate = book_chapters[i]
+                    if id(candidate) not in used_ids:
+                        if (
+                            not isinstance(candidate, dict)
+                            or not candidate.get("filename")
+                            or candidate.get("filename") == fname
+                        ):
+                            curr_match = candidate
+
+                if curr_match:
+                    used_ids.add(id(curr_match))
+                    if f_idx == chap_id:
+                        target_id = id(curr_match)
+                        break
+
+            if target_id:
+                book["chapters"] = [c for c in book_chapters if id(c) != target_id]
+    else:
+        chapters_data = story.get("chapters") or []
+        used_ids = set()
+        target_id = None
+        for i, (f_idx, f_p) in enumerate(files):
+            fname = f_p.name
+            curr_match = next(
+                (
+                    c
+                    for c in chapters_data
+                    if isinstance(c, dict)
+                    and c.get("filename") == fname
+                    and id(c) not in used_ids
+                ),
+                None,
+            )
+            if not curr_match and i < len(chapters_data):
+                candidate = chapters_data[i]
+                if id(candidate) not in used_ids:
+                    if (
+                        not isinstance(candidate, dict)
+                        or not candidate.get("filename")
+                        or candidate.get("filename") == fname
+                    ):
+                        curr_match = candidate
+
+            if curr_match:
+                used_ids.add(id(curr_match))
+                if f_idx == chap_id:
+                    target_id = id(curr_match)
+                    break
+
+        if target_id:
+            story["chapters"] = [c for c in chapters_data if id(c) != target_id]
+
+    import json
+
     story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
 
 
@@ -450,11 +558,6 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
     if not active:
         raise ValueError("No active project")
 
-    from app.helpers.chapter_helpers import (
-        _scan_chapter_files,
-        _normalize_chapter_entry,
-    )
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     p_type = story.get("project_type", "novel")
@@ -545,7 +648,7 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
     # Ensure alignment
     # If file scan shows more files than metadata, pad metadata?
     # Actually, let's just append.
-    chapters_data.append({"title": final_title, "summary": ""})
+    chapters_data.append({"title": final_title, "summary": "", "filename": filename})
     story["chapters"] = chapters_data
 
     story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")

@@ -224,6 +224,7 @@ const App: React.FC = () => {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const stopSignalRef = useRef(false);
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -541,6 +542,7 @@ const App: React.FC = () => {
 
   const executeChatRequest = async (userText: string, history: ChatMessage[]) => {
     setIsChatLoading(true);
+    stopSignalRef.current = false;
     try {
       let currentHistory = [...history];
       const session = createChatSession(
@@ -556,6 +558,7 @@ const App: React.FC = () => {
         msgId: string,
         update: { text?: string; thinking?: string; traceback?: string }
       ) => {
+        if (stopSignalRef.current) return;
         setChatMessages((prev) => {
           const idx = prev.findIndex((m) => m.id === msgId);
           if (idx !== -1) {
@@ -588,6 +591,8 @@ const App: React.FC = () => {
       );
 
       while (result.functionCalls && result.functionCalls.length > 0) {
+        if (stopSignalRef.current) break;
+
         // 1. Update assistant message with tool calls in history
         const assistantMsg: ChatMessage = {
           id: currentMsgId,
@@ -628,6 +633,8 @@ const App: React.FC = () => {
           active_chapter_id: currentChapterId ? Number(currentChapterId) : undefined,
         });
 
+        if (stopSignalRef.current) break;
+
         if (toolResponse.ok) {
           // 3. Add tool results to history
           for (const msg of toolResponse.appended_messages) {
@@ -644,6 +651,8 @@ const App: React.FC = () => {
           if (toolResponse.mutations?.story_changed) {
             await refreshStory();
           }
+
+          if (stopSignalRef.current) break;
 
           // 4. Call LLM again with tool results
           // We create a new session with updated history
@@ -665,43 +674,50 @@ const App: React.FC = () => {
         }
       }
 
-      // Final message update
-      const botMessage: ChatMessage = {
-        id: currentMsgId,
-        role: 'model',
-        text: result.text || '',
-        thinking: result.thinking,
-        tool_calls: result.functionCalls, // Ensure tool calls are preserved in final state
-      };
-      setChatMessages((prev) => {
-        const idx = prev.findIndex((m) => m.id === currentMsgId);
-        if (idx !== -1) {
-          const newMsgs = [...prev];
-          newMsgs[idx] = botMessage;
-          return newMsgs;
-        }
-        return [...prev, botMessage];
-      });
-    } catch (error: any) {
-      let errorText = `AI Error: ${error.message || 'An unexpected error occurred'}`;
-      if (error.data) {
-        const detail =
-          typeof error.data === 'string'
-            ? error.data
-            : JSON.stringify(error.data, null, 2);
-        errorText += `\n\n**Details:**\n${detail}`;
+      if (!stopSignalRef.current) {
+        // Final message update
+        const botMessage: ChatMessage = {
+          id: currentMsgId,
+          role: 'model',
+          text: result.text || '',
+          thinking: result.thinking,
+          tool_calls: result.functionCalls, // Ensure tool calls are preserved in final state
+        };
+        setChatMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === currentMsgId);
+          if (idx !== -1) {
+            const newMsgs = [...prev];
+            newMsgs[idx] = botMessage;
+            return newMsgs;
+          }
+          return [...prev, botMessage];
+        });
       }
+    } catch (error: any) {
+      if (stopSignalRef.current && error.name === 'AbortError') {
+        // Ignored
+      } else {
+        let errorText = `AI Error: ${error.message || 'An unexpected error occurred'}`;
+        if (error.data) {
+          const detail =
+            typeof error.data === 'string'
+              ? error.data
+              : JSON.stringify(error.data, null, 2);
+          errorText += `\n\n**Details:**\n${detail}`;
+        }
 
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: 'model',
-        text: errorText,
-        isError: true,
-        traceback: error.traceback,
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
+        const errorMessage: ChatMessage = {
+          id: uuidv4(),
+          role: 'model',
+          text: errorText,
+          isError: true,
+          traceback: error.traceback,
+        };
+        setChatMessages((prev) => [...prev, errorMessage]);
+      }
     } finally {
       setIsChatLoading(false);
+      stopSignalRef.current = false;
     }
   };
 
@@ -709,7 +725,12 @@ const App: React.FC = () => {
     const newMessage: ChatMessage = { id: uuidv4(), role: 'user', text };
     const newHistory = [...chatMessages, newMessage];
     setChatMessages(newHistory);
-    await executeChatRequest(text, chatMessages);
+    await executeChatRequest(text, newHistory);
+  };
+
+  const handleStopChat = () => {
+    stopSignalRef.current = true;
+    setIsChatLoading(false);
   };
 
   const handleRegenerate = async () => {
@@ -2148,6 +2169,7 @@ const App: React.FC = () => {
               isLoading={isChatLoading}
               systemPrompt={systemPrompt}
               onSendMessage={handleSendMessage}
+              onStop={handleStopChat}
               onRegenerate={handleRegenerate}
               onEditMessage={handleEditMessage}
               onDeleteMessage={handleDeleteMessage}

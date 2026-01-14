@@ -14,7 +14,11 @@ from app.config import load_story_config
 from app import llm as _llm
 from app.prompts import get_system_message, get_user_prompt, load_model_prompt_overrides
 from app.config import load_machine_config
-from .chapter_helpers import _chapter_by_id_or_404, _normalize_chapter_entry
+from .chapter_helpers import (
+    _chapter_by_id_or_404,
+    _normalize_chapter_entry,
+    _get_chapter_metadata_entry,
+)
 
 
 async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dict:
@@ -32,12 +36,9 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
         raise HTTPException(status_code=400, detail="No active project")
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
-    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
-    if pos >= len(chapters_data):
-        chapters_data.extend(
-            [{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1)
-        )
-    current_summary = chapters_data[pos].get("summary", "")
+
+    target_entry = _get_chapter_metadata_entry(story, chap_id, path)
+    current_summary = target_entry.get("summary", "") if target_entry else ""
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
         {}, model_type="EDITING"
@@ -91,10 +92,13 @@ async def _story_generate_summary_helper(*, chap_id: int, mode: str = "") -> dic
             new_summary = msg.get("content", "") or ""
             new_summary = _llm.strip_thinking_tags(new_summary)
 
-    chapters_data[pos]["summary"] = new_summary
-    story["chapters"] = chapters_data
+    if target_entry is not None:
+        target_entry["summary"] = new_summary
+
     story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
-    title_for_response = chapters_data[pos].get("title") or path.name
+    title_for_response = (
+        target_entry.get("title") if target_entry else None
+    ) or path.name
     return {
         "ok": True,
         "summary": new_summary,
@@ -115,12 +119,8 @@ async def _story_write_helper(*, chap_id: int) -> dict:
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
     story = load_story_config(active / "story.json") or {}
-    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
-    if pos >= len(chapters_data):
-        chapters_data.extend(
-            [{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1)
-        )
-    summary = chapters_data[pos].get("summary", "")
+    target_entry = _get_chapter_metadata_entry(story, chap_id, path)
+    summary = target_entry.get("summary", "") if target_entry else ""
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(
         {}, model_type="WRITING"
@@ -179,12 +179,8 @@ async def _story_continue_helper(*, chap_id: int) -> dict:
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
     story = load_story_config(active / "story.json") or {}
-    chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
-    if pos >= len(chapters_data):
-        chapters_data.extend(
-            [{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1)
-        )
-    summary = chapters_data[pos].get("summary", "")
+    target_entry = _get_chapter_metadata_entry(story, chap_id, path)
+    summary = target_entry.get("summary", "") if target_entry else ""
     current = path.read_text(encoding="utf-8") if path.exists() else ""
 
     base_url, api_key, model_id, timeout_s = _llm.resolve_openai_credentials(

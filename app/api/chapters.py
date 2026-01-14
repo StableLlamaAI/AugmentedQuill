@@ -14,6 +14,7 @@ from app.config import load_story_config
 from app.helpers.chapter_helpers import (
     _scan_chapter_files,
     _normalize_chapter_entry,
+    _chapter_by_id_or_404,
 )
 
 router = APIRouter()
@@ -21,61 +22,23 @@ router = APIRouter()
 
 @router.get("/api/chapters")
 async def api_chapters() -> dict:
+    from app.helpers.chapter_helpers import _get_chapter_metadata_entry
+
     files = _scan_chapter_files()
     active = get_active_project_dir()
-    story = load_story_config((active / "story.json") if active else None) or {}
+    if not active:
+        return {"chapters": []}
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
 
-    p_type = story.get("project_type", "novel")
-    chapters_data = []
-
-    if p_type == "series":
-        for book in story.get("books", []):
-            bid = book.get("id")
-            for c in book.get("chapters", []):
-                norm = _normalize_chapter_entry(c)
-                norm["book_id"] = bid
-                chapters_data.append(norm)
-    else:
-        chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
-
+    # Resulting objects
     result = []
-    used_metadata_ids = set()
-
     for i, (idx, p) in enumerate(files):
-        # Try to find metadata by filename matching if possible
-        fname = p.name
-        match_data = None
+        chap_entry = _get_chapter_metadata_entry(story, idx, p, files) or {}
 
-        # 1. Try filename match
-        match_data = next(
-            (
-                c
-                for c in chapters_data
-                if c.get("filename") == fname and id(c) not in used_metadata_ids
-            ),
-            None,
-        )
-
-        # 2. Simple heuristic: try index first, checking if filename matches or is empty
-        if not match_data and i < len(chapters_data):
-            candidate = chapters_data[i]
-            if id(candidate) not in used_metadata_ids:
-                if candidate.get("filename") == fname or not candidate.get("filename"):
-                    match_data = candidate
-
-        # 3. Fallback to index if still no match and valid index
-        if not match_data and i < len(chapters_data):
-            candidate = chapters_data[i]
-            if id(candidate) not in used_metadata_ids:
-                match_data = candidate
-
-        if match_data:
-            used_metadata_ids.add(id(match_data))
-
-        chap_entry = match_data or {"title": "", "summary": ""}
-
+        # Consistent fallback logic
         raw_title = (chap_entry.get("title") or "").strip()
-        if raw_title:
+        if raw_title and raw_title.lower() != "[object object]":
             title = raw_title
         else:
             # General fallback: pretty print the filename stem
@@ -88,7 +51,10 @@ async def api_chapters() -> dict:
                 title = stem.replace("_", " ").replace("-", " ").title()
 
         summary = (chap_entry.get("summary") or "").strip()
-        book_id = chap_entry.get("book_id")
+        book_id = chap_entry.get("book_id", chap_entry.get("_parent_book_id"))
+        if not book_id and story.get("project_type") == "series":
+            # Parent of chapters/ is the book folder
+            book_id = p.parent.parent.name
 
         result.append(
             {
@@ -104,66 +70,19 @@ async def api_chapters() -> dict:
 
 @router.get("/api/chapters/{chap_id}")
 async def api_chapter_content(chap_id: int = FastAPIPath(..., ge=0)) -> dict:
+    _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
-    # Find by numeric id
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    idx, path, pos = match
 
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
-    p_type = story.get("project_type", "novel")
 
-    # Robust metadata matching matching api_chapters()
-    chapters_data = []
-    if p_type == "series":
-        for book in story.get("books", []):
-            bid = book.get("id")
-            for c in book.get("chapters", []):
-                norm = _normalize_chapter_entry(c)
-                norm["book_id"] = bid
-                chapters_data.append(norm)
-    else:
-        chapters_data = [_normalize_chapter_entry(c) for c in story.get("chapters", [])]
+    from app.helpers.chapter_helpers import _get_chapter_metadata_entry
 
-    # Find the specific metadata for THIS file using the same logic as the list endpoint
-    used_metadata_ids = set()
-    chap_entry = None
-    for i, (f_idx, f_p) in enumerate(files):
-        fname = f_p.name
-        match_data = next(
-            (
-                c
-                for c in chapters_data
-                if c.get("filename") == fname and id(c) not in used_metadata_ids
-            ),
-            None,
-        )
-        if not match_data and i < len(chapters_data):
-            candidate = chapters_data[i]
-            if id(candidate) not in used_metadata_ids:
-                if candidate.get("filename") == fname or not candidate.get("filename"):
-                    match_data = candidate
-        if not match_data and i < len(chapters_data):
-            candidate = chapters_data[i]
-            if id(candidate) not in used_metadata_ids:
-                match_data = candidate
-
-        if match_data:
-            used_metadata_ids.add(id(match_data))
-
-        if f_idx == chap_id:
-            chap_entry = match_data
-            break
-
-    chap_entry = chap_entry or {"title": "", "summary": ""}
+    chap_entry = _get_chapter_metadata_entry(story, chap_id, path, files) or {}
 
     # Consistent fallback logic with the list endpoint
     raw_title = (chap_entry.get("title") or "").strip()
-    if raw_title:
+    if raw_title and raw_title.lower() != "[object object]":
         title = raw_title
     else:
         # General fallback: pretty print the filename stem
@@ -180,7 +99,7 @@ async def api_chapter_content(chap_id: int = FastAPIPath(..., ge=0)) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read chapter: {e}")
     return {
-        "id": idx,
+        "id": chap_id,
         "title": title,
         "filename": path.name,
         "content": content,
@@ -212,124 +131,15 @@ async def api_update_chapter_title(
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
-    files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    _, path, pos = match
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    p_type = story.get("project_type", "novel")
-
-    # Find and update the correct entry
-    target_entry = None
-    if p_type == "series":
-        book_id = path.parent.parent.name
-        book = next((b for b in story.get("books", []) if b.get("id") == book_id), None)
-        if not book:
-            return JSONResponse(
-                status_code=404, content={"ok": False, "detail": "Book not found"}
-            )
-
-        # Consistent matching logic
-        book_chapters = book.get("chapters", [])
-        book_files = [f for f in files if f[1].parent.parent.name == book_id]
-
-        used_ids = set()
-        for i, (f_idx, f_p) in enumerate(book_files):
-            fname = f_p.name
-            curr_match = next(
-                (
-                    c
-                    for c in book_chapters
-                    if isinstance(c, dict)
-                    and c.get("filename") == fname
-                    and id(c) not in used_ids
-                ),
-                None,
-            )
-            if not curr_match and i < len(book_chapters):
-                candidate = book_chapters[i]
-                if id(candidate) not in used_ids:
-                    if (
-                        not isinstance(candidate, dict)
-                        or not candidate.get("filename")
-                        or candidate.get("filename") == fname
-                    ):
-                        curr_match = candidate
-
-            if curr_match:
-                used_ids.add(id(curr_match))
-                if f_idx == chap_id:
-                    if not isinstance(curr_match, dict):
-                        # Convert to dict if it was a string
-                        idx_in_book = book_chapters.index(curr_match)
-                        curr_match = {
-                            "title": str(curr_match),
-                            "summary": "",
-                            "filename": fname,
-                        }
-                        book_chapters[idx_in_book] = curr_match
-                    target_entry = curr_match
-                    break
-    else:
-        chapters_data = story.get("chapters") or []
-        used_ids = set()
-        for i, (f_idx, f_p) in enumerate(files):
-            fname = f_p.name
-            curr_match = next(
-                (
-                    c
-                    for c in chapters_data
-                    if isinstance(c, dict)
-                    and c.get("filename") == fname
-                    and id(c) not in used_ids
-                ),
-                None,
-            )
-            if not curr_match and i < len(chapters_data):
-                candidate = chapters_data[i]
-                if id(candidate) not in used_ids:
-                    if (
-                        not isinstance(candidate, dict)
-                        or not candidate.get("filename")
-                        or candidate.get("filename") == fname
-                    ):
-                        curr_match = candidate
-
-            if curr_match:
-                used_ids.add(id(curr_match))
-                if f_idx == chap_id:
-                    if not isinstance(curr_match, dict):
-                        idx_in_root = chapters_data.index(curr_match)
-                        curr_match = {
-                            "title": str(curr_match),
-                            "summary": "",
-                            "filename": fname,
-                        }
-                        chapters_data[idx_in_root] = curr_match
-                    target_entry = curr_match
-                    break
-        story["chapters"] = chapters_data
-
-    if target_entry is not None:
-        target_entry["title"] = new_title_str
-    else:
-        # If we reached here, something is out of sync, fallback to creating an entry
-        # or doing nothing if we can't find where to put it.
-        pass
+    from app.projects import write_chapter_title
 
     try:
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to write story.json: {e}"},
-        )
+        write_chapter_title(chap_id, new_title_str)
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"ok": False, "detail": str(e)})
 
+    # Re-fetch for response
+    _, path, _ = _chapter_by_id_or_404(chap_id)
     return JSONResponse(
         status_code=200,
         content={
@@ -338,7 +148,6 @@ async def api_update_chapter_title(
                 "id": chap_id,
                 "title": new_title_str or path.name,
                 "filename": path.name,
-                "summary": (target_entry.get("summary") or "") if target_entry else "",
             },
         },
     )
@@ -421,13 +230,7 @@ async def api_update_chapter_content(
         )
     new_content = str(payload.get("content", ""))
 
-    files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    _, path, _ = match
+    _, path, _ = _chapter_by_id_or_404(chap_id)
 
     try:
         path.write_text(new_content, encoding="utf-8")
@@ -465,135 +268,21 @@ async def api_update_chapter_summary(
         )
     new_summary = str(payload.get("summary", "")).strip()
 
-    # Locate chapter by id
-    files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    _, path, pos = match
-
-    # Load and normalize story.json
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    p_type = story.get("project_type", "novel")
-
-    # Find and update the correct entry
-    target_entry = None
-    if p_type == "series":
-        book_id = path.parent.parent.name
-        book = next((b for b in story.get("books", []) if b.get("id") == book_id), None)
-        if not book:
-            return JSONResponse(
-                status_code=404, content={"ok": False, "detail": "Book not found"}
-            )
-
-        # Consistent matching logic
-        book_chapters = book.get("chapters", [])
-        book_files = [f for f in files if f[1].parent.parent.name == book_id]
-
-        used_ids = set()
-        for i, (f_idx, f_p) in enumerate(book_files):
-            fname = f_p.name
-            curr_match = next(
-                (
-                    c
-                    for c in book_chapters
-                    if isinstance(c, dict)
-                    and c.get("filename") == fname
-                    and id(c) not in used_ids
-                ),
-                None,
-            )
-            if not curr_match and i < len(book_chapters):
-                candidate = book_chapters[i]
-                if id(candidate) not in used_ids:
-                    if (
-                        not isinstance(candidate, dict)
-                        or not candidate.get("filename")
-                        or candidate.get("filename") == fname
-                    ):
-                        curr_match = candidate
-
-            if curr_match:
-                used_ids.add(id(curr_match))
-                if f_idx == chap_id:
-                    if not isinstance(curr_match, dict):
-                        # Convert to dict if it was a string
-                        idx_in_book = book_chapters.index(curr_match)
-                        curr_match = {
-                            "title": str(curr_match),
-                            "summary": "",
-                            "filename": fname,
-                        }
-                        book_chapters[idx_in_book] = curr_match
-                    target_entry = curr_match
-                    break
-    else:
-        chapters_data = story.get("chapters") or []
-        used_ids = set()
-        for i, (f_idx, f_p) in enumerate(files):
-            fname = f_p.name
-            curr_match = next(
-                (
-                    c
-                    for c in chapters_data
-                    if isinstance(c, dict)
-                    and c.get("filename") == fname
-                    and id(c) not in used_ids
-                ),
-                None,
-            )
-            if not curr_match and i < len(chapters_data):
-                candidate = chapters_data[i]
-                if id(candidate) not in used_ids:
-                    if (
-                        not isinstance(candidate, dict)
-                        or not candidate.get("filename")
-                        or candidate.get("filename") == fname
-                    ):
-                        curr_match = candidate
-
-            if curr_match:
-                used_ids.add(id(curr_match))
-                if f_idx == chap_id:
-                    if not isinstance(curr_match, dict):
-                        idx_in_root = chapters_data.index(curr_match)
-                        curr_match = {
-                            "title": str(curr_match),
-                            "summary": "",
-                            "filename": fname,
-                        }
-                        chapters_data[idx_in_root] = curr_match
-                    target_entry = curr_match
-                    break
-        story["chapters"] = chapters_data
-
-    if target_entry is not None:
-        target_entry["summary"] = new_summary
-    else:
-        # Fallback if synchronization failed
-        pass
+    from app.projects import write_chapter_summary
 
     try:
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to write story.json: {e}"},
-        )
+        write_chapter_summary(chap_id, new_summary)
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"ok": False, "detail": str(e)})
 
-    title_for_response = (
-        (target_entry.get("title") or path.name) if target_entry else path.name
-    )
+    # Re-fetch for response
+    _, path, _ = _chapter_by_id_or_404(chap_id)
     return JSONResponse(
         status_code=200,
         content={
             "ok": True,
             "chapter": {
                 "id": chap_id,
-                "title": title_for_response,
                 "filename": path.name,
                 "summary": new_summary,
             },
@@ -603,121 +292,19 @@ async def api_update_chapter_summary(
 
 @router.delete("/api/chapters/{chap_id}")
 async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)) -> JSONResponse:
-    """Delete a chapter file and update story.json.
-    Removes the file and shifts subsequent chapters' metadata.
-    """
-    active = get_active_project_dir()
-    if not active:
-        return JSONResponse(
-            status_code=400, content={"ok": False, "detail": "No active project"}
-        )
+    """Delete a chapter file and update story.json."""
+    from app.projects import delete_chapter
 
-    files = _scan_chapter_files()
-    match = next(
-        ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
-    )
-    if not match:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    _, path, pos = match
-
-    # Delete the file
     try:
-        path.unlink()
+        delete_chapter(chap_id)
+        return JSONResponse(status_code=200, content={"ok": True})
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"ok": False, "detail": str(e)})
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"ok": False, "detail": f"Failed to delete chapter file: {e}"},
+            content={"ok": False, "detail": f"Failed to delete chapter: {e}"},
         )
-
-    # Update story.json
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    p_type = story.get("project_type", "novel")
-
-    if p_type == "series":
-        book_id = path.parent.parent.name
-        book = next((b for b in story.get("books", []) if b.get("id") == book_id), None)
-        if book:
-            book_chapters = book.get("chapters", [])
-            book_files = [f for f in files if f[1].parent.parent.name == book_id]
-
-            # Find which entry to remove using identity matching
-            target_id = None
-            used_ids = set()
-            for i, (f_idx, f_p) in enumerate(book_files):
-                fname = f_p.name
-                curr_match = next(
-                    (
-                        c
-                        for c in book_chapters
-                        if isinstance(c, dict)
-                        and c.get("filename") == fname
-                        and id(c) not in used_ids
-                    ),
-                    None,
-                )
-                if not curr_match and i < len(book_chapters):
-                    candidate = book_chapters[i]
-                    if id(candidate) not in used_ids:
-                        if (
-                            not isinstance(candidate, dict)
-                            or not candidate.get("filename")
-                            or candidate.get("filename") == fname
-                        ):
-                            curr_match = candidate
-
-                if curr_match:
-                    used_ids.add(id(curr_match))
-                    if f_idx == chap_id:
-                        target_id = id(curr_match)
-                        break
-
-            if target_id:
-                book["chapters"] = [c for c in book_chapters if id(c) != target_id]
-    else:
-        chapters_data = story.get("chapters") or []
-        used_ids = set()
-        target_id = None
-        for i, (f_idx, f_p) in enumerate(files):
-            fname = f_p.name
-            curr_match = next(
-                (
-                    c
-                    for c in chapters_data
-                    if isinstance(c, dict)
-                    and c.get("filename") == fname
-                    and id(c) not in used_ids
-                ),
-                None,
-            )
-            if not curr_match and i < len(chapters_data):
-                candidate = chapters_data[i]
-                if id(candidate) not in used_ids:
-                    if (
-                        not isinstance(candidate, dict)
-                        or not candidate.get("filename")
-                        or candidate.get("filename") == fname
-                    ):
-                        curr_match = candidate
-
-            if curr_match:
-                used_ids.add(id(curr_match))
-                if f_idx == chap_id:
-                    target_id = id(curr_match)
-                    break
-
-        if target_id:
-            story["chapters"] = [c for c in chapters_data if id(c) != target_id]
-
-    try:
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to update story.json: {e}"},
-        )
-
-    return JSONResponse(status_code=200, content={"ok": True})
 
 
 @router.post("/api/chapters/reorder")
@@ -839,7 +426,11 @@ async def api_reorder_chapters(request: Request) -> JSONResponse:
         )
         if not target_book:
             return JSONResponse(
-                status_code=404, content={"ok": False, "detail": "Book not found"}
+                status_code=404,
+                content={
+                    "ok": False,
+                    "detail": f"Book with ID '{book_id}' not found. Please use the UUID from the project overview.",
+                },
             )
 
         # Get existing chapter IDs in this book to preserve those not in payload
@@ -852,6 +443,14 @@ async def api_reorder_chapters(request: Request) -> JSONResponse:
         for cid in chapter_ids:
             if cid in id_to_data:
                 final_ids.append(cid)
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "ok": False,
+                        "detail": f"Chapter ID {cid} not found in project. Available: {list(id_to_data.keys())}",
+                    },
+                )
         for cid in existing_ids:
             if cid not in final_ids:
                 final_ids.append(cid)
@@ -928,6 +527,18 @@ async def api_reorder_chapters(request: Request) -> JSONResponse:
         from app.helpers.chapter_helpers import _scan_chapter_files
 
         files = _scan_chapter_files()
+        all_ids = [f[0] for f in files]
+
+        # Validate provided IDs
+        for cid in chapter_ids:
+            if cid not in all_ids:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "ok": False,
+                        "detail": f"Chapter ID {cid} not found. Available chapter IDs: {all_ids}.",
+                    },
+                )
 
         # Correlate files with metadata using the SAME logic as api_chapters()
         triplets = []
