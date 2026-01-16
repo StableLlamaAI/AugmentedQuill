@@ -252,6 +252,7 @@ def initialize_project_dir(
             "books": [],  # Used for series
             "content_file": "content.md",  # Used for short-story
             "format": "markdown",
+            "version": 1,
             "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
             "created_at": _now_iso(),
             "tags": [],
@@ -320,6 +321,7 @@ def write_chapter_summary(chap_id: int, summary: str) -> None:
 
 def update_chapter_metadata(
     chap_id: int,
+    title: str = None,
     summary: str = None,
     notes: str = None,
     private_notes: str = None,
@@ -339,6 +341,11 @@ def update_chapter_metadata(
     target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
 
     if target_entry is not None:
+        if title is not None:
+            new_title_str = str(title).strip()
+            if new_title_str.lower() != "[object object]":
+                target_entry["title"] = new_title_str
+
         if summary is not None:
             target_entry["summary"] = summary.strip()
         if notes is not None:
