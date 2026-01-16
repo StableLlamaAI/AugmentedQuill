@@ -99,6 +99,7 @@ const App: React.FC = () => {
     updateStoryMetadata,
     updateStoryImageSettings,
     updateChapter,
+    updateBook,
     addChapter,
     deleteChapter,
     loadStory,
@@ -2104,6 +2105,8 @@ const App: React.FC = () => {
             title={story.title}
             summary={story.summary}
             tags={story.styleTags}
+            notes={story.notes}
+            private_notes={story.private_notes}
             onUpdate={updateStoryMetadata}
             theme={currentTheme}
           />
@@ -2114,6 +2117,8 @@ const App: React.FC = () => {
             currentChapterId={currentChapterId}
             onSelect={handleChapterSelect}
             onDelete={deleteChapter}
+            onUpdateChapter={updateChapter}
+            onUpdateBook={updateBook}
             onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
             onBookCreate={handleBookCreate}
             onBookDelete={handleBookDelete}

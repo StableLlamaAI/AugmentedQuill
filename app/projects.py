@@ -315,6 +315,17 @@ def write_chapter_content(chap_id: int, content: str) -> None:
 
 def write_chapter_summary(chap_id: int, summary: str) -> None:
     """Write summary to a chapter by its ID across all project types."""
+    update_chapter_metadata(chap_id, summary=summary)
+
+
+def update_chapter_metadata(
+    chap_id: int,
+    summary: str = None,
+    notes: str = None,
+    private_notes: str = None,
+    conflicts: list = None,
+) -> None:
+    """Update metadata fields for a chapter by its ID across all project types."""
     active = get_active_project_dir()
     if not active:
         raise ValueError("No active project")
@@ -328,7 +339,15 @@ def write_chapter_summary(chap_id: int, summary: str) -> None:
     target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
 
     if target_entry is not None:
-        target_entry["summary"] = summary.strip()
+        if summary is not None:
+            target_entry["summary"] = summary.strip()
+        if notes is not None:
+            target_entry["notes"] = notes
+        if private_notes is not None:
+            target_entry["private_notes"] = private_notes
+        if conflicts is not None:
+            target_entry["conflicts"] = conflicts
+
         import json
 
         story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
@@ -689,8 +708,14 @@ def create_new_book(title: str) -> str:
     return bid
 
 
-def update_book_metadata(book_id: str, title: str = None, summary: str = None) -> None:
-    """Update title or summary for a book in a series project."""
+def update_book_metadata(
+    book_id: str,
+    title: str = None,
+    summary: str = None,
+    notes: str = None,
+    private_notes: str = None,
+) -> None:
+    """Update title or metadata for a book in a series project."""
     active = get_active_project_dir()
     if not active:
         raise ValueError("No active project")
@@ -707,6 +732,10 @@ def update_book_metadata(book_id: str, title: str = None, summary: str = None) -
         target["title"] = title
     if summary is not None:
         target["summary"] = summary
+    if notes is not None:
+        target["notes"] = notes
+    if private_notes is not None:
+        target["private_notes"] = private_notes
 
     story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
 
@@ -736,7 +765,12 @@ def write_book_content(book_id: str, content: str) -> None:
     c_path.write_text(content, encoding="utf-8")
 
 
-def update_story_metadata(title: str = None, summary: str = None) -> None:
+def update_story_metadata(
+    title: str = None,
+    summary: str = None,
+    notes: str = None,
+    private_notes: str = None,
+) -> None:
     """Update general story metadata."""
     active = get_active_project_dir()
     if not active:
@@ -749,6 +783,10 @@ def update_story_metadata(title: str = None, summary: str = None) -> None:
         story["project_title"] = title
     if summary is not None:
         story["story_summary"] = summary
+    if notes is not None:
+        story["notes"] = notes
+    if private_notes is not None:
+        story["private_notes"] = private_notes
 
     story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
 

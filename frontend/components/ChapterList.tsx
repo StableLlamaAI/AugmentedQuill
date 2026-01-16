@@ -7,6 +7,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Chapter, Book, AppTheme } from '../types';
+import { MetadataEditorDialog } from './MetadataEditorDialog';
+import { api } from '../services/api';
 import {
   Plus,
   Trash2,
@@ -14,6 +16,7 @@ import {
   Folder,
   FolderOpen,
   Book as BookIcon,
+  Edit,
 } from 'lucide-react';
 
 interface ChapterListProps {
@@ -23,6 +26,8 @@ interface ChapterListProps {
   currentChapterId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onUpdateChapter?: (id: string, updates: Partial<Chapter>) => void;
+  onUpdateBook?: (id: string, updates: any) => void;
   onCreate: (bookId?: string) => void;
   onBookCreate?: (title: string) => void;
   onBookDelete?: (id: string) => void;
@@ -39,6 +44,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   currentChapterId,
   onSelect,
   onDelete,
+  onUpdateChapter,
+  onUpdateBook,
   onCreate,
   onBookCreate,
   onBookDelete,
@@ -242,6 +249,55 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   const titleActive = isLight ? 'text-brand-700' : 'text-brand-300';
   const titleInactive = isLight ? 'text-brand-gray-700' : 'text-brand-gray-400';
 
+  const [editingMetadata, setEditingMetadata] = useState<{
+    type: 'chapter' | 'book';
+    data: any;
+  } | null>(null);
+
+  const handleEditChapterMetadata = (e: React.MouseEvent, chapter: Chapter) => {
+    e.stopPropagation();
+    setEditingMetadata({ type: 'chapter', data: chapter });
+  };
+
+  const handleEditBookMetadata = (e: React.MouseEvent, book: Book) => {
+    e.stopPropagation();
+    setEditingMetadata({ type: 'book', data: book });
+  };
+
+  const saveMetadata = async (data: any) => {
+    if (!editingMetadata) return;
+    try {
+      if (editingMetadata.type === 'chapter') {
+        const id = parseInt(editingMetadata.data.id, 10);
+        await api.chapters.updateMetadata(id, {
+          summary: data.summary,
+          notes: data.notes,
+          private_notes: data.private_notes,
+          conflicts: data.conflicts,
+        });
+
+        if (onUpdateChapter) {
+          onUpdateChapter(editingMetadata.data.id, data);
+        } else {
+          if (data.title !== editingMetadata.data.title) {
+            await api.chapters.updateTitle(id, data.title || '');
+          }
+        }
+      } else {
+        const id = editingMetadata.data.id;
+        await api.books.updateBookMetadata(id, {
+          title: data.title,
+          summary: data.summary,
+          notes: data.notes,
+          private_notes: data.private_notes,
+        });
+        onUpdateBook?.(id, data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const renderChapter = (chapter: Chapter, index: number) => {
     const isDragging = draggedItem?.type === 'chapter' && draggedItem.id === chapter.id;
 
@@ -279,6 +335,13 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           </h3>
           <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
             <button
+              onClick={(e) => handleEditChapterMetadata(e, chapter)}
+              className="p-1 text-brand-gray-400 hover:text-blue-500"
+              title="Edit Metadata"
+            >
+              <Edit size={14} />
+            </button>
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(chapter.id);
@@ -297,7 +360,19 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   };
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 border-r ${bgClass}`}>
+    <div className={`flex flex-col flex-1 min-h-0 border-r relative ${bgClass}`}>
+      {editingMetadata && (
+        <MetadataEditorDialog
+          type={editingMetadata.type}
+          title={`Edit ${
+            editingMetadata.type === 'chapter' ? 'Chapter' : 'Book'
+          }: ${editingMetadata.data.title}`}
+          initialData={editingMetadata.data}
+          onSave={saveMetadata}
+          onClose={() => setEditingMetadata(null)}
+          theme={theme}
+        />
+      )}
       <div
         className={`p-4 border-b flex justify-between items-center sticky top-0 z-10 ${bgClass} ${
           isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
@@ -341,7 +416,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
-                    className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all duration-150 ${
+                    className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all duration-150 group ${
                       isLight
                         ? 'hover:bg-brand-gray-200/50'
                         : 'hover:bg-brand-gray-800/50'
@@ -360,6 +435,13 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center pointer-events-auto">
+                      <button
+                        onClick={(e) => handleEditBookMetadata(e, book)}
+                        className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
+                        title="Edit Book Metadata"
+                      >
+                        <Edit size={14} />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
