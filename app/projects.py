@@ -768,6 +768,7 @@ def write_book_content(book_id: str, content: str) -> None:
 def update_story_metadata(
     title: str = None,
     summary: str = None,
+    tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
 ) -> None:
@@ -783,6 +784,8 @@ def update_story_metadata(
         story["project_title"] = title
     if summary is not None:
         story["story_summary"] = summary
+    if tags is not None:
+        story["tags"] = tags
     if notes is not None:
         story["notes"] = notes
     if private_notes is not None:

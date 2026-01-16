@@ -58,11 +58,18 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       await api.story.updateMetadata({
         title: data.title,
         summary: data.summary,
+        tags: data.tags,
         notes: data.notes,
         private_notes: data.private_notes,
       });
-      onUpdate(data.title, data.summary, tags, data.notes, data.private_notes);
-      setMetadataModalOpen(false);
+      onUpdate(
+        data.title,
+        data.summary,
+        data.tags || [],
+        data.notes,
+        data.private_notes
+      );
+      // Do NOT close on save - this is called by autosave
     } catch (e) {
       console.error(e);
       alert('Failed to update story metadata');
@@ -78,6 +85,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           initialData={{
             title,
             summary,
+            tags,
             notes,
             private_notes,
           }}

@@ -33,6 +33,12 @@ interface ChapterListProps {
   onBookDelete?: (id: string) => void;
   onReorderChapters?: (chapterIds: number[], bookId?: string) => void;
   onReorderBooks?: (bookIds: string[]) => void;
+  onAiAction?: (
+    type: 'chapter' | 'book',
+    id: string,
+    action: 'write' | 'update' | 'rewrite',
+    onProgress?: (text: string) => void
+  ) => Promise<string | undefined>;
   theme?: AppTheme;
   onOpenImages?: () => void;
 }
@@ -51,6 +57,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onBookDelete,
   onReorderChapters,
   onReorderBooks,
+  onAiAction,
   theme = 'mixed',
   onOpenImages,
 }) => {
@@ -371,6 +378,17 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           onSave={saveMetadata}
           onClose={() => setEditingMetadata(null)}
           theme={theme}
+          onAiGenerate={
+            onAiAction && editingMetadata
+              ? (action, onProgress) =>
+                  onAiAction(
+                    editingMetadata.type,
+                    editingMetadata.data.id,
+                    action,
+                    onProgress
+                  )
+              : undefined
+          }
         />
       )}
       <div
@@ -416,7 +434,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
-                    className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all duration-150 group ${
+                    className={`flex flex-col p-2 rounded cursor-pointer transition-all duration-150 group ${
                       isLight
                         ? 'hover:bg-brand-gray-200/50'
                         : 'hover:bg-brand-gray-800/50'
@@ -427,49 +445,60 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     }`}
                     onClick={() => toggleBook(book.id)}
                   >
-                    <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
-                      {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
-                      <span>{book.title}</span>
-                      <span className="text-xs opacity-50 font-normal">
-                        ({bookChapters.length})
-                      </span>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
+                        {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
+                        <span>{book.title}</span>
+                        <span className="text-xs opacity-50 font-normal">
+                          ({bookChapters.length})
+                        </span>
+                      </div>
+                      <div className="flex items-center pointer-events-auto">
+                        <button
+                          onClick={(e) => handleEditBookMetadata(e, book)}
+                          className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
+                          title="Edit Book Metadata"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Create chapter in this book specifically?
+                            // Backend `create_project` -> `create_new_chapter` supports `book_id`.
+                            // We need to pass book_id to onCreate if supported.
+                            // Temporarily just onCreate() which defaults to last book.
+                            // We should probably expose book specific create.
+                            // For now, let's just allow global create or fail gracefully.
+                            // Wait, onCreate prop is generic.
+                            // User can move chapters later? No UI for that yet.
+                            // Ideally we pass book context.
+                          }}
+                          className={`p-1 opacity-0 hover:opacity-100 ${btnHover}`}
+                        >
+                          {/* Placeholder for specific add */}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Delete Book and all its chapters?')) {
+                              onBookDelete?.(book.id);
+                            }
+                          }}
+                          className="text-brand-gray-400 hover:text-red-500 p-1"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center pointer-events-auto">
-                      <button
-                        onClick={(e) => handleEditBookMetadata(e, book)}
-                        className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
-                        title="Edit Book Metadata"
+                    <div className="pl-6 mt-1.5 w-full">
+                      <p
+                        className={`text-xs line-clamp-2 pointer-events-none ${
+                          isLight ? 'text-brand-gray-500' : 'text-brand-gray-500'
+                        }`}
                       >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Create chapter in this book specifically?
-                          // Backend `create_project` -> `create_new_chapter` supports `book_id`.
-                          // We need to pass book_id to onCreate if supported.
-                          // Temporarily just onCreate() which defaults to last book.
-                          // We should probably expose book specific create.
-                          // For now, let's just allow global create or fail gracefully.
-                          // Wait, onCreate prop is generic.
-                          // User can move chapters later? No UI for that yet.
-                          // Ideally we pass book context.
-                        }}
-                        className={`p-1 opacity-0 hover:opacity-100 ${btnHover}`}
-                      >
-                        {/* Placeholder for specific add */}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm('Delete Book and all its chapters?')) {
-                            onBookDelete?.(book.id);
-                          }
-                        }}
-                        className="text-brand-gray-400 hover:text-red-500 p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        {book.summary || 'No summary available...'}
+                      </p>
                     </div>
                   </div>
 

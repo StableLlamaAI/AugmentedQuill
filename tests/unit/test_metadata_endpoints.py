@@ -97,6 +97,7 @@ class MetadataEndpointsTest(TestCase):
         payload = {
             "title": "New Title",
             "summary": "Main story summary",
+            "tags": ["Sci-Fi", "Noir"],
             "notes": "Story notes",
             "private_notes": "Story private notes",
         }
@@ -107,6 +108,7 @@ class MetadataEndpointsTest(TestCase):
         story_json = json.loads((self.proj_dir / "story.json").read_text())
         self.assertEqual(story_json["project_title"], "New Title")
         self.assertEqual(story_json["story_summary"], "Main story summary")
+        self.assertEqual(story_json["tags"], ["Sci-Fi", "Noir"])
         self.assertEqual(story_json["notes"], "Story notes")
         self.assertEqual(story_json["private_notes"], "Story private notes")
 

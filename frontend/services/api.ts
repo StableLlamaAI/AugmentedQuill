@@ -239,6 +239,23 @@ export const api = {
       if (!res.ok) throw new Error('Failed to reorder books');
       return res.json();
     },
+    updateBookMetadata: async (
+      bookId: string,
+      data: {
+        title?: string;
+        summary?: string;
+        notes?: string;
+        private_notes?: string;
+      }
+    ) => {
+      const res = await fetch(`${API_BASE}/books/${bookId}/metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update book metadata');
+      return res.json();
+    },
   },
   chapters: {
     list: async () => {
@@ -368,6 +385,7 @@ export const api = {
     updateMetadata: async (data: {
       title?: string;
       summary?: string;
+      tags?: string[];
       notes?: string;
       private_notes?: string;
     }) => {
@@ -377,23 +395,6 @@ export const api = {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to update story metadata');
-      return res.json();
-    },
-    updateBookMetadata: async (
-      bookId: string,
-      data: {
-        title?: string;
-        summary?: string;
-        notes?: string;
-        private_notes?: string;
-      }
-    ) => {
-      const res = await fetch(`${API_BASE}/books/${bookId}/metadata`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error('Failed to update book metadata');
       return res.json();
     },
   },

@@ -16,12 +16,18 @@ import {
   AlertTriangle,
   Loader2,
   Check,
+  Trash2,
+  Wand2,
+  RefreshCw,
+  PenLine,
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../types';
+import { Button } from './Button';
 
 interface MetadataParams {
   title?: string;
   summary?: string;
+  tags?: string[];
   notes?: string;
   private_notes?: string;
   conflicts?: Conflict[];
@@ -34,6 +40,10 @@ interface Props {
   onClose: () => void;
   title: string; // Dialog title
   theme?: AppTheme;
+  onAiGenerate?: (
+    action: 'write' | 'update' | 'rewrite',
+    onProgress?: (text: string) => void
+  ) => Promise<string | undefined>;
 }
 
 export function MetadataEditorDialog({
@@ -43,6 +53,7 @@ export function MetadataEditorDialog({
   onClose,
   title,
   theme = 'mixed',
+  onAiGenerate,
 }: Props) {
   const [data, setData] = useState<MetadataParams>(initialData);
   const [activeTab, setActiveTab] = useState<
@@ -50,6 +61,7 @@ export function MetadataEditorDialog({
   >('summary');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
 
   // Refs for autosave
   const onSaveRef = useRef(onSave);
@@ -137,6 +149,25 @@ export function MetadataEditorDialog({
     }
   };
 
+  const handleAiGenerate = async (action: 'write' | 'update' | 'rewrite') => {
+    if (!onAiGenerate) return;
+    setIsAiGenerating(true);
+    try {
+      // Pass a callback to update state as chunks arrive
+      const result = await onAiGenerate(action, (partialText) => {
+        setData((prev) => ({ ...prev, summary: partialText }));
+      });
+      // Ensure final result is set (though progress should have covered it)
+      if (result) {
+        setData((prev) => ({ ...prev, summary: result }));
+      }
+    } catch (e) {
+      console.error('AI Generation failed', e);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
   const isDarkMode = theme === 'dark' || theme === 'mixed';
 
   const modalContent = (
@@ -208,6 +239,22 @@ export function MetadataEditorDialog({
                 onChange={(e) => setData({ ...data, title: e.target.value })}
                 className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
               />
+
+              <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
+                Style Tags
+              </label>
+              <input
+                value={data.tags ? data.tags.join(', ') : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // Allow typing trailing comma by not filtering empty strings immediately if needed,
+                  // but simple split is fine for now.
+                  const tags = val.split(',').map((s) => s.trimStart());
+                  setData({ ...data, tags: tags });
+                }}
+                className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                placeholder="e.g. Noir, Sci-Fi, First-Person"
+              />
             </div>
 
             {/* Tabs */}
@@ -263,12 +310,64 @@ export function MetadataEditorDialog({
             {/* Content */}
             <div className="flex-1 p-4 min-h-[500px]">
               {activeTab === 'summary' && (
-                <textarea
-                  value={data.summary || ''}
-                  onChange={(e) => setData({ ...data, summary: e.target.value })}
-                  className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
-                  placeholder="Write a public summary..."
-                />
+                <div className="h-full flex flex-col gap-2">
+                  {onAiGenerate && (
+                    <div className="flex items-center gap-2 justify-end">
+                      {isAiGenerating ? (
+                        <span className="text-xs text-brand-500 flex items-center gap-1">
+                          <Loader2 size={12} className="animate-spin" /> Generating...
+                        </span>
+                      ) : (
+                        <>
+                          {!data.summary ? (
+                            <Button
+                              theme={theme}
+                              variant="secondary"
+                              size="sm"
+                              icon={<Wand2 size={14} />}
+                              onClick={() => handleAiGenerate('write')}
+                              disabled={isAiGenerating}
+                              className="text-xs py-1 h-7"
+                            >
+                              AI Write
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                theme={theme}
+                                variant="secondary"
+                                size="sm"
+                                icon={<RefreshCw size={14} />}
+                                onClick={() => handleAiGenerate('update')}
+                                disabled={isAiGenerating}
+                                className="text-xs py-1 h-7"
+                              >
+                                AI Update
+                              </Button>
+                              <Button
+                                theme={theme}
+                                variant="secondary"
+                                size="sm"
+                                icon={<PenLine size={14} />}
+                                onClick={() => handleAiGenerate('rewrite')}
+                                disabled={isAiGenerating}
+                                className="text-xs py-1 h-7"
+                              >
+                                AI Rewrite
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <textarea
+                    value={data.summary || ''}
+                    onChange={(e) => setData({ ...data, summary: e.target.value })}
+                    className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
+                    placeholder="Write a public summary..."
+                  />
+                </div>
               )}
               {activeTab === 'notes' && (
                 <div className="h-full flex flex-col">
@@ -298,12 +397,9 @@ export function MetadataEditorDialog({
               )}
               {activeTab === 'conflicts' && (
                 <div className="space-y-4">
-                  <button
-                    onClick={addConflict}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium"
-                  >
+                  <Button onClick={addConflict} variant="secondary" theme={theme}>
                     + Add Conflict
-                  </button>
+                  </Button>
                   <div className="space-y-4">
                     {conflicts.map((c, idx) => (
                       <div
@@ -314,26 +410,27 @@ export function MetadataEditorDialog({
                           <span className="font-semibold text-sm dark:text-brand-gray-300">
                             Conflict #{idx + 1}
                           </span>
-                          <div className="space-x-2">
+                          <div className="space-x-2 flex items-center">
                             <button
                               onClick={() => moveConflict(idx, 'up')}
                               disabled={idx === 0}
-                              className="disabled:opacity-30 dark:text-brand-gray-500"
+                              className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
                             >
                               ↑
                             </button>
                             <button
                               onClick={() => moveConflict(idx, 'down')}
                               disabled={idx === conflicts.length - 1}
-                              className="disabled:opacity-30 dark:text-brand-gray-500"
+                              className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
                             >
                               ↓
                             </button>
                             <button
                               onClick={() => deleteConflict(c.id)}
-                              className="text-red-500"
+                              className="text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
+                              title="Delete Conflict"
                             >
-                              DELETE
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </div>
@@ -346,10 +443,11 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.description}
+                              rows={2}
                               onChange={(e) =>
                                 updateConflict(c.id, 'description', e.target.value)
                               }
-                              className="w-full h-32 p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 text-sm font-sans transition-all resize-none"
+                              className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
                               placeholder="Describe the conflict..."
                             />
                           </div>
@@ -359,10 +457,11 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.resolution}
+                              rows={3}
                               onChange={(e) =>
                                 updateConflict(c.id, 'resolution', e.target.value)
                               }
-                              className="w-full h-32 p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 text-sm font-sans transition-all resize-none"
+                              className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
                               placeholder="How will this conflict be resolved?"
                             />
                           </div>

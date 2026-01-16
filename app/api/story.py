@@ -932,6 +932,7 @@ async def api_story_metadata(request: Request) -> JSONResponse:
 
     title = payload.get("title")
     summary = payload.get("summary")
+    tags = payload.get("tags")
     notes = payload.get("notes")
     private_notes = payload.get("private_notes")
 
@@ -939,7 +940,11 @@ async def api_story_metadata(request: Request) -> JSONResponse:
 
     try:
         update_story_metadata(
-            title=title, summary=summary, notes=notes, private_notes=private_notes
+            title=title,
+            summary=summary,
+            tags=tags,
+            notes=notes,
+            private_notes=private_notes,
         )
     except ValueError as e:
         return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})
