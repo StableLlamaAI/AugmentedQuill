@@ -21,6 +21,7 @@ import {
   Settings2,
   ChevronDown,
   ChevronRight,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from './Button';
 import { MarkdownView } from './MarkdownView';
@@ -62,6 +63,7 @@ interface ChatProps {
   onEditMessage: (id: string, newText: string) => void;
   onDeleteMessage: (id: string) => void;
   onUpdateSystemPrompt: (newPrompt: string) => void;
+  onSwitchProject?: (id: string) => void;
   theme?: AppTheme;
 }
 
@@ -75,6 +77,7 @@ export const Chat: React.FC<ChatProps> = ({
   onEditMessage,
   onDeleteMessage,
   onUpdateSystemPrompt,
+  onSwitchProject,
   theme = 'mixed',
 }) => {
   const [input, setInput] = useState('');
@@ -288,6 +291,43 @@ export const Chat: React.FC<ChatProps> = ({
                   {msg.role === 'tool' ? (
                     <CollapsibleToolSection title={`Tool Result: ${msg.name}`}>
                       <MarkdownView content={msg.text} />
+                      {msg.name === 'create_project' &&
+                        msg.text.includes('Project created:') &&
+                        onSwitchProject && (
+                          <div className="mt-2">
+                            <Button
+                              theme={theme}
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                // Extract project name from either raw text or JSON message field
+                                let projectName = '';
+                                try {
+                                  const parsed = JSON.parse(msg.text);
+                                  const innerMsg = parsed.message || '';
+                                  const match = innerMsg.match(/Project created: (.+)/);
+                                  if (match) projectName = match[1];
+                                } catch (e) {
+                                  /* ignore */
+                                }
+
+                                if (!projectName) {
+                                  const match = msg.text.match(
+                                    /Project created: ([^"}\s]+)/
+                                  );
+                                  if (match) projectName = match[1];
+                                }
+
+                                if (projectName) {
+                                  onSwitchProject(projectName.trim());
+                                }
+                              }}
+                              icon={<ArrowRight size={14} />}
+                            >
+                              Switch to New Project
+                            </Button>
+                          </div>
+                        )}
                     </CollapsibleToolSection>
                   ) : (
                     <>

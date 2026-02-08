@@ -1830,6 +1830,8 @@ async def _exec_chat_tool(
                     "content": _json.dumps({"error": "Project name is required"}),
                 }
             ok, msg = create_project(p_name, p_type)
+            if ok:
+                mutations["story_changed"] = True
             return {
                 "role": "tool",
                 "tool_call_id": call_id,
@@ -1868,6 +1870,8 @@ async def _exec_chat_tool(
                     ),
                 }
             ok, msg = delete_project(p_name)
+            if ok:
+                mutations["story_changed"] = True
             return {
                 "role": "tool",
                 "tool_call_id": call_id,

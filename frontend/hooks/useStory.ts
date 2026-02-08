@@ -71,8 +71,12 @@ export const useStory = () => {
             );
             if (matching) {
               newSelection = matching.id;
+            } else {
+              newSelection = null; // Reset if not found in new project
             }
           }
+        } else if (chapters.length > 0) {
+          newSelection = null;
         }
 
         const newStory: StoryState = {
@@ -92,6 +96,7 @@ export const useStory = () => {
         };
 
         setStory(newStory);
+        setCurrentChapterId(newSelection);
       }
     } catch (e) {
       console.error('Failed to refresh story', e);

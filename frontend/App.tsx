@@ -295,26 +295,27 @@ const App: React.FC = () => {
     fetchPrompts();
   }, [story.id]); // Re-fetch when project changes
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const data = await api.projects.list();
-        if (data.available) {
-          setProjects(
-            data.available.map((p: any) => ({
-              id: p.name,
-              title: p.title || p.name,
-              type: p.type || 'novel',
-              updatedAt: Date.now(),
-            }))
-          );
-        }
-      } catch (e) {
-        console.error('Failed to fetch projects', e);
+  const refreshProjects = useCallback(async () => {
+    try {
+      const data = await api.projects.list();
+      if (data.available) {
+        setProjects(
+          data.available.map((p: any) => ({
+            id: p.name,
+            title: p.title || p.name,
+            type: p.type || 'novel',
+            updatedAt: Date.now(),
+          }))
+        );
       }
-    };
-    fetchProjects();
+    } catch (e) {
+      console.error('Failed to fetch projects', e);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
 
   // Editor Appearance Settings
   const [editorSettings, setEditorSettings] = useState<EditorSettings>(() => {
@@ -494,13 +495,21 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (projects.length <= 1) return;
-    const newProjects = projects.filter((p) => p.id !== id);
-    setProjects(newProjects);
-    localStorage.removeItem(`project_${id}`);
-    if (id === story.id) {
-      handleLoadProject(newProjects[0].id);
+
+    try {
+      await api.projects.delete(id);
+      const newProjects = projects.filter((p) => p.id !== id);
+      setProjects(newProjects);
+      localStorage.removeItem(`project_${id}`);
+
+      if (id === story.id) {
+        handleLoadProject(newProjects[0].id);
+      }
+    } catch (e: any) {
+      console.error('Failed to delete project', e);
+      alert(`Failed to delete project: ${e.message}`);
     }
   };
 
@@ -650,6 +659,7 @@ const App: React.FC = () => {
           setChatMessages([...currentHistory]);
 
           if (toolResponse.mutations?.story_changed) {
+            await refreshProjects();
             await refreshStory();
           }
 
@@ -1250,6 +1260,7 @@ const App: React.FC = () => {
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
         onConvertProject={handleConvertProject}
+        onRefreshProjects={refreshProjects}
         activeProjectType={story.projectType}
         activeProjectStats={{
           chapterCount: story.chapters.length,
@@ -2246,6 +2257,7 @@ const App: React.FC = () => {
               onEditMessage={handleEditMessage}
               onDeleteMessage={handleDeleteMessage}
               onUpdateSystemPrompt={setSystemPrompt}
+              onSwitchProject={handleLoadProject}
               theme={currentTheme}
             />
           </div>

@@ -524,7 +524,7 @@ def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
         return False, "Failed to initialize project"
 
     set_active_project(p)
-    return True, "Project created"
+    return True, f"Project created: {p.name}"
 
 
 def select_project(name: str) -> Tuple[bool, str]:
@@ -554,7 +554,7 @@ def select_project(name: str) -> Tuple[bool, str]:
         _ensure_dir(root)
         initialize_project_dir(p, project_title=name, project_type="novel")
         set_active_project(p)
-        return True, "Project created"
+        return True, f"Project created: {p.name}"
     if p.is_dir():
         info = validate_project_dir(p)
         if info.is_valid:

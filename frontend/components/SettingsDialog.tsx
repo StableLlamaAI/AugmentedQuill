@@ -34,6 +34,7 @@ interface SettingsDialogProps {
   onRenameProject: (id: string, newName: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
+  onRefreshProjects: () => void;
   activeProjectType?: 'short-story' | 'novel' | 'series';
   activeProjectStats?: {
     chapterCount: number;
@@ -75,6 +76,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onRenameProject,
   onConvertProject,
   onImportProject,
+  onRefreshProjects,
   activeProjectType,
   activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
@@ -550,6 +552,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 onRenameProject={onRenameProject}
                 onConvertProject={onConvertProject}
                 onImportProject={onImportProject}
+                onRefreshProjects={onRefreshProjects}
                 onCloseDialog={onClose}
                 activeProjectType={activeProjectType}
                 activeProjectStats={activeProjectStats}
