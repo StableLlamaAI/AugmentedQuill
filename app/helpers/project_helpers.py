@@ -99,6 +99,7 @@ def _project_overview() -> dict:
     base_info = {
         "project_title": story.get("project_title") or (active.name if active else ""),
         "project_type": p_type,
+        "sourcebook_entry_count": len(story.get("sourcebook", {})),
     }
 
     if p_type == "short-story":

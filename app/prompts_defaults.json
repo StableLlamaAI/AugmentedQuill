@@ -68,6 +68,8 @@
       "- get_chapter_metadata / update_chapter_metadata: Manage title, summary, notes, and conflicts for a chapter.",
       "- get_chapter_summaries: List all chapter summaries at once.",
       "- get_chapter_content / write_chapter_content: Read or set the full text of a chapter.",
+      "- search_sourcebook / get_sourcebook_entry: Access information about characters, locations, and world-building.",
+      "- create_sourcebook_entry / update_sourcebook_entry: Add or modify knowledge in the sourcebook.",
       "- sync_summary: Auto-generate a summary for a chapter from its content.",
       "- list_images / generate_image_description / create_image_placeholder: Manage project visuals.",
       "",

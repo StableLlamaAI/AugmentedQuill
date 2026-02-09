@@ -94,7 +94,7 @@ def sb_create(
         return {"error": "Invalid description: Description must be a string."}
 
     if not category or not isinstance(category, str) or not category.strip():
-        return {"error": "Invalid category: Category must be a non-empty string."}
+        category = "General"
 
     if synonyms is None or not isinstance(synonyms, list):
         return {"error": "Invalid synonyms: Synonyms must be a list of strings."}
