@@ -77,6 +77,16 @@ export interface ChatMessage {
   traceback?: string;
 }
 
+export interface ChatSession {
+  id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  messages?: ChatMessage[];
+  systemPrompt?: string;
+  isIncognito?: boolean;
+}
+
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
 export type AppTheme = 'light' | 'mixed' | 'dark';
@@ -108,11 +118,26 @@ export interface LLMConfig {
   };
 }
 
+export const DEFAULT_LLM_CONFIG: LLMConfig = {
+  id: 'default',
+  name: 'OpenAI (Default)',
+  baseUrl: 'https://api.openai.com/v1',
+  apiKey: '',
+  timeout: 30000,
+  modelId: 'gpt-4o',
+  temperature: 0.7,
+  topP: 0.95,
+  prompts: { system: '', continuation: '', summary: '' },
+};
+
 export interface AppSettings {
   providers: LLMConfig[];
   activeWritingProviderId: string;
   activeChatProviderId: string;
   activeEditingProviderId: string;
+  editor: EditorSettings;
+  sidebarOpen: boolean;
+  activeTab: string;
 }
 
 export interface ProjectMetadata {

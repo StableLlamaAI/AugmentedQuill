@@ -6,7 +6,7 @@
 // (at your option) any later version.
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, AppTheme } from '../types';
+import { ChatMessage, AppTheme, ChatSession } from '../types';
 import {
   Send,
   Loader2,
@@ -22,6 +22,9 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowRight,
+  Plus,
+  Ghost,
+  History,
 } from 'lucide-react';
 import { Button } from './Button';
 import { MarkdownView } from './MarkdownView';
@@ -65,6 +68,13 @@ interface ChatProps {
   onUpdateSystemPrompt: (newPrompt: string) => void;
   onSwitchProject?: (id: string) => void;
   theme?: AppTheme;
+  sessions: ChatSession[];
+  currentSessionId: string | null;
+  isIncognito: boolean;
+  onSelectSession: (id: string) => void;
+  onNewSession: (incognito?: boolean) => void;
+  onDeleteSession: (id: string) => void;
+  onToggleIncognito: (val: boolean) => void;
 }
 
 export const Chat: React.FC<ChatProps> = ({
@@ -79,14 +89,25 @@ export const Chat: React.FC<ChatProps> = ({
   onUpdateSystemPrompt,
   onSwitchProject,
   theme = 'mixed',
+  sessions,
+  currentSessionId,
+  isIncognito,
+  onSelectSession,
+  onNewSession,
+  onDeleteSession,
+  onToggleIncognito,
 }) => {
   const [input, setInput] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
   const isLight = theme === 'light';
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
@@ -103,23 +124,63 @@ export const Chat: React.FC<ChatProps> = ({
     ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
     : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      // Consider "at bottom" if within 100px of the actual bottom to be more forgiving
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isAtBottomRef.current = isAtBottom;
+    }
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (isAtBottomRef.current) {
+      scrollToBottom();
+    }
   }, [messages, isLoading, editingMessageId]);
+
+  // Always scroll to bottom on session switch
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    scrollToBottom('auto');
+  }, [currentSessionId]);
 
   useEffect(() => {
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle textarea auto-resize
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const maxHeight = window.innerHeight * 0.5;
+      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [input]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (input.trim() && !isLoading) {
       onSendMessage(input.trim());
       setInput('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      // Force scroll to bottom on user message
+      isAtBottomRef.current = true;
+      setTimeout(() => scrollToBottom('auto'), 0);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -156,22 +217,134 @@ export const Chat: React.FC<ChatProps> = ({
       <div
         className={`p-4 border-b flex items-center justify-between ${headerBg} ${borderMain}`}
       >
-        <div className="flex items-center space-x-2">
-          <Sparkles className="text-blue-600" size={20} />
-          <h2 className="font-semibold">Writing Partner</h2>
+        <div className="flex items-center space-x-2 overflow-hidden">
+          <Sparkles className="text-blue-600 shrink-0" size={20} />
+          <h2 className="font-semibold truncate">
+            {isIncognito ? 'Incognito Chat' : 'Writing Partner'}
+          </h2>
         </div>
-        <button
-          onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-          className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
-            showSystemPrompt
-              ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
-              : 'text-brand-gray-500'
-          }`}
-          title="Chat Settings"
-        >
-          <Settings2 size={16} />
-        </button>
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => {
+              if (currentSessionId) {
+                onDeleteSession(currentSessionId);
+              }
+            }}
+            className="p-1.5 rounded hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
+            title="Delete Current Chat"
+            disabled={!currentSessionId}
+          >
+            <Trash2 size={16} />
+          </button>
+          <button
+            onClick={() => onNewSession(false)}
+            className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
+            title="New Chat"
+          >
+            <Plus size={16} />
+          </button>
+          <button
+            onClick={() => onNewSession(true)}
+            className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
+              isIncognito ? 'text-purple-500 bg-purple-500/10' : 'text-brand-gray-500'
+            }`}
+            title="Incognito Chat (Not Saved)"
+          >
+            <Ghost size={16} />
+          </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
+              showHistory
+                ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
+                : 'text-brand-gray-500'
+            }`}
+            title="Chat History"
+          >
+            <History size={16} />
+          </button>
+          <button
+            onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+            className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
+              showSystemPrompt
+                ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
+                : 'text-brand-gray-500'
+            }`}
+            title="Chat Settings"
+          >
+            <Settings2 size={16} />
+          </button>
+        </div>
       </div>
+
+      {showHistory && (
+        <div
+          className={`p-4 border-b max-h-60 overflow-y-auto ${headerBg} ${borderMain}`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-brand-gray-500">
+              Recent Chats
+            </h3>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="text-brand-gray-500 hover:text-brand-gray-700"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="space-y-1">
+            {sessions.length === 0 && (
+              <div className="text-xs text-brand-gray-500 py-2 italic">
+                No saved chats yet.
+              </div>
+            )}
+            {sessions.map((s) => {
+              const isSIncognito = s.isIncognito;
+              return (
+                <div
+                  key={s.id}
+                  className={`group flex items-center justify-between p-2 rounded text-sm cursor-pointer transition-colors ${
+                    currentSessionId === s.id
+                      ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600 font-medium'
+                      : 'hover:bg-brand-gray-200/50 dark:hover:bg-brand-gray-800/50'
+                  }`}
+                  onClick={() => {
+                    onSelectSession(s.id);
+                    setShowHistory(false);
+                  }}
+                >
+                  <div className="flex flex-col overflow-hidden">
+                    <div className="flex items-center space-x-1">
+                      {isSIncognito && (
+                        <Ghost size={12} className="text-purple-500 shrink-0" />
+                      )}
+                      <span className="truncate">{s.name}</span>
+                    </div>
+                    <span className="text-[10px] text-brand-gray-500">
+                      {isSIncognito
+                        ? 'Not saved to disk'
+                        : s.updated_at
+                          ? new Date(s.updated_at).toLocaleString()
+                          : 'Unknown date'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm('Delete this chat?')) {
+                        onDeleteSession(s.id);
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 hover:text-red-600 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {showSystemPrompt && (
         <div
@@ -208,6 +381,8 @@ export const Chat: React.FC<ChatProps> = ({
       )}
 
       <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
         className={`flex-1 overflow-y-auto p-4 space-y-4 ${
           isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
@@ -467,18 +642,20 @@ export const Chat: React.FC<ChatProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="relative">
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Type your instruction..."
-            className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border ${inputBg}`}
+            className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border resize-none overflow-y-auto ${inputBg}`}
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-gray-200 dark:hover:bg-brand-gray-700 rounded-full transition-colors"
+            className="absolute right-2 bottom-2 p-2 text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-gray-200 dark:hover:bg-brand-gray-700 rounded-full transition-colors"
             title="Send Message (CHAT model)"
           >
             <Send size={18} />

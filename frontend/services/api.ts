@@ -388,7 +388,6 @@ export const api = {
       tags?: string[];
       notes?: string;
       private_notes?: string;
-      conflicts?: any[];
     }) => {
       const res = await fetch(`${API_BASE}/story/metadata`, {
         method: 'POST',
@@ -414,6 +413,32 @@ export const api = {
     },
   },
   chat: {
+    list: async () => {
+      const res = await fetch(`${API_BASE}/chats`);
+      if (!res.ok) throw new Error('Failed to list chats');
+      return res.json();
+    },
+    load: async (id: string) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`);
+      if (!res.ok) throw new Error('Failed to load chat');
+      return res.json();
+    },
+    save: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to save chat');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete chat');
+      return res.json();
+    },
     executeTools: async (payload: {
       messages: any[];
       active_chapter_id?: number;

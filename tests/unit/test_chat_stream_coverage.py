@@ -516,6 +516,42 @@ class TestChatStreamCoverage(TestCase):
             if msg.get("tool_calls"):
                 self.assertIsNone(msg.get("content"))
 
+    def test_llm_resolve_credentials_with_name(self):
+        from app import llm
+
+        cfg = {
+            "openai": {
+                "selected": "model-a",
+                "models": [
+                    {
+                        "name": "model-a",
+                        "base_url": "http://a",
+                        "api_key": "ka",
+                        "model": "gpt-a",
+                    },
+                    {
+                        "name": "model-b",
+                        "base_url": "http://b",
+                        "api_key": "kb",
+                        "model": "gpt-b",
+                    },
+                ],
+            }
+        }
+
+        with patch("app.llm.load_machine_config", return_value=cfg):
+            # Test default (selected = model-a)
+            url, key, mod, to = llm.resolve_openai_credentials({}, model_type="CHAT")
+            self.assertEqual(url, "http://a")
+            self.assertEqual(mod, "gpt-a")
+
+            # Test explicit model_name
+            url, key, mod, to = llm.resolve_openai_credentials(
+                {"model_name": "model-b"}, model_type="CHAT"
+            )
+            self.assertEqual(url, "http://b")
+            self.assertEqual(mod, "gpt-b")
+
     def _parse_sse_events(self, text):
         events = []
         for line in text.splitlines():

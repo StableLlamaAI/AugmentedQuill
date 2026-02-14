@@ -938,7 +938,6 @@ async def api_story_metadata(request: Request) -> JSONResponse:
     tags = payload.get("tags")
     notes = payload.get("notes")
     private_notes = payload.get("private_notes")
-    conflicts = payload.get("conflicts")
 
     from app.projects import update_story_metadata
 
@@ -949,7 +948,6 @@ async def api_story_metadata(request: Request) -> JSONResponse:
             tags=tags,
             notes=notes,
             private_notes=private_notes,
-            conflicts=conflicts,
         )
     except ValueError as e:
         return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})

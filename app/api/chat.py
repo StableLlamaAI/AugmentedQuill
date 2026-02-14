@@ -27,6 +27,10 @@ from app.projects import (
     read_book_content,
     write_book_content,
     update_book_metadata,
+    list_chats,
+    load_chat,
+    save_chat,
+    delete_chat,
 )
 from app.helpers.project_helpers import _project_overview, _chapter_content_slice
 from app.helpers.chapter_helpers import (
@@ -390,6 +394,154 @@ def _parse_tool_syntax(content: str) -> tuple[str, list[dict] | None]:
     return _sanitize_analysis_prefix(clean_content), parsed_tool_calls
 
 
+READING_TOOL_NAMES = {
+    "get_project_overview",
+    "get_story_summary",
+    "get_story_metadata",
+    "get_story_tags",
+    "read_story_content",
+    "get_book_metadata",
+    "read_book_content",
+    "search_sourcebook",
+    "get_sourcebook_entry",
+    "get_chapter_metadata",
+    "list_images",
+    "get_chapter_summaries",
+    "get_chapter_content",
+    "get_chapter_heading",
+    "get_chapter_summary",
+    "list_projects",
+}
+
+MODIFYING_TOOL_NAMES = {
+    "update_story_summary",
+    "update_story_metadata",
+    "set_story_tags",
+    "write_story_content",
+    "update_book_metadata",
+    "write_book_content",
+    "create_sourcebook_entry",
+    "update_sourcebook_entry",
+    "delete_sourcebook_entry",
+    "update_chapter_metadata",
+    "add_chapter_conflict",
+    "update_chapter_conflict",
+    "remove_chapter_conflict",
+    "reorder_chapter_conflicts",
+    "generate_image_description",
+    "create_image_placeholder",
+    "set_image_metadata",
+    "write_chapter_content",
+    "write_chapter_summary",
+    "create_new_chapter",
+    "sync_summary",
+    "write_chapter",
+    "continue_chapter",
+    "sync_story_summary",
+    "write_story_summary",
+    "write_chapter_heading",
+    "create_project",
+    "delete_project",
+    "delete_book",
+    "delete_chapter",
+    "create_new_book",
+    "change_project_type",
+    "reorder_chapters",
+    "reorder_books",
+}
+
+
+def _filter_chat_history(messages: list[dict]) -> list[dict]:
+    """Optimize chat history by removing invalidated reading calls and modifying calls.
+
+    Strategy:
+    - If a modifying tool is encountered, all previous reading tool calls and responses are removed.
+    - Also binary pairs of (assistant with tool_call, tool response) for modifying tools are removed.
+    """
+    indices_to_remove = set()
+    tcalls_to_remove = set()  # (msg_idx, tcall_id)
+
+    reading_calls = []  # List of (msg_idx, tcall_id)
+    reading_responses = []  # List of msg_idx
+
+    # Map tool_call_id to its name for later reference in tool responses
+    tcall_id_to_name = {}
+
+    for i, msg in enumerate(messages):
+        role = msg.get("role")
+
+        if role == "assistant":
+            tcalls = msg.get("tool_calls") or []
+            for tc in tcalls:
+                tid = tc.get("id")
+                func = tc.get("function") or {}
+                name = func.get("name")
+                if tid:
+                    tcall_id_to_name[tid] = name
+
+                if name in MODIFYING_TOOL_NAMES:
+                    # Mark THIS call for removal
+                    tcalls_to_remove.add((i, tid))
+
+                    # Mark ALL PREVIOUS reading calls and responses for removal
+                    for r_msg_idx, r_tid in reading_calls:
+                        tcalls_to_remove.add((r_msg_idx, r_tid))
+                    for r_resp_idx in reading_responses:
+                        indices_to_remove.add(r_resp_idx)
+
+                    # Reset reading tracking
+                    reading_calls = []
+                    reading_responses = []
+
+                elif name in READING_TOOL_NAMES:
+                    reading_calls.append((i, tid))
+
+        elif role == "tool":
+            tid = msg.get("tool_call_id")
+            name = msg.get("name") or tcall_id_to_name.get(tid)
+
+            if name in MODIFYING_TOOL_NAMES:
+                indices_to_remove.add(i)
+                # Mark ALL PREVIOUS reading calls and responses for removal
+                for r_msg_idx, r_tid in reading_calls:
+                    tcalls_to_remove.add((r_msg_idx, r_tid))
+                for r_resp_idx in reading_responses:
+                    indices_to_remove.add(r_resp_idx)
+
+                # Reset reading tracking
+                reading_calls = []
+                reading_responses = []
+            elif name in READING_TOOL_NAMES:
+                reading_responses.append(i)
+
+    # Build final list
+    result = []
+    for i, msg in enumerate(messages):
+        if i in indices_to_remove:
+            continue
+
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            new_tcalls = [
+                tc
+                for tc in msg["tool_calls"]
+                if (i, tc.get("id")) not in tcalls_to_remove
+            ]
+            if not new_tcalls:
+                if not msg.get("content"):
+                    continue
+                new_msg = msg.copy()
+                del new_msg["tool_calls"]
+                result.append(new_msg)
+            else:
+                new_msg = msg.copy()
+                new_msg["tool_calls"] = new_tcalls
+                result.append(new_msg)
+        else:
+            result.append(msg)
+
+    return result
+
+
 STORY_TOOLS = [
     {
         "type": "function",
@@ -427,24 +579,6 @@ STORY_TOOLS = [
                         "items": {"type": "string"},
                         "description": "New style tags.",
                     },
-                    "conflicts": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "description": {
-                                    "type": "string",
-                                    "description": "Description of the conflict.",
-                                },
-                                "resolution": {
-                                    "type": "string",
-                                    "description": "Planned resolution for the conflict.",
-                                },
-                            },
-                            "required": ["description", "resolution"],
-                        },
-                        "description": "List of story-level conflicts.",
-                    },
                 },
                 "required": [],
             },
@@ -471,7 +605,7 @@ STORY_TOOLS = [
         "type": "function",
         "function": {
             "name": "update_chapter_metadata",
-            "description": "Update the title, summary, notes, or conflicts of a chapter.",
+            "description": "Update the title, summary, or notes of a chapter. For conflicts, use add_chapter_conflict, update_chapter_conflict, remove_chapter_conflict, or reorder_chapter_conflicts for better control.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -489,26 +623,97 @@ STORY_TOOLS = [
                         "type": "string",
                         "description": "Internal (private) notes.",
                     },
-                    "conflicts": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "description": {
-                                    "type": "string",
-                                    "description": "Description of the conflict.",
-                                },
-                                "resolution": {
-                                    "type": "string",
-                                    "description": "How the conflict is resolved or planned to be resolved.",
-                                },
-                            },
-                            "required": ["description", "resolution"],
-                        },
-                        "description": "List of conflicts for the chapter.",
-                    },
                 },
                 "required": ["chap_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_chapter_conflict",
+            "description": "Add a new conflict to a chapter. Selective edit: only one or a few can be added at a time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chap_id": {"type": "integer", "description": "Chapter ID."},
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the conflict.",
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "description": "Planned resolution.",
+                    },
+                    "index": {
+                        "type": "integer",
+                        "description": "Optional index for insertion (defaults to end).",
+                    },
+                },
+                "required": ["chap_id", "description", "resolution"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_chapter_conflict",
+            "description": "Update an existing conflict in a chapter by its index.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chap_id": {"type": "integer", "description": "Chapter ID."},
+                    "index": {
+                        "type": "integer",
+                        "description": "Index of the conflict to update.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description (optional).",
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "description": "New resolution (optional).",
+                    },
+                },
+                "required": ["chap_id", "index"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_chapter_conflict",
+            "description": "Remove a conflict from a chapter by its index.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chap_id": {"type": "integer", "description": "Chapter ID."},
+                    "index": {
+                        "type": "integer",
+                        "description": "Index of the conflict to remove.",
+                    },
+                },
+                "required": ["chap_id", "index"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reorder_chapter_conflicts",
+            "description": "Reorder conflicts by providing the new list of indices.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chap_id": {"type": "integer", "description": "Chapter ID."},
+                    "new_indices": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "The new sequence of old indices.",
+                    },
+                },
+                "required": ["chap_id", "new_indices"],
             },
         },
     },
@@ -892,7 +1097,6 @@ async def _exec_chat_tool(
             notes = args_obj.get("notes")
             private_notes = args_obj.get("private_notes")
             tags = args_obj.get("tags")
-            conflicts = args_obj.get("conflicts")
 
             try:
                 update_story_metadata(
@@ -901,7 +1105,6 @@ async def _exec_chat_tool(
                     notes=notes,
                     private_notes=private_notes,
                     tags=tags,
-                    conflicts=conflicts,
                 )
                 mutations["story_changed"] = True
                 return {
@@ -1164,13 +1367,6 @@ async def _exec_chat_tool(
             summary = args_obj.get("summary")
             notes = args_obj.get("notes")
             private_notes = args_obj.get("private_notes")
-            conflicts = args_obj.get("conflicts")
-
-            if isinstance(conflicts, str):
-                try:
-                    conflicts = _json.loads(conflicts)
-                except Exception:
-                    pass
 
             if not isinstance(chap_id, int):
                 return {
@@ -1189,7 +1385,6 @@ async def _exec_chat_tool(
                     summary=summary,
                     notes=notes,
                     private_notes=private_notes,
-                    conflicts=conflicts,
                 )
                 mutations["story_changed"] = True
                 return {
@@ -1199,6 +1394,98 @@ async def _exec_chat_tool(
                     "content": _json.dumps({"ok": True}),
                 }
 
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
+
+        if name == "add_chapter_conflict":
+            chap_id = args_obj.get("chap_id")
+            description = args_obj.get("description")
+            resolution = args_obj.get("resolution")
+            index = args_obj.get("index")
+            try:
+                from app.projects import add_chapter_conflict
+
+                add_chapter_conflict(chap_id, description, resolution, index)
+                mutations["story_changed"] = True
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"ok": True}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
+
+        if name == "update_chapter_conflict":
+            chap_id = args_obj.get("chap_id")
+            index = args_obj.get("index")
+            description = args_obj.get("description")
+            resolution = args_obj.get("resolution")
+            try:
+                from app.projects import update_chapter_conflict
+
+                update_chapter_conflict(chap_id, index, description, resolution)
+                mutations["story_changed"] = True
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"ok": True}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
+
+        if name == "remove_chapter_conflict":
+            chap_id = args_obj.get("chap_id")
+            index = args_obj.get("index")
+            try:
+                from app.projects import remove_chapter_conflict
+
+                remove_chapter_conflict(chap_id, index)
+                mutations["story_changed"] = True
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"ok": True}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
+
+        if name == "reorder_chapter_conflicts":
+            chap_id = args_obj.get("chap_id")
+            new_indices = args_obj.get("new_indices")
+            try:
+                from app.projects import reorder_chapter_conflicts
+
+                reorder_chapter_conflicts(chap_id, new_indices)
+                mutations["story_changed"] = True
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"ok": True}),
+                }
             except Exception as e:
                 return {
                     "role": "tool",
@@ -2244,6 +2531,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     if not req_messages:
         raise HTTPException(status_code=400, detail="messages array is required")
 
+    # Filter and optimize chat history based on tool usage
+    req_messages = _filter_chat_history(req_messages)
+
     # Load config to determine model capabilities and overrides
     machine = _load_machine_config(CONFIG_DIR / "machine.json") or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
@@ -3132,6 +3422,49 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             finalize_llm_log_entry(log_entry)
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
+
+
+@router.get("/api/chats")
+async def api_list_chats():
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        return []
+    return list_chats(p_dir)
+
+
+@router.get("/api/chats/{chat_id}")
+async def api_load_chat(chat_id: str):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    data = load_chat(p_dir, chat_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return data
+
+
+@router.post("/api/chats/{chat_id}")
+async def api_save_chat(chat_id: str, request: Request):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    data["id"] = chat_id
+    save_chat(p_dir, chat_id, data)
+    return {"ok": True}
+
+
+@router.delete("/api/chats/{chat_id}")
+async def api_delete_chat(chat_id: str):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    if delete_chat(p_dir, chat_id):
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="Chat not found")
 
 
 @router.post("/api/openai/models")

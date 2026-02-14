@@ -141,6 +141,21 @@ class MetadataEndpointsTest(TestCase):
         self.assertEqual(story_json["notes"], "Story notes")
         self.assertEqual(story_json["private_notes"], "Story private notes")
 
+    def test_update_story_metadata_ignores_conflicts(self):
+        # Sending conflicts to story metadata should be ignored now
+        payload = {
+            "title": "Title with Conflicts",
+            "conflicts": [
+                {"description": "Should not be here", "resolution": "Discarded"}
+            ],
+        }
+        resp = self.client.post("/api/story/metadata", json=payload)
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify story.json
+        story_json = json.loads((self.proj_dir / "story.json").read_text())
+        self.assertNotIn("conflicts", story_json)
+
     def test_update_book_metadata(self):
         # Create a series project
         create_project("test_series", project_type="series")

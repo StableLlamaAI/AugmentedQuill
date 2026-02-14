@@ -202,8 +202,7 @@ export const useStory = () => {
     summary: string,
     tags: string[],
     notes?: string,
-    private_notes?: string,
-    conflicts?: any[]
+    private_notes?: string
   ) => {
     const newState = {
       ...story,
@@ -212,7 +211,6 @@ export const useStory = () => {
       styleTags: tags,
       notes,
       private_notes,
-      conflicts,
     };
     pushState(newState);
 
@@ -223,7 +221,6 @@ export const useStory = () => {
         tags,
         notes,
         private_notes,
-        conflicts,
       });
       await api.story.updateTags(tags);
     } catch (e) {

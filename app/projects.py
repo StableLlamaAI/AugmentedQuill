@@ -113,6 +113,66 @@ def set_active_project(path: Path) -> None:
     save_registry(current, [current] + recent)
 
 
+def get_chats_dir(project_path: Path) -> Path:
+    return project_path / "chats"
+
+
+def list_chats(project_path: Path) -> List[Dict]:
+    chats_dir = get_chats_dir(project_path)
+    if not chats_dir.exists():
+        return []
+
+    results = []
+    for f in chats_dir.glob("*.json"):
+        if f.is_file():
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                # Return metadata only for listing
+                results.append(
+                    {
+                        "id": data.get("id", f.stem),
+                        "name": data.get("name", "Untitled Chat"),
+                        "created_at": data.get("created_at"),
+                        "updated_at": data.get("updated_at"),
+                    }
+                )
+            except Exception:
+                continue
+    # Sort by updated_at descending
+    results.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return results
+
+
+def load_chat(project_path: Path, chat_id: str) -> Dict | None:
+    chats_dir = get_chats_dir(project_path)
+    chat_file = chats_dir / f"{chat_id}.json"
+    if not chat_file.exists():
+        return None
+    try:
+        return json.loads(chat_file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def save_chat(project_path: Path, chat_id: str, chat_data: Dict) -> None:
+    chats_dir = get_chats_dir(project_path)
+    _ensure_dir(chats_dir)
+    chat_file = chats_dir / f"{chat_id}.json"
+    chat_data["updated_at"] = _now_iso()
+    if "created_at" not in chat_data:
+        chat_data["created_at"] = chat_data["updated_at"]
+    chat_file.write_text(json.dumps(chat_data, indent=2), encoding="utf-8")
+
+
+def delete_chat(project_path: Path, chat_id: str) -> bool:
+    chats_dir = get_chats_dir(project_path)
+    chat_file = chats_dir / f"{chat_id}.json"
+    if chat_file.exists():
+        chat_file.unlink()
+        return True
+    return False
+
+
 def get_active_project_dir() -> Path | None:
     reg = load_registry()
     cur = reg.get("current") or ""
@@ -388,6 +448,123 @@ def update_chapter_metadata(
         raise ValueError(
             f"Could not find or create metadata entry for chapter {chap_id}"
         )
+
+
+def add_chapter_conflict(
+    chap_id: int, description: str, resolution: str, index: int = None
+) -> None:
+    """Add a conflict to a chapter. If index is provided, inserts there; else appends."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.setdefault("conflicts", [])
+    new_conflict = {"description": description, "resolution": resolution}
+
+    if index is not None and 0 <= index <= len(conflicts):
+        conflicts.insert(index, new_conflict)
+    else:
+        conflicts.append(new_conflict)
+
+    save_story_config(story_path, story)
+
+
+def update_chapter_conflict(
+    chap_id: int, index: int, description: str = None, resolution: str = None
+) -> None:
+    """Update a specific conflict in a chapter by its index."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if not (0 <= index < len(conflicts)):
+        raise IndexError(
+            f"Conflict index {index} out of range (total {len(conflicts)})"
+        )
+
+    if description is not None:
+        conflicts[index]["description"] = description
+    if resolution is not None:
+        conflicts[index]["resolution"] = resolution
+
+    save_story_config(story_path, story)
+
+
+def remove_chapter_conflict(chap_id: int, index: int) -> None:
+    """Remove a conflict from a chapter by its index."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if not (0 <= index < len(conflicts)):
+        raise IndexError(
+            f"Conflict index {index} out of range (total {len(conflicts)})"
+        )
+
+    conflicts.pop(index)
+    save_story_config(story_path, story)
+
+
+def reorder_chapter_conflicts(chap_id: int, new_indices: List[int]) -> None:
+    """Reorder conflicts in a chapter providing the new sequence of indices."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if len(new_indices) != len(conflicts):
+        raise ValueError("List of indices must match total number of conflicts.")
+
+    new_list = []
+    for idx in new_indices:
+        if not (0 <= idx < len(conflicts)):
+            raise IndexError(f"Index {idx} out of range.")
+        new_list.append(conflicts[idx])
+
+    target["conflicts"] = new_list
+    save_story_config(story_path, story)
 
 
 def write_chapter_title(chap_id: int, title: str) -> None:
@@ -823,7 +1000,6 @@ def update_story_metadata(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
-    conflicts: List[str] = None,
 ) -> None:
     """Update general story metadata."""
     active = get_active_project_dir()
@@ -845,8 +1021,6 @@ def update_story_metadata(
         story["notes"] = notes
     if private_notes is not None:
         story["private_notes"] = private_notes
-    if conflicts is not None:
-        story["conflicts"] = conflicts
 
     save_story_config(story_path, story)
 
