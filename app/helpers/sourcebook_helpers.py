@@ -10,6 +10,9 @@ from app.projects import get_active_project_dir
 from app.config import load_story_config, save_story_config
 
 
+_UNSET = object()
+
+
 def _get_story_data():
     active = get_active_project_dir()
     if not active:
@@ -85,7 +88,10 @@ def sb_get(name_or_id: str) -> Optional[Dict]:
 
 
 def sb_create(
-    name: str, description: str, category: str = None, synonyms: List[str] = []
+    name: str,
+    description: str,
+    category: str = None,
+    synonyms: List[str] | object = _UNSET,
 ) -> Dict:
     if not name or not isinstance(name, str) or not name.strip():
         return {"error": "Invalid name: Name must be a non-empty string."}
@@ -94,9 +100,11 @@ def sb_create(
         return {"error": "Invalid description: Description must be a string."}
 
     if not category or not isinstance(category, str) or not category.strip():
-        category = "General"
+        return {"error": "Invalid category: Category must be a non-empty string."}
 
-    if synonyms is None or not isinstance(synonyms, list):
+    if synonyms is _UNSET:
+        synonyms = []
+    elif synonyms is None or not isinstance(synonyms, list):
         return {"error": "Invalid synonyms: Synonyms must be a list of strings."}
 
     story, story_path = _get_story_data()

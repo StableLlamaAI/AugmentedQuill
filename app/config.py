@@ -157,16 +157,78 @@ def load_story_config(
     json_config = _interpolate_env(json_config)
     merged = _deep_merge(defaults, json_config)
 
-    # Validate version and schema
-    version = merged.get("metadata", {}).get("version", 0)
-    if version < CURRENT_SCHEMA_VERSION:
-        raise ValueError(
-            f"Story config at {path} has outdated version {version}. Current version is {CURRENT_SCHEMA_VERSION}. Please update the config."
-        )
+    # Backward compatibility normalization for legacy/minimal story.json files
+    metadata = merged.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    version = metadata.get("version")
+    if not isinstance(version, int) or version < CURRENT_SCHEMA_VERSION:
+        metadata["version"] = CURRENT_SCHEMA_VERSION
     elif version > CURRENT_SCHEMA_VERSION:
         raise ValueError(
             f"Story config at {path} has unknown version {version}. Current supported version is {CURRENT_SCHEMA_VERSION}."
         )
+    merged["metadata"] = metadata
+
+    if not isinstance(merged.get("project_title"), str):
+        merged["project_title"] = str(merged.get("project_title") or "")
+    if not merged.get("format"):
+        merged["format"] = "markdown"
+
+    if not isinstance(merged.get("project_type"), str):
+        if isinstance(merged.get("books"), list) and merged.get("books"):
+            merged["project_type"] = "series"
+        elif isinstance(merged.get("chapters"), list):
+            merged["project_type"] = "novel"
+        else:
+            merged["project_type"] = "novel"
+
+    sourcebook = merged.get("sourcebook")
+    if isinstance(sourcebook, list):
+        sourcebook_dict: Dict[str, Any] = {}
+        for entry in sourcebook:
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                name = entry["name"]
+                sourcebook_dict[name] = {
+                    k: v for k, v in entry.items() if k not in ("id", "name")
+                }
+        merged["sourcebook"] = sourcebook_dict
+    elif not isinstance(sourcebook, dict):
+        merged["sourcebook"] = {}
+
+    chapters = merged.get("chapters")
+    if isinstance(chapters, list):
+        for idx, chapter in enumerate(chapters, start=1):
+            if isinstance(chapter, dict) and not chapter.get("title"):
+                chapter["title"] = f"Chapter {idx}"
+            if isinstance(chapter, dict) and isinstance(chapter.get("conflicts"), list):
+                for conflict in chapter["conflicts"]:
+                    if isinstance(conflict, dict) and "resolution" not in conflict:
+                        conflict["resolution"] = ""
+
+    books = merged.get("books")
+    if isinstance(books, list):
+        for book_idx, book in enumerate(books, start=1):
+            if not isinstance(book, dict):
+                continue
+            if not book.get("title"):
+                book["title"] = f"Book {book_idx}"
+            bchapters = book.get("chapters")
+            if not isinstance(bchapters, list):
+                bchapters = []
+                book["chapters"] = bchapters
+            for chap_idx, chapter in enumerate(bchapters, start=1):
+                if isinstance(chapter, dict) and not chapter.get("title"):
+                    chapter["title"] = f"Chapter {chap_idx}"
+                if isinstance(chapter, dict) and isinstance(
+                    chapter.get("conflicts"), list
+                ):
+                    for conflict in chapter["conflicts"]:
+                        if isinstance(conflict, dict) and "resolution" not in conflict:
+                            conflict["resolution"] = ""
+
+    # Validate version and schema
+    version = merged.get("metadata", {}).get("version", CURRENT_SCHEMA_VERSION)
 
     # Validate against schema
     schema = _get_story_schema(version)

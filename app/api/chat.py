@@ -13,7 +13,13 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import load_machine_config, load_story_config
-from app.projects import get_active_project_dir
+from app.projects import (
+    get_active_project_dir,
+    list_chats,
+    load_chat,
+    save_chat,
+    delete_chat,
+)
 from app.prompts import get_system_message, load_model_prompt_overrides
 from app.llm import add_llm_log, create_log_entry
 from app.helpers.chat_tool_dispatcher import _exec_chat_tool
@@ -42,6 +48,54 @@ def _load_machine_config(path):
 
 
 STORY_TOOLS = CHAT_STORY_TOOLS
+
+WEB_SEARCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for real-world information. NOTE: This returns snippets only. You MUST subsequently call 'visit_page' on the top 1-3 relevant URLs to get the actual content needed for your answer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query."}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "visit_page",
+            "description": "Visit a specific web page by URL and extract its main content as text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL of the page to visit.",
+                    }
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "wikipedia_search",
+            "description": "Search Wikipedia for factual information. You MUST subsequently call 'visit_page' on the result URLs to read the full article content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search term."}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
 
 
 @router.get("/api/chat")
@@ -251,6 +305,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             tcs = m.get("tool_calls")
             if isinstance(tcs, list) and tcs:
                 msg["tool_calls"] = tcs
+                if role == "assistant":
+                    msg["content"] = None
             out.append(msg)
         return out
 
@@ -396,6 +452,60 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 yield f"data: {_json.dumps({'tool_calls': chunk['tool_calls']})}\n\n"
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
+
+
+@router.get("/api/chats")
+async def api_list_chats():
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        return []
+    return list_chats(p_dir)
+
+
+@router.get("/api/chats/{chat_id}")
+async def api_load_chat(chat_id: str):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    data = load_chat(p_dir, chat_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return data
+
+
+@router.post("/api/chats/{chat_id}")
+async def api_save_chat(chat_id: str, request: Request):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    data["id"] = chat_id
+    save_chat(p_dir, chat_id, data)
+    return {"ok": True}
+
+
+@router.delete("/api/chats/{chat_id}")
+async def api_delete_chat(chat_id: str):
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    if delete_chat(p_dir, chat_id):
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="Chat not found")
+
+
+@router.delete("/api/chats")
+async def api_delete_all_chats():
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    from app.projects import delete_all_chats as delete_all
+
+    delete_all(p_dir)
+    return {"ok": True}
 
 
 @router.post("/api/openai/models")

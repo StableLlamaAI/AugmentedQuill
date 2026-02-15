@@ -57,7 +57,13 @@ async def handle_chapter_tool(
         title = args_obj.get("title")
         summary = args_obj.get("summary")
         notes = args_obj.get("notes")
+        private_notes = args_obj.get("private_notes")
         conflicts = args_obj.get("conflicts")
+        if isinstance(conflicts, str):
+            try:
+                conflicts = _json.loads(conflicts)
+            except Exception:
+                conflicts = None
 
         if not isinstance(chap_id, int):
             return tool_message(name, call_id, {"error": "chap_id is required"})
@@ -70,6 +76,7 @@ async def handle_chapter_tool(
                 title=title,
                 summary=summary,
                 notes=notes,
+                private_notes=private_notes,
                 conflicts=conflicts,
             )
             mutations["story_changed"] = True

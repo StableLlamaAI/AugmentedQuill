@@ -32,6 +32,7 @@ from app.projects import get_active_project_dir
 from app.helpers.stream_helpers import ChannelFilter
 from app.helpers.llm_parsing import parse_tool_calls_from_content, strip_thinking_tags
 from app.helpers.llm_logging import add_llm_log, create_log_entry
+from app.helpers import llm_logging as _llm_logging
 from app.helpers.llm_request_helpers import (
     get_story_llm_preferences,
     build_headers,
@@ -40,6 +41,16 @@ from app.helpers.llm_request_helpers import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
+
+# Backward-compatible export used by debug endpoint and tests.
+llm_logs = _llm_logging.llm_logs
+
+
+def _normalize_tool_name(name: str) -> str:
+    cleaned = name.strip()
+    if cleaned.startswith("functions."):
+        cleaned = cleaned.split("functions.", 1)[1]
+    return cleaned
 
 
 async def unified_chat_stream(
@@ -197,6 +208,29 @@ async def unified_chat_stream(
                                     for res in channel_filter.feed(content):
                                         if res["channel"] == "thinking":
                                             yield {"thinking": res["content"]}
+                                        elif res["channel"].startswith(
+                                            "commentary to="
+                                        ):
+                                            func_name = _normalize_tool_name(
+                                                res["channel"]
+                                                .split("commentary to=", 1)[1]
+                                                .strip()
+                                            )
+                                            if func_name:
+                                                yield {
+                                                    "tool_calls": [
+                                                        {
+                                                            "id": f"call_{func_name}",
+                                                            "type": "function",
+                                                            "function": {
+                                                                "name": func_name,
+                                                                "arguments": res[
+                                                                    "content"
+                                                                ],
+                                                            },
+                                                        }
+                                                    ]
+                                                }
                                         elif res["channel"] == "final":
                                             yield {"content": res["content"]}
 
@@ -238,6 +272,28 @@ async def unified_chat_stream(
                                 for res in channel_filter.flush():
                                     if res["channel"] == "thinking":
                                         yield {"thinking": res["content"]}
+                                    elif res["channel"].startswith("commentary to="):
+                                        func_name = _normalize_tool_name(
+                                            res["channel"]
+                                            .split("commentary to=", 1)[1]
+                                            .strip()
+                                        )
+                                        if func_name:
+                                            call_id = f"call_{func_name}"
+                                            if call_id not in sent_tool_call_ids:
+                                                sent_tool_call_ids.add(call_id)
+                                            yield {
+                                                "tool_calls": [
+                                                    {
+                                                        "id": call_id,
+                                                        "type": "function",
+                                                        "function": {
+                                                            "name": func_name,
+                                                            "arguments": res["content"],
+                                                        },
+                                                    }
+                                                ]
+                                            }
                                     elif res["channel"].startswith("call:"):
                                         func_name = res["channel"][5:]
                                         call_id = f"call_{func_name}"
@@ -287,6 +343,32 @@ async def unified_chat_stream(
                                     for res in channel_filter.feed(content):
                                         if res["channel"] == "thinking":
                                             yield {"thinking": res["content"]}
+                                        elif res["channel"].startswith(
+                                            "commentary to="
+                                        ):
+                                            func_name = _normalize_tool_name(
+                                                res["channel"]
+                                                .split("commentary to=", 1)[1]
+                                                .strip()
+                                            )
+                                            if func_name:
+                                                call_id = f"call_{func_name}"
+                                                if call_id not in sent_tool_call_ids:
+                                                    sent_tool_call_ids.add(call_id)
+                                                yield {
+                                                    "tool_calls": [
+                                                        {
+                                                            "id": call_id,
+                                                            "type": "function",
+                                                            "function": {
+                                                                "name": func_name,
+                                                                "arguments": res[
+                                                                    "content"
+                                                                ],
+                                                            },
+                                                        }
+                                                    ]
+                                                }
                                         elif res["channel"].startswith("call:"):
                                             func_name = res["channel"][5:]
                                             yield {

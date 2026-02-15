@@ -23,6 +23,8 @@ async def handle_story_tool(
             "title": story.get("project_title", ""),
             "summary": story.get("story_summary", ""),
             "notes": story.get("notes", ""),
+            "tags": story.get("tags", []),
+            "project_type": story.get("project_type", "novel"),
         }
         return tool_message(name, call_id, val)
 
@@ -30,9 +32,10 @@ async def handle_story_tool(
         title = args_obj.get("title")
         summary = args_obj.get("summary")
         notes = args_obj.get("notes")
+        tags = args_obj.get("tags")
 
         try:
-            update_story_metadata(title=title, summary=summary, notes=notes)
+            update_story_metadata(title=title, summary=summary, notes=notes, tags=tags)
             mutations["story_changed"] = True
             return tool_message(name, call_id, {"ok": True})
         except Exception as e:
