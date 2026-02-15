@@ -160,7 +160,8 @@ export const createChatSession = (
   systemInstruction: string,
   history: any[],
   config: LLMConfig,
-  modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT'
+  modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
+  options?: { allowWebSearch?: boolean }
 ): UnifiedChat => {
   return {
     sendMessage: async (msg, onUpdate) => {
@@ -198,7 +199,12 @@ export const createChatSession = (
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages, model_type: modelType }),
+          body: JSON.stringify({
+            messages,
+            model_type: modelType,
+            model_name: config.id,
+            allow_web_search: options?.allowWebSearch,
+          }),
         });
 
         if (!res.ok) throw new Error('Chat request failed');
@@ -292,6 +298,7 @@ export const generateSimpleContent = async (
       body: JSON.stringify({
         messages,
         model_type: modelType,
+        model_name: config.id,
         tool_choice: options?.tool_choice,
       }),
     });
@@ -328,6 +335,7 @@ export const generateContinuations = async (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chap_id: Number(chapterId),
+          model_name: config.id,
           current_text: currentContent,
         }),
       });

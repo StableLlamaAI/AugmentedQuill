@@ -23,13 +23,13 @@ from pathlib import Path
 import os
 import datetime
 import uuid
+import json as _json
 
 import httpx
 import re
 
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
@@ -75,6 +75,41 @@ def add_llm_log(log_entry: Dict[str, Any]):
     llm_logs.append(log_entry)
     if len(llm_logs) > 100:
         llm_logs.pop(0)
+
+
+def _llm_dump_enabled() -> bool:
+    return os.getenv("AUGQ_LLM_DUMP", "0") in ("1", "true", "TRUE", "yes", "on")
+
+
+def _llm_dump_path() -> Path:
+    env_path = os.getenv("AUGQ_LLM_DUMP_PATH")
+    if env_path:
+        return Path(env_path)
+    return BASE_DIR / "logs" / "llm_raw.log"
+
+
+def finalize_llm_log_entry(log_entry: Dict[str, Any]) -> None:
+    """Finalize and optionally dump an LLM log entry to disk."""
+    if log_entry.get("_dumped"):
+        return
+    if log_entry.get("timestamp_end") is None:
+        log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+
+    if not _llm_dump_enabled():
+        return
+
+    try:
+        dump_path = _llm_dump_path()
+        dump_path.parent.mkdir(parents=True, exist_ok=True)
+        with dump_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                _json.dumps(log_entry, ensure_ascii=True, default=str, indent=2)
+            )
+            handle.write("\n")
+        log_entry["_dumped"] = True
+    except Exception:
+        # Never break the app because a debug log cannot be written.
+        return
 
 
 def create_log_entry(
@@ -268,6 +303,8 @@ async def openai_chat_complete(
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
             log_entry["response"]["error"] = str(e)
             raise
+        finally:
+            finalize_llm_log_entry(log_entry)
 
 
 async def openai_completions(
@@ -345,6 +382,8 @@ async def openai_completions(
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
             log_entry["response"]["error"] = str(e)
             raise
+        finally:
+            finalize_llm_log_entry(log_entry)
 
 
 async def openai_chat_complete_stream(
@@ -427,6 +466,7 @@ async def openai_chat_complete_stream(
             raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            finalize_llm_log_entry(log_entry)
 
 
 async def openai_completions_stream(
@@ -512,3 +552,4 @@ async def openai_completions_stream(
             raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            finalize_llm_log_entry(log_entry)

@@ -45,7 +45,7 @@ class ChaptersApiTest(TestCase):
         )
         # story.json chapters titles
         (pdir / "story.json").write_text(
-            '{"project_title":"X","format":"markdown","chapters":["Intro","Climax"],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
+            '{"metadata": {"version": 2}, "project_title":"X","format":"markdown","chapters":["Intro","Climax"],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
             encoding="utf-8",
         )
         return pdir
@@ -81,7 +81,7 @@ class ChaptersApiTest(TestCase):
         (chdir / "0002.txt").write_text("Second content", encoding="utf-8")
         # Write story.json with empty titles array
         (pdir / "story.json").write_text(
-            '{"project_title":"Y","format":"markdown","chapters":[],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
+            '{"metadata": {"version": 2}, "project_title":"Y","format":"markdown","chapters":[],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
             encoding="utf-8",
         )
 
@@ -106,6 +106,9 @@ class ChaptersApiTest(TestCase):
 
         # Manually construct story.json for series
         story = {
+            "metadata": {"version": 2},
+            "project_title": "Test Series",
+            "format": "markdown",
             "project_type": "series",
             "books": [
                 {
@@ -191,7 +194,8 @@ class ChaptersApiTest(TestCase):
         select_project("create_chap")
         pdir = self.projects_root / "create_chap"
         (pdir / "story.json").write_text(
-            '{"project_type":"novel","chapters":[]}', encoding="utf-8"
+            '{"metadata": {"version": 2}, "project_title": "Create Chapter Test", "format": "markdown", "project_type":"novel","chapters":[]}',
+            encoding="utf-8",
         )
         (pdir / "chapters").mkdir(exist_ok=True)
 

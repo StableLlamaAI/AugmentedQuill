@@ -13,7 +13,7 @@ import {
   hasUnsupportedSummaryMarkdown,
   SummaryWarning,
 } from './MarkdownView';
-import { AppTheme, Story } from '../types';
+import { AppTheme, Story, Conflict } from '../types';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 import { api } from '../services/api';
 

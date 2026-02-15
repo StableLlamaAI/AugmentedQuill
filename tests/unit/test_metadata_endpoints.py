@@ -93,7 +93,36 @@ class MetadataEndpointsTest(TestCase):
         resp = self.client.put(f"/api/chapters/{chap_id}/metadata", json=payload)
         self.assertEqual(resp.status_code, 400)
 
+    def test_update_chapter_metadata_missing_entry(self):
+        """Test that update works even if the metadata entry is missing from story.json."""
+        # 1. Create a chapter normally
+        chap_id = create_new_chapter("Initial Title")
+        story_path = self.proj_dir / "story.json"
+        story = json.loads(story_path.read_text())
+
+        # 2. Corrupt/Wipe the metadata for this chapter in story.json
+        story["chapters"] = []
+        story_path.write_text(json.dumps(story))
+
+        # 3. Try to update it via API - it should now auto-create the entry
+        payload = {
+            "title": "Recovered Title",
+            "summary": "Recovered summary",
+            "conflicts": [{"description": "New Conflict"}],
+        }
+        resp = self.client.put(f"/api/chapters/{chap_id}/metadata", json=payload)
+        self.assertEqual(resp.status_code, 200)
+
+        # 4. Verify it was recreated in story.json
+        story_after = json.loads(story_path.read_text())
+        self.assertEqual(len(story_after["chapters"]), 1)
+        entry = story_after["chapters"][0]
+        self.assertEqual(entry["title"], "Recovered Title")
+        self.assertEqual(entry["summary"], "Recovered summary")
+        self.assertEqual(entry["conflicts"][0]["description"], "New Conflict")
+
     def test_update_story_metadata(self):
+
         payload = {
             "title": "New Title",
             "summary": "Main story summary",
@@ -111,6 +140,21 @@ class MetadataEndpointsTest(TestCase):
         self.assertEqual(story_json["tags"], ["Sci-Fi", "Noir"])
         self.assertEqual(story_json["notes"], "Story notes")
         self.assertEqual(story_json["private_notes"], "Story private notes")
+
+    def test_update_story_metadata_ignores_conflicts(self):
+        # Sending conflicts to story metadata should be ignored now
+        payload = {
+            "title": "Title with Conflicts",
+            "conflicts": [
+                {"description": "Should not be here", "resolution": "Discarded"}
+            ],
+        }
+        resp = self.client.post("/api/story/metadata", json=payload)
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify story.json
+        story_json = json.loads((self.proj_dir / "story.json").read_text())
+        self.assertNotIn("conflicts", story_json)
 
     def test_update_book_metadata(self):
         # Create a series project
@@ -132,7 +176,11 @@ class MetadataEndpointsTest(TestCase):
 
         # Verify
         story_json = json.loads((self.proj_dir / "story.json").read_text())
-        book_entry = next(b for b in story_json["books"] if b["id"] == book_id)
+        book_entry = next(
+            b
+            for b in story_json["books"]
+            if (b.get("id") == book_id or b.get("folder") == book_id)
+        )
 
         self.assertEqual(book_entry["title"], "Book One Renamed")
         self.assertEqual(book_entry["summary"], "Book summary")

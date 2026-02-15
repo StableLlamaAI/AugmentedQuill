@@ -79,7 +79,7 @@ class ChatAndTitlesTest(TestCase):
         (chdir / "0002.txt").write_text("C2", encoding="utf-8")
         # Write story.json with bogus titles that sometimes leak from UI
         (pdir / "story.json").write_text(
-            '{"project_title":"Z","format":"markdown","chapters":[{"title":"[object Object]","summary":""},{"title":"[object Object]","summary":""}],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
+            '{"project_title":"Z","format":"markdown","chapters":[{"title":"[object Object]","summary":""},{"title":"[object Object]","summary":""}],"llm_prefs":{"temperature":0.7,"max_tokens":2048},"metadata":{"version":2}}',
             encoding="utf-8",
         )
 

@@ -67,6 +67,7 @@ class ConfigLoaderTest(TestCase):
                 cfg_path.write_text(
                     json.dumps(
                         {
+                            "metadata": {"version": 2},
                             "project_title": "${PROJECT_TITLE}",
                             "format": "markdown",
                             "chapters": ["000-intro.md", "010-conflict.md"],

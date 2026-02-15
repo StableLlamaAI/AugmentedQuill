@@ -20,7 +20,10 @@ jobs:
     - name: Run ruff
       run: ruff check .
     - name: Run black
-      run: black --check .
+      uses: psf/black@stable
+      with:
+        options: "--check --diff"
+        src: "."
     - name: Run tests
       run: pytest
 

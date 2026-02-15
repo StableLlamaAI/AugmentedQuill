@@ -119,6 +119,14 @@ export const api = {
       if (!res.ok) throw new Error('Failed to export project');
       return res.blob();
     },
+    updateConfig: async () => {
+      const res = await fetch(`${API_BASE}/settings/update_story_config`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update story config');
+      return data;
+    },
     import: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -413,6 +421,39 @@ export const api = {
     },
   },
   chat: {
+    list: async () => {
+      const res = await fetch(`${API_BASE}/chats`);
+      if (!res.ok) throw new Error('Failed to list chats');
+      return res.json();
+    },
+    load: async (id: string) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`);
+      if (!res.ok) throw new Error('Failed to load chat');
+      return res.json();
+    },
+    save: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to save chat');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE}/chats/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete chat');
+      return res.json();
+    },
+    deleteAll: async () => {
+      const res = await fetch(`${API_BASE}/chats`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete all chats');
+      return res.json();
+    },
     executeTools: async (payload: {
       messages: any[];
       active_chapter_id?: number;
@@ -424,6 +465,38 @@ export const api = {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Failed to execute chat tools');
+      return res.json();
+    },
+  },
+  sourcebook: {
+    list: async () => {
+      const res = await fetch(`${API_BASE}/sourcebook`);
+      if (!res.ok) throw new Error('Failed to load sourcebook');
+      return res.json();
+    },
+    create: async (entry: any) => {
+      const res = await fetch(`${API_BASE}/sourcebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+      if (!res.ok) throw new Error('Failed to create entry');
+      return res.json();
+    },
+    update: async (id: string, updates: any) => {
+      const res = await fetch(`${API_BASE}/sourcebook/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Failed to update entry');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE}/sourcebook/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete entry');
       return res.json();
     },
   },

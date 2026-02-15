@@ -113,6 +113,75 @@ def set_active_project(path: Path) -> None:
     save_registry(current, [current] + recent)
 
 
+def get_chats_dir(project_path: Path) -> Path:
+    return project_path / "chats"
+
+
+def list_chats(project_path: Path) -> List[Dict]:
+    chats_dir = get_chats_dir(project_path)
+    if not chats_dir.exists():
+        return []
+
+    results = []
+    for f in chats_dir.glob("*.json"):
+        if f.is_file():
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                # Return metadata only for listing
+                results.append(
+                    {
+                        "id": data.get("id", f.stem),
+                        "name": data.get("name", "Untitled Chat"),
+                        "created_at": data.get("created_at"),
+                        "updated_at": data.get("updated_at"),
+                    }
+                )
+            except Exception:
+                continue
+    # Sort by updated_at descending
+    results.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return results
+
+
+def load_chat(project_path: Path, chat_id: str) -> Dict | None:
+    chats_dir = get_chats_dir(project_path)
+    chat_file = chats_dir / f"{chat_id}.json"
+    if not chat_file.exists():
+        return None
+    try:
+        return json.loads(chat_file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def save_chat(project_path: Path, chat_id: str, chat_data: Dict) -> None:
+    chats_dir = get_chats_dir(project_path)
+    _ensure_dir(chats_dir)
+    chat_file = chats_dir / f"{chat_id}.json"
+    chat_data["updated_at"] = _now_iso()
+    if "created_at" not in chat_data:
+        chat_data["created_at"] = chat_data["updated_at"]
+    chat_file.write_text(json.dumps(chat_data, indent=2), encoding="utf-8")
+
+
+def delete_chat(project_path: Path, chat_id: str) -> bool:
+    chats_dir = get_chats_dir(project_path)
+    chat_file = chats_dir / f"{chat_id}.json"
+    if chat_file.exists():
+        chat_file.unlink()
+        return True
+    return False
+
+
+def delete_all_chats(project_path: Path) -> None:
+    chats_dir = get_chats_dir(project_path)
+    if chats_dir.exists():
+        import shutil
+
+        shutil.rmtree(chats_dir)
+        chats_dir.mkdir(parents=True, exist_ok=True)
+
+
 def get_active_project_dir() -> Path | None:
     reg = load_registry()
     cur = reg.get("current") or ""
@@ -246,18 +315,20 @@ def initialize_project_dir(
 
     if not story_path.exists():
         payload = {
+            "metadata": {"version": 2},
             "project_title": project_title,
             "project_type": project_type,
             "chapters": [],  # Used for novel
             "books": [],  # Used for series
             "content_file": "content.md",  # Used for short-story
             "format": "markdown",
-            "version": 1,
             "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
             "created_at": _now_iso(),
             "tags": [],
         }
-        story_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        from app.config import save_story_config
+
+        save_story_config(story_path, payload)
 
     if project_type == "short-story":
         content_path = path / "content.md"
@@ -332,13 +403,38 @@ def update_chapter_metadata(
     if not active:
         raise ValueError("No active project")
 
+    # Use _chapter_by_id_or_404 to get the actual file path and verify existence
     _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
 
     story_path = active / "story.json"
+    from app.config import save_story_config
+
     story = load_story_config(story_path) or {}
 
     target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+
+    if target_entry is None:
+        # If no entry was found in story.json, we create one automatically if it's a valid chapter
+        p_type = story.get("project_type", "novel")
+        if p_type == "series":
+            # Finding the correct book
+            book_id = path.parent.parent.name
+            books = story.setdefault("books", [])
+            book = next((b for b in books if b.get("id") == book_id), None)
+            if book:
+                book_chapters = book.setdefault("chapters", [])
+                target_entry = {
+                    "title": path.stem,
+                    "summary": "",
+                    "filename": path.name,
+                }
+                book_chapters.append(target_entry)
+        else:
+            # novel or short-story
+            chapters_data = story.setdefault("chapters", [])
+            target_entry = {"title": path.stem, "summary": "", "filename": path.name}
+            chapters_data.append(target_entry)
 
     if target_entry is not None:
         if title is not None:
@@ -355,12 +451,129 @@ def update_chapter_metadata(
         if conflicts is not None:
             target_entry["conflicts"] = conflicts
 
-        import json
-
-        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+        save_story_config(story_path, story)
     else:
-        # If no entry was found in story.json, we might want to add one but for now just raise error
-        raise ValueError(f"Could not find metadata entry for chapter {chap_id}")
+        # Should not happen with the creation logic above, but for safety
+        raise ValueError(
+            f"Could not find or create metadata entry for chapter {chap_id}"
+        )
+
+
+def add_chapter_conflict(
+    chap_id: int, description: str, resolution: str, index: int = None
+) -> None:
+    """Add a conflict to a chapter. If index is provided, inserts there; else appends."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.setdefault("conflicts", [])
+    new_conflict = {"description": description, "resolution": resolution}
+
+    if index is not None and 0 <= index <= len(conflicts):
+        conflicts.insert(index, new_conflict)
+    else:
+        conflicts.append(new_conflict)
+
+    save_story_config(story_path, story)
+
+
+def update_chapter_conflict(
+    chap_id: int, index: int, description: str = None, resolution: str = None
+) -> None:
+    """Update a specific conflict in a chapter by its index."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if not (0 <= index < len(conflicts)):
+        raise IndexError(
+            f"Conflict index {index} out of range (total {len(conflicts)})"
+        )
+
+    if description is not None:
+        conflicts[index]["description"] = description
+    if resolution is not None:
+        conflicts[index]["resolution"] = resolution
+
+    save_story_config(story_path, story)
+
+
+def remove_chapter_conflict(chap_id: int, index: int) -> None:
+    """Remove a conflict from a chapter by its index."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if not (0 <= index < len(conflicts)):
+        raise IndexError(
+            f"Conflict index {index} out of range (total {len(conflicts)})"
+        )
+
+    conflicts.pop(index)
+    save_story_config(story_path, story)
+
+
+def reorder_chapter_conflicts(chap_id: int, new_indices: List[int]) -> None:
+    """Reorder conflicts in a chapter providing the new sequence of indices."""
+    active = get_active_project_dir()
+    if not active:
+        raise ValueError("No active project")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
+    story_path = active / "story.json"
+    from app.config import save_story_config
+
+    story = load_story_config(story_path) or {}
+    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    if target is None:
+        raise ValueError(f"Chapter {chap_id} metadata not found.")
+
+    conflicts = target.get("conflicts", [])
+    if len(new_indices) != len(conflicts):
+        raise ValueError("List of indices must match total number of conflicts.")
+
+    new_list = []
+    for idx in new_indices:
+        if not (0 <= idx < len(conflicts)):
+            raise IndexError(f"Index {idx} out of range.")
+        new_list.append(conflicts[idx])
+
+    target["conflicts"] = new_list
+    save_story_config(story_path, story)
 
 
 def write_chapter_title(chap_id: int, title: str) -> None:
@@ -373,6 +586,8 @@ def write_chapter_title(chap_id: int, title: str) -> None:
     files = _scan_chapter_files()
 
     story_path = active / "story.json"
+    from app.config import save_story_config
+
     story = load_story_config(story_path) or {}
 
     new_title_str = str(title).strip()
@@ -383,9 +598,7 @@ def write_chapter_title(chap_id: int, title: str) -> None:
 
     if target_entry is not None:
         target_entry["title"] = new_title_str
-        import json
-
-        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+        save_story_config(story_path, story)
     else:
         # If no entry was found in story.json, we might want to add one but for now just raise error
         raise ValueError(f"Could not find metadata entry for chapter {chap_id}")
@@ -483,9 +696,9 @@ def delete_chapter(chap_id: int) -> None:
         if target_id:
             story["chapters"] = [c for c in chapters_data if id(c) != target_id]
 
-    import json
+    from app.config import save_story_config
 
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    save_story_config(story_path, story)
 
 
 def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
@@ -524,7 +737,7 @@ def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
         return False, "Failed to initialize project"
 
     set_active_project(p)
-    return True, "Project created"
+    return True, f"Project created: {p.name}"
 
 
 def select_project(name: str) -> Tuple[bool, str]:
@@ -554,7 +767,7 @@ def select_project(name: str) -> Tuple[bool, str]:
         _ensure_dir(root)
         initialize_project_dir(p, project_title=name, project_type="novel")
         set_active_project(p)
-        return True, "Project created"
+        return True, f"Project created: {p.name}"
     if p.is_dir():
         info = validate_project_dir(p)
         if info.is_valid:
@@ -602,12 +815,19 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
 
         target_book = None
         if book_id:
-            target_book = next((b for b in books if b["id"] == book_id), None)
+            target_book = next(
+                (
+                    b
+                    for b in books
+                    if (b.get("id") == book_id or b.get("folder") == book_id)
+                ),
+                None,
+            )
             if not target_book:
                 raise ValueError(f"Book {book_id} not found")
         else:
             target_book = books[-1]
-            book_id = target_book["id"]
+            book_id = target_book.get("id") or target_book.get("folder")
 
         # Determine title if needed
         if not final_title:
@@ -640,7 +860,9 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
             {"title": final_title, "summary": "", "filename": filename}
         )
         # Save story
-        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+        from app.config import save_story_config
+
+        save_story_config(story_path, story)
 
         # Return global ID by rescanning
         all_files = _scan_chapter_files()  # This scans filesystem
@@ -677,7 +899,9 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
     chapters_data.append({"title": final_title, "summary": "", "filename": filename})
     story["chapters"] = chapters_data
 
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    from app.config import save_story_config
+
+    save_story_config(story_path, story)
 
     return next_idx
 
@@ -700,9 +924,11 @@ def create_new_book(title: str) -> str:
 
     bid = str(uuid.uuid4())
 
-    books.append({"id": bid, "title": title, "chapters": []})
+    books.append({"folder": bid, "title": title, "chapters": []})
     story["books"] = books
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    from app.config import save_story_config
+
+    save_story_config(story_path, story)
 
     # Create dir
     b_dir = active / "books" / bid
@@ -728,10 +954,15 @@ def update_book_metadata(
         raise ValueError("No active project")
 
     story_path = active / "story.json"
+    from app.config import save_story_config
+
     story = load_story_config(story_path) or {}
 
     books = story.get("books", [])
-    target = next((b for b in books if b.get("id") == book_id), None)
+    target = next(
+        (b for b in books if (b.get("id") == book_id or b.get("folder") == book_id)),
+        None,
+    )
     if not target:
         raise ValueError(f"Book with ID {book_id} not found")
 
@@ -744,7 +975,7 @@ def update_book_metadata(
     if private_notes is not None:
         target["private_notes"] = private_notes
 
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    save_story_config(story_path, story)
 
 
 def read_book_content(book_id: str) -> str:
@@ -785,6 +1016,8 @@ def update_story_metadata(
         raise ValueError("No active project")
 
     story_path = active / "story.json"
+    from app.config import save_story_config
+
     story = load_story_config(story_path) or {}
 
     if title is not None:
@@ -798,7 +1031,7 @@ def update_story_metadata(
     if private_notes is not None:
         story["private_notes"] = private_notes
 
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    save_story_config(story_path, story)
 
 
 def read_story_content() -> str:
@@ -942,7 +1175,7 @@ def change_project_type(new_type: str) -> Tuple[bool, str]:
 
         story["project_type"] = "series"
         story["books"] = [
-            {"id": bid, "title": book_title, "chapters": story.get("chapters", [])}
+            {"folder": bid, "title": book_title, "chapters": story.get("chapters", [])}
         ]
         if "chapters" in story:
             del story["chapters"]
@@ -955,7 +1188,7 @@ def change_project_type(new_type: str) -> Tuple[bool, str]:
 
         if books:
             book = books[0]
-            bid = book["id"]
+            bid = book.get("id") or book.get("folder")
             book_dir = active / "books" / bid
 
             _ensure_dir(active / "chapters")
@@ -981,5 +1214,7 @@ def change_project_type(new_type: str) -> Tuple[bool, str]:
     else:
         return False, f"Conversion from {old_type} to {new_type} not implemented."
 
-    story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+    from app.config import save_story_config
+
+    save_story_config(story_path, story)
     return True, f"Converted to {new_type}"

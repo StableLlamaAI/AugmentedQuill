@@ -50,6 +50,7 @@ class ToolParityTest(TestCase):
         (pdir / "story.json").write_text(
             json.dumps(
                 {
+                    "metadata": {"version": 2},
                     "project_title": "Test Series",
                     "project_type": "series",
                     "story_summary": "Initial story summary",

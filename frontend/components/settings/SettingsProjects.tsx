@@ -16,6 +16,7 @@ import {
   Download,
   FileText,
   Library,
+  RefreshCw,
 } from 'lucide-react';
 import { AppTheme, ProjectMetadata } from '../../types';
 import { Button } from '../Button';
@@ -30,6 +31,7 @@ interface SettingsProjectsProps {
   onRenameProject: (id: string, newName: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
+  onRefreshProjects: () => void;
   onCloseDialog: () => void;
   activeProjectType?: 'short-story' | 'novel' | 'series';
   activeProjectStats: {
@@ -47,6 +49,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   onDeleteProject,
   onRenameProject,
   onConvertProject,
+  onRefreshProjects,
   onImportProject,
   onCloseDialog,
   activeProjectType,
@@ -144,6 +147,16 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
               if (e.target.files?.[0]) onImportProject(e.target.files[0]);
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}
+          />
+          <Button
+            theme={theme}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              onRefreshProjects();
+            }}
+            variant="secondary"
+            icon={<RefreshCw size={16} />}
+            title="Refresh Projects"
           />
           <Button
             theme={theme}
@@ -325,7 +338,15 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                 </div>
               )}
               <button
-                onClick={() => onDeleteProject(proj.id)}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Are you sure you want to delete "${proj.title}"? This action cannot be undone.`
+                    )
+                  ) {
+                    onDeleteProject(proj.id);
+                  }
+                }}
                 className={`p-2 rounded transition-colors ${
                   isLight
                     ? 'text-brand-gray-600 hover:text-red-600 hover:bg-red-50'

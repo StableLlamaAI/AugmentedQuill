@@ -13,6 +13,7 @@ import { ChapterList } from './components/ChapterList';
 import { Editor } from './components/Editor';
 import { Chat } from './components/Chat';
 import { ProjectImages } from './components/ProjectImages';
+import { SourcebookList } from './components/SourcebookList';
 import { DebugLogs } from './components/DebugLogs';
 import { Button } from './components/Button';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -20,13 +21,16 @@ import { CreateProjectDialog } from './components/CreateProjectDialog';
 import { ModelSelector } from './components/ModelSelector';
 import {
   ChatMessage,
+  ChatSession,
   Chapter,
   EditorSettings,
   ViewMode,
   AppSettings,
+  LLMConfig,
   ProjectMetadata,
   StoryState,
   AppTheme,
+  DEFAULT_LLM_CONFIG,
 } from './types';
 import {
   createChatSession,
@@ -73,22 +77,20 @@ import { api } from './services/api';
 
 // Default Settings
 const DEFAULT_APP_SETTINGS: AppSettings = {
-  providers: [
-    {
-      id: 'default',
-      name: 'OpenAI (Default)',
-      baseUrl: 'https://api.openai.com/v1',
-      apiKey: '',
-      timeout: 30000,
-      modelId: 'gpt-4o',
-      temperature: 0.7,
-      topP: 0.95,
-      prompts: { system: '', continuation: '', summary: '' },
-    },
-  ],
-  activeChatProviderId: 'default',
-  activeWritingProviderId: 'default',
-  activeEditingProviderId: 'default',
+  providers: [DEFAULT_LLM_CONFIG],
+  activeChatProviderId: DEFAULT_LLM_CONFIG.id,
+  activeWritingProviderId: DEFAULT_LLM_CONFIG.id,
+  activeEditingProviderId: DEFAULT_LLM_CONFIG.id,
+  editor: {
+    fontSize: 18,
+    maxWidth: 60,
+    brightness: 0.95,
+    contrast: 0.9,
+    theme: 'mixed',
+    sidebarWidth: 320,
+  },
+  sidebarOpen: false,
+  activeTab: 'chat',
 };
 
 const App: React.FC = () => {
@@ -117,32 +119,29 @@ const App: React.FC = () => {
   // App State
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_settings');
+    const base = DEFAULT_APP_SETTINGS;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Migration: if we have activeStoryProviderId but not the new ones
+        const merged = { ...base, ...parsed };
+
+        // Migration: handle old property names
         if (parsed.activeStoryProviderId && !parsed.activeWritingProviderId) {
-          return {
-            ...parsed,
-            activeWritingProviderId: parsed.activeStoryProviderId,
-            activeEditingProviderId: parsed.activeStoryProviderId,
-          };
+          merged.activeWritingProviderId = parsed.activeStoryProviderId;
+          merged.activeEditingProviderId = parsed.activeStoryProviderId;
         }
-        // Migration: if we only have activeProviderId (very old)
-        if (!parsed.activeWritingProviderId && parsed.activeProviderId) {
-          return {
-            ...parsed,
-            activeChatProviderId: parsed.activeProviderId,
-            activeWritingProviderId: parsed.activeProviderId,
-            activeEditingProviderId: parsed.activeProviderId,
-          };
+        if (parsed.activeProviderId && !parsed.activeChatProviderId) {
+          merged.activeChatProviderId = parsed.activeProviderId;
+          merged.activeWritingProviderId = parsed.activeProviderId;
+          merged.activeEditingProviderId = parsed.activeProviderId;
         }
-        return parsed.activeWritingProviderId ? parsed : DEFAULT_APP_SETTINGS;
+
+        return merged;
       } catch (e) {
-        return DEFAULT_APP_SETTINGS;
+        return base;
       }
     }
-    return DEFAULT_APP_SETTINGS;
+    return base;
   });
 
   const [modelConnectionStatus, setModelConnectionStatus] = useState<
@@ -151,6 +150,13 @@ const App: React.FC = () => {
   const [detectedCapabilities, setDetectedCapabilities] = useState<
     Record<string, { is_multimodal: boolean; supports_function_calling: boolean }>
   >({});
+
+  const [toolCallLoopDialog, setToolCallLoopDialog] = useState<{
+    count: number;
+    resolver: (choice: 'stop' | 'continue' | 'unlimited') => void;
+  } | null>(null);
+
+  const [allowWebSearch, setAllowWebSearch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +222,77 @@ const App: React.FC = () => {
     appSettings.activeWritingProviderId,
   ]);
 
+  // Sync settings with backend on mount
+  useEffect(() => {
+    const syncWithBackend = async () => {
+      try {
+        const machine = await api.machine.get();
+        const openai = machine?.openai || {};
+        const models = Array.isArray(openai?.models) ? openai.models : [];
+
+        if (models.length > 0) {
+          const providers: LLMConfig[] = models.map((m: any) => {
+            const name = String(m.name || '').trim();
+            const timeoutS = Number(m.timeout_s ?? 60);
+            return {
+              ...DEFAULT_LLM_CONFIG,
+              id: name,
+              name: name,
+              baseUrl: String(m.base_url || '').trim(),
+              apiKey: String(m.api_key || ''),
+              timeout: Number.isFinite(timeoutS) ? Math.max(1, timeoutS) * 1000 : 60000,
+              modelId: String(m.model || '').trim(),
+              isMultimodal: m.is_multimodal,
+              supportsFunctionCalling: m.supports_function_calling,
+              prompts: m.prompt_overrides || {},
+            };
+          });
+
+          setAppSettings((prev) => {
+            const next = { ...prev, providers };
+            const selectedName = (openai?.selected || '') as string;
+            const selectedChat = (openai?.selected_chat || selectedName) as string;
+            const selectedWriting = (openai?.selected_writing ||
+              selectedName) as string;
+            const selectedEditing = (openai?.selected_editing ||
+              selectedName) as string;
+
+            // If local settings are 'default' or missing, use backend preference
+            if (!next.activeChatProviderId || next.activeChatProviderId === 'default') {
+              if (selectedChat) next.activeChatProviderId = selectedChat;
+            }
+            if (
+              !next.activeWritingProviderId ||
+              next.activeWritingProviderId === 'default'
+            ) {
+              if (selectedWriting) next.activeWritingProviderId = selectedWriting;
+            }
+            if (
+              !next.activeEditingProviderId ||
+              next.activeEditingProviderId === 'default'
+            ) {
+              if (selectedEditing) next.activeEditingProviderId = selectedEditing;
+            }
+
+            // Safety: ensure selected ID exists in providers
+            const exists = (id: string) => providers.some((p) => p.id === id);
+            if (!exists(next.activeChatProviderId))
+              next.activeChatProviderId = providers[0].id;
+            if (!exists(next.activeWritingProviderId))
+              next.activeWritingProviderId = providers[0].id;
+            if (!exists(next.activeEditingProviderId))
+              next.activeEditingProviderId = providers[0].id;
+
+            return next;
+          });
+        }
+      } catch (e) {
+        console.error('Failed to sync settings with backend', e);
+      }
+    };
+    syncWithBackend();
+  }, []);
+
   const [projects, setProjects] = useState<ProjectMetadata[]>(() => {
     const saved = localStorage.getItem('augmentedquill_projects_meta');
     return saved
@@ -224,6 +301,9 @@ const App: React.FC = () => {
   });
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatHistoryList, setChatHistoryList] = useState<ChatSession[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [isIncognito, setIsIncognito] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const stopSignalRef = useRef(false);
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
@@ -294,26 +374,27 @@ const App: React.FC = () => {
     fetchPrompts();
   }, [story.id]); // Re-fetch when project changes
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const data = await api.projects.list();
-        if (data.available) {
-          setProjects(
-            data.available.map((p: any) => ({
-              id: p.name,
-              title: p.title || p.name,
-              type: p.type || 'novel',
-              updatedAt: Date.now(),
-            }))
-          );
-        }
-      } catch (e) {
-        console.error('Failed to fetch projects', e);
+  const refreshProjects = useCallback(async () => {
+    try {
+      const data = await api.projects.list();
+      if (data.available) {
+        setProjects(
+          data.available.map((p: any) => ({
+            id: p.name,
+            title: p.title || p.name,
+            type: p.type || 'novel',
+            updatedAt: Date.now(),
+          }))
+        );
       }
-    };
-    fetchProjects();
+    } catch (e) {
+      console.error('Failed to fetch projects', e);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
 
   // Editor Appearance Settings
   const [editorSettings, setEditorSettings] = useState<EditorSettings>(() => {
@@ -393,12 +474,30 @@ const App: React.FC = () => {
   }, [projects]);
 
   // Project Management Functions
+  const getSystemPrompt = useCallback(() => {
+    return prompts.system_messages.chat_llm || '';
+  }, [prompts]);
+
+  const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt());
+
+  const [incognitoSessions, setIncognitoSessions] = useState<ChatSession[]>([]);
+
+  useEffect(() => {
+    setSystemPrompt(getSystemPrompt());
+  }, [story.id, getSystemPrompt]);
+
   const handleLoadProject = async (id: string) => {
     try {
       const res = await api.projects.select(id);
       if (res.ok) {
         await refreshStory();
-        setChatMessages([]);
+        const chats = await api.chat.list();
+        setChatHistoryList(chats);
+        if (chats.length > 0) {
+          handleSelectChat(chats[0].id);
+        } else {
+          handleNewChat();
+        }
       }
     } catch (e) {
       console.error('Failed to load project', e);
@@ -482,7 +581,7 @@ const App: React.FC = () => {
           }
 
           loadStory(mappedStory as any);
-          setChatMessages([]);
+          handleNewChat(false);
         }
         setIsCreateProjectOpen(false);
         if (isSettingsOpen) setIsSettingsOpen(false);
@@ -493,13 +592,21 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (projects.length <= 1) return;
-    const newProjects = projects.filter((p) => p.id !== id);
-    setProjects(newProjects);
-    localStorage.removeItem(`project_${id}`);
-    if (id === story.id) {
-      handleLoadProject(newProjects[0].id);
+
+    try {
+      await api.projects.delete(id);
+      const newProjects = projects.filter((p) => p.id !== id);
+      setProjects(newProjects);
+      localStorage.removeItem(`project_${id}`);
+
+      if (id === story.id) {
+        handleLoadProject(newProjects[0].id);
+      }
+    } catch (e: any) {
+      console.error('Failed to delete project', e);
+      alert(`Failed to delete project: ${e.message}`);
     }
   };
 
@@ -519,6 +626,186 @@ const App: React.FC = () => {
     }
   };
 
+  // Chat Session Management
+  const refreshChatList = useCallback(async () => {
+    try {
+      const chats = await api.chat.list();
+      setChatHistoryList(chats);
+    } catch (e) {
+      console.error('Failed to list chats', e);
+    }
+  }, []);
+
+  const handleNewChat = useCallback(
+    (incognito: boolean = false) => {
+      const newId = uuidv4();
+      if (incognito) {
+        const newSession: ChatSession = {
+          id: newId,
+          name: 'Incognito Chat',
+          messages: [],
+          systemPrompt: getSystemPrompt(),
+          isIncognito: true,
+          allowWebSearch: false,
+        };
+        setIncognitoSessions((prev) => [newSession, ...prev]);
+        setChatMessages([]);
+        setIsIncognito(true);
+        setCurrentChatId(newId);
+        setAllowWebSearch(false);
+      } else {
+        setChatMessages([]);
+        setIsIncognito(false);
+        setCurrentChatId(newId);
+        setAllowWebSearch(false);
+      }
+      setSystemPrompt(getSystemPrompt());
+    },
+    [getSystemPrompt]
+  );
+
+  const handleSelectChat = useCallback(
+    async (id: string) => {
+      // Check incognito first
+      const incognito = incognitoSessions.find((s) => s.id === id);
+      if (incognito) {
+        setChatMessages(incognito.messages || []);
+        setCurrentChatId(id);
+        setIsIncognito(true);
+        if (incognito.systemPrompt) {
+          setSystemPrompt(incognito.systemPrompt);
+        }
+        setAllowWebSearch(incognito.allowWebSearch || false);
+        return;
+      }
+
+      try {
+        const chat = await api.chat.load(id);
+        if (chat) {
+          setChatMessages(chat.messages || []);
+          setCurrentChatId(id);
+          setIsIncognito(false);
+          if (chat.systemPrompt) {
+            setSystemPrompt(chat.systemPrompt);
+          }
+          setAllowWebSearch(chat.allowWebSearch || false);
+        }
+      } catch (e) {
+        console.error('Failed to load chat', e);
+      }
+    },
+    [incognitoSessions]
+  );
+
+  const handleDeleteChat = useCallback(
+    async (id: string) => {
+      // Check incognito
+      if (incognitoSessions.some((s) => s.id === id)) {
+        setIncognitoSessions((prev) => prev.filter((s) => s.id !== id));
+        if (currentChatId === id) {
+          handleNewChat();
+        }
+        return;
+      }
+
+      try {
+        await api.chat.delete(id);
+        await refreshChatList();
+        if (currentChatId === id) {
+          handleNewChat();
+        }
+      } catch (e) {
+        console.error('Failed to delete chat', e);
+      }
+    },
+    [currentChatId, handleNewChat, refreshChatList, incognitoSessions]
+  );
+
+  const handleDeleteAllChats = useCallback(async () => {
+    if (
+      !confirm(
+        'Are you sure you want to delete ALL chats (including incognito)? This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      // Clear incognito
+      setIncognitoSessions([]);
+      // Delete from server
+      await api.chat.deleteAll();
+      await refreshChatList();
+      handleNewChat();
+    } catch (e) {
+      console.error('Failed to delete all chats', e);
+    }
+  }, [handleNewChat, refreshChatList]);
+
+  // Initial Chat Load
+  useEffect(() => {
+    if (story.id && !currentChatId && !isIncognito) {
+      const loadInitialChats = async () => {
+        try {
+          const chats = await api.chat.list();
+          setChatHistoryList(chats);
+          if (chats.length > 0) {
+            handleSelectChat(chats[0].id);
+          } else {
+            handleNewChat(false);
+          }
+        } catch (e) {
+          console.error('Failed to load initial chats', e);
+        }
+      };
+      loadInitialChats();
+    }
+  }, [story.id, currentChatId, isIncognito, handleSelectChat, handleNewChat]);
+
+  // Auto-save chat
+  useEffect(() => {
+    let timeout: any;
+    if (currentChatId && chatMessages.length > 0 && !isChatLoading) {
+      if (isIncognito) {
+        // Update incognito in-memory
+        const firstUserMsg = chatMessages.find((m) => m.role === 'user');
+        const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
+        setIncognitoSessions((prev) =>
+          prev.map((s) =>
+            s.id === currentChatId
+              ? { ...s, name, messages: chatMessages, systemPrompt, allowWebSearch }
+              : s
+          )
+        );
+      } else {
+        timeout = setTimeout(async () => {
+          try {
+            const firstUserMsg = chatMessages.find((m) => m.role === 'user');
+            const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
+            await api.chat.save(currentChatId, {
+              name,
+              messages: chatMessages,
+              systemPrompt: systemPrompt,
+              allowWebSearch,
+            });
+            refreshChatList();
+          } catch (e) {
+            console.error('Failed to auto-save chat', e);
+          }
+        }, 2000);
+      }
+    }
+    return () => clearTimeout(timeout);
+  }, [
+    chatMessages,
+    currentChatId,
+    isIncognito,
+    systemPrompt,
+    isChatLoading,
+    refreshChatList,
+    allowWebSearch,
+  ]);
+
   // Get Active LLM Configs
   const activeChatConfig =
     appSettings.providers.find((p) => p.id === appSettings.activeChatProviderId) ||
@@ -530,26 +817,33 @@ const App: React.FC = () => {
     appSettings.providers.find((p) => p.id === appSettings.activeEditingProviderId) ||
     appSettings.providers[0];
 
-  const getSystemPrompt = () => {
-    return prompts.system_messages.chat_llm || '';
+  const requestToolCallLoopAccess = (
+    count: number
+  ): Promise<'stop' | 'continue' | 'unlimited'> => {
+    return new Promise((resolve) => {
+      setToolCallLoopDialog({ count, resolver: resolve });
+    });
   };
 
-  const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt());
-
-  useEffect(() => {
-    setSystemPrompt(getSystemPrompt());
-  }, [story.title, story.summary, story.styleTags, prompts]);
-
-  const executeChatRequest = async (userText: string, history: ChatMessage[]) => {
+  const executeChatRequest = async (
+    userText: string,
+    history: ChatMessage[],
+    userMsgId?: string
+  ) => {
     setIsChatLoading(true);
     stopSignalRef.current = false;
+
+    let sequentialToolCalls = 0;
+    let toolCallLimit = 10;
+
     try {
       let currentHistory = [...history];
       const session = createChatSession(
         systemPrompt,
         currentHistory,
         activeChatConfig,
-        'CHAT'
+        'CHAT',
+        { allowWebSearch }
       );
 
       let promptWithContext = userText;
@@ -590,8 +884,27 @@ const App: React.FC = () => {
         updateMessage(currentMsgId, update)
       );
 
+      // Add the user message to currentHistory so tool turns have context
+      currentHistory.push({
+        id: userMsgId || uuidv4(),
+        role: 'user',
+        text: userText,
+      });
+
       while (result.functionCalls && result.functionCalls.length > 0) {
         if (stopSignalRef.current) break;
+
+        sequentialToolCalls++;
+        if (sequentialToolCalls >= toolCallLimit) {
+          const choice = await requestToolCallLoopAccess(sequentialToolCalls);
+          setToolCallLoopDialog(null);
+          if (choice === 'stop') break;
+          if (choice === 'continue') {
+            toolCallLimit += 10;
+          } else {
+            toolCallLimit = Infinity;
+          }
+        }
 
         // 1. Update assistant message with tool calls in history
         const assistantMsg: ChatMessage = {
@@ -649,6 +962,7 @@ const App: React.FC = () => {
           setChatMessages([...currentHistory]);
 
           if (toolResponse.mutations?.story_changed) {
+            await refreshProjects();
             await refreshStory();
           }
 
@@ -660,7 +974,8 @@ const App: React.FC = () => {
             systemPrompt,
             currentHistory,
             activeChatConfig,
-            'CHAT'
+            'CHAT',
+            { allowWebSearch }
           );
           currentMsgId = uuidv4();
           result = await nextSession.sendMessage({ message: '' }, (update) =>
@@ -722,10 +1037,11 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = async (text: string) => {
-    const newMessage: ChatMessage = { id: uuidv4(), role: 'user', text };
-    const newHistory = [...chatMessages, newMessage];
-    setChatMessages(newHistory);
-    await executeChatRequest(text, newHistory);
+    const userMsgId = uuidv4();
+    const newMessage: ChatMessage = { id: userMsgId, role: 'user', text };
+    const historyBefore = [...chatMessages];
+    setChatMessages((prev) => [...prev, newMessage]);
+    await executeChatRequest(text, historyBefore, userMsgId);
   };
 
   const handleStopChat = () => {
@@ -736,16 +1052,27 @@ const App: React.FC = () => {
   const handleRegenerate = async () => {
     const lastMsgIndex = chatMessages.length - 1;
     if (lastMsgIndex < 0) return;
+
+    // Only allow regenerate if the last message is from the model
     const lastMsg = chatMessages[lastMsgIndex];
     if (lastMsg.role !== 'model') return;
-    const userMsgIndex = lastMsgIndex - 1;
-    if (userMsgIndex < 0) return;
-    const userMsg = chatMessages[userMsgIndex];
-    if (userMsg.role !== 'user') return;
 
-    const newHistory = chatMessages.slice(0, userMsgIndex);
+    // Find the last user message that initiated this turn.
+    // This allows regeneration even after tool calls or errors.
+    let userMsgIdx = -1;
+    for (let i = lastMsgIndex; i >= 0; i--) {
+      if (chatMessages[i].role === 'user') {
+        userMsgIdx = i;
+        break;
+      }
+    }
+
+    if (userMsgIdx === -1) return;
+    const userMsg = chatMessages[userMsgIdx];
+
+    const newHistory = chatMessages.slice(0, userMsgIdx);
     setChatMessages([...newHistory, userMsg]);
-    await executeChatRequest(userMsg.text, newHistory);
+    await executeChatRequest(userMsg.text, newHistory, userMsg.id);
   };
 
   const handleEditMessage = (id: string, newText: string) => {
@@ -1249,6 +1576,7 @@ const App: React.FC = () => {
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
         onConvertProject={handleConvertProject}
+        onRefreshProjects={refreshProjects}
         activeProjectType={story.projectType}
         activeProjectStats={{
           chapterCount: story.chapters.length,
@@ -2173,6 +2501,7 @@ const App: React.FC = () => {
             tags={story.styleTags}
             notes={story.notes}
             private_notes={story.private_notes}
+            conflicts={story.conflicts}
             onUpdate={updateStoryMetadata}
             theme={currentTheme}
           />
@@ -2194,6 +2523,7 @@ const App: React.FC = () => {
             theme={currentTheme}
             onOpenImages={handleOpenImages}
           />
+          <SourcebookList theme={currentTheme} />
         </div>
         <div
           className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
@@ -2244,7 +2574,18 @@ const App: React.FC = () => {
               onEditMessage={handleEditMessage}
               onDeleteMessage={handleDeleteMessage}
               onUpdateSystemPrompt={setSystemPrompt}
+              onSwitchProject={handleLoadProject}
               theme={currentTheme}
+              sessions={[...incognitoSessions, ...chatHistoryList]}
+              currentSessionId={currentChatId}
+              isIncognito={isIncognito}
+              onSelectSession={handleSelectChat}
+              onNewSession={handleNewChat}
+              onDeleteSession={handleDeleteChat}
+              onDeleteAllSessions={handleDeleteAllChats}
+              onToggleIncognito={setIsIncognito}
+              allowWebSearch={allowWebSearch}
+              onToggleWebSearch={setAllowWebSearch}
             />
           </div>
         )}
@@ -2255,6 +2596,53 @@ const App: React.FC = () => {
         onClose={() => setIsDebugLogsOpen(false)}
         theme={currentTheme}
       />
+
+      {toolCallLoopDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div
+            className={`p-6 rounded-lg shadow-2xl max-w-sm w-full ${
+              currentTheme === 'dark'
+                ? 'bg-brand-gray-900 text-white border border-brand-gray-700'
+                : 'bg-white text-brand-gray-900 border border-brand-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-4 text-amber-500">
+              <RefreshCw className="w-6 h-6 animate-spin-slow" />
+              <h3 className="text-xl font-bold">Tool Call Limit</h3>
+            </div>
+            <p className="mb-6 opacity-90">
+              The AI has executed <strong>{toolCallLoopDialog.count}</strong> tool calls
+              in a row.
+              <br />
+              <br />
+              Frequent automated actions can consume tokens quickly. How would you like
+              to proceed?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => toolCallLoopDialog.resolver('continue')}
+                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors shadow-sm"
+              >
+                Continue (+10 calls)
+              </button>
+              <button
+                onClick={() => toolCallLoopDialog.resolver('unlimited')}
+                className="w-full py-2.5 px-4 bg-brand-gray-200 dark:bg-brand-gray-800 hover:bg-brand-gray-300 dark:hover:bg-brand-gray-700 rounded-md font-medium transition-colors"
+              >
+                Continue without limit
+              </button>
+              <div className="mt-2 pt-2 border-t border-brand-gray-100 dark:border-brand-gray-800">
+                <button
+                  onClick={() => toolCallLoopDialog.resolver('stop')}
+                  className="w-full py-2.5 px-4 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md font-medium transition-colors"
+                >
+                  Stop and review
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

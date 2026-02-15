@@ -32,6 +32,15 @@ export interface Book {
   private_notes?: string;
 }
 
+export interface SourcebookEntry {
+  id: string;
+  name: string;
+  synonyms: string[];
+  category?: string;
+  description: string;
+  images: string[];
+}
+
 export interface Story {
   title: string;
   summary: string;
@@ -43,6 +52,7 @@ export interface Story {
   chapters: Chapter[];
   projectType: 'short-story' | 'novel' | 'series';
   books?: Book[];
+  sourcebook?: SourcebookEntry[];
   llm_prefs?: {
     prompt_overrides?: Record<string, string>;
   };
@@ -52,6 +62,7 @@ export interface StoryState extends Story {
   id: string; // Added ID for project management
   currentChapterId: string | null;
   lastUpdated?: number;
+  conflicts?: Conflict[];
 }
 
 export interface ChatMessage {
@@ -64,6 +75,17 @@ export interface ChatMessage {
   tool_call_id?: string;
   tool_calls?: any[];
   traceback?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  messages?: ChatMessage[];
+  systemPrompt?: string;
+  isIncognito?: boolean;
+  allowWebSearch?: boolean;
 }
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
@@ -97,11 +119,26 @@ export interface LLMConfig {
   };
 }
 
+export const DEFAULT_LLM_CONFIG: LLMConfig = {
+  id: 'default',
+  name: 'OpenAI (Default)',
+  baseUrl: 'https://api.openai.com/v1',
+  apiKey: '',
+  timeout: 30000,
+  modelId: 'gpt-4o',
+  temperature: 0.7,
+  topP: 0.95,
+  prompts: { system: '', continuation: '', summary: '' },
+};
+
 export interface AppSettings {
   providers: LLMConfig[];
   activeWritingProviderId: string;
   activeChatProviderId: string;
   activeEditingProviderId: string;
+  editor: EditorSettings;
+  sidebarOpen: boolean;
+  activeTab: string;
 }
 
 export interface ProjectMetadata {

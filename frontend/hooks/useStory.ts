@@ -19,6 +19,8 @@ const INITIAL_STORY: StoryState = {
   chapters: [],
   projectType: 'novel',
   books: [],
+  sourcebook: [],
+  conflicts: [],
   currentChapterId: null,
   lastUpdated: Date.now(),
 };
@@ -49,7 +51,89 @@ export const useStory = () => {
       if (!currentProject) return;
 
       const res = await api.projects.select(currentProject);
-      if (res.ok && res.story) {
+      if (res.error === 'version_outdated') {
+        // Show dialog to update
+        const shouldUpdate = confirm(
+          `The story config is outdated (version ${res.current_version}). Current version is ${res.required_version}. Do you want to update it?`
+        );
+        if (shouldUpdate) {
+          try {
+            const updateRes = await api.projects.updateConfig();
+            if (updateRes.ok) {
+              // After update, reload the story
+              const res2 = await api.projects.select(currentProject);
+              if (res2.ok && res2.story) {
+                const chaptersRes = await api.chapters.list();
+                const chapters: Chapter[] = chaptersRes.chapters.map((c: any) => ({
+                  id: String(c.id),
+                  title: c.title,
+                  summary: c.summary,
+                  content: '',
+                  filename: c.filename,
+                  book_id: c.book_id,
+                  notes: c.notes,
+                  private_notes: c.private_notes,
+                  conflicts: c.conflicts,
+                }));
+
+                // Re-anchor selection based on filename/book_id if IDs shifted
+                let newSelection = currentChapterId;
+                if (currentChapterId) {
+                  const oldChap = story.chapters.find((c) => c.id === currentChapterId);
+                  if (oldChap) {
+                    const matching = chapters.find(
+                      (c) =>
+                        c.filename === oldChap.filename && c.book_id === oldChap.book_id
+                    );
+                    if (matching) {
+                      newSelection = matching.id;
+                    } else {
+                      newSelection = null; // Reset if not found in new project
+                    }
+                  }
+                } else if (chapters.length > 0) {
+                  newSelection = null;
+                }
+
+                const newStory: StoryState = {
+                  id: currentProject,
+                  title: res2.story.project_title || currentProject,
+                  summary: res2.story.story_summary || '',
+                  styleTags: res2.story.tags || [],
+                  image_style: res2.story.image_style || '',
+                  image_additional_info: res2.story.image_additional_info || '',
+                  chapters: chapters,
+                  projectType: res2.story.project_type || 'novel',
+                  books: res2.story.books || [],
+                  sourcebook: res2.story.sourcebook || [],
+                  conflicts: res2.story.conflicts || [],
+                  llm_prefs: res2.story.llm_prefs,
+                  currentChapterId: newSelection,
+                  lastUpdated: Date.now(),
+                };
+
+                setStory(newStory);
+                setCurrentChapterId(newSelection);
+              } else if (res2.error) {
+                // Handle errors after update
+                if (res2.error === 'invalid_config') {
+                  alert(`Invalid story config: ${res2.error_message}`);
+                } else {
+                  alert(`Failed to load story after update: ${res2.error}`);
+                }
+              }
+            } else {
+              alert(`Failed to update config: ${updateRes.detail}`);
+            }
+          } catch (e) {
+            alert(`Failed to update config: ${e}`);
+          }
+        }
+        return;
+      } else if (res.error === 'invalid_config') {
+        alert(`Invalid story config: ${res.error_message}`);
+        return;
+      } else if (res.ok && res.story) {
         const chaptersRes = await api.chapters.list();
         const chapters: Chapter[] = chaptersRes.chapters.map((c: any) => ({
           id: String(c.id),
@@ -58,6 +142,9 @@ export const useStory = () => {
           content: '',
           filename: c.filename,
           book_id: c.book_id,
+          notes: c.notes,
+          private_notes: c.private_notes,
+          conflicts: c.conflicts,
         }));
 
         // Re-anchor selection based on filename/book_id if IDs shifted
@@ -70,8 +157,12 @@ export const useStory = () => {
             );
             if (matching) {
               newSelection = matching.id;
+            } else {
+              newSelection = null; // Reset if not found in new project
             }
           }
+        } else if (chapters.length > 0) {
+          newSelection = null;
         }
 
         const newStory: StoryState = {
@@ -84,12 +175,15 @@ export const useStory = () => {
           chapters: chapters,
           projectType: res.story.project_type || 'novel',
           books: res.story.books || [],
+          sourcebook: res.story.sourcebook || [],
+          conflicts: res.story.conflicts || [],
           llm_prefs: res.story.llm_prefs,
           currentChapterId: newSelection,
           lastUpdated: Date.now(),
         };
 
         setStory(newStory);
+        setCurrentChapterId(newSelection);
       }
     } catch (e) {
       console.error('Failed to refresh story', e);
@@ -108,7 +202,17 @@ export const useStory = () => {
           const res = await api.chapters.get(Number(currentChapterId));
           setStory((prev) => {
             const updatedChapters = prev.chapters.map((c) =>
-              c.id === currentChapterId ? { ...c, content: res.content } : c
+              c.id === currentChapterId
+                ? {
+                    ...c,
+                    content: res.content,
+                    notes: res.notes,
+                    private_notes: res.private_notes,
+                    conflicts: res.conflicts,
+                    title: res.title,
+                    summary: res.summary,
+                  }
+                : c
             );
             return { ...prev, chapters: updatedChapters };
           });
@@ -135,6 +239,9 @@ export const useStory = () => {
             content: '',
             filename: c.filename,
             book_id: c.book_id,
+            notes: c.notes,
+            private_notes: c.private_notes,
+            conflicts: c.conflicts,
           }));
 
           const newStory: StoryState = {
@@ -147,7 +254,8 @@ export const useStory = () => {
             chapters: chapters,
             projectType: res.story.project_type || 'novel',
             books: res.story.books || [],
-            llm_prefs: res.story.llm_prefs,
+            sourcebook: res.story.sourcebook || [],
+            conflicts: res.story.conflicts || [],
             currentChapterId: chapters.length > 0 ? chapters[0].id : null,
             lastUpdated: Date.now(),
           };
@@ -189,26 +297,13 @@ export const useStory = () => {
     pushState(newState);
 
     try {
-      if (story.title !== title) await api.story.updateTitle(title);
-      if (story.summary !== summary) await api.story.updateSummary(summary);
-      if (story.styleTags.join(',') !== tags.join(','))
-        await api.story.updateTags(tags);
-      // New generic metadata update if needed, but App.tsx calls api.story.updateMetadata which handles all
-      // Actually `useStory` logic for `updateStoryMetadata` was used in `StoryMetadata` via props,
-      // but `StoryMetadata.tsx` handles valid API calls now via `api.story.updateMetadata` internally?
-      // No, `StoryMetadata` in `App.tsx` calls `updateStoryMetadata` (from hook) in `onUpdate`.
-      // The `StoryMetadata` component calls `api.story.updateMetadata` AND calls `onUpdate`.
-      // So this hook function is just for updating local state mostly?
-      // Wait, the previous implementation in `useStory` called individual API endpoints.
-      // But `StoryMetadata` component was updated to call `api.story.updateMetadata` itself.
-      // So here in hook, we can skip API calls if they are redundant, OR ensure we use the new API.
-      // Ideally, the hook should manage the API call to keep logic centralized.
-      // But `StoryMetadata.tsx` does `await api.story.updateMetadata(...)` then `onUpdate(...)`.
-      // So `onUpdate` here should just update state.
-      // However to be safe and backward compatible with other calls, let's just leave state update.
-      // If we want this function to ALSO save, we should use the new endpoint.
-
-      await api.story.updateMetadata({ title, summary, notes, private_notes });
+      await api.story.updateMetadata({
+        title,
+        summary,
+        tags,
+        notes,
+        private_notes,
+      });
       await api.story.updateTags(tags);
     } catch (e) {
       console.error('Failed to update story metadata', e);

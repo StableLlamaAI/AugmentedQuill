@@ -18,6 +18,7 @@ dependencies = [
     "jinja2>=3.1",
     "httpx>=0.27",
     "python-multipart",
+    "jsonschema>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -48,3 +49,21 @@ target-version = "py311"
 [tool.ruff.lint]
 ignore = ["E501", "S101", "S104", "COM812", "ISC001"]
 per-file-ignores = {"tests/**/*" = ["S101", "ARG", "FBT", "PLR2004"]}
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''

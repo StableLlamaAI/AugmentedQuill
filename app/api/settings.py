@@ -11,7 +11,7 @@ import json as _json
 import httpx
 import datetime
 
-from app.config import load_story_config, load_machine_config
+from app.config import load_story_config, load_machine_config, CURRENT_SCHEMA_VERSION
 from app.projects import get_active_project_dir
 from app.llm import add_llm_log, create_log_entry
 from app.prompts import (
@@ -263,7 +263,9 @@ async def api_settings_post(request: Request) -> JSONResponse:
         machine_path = CONFIG_DIR / "machine.json"
         _ensure_parent_dir(story_path)
         _ensure_parent_dir(machine_path)
-        story_path.write_text(_json.dumps(story_cfg, indent=2), encoding="utf-8")
+        from app.config import save_story_config
+
+        save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
         return JSONResponse(
@@ -558,7 +560,9 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
         story = load_story_config(story_path) or {}
         story["story_summary"] = summary
         _ensure_parent_dir(story_path)
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+        from app.config import save_story_config
+
+        save_story_config(story_path, story)
     except Exception as e:
         return JSONResponse(
             status_code=500,
@@ -589,7 +593,9 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
         story = load_story_config(story_path) or {}
         story["tags"] = tags
         _ensure_parent_dir(story_path)
-        story_path.write_text(_json.dumps(story, indent=2), encoding="utf-8")
+        from app.config import save_story_config
+
+        save_story_config(story_path, story)
     except Exception as e:
         return JSONResponse(
             status_code=500,
@@ -597,3 +603,65 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
         )
 
     return JSONResponse(status_code=200, content={"ok": True, "tags": tags})
+
+
+@router.post("/api/settings/update_story_config")
+async def update_story_config(request: Request):
+    """Update the story config to the latest version."""
+    try:
+        active = get_active_project_dir()
+        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+
+        # Load without validation to get current config
+        from app.config import load_json_file, _interpolate_env, _deep_merge
+
+        defaults = {}
+        json_config = load_json_file(story_path)
+        json_config = _interpolate_env(json_config)
+        merged = _deep_merge(defaults, json_config)
+
+        version = merged.get("metadata", {}).get("version", 0)
+        if version >= CURRENT_SCHEMA_VERSION:
+            return JSONResponse(
+                status_code=200, content={"ok": True, "message": "Already up to date"}
+            )
+
+        # Find the update script
+        update_script = (
+            BASE_DIR
+            / "app"
+            / "updates"
+            / f"update_v{version}_to_v{CURRENT_SCHEMA_VERSION}.py"
+        )
+        if not update_script.exists():
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "ok": False,
+                    "detail": f"No update script found for version {version} to {CURRENT_SCHEMA_VERSION}",
+                },
+            )
+
+        # Run the update script
+        import subprocess
+
+        python_exe = BASE_DIR / "venv" / "bin" / "python"
+        result = subprocess.run(
+            [str(python_exe), str(update_script), str(story_path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return JSONResponse(
+                status_code=500,
+                content={"ok": False, "detail": f"Update failed: {result.stderr}"},
+            )
+
+        return JSONResponse(
+            status_code=200, content={"ok": True, "message": result.stdout.strip()}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Failed to update story config: {e}"},
+        )

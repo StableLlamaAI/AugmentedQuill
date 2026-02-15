@@ -122,7 +122,7 @@ class ProjectFeaturesTest(TestCase):
         self.assertEqual(len(story["books"]), 1)
 
         # Check that content was moved to the book
-        book_id = story["books"][0]["id"]
+        book_id = story["books"][0].get("id") or story["books"][0].get("folder")
         book_dir = active / "books" / book_id
         self.assertTrue((book_dir / "chapters" / "0001.txt").exists())
         text = (book_dir / "chapters" / "0001.txt").read_text(encoding="utf-8")
@@ -280,7 +280,14 @@ class ProjectFeaturesTest(TestCase):
         select_project("api_export")
         active = get_active_project_dir()
         (active / "story.json").write_text(
-            json.dumps({"project_title": "API Imported", "tags": ["imported"]}),
+            json.dumps(
+                {
+                    "metadata": {"version": 2},
+                    "project_title": "API Imported",
+                    "format": "markdown",
+                    "tags": ["imported"],
+                }
+            ),
             encoding="utf-8",
         )
 

@@ -25,6 +25,19 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+import jsonschema
+
+CURRENT_SCHEMA_VERSION = 2
+
+
+def _get_story_schema(version: int) -> Dict[str, Any]:
+    """Get the JSON schema for a given story config version."""
+    schema_path = (
+        Path(__file__).parent.parent / "schemas" / f"story-v{version}.schema.json"
+    )
+    with open(schema_path, "r") as f:
+        return json.load(f)
+
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
@@ -144,7 +157,84 @@ def load_story_config(
     json_config = _interpolate_env(json_config)
     merged = _deep_merge(defaults, json_config)
 
+    # Validate version and schema
+    version = merged.get("metadata", {}).get("version", 0)
+    if version < CURRENT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Story config at {path} has outdated version {version}. Current version is {CURRENT_SCHEMA_VERSION}. Please update the config."
+        )
+    elif version > CURRENT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Story config at {path} has unknown version {version}. Current supported version is {CURRENT_SCHEMA_VERSION}."
+        )
+
+    # Validate against schema
+    schema = _get_story_schema(version)
+    try:
+        jsonschema.validate(merged, schema)
+    except jsonschema.ValidationError as e:
+        raise ValueError(f"Invalid story config at {path}: {e.message}")
+
     if "tags" in merged and not isinstance(merged["tags"], list):
         raise ValueError(f"Invalid story config at {path}: 'tags' must be an array")
 
+    # Internal Normalization: Re-inject IDs that are stored under different names (like folder)
+    # for consistent usage throughout the app.
+    if merged.get("project_type") == "series" and "books" in merged:
+        for book in merged["books"]:
+            if isinstance(book, dict):
+                # If we have id but no folder, assume folder = id (legacy/manual)
+                if "id" in book and "folder" not in book:
+                    book["folder"] = book["id"]
+                # If we have folder but no id, inject it for runtime
+                if "folder" in book and "id" not in book:
+                    book["id"] = book["folder"]
+
     return merged
+
+
+def save_story_config(path: os.PathLike[str] | str, config: Dict[str, Any]) -> None:
+    p = Path(path)
+    if not p.parent.exists():
+        p.parent.mkdir(parents=True)
+
+    # Strip internal IDs recursively before saving.
+    # The requirement is that internal implementation details like UUIDs
+    # should not be content in the file on disk.
+    def _clean_for_disk(data, current_key=None):
+        if isinstance(data, dict):
+            res = {}
+            for k, v in data.items():
+                if k == "id":
+                    continue
+                if current_key == "sourcebook":
+                    # For sourcebook entries, the key is the name.
+                    # Dictionary values are the entry data; strip 'name' from within them.
+                    entry_data = _clean_for_disk(v)
+                    if isinstance(entry_data, dict):
+                        entry_data.pop("name", None)
+                    res[k] = entry_data
+                else:
+                    res[k] = _clean_for_disk(v, k)
+            return res
+        elif isinstance(data, list):
+            # If sourcebook somehow arrives as a list, convert it to the expected dict format.
+            if current_key == "sourcebook":
+                res = {}
+                for entry in data:
+                    if isinstance(entry, dict) and "name" in entry:
+                        name = entry["name"]
+                        entry_copy = {
+                            k: _clean_for_disk(v)
+                            for k, v in entry.items()
+                            if k not in ("id", "name")
+                        }
+                        res[name] = entry_copy
+                return res
+            return [_clean_for_disk(x) for x in data]
+        return data
+
+    clean_config = _clean_for_disk(config)
+
+    with p.open("w", encoding="utf-8") as f:
+        json.dump(clean_config, f, indent=2, ensure_ascii=False)

@@ -15,7 +15,13 @@ import {
   AlertCircle,
   Save,
 } from 'lucide-react';
-import { LLMConfig, ProjectMetadata, AppSettings, AppTheme } from '../types';
+import {
+  LLMConfig,
+  ProjectMetadata,
+  AppSettings,
+  AppTheme,
+  DEFAULT_LLM_CONFIG,
+} from '../types';
 import { api } from '../services/api';
 import { Button } from './Button';
 import { SettingsProjects } from './settings/SettingsProjects';
@@ -34,6 +40,7 @@ interface SettingsDialogProps {
   onRenameProject: (id: string, newName: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
+  onRefreshProjects: () => void;
   activeProjectType?: 'short-story' | 'novel' | 'series';
   activeProjectStats?: {
     chapterCount: number;
@@ -45,22 +52,6 @@ interface SettingsDialogProps {
     user_prompts: Record<string, string>;
   };
 }
-
-const DEFAULT_CONFIG: LLMConfig = {
-  id: 'default-openai',
-  name: 'Default OpenAI',
-  baseUrl: 'https://api.openai.com/v1',
-  apiKey: '',
-  timeout: 30000,
-  modelId: 'gpt-4o',
-  temperature: 0.7,
-  topP: 0.95,
-  prompts: {
-    system: '',
-    continuation: '',
-    summary: '',
-  },
-};
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   isOpen,
@@ -75,6 +66,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onRenameProject,
   onConvertProject,
   onImportProject,
+  onRefreshProjects,
   activeProjectType,
   activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
@@ -401,7 +393,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   const addProvider = () => {
     const newProvider: LLMConfig = {
-      ...DEFAULT_CONFIG,
+      ...DEFAULT_LLM_CONFIG,
       id: Date.now().toString(),
       name: 'New Provider',
     };
@@ -550,6 +542,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 onRenameProject={onRenameProject}
                 onConvertProject={onConvertProject}
                 onImportProject={onImportProject}
+                onRefreshProjects={onRefreshProjects}
                 onCloseDialog={onClose}
                 activeProjectType={activeProjectType}
                 activeProjectStats={activeProjectStats}
