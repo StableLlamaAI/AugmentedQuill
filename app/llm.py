@@ -18,11 +18,10 @@ Design goals:
 
 from __future__ import annotations
 
-from typing import Any, Dict, AsyncIterator, Tuple, List
+from typing import Any, Dict, AsyncIterator, Tuple
 from pathlib import Path
 import os
 import datetime
-import uuid
 
 import httpx
 import re
@@ -31,191 +30,16 @@ import json as _json
 from app.config import load_machine_config, load_story_config
 from app.projects import get_active_project_dir
 from app.helpers.stream_helpers import ChannelFilter
+from app.helpers.llm_parsing import parse_tool_calls_from_content, strip_thinking_tags
+from app.helpers.llm_logging import add_llm_log, create_log_entry
+from app.helpers.llm_request_helpers import (
+    get_story_llm_preferences,
+    build_headers,
+    build_timeout,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
-
-# Global list to store LLM communication logs for the current session
-llm_logs: List[Dict[str, Any]] = []
-
-
-def parse_tool_calls_from_content(content: str) -> list[dict] | None:
-    """Parse tool calls from assistant content if not provided in structured format.
-
-    Handles various formats like:
-    - <tool_call>get_project_overview</tool_call>
-    - <tool_call><function=get_project_overview></function></tool_call>
-    - [TOOL_CALL]get_project_overview[/TOOL_CALL]
-    - Tool: get_project_overview
-    """
-
-    calls = []
-
-    # 1. Look for <tool_call> tags
-    pattern1 = r"<tool_call>(.*?)</tool_call>"
-    matches1 = re.finditer(pattern1, content, re.IGNORECASE | re.DOTALL)
-
-    for m in matches1:
-        content_inner = m.group(1).strip()
-
-        # Try JSON format: {"name": "...", "arguments": ...}
-        if content_inner.startswith("{"):
-            try:
-                json_obj = _json.loads(content_inner)
-                if isinstance(json_obj, dict) and "name" in json_obj:
-                    name = json_obj["name"]
-                    args_obj = json_obj.get("arguments", {})
-
-                    call_id = f"call_{name}"
-                    if any(c["id"] == call_id for c in calls):
-                        call_id = f"{call_id}_{len(calls)}"
-
-                    calls.append(
-                        {
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": name,
-                                "arguments": _json.dumps(args_obj),
-                            },
-                            "original_text": m.group(0),
-                        }
-                    )
-                    continue
-            except Exception:
-                pass
-
-        # Try XML-like format: <function=NAME>ARGS</function>
-        xml_match = re.search(
-            r"<function=(\w+)>(.*?)</function>",
-            content_inner,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if xml_match:
-            name = xml_match.group(1)
-            args_str = xml_match.group(2).strip() or "{}"
-            try:
-                args_obj = _json.loads(args_str)
-            except Exception:
-                args_obj = {}
-
-            call_id = f"call_{name}"
-            # Ensure unique ID if multiple calls to same tool
-            if any(c["id"] == call_id for c in calls):
-                call_id = f"{call_id}_{len(calls)}"
-
-            calls.append(
-                {
-                    "id": call_id,
-                    "type": "function",
-                    "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                    "original_text": m.group(0),
-                }
-            )
-            continue
-
-        # Try NAME(ARGS) format
-        func_match = re.match(r"(\w+)(?:\((.*)\))?", content_inner, re.DOTALL)
-        if func_match:
-            name = func_match.group(1)
-            args_str = func_match.group(2) or "{}"
-            try:
-                args_obj = _json.loads(args_str)
-            except Exception:
-                args_obj = {}
-
-            call_id = f"call_{name}"
-            if any(c["id"] == call_id for c in calls):
-                call_id = f"{call_id}_{len(calls)}"
-
-            calls.append(
-                {
-                    "id": call_id,
-                    "type": "function",
-                    "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                    "original_text": m.group(0),
-                }
-            )
-
-    # 2. Look for [TOOL_CALL] tags
-    pattern2 = r"\[TOOL_CALL\]\s*(.*?)\s*\[/TOOL_CALL\]"
-    matches2 = re.finditer(pattern2, content, re.IGNORECASE | re.DOTALL)
-
-    for m in matches2:
-        content_inner = m.group(1).strip()
-        func_match = re.match(r"(\w+)(?:\s*\((.*?)\))?", content_inner, re.DOTALL)
-        if func_match:
-            name = func_match.group(1)
-            args_str = func_match.group(2).strip() if func_match.group(2) else "{}"
-            try:
-                args_obj = _json.loads(args_str)
-            except Exception:
-                args_obj = {}
-
-            call_id = f"call_{name}"
-            if any(c["id"] == call_id for c in calls):
-                call_id = f"{call_id}_{len(calls)}"
-
-            calls.append(
-                {
-                    "id": call_id,
-                    "type": "function",
-                    "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                    "original_text": m.group(0),
-                }
-            )
-
-    # 3. Look for "Tool:" prefix (must be at start of line or after whitespace)
-    pattern3 = r"(?:^|(?<=\s))Tool:\s+(\w+)(?:\(([^)]*)\))?"
-    matches3 = re.finditer(pattern3, content, re.IGNORECASE)
-
-    for m in matches3:
-        name = m.group(1)
-        args_str = m.group(2).strip() if m.group(2) else "{}"
-        try:
-            args_obj = _json.loads(args_str) if args_str != "{}" else {}
-        except Exception:
-            args_obj = {}
-
-        call_id = f"call_{name}"
-        if any(c["id"] == call_id for c in calls):
-            call_id = f"{call_id}_{len(calls)}"
-
-        calls.append(
-            {
-                "id": call_id,
-                "type": "function",
-                "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                "original_text": m.group(0),
-            }
-        )
-
-    # 4. Look for <|channel|>commentary to=functions.NAME ... <|message|>JSON
-    pattern4 = r"(?:<\|start\|>assistant)?<\|channel\|>commentary to=functions\.(\w+).*?<\|message\|>(.*?)(?=<\||$)"
-    matches4 = re.finditer(pattern4, content, re.IGNORECASE | re.DOTALL)
-
-    for m in matches4:
-        name = m.group(1)
-        args_str = m.group(2).strip() or "{}"
-        try:
-            args_obj = _json.loads(args_str)
-        except Exception:
-            args_obj = {}
-
-        call_id = f"call_{name}"
-        if any(c["id"] == call_id for c in calls):
-            call_id = f"{call_id}_{len(calls)}"
-
-        calls.append(
-            {
-                "id": call_id,
-                "type": "function",
-                "function": {"name": name, "arguments": _json.dumps(args_obj)},
-                "original_text": m.group(0),
-            }
-        )
-
-    return calls if calls else None
 
 
 async def unified_chat_stream(
@@ -525,72 +349,6 @@ async def unified_chat_stream(
             break
 
 
-def strip_thinking_tags(content: str) -> str:
-    """Strip thinking/analysis tags from content, returning only the final message."""
-    if not content:
-        return content
-
-    # Handle <|channel|>analysis<|message|>...<|end|><|start|>assistant<|channel|>final<|message|>
-    if "<|channel|>analysis<|message|>" in content:
-        # Try to find the final channel
-        final_match = re.search(
-            r"<\|channel\|>final<\|message\|>(.*)", content, re.DOTALL
-        )
-        if final_match:
-            return final_match.group(1).strip()
-        # If no final channel found but analysis is present, it might be just analysis or incomplete
-        # Remove the analysis part
-        content = re.sub(
-            r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>",
-            "",
-            content,
-            flags=re.DOTALL,
-        )
-        content = re.sub(
-            r"<\|start\|>assistant<\|channel\|>final<\|message\|>", "", content
-        )
-        return content.strip()
-
-    # Handle <thought>...</thought> or <thinking>...</thinking>
-    content = re.sub(r"<(thought|thinking)>.*?</\1>", "", content, flags=re.DOTALL)
-
-    return content.strip()
-
-
-def add_llm_log(log_entry: Dict[str, Any]):
-    """Add a log entry to the global list, keeping only the last 100 entries."""
-    llm_logs.append(log_entry)
-    if len(llm_logs) > 100:
-        llm_logs.pop(0)
-
-
-def create_log_entry(
-    url: str, method: str, headers: Dict[str, str], body: Any, streaming: bool = False
-) -> Dict[str, Any]:
-    """Create a new log entry structure."""
-    return {
-        "id": str(uuid.uuid4()),
-        "timestamp_start": datetime.datetime.now().isoformat(),
-        "timestamp_end": None,
-        "request": {
-            "url": url,
-            "method": method,
-            "headers": {
-                k: ("***" if k.lower() == "authorization" else v)
-                for k, v in headers.items()
-            },
-            "body": body,
-        },
-        "response": {
-            "status_code": None,
-            "streaming": streaming,
-            "chunks": [] if streaming else None,
-            "full_content": "" if streaming else None,
-            "body": None if not streaming else None,
-        },
-    }
-
-
 def get_selected_model_name(
     payload: Dict[str, Any], model_type: str | None = None
 ) -> str | None:
@@ -775,21 +533,14 @@ async def openai_chat_complete(
 
     Pulls llm_prefs (temperature, max_tokens) from story.json of active project.
     """
-    story = (
-        load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    temperature, max_tokens = get_story_llm_preferences(
+        config_dir=CONFIG_DIR,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
     )
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
 
     url = str(base_url).rstrip("/") + "/chat/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = build_headers(api_key)
 
     body: Dict[str, Any] = {
         "model": model_id,
@@ -804,10 +555,7 @@ async def openai_chat_complete(
     log_entry = create_log_entry(url, "POST", headers, body)
     add_llm_log(log_entry)
 
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
+    timeout_obj = build_timeout(timeout_s)
 
     if _llm_debug_enabled():
         print(
@@ -851,21 +599,14 @@ async def openai_completions(
 
     Pulls llm_prefs (temperature, max_tokens) from story.json of active project.
     """
-    story = (
-        load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    temperature, max_tokens = get_story_llm_preferences(
+        config_dir=CONFIG_DIR,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
     )
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
 
     url = str(base_url).rstrip("/") + "/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = build_headers(api_key)
 
     body: Dict[str, Any] = {
         "model": model_id,
@@ -881,10 +622,7 @@ async def openai_completions(
     log_entry = create_log_entry(url, "POST", headers, body)
     add_llm_log(log_entry)
 
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
+    timeout_obj = build_timeout(timeout_s)
 
     if _llm_debug_enabled():
         print(
@@ -928,20 +666,13 @@ async def openai_chat_complete_stream(
     pieces for simplicity on the caller side.
     """
     url = str(base_url).rstrip("/") + "/chat/completions"
-    story = (
-        load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    temperature, max_tokens = get_story_llm_preferences(
+        config_dir=CONFIG_DIR,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
     )
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
 
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = build_headers(api_key)
 
     body: Dict[str, Any] = {
         "model": model_id,
@@ -955,10 +686,7 @@ async def openai_chat_complete_stream(
     log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
     add_llm_log(log_entry)
 
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
+    timeout_obj = build_timeout(timeout_s)
 
     async with httpx.AsyncClient(timeout=timeout_obj) as client:
         try:
@@ -1011,20 +739,13 @@ async def openai_completions_stream(
     pieces for simplicity on the caller side.
     """
     url = str(base_url).rstrip("/") + "/completions"
-    story = (
-        load_story_config((get_active_project_dir() or CONFIG_DIR) / "story.json") or {}
+    temperature, max_tokens = get_story_llm_preferences(
+        config_dir=CONFIG_DIR,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
     )
-    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
-    temperature = prefs.get("temperature", 0.7)
-    try:
-        temperature = float(temperature)
-    except Exception:
-        temperature = 0.7
-    max_tokens = prefs.get("max_tokens")
 
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = build_headers(api_key)
 
     body: Dict[str, Any] = {
         "model": model_id,
@@ -1040,10 +761,7 @@ async def openai_completions_stream(
     log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
     add_llm_log(log_entry)
 
-    try:
-        timeout_obj = httpx.Timeout(float(timeout_s or 60))
-    except Exception:
-        timeout_obj = httpx.Timeout(60.0)
+    timeout_obj = build_timeout(timeout_s)
 
     async with httpx.AsyncClient(timeout=timeout_obj) as client:
         try:

@@ -1,0 +1,44 @@
+import json as _json
+
+from fastapi import HTTPException
+
+from app.helpers.chat_tools.chapter_tools import handle_chapter_tool
+from app.helpers.chat_tools.common import tool_error
+from app.helpers.chat_tools.image_tools import (
+    handle_image_tool,
+)
+from app.helpers.chat_tools.order_tools import handle_order_tool
+from app.helpers.chat_tools.project_tools import handle_project_tool
+from app.helpers.chat_tools.story_tools import handle_story_tool
+
+
+async def _exec_chat_tool(
+    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+) -> dict:
+    """Helper to execute a single tool call."""
+    try:
+        handlers = [
+            handle_project_tool,
+            handle_story_tool,
+            handle_image_tool,
+            handle_chapter_tool,
+            handle_order_tool,
+        ]
+
+        for handler in handlers:
+            result = await handler(name, args_obj, call_id, payload, mutations)
+            if result is not None:
+                return result
+
+        return tool_error(name, call_id, f"Unknown tool: {name}")
+    except HTTPException as e:
+        return tool_error(name, call_id, f"Tool failed: {e.detail}")
+    except Exception as e:
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps(
+                {"error": f"Tool failed with unexpected error: {e}"}
+            ),
+        }

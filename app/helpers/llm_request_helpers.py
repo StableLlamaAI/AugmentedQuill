@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+from typing import Any, Dict, Callable
+
+import httpx
+
+
+def get_story_llm_preferences(
+    *,
+    config_dir,
+    get_active_project_dir: Callable[[], Any],
+    load_story_config: Callable[[Any], Dict[str, Any] | None],
+) -> tuple[float, int | None]:
+    """Load story-level LLM preferences and normalize values."""
+    story = (
+        load_story_config((get_active_project_dir() or config_dir) / "story.json") or {}
+    )
+    prefs = (story.get("llm_prefs") or {}) if isinstance(story, dict) else {}
+    temperature = prefs.get("temperature", 0.7)
+    try:
+        temperature = float(temperature)
+    except Exception:
+        temperature = 0.7
+    max_tokens = prefs.get("max_tokens")
+    return temperature, max_tokens
+
+
+def build_headers(api_key: str | None) -> Dict[str, str]:
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def build_timeout(timeout_s: int) -> httpx.Timeout:
+    try:
+        return httpx.Timeout(float(timeout_s or 60))
+    except Exception:
+        return httpx.Timeout(60.0)
