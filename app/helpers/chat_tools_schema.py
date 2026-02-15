@@ -578,6 +578,109 @@ STORY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search_sourcebook",
+            "description": "Search the sourcebook (world info, characters, locations) for a query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query."}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sourcebook_entry",
+            "description": "Get a specific sourcebook entry by name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name_or_id": {"type": "string", "description": "Entry name."}
+                },
+                "required": ["name_or_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_sourcebook_entry",
+            "description": "Create a new sourcebook entry.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Entry name."},
+                    "description": {
+                        "type": "string",
+                        "description": "Entry description.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category (Character, Location, etc.).",
+                    },
+                    "synonyms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional synonyms.",
+                    },
+                },
+                "required": ["name", "description", "category"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_sourcebook_entry",
+            "description": "Update an existing sourcebook entry.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name_or_id": {
+                        "type": "string",
+                        "description": "Current entry name.",
+                    },
+                    "name": {"type": "string", "description": "New name (optional)."},
+                    "description": {
+                        "type": "string",
+                        "description": "New description (optional).",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "New category (optional).",
+                    },
+                    "synonyms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "New synonyms (optional).",
+                    },
+                },
+                "required": ["name_or_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_sourcebook_entry",
+            "description": "Remove a sourcebook entry.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name_or_id": {
+                        "type": "string",
+                        "description": "Entry name to delete.",
+                    }
+                },
+                "required": ["name_or_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "reorder_chapters",
             "description": "Reorder chapters in a novel project or within a specific book in a series project. To move a chapter between books, provide the chapter ID in the list for the target book. ONLY use numeric chapter IDs and UUID book IDs.",
             "parameters": {
