@@ -551,6 +551,57 @@ STORY_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+]
+
+WEB_SEARCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for real-world information. NOTE: This returns snippets only. You MUST subsequently call 'visit_page' on the top 1-3 relevant URLs to get the actual content needed for your answer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "visit_page",
+            "description": "Visit a specific web page by URL and extract its main content as text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL of the page to visit.",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "wikipedia_search",
+            "description": "Search Wikipedia for factual information. You MUST subsequently call 'visit_page' on the result URLs to read the full article content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search term."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+STORY_TOOLS += [
     {
         "type": "function",
         "function": {
@@ -1552,6 +1603,132 @@ async def _exec_chat_tool(
                 "name": name,
                 "content": _json.dumps({"ok": True}),
             }
+
+        if name == "web_search":
+            query = args_obj.get("query", "")
+            try:
+                from duckduckgo_search import DDGS
+
+                results = []
+                with DDGS() as ddgs:
+                    # Try a few variations to be robust
+                    # 1. Standard text search with US region first to avoid irrelevant results
+                    results = list(ddgs.text(query, max_results=8, region="us-en"))
+
+                    # 2. If empty, try with a broader region
+                    if not results:
+                        results = list(ddgs.text(query, max_results=8, region="wt-wt"))
+
+                    # 3. If still empty and contains a future year, try without the year
+                    import datetime
+
+                    current_year = datetime.datetime.now().year
+                    if not results and str(current_year + 1) in query:
+                        broader_query = query.replace(str(current_year + 1), "").strip()
+                        results = list(ddgs.text(broader_query, max_results=8))
+
+                    # 4. If still empty, try news
+                    if not results:
+                        results = list(ddgs.news(query, max_results=5))
+
+                # If we have results, wrap them with the query for transparency
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"query": query, "results": results}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps(
+                        {"query": query, "error": str(e), "results": []}
+                    ),
+                }
+
+        if name == "visit_page":
+            url = args_obj.get("url", "")
+            try:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                async with httpx.AsyncClient(follow_redirects=True) as client:
+                    resp = await client.get(url, headers=headers, timeout=15.0)
+                    resp.raise_for_status()
+
+                    from bs4 import BeautifulSoup
+
+                    soup = BeautifulSoup(resp.text, "html.parser")
+
+                    # Remove script and style elements
+                    for script_or_style in soup(["script", "style"]):
+                        script_or_style.decompose()
+
+                    # Get text
+                    text = soup.get_text(separator="\n")
+                    # Break into lines and remove leading/trailing whitespace
+                    lines = (line.strip() for line in text.splitlines())
+                    # Break multi-headlines into a line each
+                    chunks = (
+                        phrase.strip() for line in lines for phrase in line.split("  ")
+                    )
+                    # Drop blank lines
+                    text = "\n".join(chunk for chunk in chunks if chunk)
+
+                    # Limit length
+                    if len(text) > 10000:
+                        text = text[:10000] + "... [TRUNCATED]"
+
+                    return {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": _json.dumps({"url": url, "content": text}),
+                    }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"url": url, "error": str(e)}),
+                }
+
+        if name == "wikipedia_search":
+            query = args_obj.get("query", "")
+            try:
+                # Use wikipedia API
+                wiki_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={query}&limit=5&namespace=0&format=json"
+                headers = {"User-Agent": "AugmentedQuill/1.0 (Research Tool)"}
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(wiki_url, headers=headers, timeout=10.0)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    # data format: [query, [titles], [snippets], [urls]]
+                    results = []
+                    if len(data) >= 4:
+                        for i in range(len(data[1])):
+                            results.append(
+                                {
+                                    "title": data[1][i],
+                                    "snippet": data[2][i],
+                                    "url": data[3][i],
+                                }
+                            )
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"query": query, "results": results}),
+                }
+            except Exception as e:
+                return {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": name,
+                    "content": _json.dumps({"error": str(e)}),
+                }
 
         if name == "get_story_summary":
             active = get_active_project_dir()
@@ -2597,8 +2774,13 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         await _inject_project_images(req_messages)
 
     # Prepend system message if not present
-    has_system = any(msg.get("role") == "system" for msg in req_messages)
-    if not has_system:
+    system_msg = None
+    for msg in req_messages:
+        if msg.get("role") == "system":
+            system_msg = msg
+            break
+
+    if not system_msg:
         # Map model_type to system message key
         sys_msg_key = "chat_llm"
         if model_type == "WRITING":
@@ -2607,9 +2789,22 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             sys_msg_key = "editing_llm"
 
         model_overrides = load_model_prompt_overrides(machine, selected_name)
-
         system_content = get_system_message(sys_msg_key, model_overrides)
-        req_messages.insert(0, {"role": "system", "content": system_content})
+        system_msg = {"role": "system", "content": system_content}
+        req_messages.insert(0, system_msg)
+
+    # If web search is allowed, ensure the system prompt mentions it
+    if (payload or {}).get("allow_web_search"):
+        content = system_msg.get("content") or ""
+        if "web_search" not in content:
+            system_msg["content"] = (
+                content
+                + "\n\nWEB SEARCH ENABLED: You have access to 'web_search', 'wikipedia_search', and 'visit_page'.\n"
+                "RESEARCH PROTOCOL:\n"
+                "1. Start with 'wikipedia_search' for entities/facts, or 'web_search' for news/general info.\n"
+                "2. IMPORTANT: Do NOT rely solely on snippets. You MUST use 'visit_page' to read the full content of the top 1-3 most relevant URLs found in the search results before formulating your final response.\n"
+                "3. This multi-step process is required so the user can see your research path and the actual data you are using."
+            )
 
     if not base_url or not model_id:
         raise HTTPException(
@@ -2654,7 +2849,11 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         if tool_choice == "none":
             pass
         else:
-            body["tools"] = STORY_TOOLS
+            tools = STORY_TOOLS.copy()
+            if (payload or {}).get("allow_web_search"):
+                tools.extend(WEB_SEARCH_TOOLS)
+
+            body["tools"] = tools
             if tool_choice:
                 body["tool_choice"] = tool_choice
 
@@ -2696,8 +2895,12 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                                 content = m.get("content", "") or ""
                                 # Append explicit instruction for text-based tool calling
                                 # Construct a list of available tools
+                                tools_list = STORY_TOOLS.copy()
+                                if (payload or {}).get("allow_web_search"):
+                                    tools_list.extend(WEB_SEARCH_TOOLS)
+
                                 tools_desc = "\nAvailable Tools:\n"
-                                for t in STORY_TOOLS:
+                                for t in tools_list:
                                     f = t.get("function", {})
                                     name = f.get("name")
                                     desc = f.get("description", "")
@@ -2716,11 +2919,23 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
                         # If no system prompt found, prepend one
                         if not found_system:
+                            tools_list = STORY_TOOLS.copy()
+                            if (payload or {}).get("allow_web_search"):
+                                tools_list.extend(WEB_SEARCH_TOOLS)
+
+                            tools_desc = "\nAvailable Tools:\n"
+                            for t in tools_list:
+                                f = t.get("function", {})
+                                name = f.get("name")
+                                desc = f.get("description", "")
+                                if name:
+                                    tools_desc += f"- {name}: {desc}\n"
+
                             current_body["messages"].insert(
                                 0,
                                 {
                                     "role": "system",
-                                    "content": 'You are a helpful assistant.\n\n[SYSTEM NOTICE: Native tool calling is unavailable. To use tools, you MUST output the tool call strictly using this format:]\n[TOOL_CALL]tool_name({"arg": "value"})[/TOOL_CALL]',
+                                    "content": f'You are a helpful assistant.\n\n[SYSTEM NOTICE: Native tool calling is unavailable. To use tools, you MUST output the tool call strictly using this format:]\n[TOOL_CALL]tool_name({{"arg": "value"}})[/TOOL_CALL]\n{tools_desc}',
                                 },
                             )
 
@@ -3465,6 +3680,17 @@ async def api_delete_chat(chat_id: str):
     if delete_chat(p_dir, chat_id):
         return {"ok": True}
     raise HTTPException(status_code=404, detail="Chat not found")
+
+
+@router.delete("/api/chats")
+async def api_delete_all_chats():
+    p_dir = get_active_project_dir()
+    if not p_dir:
+        raise HTTPException(status_code=404, detail="No active project")
+    from app.projects import delete_all_chats as delete_all
+
+    delete_all(p_dir)
+    return {"ok": True}
 
 
 @router.post("/api/openai/models")

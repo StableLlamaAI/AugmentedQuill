@@ -156,6 +156,8 @@ const App: React.FC = () => {
     resolver: (choice: 'stop' | 'continue' | 'unlimited') => void;
   } | null>(null);
 
+  const [allowWebSearch, setAllowWebSearch] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     const checkProviders = async () => {
@@ -644,15 +646,18 @@ const App: React.FC = () => {
           messages: [],
           systemPrompt: getSystemPrompt(),
           isIncognito: true,
+          allowWebSearch: false,
         };
         setIncognitoSessions((prev) => [newSession, ...prev]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
+        setAllowWebSearch(false);
       } else {
         setChatMessages([]);
         setIsIncognito(false);
         setCurrentChatId(newId);
+        setAllowWebSearch(false);
       }
       setSystemPrompt(getSystemPrompt());
     },
@@ -670,6 +675,7 @@ const App: React.FC = () => {
         if (incognito.systemPrompt) {
           setSystemPrompt(incognito.systemPrompt);
         }
+        setAllowWebSearch(incognito.allowWebSearch || false);
         return;
       }
 
@@ -682,6 +688,7 @@ const App: React.FC = () => {
           if (chat.systemPrompt) {
             setSystemPrompt(chat.systemPrompt);
           }
+          setAllowWebSearch(chat.allowWebSearch || false);
         }
       } catch (e) {
         console.error('Failed to load chat', e);
@@ -714,6 +721,27 @@ const App: React.FC = () => {
     [currentChatId, handleNewChat, refreshChatList, incognitoSessions]
   );
 
+  const handleDeleteAllChats = useCallback(async () => {
+    if (
+      !confirm(
+        'Are you sure you want to delete ALL chats (including incognito)? This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      // Clear incognito
+      setIncognitoSessions([]);
+      // Delete from server
+      await api.chat.deleteAll();
+      await refreshChatList();
+      handleNewChat();
+    } catch (e) {
+      console.error('Failed to delete all chats', e);
+    }
+  }, [handleNewChat, refreshChatList]);
+
   // Initial Chat Load
   useEffect(() => {
     if (story.id && !currentChatId && !isIncognito) {
@@ -745,7 +773,7 @@ const App: React.FC = () => {
         setIncognitoSessions((prev) =>
           prev.map((s) =>
             s.id === currentChatId
-              ? { ...s, name, messages: chatMessages, systemPrompt }
+              ? { ...s, name, messages: chatMessages, systemPrompt, allowWebSearch }
               : s
           )
         );
@@ -758,6 +786,7 @@ const App: React.FC = () => {
               name,
               messages: chatMessages,
               systemPrompt: systemPrompt,
+              allowWebSearch,
             });
             refreshChatList();
           } catch (e) {
@@ -774,6 +803,7 @@ const App: React.FC = () => {
     systemPrompt,
     isChatLoading,
     refreshChatList,
+    allowWebSearch,
   ]);
 
   // Get Active LLM Configs
@@ -812,7 +842,8 @@ const App: React.FC = () => {
         systemPrompt,
         currentHistory,
         activeChatConfig,
-        'CHAT'
+        'CHAT',
+        { allowWebSearch }
       );
 
       let promptWithContext = userText;
@@ -943,7 +974,8 @@ const App: React.FC = () => {
             systemPrompt,
             currentHistory,
             activeChatConfig,
-            'CHAT'
+            'CHAT',
+            { allowWebSearch }
           );
           currentMsgId = uuidv4();
           result = await nextSession.sendMessage({ message: '' }, (update) =>
@@ -2550,7 +2582,10 @@ const App: React.FC = () => {
               onSelectSession={handleSelectChat}
               onNewSession={handleNewChat}
               onDeleteSession={handleDeleteChat}
+              onDeleteAllSessions={handleDeleteAllChats}
               onToggleIncognito={setIsIncognito}
+              allowWebSearch={allowWebSearch}
+              onToggleWebSearch={setAllowWebSearch}
             />
           </div>
         )}

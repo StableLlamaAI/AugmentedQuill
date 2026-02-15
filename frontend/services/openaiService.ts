@@ -160,7 +160,8 @@ export const createChatSession = (
   systemInstruction: string,
   history: any[],
   config: LLMConfig,
-  modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT'
+  modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
+  options?: { allowWebSearch?: boolean }
 ): UnifiedChat => {
   return {
     sendMessage: async (msg, onUpdate) => {
@@ -202,6 +203,7 @@ export const createChatSession = (
             messages,
             model_type: modelType,
             model_name: config.id,
+            allow_web_search: options?.allowWebSearch,
           }),
         });
 

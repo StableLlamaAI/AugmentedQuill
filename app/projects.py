@@ -173,6 +173,15 @@ def delete_chat(project_path: Path, chat_id: str) -> bool:
     return False
 
 
+def delete_all_chats(project_path: Path) -> None:
+    chats_dir = get_chats_dir(project_path)
+    if chats_dir.exists():
+        import shutil
+
+        shutil.rmtree(chats_dir)
+        chats_dir.mkdir(parents=True, exist_ok=True)
+
+
 def get_active_project_dir() -> Path | None:
     reg = load_registry()
     cur = reg.get("current") or ""

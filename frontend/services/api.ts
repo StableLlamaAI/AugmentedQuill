@@ -439,6 +439,13 @@ export const api = {
       if (!res.ok) throw new Error('Failed to delete chat');
       return res.json();
     },
+    deleteAll: async () => {
+      const res = await fetch(`${API_BASE}/chats`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete all chats');
+      return res.json();
+    },
     executeTools: async (payload: {
       messages: any[];
       active_chapter_id?: number;

@@ -85,6 +85,7 @@ export interface ChatSession {
   messages?: ChatMessage[];
   systemPrompt?: string;
   isIncognito?: boolean;
+  allowWebSearch?: boolean;
 }
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';

@@ -13,6 +13,7 @@ import {
   Bot,
   User,
   Sparkles,
+  Globe,
   RefreshCw,
   Trash2,
   Edit2,
@@ -74,8 +75,109 @@ interface ChatProps {
   onSelectSession: (id: string) => void;
   onNewSession: (incognito?: boolean) => void;
   onDeleteSession: (id: string) => void;
+  onDeleteAllSessions?: () => void;
   onToggleIncognito: (val: boolean) => void;
+  allowWebSearch: boolean;
+  onToggleWebSearch: (val: boolean) => void;
 }
+
+const WebSearchResults: React.FC<{ content: string; name: string }> = ({
+  content,
+  name,
+}) => {
+  try {
+    const data = JSON.parse(content);
+    const results = Array.isArray(data) ? data : data.results || [];
+    const query = data.query || '';
+
+    return (
+      <div className="flex flex-col space-y-2">
+        <div className="flex items-center space-x-2 pb-2 border-b border-blue-500/20">
+          <Globe className="text-blue-500" size={16} />
+          <span className="font-bold text-xs text-blue-700 dark:text-blue-400">
+            {name === 'wikipedia_search' ? 'Wikipedia:' : 'Web Search:'}
+          </span>
+          <span className="italic text-brand-gray-600 dark:text-brand-gray-400 text-xs truncate">
+            "{query}"
+          </span>
+        </div>
+
+        {results.length === 0 ? (
+          <div className="text-[11px] text-brand-gray-500 italic py-2">
+            {data.error ? `Error: ${data.error}` : 'No relevant results found.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 py-2">
+            {results.map((r: any, i: number) => (
+              <div
+                key={i}
+                className="group flex flex-col p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-blue-500/20"
+              >
+                <a
+                  href={r.href || r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-sm line-clamp-1"
+                >
+                  {r.title}
+                </a>
+                <div className="text-[10px] text-green-700 dark:text-green-500 truncate mt-0.5">
+                  {r.href || r.url}
+                </div>
+                {r.body || r.snippet ? (
+                  <div className="text-brand-gray-600 dark:text-brand-gray-300 text-[11px] line-clamp-2 mt-1 leading-snug">
+                    {r.body || r.snippet}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  } catch (e) {
+    return <MarkdownView content={content} />;
+  }
+};
+
+const VisitPageResult: React.FC<{ content: string }> = ({ content }) => {
+  try {
+    const data = JSON.parse(content);
+    return (
+      <div className="flex flex-col space-y-2">
+        <div className="flex items-center space-x-2 pb-2 border-b border-amber-500/20">
+          <ArrowRight className="text-amber-500" size={14} />
+          <span className="font-bold text-xs text-amber-700 dark:text-amber-400">
+            Visited Page:
+          </span>
+        </div>
+
+        <div className="bg-amber-500/5 border border-amber-500/10 rounded p-2 text-[10px] text-brand-gray-500 break-all font-mono">
+          {data.url}
+        </div>
+
+        {data.error ? (
+          <div className="text-[11px] text-red-500 italic p-1">
+            Error loading page: {data.error}
+          </div>
+        ) : (
+          <div className="bg-white/80 dark:bg-black/20 border border-black/5 dark:border-white/5 rounded-lg p-3">
+            <div className="max-h-80 overflow-y-auto custom-scrollbar text-[11px] whitespace-pre-wrap opacity-90 font-sans leading-relaxed">
+              {data.content}
+            </div>
+            <div className="mt-2 text-right">
+              <span className="text-[9px] text-brand-gray-400 uppercase tracking-wider">
+                Extracted Text ({Math.round(data.content.length / 1024)} KB)
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  } catch (e) {
+    return <MarkdownView content={content} />;
+  }
+};
 
 export const Chat: React.FC<ChatProps> = ({
   messages,
@@ -95,7 +197,10 @@ export const Chat: React.FC<ChatProps> = ({
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  onDeleteAllSessions,
   onToggleIncognito,
+  allowWebSearch,
+  onToggleWebSearch,
 }) => {
   const [input, setInput] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -264,6 +369,17 @@ export const Chat: React.FC<ChatProps> = ({
             <History size={16} />
           </button>
           <button
+            onClick={() => onToggleWebSearch(!allowWebSearch)}
+            className={`p-1.5 rounded border transition-all ${
+              allowWebSearch
+                ? 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/20 dark:border-blue-500/30 shadow-sm'
+                : 'text-brand-gray-500 border-transparent hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800'
+            }`}
+            title={allowWebSearch ? 'Web Search Enabled' : 'Enable Web Search'}
+          >
+            <Globe size={16} />
+          </button>
+          <button
             onClick={() => setShowSystemPrompt(!showSystemPrompt)}
             className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
               showSystemPrompt
@@ -282,9 +398,19 @@ export const Chat: React.FC<ChatProps> = ({
           className={`p-4 border-b max-h-60 overflow-y-auto ${headerBg} ${borderMain}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-brand-gray-500">
-              Recent Chats
-            </h3>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-brand-gray-500">
+                Recent Chats
+              </h3>
+              {sessions.length > 0 && onDeleteAllSessions && (
+                <button
+                  onClick={onDeleteAllSessions}
+                  className="text-[10px] text-red-500 hover:text-red-600 font-bold uppercase hover:underline ml-2"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setShowHistory(false)}
               className="text-brand-gray-500 hover:text-brand-gray-700"
@@ -459,51 +585,64 @@ export const Chat: React.FC<ChatProps> = ({
                     msg.role === 'user'
                       ? msgUserBg
                       : msg.role === 'tool'
-                        ? 'bg-blue-500/5 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-mono text-xs'
+                        ? msg.name === 'web_search' ||
+                          msg.name === 'wikipedia_search' ||
+                          msg.name === 'visit_page'
+                          ? 'bg-blue-500/5 border border-blue-500/30 shadow-sm'
+                          : 'bg-blue-500/5 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-mono text-xs'
                         : msgBotBg
                   }`}
                 >
                   {msg.role === 'tool' ? (
-                    <CollapsibleToolSection title={`Tool Result: ${msg.name}`}>
-                      <MarkdownView content={msg.text} />
-                      {msg.name === 'create_project' &&
-                        msg.text.includes('Project created:') &&
-                        onSwitchProject && (
-                          <div className="mt-2">
-                            <Button
-                              theme={theme}
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                // Extract project name from either raw text or JSON message field
-                                let projectName = '';
-                                try {
-                                  const parsed = JSON.parse(msg.text);
-                                  const innerMsg = parsed.message || '';
-                                  const match = innerMsg.match(/Project created: (.+)/);
-                                  if (match) projectName = match[1];
-                                } catch (e) {
-                                  /* ignore */
-                                }
+                    <>
+                      {msg.name === 'web_search' || msg.name === 'wikipedia_search' ? (
+                        <WebSearchResults content={msg.text} name={msg.name} />
+                      ) : msg.name === 'visit_page' ? (
+                        <VisitPageResult content={msg.text} />
+                      ) : (
+                        <CollapsibleToolSection title={`Tool Result: ${msg.name}`}>
+                          <MarkdownView content={msg.text} />
+                          {msg.name === 'create_project' &&
+                            msg.text.includes('Project created:') &&
+                            onSwitchProject && (
+                              <div className="mt-2">
+                                <Button
+                                  theme={theme}
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    // Extract project name from either raw text or JSON message field
+                                    let projectName = '';
+                                    try {
+                                      const parsed = JSON.parse(msg.text);
+                                      const innerMsg = parsed.message || '';
+                                      const match =
+                                        innerMsg.match(/Project created: (.+)/);
+                                      if (match) projectName = match[1];
+                                    } catch (e) {
+                                      /* ignore */
+                                    }
 
-                                if (!projectName) {
-                                  const match = msg.text.match(
-                                    /Project created: ([^"}\s]+)/
-                                  );
-                                  if (match) projectName = match[1];
-                                }
+                                    if (!projectName) {
+                                      const match = msg.text.match(
+                                        /Project created: ([^"}\s]+)/
+                                      );
+                                      if (match) projectName = match[1];
+                                    }
 
-                                if (projectName) {
-                                  onSwitchProject(projectName.trim());
-                                }
-                              }}
-                              icon={<ArrowRight size={14} />}
-                            >
-                              Switch to New Project
-                            </Button>
-                          </div>
-                        )}
-                    </CollapsibleToolSection>
+                                    if (projectName) {
+                                      onSwitchProject(projectName.trim());
+                                    }
+                                  }}
+                                  icon={<ArrowRight size={14} />}
+                                >
+                                  Switch to New Project
+                                </Button>
+                              </div>
+                            )}
+                        </CollapsibleToolSection>
+                      )}
+                    </>
                   ) : (
                     <>
                       {msg.thinking && (
