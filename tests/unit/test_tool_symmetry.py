@@ -41,6 +41,7 @@ class TestChatToolsSymmetry(TestCase):
         )
 
         story_data = {
+            "metadata": {"version": 2},
             "project_title": "Original Title",
             "story_summary": "Original Summary",
             "notes": "Original Notes",

@@ -37,7 +37,7 @@ class StorySettingsTest(TestCase):
         pdir = self.projects_root / name
         pdir.mkdir(parents=True, exist_ok=True)
         (pdir / "story.json").write_text(
-            '{"project_title":"Art Book","format":"markdown","chapters":[]}',
+            '{"project_title":"Art Book","format":"markdown","chapters":[],"metadata":{"version":2}}',
             encoding="utf-8",
         )
         return pdir

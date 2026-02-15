@@ -33,7 +33,8 @@ class TestChatStreamCoverage(TestCase):
         # Create a dummy project
         (self.projects_root / "testproj").mkdir()
         (self.projects_root / "testproj" / "story.json").write_text(
-            "{}", encoding="utf-8"
+            '{"metadata": {"version": 2}, "project_title": "Test Project", "format": "markdown"}',
+            encoding="utf-8",
         )
         select_project("testproj")
 

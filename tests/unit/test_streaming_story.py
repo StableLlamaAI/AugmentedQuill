@@ -41,7 +41,7 @@ class StreamingStoryTest(TestCase):
         (chdir / "0001.txt").write_text("C1", encoding="utf-8")
         (chdir / "0002.txt").write_text("C2", encoding="utf-8")
         (pdir / "story.json").write_text(
-            '{"project_title":"P","format":"markdown","chapters":[{"title":"T1","summary":"S1"},{"title":"T2","summary":"S2"}],"llm_prefs":{"temperature":0.7,"max_tokens":2048}}',
+            '{"project_title":"P","format":"markdown","chapters":[{"title":"T1","summary":"S1"},{"title":"T2","summary":"S2"}],"llm_prefs":{"temperature":0.7,"max_tokens":2048},"metadata":{"version":2}}',
             encoding="utf-8",
         )
         return pdir

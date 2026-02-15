@@ -37,6 +37,7 @@ class ConflictsTest(TestCase):
         (self.project_dir / "story.json").write_text(
             json.dumps(
                 {
+                    "metadata": {"version": 2},
                     "project_title": "Conflict Test",
                     "chapters": [{"title": "Chapter 1", "filename": "0001.txt"}],
                 }

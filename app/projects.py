@@ -315,13 +315,13 @@ def initialize_project_dir(
 
     if not story_path.exists():
         payload = {
+            "metadata": {"version": 2},
             "project_title": project_title,
             "project_type": project_type,
             "chapters": [],  # Used for novel
             "books": [],  # Used for series
             "content_file": "content.md",  # Used for short-story
             "format": "markdown",
-            "version": 1,
             "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
             "created_at": _now_iso(),
             "tags": [],

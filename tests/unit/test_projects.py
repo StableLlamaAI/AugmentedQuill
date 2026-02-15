@@ -128,7 +128,12 @@ class ProjectsTest(TestCase):
         self.assertTrue(ok)
         project_dir = self.projects_root / project_name
         story_file = project_dir / "story.json"
-        initial_story = {"chapters": [{"title": "Chapter 1", "summary": "Old summary"}]}
+        initial_story = {
+            "metadata": {"version": 2},
+            "project_title": "Test Write Summary",
+            "format": "markdown",
+            "chapters": [{"title": "Chapter 1", "summary": "Old summary"}],
+        }
         story_file.write_text(json.dumps(initial_story, indent=2), encoding="utf-8")
         chapters_dir = project_dir / "chapters"
         chapters_dir.mkdir(parents=True, exist_ok=True)

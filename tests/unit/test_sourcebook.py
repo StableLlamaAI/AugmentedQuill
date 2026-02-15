@@ -25,7 +25,9 @@ class SourcebookTest(TestCase):
         self.proj_dir.mkdir()
 
         story = {
+            "metadata": {"version": 2},
             "project_title": "Test Project",
+            "format": "markdown",
             "project_type": "novel",
             "sourcebook": [],
         }

@@ -28,7 +28,9 @@ class SourcebookValidationTest(TestCase):
         # Create test project
         self.pdir = self.projects_root / "test_proj"
         self.pdir.mkdir(parents=True, exist_ok=True)
-        (self.pdir / "story.json").write_text('{"sourcebook": {}}')
+        (self.pdir / "story.json").write_text(
+            '{"metadata": {"version": 2}, "project_title": "Test Project", "format": "markdown", "sourcebook": {}}'
+        )
 
         # Select it (creates registry entry)
         select_project("test_proj")

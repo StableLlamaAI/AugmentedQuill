@@ -46,6 +46,7 @@ class EndpointsCoverageTest(TestCase):
                         {"title": "T2", "summary": "S2"},
                     ],
                     "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+                    "metadata": {"version": 2},
                 }
             ),
             encoding="utf-8",

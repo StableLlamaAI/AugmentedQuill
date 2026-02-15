@@ -280,7 +280,14 @@ class ProjectFeaturesTest(TestCase):
         select_project("api_export")
         active = get_active_project_dir()
         (active / "story.json").write_text(
-            json.dumps({"project_title": "API Imported", "tags": ["imported"]}),
+            json.dumps(
+                {
+                    "metadata": {"version": 2},
+                    "project_title": "API Imported",
+                    "format": "markdown",
+                    "tags": ["imported"],
+                }
+            ),
             encoding="utf-8",
         )
 

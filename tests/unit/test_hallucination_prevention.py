@@ -46,6 +46,7 @@ class HallucinationPreventionTest(TestCase):
 
         # story.json
         story = {
+            "metadata": {"version": 2},
             "project_title": "Hallu Series",
             "project_type": "series",
             "books": [

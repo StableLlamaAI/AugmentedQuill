@@ -41,7 +41,7 @@ class ChatToolsTest(TestCase):
         (chdir / "0001.txt").write_text("Alpha chapter content.", encoding="utf-8")
         (chdir / "0002.txt").write_text("Beta chapter content.", encoding="utf-8")
         (pdir / "story.json").write_text(
-            '{"project_title":"Demo","format":"markdown","chapters":[{"title":"Intro","summary":""},{"title":"Next","summary":""}],"llm_prefs":{"temperature":0.7,"max_tokens":256}}',
+            '{"metadata": {"version": 2}, "project_title":"Demo","format":"markdown","chapters":[{"title":"Intro","summary":""},{"title":"Next","summary":""}],"llm_prefs":{"temperature":0.7,"max_tokens":256}}',
             encoding="utf-8",
         )
 
