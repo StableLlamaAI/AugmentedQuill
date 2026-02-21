@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Helper functions for managing project images and their metadata.
+"""
+
 import json
 from pathlib import Path
 from app.services.projects.projects import get_active_project_dir

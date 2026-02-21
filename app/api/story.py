@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for story generation, management, and AI assistance within chapters.
+"""
+
 from fastapi import APIRouter, Request, HTTPException, Path as FastAPIPath
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -32,7 +36,7 @@ from app.services.story.story_api_stream_ops import (
 )
 from app.services.llm import llm
 
-router = APIRouter()
+router = APIRouter(tags=["Story"])
 
 
 @router.post("/api/story/story-summary")

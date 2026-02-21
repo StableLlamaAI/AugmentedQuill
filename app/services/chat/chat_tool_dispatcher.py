@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Central dispatcher for delegating LLM tool calls to their respective domain handlers.
+"""
+
 import json as _json
 
 from fastapi import HTTPException

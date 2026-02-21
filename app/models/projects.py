@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Pydantic models for project-related API requests and responses.
+"""
+
 from pydantic import BaseModel
 from typing import Optional
 

@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for chapter management, including CRUD operations, reordering, and book-related functions.
+"""
+
 from fastapi import APIRouter, Request, HTTPException, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
@@ -19,7 +23,7 @@ from app.services.chapters.chapters_api_ops import (
     reorder_books_in_project,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Chapters"])
 
 
 @router.get("/api/chapters")

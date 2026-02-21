@@ -5,6 +5,11 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Main application entry point for the AugmentedQuill API server.
+Includes global configuration setup, error handling, and router registration.
+"""
+
 from __future__ import annotations
 
 import argparse

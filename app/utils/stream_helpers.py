@@ -5,6 +5,11 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Utility functions for handling server-sent events (SSE) and data streaming.
+Includes stateful filtering for multi-channel LLM output.
+"""
+
 import re
 from typing import List, Dict
 

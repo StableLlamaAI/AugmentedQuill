@@ -6,3 +6,6 @@
 # (at your option) any later version.
 
 # API module
+"""
+FastAPI API routers for different domain areas.
+"""

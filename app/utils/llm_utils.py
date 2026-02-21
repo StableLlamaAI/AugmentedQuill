@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+Common LLM-related utility functions, including capability verification and URL normalization.
+"""
+
 import httpx
 import asyncio
 

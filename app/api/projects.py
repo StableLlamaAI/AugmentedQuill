@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for project-related operations including creation, deletion, and management.
+"""
+
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from app.services.projects.projects_api_manage_ops import (
@@ -39,7 +43,7 @@ from app.models.projects import (
     ImageDeleteRequest,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Projects"])
 
 
 @router.get("/api/projects")

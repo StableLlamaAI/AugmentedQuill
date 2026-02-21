@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for application and machine settings management.
+"""
+
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 import json as _json
@@ -38,7 +42,7 @@ from app.services.settings.settings_machine_ops import (
 from app.services.settings.settings_update_ops import run_story_config_update
 from pathlib import Path
 
-router = APIRouter()
+router = APIRouter(tags=["Settings"])
 
 
 def _ensure_parent_dir(path: Path) -> None:

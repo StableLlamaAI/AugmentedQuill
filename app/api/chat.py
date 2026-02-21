@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for chat sessions and conversational interactions with the LLM writing partner.
+"""
+
 import datetime
 import base64
 import app.services.llm.llm as llm
@@ -34,7 +38,7 @@ import app.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
 
-router = APIRouter()
+router = APIRouter(tags=["Chat"])
 
 proxy_openai_models = _chat_api_proxy_ops.proxy_openai_models
 httpx = _chat_api_proxy_ops.httpx

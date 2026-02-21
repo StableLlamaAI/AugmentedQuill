@@ -24,3 +24,6 @@ __all__ = [
     "handle_sourcebook_tool",
     "handle_order_tool",
 ]
+"""
+Chat tool implementations for specific domain areas.
+"""

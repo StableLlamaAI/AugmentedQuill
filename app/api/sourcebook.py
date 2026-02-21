@@ -5,6 +5,10 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""
+API endpoints for managing the sourcebook (knowledge base) associated with a project.
+"""
+
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -12,7 +16,7 @@ from pydantic import BaseModel
 from app.services.projects.projects import get_active_project_dir
 from app.core.config import load_story_config, save_story_config
 
-router = APIRouter()
+router = APIRouter(tags=["Sourcebook"])
 
 
 class SourcebookEntry(BaseModel):
