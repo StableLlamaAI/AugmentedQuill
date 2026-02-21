@@ -278,9 +278,16 @@ class ToolParityTest(TestCase):
         # We need to mock the LLM for sync_summary because it calls unified_chat_complete
         from unittest.mock import patch, AsyncMock
 
-        with patch(
-            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
-        ) as mock_llm:
+        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        with (
+            patch(
+                "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+            ) as mock_llm,
+            patch(
+                "app.services.story.story_generation_ops.resolve_model_runtime",
+                return_value=_dummy_runtime,
+            ),
+        ):
             mock_llm.return_value = {
                 "content": "Synced summary",
                 "tool_calls": [],
@@ -296,9 +303,16 @@ class ToolParityTest(TestCase):
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
 
-        with patch(
-            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
-        ) as mock_llm:
+        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        with (
+            patch(
+                "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+            ) as mock_llm,
+            patch(
+                "app.services.story.story_generation_ops.resolve_model_runtime",
+                return_value=_dummy_runtime,
+            ),
+        ):
             mock_llm.return_value = {
                 "content": "Synced story summary",
                 "tool_calls": [],
