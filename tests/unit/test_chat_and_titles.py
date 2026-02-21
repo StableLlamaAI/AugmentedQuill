@@ -13,9 +13,9 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-import app.main as main
-import app.api.chat
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+import augmentedquill.api.chat
+from augmentedquill.services.projects.projects import select_project
 
 
 class ChatAndTitlesTest(TestCase):
@@ -35,7 +35,7 @@ class ChatAndTitlesTest(TestCase):
 
     def test_api_chat_coerces_invalid_selected_and_lists_models(self):
         # Patch load_machine_config to return models with an invalid selected name
-        orig_lmc = app.api.chat.load_machine_config
+        orig_lmc = augmentedquill.api.chat.load_machine_config
 
         def fake_lmc(_path):  # type: ignore
             return {
@@ -61,15 +61,15 @@ class ChatAndTitlesTest(TestCase):
             }
 
         try:
-            app.api.chat.load_machine_config = fake_lmc  # type: ignore
-            r = self.client.get("/api/chat")
+            augmentedquill.api.chat.load_machine_config = fake_lmc  # type: ignore
+            r = self.client.get("/api/v1/chat")
             self.assertEqual(r.status_code, 200, r.text)
             data = r.json()
             self.assertEqual(data.get("models"), ["m1", "m2"])
             # Should coerce to first available model
             self.assertEqual(data.get("current_model"), "m1")
         finally:
-            app.api.chat.load_machine_config = orig_lmc  # type: ignore
+            augmentedquill.api.chat.load_machine_config = orig_lmc  # type: ignore
 
     def test_chapter_title_object_object_falls_back_to_filename(self):
         ok, msg = select_project("oob")
@@ -86,13 +86,13 @@ class ChatAndTitlesTest(TestCase):
         )
 
         # List should fallback to filenames
-        r = self.client.get("/api/chapters")
+        r = self.client.get("/api/v1/chapters")
         self.assertEqual(r.status_code, 200)
         chs = r.json().get("chapters")
         self.assertEqual([c["title"] for c in chs], ["0001", "0002"])
 
         # Fetch single should also fallback
-        r1 = self.client.get("/api/chapters/1")
+        r1 = self.client.get("/api/v1/chapters/1")
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
         self.assertEqual(d1.get("title"), "0001")

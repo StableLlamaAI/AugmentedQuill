@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from unittest import TestCase
 
-from app.core.config import load_machine_config, load_story_config
+from augmentedquill.core.config import load_machine_config, load_story_config
 
 
 class ConfigLoaderTest(TestCase):

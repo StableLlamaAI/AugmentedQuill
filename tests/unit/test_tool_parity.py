@@ -15,7 +15,7 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-import app.main as main
+import augmentedquill.main as main
 
 
 class ToolParityTest(TestCase):
@@ -75,7 +75,9 @@ class ToolParityTest(TestCase):
         )
 
         # Select the project
-        r = self.client.post("/api/projects/select", json={"name": self.project_name})
+        r = self.client.post(
+            "/api/v1/projects/select", json={"name": self.project_name}
+        )
         self.assertEqual(r.status_code, 200)
 
     def tearDown(self):
@@ -104,7 +106,7 @@ class ToolParityTest(TestCase):
             ],
             "active_chapter_id": 1,
         }
-        r = self.client.post("/api/chat/tools", json=body)
+        r = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
@@ -252,7 +254,7 @@ class ToolParityTest(TestCase):
         # For series, it needs a book_id or it might fail if multiple books exist,
         # but here we only have one if we didn't delete it yet.
         # Let's create a new book first to make it interesting.
-        from app.services.projects.projects import create_new_book
+        from augmentedquill.services.projects.projects import create_new_book
 
         new_bid = create_new_book("Book 2")
 
@@ -281,10 +283,11 @@ class ToolParityTest(TestCase):
         _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
         with (
             patch(
-                "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
             ) as mock_llm,
             patch(
-                "app.services.story.story_generation_ops.resolve_model_runtime",
+                "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
                 return_value=_dummy_runtime,
             ),
         ):
@@ -306,10 +309,11 @@ class ToolParityTest(TestCase):
         _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
         with (
             patch(
-                "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
             ) as mock_llm,
             patch(
-                "app.services.story.story_generation_ops.resolve_model_runtime",
+                "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
                 return_value=_dummy_runtime,
             ),
         ):

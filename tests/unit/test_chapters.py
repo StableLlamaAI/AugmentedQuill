@@ -14,8 +14,8 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.projects.projects import select_project
+from augmentedquill.main import app
+from augmentedquill.services.projects.projects import select_project
 
 
 class ChaptersApiTest(TestCase):
@@ -54,7 +54,7 @@ class ChaptersApiTest(TestCase):
     def test_list_and_fetch_chapters(self):
         self._make_project_with_chapters()
         # List
-        r = self.client.get("/api/chapters")
+        r = self.client.get("/api/v1/chapters")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         chs = data.get("chapters")
@@ -65,7 +65,7 @@ class ChaptersApiTest(TestCase):
         self.assertEqual([c["title"] for c in chs], ["Intro", "Climax"])
 
         # Fetch first chapter by id
-        r1 = self.client.get("/api/chapters/1")
+        r1 = self.client.get("/api/v1/chapters/1")
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
         self.assertEqual(d1["id"], 1)
@@ -86,7 +86,7 @@ class ChaptersApiTest(TestCase):
             encoding="utf-8",
         )
 
-        r = self.client.get("/api/chapters")
+        r = self.client.get("/api/v1/chapters")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         chs = data.get("chapters")
@@ -94,7 +94,7 @@ class ChaptersApiTest(TestCase):
         # Titles should fall back to the filename STEM when no titles provided
         self.assertEqual([c["title"] for c in chs], ["0001", "0002"])
 
-        r1 = self.client.get("/api/chapters/1")
+        r1 = self.client.get("/api/v1/chapters/1")
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
         self.assertEqual(d1["title"], "0001")
@@ -133,7 +133,7 @@ class ChaptersApiTest(TestCase):
         (pdir / "books" / "book-b" / "chapters" / "0001.txt").write_text("BB1")
 
         # List chapters
-        r = self.client.get("/api/chapters")
+        r = self.client.get("/api/v1/chapters")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         chs = data.get("chapters")
@@ -150,7 +150,7 @@ class ChaptersApiTest(TestCase):
 
     def test_update_title(self):
         self._make_project_with_chapters("update_title")
-        r = self.client.put("/api/chapters/1/title", json={"title": "New Title"})
+        r = self.client.put("/api/v1/chapters/1/title", json={"title": "New Title"})
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertTrue(data["ok"])
@@ -168,7 +168,9 @@ class ChaptersApiTest(TestCase):
 
     def test_update_summary(self):
         self._make_project_with_chapters("update_summary")
-        r = self.client.put("/api/chapters/1/summary", json={"summary": "New Summary"})
+        r = self.client.put(
+            "/api/v1/chapters/1/summary", json={"summary": "New Summary"}
+        )
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertTrue(data["ok"])
@@ -180,7 +182,7 @@ class ChaptersApiTest(TestCase):
     def test_update_content(self):
         self._make_project_with_chapters("update_content")
         r = self.client.put(
-            "/api/chapters/1/content", json={"content": "Updated content text."}
+            "/api/v1/chapters/1/content", json={"content": "Updated content text."}
         )
         self.assertEqual(r.status_code, 200)
         data = r.json()
@@ -201,7 +203,7 @@ class ChaptersApiTest(TestCase):
         (pdir / "chapters").mkdir(exist_ok=True)
 
         r = self.client.post(
-            "/api/chapters", json={"title": "New Chap", "content": "Initial text"}
+            "/api/v1/chapters", json={"title": "New Chap", "content": "Initial text"}
         )
         if r.status_code != 200:
             print(f"FAILED CREATE CHAPTER: {r.json()}")
@@ -217,7 +219,7 @@ class ChaptersApiTest(TestCase):
 
     def test_delete_chapter(self):
         self._make_project_with_chapters("delete_chap")
-        r = self.client.delete("/api/chapters/1")
+        r = self.client.delete("/api/v1/chapters/1")
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["ok"])
 
@@ -259,7 +261,7 @@ class ChaptersApiTest(TestCase):
         (b2_dir / "0001.txt").write_text("B2 C1 content", encoding="utf-8")
 
         # List chapters (global IDs 1 and 2)
-        r = self.client.get("/api/chapters")
+        r = self.client.get("/api/v1/chapters")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         chs = data["chapters"]
@@ -268,19 +270,19 @@ class ChaptersApiTest(TestCase):
         self.assertEqual(chs[1]["title"], "B2 C1")
 
         # Fetch chapter 2
-        r2 = self.client.get("/api/chapters/2")
+        r2 = self.client.get("/api/v1/chapters/2")
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(r2.json()["title"], "B2 C1")
 
     def test_reorder_chapters(self):
         self._make_project_with_chapters("reorder_chap")
         # Initially [1, 2] (Intro, Climax)
-        r = self.client.post("/api/chapters/reorder", json={"chapter_ids": [2, 1]})
+        r = self.client.post("/api/v1/chapters/reorder", json={"chapter_ids": [2, 1]})
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["ok"])
 
         # List and check order
-        r2 = self.client.get("/api/chapters")
+        r2 = self.client.get("/api/v1/chapters")
         data = r2.json()["chapters"]
         # In Novel project, reorder renames files to 0001, 0002...
         # So the one that was ID 2 (Climax) should now be at position 0

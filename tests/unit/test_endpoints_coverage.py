@@ -14,9 +14,9 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-import app.services.llm.llm as llm
-from app.services.projects.projects import select_project
+from augmentedquill.main import app
+import augmentedquill.services.llm.llm as llm
+from augmentedquill.services.projects.projects import select_project
 
 
 class EndpointsCoverageTest(TestCase):

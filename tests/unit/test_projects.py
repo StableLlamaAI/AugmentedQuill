@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from app.services.projects.projects import (
+from augmentedquill.services.projects.projects import (
     validate_project_dir,
     initialize_project_dir,
     select_project,

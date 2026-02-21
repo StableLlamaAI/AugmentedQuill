@@ -7,7 +7,7 @@
 # Purpose: Defines the test chat parser unit so this responsibility stays isolated, testable, and easy to evolve.
 
 import unittest
-from app.services.llm.llm import (
+from augmentedquill.services.llm.llm import (
     parse_tool_calls_from_content as _parse_tool_calls_from_content,
 )
 import json

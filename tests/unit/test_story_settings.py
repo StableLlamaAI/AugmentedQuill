@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest import TestCase
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.projects.projects import select_project
+from augmentedquill.main import app
+from augmentedquill.services.projects.projects import select_project
 
 
 class StorySettingsTest(TestCase):
@@ -57,7 +57,7 @@ class StorySettingsTest(TestCase):
             "image_style": "Cyberpunk Neon",
             "image_additional_info": "<lora:neon:0.8>",
         }
-        response = self.client.post("/api/story/settings", json=payload)
+        response = self.client.post("/api/v1/story/settings", json=payload)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
 
@@ -84,7 +84,7 @@ class StorySettingsTest(TestCase):
 
         # Update only one field
         payload = {"image_style": "New Style"}
-        response = self.client.post("/api/story/settings", json=payload)
+        response = self.client.post("/api/v1/story/settings", json=payload)
         self.assertEqual(response.status_code, 200)
 
         # Verify
@@ -100,6 +100,8 @@ class StorySettingsTest(TestCase):
 
     def test_post_story_settings_no_active_project(self):
         # No project selected
-        response = self.client.post("/api/story/settings", json={"image_style": "test"})
+        response = self.client.post(
+            "/api/v1/story/settings", json={"image_style": "test"}
+        )
         self.assertEqual(response.status_code, 400)
         self.assertIn("No active project", response.json()["detail"])

@@ -12,8 +12,8 @@ from pathlib import Path
 from unittest import TestCase
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.projects.projects import (
+from augmentedquill.main import app
+from augmentedquill.services.projects.projects import (
     initialize_project_dir,
     select_project,
     get_chats_dir,
@@ -83,31 +83,31 @@ class ChatSessionsTest(TestCase):
             "messages": [{"role": "user", "content": "Hello API"}],
         }
 
-        # POST /api/chats/{id}
-        resp = self.client.post(f"/api/chats/{chat_id}", json=chat_payload)
+        # POST /api/v1/chats/{id}
+        resp = self.client.post(f"/api/v1/chats/{chat_id}", json=chat_payload)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["ok"])
 
-        # GET /api/chats (list)
-        resp = self.client.get("/api/chats")
+        # GET /api/v1/chats (list)
+        resp = self.client.get("/api/v1/chats")
         self.assertEqual(resp.status_code, 200)
         chats = resp.json()
         self.assertEqual(len(chats), 1)
         self.assertEqual(chats[0]["id"], chat_id)
 
-        # GET /api/chats/{id} (load)
-        resp = self.client.get(f"/api/chats/{chat_id}")
+        # GET /api/v1/chats/{id} (load)
+        resp = self.client.get(f"/api/v1/chats/{chat_id}")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["name"], "API Test Chat")
 
-        # DELETE /api/chats/{id}
-        resp = self.client.delete(f"/api/chats/{chat_id}")
+        # DELETE /api/v1/chats/{id}
+        resp = self.client.delete(f"/api/v1/chats/{chat_id}")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["ok"])
 
         # Confirm deleted
-        resp = self.client.get("/api/chats")
+        resp = self.client.get("/api/v1/chats")
         self.assertEqual(len(resp.json()), 0)
 
     def test_chat_save_updates_timestamp(self):

@@ -13,9 +13,9 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-import app.main as main
-import app.services.llm.llm as llm
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+import augmentedquill.services.llm.llm as llm
+from augmentedquill.services.projects.projects import select_project
 
 
 class StreamingStoryTest(TestCase):
@@ -73,7 +73,7 @@ class StreamingStoryTest(TestCase):
         pdir = self._make_project()
         self._patch_stream()
         r = self.client.post(
-            "/api/story/summary/stream",
+            "/api/v1/story/summary/stream",
             json={"chap_id": 1, "mode": "update", "model_name": "fake"},
         )
         self.assertEqual(r.status_code, 200, r.text)
@@ -88,7 +88,7 @@ class StreamingStoryTest(TestCase):
         pdir = self._make_project()
         self._patch_stream()
         r = self.client.post(
-            "/api/story/write/stream", json={"chap_id": 1, "model_name": "fake"}
+            "/api/v1/story/write/stream", json={"chap_id": 1, "model_name": "fake"}
         )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.text, "ABC")
@@ -99,7 +99,7 @@ class StreamingStoryTest(TestCase):
         pdir = self._make_project()
         self._patch_stream()
         r = self.client.post(
-            "/api/story/continue/stream", json={"chap_id": 1, "model_name": "fake"}
+            "/api/v1/story/continue/stream", json={"chap_id": 1, "model_name": "fake"}
         )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.text, "ABC")

@@ -14,8 +14,8 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-import app.main as main
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+from augmentedquill.services.projects.projects import select_project
 
 
 class SourcebookApiTest(TestCase):
@@ -50,7 +50,7 @@ class SourcebookApiTest(TestCase):
 
     def test_sourcebook_api_crud(self):
         create = self.client.post(
-            "/api/sourcebook",
+            "/api/v1/sourcebook",
             json={
                 "name": "Aelith",
                 "description": "A traveling archivist",
@@ -63,14 +63,14 @@ class SourcebookApiTest(TestCase):
         created = create.json()
         self.assertEqual(created["id"], "Aelith")
 
-        get_all = self.client.get("/api/sourcebook")
+        get_all = self.client.get("/api/v1/sourcebook")
         self.assertEqual(get_all.status_code, 200, get_all.text)
         entries = get_all.json()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["name"], "Aelith")
 
         update = self.client.put(
-            "/api/sourcebook/Aelith",
+            "/api/v1/sourcebook/Aelith",
             json={
                 "name": "Aelith Ren",
                 "description": "Renowned traveling archivist",
@@ -81,10 +81,10 @@ class SourcebookApiTest(TestCase):
         updated = update.json()
         self.assertEqual(updated["name"], "Aelith Ren")
 
-        delete = self.client.delete("/api/sourcebook/Aelith Ren")
+        delete = self.client.delete("/api/v1/sourcebook/Aelith Ren")
         self.assertEqual(delete.status_code, 200, delete.text)
         self.assertEqual(delete.json().get("ok"), True)
 
-        get_after_delete = self.client.get("/api/sourcebook")
+        get_after_delete = self.client.get("/api/v1/sourcebook")
         self.assertEqual(get_after_delete.status_code, 200, get_after_delete.text)
         self.assertEqual(get_after_delete.json(), [])

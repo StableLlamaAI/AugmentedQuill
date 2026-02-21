@@ -7,7 +7,7 @@
 # Purpose: Defines the test stream channel filter unit so this responsibility stays isolated, testable, and easy to evolve.
 
 import unittest
-from app.utils.stream_helpers import ChannelFilter
+from augmentedquill.utils.stream_helpers import ChannelFilter
 
 
 class TestChannelFilter(unittest.TestCase):

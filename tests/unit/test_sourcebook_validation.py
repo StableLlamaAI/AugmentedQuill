@@ -11,13 +11,13 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
-from app.services.sourcebook.sourcebook_helpers import (
+from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sb_create,
     sb_delete,
     sb_get,
     sb_update,
 )
-from app.services.projects.projects import select_project
+from augmentedquill.services.projects.projects import select_project
 
 
 class SourcebookValidationTest(TestCase):

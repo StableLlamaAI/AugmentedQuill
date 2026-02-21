@@ -14,8 +14,8 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.projects.projects import (
+from augmentedquill.main import app
+from augmentedquill.services.projects.projects import (
     select_project,
     create_new_book,
     create_project,
@@ -55,14 +55,14 @@ class MetadataEndpointsTest(TestCase):
                 {"id": "1", "description": "Conflict A", "resolution": "Plan A"}
             ],
         }
-        resp = self.client.put(f"/api/chapters/{chap_id}/metadata", json=payload)
+        resp = self.client.put(f"/api/v1/chapters/{chap_id}/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["ok"])
 
         # Create another chapter to verify we can update partial fields
         chap_id_2 = create_new_chapter("Another Chapter")
         resp_partial = self.client.put(
-            f"/api/chapters/{chap_id_2}/metadata", json={"notes": "Just notes"}
+            f"/api/v1/chapters/{chap_id_2}/metadata", json={"notes": "Just notes"}
         )
         self.assertEqual(resp_partial.status_code, 200)
 
@@ -91,7 +91,7 @@ class MetadataEndpointsTest(TestCase):
         # Invalid conflict format
         chap_id = create_new_chapter("My Chapter")
         payload = {"conflicts": "not a list"}
-        resp = self.client.put(f"/api/chapters/{chap_id}/metadata", json=payload)
+        resp = self.client.put(f"/api/v1/chapters/{chap_id}/metadata", json=payload)
         self.assertEqual(resp.status_code, 400)
 
     def test_update_chapter_metadata_missing_entry(self):
@@ -111,7 +111,7 @@ class MetadataEndpointsTest(TestCase):
             "summary": "Recovered summary",
             "conflicts": [{"description": "New Conflict"}],
         }
-        resp = self.client.put(f"/api/chapters/{chap_id}/metadata", json=payload)
+        resp = self.client.put(f"/api/v1/chapters/{chap_id}/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
 
         # 4. Verify it was recreated in story.json
@@ -131,7 +131,7 @@ class MetadataEndpointsTest(TestCase):
             "notes": "Story notes",
             "private_notes": "Story private notes",
         }
-        resp = self.client.post("/api/story/metadata", json=payload)
+        resp = self.client.post("/api/v1/story/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
 
         # Verify
@@ -150,7 +150,7 @@ class MetadataEndpointsTest(TestCase):
                 {"description": "Should not be here", "resolution": "Discarded"}
             ],
         }
-        resp = self.client.post("/api/story/metadata", json=payload)
+        resp = self.client.post("/api/v1/story/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
 
         # Verify story.json
@@ -172,7 +172,7 @@ class MetadataEndpointsTest(TestCase):
             "notes": "Book notes",
             "private_notes": "Book private notes",
         }
-        resp = self.client.post(f"/api/books/{book_id}/metadata", json=payload)
+        resp = self.client.post(f"/api/v1/books/{book_id}/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
 
         # Verify
@@ -189,6 +189,6 @@ class MetadataEndpointsTest(TestCase):
 
     def test_update_book_metadata_not_found(self):
         resp = self.client.post(
-            "/api/books/nonexistent-id/metadata", json={"title": "T"}
+            "/api/v1/books/nonexistent-id/metadata", json={"title": "T"}
         )
         self.assertEqual(resp.status_code, 404)

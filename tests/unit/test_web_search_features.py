@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 from unittest import TestCase
 from fastapi.testclient import TestClient
-from app.services.chat.chat_tools_schema import WEB_SEARCH_TOOLS
-from app.main import app
+from augmentedquill.services.chat.chat_tools_schema import WEB_SEARCH_TOOLS
+from augmentedquill.main import app
 
 
 class WebSearchFeaturesTest(TestCase):
@@ -37,9 +37,9 @@ class WebSearchFeaturesTest(TestCase):
         self.assertIn("visit_page", wiki_tool["function"]["description"])
 
     def test_delete_all_chats_endpoint(self):
-        """Test the DELETE /api/chats endpoint."""
+        """Test the DELETE /api/v1/chats endpoint."""
         import tempfile
-        from app.services.projects.projects import delete_all_chats
+        from augmentedquill.services.projects.projects import delete_all_chats
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -87,7 +87,7 @@ class WebSearchFeaturesTest(TestCase):
         query = "test search"
         results = [{"title": "Result", "url": "http://test.com", "snippet": "Snippet"}]
 
-        # Emulate the return structure we implemented in app/api/chat.py
+        # Emulate the return structure we implemented in app/api/v1/chat.py
         tool_resp = {
             "role": "tool",
             "tool_call_id": "call_123",

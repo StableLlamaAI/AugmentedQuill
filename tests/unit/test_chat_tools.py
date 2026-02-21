@@ -14,8 +14,8 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-import app.main as main
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+from augmentedquill.services.projects.projects import select_project
 
 
 class ChatToolsTest(TestCase):
@@ -77,7 +77,7 @@ class ChatToolsTest(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=body)
+        r = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(r.status_code, 200)
 
         # Verify persistence
@@ -108,7 +108,7 @@ class ChatToolsTest(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=body_alias)
+        r = self.client.post("/api/v1/chat/tools", json=body_alias)
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertIn("Demo", data["appended_messages"][0]["content"])
@@ -139,7 +139,7 @@ class ChatToolsTest(TestCase):
             "active_chapter_id": 1,
         }
 
-        r = self.client.post("/api/chat/tools", json=body_content)
+        r = self.client.post("/api/v1/chat/tools", json=body_content)
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
@@ -177,7 +177,7 @@ class ChatToolsTest(TestCase):
             "active_chapter_id": 1,
         }
 
-        r2 = self.client.post("/api/chat/tools", json=body_summary)
+        r2 = self.client.post("/api/v1/chat/tools", json=body_summary)
         self.assertEqual(r2.status_code, 200, r2.text)
         data2 = r2.json()
         self.assertTrue(data2.get("ok"))

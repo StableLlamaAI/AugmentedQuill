@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest import TestCase
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.projects.projects import select_project
+from augmentedquill.main import app
+from augmentedquill.services.projects.projects import select_project
 
 
 class HallucinationPreventionTest(TestCase):
@@ -70,7 +70,7 @@ class HallucinationPreventionTest(TestCase):
     def test_chapter_id_not_found_descriptive_error(self):
         self._setup_series_project()
         # Trying to fetch ID 4 which doesn't exist (only 1, 2 exist globally)
-        r = self.client.get("/api/chapters/4")
+        r = self.client.get("/api/v1/chapters/4")
         self.assertEqual(r.status_code, 404)
         detail = r.json().get("detail", "")
         self.assertIn("Chapter with ID 4 not found", detail)
@@ -83,7 +83,7 @@ class HallucinationPreventionTest(TestCase):
             "book_id": b1_id,
             "chapter_ids": [2, 4],  # 1, 2 exist. 4 is hallucinated
         }
-        r = self.client.post("/api/chapters/reorder", json=payload)
+        r = self.client.post("/api/v1/chapters/reorder", json=payload)
         self.assertEqual(r.status_code, 400)
         detail = r.json().get("detail", "")
         self.assertIn("Chapter ID 4 not found in project", detail)
@@ -92,7 +92,7 @@ class HallucinationPreventionTest(TestCase):
     def test_project_overview_includes_titles_for_series(self):
         self._setup_series_project()
         # Chat tools overview helper
-        from app.services.projects.project_helpers import _project_overview
+        from augmentedquill.services.projects.project_helpers import _project_overview
 
         ov = _project_overview()
 

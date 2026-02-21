@@ -13,9 +13,9 @@ from unittest import TestCase
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-import app.services.llm.llm as llm
-from app.services.projects.projects import select_project
+from augmentedquill.main import app
+import augmentedquill.services.llm.llm as llm
+from augmentedquill.services.projects.projects import select_project
 
 
 class StoryEndpointsTest(TestCase):
@@ -47,10 +47,12 @@ class StoryEndpointsTest(TestCase):
         )
         return pdir
 
-    # ---- PUT /api/chapters/{id}/summary ----
+    # ---- PUT /api/v1/chapters/{id}/summary ----
     def test_put_summary_updates_story(self):
         pdir = self._make_project()
-        r = self.client.put("/api/chapters/1/summary", json={"summary": "New summary"})
+        r = self.client.put(
+            "/api/v1/chapters/1/summary", json={"summary": "New summary"}
+        )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
@@ -63,12 +65,12 @@ class StoryEndpointsTest(TestCase):
 
     def test_put_summary_404_invalid_id(self):
         self._make_project()
-        r = self.client.put("/api/chapters/999/summary", json={"summary": "X"})
+        r = self.client.put("/api/v1/chapters/999/summary", json={"summary": "X"})
         self.assertEqual(r.status_code, 404)
 
     # ---- Story LLM endpoints with fakes ----
     def _patch_llm(self):
-        # Patch credentials and completion in app.services.llm.llm
+        # Patch credentials and completion in augmentedquill.services.llm.llm
         self._orig_resolve = llm.resolve_openai_credentials
         self._orig_unified = llm.unified_chat_complete
 
@@ -102,7 +104,7 @@ class StoryEndpointsTest(TestCase):
         pdir = self._make_project()
         self._patch_llm()
         r = self.client.post(
-            "/api/story/summary",
+            "/api/v1/story/summary",
             json={"chap_id": 1, "mode": "update", "model_name": "fake"},
         )
         self.assertEqual(r.status_code, 200, r.text)
@@ -119,7 +121,7 @@ class StoryEndpointsTest(TestCase):
         self._patch_llm()
         # Ensure summary exists
         r = self.client.post(
-            "/api/story/write", json={"chap_id": 1, "model_name": "fake"}
+            "/api/v1/story/write", json={"chap_id": 1, "model_name": "fake"}
         )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
@@ -132,7 +134,7 @@ class StoryEndpointsTest(TestCase):
         self._patch_llm()
         # continue
         r = self.client.post(
-            "/api/story/continue", json={"chap_id": 1, "model_name": "fake"}
+            "/api/v1/story/continue", json={"chap_id": 1, "model_name": "fake"}
         )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
@@ -143,12 +145,16 @@ class StoryEndpointsTest(TestCase):
     def test_story_endpoints_404_for_invalid_id(self):
         self._make_project()
         self._patch_llm()
-        for path in ("/api/story/summary", "/api/story/write", "/api/story/continue"):
+        for path in (
+            "/api/v1/story/summary",
+            "/api/v1/story/write",
+            "/api/v1/story/continue",
+        ):
             r = self.client.post(path, json={"chap_id": 999, "model_name": "fake"})
             self.assertEqual(r.status_code, 404, path)
 
     def test_suggest_endpoint_streams_paragraph(self):
-        """Ensure `/api/story/suggest` is registered and returns streaming text."""
+        """Ensure `/api/v1/story/suggest` is registered and returns streaming text."""
         self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
@@ -177,7 +183,7 @@ class StoryEndpointsTest(TestCase):
 
         # Call the suggest endpoint
         r = self.client.post(
-            "/api/story/suggest", json={"chap_id": 1, "current_text": "Hello"}
+            "/api/v1/story/suggest", json={"chap_id": 1, "current_text": "Hello"}
         )
         self.assertEqual(r.status_code, 200, r.text)
         # Response should be plain text and return non-empty content
@@ -188,7 +194,7 @@ class StoryEndpointsTest(TestCase):
     def test_post_story_title_updates_and_persists(self):
         pdir = self._make_project()
         new_title = "My New Story Title"
-        r = self.client.post("/api/story/title", json={"title": new_title})
+        r = self.client.post("/api/v1/story/title", json={"title": new_title})
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
@@ -202,7 +208,7 @@ class StoryEndpointsTest(TestCase):
     def test_put_story_summary_updates_and_persists(self):
         pdir = self._make_project()
         new_summary = "This is a new story summary."
-        r = self.client.put("/api/story/summary", json={"summary": new_summary})
+        r = self.client.put("/api/v1/story/summary", json={"summary": new_summary})
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))
@@ -216,7 +222,7 @@ class StoryEndpointsTest(TestCase):
     def test_put_story_tags_updates_and_persists(self):
         pdir = self._make_project()
         new_tags = ["fantasy", "adventure"]
-        r = self.client.put("/api/story/tags", json={"tags": new_tags})
+        r = self.client.put("/api/v1/story/tags", json={"tags": new_tags})
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertTrue(data.get("ok"))

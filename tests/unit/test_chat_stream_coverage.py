@@ -14,8 +14,8 @@ from unittest import TestCase
 from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi.testclient import TestClient
 
-import app.main as main
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+from augmentedquill.services.projects.projects import select_project
 
 
 class TestChatStreamCoverage(TestCase):
@@ -40,7 +40,7 @@ class TestChatStreamCoverage(TestCase):
         select_project("testproj")
 
         # Mock config to point to a "test" model
-        self.patcher_config = patch("app.api.chat.load_machine_config")
+        self.patcher_config = patch("augmentedquill.api.chat.load_machine_config")
         self.mock_config = self.patcher_config.start()
         self.mock_config.return_value = {
             "openai": {
@@ -57,7 +57,7 @@ class TestChatStreamCoverage(TestCase):
         }
         self.addCleanup(self.patcher_config.stop)
 
-    @patch("app.services.llm.llm.httpx.AsyncClient")
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_streaming_tool_call_hidden_text(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -96,7 +96,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -119,7 +119,7 @@ class TestChatStreamCoverage(TestCase):
         found_tool = any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         self.assertTrue(found_tool, "Did not find list_images tool call")
 
-    @patch("app.services.llm.llm.httpx.AsyncClient")
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_editing_model_tools(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -158,7 +158,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "EDITING",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -177,7 +177,7 @@ class TestChatStreamCoverage(TestCase):
         self.assertIn("Edit start", content_text)
         self.assertIn("Edit end", content_text)
 
-    @patch("app.services.llm.llm.httpx.AsyncClient")
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_non_streaming_json_response(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -211,7 +211,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -230,7 +230,7 @@ class TestChatStreamCoverage(TestCase):
             "Tool call not found in parsed non-streaming response",
         )
 
-    @patch("app.services.llm.llm.httpx.AsyncClient")
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_native_tool_calling_stream(self, MockClientClass):
         """Test modern models that return tool_calls in stream chunks natively."""
         mock_client_instance = MagicMock()
@@ -306,7 +306,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -337,7 +337,7 @@ class TestChatStreamCoverage(TestCase):
         # If it finds them, it re-emits them.
         self.assertTrue(found_tool, f"Native tool calls not emitted. Events: {events}")
 
-    @patch("app.services.llm.llm.httpx.AsyncClient")
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_native_tool_calling_non_stream(self, MockClientClass):
         """Test modern models that return tool_calls in a single JSON response."""
         mock_client_instance = MagicMock()
@@ -380,7 +380,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -397,7 +397,7 @@ class TestChatStreamCoverage(TestCase):
             any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         )
 
-    @patch("app.api.chat.httpx.AsyncClient")
+    @patch("augmentedquill.api.chat.httpx.AsyncClient")
     def test_stream_commentary_tool_call_suppresses_json(self, MockClientClass):
         """Commentary/tool-call output should emit tool_calls and no user-visible JSON."""
         mock_client_instance = MagicMock()
@@ -446,7 +446,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         events = self._parse_sse_events(response.text)
@@ -464,7 +464,7 @@ class TestChatStreamCoverage(TestCase):
             any(tc["function"]["name"] == "get_chapter_metadata" for tc in tool_calls)
         )
 
-    @patch("app.api.chat.httpx.AsyncClient")
+    @patch("augmentedquill.api.chat.httpx.AsyncClient")
     def test_sanitizes_assistant_tool_content(self, MockClientClass):
         """Assistant messages with tool_calls should not send tool args as content."""
         mock_client_instance = MagicMock()
@@ -507,7 +507,7 @@ class TestChatStreamCoverage(TestCase):
             "model_type": "CHAT",
         }
 
-        response = self.client.post("/api/chat/stream", json=payload)
+        response = self.client.post("/api/v1/chat/stream", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
 
         _, call_kwargs = mock_client_instance.stream.call_args
@@ -519,7 +519,7 @@ class TestChatStreamCoverage(TestCase):
                 self.assertIsNone(msg.get("content"))
 
     def test_llm_resolve_credentials_with_name(self):
-        from app.services.llm import llm
+        from augmentedquill.services.llm import llm
 
         cfg = {
             "openai": {
@@ -541,7 +541,9 @@ class TestChatStreamCoverage(TestCase):
             }
         }
 
-        with patch("app.services.llm.llm.load_machine_config", return_value=cfg):
+        with patch(
+            "augmentedquill.services.llm.llm.load_machine_config", return_value=cfg
+        ):
             # Test default (selected = model-a)
             url, key, mod, to = llm.resolve_openai_credentials({}, model_type="CHAT")
             self.assertEqual(url, "http://a")

@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest import TestCase
 from fastapi.testclient import TestClient
 
-import app.main as main
-from app.services.projects.projects import select_project
+import augmentedquill.main as main
+from augmentedquill.services.projects.projects import select_project
 
 
 class TestChatToolsSymmetry(TestCase):
@@ -89,7 +89,7 @@ class TestChatToolsSymmetry(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=update_body)
+        r = self.client.post("/api/v1/chat/tools", json=update_body)
         self.assertEqual(r.status_code, 200)
 
         # 2. Test get_story_metadata symmetry
@@ -111,7 +111,7 @@ class TestChatToolsSymmetry(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=get_body)
+        r = self.client.post("/api/v1/chat/tools", json=get_body)
         data = r.json()
         content = json.loads(data["appended_messages"][0]["content"])
 
@@ -151,7 +151,7 @@ class TestChatToolsSymmetry(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=update_body)
+        r = self.client.post("/api/v1/chat/tools", json=update_body)
         self.assertEqual(r.status_code, 200)
 
         # 2. Get chapter metadata
@@ -173,7 +173,7 @@ class TestChatToolsSymmetry(TestCase):
                 }
             ]
         }
-        r = self.client.post("/api/chat/tools", json=get_body)
+        r = self.client.post("/api/v1/chat/tools", json=get_body)
         data = r.json()
         content = json.loads(data["appended_messages"][0]["content"])
 
@@ -211,7 +211,7 @@ class TestChatToolsSymmetry(TestCase):
                 }
             ]
         }
-        self.client.post("/api/chat/tools", json=update_body)
+        self.client.post("/api/v1/chat/tools", json=update_body)
 
         # 2. Check the raw story.json file on disk
         pdir = self.projects_root / "test_symmetry"

@@ -16,15 +16,15 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from app.services.projects.projects import select_project, create_project
-from app.utils.image_helpers import (
+from augmentedquill.main import create_app
+from augmentedquill.services.projects.projects import select_project, create_project
+from augmentedquill.utils.image_helpers import (
     load_image_metadata,
     get_project_images,
     update_image_metadata,
 )
-from app.api.chat import _inject_project_images
-from app.services.chat.chat_tool_dispatcher import exec_chat_tool
+from augmentedquill.api.chat import _inject_project_images
+from augmentedquill.services.chat.chat_tool_dispatcher import exec_chat_tool
 
 
 class ImageFeaturesTest(TestCase):
@@ -110,19 +110,19 @@ class ImageFeaturesTest(TestCase):
     def test_endpoints_crud(self):
         """Test the REST API endpoints for images."""
         # 1. List empty
-        resp = self.client.get("/api/projects/images/list")
+        resp = self.client.get("/api/v1/projects/images/list")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["images"], [])
 
         # 2. Upload
         files = {"file": ("uploaded.png", b"pngdata", "image/png")}
-        resp = self.client.post("/api/projects/images/upload", files=files)
+        resp = self.client.post("/api/v1/projects/images/upload", files=files)
         self.assertEqual(resp.status_code, 200)
         filename = resp.json()["filename"]
 
         # 3. Create Placeholder
         resp = self.client.post(
-            "/api/projects/images/create_placeholder",
+            "/api/v1/projects/images/create_placeholder",
             json={"description": "A sketch", "title": "Sketchy"},
         )
         self.assertEqual(resp.status_code, 200)
@@ -130,7 +130,7 @@ class ImageFeaturesTest(TestCase):
         self.assertTrue(ph_filename.startswith("placeholder_"))
 
         # 4. List again
-        resp = self.client.get("/api/projects/images/list")
+        resp = self.client.get("/api/v1/projects/images/list")
         images = resp.json()["images"]
         self.assertEqual(len(images), 2)
         ph = next(i for i in images if i["filename"] == ph_filename)
@@ -138,7 +138,7 @@ class ImageFeaturesTest(TestCase):
 
         # 5. Update description
         resp = self.client.post(
-            "/api/projects/images/update_description",
+            "/api/v1/projects/images/update_description",
             json={
                 "filename": filename,
                 "description": "Real Upload",
@@ -148,7 +148,7 @@ class ImageFeaturesTest(TestCase):
         self.assertEqual(resp.status_code, 200)
 
         # Verify
-        resp = self.client.get("/api/projects/images/list")
+        resp = self.client.get("/api/v1/projects/images/list")
         images = resp.json()["images"]
         upl = next(i for i in images if i["filename"] == filename)
         self.assertEqual(upl["description"], "Real Upload")
@@ -156,7 +156,7 @@ class ImageFeaturesTest(TestCase):
 
         # 6. Delete Upload
         resp = self.client.post(
-            "/api/projects/images/delete", json={"filename": filename}
+            "/api/v1/projects/images/delete", json={"filename": filename}
         )
         self.assertEqual(resp.status_code, 200)
 
@@ -210,7 +210,8 @@ class ImageFeaturesTest(TestCase):
         mock_resp = {"content": "A beautiful sunset.", "tool_calls": [], "thinking": ""}
 
         with patch(
-            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+            "augmentedquill.services.llm.llm.unified_chat_complete",
+            new_callable=AsyncMock,
         ) as mock_llm:
             mock_llm.return_value = mock_resp
 

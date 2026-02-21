@@ -14,16 +14,16 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from app.services.projects.projects import (
+from augmentedquill.services.projects.projects import (
     create_project,
     select_project,
     change_project_type,
     get_active_project_dir,
     load_story_config,
 )
-from app.services.projects.project_helpers import _project_overview
+from augmentedquill.services.projects.project_helpers import _project_overview
 from fastapi.testclient import TestClient
-from app.main import app
+from augmentedquill.main import app
 
 
 class ProjectFeaturesTest(TestCase):
@@ -137,7 +137,7 @@ class ProjectFeaturesTest(TestCase):
         active = get_active_project_dir()
 
         # Create a book with one chapter
-        from app.services.projects.projects import create_new_book
+        from augmentedquill.services.projects.projects import create_new_book
 
         book_id = create_new_book("Book 1")
         book_dir = active / "books" / book_id
@@ -168,7 +168,7 @@ class ProjectFeaturesTest(TestCase):
         select_project("test_series_multi_books")
 
         # Create two books
-        from app.services.projects.projects import create_new_book
+        from augmentedquill.services.projects.projects import create_new_book
 
         create_new_book("Book 1")
         create_new_book("Book 2")
@@ -184,7 +184,7 @@ class ProjectFeaturesTest(TestCase):
         active = get_active_project_dir()
 
         # Create one book with two chapters
-        from app.services.projects.projects import create_new_book
+        from augmentedquill.services.projects.projects import create_new_book
 
         book_id = create_new_book("Book 1")
         book_dir = active / "books" / book_id
@@ -303,7 +303,7 @@ class ProjectFeaturesTest(TestCase):
 
         # Call API
         response = self.client.post(
-            "/api/projects/import",
+            "/api/v1/projects/import",
             files={"file": ("project.zip", mem_zip, "application/zip")},
         )
 
@@ -346,7 +346,7 @@ class ProjectFeaturesTest(TestCase):
 
         # 2. Test reorder API
         response = self.client.post(
-            "/api/chapters/reorder", json={"chapter_ids": [3, 1, 2]}
+            "/api/v1/chapters/reorder", json={"chapter_ids": [3, 1, 2]}
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -368,7 +368,10 @@ class ProjectFeaturesTest(TestCase):
         active = get_active_project_dir()
 
         # Create a book
-        from app.services.projects.projects import create_new_book, create_new_chapter
+        from augmentedquill.services.projects.projects import (
+            create_new_book,
+            create_new_chapter,
+        )
 
         book_id = create_new_book("Book 1")
 
@@ -379,7 +382,7 @@ class ProjectFeaturesTest(TestCase):
 
         # 2. Reorder them [2, 3, 1]
         response = self.client.post(
-            "/api/chapters/reorder",
+            "/api/v1/chapters/reorder",
             json={"book_id": book_id, "chapter_ids": [c2_id, c3_id, c1_id]},
         )
         self.assertEqual(response.status_code, 200)
@@ -414,7 +417,7 @@ class ProjectFeaturesTest(TestCase):
         active = get_active_project_dir()
 
         # Create books
-        from app.services.projects.projects import create_new_book
+        from augmentedquill.services.projects.projects import create_new_book
 
         book1_id = create_new_book("Book 1")
         book2_id = create_new_book("Book 2")
@@ -422,7 +425,7 @@ class ProjectFeaturesTest(TestCase):
 
         # 2. Test reorder API
         response = self.client.post(
-            "/api/books/reorder", json={"book_ids": [book3_id, book1_id, book2_id]}
+            "/api/v1/books/reorder", json={"book_ids": [book3_id, book1_id, book2_id]}
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()

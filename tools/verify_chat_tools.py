@@ -21,14 +21,14 @@ sys.path.insert(0, str(BASE_DIR))
 
 # Mock modules that might fail on import during script execution
 mock_modules = [
-    "app.main",
+    "augmentedquill.main",
 ]
 
 for mod in mock_modules:
     sys.modules[mod] = types.ModuleType(mod)
 
 # Import the router and function after setting up paths
-from app.api.chat import api_chat_stream  # noqa: E402
+from augmentedquill.api.chat import api_chat_stream  # noqa: E402
 
 
 async def test_mock_chat_stream():
@@ -81,19 +81,19 @@ async def test_mock_chat_stream():
 
         # Mock other dependencies
         with (
-            patch("app.api.chat._load_machine_config") as mock_load_config,
+            patch("augmentedquill.api.chat._load_machine_config") as mock_load_config,
             patch(
-                "app.services.chat.chat_api_stream_ops.load_story_config"
+                "augmentedquill.services.chat.chat_api_stream_ops.load_story_config"
             ) as mock_load_story,
-            patch("app.api.chat.get_active_project_dir") as mock_active_dir,
+            patch("augmentedquill.api.chat.get_active_project_dir") as mock_active_dir,
             patch(
-                "app.services.chat.chat_api_stream_ops.load_model_prompt_overrides"
+                "augmentedquill.services.chat.chat_api_stream_ops.load_model_prompt_overrides"
             ) as mock_overrides,
             patch(
-                "app.services.chat.chat_api_stream_ops.get_system_message"
+                "augmentedquill.services.chat.chat_api_stream_ops.get_system_message"
             ) as mock_sys_msg,
-            patch("app.api.chat.create_log_entry") as mock_log_entry,
-            patch("app.api.chat.add_llm_log"),
+            patch("augmentedquill.api.chat.create_log_entry") as mock_log_entry,
+            patch("augmentedquill.api.chat.add_llm_log"),
         ):
 
             mock_load_config.return_value = {
