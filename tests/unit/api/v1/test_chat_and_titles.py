@@ -14,7 +14,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 import augmentedquill.main as main
-import augmentedquill.api.chat
+import augmentedquill.api.v1.chat
 from augmentedquill.services.projects.projects import select_project
 
 
@@ -35,7 +35,7 @@ class ChatAndTitlesTest(TestCase):
 
     def test_api_chat_coerces_invalid_selected_and_lists_models(self):
         # Patch load_machine_config to return models with an invalid selected name
-        orig_lmc = augmentedquill.api.chat.load_machine_config
+        orig_lmc = augmentedquill.api.v1.chat.load_machine_config
 
         def fake_lmc(_path):  # type: ignore
             return {
@@ -61,7 +61,7 @@ class ChatAndTitlesTest(TestCase):
             }
 
         try:
-            augmentedquill.api.chat.load_machine_config = fake_lmc  # type: ignore
+            augmentedquill.api.v1.chat.load_machine_config = fake_lmc  # type: ignore
             r = self.client.get("/api/v1/chat")
             self.assertEqual(r.status_code, 200, r.text)
             data = r.json()
@@ -69,7 +69,7 @@ class ChatAndTitlesTest(TestCase):
             # Should coerce to first available model
             self.assertEqual(data.get("current_model"), "m1")
         finally:
-            augmentedquill.api.chat.load_machine_config = orig_lmc  # type: ignore
+            augmentedquill.api.v1.chat.load_machine_config = orig_lmc  # type: ignore
 
     def test_chapter_title_object_object_falls_back_to_filename(self):
         ok, msg = select_project("oob")

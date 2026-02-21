@@ -24,13 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from augmentedquill.core.config import load_machine_config, STATIC_DIR, CONFIG_DIR
 
 # Import API routers
-from augmentedquill.api.settings import router as settings_router  # noqa: E402
-from augmentedquill.api.projects import router as projects_router  # noqa: E402
-from augmentedquill.api.chapters import router as chapters_router  # noqa: E402
-from augmentedquill.api.story import router as story_router  # noqa: E402
-from augmentedquill.api.chat import router as chat_router  # noqa: E402
-from augmentedquill.api.debug import router as debug_router  # noqa: E402
-from augmentedquill.api.sourcebook import router as sourcebook_router  # noqa: E402
+from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
+from augmentedquill.api.v1.projects import router as projects_router  # noqa: E402
+from augmentedquill.api.v1.chapters import router as chapters_router  # noqa: E402
+from augmentedquill.api.v1.story import router as story_router  # noqa: E402
+from augmentedquill.api.v1.chat import router as chat_router  # noqa: E402
+from augmentedquill.api.v1.debug import router as debug_router  # noqa: E402
+from augmentedquill.api.v1.sourcebook import router as sourcebook_router  # noqa: E402
 
 
 def create_app() -> FastAPI:

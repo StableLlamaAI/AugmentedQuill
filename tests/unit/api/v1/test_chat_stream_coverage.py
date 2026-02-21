@@ -40,7 +40,7 @@ class TestChatStreamCoverage(TestCase):
         select_project("testproj")
 
         # Mock config to point to a "test" model
-        self.patcher_config = patch("augmentedquill.api.chat.load_machine_config")
+        self.patcher_config = patch("augmentedquill.api.v1.chat.load_machine_config")
         self.mock_config = self.patcher_config.start()
         self.mock_config.return_value = {
             "openai": {
@@ -397,7 +397,7 @@ class TestChatStreamCoverage(TestCase):
             any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         )
 
-    @patch("augmentedquill.api.chat.httpx.AsyncClient")
+    @patch("augmentedquill.api.v1.chat.httpx.AsyncClient")
     def test_stream_commentary_tool_call_suppresses_json(self, MockClientClass):
         """Commentary/tool-call output should emit tool_calls and no user-visible JSON."""
         mock_client_instance = MagicMock()
@@ -464,7 +464,7 @@ class TestChatStreamCoverage(TestCase):
             any(tc["function"]["name"] == "get_chapter_metadata" for tc in tool_calls)
         )
 
-    @patch("augmentedquill.api.chat.httpx.AsyncClient")
+    @patch("augmentedquill.api.v1.chat.httpx.AsyncClient")
     def test_sanitizes_assistant_tool_content(self, MockClientClass):
         """Assistant messages with tool_calls should not send tool args as content."""
         mock_client_instance = MagicMock()

@@ -31,7 +31,7 @@ from augmentedquill.services.story.story_api_stream_ops import (
     stream_collect_and_persist,
     stream_unified_chat_content,
 )
-from augmentedquill.api.story_routes.common import parse_json_body
+from augmentedquill.api.v1.story_routes.common import parse_json_body
 
 router = APIRouter(tags=["Story"])
 

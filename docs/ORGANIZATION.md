@@ -64,12 +64,16 @@ This document defines where files belong and why each top-level area exists.
 
 ## Tests (`tests/`)
 
-- `tests/unit/`: backend unit/integration-style tests grouped by capability.
+- `tests/unit/`: backend unit/integration-style tests grouped by backend architecture:
+  - `api/v1/`: endpoints and route-level contracts.
+  - `core/`: configuration, constant, and runtime-wide logic.
+  - `models/`: data structure and schema validation.
+  - `services/`: domain workflows, LLM orchestration, and project logic.
 - `tests/conftest.py`: shared fixtures and setup.
 
 ### Test Placement Rules
 
-- Backend behavior test: `tests/unit/test_<capability>.py`.
+- Backend behavior test: `tests/unit/<category>/test_<capability>.py`.
 - Shared fixture/helper for tests: `tests/conftest.py` or a local helper in `tests/unit/`.
 
 ## Tooling and Runtime Data
@@ -87,5 +91,4 @@ All `*.py`, `*.ts`, `*.tsx`, and `*.js` files are expected to start with:
 1. GPL copyright notice.
 2. A one-line `Purpose:` header describing why the file exists.
 
-Use `python tools/check_copyright.py .` to validate compliance.
-Use `python tools/enforce_code_hygiene.py .` to normalize headers.
+Use `python tools/enforce_code_hygiene.py .` to normalize headers and validate compliance.

@@ -8,19 +8,19 @@
 
 """Story API router aggregator.
 
-This module keeps the public import path stable (`augmentedquill.api.story:router`) while
+This module keeps the public import path stable (`augmentedquill.api.v1.story:router`) while
 splitting story endpoints into focused route modules.
 """
 
 from fastapi import APIRouter
 
-from augmentedquill.api.story_routes.generation_mutations import (
+from augmentedquill.api.v1.story_routes.generation_mutations import (
     router as generation_mutations_router,
 )
-from augmentedquill.api.story_routes.generation_streaming import (
+from augmentedquill.api.v1.story_routes.generation_streaming import (
     router as generation_streaming_router,
 )
-from augmentedquill.api.story_routes.metadata import router as metadata_router
+from augmentedquill.api.v1.story_routes.metadata import router as metadata_router
 
 router = APIRouter(tags=["Story"])
 router.include_router(generation_mutations_router)

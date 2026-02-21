@@ -97,4 +97,3 @@ The architecture treats `resources/` as reference/config contracts and `data/` a
 - Use typed API contracts to avoid shape drift between frontend and backend.
 - Enforce code hygiene headers with:
   - `python tools/enforce_code_hygiene.py .`
-  - `python tools/check_copyright.py .`

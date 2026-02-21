@@ -5,7 +5,6 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 // Purpose: Centralises all derived theme CSS-class strings so components can
-//   consume them via context instead of receiving them as props.
 
 import React, { createContext, useContext, useMemo } from 'react';
 import { AppTheme } from '../../types';

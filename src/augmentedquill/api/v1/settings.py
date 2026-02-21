@@ -41,7 +41,7 @@ from augmentedquill.services.settings.settings_machine_ops import (
     remote_model_exists,
 )
 from augmentedquill.services.settings.settings_update_ops import run_story_config_update
-from augmentedquill.api.http_responses import error_json, ok_json
+from augmentedquill.api.v1.http_responses import error_json, ok_json
 from pathlib import Path
 
 router = APIRouter(tags=["Settings"])

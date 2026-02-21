@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
+import { computeContentWithSeparator } from '../../utils/textUtils';
 
 type UseChapterSuggestionsParams = {
   currentChapter?: Chapter;
@@ -103,52 +104,12 @@ export function useChapterSuggestions({
     const prefix = currentContent.slice(0, c);
     const suffix = currentContent.slice(c);
 
-    const startsWithWhitespace = text.length > 0 && /^\s/.test(text);
-    const endsWithWhitespace = prefix.length > 0 && /\s$/.test(prefix);
-
-    const needsTokenBoundary =
-      prefix.length > 0 && !endsWithWhitespace && !startsWithWhitespace;
-
-    const countTrailingNewlines = (value: string) => {
-      let index = value.length - 1;
-      let count = 0;
-      while (index >= 0 && value[index] === '\n') {
-        count++;
-        index--;
-      }
-      return count;
-    };
-    const countLeadingNewlines = (value: string) => {
-      let index = 0;
-      let count = 0;
-      while (index < value.length && value[index] === '\n') {
-        count++;
-        index++;
-      }
-      return count;
-    };
-
-    let separator = '';
-
-    if (prefix.length === 0) {
-      separator = '';
-    } else if (viewMode === 'raw') {
-      separator = needsTokenBoundary ? ' ' : '';
-    } else {
-      const preNewlines = countTrailingNewlines(prefix);
-      const textNewlines = countLeadingNewlines(text);
-      const totalBoundaryNewlines = preNewlines + textNewlines;
-
-      if (totalBoundaryNewlines >= 2) {
-        separator = '';
-      } else if (preNewlines > 0 || textNewlines > 0) {
-        separator = '\n'.repeat(Math.max(0, 2 - totalBoundaryNewlines));
-      } else {
-        separator = needsTokenBoundary ? ' ' : '\n\n';
-      }
-    }
-
-    const newContent = prefix + separator + text + suffix;
+    const { newContent, separator } = computeContentWithSeparator(
+      prefix,
+      text,
+      suffix,
+      viewMode
+    );
 
     setSuggestUndoStack((prev) => [...prev, { content: currentContent, cursor: c }]);
     await updateChapter(currentChapterId, { content: newContent });

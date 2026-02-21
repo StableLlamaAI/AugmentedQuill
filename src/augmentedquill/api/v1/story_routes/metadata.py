@@ -16,7 +16,7 @@ from augmentedquill.services.projects.project_helpers import (
 from augmentedquill.services.story.story_api_state_ops import (
     get_active_story_or_http_error,
 )
-from augmentedquill.api.story_routes.common import (
+from augmentedquill.api.v1.story_routes.common import (
     parse_json_body,
     map_story_exception,
     StoryBadRequestError,

@@ -8,8 +8,8 @@
 
 from fastapi import APIRouter, Path as FastAPIPath, Request
 
-from augmentedquill.api.chapters_routes.common import parse_json_body
-from augmentedquill.api.http_responses import error_json, ok_json
+from augmentedquill.api.v1.chapters_routes.common import parse_json_body
+from augmentedquill.api.v1.http_responses import error_json, ok_json
 from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
 from augmentedquill.services.chapters.chapters_api_ops import (
     reorder_books_in_project,

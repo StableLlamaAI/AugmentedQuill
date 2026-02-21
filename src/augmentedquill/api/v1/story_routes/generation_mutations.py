@@ -9,7 +9,10 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from augmentedquill.api.story_routes.common import map_story_exception, parse_json_body
+from augmentedquill.api.v1.story_routes.common import (
+    map_story_exception,
+    parse_json_body,
+)
 from augmentedquill.services.story.story_generation_ops import (
     continue_chapter_from_summary,
     generate_chapter_summary,

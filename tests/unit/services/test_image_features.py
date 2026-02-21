@@ -23,7 +23,7 @@ from augmentedquill.utils.image_helpers import (
     get_project_images,
     update_image_metadata,
 )
-from augmentedquill.api.chat import _inject_project_images
+from augmentedquill.api.v1.chat import _inject_project_images
 from augmentedquill.services.chat.chat_tool_dispatcher import exec_chat_tool
 
 
