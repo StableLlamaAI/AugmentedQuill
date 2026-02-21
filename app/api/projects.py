@@ -5,9 +5,9 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-from fastapi import APIRouter, Request, UploadFile, File
+from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
-from app.helpers.projects_api_manage_ops import (
+from app.services.projects.projects_api_manage_ops import (
     projects_listing_payload,
     delete_project_response,
     select_project_response,
@@ -16,11 +16,7 @@ from app.helpers.projects_api_manage_ops import (
     create_book_response,
     delete_book_response,
 )
-from app.helpers.projects_api_request_ops import (
-    parse_json_body,
-    payload_value,
-)
-from app.helpers.projects_api_asset_ops import (
+from app.services.projects.projects_api_asset_ops import (
     list_images_response,
     update_image_description_response,
     create_image_placeholder_response,
@@ -29,6 +25,18 @@ from app.helpers.projects_api_asset_ops import (
     get_image_file_response,
     export_project_response,
     import_project_response,
+)
+
+from app.models.projects import (
+    ProjectDeleteRequest,
+    ProjectSelectRequest,
+    ProjectCreateRequest,
+    ProjectConvertRequest,
+    BookCreateRequest,
+    BookDeleteRequest,
+    ImageDescriptionUpdateRequest,
+    ImagePlaceholderRequest,
+    ImageDeleteRequest,
 )
 
 router = APIRouter()
@@ -40,47 +48,33 @@ async def api_projects() -> dict:
 
 
 @router.post("/api/projects/delete")
-async def api_projects_delete(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    name = payload_value(payload, "name", "")
-    return delete_project_response(name)
+async def api_projects_delete(body: ProjectDeleteRequest) -> JSONResponse:
+    return delete_project_response(body.name)
 
 
 @router.post("/api/projects/select")
-async def api_projects_select(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    name = payload_value(payload, "name", "")
-    return select_project_response(name)
+async def api_projects_select(body: ProjectSelectRequest) -> JSONResponse:
+    return select_project_response(body.name)
 
 
 @router.post("/api/projects/create")
-async def api_projects_create(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    name = payload_value(payload, "name", "")
-    project_type = payload_value(payload, "type", "novel")
-
-    return create_project_response(name, project_type)
+async def api_projects_create(body: ProjectCreateRequest) -> JSONResponse:
+    return create_project_response(body.name, body.type)
 
 
 @router.post("/api/projects/convert")
-async def api_projects_convert(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    new_type = payload_value(payload, "new_type")
-    return convert_project_response(new_type)
+async def api_projects_convert(body: ProjectConvertRequest) -> JSONResponse:
+    return convert_project_response(body.target_type)
 
 
 @router.post("/api/books/create")
-async def api_books_create(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    title = payload_value(payload, "title")
-    return create_book_response(title)
+async def api_books_create(body: BookCreateRequest) -> JSONResponse:
+    return create_book_response(body.name)
 
 
 @router.post("/api/books/delete")
-async def api_books_delete(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    book_id = payload_value(payload, "book_id")
-    return delete_book_response(book_id)
+async def api_books_delete(body: BookDeleteRequest) -> JSONResponse:
+    return delete_book_response(body.name)
 
 
 @router.get("/api/projects/images/list")
@@ -89,15 +83,15 @@ async def api_list_images() -> JSONResponse:
 
 
 @router.post("/api/projects/images/update_description")
-async def api_update_image_description(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    return update_image_description_response(payload)
+async def api_update_image_description(
+    body: ImageDescriptionUpdateRequest,
+) -> JSONResponse:
+    return update_image_description_response(body.model_dump())
 
 
 @router.post("/api/projects/images/create_placeholder")
-async def api_create_image_placeholder(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    return create_image_placeholder_response(payload)
+async def api_create_image_placeholder(body: ImagePlaceholderRequest) -> JSONResponse:
+    return create_image_placeholder_response(body.model_dump())
 
 
 @router.post("/api/projects/images/upload")
@@ -108,9 +102,8 @@ async def api_upload_image(
 
 
 @router.post("/api/projects/images/delete")
-async def api_delete_image(request: Request) -> JSONResponse:
-    payload = await parse_json_body(request)
-    return delete_image_response(payload)
+async def api_delete_image(body: ImageDeleteRequest) -> JSONResponse:
+    return delete_image_response(body.model_dump())
 
 
 @router.get("/api/projects/images/{filename}")

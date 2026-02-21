@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from unittest import TestCase
 
-from app.config import load_machine_config, load_story_config
+from app.core.config import load_machine_config, load_story_config
 
 
 class ConfigLoaderTest(TestCase):

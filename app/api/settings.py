@@ -9,32 +9,34 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 import json as _json
 
-from app.config import load_machine_config, CURRENT_SCHEMA_VERSION
-from app.projects import get_active_project_dir
-from app.prompts import (
+from app.core.config import (
+    load_machine_config,
+    CURRENT_SCHEMA_VERSION,
+    BASE_DIR,
+    CONFIG_DIR,
+)
+from app.services.projects.projects import get_active_project_dir
+from app.core.prompts import (
     get_system_message,
     load_model_prompt_overrides,
     DEFAULT_SYSTEM_MESSAGES,
     DEFAULT_USER_PROMPTS,
     ensure_string,
 )
-from app.helpers.settings_api_ops import (
+from app.services.settings.settings_api_ops import (
     ensure_parent_dir,
     build_story_cfg_from_payload,
     validate_and_fill_openai_cfg_for_settings,
     clean_machine_openai_cfg_for_put,
     update_story_field,
 )
-from app.helpers.settings_machine_ops import (
+from app.services.settings.settings_machine_ops import (
     parse_connection_payload,
     list_remote_models,
     remote_model_exists,
 )
-from app.helpers.settings_update_ops import run_story_config_update
+from app.services.settings.settings_update_ops import run_story_config_update
 from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-CONFIG_DIR = BASE_DIR / "config"
 
 router = APIRouter()
 
@@ -78,7 +80,7 @@ async def api_settings_post(request: Request) -> JSONResponse:
         machine_path = CONFIG_DIR / "machine.json"
         _ensure_parent_dir(story_path)
         _ensure_parent_dir(machine_path)
-        from app.config import save_story_config
+        from app.core.config import save_story_config
 
         save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
@@ -112,7 +114,7 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
             model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
         )
 
-    from app.prompts import PROMPT_TYPES
+    from app.core.prompts import PROMPT_TYPES
 
     return JSONResponse(
         status_code=200,
@@ -200,7 +202,7 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
     model_id_str = str(model_id or "").strip()
     # Perform dynamic capability verification
-    from app.helpers.llm_utils import verify_model_capabilities
+    from app.utils.llm_utils import verify_model_capabilities
 
     caps = await verify_model_capabilities(
         base_url=base_url,

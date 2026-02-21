@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.projects import select_project
+from app.services.projects.projects import select_project
 
 
 class TestChatStreamCoverage(TestCase):
@@ -56,7 +56,7 @@ class TestChatStreamCoverage(TestCase):
         }
         self.addCleanup(self.patcher_config.stop)
 
-    @patch("app.llm.httpx.AsyncClient")
+    @patch("app.services.llm.llm.httpx.AsyncClient")
     def test_streaming_tool_call_hidden_text(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -118,7 +118,7 @@ class TestChatStreamCoverage(TestCase):
         found_tool = any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         self.assertTrue(found_tool, "Did not find list_images tool call")
 
-    @patch("app.llm.httpx.AsyncClient")
+    @patch("app.services.llm.llm.httpx.AsyncClient")
     def test_editing_model_tools(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -176,7 +176,7 @@ class TestChatStreamCoverage(TestCase):
         self.assertIn("Edit start", content_text)
         self.assertIn("Edit end", content_text)
 
-    @patch("app.llm.httpx.AsyncClient")
+    @patch("app.services.llm.llm.httpx.AsyncClient")
     def test_non_streaming_json_response(self, MockClientClass):
         mock_client_instance = MagicMock()
         MockClientClass.return_value = mock_client_instance
@@ -229,7 +229,7 @@ class TestChatStreamCoverage(TestCase):
             "Tool call not found in parsed non-streaming response",
         )
 
-    @patch("app.llm.httpx.AsyncClient")
+    @patch("app.services.llm.llm.httpx.AsyncClient")
     def test_native_tool_calling_stream(self, MockClientClass):
         """Test modern models that return tool_calls in stream chunks natively."""
         mock_client_instance = MagicMock()
@@ -336,7 +336,7 @@ class TestChatStreamCoverage(TestCase):
         # If it finds them, it re-emits them.
         self.assertTrue(found_tool, f"Native tool calls not emitted. Events: {events}")
 
-    @patch("app.llm.httpx.AsyncClient")
+    @patch("app.services.llm.llm.httpx.AsyncClient")
     def test_native_tool_calling_non_stream(self, MockClientClass):
         """Test modern models that return tool_calls in a single JSON response."""
         mock_client_instance = MagicMock()
@@ -518,7 +518,7 @@ class TestChatStreamCoverage(TestCase):
                 self.assertIsNone(msg.get("content"))
 
     def test_llm_resolve_credentials_with_name(self):
-        from app import llm
+        from app.services.llm import llm
 
         cfg = {
             "openai": {
@@ -540,7 +540,7 @@ class TestChatStreamCoverage(TestCase):
             }
         }
 
-        with patch("app.llm.load_machine_config", return_value=cfg):
+        with patch("app.services.llm.llm.load_machine_config", return_value=cfg):
             # Test default (selected = model-a)
             url, key, mod, to = llm.resolve_openai_credentials({}, model_type="CHAT")
             self.assertEqual(url, "http://a")

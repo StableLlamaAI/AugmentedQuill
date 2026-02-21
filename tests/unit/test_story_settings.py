@@ -13,7 +13,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.projects import select_project
+from app.services.projects.projects import select_project
 
 
 class StorySettingsTest(TestCase):

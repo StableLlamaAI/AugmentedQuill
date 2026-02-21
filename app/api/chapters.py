@@ -8,11 +8,11 @@
 from fastapi import APIRouter, Request, HTTPException, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
-from app.projects import get_active_project_dir
-from app.helpers.chapter_helpers import (
+from app.services.projects.projects import get_active_project_dir
+from app.services.chapters.chapter_helpers import (
     _chapter_by_id_or_404,
 )
-from app.helpers.chapters_api_ops import (
+from app.services.chapters.chapters_api_ops import (
     list_chapters_payload,
     chapter_detail_payload,
     reorder_chapters_in_project,
@@ -97,7 +97,7 @@ async def api_update_chapter_metadata(
             )
         # normalize conflicts just in case (e.g. ensure they are dicts)
 
-    from app.projects import update_chapter_metadata
+    from app.services.projects.projects import update_chapter_metadata
 
     try:
         update_chapter_metadata(
@@ -148,7 +148,7 @@ async def api_update_chapter_title(
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
-    from app.projects import write_chapter_title
+    from app.services.projects.projects import write_chapter_title
 
     try:
         write_chapter_title(chap_id, new_title_str)
@@ -194,7 +194,7 @@ async def api_create_chapter(request: Request) -> JSONResponse:
     book_id = payload.get("book_id") if isinstance(payload, dict) else None
 
     # Use centralized logic
-    from app.projects import create_new_chapter, write_chapter_content
+    from app.services.projects.projects import create_new_chapter, write_chapter_content
 
     try:
         # Create chapter entry & file
@@ -285,7 +285,7 @@ async def api_update_chapter_summary(
         )
     new_summary = str(payload.get("summary", "")).strip()
 
-    from app.projects import write_chapter_summary
+    from app.services.projects.projects import write_chapter_summary
 
     try:
         write_chapter_summary(chap_id, new_summary)
@@ -310,7 +310,7 @@ async def api_update_chapter_summary(
 @router.delete("/api/chapters/{chap_id}")
 async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)) -> JSONResponse:
     """Delete a chapter file and update story.json."""
-    from app.projects import delete_chapter
+    from app.services.projects.projects import delete_chapter
 
     try:
         delete_chapter(chap_id)

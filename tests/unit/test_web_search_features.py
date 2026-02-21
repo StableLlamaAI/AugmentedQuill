@@ -31,7 +31,7 @@ class WebSearchFeaturesTest(TestCase):
     def test_delete_all_chats_endpoint(self):
         """Test the DELETE /api/chats endpoint."""
         import tempfile
-        from app.projects import delete_all_chats
+        from app.services.projects.projects import delete_all_chats
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

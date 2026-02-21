@@ -8,9 +8,9 @@
 from fastapi import APIRouter, Request, HTTPException, Path as FastAPIPath
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.config import save_story_config
-from app.helpers.project_helpers import normalize_story_for_frontend
-from app.helpers.story_api_prompt_ops import (
+from app.core.config import save_story_config, BASE_DIR
+from app.services.projects.project_helpers import normalize_story_for_frontend
+from app.services.story.story_api_prompt_ops import (
     resolve_model_runtime,
     build_chapter_summary_messages,
     build_story_summary_messages,
@@ -18,7 +18,7 @@ from app.helpers.story_api_prompt_ops import (
     build_continue_chapter_messages,
     build_suggest_prompt,
 )
-from app.helpers.story_api_state_ops import (
+from app.services.story.story_api_state_ops import (
     get_active_story_or_http_error,
     get_chapter_locator,
     read_text_or_http_500,
@@ -26,17 +26,13 @@ from app.helpers.story_api_state_ops import (
     ensure_chapter_slot,
     collect_chapter_summaries,
 )
-from app.helpers.story_api_stream_ops import (
+from app.services.story.story_api_stream_ops import (
     stream_unified_chat_content,
     stream_collect_and_persist,
 )
-from app import llm
-from pathlib import Path
+from app.services.llm import llm
 
 router = APIRouter()
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-CONFIG_DIR = BASE_DIR / "config"
 
 
 @router.post("/api/story/story-summary")
@@ -735,7 +731,7 @@ async def api_story_metadata(request: Request) -> JSONResponse:
     notes = payload.get("notes")
     private_notes = payload.get("private_notes")
 
-    from app.projects import update_story_metadata
+    from app.services.projects.projects import update_story_metadata
 
     try:
         update_story_metadata(
@@ -778,7 +774,7 @@ async def api_book_metadata(
     notes = payload.get("notes")
     private_notes = payload.get("private_notes")
 
-    from app.projects import update_book_metadata
+    from app.services.projects.projects import update_book_metadata
 
     try:
         update_book_metadata(

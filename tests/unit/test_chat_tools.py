@@ -14,7 +14,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.projects import select_project
+from app.services.projects.projects import select_project
 
 
 class ChatToolsTest(TestCase):

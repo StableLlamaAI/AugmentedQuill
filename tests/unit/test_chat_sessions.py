@@ -12,7 +12,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.projects import (
+from app.services.projects.projects import (
     initialize_project_dir,
     select_project,
     get_chats_dir,

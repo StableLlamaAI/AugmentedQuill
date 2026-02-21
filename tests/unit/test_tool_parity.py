@@ -251,7 +251,7 @@ class ToolParityTest(TestCase):
         # For series, it needs a book_id or it might fail if multiple books exist,
         # but here we only have one if we didn't delete it yet.
         # Let's create a new book first to make it interesting.
-        from app.projects import create_new_book
+        from app.services.projects.projects import create_new_book
 
         new_bid = create_new_book("Book 2")
 
@@ -277,7 +277,9 @@ class ToolParityTest(TestCase):
         # We need to mock the LLM for sync_summary because it calls unified_chat_complete
         from unittest.mock import patch, AsyncMock
 
-        with patch("app.llm.unified_chat_complete", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+        ) as mock_llm:
             mock_llm.return_value = {
                 "content": "Synced summary",
                 "tool_calls": [],
@@ -293,7 +295,9 @@ class ToolParityTest(TestCase):
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
 
-        with patch("app.llm.unified_chat_complete", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+        ) as mock_llm:
             mock_llm.return_value = {
                 "content": "Synced story summary",
                 "tool_calls": [],

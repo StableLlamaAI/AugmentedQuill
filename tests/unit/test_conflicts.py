@@ -10,14 +10,14 @@ import tempfile
 import json
 from pathlib import Path
 from unittest import TestCase
-from app.projects import (
+from app.services.projects.projects import (
     select_project,
     add_chapter_conflict,
     update_chapter_conflict,
     remove_chapter_conflict,
     reorder_chapter_conflicts,
 )
-from app.config import load_story_config
+from app.core.config import load_story_config
 
 
 class ConflictsTest(TestCase):

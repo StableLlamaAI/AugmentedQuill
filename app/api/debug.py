@@ -6,7 +6,7 @@
 # (at your option) any later version.
 
 from fastapi import APIRouter
-from app.llm import llm_logs
+from app.services.llm.llm import llm_logs
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
 

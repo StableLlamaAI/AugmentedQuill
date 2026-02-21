@@ -71,13 +71,19 @@ async def test_mock_chat_stream():
         # mock_stream is a context manager, so it needs to return an object with __aenter__ and __aexit__
         mock_stream.return_value.__aenter__.return_value = mock_response
 
-        # Mock other dependencies in app.api.chat
+        # Mock other dependencies
         with (
             patch("app.api.chat._load_machine_config") as mock_load_config,
-            patch("app.api.chat.load_story_config") as mock_load_story,
+            patch(
+                "app.services.chat.chat_api_stream_ops.load_story_config"
+            ) as mock_load_story,
             patch("app.api.chat.get_active_project_dir") as mock_active_dir,
-            patch("app.api.chat.load_model_prompt_overrides") as mock_overrides,
-            patch("app.api.chat.get_system_message") as mock_sys_msg,
+            patch(
+                "app.services.chat.chat_api_stream_ops.load_model_prompt_overrides"
+            ) as mock_overrides,
+            patch(
+                "app.services.chat.chat_api_stream_ops.get_system_message"
+            ) as mock_sys_msg,
             patch("app.api.chat.create_log_entry") as mock_log_entry,
             patch("app.api.chat.add_llm_log"),
         ):

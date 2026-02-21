@@ -9,7 +9,12 @@ import tempfile
 import os
 from pathlib import Path
 from unittest import TestCase
-from app.helpers.sourcebook_helpers import sb_create, sb_get, sb_search, sb_delete
+from app.services.sourcebook.sourcebook_helpers import (
+    sb_create,
+    sb_get,
+    sb_search,
+    sb_delete,
+)
 
 
 class SourcebookTest(TestCase):
@@ -40,7 +45,7 @@ class SourcebookTest(TestCase):
         os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
 
         # Mock get_active_project_dir via MonkeyPatching not easily done in unittest without mock lib
-        # But wait, app.projects.get_active_project_dir uses AUGQ_PROJECTS_REGISTRY
+        # But wait, app.services.projects.projects.get_active_project_dir uses AUGQ_PROJECTS_REGISTRY
         # I need to set up the registry to point to our test project.
 
         self.registry_path = Path(self.td.name) / "projects.json"

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 from typing import Optional
 import os
 
@@ -18,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.config import load_machine_config
+from app.core.config import load_machine_config, STATIC_DIR, CONFIG_DIR
 
 # Import API routers
 from app.api.settings import router as settings_router  # noqa: E402
@@ -28,10 +27,6 @@ from app.api.story import router as story_router  # noqa: E402
 from app.api.chat import router as chat_router  # noqa: E402
 from app.api.debug import router as debug_router  # noqa: E402
 from app.api.sourcebook import router as sourcebook_router  # noqa: E402
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-STATIC_DIR = BASE_DIR / "static"
-CONFIG_DIR = BASE_DIR / "config"
 
 
 def create_app() -> FastAPI:

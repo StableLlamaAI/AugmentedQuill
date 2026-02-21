@@ -13,8 +13,8 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
-import app.llm as llm
-from app.projects import select_project
+import app.services.llm.llm as llm
+from app.services.projects.projects import select_project
 
 
 class StoryEndpointsTest(TestCase):
@@ -67,7 +67,7 @@ class StoryEndpointsTest(TestCase):
 
     # ---- Story LLM endpoints with fakes ----
     def _patch_llm(self):
-        # Patch credentials and completion in app.llm
+        # Patch credentials and completion in app.services.llm.llm
         self._orig_resolve = llm.resolve_openai_credentials
         self._orig_unified = llm.unified_chat_complete
 

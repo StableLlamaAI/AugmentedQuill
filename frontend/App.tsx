@@ -7,18 +7,18 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useStory } from './hooks/useStory';
-import { StoryMetadata } from './components/StoryMetadata';
-import { ChapterList } from './components/ChapterList';
-import { Editor } from './components/Editor';
-import { Chat } from './components/Chat';
-import { ProjectImages } from './components/ProjectImages';
-import { SourcebookList } from './components/SourcebookList';
-import { DebugLogs } from './components/DebugLogs';
-import { Button } from './components/Button';
-import { SettingsDialog } from './components/SettingsDialog';
-import { CreateProjectDialog } from './components/CreateProjectDialog';
-import { ModelSelector } from './components/ModelSelector';
+import { useStory } from './features/story/useStory';
+import { StoryMetadata } from './features/story/StoryMetadata';
+import { ChapterList } from './features/chapters/ChapterList';
+import { Editor } from './features/editor/Editor';
+import { Chat } from './features/chat/Chat';
+import { ProjectImages } from './features/projects/ProjectImages';
+import { SourcebookList } from './features/sourcebook/SourcebookList';
+import { DebugLogs } from './features/debug/DebugLogs';
+import { Button } from './components/ui/Button';
+import { SettingsDialog } from './features/settings/SettingsDialog';
+import { CreateProjectDialog } from './features/projects/CreateProjectDialog';
+import { ModelSelector } from './features/chat/ModelSelector';
 import {
   ChatMessage,
   ChatSession,

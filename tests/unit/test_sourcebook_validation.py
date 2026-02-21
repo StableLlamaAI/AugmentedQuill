@@ -10,8 +10,13 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
-from app.helpers.sourcebook_helpers import sb_create, sb_delete, sb_get, sb_update
-from app.projects import select_project
+from app.services.sourcebook.sourcebook_helpers import (
+    sb_create,
+    sb_delete,
+    sb_get,
+    sb_update,
+)
+from app.services.projects.projects import select_project
 
 
 class SourcebookValidationTest(TestCase):

@@ -9,8 +9,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.projects import get_active_project_dir
-from app.config import load_story_config, save_story_config
+from app.services.projects.projects import get_active_project_dir
+from app.core.config import load_story_config, save_story_config
 
 router = APIRouter()
 

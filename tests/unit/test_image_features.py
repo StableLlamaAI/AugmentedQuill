@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.projects import select_project, create_project
-from app.helpers.image_helpers import (
+from app.services.projects.projects import select_project, create_project
+from app.utils.image_helpers import (
     load_image_metadata,
     get_project_images,
     update_image_metadata,
@@ -207,7 +207,9 @@ class ImageFeaturesTest(TestCase):
         # Mock LLM response
         mock_resp = {"content": "A beautiful sunset.", "tool_calls": [], "thinking": ""}
 
-        with patch("app.llm.unified_chat_complete", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "app.services.llm.llm.unified_chat_complete", new_callable=AsyncMock
+        ) as mock_llm:
             mock_llm.return_value = mock_resp
 
             payload = {"messages": [], "model_name": "gpt-4o"}

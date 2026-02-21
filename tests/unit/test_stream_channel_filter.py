@@ -6,7 +6,7 @@
 # (at your option) any later version.
 
 import unittest
-from app.helpers.stream_helpers import ChannelFilter
+from app.utils.stream_helpers import ChannelFilter
 
 
 class TestChannelFilter(unittest.TestCase):

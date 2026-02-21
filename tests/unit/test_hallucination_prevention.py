@@ -13,7 +13,7 @@ from unittest import TestCase
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.projects import select_project
+from app.services.projects.projects import select_project
 
 
 class HallucinationPreventionTest(TestCase):
@@ -91,7 +91,7 @@ class HallucinationPreventionTest(TestCase):
     def test_project_overview_includes_titles_for_series(self):
         self._setup_series_project()
         # Chat tools overview helper
-        from app.helpers.project_helpers import _project_overview
+        from app.services.projects.project_helpers import _project_overview
 
         ov = _project_overview()
 

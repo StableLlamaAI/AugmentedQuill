@@ -7,37 +7,32 @@
 
 import datetime
 import base64
-import app.llm as llm
+import app.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.config import load_machine_config
-import app.config as _app_config
-from app.projects import get_active_project_dir
-from app.llm import add_llm_log, create_log_entry
-from app.helpers.chat_tool_dispatcher import _exec_chat_tool
-from app.helpers.chat_tools_schema import STORY_TOOLS as CHAT_STORY_TOOLS
-from app.helpers.chat_api_stream_ops import (
+from app.core.config import load_machine_config, CONFIG_DIR
+import app.core.config as _app_config
+from app.services.projects.projects import get_active_project_dir
+from app.services.llm.llm import add_llm_log, create_log_entry
+from app.services.chat.chat_tool_dispatcher import _exec_chat_tool
+from app.services.chat.chat_tools_schema import STORY_TOOLS as CHAT_STORY_TOOLS
+from app.services.chat.chat_api_stream_ops import (
     normalize_chat_messages,
     resolve_stream_model_context,
     ensure_system_message_if_missing,
     resolve_story_llm_prefs,
 )
-from app.helpers.chat_api_session_ops import (
+from app.services.chat.chat_api_session_ops import (
     list_active_chats,
     load_active_chat,
     save_active_chat,
     delete_active_chat,
     delete_all_active_chats,
 )
-import app.helpers.chat_api_proxy_ops as _chat_api_proxy_ops
+import app.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
-
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-CONFIG_DIR = BASE_DIR / "config"
 
 router = APIRouter()
 
