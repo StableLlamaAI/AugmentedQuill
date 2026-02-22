@@ -20,7 +20,7 @@ COPY src/augmentedquill/ ./src/augmentedquill/
 RUN pip install --no-cache-dir -e .
 
 # Copy built frontend from the builder stage
-COPY --from=frontend-builder /app/src/frontend/dist ./static/dist
+COPY --from=frontend-builder /app/static/dist ./static/dist
 COPY static/images ./static/images
 
 # Create necessary directories
