@@ -6,7 +6,7 @@ The Sourcebook is your story's encyclopedia. It is crucial for keeping both you 
 
 ## Sourcebook Browser
 
-- **Add entry**: The plus button in the header opens the entry dialog so you can create a brand-new record.
+- **Add entry**: The <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" /> plus button in the header opens the entry dialog so you can create a brand-new record.
 - **Search & filter**: The input at the top filters by name, category, or synonym, letting you quickly drill down to the right entry.
 - **Hover previews**: Hover an entry to open a tooltip that shows the category badge, description, and the primary associated image (if any) so you can scan details without opening the editor.
 - **Click to edit**: Clicking an entry immediately opens it in the editor modal with every field populated.

@@ -8,7 +8,7 @@ Every story starts with a concept. Before you write a single word of prose, you 
 
 **Manually:**
 
-1. Open AugmentedQuill and click the **Settings** icon in the top navigation bar.
+1. Open AugmentedQuill and click the <img src="assets/settings.svg" alt="Settings icon" width="16" height="16" style="vertical-align:text-bottom;" /> **Settings** icon in the top navigation bar.
 2. In the **Projects** tab, click **New Project**. Name it "The Lost Heirloom".
 3. Close the Settings dialog. In the left sidebar, find the **Story Metadata** section.
 

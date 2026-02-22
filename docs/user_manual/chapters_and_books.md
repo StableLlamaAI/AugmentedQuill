@@ -26,7 +26,7 @@ Each chapter card in the sidebar shows the title, a short summary excerpt, and q
 
 - **Select**: Click a card to load it into the editor. The active chapter highlights with a brighter border.
 - **Drag & Drop**: Reorder chapters by dragging the cards up or down. In a series, drag within a book or across books; the UI previews the move before it actually reorders on the server.
-- **Actions**: Hover to reveal Edit and Delete icons. Delete immediately removes the chapter after confirmation.
+- **Actions**: Hover to reveal the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> Edit and <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" /> Delete icons. Delete immediately removes the chapter after confirmation.
 - **Metadata**: The edit button opens the Metadata Editor Dialog, where you can change the title, summary, notes, private notes, and—if it’s a chapter—conflict list.
 
 The Metadata Editor Dialog auto-saves changes and exposes tabs:
@@ -42,15 +42,15 @@ When you switch to a series, each book renders as a collapsible panel showing th
 
 `[SCREENSHOT: Series view with multiple books expanded, showing Add Chapter and drag handles for books]`
 
-- **Add Chapter**: Tap the plus icon inside a book to append a new chapter directly into that volume.
+- **Add Chapter**: Tap the <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" /> plus icon inside a book to append a new chapter directly into that volume.
 - **Edit Metadata**: The same metadata dialog used for chapters opens for books, letting you clarify the book’s focus, notes, and title.
-- **Add Book**: A dashed button at the bottom of the list creates a new book. Name it, then drag it to place it before or after other books.
-- **Delete Book**: Removing a book deletes every chapter inside it; a confirmation prompt reminds you of the cascade.
+- **Add Book**: A dashed button at the bottom of the list creates a new book (the button uses the same <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" /> icon). Name it, then drag it to place it before or after other books.
+- **Delete Book**: Removing a book deletes every chapter inside it; a confirmation prompt (the same <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" /> icon) reminds you of the cascade.
 - **Drag to Reorder**: Both books and chapters respond to drag-and-drop, so you can reorder entire arcs without leaving the sidebar.
 
 ## Story Metadata Panel
 
-The top of the sidebar shows the Story Metadata view with the title, summary, tags, and a compact notes preview. Click the pencil icon to open the metadata dialog and adjust the shared story information:
+- The top of the sidebar shows the Story Metadata view with the title, summary, tags, and a compact notes preview. Click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon to open the metadata dialog and adjust the shared story information:
 
 `[SCREENSHOT: Story Metadata panel with tags, notes, and the pencil icon highlighted]`
 

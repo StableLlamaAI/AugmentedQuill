@@ -1,6 +1,6 @@
 # Projects and Settings
 
-To access your projects and configure the application, click the **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has two main tabs: **Projects** and **Machine Settings**.
+To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has two main tabs: **Projects** and **Machine Settings**.
 
 ## The Projects Tab
 

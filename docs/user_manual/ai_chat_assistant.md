@@ -11,14 +11,14 @@ The Chat Assistant is powered by the **CHAT model**
 
 The Chat pane goes beyond free-form conversation. Whenever you see the blue CHAT badge, you can:
 
-- **Start a new chat**: Tap the plus button to spin up a blank conversational thread without losing your context.
-- **Delete chats**: Remove an entire conversation using the trash icon next to each chat header.
+- **Start a new chat**: Tap the <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" /> button to spin up a blank conversational thread without losing your context.
+- **Delete chats**: Remove an entire conversation using the <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" /> icon next to each chat header.
 - **Review history**: Scroll the sidebar list to see every previous chat, even after you close the panel.
 - **Use incognito mode**: Toggle the incognito switch to keep a session local—no logging, no training data.
-- **Web search integration**: Hit the search icon to draw in up-to-date knowledge before the model responds.
+- **Web search integration**: Hit the <img src="assets/search.svg" alt="Search icon" width="16" height="16" style="vertical-align:text-bottom;" /> icon to draw in up-to-date knowledge before the model responds.
 - **Set system instructions**: Use the "System" prompt at the top of the composer to guide how the CHAT model behaves.
 - **Edit single messages**: Hover any message, click edit, adjust the wording, and resend it in the same turn.
-- **Delete single messages**: Remove just the malformed turn with the delete action inside each bubble.
+- **Delete single messages**: Remove just the malformed turn with the <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" /> action inside each bubble.
 - **Regenerate responses**: Use the regenerate button to ask the CHAT model for a new take on the last reply.
 
 ## How to Use the Chat
