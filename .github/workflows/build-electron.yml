@@ -32,6 +32,20 @@ jobs:
         pip install -e .
         pip install pyinstaller uvicorn
 
+    - name: Set Electron package version from release tag
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const tag = context.payload.release && context.payload.release.tag_name;
+          if (!tag) throw new Error('Release tag not available on context.payload.release.tag_name');
+          const version = tag.startsWith('v') ? tag.slice(1) : tag;
+          core.info(`Setting electron/package.json version to ${version}`);
+          const pkgPath = 'electron/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = version;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+
     - name: Build Frontend
       run: |
         cd src/frontend
@@ -48,7 +62,7 @@ jobs:
         npm install
         npm run dist
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
     - name: Upload Artifact (Windows)
       if: runner.os == 'Windows'
