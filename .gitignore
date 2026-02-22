@@ -146,6 +146,16 @@ venv.bak/
 
 # Node
 node_modules/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS and Editor
+.DS_Store
+*.swp
+*.swo
 
 # Spyder project settings
 .spyderproject
