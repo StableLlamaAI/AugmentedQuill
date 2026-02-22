@@ -173,11 +173,6 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 </div>
               </div>
               <div className="flex flex-wrap gap-1">
-                {p.id === localSettings.activeChatProviderId && (
-                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                    <MessageSquare size={10} /> Chat
-                  </span>
-                )}
                 {p.id === localSettings.activeWritingProviderId && (
                   <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
                     <BookOpen size={10} /> Writing
@@ -186,6 +181,11 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 {p.id === localSettings.activeEditingProviderId && (
                   <span className="text-[9px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded border border-fuchsia-200 flex items-center gap-1">
                     <Edit2 size={10} /> Editing
+                  </span>
+                )}
+                {p.id === localSettings.activeChatProviderId && (
+                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                    <MessageSquare size={10} /> Chat
                   </span>
                 )}
               </div>
@@ -235,26 +235,6 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 onClick={() =>
                   setLocalSettings((s) => ({
                     ...s,
-                    activeChatProviderId: activeProvider.id,
-                  }))
-                }
-                className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
-                  localSettings.activeChatProviderId === activeProvider.id
-                    ? isLight
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-blue-900/40 text-blue-300 border border-blue-800/50'
-                    : isLight
-                      ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
-                      : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
-                }`}
-              >
-                <MessageSquare size={14} />
-                Chat
-              </button>
-              <button
-                onClick={() =>
-                  setLocalSettings((s) => ({
-                    ...s,
                     activeWritingProviderId: activeProvider.id,
                   }))
                 }
@@ -290,6 +270,26 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
               >
                 <Edit2 size={14} />
                 Editing
+              </button>
+              <button
+                onClick={() =>
+                  setLocalSettings((s) => ({
+                    ...s,
+                    activeChatProviderId: activeProvider.id,
+                  }))
+                }
+                className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
+                  localSettings.activeChatProviderId === activeProvider.id
+                    ? isLight
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-blue-900/40 text-blue-300 border border-blue-800/50'
+                    : isLight
+                      ? 'bg-brand-gray-100 text-brand-gray-600 hover:bg-brand-gray-200'
+                      : 'bg-brand-gray-800 text-brand-gray-400 hover:bg-brand-gray-700'
+                }`}
+              >
+                <MessageSquare size={14} />
+                Chat
               </button>
             </div>
 
