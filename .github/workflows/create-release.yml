@@ -30,6 +30,14 @@ jobs:
             exit 1;
           fi
 
+      - name: Ensure RELEASE_TOKEN secret is provided
+        run: |
+          if [ -z "${{ secrets.RELEASE_TOKEN }}" ]; then
+            echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN.";
+            echo "Create a PAT with 'repo' scope and add it at Settings → Secrets → Actions → New repository secret.";
+            exit 1;
+          fi
+
       - name: Create GitHub Release (action)
         uses: ncipollo/release-action@v1
         with:
@@ -39,4 +47,4 @@ jobs:
           draft: false
           prerelease: false
           commit: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
