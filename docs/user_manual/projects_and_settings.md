@@ -28,19 +28,19 @@ AugmentedQuill uses three distinct AI models, each optimized for a specific part
 
 1. **WRITING Model (Violet)**
    - **Icon**: <img src="assets/book-open.svg" alt="Book Open icon" width="20" height="20" style="vertical-align:text-bottom;" /> Book Open
-   - **Color Hint**: <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Violet (background #ede9fe, text #6d28d9)
+   - **Color Hint**: <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Violet
    - **Purpose**: Generating new text, continuing the story, and expanding on ideas.
    - **Capabilities**: This model is called when you ask the AI to "Continue" writing from where you left off, or when you generate a new scene from scratch. It focuses on creativity, prose generation, and maintaining the narrative flow.
 
 2. **EDITING Model (Fuchsia)**
    - **Icon**: <img src="assets/pen.svg" alt="Edit Pencil icon" width="20" height="20" style="vertical-align:text-bottom;" /> Edit Pencil
-   - **Color Hint**: <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Fuchsia (background #fdf2f8, text #be185d)
+   - **Color Hint**: <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Fuchsia
    - **Purpose**: Modifying, rewriting, and critiquing existing text.
    - **Capabilities**: This model is called when you highlight text in the editor and ask the AI to "Rewrite," "Condense," or "Change Tone." It focuses on precision, grammar, style adjustments, and following specific editing instructions without hallucinating new plot points.
 
 3. **CHAT Model (Blue)**
    - **Icon**: <img src="assets/message-square.svg" alt="Message Square icon" width="20" height="20" style="vertical-align:text-bottom;" /> Message Square
-   - **Color Hint**: <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Blue (background #dbeafe, text #1d4ed8)
+   - **Color Hint**: <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Blue
    - **Purpose**: Conversational assistance, brainstorming, and project management.
    - **Capabilities**: This model powers the AI Chat Assistant in the right sidebar. It can answer questions about your story, brainstorm ideas, summarize chapters, and even take actions like creating new Sourcebook entries or updating your Story Metadata.
 

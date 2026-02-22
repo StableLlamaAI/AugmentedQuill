@@ -521,21 +521,6 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         }`}
       >
         <ModelSelector
-          label="Editing"
-          value={appSettings.activeEditingProviderId}
-          onChange={(value) =>
-            setAppSettings((previous) => ({
-              ...previous,
-              activeEditingProviderId: value,
-            }))
-          }
-          options={appSettings.providers}
-          theme={currentTheme}
-          connectionStatus={modelConnectionStatus}
-          detectedCapabilities={detectedCapabilities}
-          labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
-        />
-        <ModelSelector
           label="Writing"
           value={appSettings.activeWritingProviderId}
           onChange={(value) =>
@@ -549,6 +534,21 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           connectionStatus={modelConnectionStatus}
           detectedCapabilities={detectedCapabilities}
           labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+        />
+        <ModelSelector
+          label="Editing"
+          value={appSettings.activeEditingProviderId}
+          onChange={(value) =>
+            setAppSettings((previous) => ({
+              ...previous,
+              activeEditingProviderId: value,
+            }))
+          }
+          options={appSettings.providers}
+          theme={currentTheme}
+          connectionStatus={modelConnectionStatus}
+          detectedCapabilities={detectedCapabilities}
+          labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
         />
         <ModelSelector
           label="Chat"
