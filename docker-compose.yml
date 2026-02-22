@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  augmentedquill:
+    build: .
+    image: ghcr.io/stablellamaai/augmentedquill:latest
+    container_name: augmentedquill
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./resources/config:/app/resources/config
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-}
+    restart: unless-stopped

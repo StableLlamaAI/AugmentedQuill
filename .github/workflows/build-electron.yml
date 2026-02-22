@@ -1,0 +1,77 @@
+name: Build Standalone App (Electron)
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyinstaller uvicorn
+
+    - name: Build Frontend
+      run: |
+        cd src/frontend
+        npm install
+        npm run build
+
+    - name: Build Backend with PyInstaller (Directory Mode)
+      run: |
+        python build_backend.py onedir
+
+    - name: Build Electron App
+      run: |
+        cd electron
+        npm install
+        npm run dist
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Artifact (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AugmentedQuill-Electron-Windows
+        path: electron/dist/*.exe
+        if-no-files-found: ignore
+
+    - name: Upload Artifact (Mac)
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AugmentedQuill-Electron-Mac
+        path: electron/dist/*.dmg
+        if-no-files-found: ignore
+
+    - name: Upload Artifact (Linux)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AugmentedQuill-Electron-Linux
+        path: electron/dist/*.AppImage
+        if-no-files-found: ignore

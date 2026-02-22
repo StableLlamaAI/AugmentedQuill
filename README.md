@@ -2,6 +2,8 @@
 
 **NOTE:** This project is under heavy development. Do not try to use it for any productive work.
 
+> **Important:** The main base for this code has moved to the GitHub project [StableLlamaAI/AugmentedQuill](https://github.com/StableLlamaAI/AugmentedQuill). The repository `StableLlama/AugmentedQuill` is now a fork of it.
+
 <img src="static/images/logo_2048.png" alt="Augmented Quill - Your Words, Amplified" width="1024">
 
 **AugmentedQuill** is a modern, web-based GUI for AI-assisted prose writing. It leverages Large Language Models (LLMs) via the OpenAI-compatible API to act as a writing partner, editor, and continuation engine.
@@ -48,45 +50,14 @@ The application follows a modular FastAPI architecture:
 
 ## Quickstart
 
-### Prerequisites
+We offer multiple ways to install and run AugmentedQuill, depending on your technical background and how you prefer to use it:
 
-- Python 3.11+
-- Node.js 18+ (required to build the frontend)
+1. **Portable Executable (PyInstaller)**: For artists and authors who want to double-click an app and start writing in their own web browser.
+2. **Standalone Desktop App (Electron)**: For those who prefer a complete, isolated desktop application experience.
+3. **Docker**: For self-hosters and home servers.
+4. **Developer Setup**: For those who want to modify the code or run from source.
 
-### Installation
-
-1.  **Backend Setup**:
-
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -e .
-    ```
-
-2.  **Frontend Setup & Build**:
-    The frontend must be built before running the application.
-
-    ```bash
-    cd src/frontend
-    npm install
-    npm run build
-    ```
-
-    This generates the static SPA bundle in `static/dist`.
-
-3.  **Run the Application**:
-
-    ```bash
-    augmentedquill --host 127.0.0.1 --port 8000
-    ```
-
-    Open http://127.0.0.1:8000 in your browser.
-
-    Optional: Enable LLM request/response logging for debugging:
-
-    ```bash
-    augmentedquill --host 127.0.0.1 --port 8000 --llm-dump
-    ```
+**Please see our [Installation Guide](INSTALL.md) for detailed instructions on each option.**
 
 ### Development Workflow
 

@@ -9,7 +9,7 @@ description = "Web GUI for LLM assisted prose writing"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    {name = "StableLlama"},
+    {name = "StableLlamaAI"},
 ]
 dependencies = [
     "fastapi>=0.115",
