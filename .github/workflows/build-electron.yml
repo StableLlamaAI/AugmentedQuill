@@ -33,12 +33,18 @@ jobs:
         pip install pyinstaller uvicorn
 
     - name: Set Electron package version from release tag
-      run: |
-        TAG_NAME="${{ github.event.release.tag_name }}"
-        # strip leading 'v' if present
-        VERSION=${TAG_NAME#v}
-        echo "Setting electron/package.json version to $VERSION"
-        jq --arg v "$VERSION" '.version = $v' electron/package.json > electron/package.json.tmp && mv electron/package.json.tmp electron/package.json
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const tag = context.payload.release && context.payload.release.tag_name;
+          if (!tag) throw new Error('Release tag not available on context.payload.release.tag_name');
+          const version = tag.startsWith('v') ? tag.slice(1) : tag;
+          core.info(`Setting electron/package.json version to ${version}`);
+          const pkgPath = 'electron/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = version;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 
     - name: Build Frontend
       run: |
