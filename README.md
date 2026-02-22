@@ -162,4 +162,4 @@ Workflow summary:
 3. Merge the release back into `develop` if any release-specific changes were made.
 4. For urgent fixes, create `hotfix/*` from `main`, merge into `main` and `develop`, and tag as appropriate.
 
-See CONTRIBUTING.md for PR and review requirements. If you prefer a trunk-based model (single-branch), use `main` + short-lived feature branches and tag `main` for releases.
+See CONTRIBUTING.md for PR and review requirements.
