@@ -50,11 +50,6 @@ def _tool_message(name: str, call_id: str, content) -> dict:
     }
 
 
-def _tool_error(name: str, call_id: str, message: str) -> dict:
-    """Format a tool error message."""
-    return _tool_message(name, call_id, {"error": message})
-
-
 def chat_tool(
     description: str,
     name: str | None = None,
@@ -134,13 +129,17 @@ def chat_tool(
             except ValidationError as e:
                 # Return validation error to LLM
                 error_details = e.errors()
-                return _tool_error(
+                return _tool_message(
                     tool_name,
                     call_id,
-                    f"Invalid parameters: {error_details}",
+                    {"error": f"Invalid parameters: {error_details}"},
                 )
             except Exception as e:
-                return _tool_error(tool_name, call_id, f"Validation error: {str(e)}")
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Validation error: {str(e)}"},
+                )
 
             try:
                 # Call the original function with validated params
@@ -148,7 +147,11 @@ def chat_tool(
                 # Wrap the result in tool message format
                 return _tool_message(tool_name, call_id, result)
             except Exception as e:
-                return _tool_error(tool_name, call_id, f"Execution error: {str(e)}")
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Execution error: {str(e)}"},
+                )
 
         # Register the tool
         _TOOL_REGISTRY[tool_name] = {
@@ -171,13 +174,3 @@ def get_tool_function(name: str) -> Callable | None:
     """Get the wrapped function for a tool by name."""
     info = _TOOL_REGISTRY.get(name)
     return info["function"] if info else None
-
-
-def get_all_tool_names() -> list[str]:
-    """Return list of all registered tool names."""
-    return list(_TOOL_REGISTRY.keys())
-
-
-def clear_registry():
-    """Clear the tool registry (useful for testing)."""
-    _TOOL_REGISTRY.clear()

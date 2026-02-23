@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from augmentedquill.services.projects.projects import (
-    get_active_project_dir,
+from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.services.chat.chat_session_helpers import (
     list_chats,
     load_chat,
     save_chat,

@@ -17,7 +17,8 @@ import asyncio
 PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 
-def _normalize_base_url(base_url: str) -> str:
+def normalize_base_url(base_url: str) -> str:
+    """Return a trimmed base URL without a trailing slash."""
     return str(base_url or "").strip().rstrip("/")
 
 
@@ -27,7 +28,7 @@ async def verify_model_capabilities(
     """
     Dynamically tests the model for Vision and Function Calling capabilities by sending minimal requests.
     """
-    url = _normalize_base_url(base_url) + "/chat/completions"
+    url = normalize_base_url(base_url) + "/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     headers["Content-Type"] = "application/json"
 

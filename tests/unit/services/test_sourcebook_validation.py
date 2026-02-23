@@ -13,10 +13,10 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_create,
-    sb_delete,
-    sb_get,
-    sb_update,
+    sourcebook_create_entry,
+    sourcebook_delete_entry,
+    sourcebook_get_entry,
+    sourcebook_update_entry,
 )
 from augmentedquill.services.projects.projects import select_project
 
@@ -48,7 +48,9 @@ class SourcebookValidationTest(TestCase):
 
     def test_create_invalid_entry_returns_error(self):
         # Category is now mandatory, so we must provide it to test other fields
-        result = sb_create(name=None, description="Valid desc", category="Cat")
+        result = sourcebook_create_entry(
+            name=None, description="Valid desc", category="Cat"
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -59,7 +61,9 @@ class SourcebookValidationTest(TestCase):
                 )
 
     def test_create_entry_with_null_description_returns_error(self):
-        result = sb_create(name="Valid Name", description=None, category="Cat")
+        result = sourcebook_create_entry(
+            name="Valid Name", description=None, category="Cat"
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -70,14 +74,16 @@ class SourcebookValidationTest(TestCase):
                 )
 
     def test_create_entry_with_invalid_category_returns_error(self):
-        result = sb_create(name="Valid Name", description="Valid", category=123)
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category=123
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
             self.fail("Should create error for numeric category")
 
     def test_create_entry_with_invalid_synonyms_returns_error(self):
-        result = sb_create(
+        result = sourcebook_create_entry(
             name="Valid Name",
             description="Valid",
             category="Cat",
@@ -89,7 +95,7 @@ class SourcebookValidationTest(TestCase):
             self.fail("Should create error for non-list synonyms")
 
     def test_create_entry_with_none_synonyms_returns_error(self):
-        result = sb_create(
+        result = sourcebook_create_entry(
             name="Valid Name", description="Valid", category="Cat", synonyms=None
         )
         if "error" in result:
@@ -104,20 +110,22 @@ class SourcebookValidationTest(TestCase):
 
     def test_delete_entry_with_none_returns_false_safe(self):
         try:
-            result = sb_delete(None)
+            result = sourcebook_delete_entry(None)
             self.assertFalse(result)
         except AttributeError:
-            self.fail("sb_delete crashed on None input")
+            self.fail("sourcebook_delete_entry crashed on None input")
 
     def test_get_entry_with_none_returns_none_safe(self):
         try:
-            result = sb_get(None)
+            result = sourcebook_get_entry(None)
             self.assertIsNone(result)
         except AttributeError:
-            self.fail("sb_get crashed on None input")
+            self.fail("sourcebook_get_entry crashed on None input")
 
     def test_create_requires_category(self):
-        result = sb_create(name="Valid Name", description="Valid", category=None)
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category=None
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -125,12 +133,12 @@ class SourcebookValidationTest(TestCase):
 
     def test_update_success(self):
         # Create valid entry
-        entry = sb_create("UpdateTarget", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget", "Desc", "Cat")
         self.assertNotIn("error", entry)
         eid = entry["id"]
 
         # Update it
-        updated = sb_update(eid, name="NewName", description="NewDesc")
+        updated = sourcebook_update_entry(eid, name="NewName", description="NewDesc")
         self.assertNotIn("error", updated)
         self.assertEqual(updated["name"], "NewName")
         self.assertEqual(updated["description"], "NewDesc")
@@ -143,31 +151,31 @@ class SourcebookValidationTest(TestCase):
         self.assertEqual(saved["name"], "NewName")
 
     def test_update_with_invalid_id_returns_error(self):
-        result = sb_update("nonexistent", name="Foo")
+        result = sourcebook_update_entry("nonexistent", name="Foo")
         self.assertIn("error", result)
 
     def test_update_with_invalid_fields_returns_error(self):
         # Create valid entry
-        entry = sb_create("UpdateTarget2", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget2", "Desc", "Cat")
         eid = entry["id"]
 
         # Valid update
-        updated = sb_update(eid, name="Valid")
+        updated = sourcebook_update_entry(eid, name="Valid")
         self.assertNotIn("error", updated)
         eid = updated["id"]
 
         # Invalid name
-        self.assertIn("error", sb_update(eid, name=""))
+        self.assertIn("error", sourcebook_update_entry(eid, name=""))
 
         # Test None explicitly logic
-        res = sb_update(eid, name=None)  # Should be fine, just no update
+        res = sourcebook_update_entry(eid, name=None)  # Should be fine, just no update
         self.assertNotIn("error", res)
 
         # Invalid Type
-        self.assertIn("error", sb_update(eid, category=123))
+        self.assertIn("error", sourcebook_update_entry(eid, category=123))
 
         # Invalid Identifier (None)
-        self.assertIn("error", sb_update(None))
+        self.assertIn("error", sourcebook_update_entry(None))
 
     def _get_entries(self):
         story_path = self.pdir / "story.json"

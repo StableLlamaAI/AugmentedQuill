@@ -21,6 +21,7 @@ def normalize_validate_story_config(
     current_schema_version: int,
     schema_loader: Callable[[int], Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """Normalize story data to current invariants and validate against schema."""
     metadata = merged.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
@@ -114,6 +115,8 @@ def normalize_validate_story_config(
 
 
 def clean_story_config_for_disk(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip runtime-only fields and normalize sourcebook shape before persistence."""
+
     def _clean_for_disk(data, current_key=None):
         if isinstance(data, dict):
             res = {}

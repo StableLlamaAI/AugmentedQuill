@@ -21,15 +21,6 @@ interface MarkdownViewProps {
 const renderer = new marked.Renderer();
 // @ts-ignore
 renderer.image = (href, title, text) => {
-  type LegacyImageArg = { href?: string; title?: string; text?: string };
-  // Support both legacy positional args and modern object-style image args.
-  if (typeof href === 'object' && href !== null) {
-    const obj = href as LegacyImageArg;
-    href = obj.href;
-    title = obj.title;
-    text = obj.text;
-  }
-
   if (
     typeof href === 'string' &&
     href &&

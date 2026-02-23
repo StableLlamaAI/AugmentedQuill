@@ -16,10 +16,10 @@ from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_list,
-    sb_create,
-    sb_update,
-    sb_delete,
+    sourcebook_list_entries,
+    sourcebook_create_entry,
+    sourcebook_update_entry,
+    sourcebook_delete_entry,
 )
 
 router = APIRouter(tags=["Sourcebook"])
@@ -55,7 +55,7 @@ async def get_sourcebook() -> List[SourcebookEntry]:
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
-    return [SourcebookEntry(**entry) for entry in sb_list()]
+    return [SourcebookEntry(**entry) for entry in sourcebook_list_entries()]
 
 
 @router.post("/sourcebook")
@@ -64,7 +64,7 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    created = sb_create(
+    created = sourcebook_create_entry(
         name=entry.name,
         description=entry.description,
         category=entry.category,
@@ -83,7 +83,7 @@ async def update_sourcebook_entry(
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    result = sb_update(
+    result = sourcebook_update_entry(
         name_or_id=entry_name,
         name=updates.name,
         description=updates.description,
@@ -103,6 +103,6 @@ async def delete_sourcebook_entry(entry_name: str):
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    if not sb_delete(entry_name):
+    if not sourcebook_delete_entry(entry_name):
         raise HTTPException(status_code=404, detail="Entry not found")
     return {"ok": True}

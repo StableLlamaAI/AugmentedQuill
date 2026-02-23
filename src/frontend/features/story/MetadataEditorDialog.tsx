@@ -31,7 +31,7 @@ interface MetadataParams {
   tags?: string[];
   notes?: string;
   private_notes?: string;
-  conflicts?: Array<Conflict | string>;
+  conflicts?: Conflict[];
 }
 
 interface Props {
@@ -68,10 +68,7 @@ export function MetadataEditorDialog({
   const onSaveRef = useRef(onSave);
   const isFirstRun = useRef(true);
 
-  const normalizeConflict = (value: string | Conflict): Conflict => {
-    if (typeof value === 'string') {
-      return { id: crypto.randomUUID(), description: value, resolution: 'TBD' };
-    }
+  const normalizeConflict = (value: Conflict): Conflict => {
     return {
       id: value.id || crypto.randomUUID(),
       description: value.description || '',
@@ -79,7 +76,6 @@ export function MetadataEditorDialog({
     };
   };
 
-  // Normalize legacy string conflicts once so downstream editing stays typed.
   const [conflicts, setConflicts] = useState<Conflict[]>(
     (initialData.conflicts || []).map((c) => normalizeConflict(c))
   );
@@ -87,11 +83,10 @@ export function MetadataEditorDialog({
   // Reconcile external updates (for example, AI writes) without clobbering
   // in-flight autosave operations.
   useEffect(() => {
-    const normalizedPropConflicts = (initialData.conflicts || []).map((c) =>
-      typeof c === 'string'
-        ? { description: c, resolution: 'TBD' }
-        : { description: c.description || '', resolution: c.resolution || 'TBD' }
-    );
+    const normalizedPropConflicts = (initialData.conflicts || []).map((c) => ({
+      description: c.description || '',
+      resolution: c.resolution || 'TBD',
+    }));
     const normalizedLocalConflicts = conflicts.map((c) => ({
       description: c.description,
       resolution: c.resolution,

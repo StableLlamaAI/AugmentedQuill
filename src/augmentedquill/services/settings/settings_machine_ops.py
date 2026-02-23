@@ -14,10 +14,7 @@ import datetime
 import httpx
 
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
-
-
-def normalize_base_url(base_url: str) -> str:
-    return str(base_url or "").strip().rstrip("/")
+from augmentedquill.utils.llm_utils import normalize_base_url
 
 
 def auth_headers(api_key: str | None) -> dict[str, str]:

@@ -153,7 +153,9 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
     if old_type == new_type:
         return True, "Already this type"
 
-    def _convert(current_old_type: str, target_type: str) -> Tuple[bool, str]:
+    def _convert_project_type(
+        current_old_type: str, target_type: str
+    ) -> Tuple[bool, str]:
         local_story = load_story_config(story_path) or {}
         local_old_type = local_story.get("project_type", "novel")
 
@@ -161,16 +163,16 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
             return True, "Already this type"
 
         if local_old_type == "short-story" and target_type == "series":
-            ok, msg = _convert("short-story", "novel")
+            ok, msg = _convert_project_type("short-story", "novel")
             if not ok:
                 return ok, msg
-            return _convert("novel", "series")
+            return _convert_project_type("novel", "series")
 
         if local_old_type == "series" and target_type == "short-story":
-            ok, msg = _convert("series", "novel")
+            ok, msg = _convert_project_type("series", "novel")
             if not ok:
                 return ok, msg
-            return _convert("novel", "short-story")
+            return _convert_project_type("novel", "short-story")
 
         if local_old_type == "short-story" and target_type == "novel":
             content_path = active / "content.md"
@@ -284,4 +286,4 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
         save_story_config(story_path, local_story)
         return True, f"Converted to {target_type}"
 
-    return _convert(old_type, new_type)
+    return _convert_project_type(old_type, new_type)

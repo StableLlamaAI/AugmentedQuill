@@ -29,7 +29,6 @@ from augmentedquill.core.prompts import (
     ensure_string,
 )
 from augmentedquill.services.settings.settings_api_ops import (
-    ensure_parent_dir,
     build_story_cfg_from_payload,
     validate_and_fill_openai_cfg_for_settings,
     clean_machine_openai_cfg_for_put,
@@ -42,13 +41,8 @@ from augmentedquill.services.settings.settings_machine_ops import (
 )
 from augmentedquill.services.settings.settings_update_ops import run_story_config_update
 from augmentedquill.api.v1.http_responses import error_json, ok_json
-from pathlib import Path
 
 router = APIRouter(tags=["Settings"])
-
-
-def _ensure_parent_dir(path: Path) -> None:
-    ensure_parent_dir(path)
 
 
 @router.post("/settings")
@@ -84,8 +78,8 @@ async def api_settings_post(request: Request) -> JSONResponse:
         active = get_active_project_dir()
         story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
         machine_path = CONFIG_DIR / "machine.json"
-        _ensure_parent_dir(story_path)
-        _ensure_parent_dir(machine_path)
+        story_path.parent.mkdir(parents=True, exist_ok=True)
+        machine_path.parent.mkdir(parents=True, exist_ok=True)
         from augmentedquill.core.config import save_story_config
 
         save_story_config(story_path, story_cfg)
@@ -265,7 +259,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
 
     try:
         machine_path = CONFIG_DIR / "machine.json"
-        _ensure_parent_dir(machine_path)
+        machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
         return JSONResponse(

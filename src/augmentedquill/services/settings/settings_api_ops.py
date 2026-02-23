@@ -15,11 +15,8 @@ from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.chapters.chapter_helpers import _normalize_chapter_entry
 
 
-def ensure_parent_dir(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
 def build_story_cfg_from_payload(story: dict) -> dict:
+    """Build a normalized story configuration payload for persistence."""
     normalized_chapters = [
         _normalize_chapter_entry(chapter) for chapter in (story.get("chapters") or [])
     ]
@@ -39,6 +36,7 @@ def build_story_cfg_from_payload(story: dict) -> dict:
 def validate_and_fill_openai_cfg_for_settings(
     openai_cfg: dict,
 ) -> tuple[dict | None, str | None]:
+    """Validate OpenAI model configuration and backfill selected model fields."""
     models = openai_cfg.get("models")
     selected = openai_cfg.get("selected") or ""
     selected_chat = openai_cfg.get("selected_chat") or ""
@@ -83,6 +81,7 @@ def validate_and_fill_openai_cfg_for_settings(
 def clean_machine_openai_cfg_for_put(
     openai_cfg: dict,
 ) -> tuple[dict | None, str | None, str | None]:
+    """Sanitize and validate machine OpenAI config for PUT operations."""
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
     selected = (
         (openai_cfg.get("selected") or "") if isinstance(openai_cfg, dict) else ""
@@ -146,7 +145,8 @@ def clean_machine_openai_cfg_for_put(
 
 
 def update_story_field(story_path: Path, field: str, value) -> None:
+    """Update one top-level story field and persist the story config."""
     story = load_story_config(story_path) or {}
     story[field] = value
-    ensure_parent_dir(story_path)
+    story_path.parent.mkdir(parents=True, exist_ok=True)
     save_story_config(story_path, story)

@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field
 
 from augmentedquill.services.chat.chat_tool_decorator import chat_tool
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_create,
-    sb_delete,
-    sb_get,
-    sb_search,
-    sb_update,
+    sourcebook_create_entry,
+    sourcebook_delete_entry,
+    sourcebook_get_entry,
+    sourcebook_search_entries,
+    sourcebook_update_entry,
 )
 
 # Pydantic models for tool parameters
@@ -71,14 +71,14 @@ class DeleteSourcebookEntryParams(BaseModel):
 async def search_sourcebook(
     params: SearchSourcebookParams, payload: dict, mutations: dict
 ):
-    return sb_search(params.query)
+    return sourcebook_search_entries(params.query)
 
 
 @chat_tool(description="Get a specific sourcebook entry by name or ID.")
 async def get_sourcebook_entry(
     params: GetSourcebookEntryParams, payload: dict, mutations: dict
 ):
-    entry = sb_get(params.name_or_id)
+    entry = sourcebook_get_entry(params.name_or_id)
     if not entry:
         return {"error": "Not found"}
     return entry
@@ -88,7 +88,7 @@ async def get_sourcebook_entry(
 async def create_sourcebook_entry(
     params: CreateSourcebookEntryParams, payload: dict, mutations: dict
 ):
-    new_entry = sb_create(
+    new_entry = sourcebook_create_entry(
         name=params.name,
         description=params.description,
         category=params.category,
@@ -105,7 +105,7 @@ async def create_sourcebook_entry(
 async def update_sourcebook_entry(
     params: UpdateSourcebookEntryParams, payload: dict, mutations: dict
 ):
-    result = sb_update(
+    result = sourcebook_update_entry(
         name_or_id=params.name_or_id,
         name=params.name,
         description=params.description,
@@ -121,7 +121,7 @@ async def update_sourcebook_entry(
 async def delete_sourcebook_entry(
     params: DeleteSourcebookEntryParams, payload: dict, mutations: dict
 ):
-    deleted = sb_delete(params.name_or_id)
+    deleted = sourcebook_delete_entry(params.name_or_id)
     if deleted:
         mutations["story_changed"] = True
         return {"ok": True}

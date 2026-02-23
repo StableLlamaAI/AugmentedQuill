@@ -14,25 +14,28 @@ from fastapi.responses import JSONResponse
 
 
 class StoryApiError(Exception):
-    def __init__(self, detail: str, status_code: int = 400):
+    """Base domain exception that carries an HTTP status code."""
+
+    default_status_code = 400
+
+    def __init__(self, detail: str, status_code: int | None = None):
         super().__init__(detail)
         self.detail = detail
-        self.status_code = status_code
+        self.status_code = (
+            status_code if status_code is not None else self.default_status_code
+        )
 
 
 class StoryBadRequestError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=400)
+    default_status_code = 400
 
 
 class StoryNotFoundError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=404)
+    default_status_code = 404
 
 
 class StoryPersistenceError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=500)
+    default_status_code = 500
 
 
 async def parse_json_body(request: Request) -> dict:

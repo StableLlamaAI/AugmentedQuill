@@ -31,6 +31,7 @@ from augmentedquill.services.llm.llm_request_helpers import (
 
 
 def _llm_debug_enabled() -> bool:
+    """Return whether verbose LLM request/response logging is enabled."""
     return os.getenv("AUGQ_LLM_DEBUG", "0") in ("1", "true", "TRUE", "yes", "on")
 
 
@@ -47,6 +48,7 @@ async def unified_chat_complete(
     temperature: float = 0.7,
     max_tokens: int | None = None,
 ) -> dict:
+    """Execute a non-streaming chat completion and normalize tool/thinking output."""
     extra_body = {}
     if supports_function_calling and tools and tool_choice != "none":
         extra_body["tools"] = tools
@@ -105,6 +107,7 @@ async def openai_chat_complete(
     timeout_s: int,
     extra_body: dict | None = None,
 ) -> dict:
+    """Call the OpenAI-compatible chat completions endpoint and return JSON."""
     temperature, max_tokens = get_story_llm_preferences(
         config_dir=CONFIG_DIR,
         get_active_project_dir=get_active_project_dir,
@@ -163,6 +166,7 @@ async def openai_completions(
     n: int = 1,
     extra_body: dict | None = None,
 ) -> dict:
+    """Call the OpenAI-compatible text completions endpoint and return JSON."""
     temperature, max_tokens = get_story_llm_preferences(
         config_dir=CONFIG_DIR,
         get_active_project_dir=get_active_project_dir,
@@ -220,6 +224,7 @@ async def openai_chat_complete_stream(
     model_id: str,
     timeout_s: int,
 ) -> AsyncIterator[str]:
+    """Stream content chunks from the chat completions endpoint."""
     url = str(base_url).rstrip("/") + "/chat/completions"
     temperature, max_tokens = get_story_llm_preferences(
         config_dir=CONFIG_DIR,
@@ -288,6 +293,7 @@ async def openai_completions_stream(
     timeout_s: int,
     extra_body: dict | None = None,
 ) -> AsyncIterator[str]:
+    """Stream content chunks from the text completions endpoint."""
     url = str(base_url).rstrip("/") + "/completions"
     temperature, max_tokens = get_story_llm_preferences(
         config_dir=CONFIG_DIR,

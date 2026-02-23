@@ -309,10 +309,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const chaptersRes = await api.chapters.list();
       const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
 
-      // Prefer backend-returned identity, then fallback to list tail for compatibility.
-      const newChapter =
-        newChapters.find((c) => c.id === String(res.id)) ||
-        newChapters[newChapters.length - 1];
+      const newChapter = newChapters.find((c) => c.id === String(res.id));
+      if (!newChapter) {
+        throw new Error('Created chapter not found in refreshed chapter list');
+      }
 
       const newState: StoryState = {
         ...story,

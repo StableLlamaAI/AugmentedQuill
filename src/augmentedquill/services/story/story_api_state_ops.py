@@ -30,8 +30,7 @@ def get_active_story_or_http_error() -> tuple[Path, Path, dict]:
     return active, story_path, story
 
 
-def get_chapter_locator(chap_id: int) -> tuple[int, Path, int]:
-    return _chapter_by_id_or_404(chap_id)
+get_chapter_locator = _chapter_by_id_or_404
 
 
 def read_text_or_http_500(path: Path, message: str = "Failed to read chapter") -> str:

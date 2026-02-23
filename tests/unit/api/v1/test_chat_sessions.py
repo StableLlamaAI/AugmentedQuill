@@ -17,6 +17,8 @@ from augmentedquill.main import app
 from augmentedquill.services.projects.projects import (
     initialize_project_dir,
     select_project,
+)
+from augmentedquill.services.chat.chat_session_helpers import (
     get_chats_dir,
     list_chats,
     load_chat,

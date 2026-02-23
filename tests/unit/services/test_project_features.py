@@ -20,8 +20,8 @@ from augmentedquill.services.projects.projects import (
     select_project,
     change_project_type,
     get_active_project_dir,
-    load_story_config,
 )
+from augmentedquill.core.config import load_story_config
 from augmentedquill.services.projects.project_helpers import _project_overview
 from fastapi.testclient import TestClient
 from augmentedquill.main import app

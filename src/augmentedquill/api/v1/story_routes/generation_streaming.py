@@ -11,9 +11,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from augmentedquill.core.config import BASE_DIR, save_story_config
+from augmentedquill.core.prompts import get_user_prompt
 from augmentedquill.services.llm import llm
 from augmentedquill.services.story.story_api_prompt_ops import (
-    build_suggest_prompt,
     resolve_model_runtime,
 )
 from augmentedquill.services.story.story_api_state_ops import (
@@ -67,11 +67,12 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         base_dir=BASE_DIR,
     )
 
-    prompt = build_suggest_prompt(
-        chapter_title=title,
-        chapter_summary=summary,
-        current_text=current_text,
-        model_overrides=model_overrides,
+    prompt = get_user_prompt(
+        "suggest_continuation",
+        chapter_title=title or "",
+        chapter_summary=summary or "",
+        current_text=current_text or "",
+        user_prompt_overrides=model_overrides,
     )
 
     extra_body = {

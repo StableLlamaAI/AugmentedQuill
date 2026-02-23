@@ -15,7 +15,4 @@ All tools are now decorator-based and auto-registered via @chat_tool.
 from augmentedquill.services.chat.chat_tool_decorator import get_tool_schemas
 from augmentedquill.services.chat import chat_tools  # noqa: F401
 
-
-def get_story_tools() -> list[dict]:
-    """Return the complete tool schema list for chat/tool calling."""
-    return get_tool_schemas()
+get_story_tools = get_tool_schemas
