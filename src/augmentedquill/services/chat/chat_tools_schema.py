@@ -9,10 +9,10 @@
 
 Chat tool schemas for LLM function calling.
 
-All tools are now decorator-based and auto-registered via @chat_tool.
+Compatibility shim for legacy imports that resolves schemas from the canonical
+decorator-based tool registry.
 """
 
-from augmentedquill.services.chat.chat_tool_decorator import get_tool_schemas
-from augmentedquill.services.chat import chat_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tool_decorator import get_registered_tool_schemas
 
-get_story_tools = get_tool_schemas
+get_story_tools = get_registered_tool_schemas

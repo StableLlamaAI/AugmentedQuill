@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json as _json
 import re
+from typing import Any
 
 
 def parse_tool_calls_from_content(content: str) -> list[dict] | None:
@@ -225,3 +226,148 @@ def strip_thinking_tags(content: str) -> str:
     content = re.sub(r"<(thought|thinking)>.*?</\1>", "", content, flags=re.DOTALL)
 
     return content.strip()
+
+
+def strip_tool_call_tags(content: str) -> str:
+    """Strip inline tool-call markup from assistant content."""
+    if not content:
+        return content
+    content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL)
+    content = re.sub(
+        r"\[TOOL_CALL\]\s*.*?\s*\[/TOOL_CALL\]",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+    return content.strip()
+
+
+def extract_thinking_from_content(content: str) -> str:
+    """Extract first thinking/thought block content from assistant text."""
+    if not content:
+        return ""
+
+    match = re.search(
+        r"<(thought|thinking)>(.*?)</\1>",
+        content,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return (match.group(2) or "").strip()
+
+
+def parse_complete_assistant_output(
+    content: str,
+    structured_tool_calls: list[dict] | None = None,
+) -> dict[str, Any]:
+    """Parse complete assistant output into normalized content/tool_calls/thinking."""
+    tool_calls = list(structured_tool_calls or [])
+    parsed_calls = parse_tool_calls_from_content(content or "") or []
+    if parsed_calls:
+        tool_calls.extend(parsed_calls)
+
+    thinking = extract_thinking_from_content(content or "")
+    cleaned_content = strip_tool_call_tags(strip_thinking_tags(content or ""))
+    return {
+        "content": cleaned_content,
+        "tool_calls": tool_calls,
+        "thinking": thinking,
+    }
+
+
+def normalize_tool_channel_name(name: str) -> str:
+    """Normalize channel-derived function names to registered tool names."""
+    cleaned = (name or "").strip()
+    if cleaned.startswith("functions."):
+        cleaned = cleaned.split("functions.", 1)[1]
+    return cleaned
+
+
+def parse_stream_channel_fragments(
+    fragments: list[dict[str, str]],
+    sent_tool_call_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Convert ChannelFilter fragments to normalized stream events."""
+    events: list[dict[str, Any]] = []
+    seen_ids = sent_tool_call_ids if sent_tool_call_ids is not None else set()
+
+    for fragment in fragments:
+        channel = fragment.get("channel", "")
+        piece = fragment.get("content", "")
+        if not piece and channel != "tool_def":
+            continue
+
+        if channel in {"thinking", "thought"}:
+            if piece:
+                events.append({"thinking": piece})
+            continue
+
+        if channel.startswith("commentary to="):
+            func_name = normalize_tool_channel_name(
+                channel.split("commentary to=", 1)[1].strip()
+            )
+            if not func_name:
+                continue
+            call_id = f"call_{func_name}"
+            if call_id in seen_ids:
+                continue
+            seen_ids.add(call_id)
+            events.append(
+                {
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": func_name, "arguments": piece},
+                        }
+                    ]
+                }
+            )
+            continue
+
+        if channel.startswith("call:"):
+            func_name = normalize_tool_channel_name(channel[5:])
+            if not func_name:
+                continue
+            call_id = f"call_{func_name}"
+            if call_id in seen_ids:
+                continue
+            seen_ids.add(call_id)
+            events.append(
+                {
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": func_name, "arguments": piece},
+                        }
+                    ]
+                }
+            )
+            continue
+
+        if channel == "tool_def":
+            continue
+
+        piece_lower = piece.lower()
+        has_tool_syntax = (
+            "<tool_call" in piece_lower
+            or "[tool_call" in piece_lower
+            or piece_lower.strip().startswith("tool:")
+        )
+        if has_tool_syntax:
+            parsed_calls = parse_tool_calls_from_content(piece) or []
+            if parsed_calls:
+                new_calls = [c for c in parsed_calls if c.get("id") not in seen_ids]
+                if new_calls:
+                    for call in new_calls:
+                        call_id = call.get("id")
+                        if isinstance(call_id, str):
+                            seen_ids.add(call_id)
+                    events.append({"tool_calls": new_calls})
+                continue
+
+        events.append({"content": piece})
+
+    return events

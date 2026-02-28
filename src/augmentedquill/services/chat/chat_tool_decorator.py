@@ -34,6 +34,7 @@ import json as _json
 from collections.abc import Callable
 from typing import Any, get_args, get_origin
 
+from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 
 # Global registry of all chat tools
@@ -48,6 +49,11 @@ def _tool_message(name: str, call_id: str, content) -> dict:
         "name": name,
         "content": _json.dumps(content),
     }
+
+
+def _tool_error(name: str, call_id: str, message: str) -> dict:
+    """Format a tool error response message."""
+    return _tool_message(name, call_id, {"error": message})
 
 
 def chat_tool(
@@ -176,3 +182,38 @@ def get_tool_function(name: str) -> Callable | None:
     """Get the wrapped function for a tool by name."""
     info = _TOOL_REGISTRY.get(name)
     return info["function"] if info else None
+
+
+def ensure_tool_registry_loaded() -> None:
+    """Ensure all chat tool modules are imported so decorator registration has run."""
+    from augmentedquill.services.chat import chat_tools  # noqa: F401
+
+
+def get_registered_tool_schemas() -> list[dict]:
+    """Get OpenAI tool schemas from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    return get_tool_schemas()
+
+
+async def execute_registered_tool(
+    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+) -> dict:
+    """Execute a tool from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    tool_fn = get_tool_function(name)
+    if tool_fn is None:
+        return _tool_error(name, call_id, f"Unknown tool: {name}")
+
+    try:
+        return await tool_fn(args_obj, call_id, payload, mutations)
+    except HTTPException as e:
+        return _tool_error(name, call_id, f"Tool failed: {e.detail}")
+    except Exception as e:
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps(
+                {"error": f"Tool failed with unexpected error: {e}"}
+            ),
+        }

@@ -12,15 +12,13 @@ from __future__ import annotations
 from typing import Any, Dict, AsyncIterator
 import datetime
 import os
-import re
 
 import httpx
 
 from augmentedquill.core.config import load_story_config, CONFIG_DIR
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.utils.llm_parsing import (
-    parse_tool_calls_from_content,
-    strip_thinking_tags,
+    parse_complete_assistant_output,
 )
 from augmentedquill.services.llm.llm_logging import add_llm_log, create_log_entry
 from augmentedquill.services.llm.llm_request_helpers import (
@@ -91,24 +89,13 @@ async def unified_chat_complete(
 
     if choices:
         message = choices[0].get("message", {})
-        content = message.get("content") or ""
-        tool_calls = message.get("tool_calls") or []
-
-        if content:
-            parsed = parse_tool_calls_from_content(content)
-            if parsed:
-                tool_calls = list(tool_calls) + parsed
-
-            if "<thought>" in content or "<thinking>" in content:
-                match = re.search(
-                    r"<(thought|thinking)>(.*?)</\\1>",
-                    content,
-                    re.DOTALL | re.IGNORECASE,
-                )
-                if match:
-                    thinking = match.group(2).strip()
-
-            content = strip_thinking_tags(content)
+        parsed = parse_complete_assistant_output(
+            message.get("content") or "",
+            structured_tool_calls=message.get("tool_calls") or [],
+        )
+        content = parsed["content"]
+        tool_calls = parsed["tool_calls"]
+        thinking = parsed["thinking"]
 
     return {
         "content": content,

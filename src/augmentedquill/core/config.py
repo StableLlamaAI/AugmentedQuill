@@ -41,6 +41,8 @@ LOGS_DIR = DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 
 CURRENT_SCHEMA_VERSION = 2
+DEFAULT_MACHINE_CONFIG_PATH = CONFIG_DIR / "machine.json"
+DEFAULT_STORY_CONFIG_PATH = CONFIG_DIR / "story.json"
 
 
 def _get_story_schema(version: int) -> Dict[str, Any]:
@@ -135,7 +137,7 @@ def _env_overrides_for_openai() -> Dict[str, Any]:
 
 
 def load_machine_config(
-    path: os.PathLike[str] | str | None = "config/machine.json",
+    path: os.PathLike[str] | str | None = DEFAULT_MACHINE_CONFIG_PATH,
     defaults: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Load machine configuration applying precedence and interpolation.
@@ -152,7 +154,7 @@ def load_machine_config(
 
 
 def load_story_config(
-    path: os.PathLike[str] | str | None = "config/story.json",
+    path: os.PathLike[str] | str | None = DEFAULT_STORY_CONFIG_PATH,
     defaults: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Load story-specific configuration with env interpolation only.

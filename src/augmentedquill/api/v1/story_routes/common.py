@@ -12,6 +12,8 @@ from __future__ import annotations
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from augmentedquill.api.v1.http_responses import error_json
+
 
 class StoryApiError(Exception):
     """Base domain exception that carries an HTTP status code."""
@@ -44,12 +46,6 @@ async def parse_json_body(request: Request) -> dict:
     except Exception as exc:
         raise StoryBadRequestError("Invalid JSON body") from exc
     return payload if isinstance(payload, dict) else {}
-
-
-def error_json(detail: str, status_code: int = 400) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code, content={"ok": False, "detail": detail}
-    )
 
 
 def map_story_exception(exc: Exception) -> JSONResponse:

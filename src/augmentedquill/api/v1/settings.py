@@ -239,7 +239,7 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
 @router.put("/machine")
 async def api_machine_put(request: Request) -> JSONResponse:
-    """Persist machine config to config/machine.json.
+    """Persist machine config to resources/config/machine.json.
 
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
     Returns: { ok: bool, detail?: str }
