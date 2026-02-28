@@ -38,6 +38,18 @@ from augmentedquill.api.v1.story_routes.common import parse_json_body
 router = APIRouter(tags=["Story"])
 
 
+async def _create_gen_source(prepared: dict):
+    """Create a generator source for streaming."""
+    async for chunk in stream_unified_chat_content(
+        messages=prepared["messages"],
+        base_url=prepared["base_url"],
+        api_key=prepared["api_key"],
+        model_id=prepared["model_id"],
+        timeout_s=prepared["timeout_s"],
+    ):
+        yield chunk
+
+
 def _as_streaming_response(gen_factory, media_type: str = "text/plain"):
     return StreamingResponse(gen_factory(), media_type=media_type)
 
@@ -123,24 +135,15 @@ async def api_story_summary_stream(request: Request):
         payload.get("mode") or "",
     )
 
-    async def _gen_source():
-        """Gen Source."""
-        async for chunk in stream_unified_chat_content(
-            messages=prepared["messages"],
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model_id=prepared["model_id"],
-            timeout_s=prepared["timeout_s"],
-        ):
-            yield chunk
-
     def _persist(new_summary: str) -> None:
         prepared["chapters_data"][prepared["pos"]]["summary"] = new_summary
         prepared["story"]["chapters"] = prepared["chapters_data"]
         save_story_config(prepared["story_path"], prepared["story"])
 
     return _as_streaming_response(
-        lambda: stream_collect_and_persist(_gen_source, _persist)
+        lambda: stream_collect_and_persist(
+            lambda: _create_gen_source(prepared), _persist
+        )
     )
 
 
@@ -150,22 +153,13 @@ async def api_story_write_stream(request: Request):
     payload = await parse_json_body(request)
     prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
 
-    async def _gen_source():
-        """Gen Source."""
-        async for chunk in stream_unified_chat_content(
-            messages=prepared["messages"],
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model_id=prepared["model_id"],
-            timeout_s=prepared["timeout_s"],
-        ):
-            yield chunk
-
     def _persist(content: str) -> None:
         prepared["path"].write_text(content, encoding="utf-8")
 
     return _as_streaming_response(
-        lambda: stream_collect_and_persist(_gen_source, _persist)
+        lambda: stream_collect_and_persist(
+            lambda: _create_gen_source(prepared), _persist
+        )
     )
 
 
@@ -174,17 +168,6 @@ async def api_story_continue_stream(request: Request):
     """Api Story Continue Stream."""
     payload = await parse_json_body(request)
     prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
-
-    async def _gen_source():
-        """Gen Source."""
-        async for chunk in stream_unified_chat_content(
-            messages=prepared["messages"],
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model_id=prepared["model_id"],
-            timeout_s=prepared["timeout_s"],
-        ):
-            yield chunk
 
     def _persist(appended: str) -> None:
         """Persist."""
@@ -200,7 +183,9 @@ async def api_story_continue_stream(request: Request):
         prepared["path"].write_text(new_content, encoding="utf-8")
 
     return _as_streaming_response(
-        lambda: stream_collect_and_persist(_gen_source, _persist)
+        lambda: stream_collect_and_persist(
+            lambda: _create_gen_source(prepared), _persist
+        )
     )
 
 
@@ -210,21 +195,12 @@ async def api_story_story_summary_stream(request: Request):
     payload = await parse_json_body(request)
     prepared = prepare_story_summary_generation(payload, payload.get("mode") or "")
 
-    async def _gen_source():
-        """Gen Source."""
-        async for chunk in stream_unified_chat_content(
-            messages=prepared["messages"],
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model_id=prepared["model_id"],
-            timeout_s=prepared["timeout_s"],
-        ):
-            yield chunk
-
     def _persist(new_summary: str) -> None:
         prepared["story"]["story_summary"] = new_summary
         save_story_config(prepared["story_path"], prepared["story"])
 
     return _as_streaming_response(
-        lambda: stream_collect_and_persist(_gen_source, _persist)
+        lambda: stream_collect_and_persist(
+            lambda: _create_gen_source(prepared), _persist
+        )
     )

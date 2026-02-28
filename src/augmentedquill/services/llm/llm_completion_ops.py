@@ -35,6 +35,26 @@ def _llm_debug_enabled() -> bool:
     return os.getenv("AUGQ_LLM_DEBUG", "0") in ("1", "true", "TRUE", "yes", "on")
 
 
+def _prepare_llm_request(
+    base_url, api_key, model_id, messages, temperature, max_tokens, extra_body=None
+):
+    url = str(base_url).rstrip("/") + "/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    body = {
+        "model": model_id,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if isinstance(max_tokens, int):
+        body["max_tokens"] = max_tokens
+    if extra_body:
+        body.update(extra_body)
+    return url, headers, body
+
+
 async def unified_chat_complete(
     *,
     messages: list[dict],
@@ -98,6 +118,36 @@ async def unified_chat_complete(
     }
 
 
+async def _execute_llm_request(url, headers, body, timeout_s):
+    log_entry = create_log_entry(url, "POST", headers, body)
+    add_llm_log(log_entry)
+
+    timeout_obj = build_timeout(timeout_s)
+
+    if _llm_debug_enabled():
+        print(
+            "LLM REQUEST:",
+            {"url": url, "headers": log_entry["request"]["headers"], "body": body},
+        )
+
+    async with httpx.AsyncClient(timeout=timeout_obj) as client:
+        try:
+            r = await client.post(url, headers=headers, json=body)
+            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            log_entry["response"]["status_code"] = r.status_code
+            if _llm_debug_enabled():
+                print("LLM RESPONSE:", r.status_code)
+
+            r.raise_for_status()
+            resp_json = r.json()
+            log_entry["response"]["body"] = resp_json
+            return resp_json
+        except Exception as e:
+            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            log_entry["response"]["error"] = str(e)
+            raise
+
+
 async def openai_chat_complete(
     *,
     messages: list[dict],
@@ -127,33 +177,7 @@ async def openai_chat_complete(
     if extra_body:
         body.update(extra_body)
 
-    log_entry = create_log_entry(url, "POST", headers, body)
-    add_llm_log(log_entry)
-
-    timeout_obj = build_timeout(timeout_s)
-
-    if _llm_debug_enabled():
-        print(
-            "LLM REQUEST:",
-            {"url": url, "headers": log_entry["request"]["headers"], "body": body},
-        )
-
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            r = await client.post(url, headers=headers, json=body)
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["status_code"] = r.status_code
-            if _llm_debug_enabled():
-                print("LLM RESPONSE:", r.status_code)
-
-            r.raise_for_status()
-            resp_json = r.json()
-            log_entry["response"]["body"] = resp_json
-            return resp_json
-        except Exception as e:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["error"] = str(e)
-            raise
+    return await _execute_llm_request(url, headers, body, timeout_s)
 
 
 async def openai_completions(
@@ -187,33 +211,7 @@ async def openai_completions(
     if extra_body:
         body.update(extra_body)
 
-    log_entry = create_log_entry(url, "POST", headers, body)
-    add_llm_log(log_entry)
-
-    timeout_obj = build_timeout(timeout_s)
-
-    if _llm_debug_enabled():
-        print(
-            "LLM REQUEST:",
-            {"url": url, "headers": log_entry["request"]["headers"], "body": body},
-        )
-
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            r = await client.post(url, headers=headers, json=body)
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["status_code"] = r.status_code
-            if _llm_debug_enabled():
-                print("LLM RESPONSE:", r.status_code)
-
-            r.raise_for_status()
-            resp_json = r.json()
-            log_entry["response"]["body"] = resp_json
-            return resp_json
-        except Exception as e:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["error"] = str(e)
-            raise
+    return await _execute_llm_request(url, headers, body, timeout_s)
 
 
 async def openai_chat_complete_stream(

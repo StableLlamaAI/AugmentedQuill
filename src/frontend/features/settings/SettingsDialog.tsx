@@ -436,6 +436,28 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     if (editingProviderId === id) setEditingProviderId(null);
   };
 
+  const renderTab = (
+    id: 'projects' | 'machine',
+    icon: React.ReactNode,
+    label: string
+  ) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
+        activeTab === id
+          ? isLight
+            ? 'bg-brand-600 text-white border border-brand-500'
+            : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
+          : isLight
+            ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+            : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4">
       <div
@@ -494,36 +516,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 : 'border-brand-gray-800 bg-brand-gray-950'
             }`}
           >
-            <button
-              onClick={() => setActiveTab('projects')}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
-                activeTab === 'projects'
-                  ? isLight
-                    ? 'bg-brand-600 text-white border border-brand-500'
-                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
-                  : isLight
-                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
-              }`}
-            >
-              <HardDrive size={18} />
-              <span>Projects</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('machine')}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
-                activeTab === 'machine'
-                  ? isLight
-                    ? 'bg-brand-600 text-white border border-brand-500'
-                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
-                  : isLight
-                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
-              }`}
-            >
-              <Cpu size={18} />
-              <span>Machine Settings</span>
-            </button>
+            {renderTab('projects', <HardDrive size={18} />, 'Projects')}
+            {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
           </div>
 
           {/* Tab Content */}

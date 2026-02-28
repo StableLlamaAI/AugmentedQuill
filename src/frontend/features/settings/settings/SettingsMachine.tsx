@@ -67,6 +67,45 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
 
   const isLight = theme === 'light';
 
+  const renderCapabilitySelect = (
+    label: string,
+    field: 'isMultimodal' | 'supportsFunctionCalling',
+    detectedField: 'is_multimodal' | 'supports_function_calling'
+  ) => {
+    if (!activeProvider) return null;
+    const val = activeProvider[field];
+    const detected = detectedCapabilities[activeProvider.id]?.[detectedField];
+
+    return (
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          {label}
+        </label>
+        <select
+          value={val === true ? 'true' : val === false ? 'false' : 'auto'}
+          onChange={(e) => {
+            const v = e.target.value;
+            onUpdateProvider(activeProvider.id, {
+              [field]: v === 'auto' ? null : v === 'true',
+            });
+          }}
+          className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+          }`}
+        >
+          <option value="auto">
+            Auto
+            {detected !== undefined ? ` (${detected ? 'Yes' : 'No'})` : ''}
+          </option>
+          <option value="true">Supported</option>
+          <option value="false">Unsupported</option>
+        </select>
+      </div>
+    );
+  };
+
   const activeProvider = localSettings.providers.find(
     (p) => p.id === editingProviderId
   );
@@ -533,86 +572,13 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Multimodal (Vision)
-                  </label>
-                  <select
-                    value={
-                      activeProvider.isMultimodal === true
-                        ? 'true'
-                        : activeProvider.isMultimodal === false
-                          ? 'false'
-                          : 'auto'
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdateProvider(activeProvider.id, {
-                        isMultimodal: val === 'auto' ? null : val === 'true',
-                      });
-                    }}
-                    className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                      isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                    }`}
-                  >
-                    <option value="auto">
-                      Auto
-                      {detectedCapabilities[activeProvider.id]?.is_multimodal !==
-                      undefined
-                        ? ` (${
-                            detectedCapabilities[activeProvider.id].is_multimodal
-                              ? 'Yes'
-                              : 'No'
-                          })`
-                        : ''}
-                    </option>
-                    <option value="true">Supported</option>
-                    <option value="false">Unsupported</option>
-                  </select>
-                </div>
+                {renderCapabilitySelect('Multimodal', 'isMultimodal', 'is_multimodal')}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Function Calling
-                  </label>
-                  <select
-                    value={
-                      activeProvider.supportsFunctionCalling === true
-                        ? 'true'
-                        : activeProvider.supportsFunctionCalling === false
-                          ? 'false'
-                          : 'auto'
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdateProvider(activeProvider.id, {
-                        supportsFunctionCalling: val === 'auto' ? null : val === 'true',
-                      });
-                    }}
-                    className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                      isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                    }`}
-                  >
-                    <option value="auto">
-                      Auto
-                      {detectedCapabilities[activeProvider.id]
-                        ?.supports_function_calling !== undefined
-                        ? ` (${
-                            detectedCapabilities[activeProvider.id]
-                              .supports_function_calling
-                              ? 'Yes'
-                              : 'No'
-                          })`
-                        : ''}
-                    </option>
-                    <option value="true">Supported</option>
-                    <option value="false">Unsupported</option>
-                  </select>
-                </div>
+                {renderCapabilitySelect(
+                  'Function Calling',
+                  'supportsFunctionCalling',
+                  'supports_function_calling'
+                )}
               </div>
 
               <div

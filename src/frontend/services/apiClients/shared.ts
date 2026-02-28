@@ -52,3 +52,19 @@ export async function fetchBlob(
   }
   return response.blob();
 }
+
+export async function postJson<T>(
+  path: string,
+  body: unknown,
+  fallbackError: string
+): Promise<T> {
+  return fetchJson<T>(
+    path,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    fallbackError
+  );
+}

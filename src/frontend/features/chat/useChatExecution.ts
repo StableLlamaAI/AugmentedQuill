@@ -47,6 +47,34 @@ export function useChatExecution({
 }: UseChatExecutionParams) {
   const stopSignalRef = useRef(false);
 
+  const upsertChatMessage = (msgId: string, messageUpdate: Partial<ChatMessage>) => {
+    setChatMessages((prev) => {
+      const messageIndex = prev.findIndex((item) => item.id === msgId);
+      if (messageIndex !== -1) {
+        const next = [...prev];
+        next[messageIndex] = {
+          ...next[messageIndex],
+          ...messageUpdate,
+          text: messageUpdate.text ?? next[messageIndex].text,
+          thinking: messageUpdate.thinking ?? next[messageIndex].thinking,
+          traceback: messageUpdate.traceback ?? next[messageIndex].traceback,
+        } as ChatMessage;
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: msgId,
+          role: 'model',
+          text: messageUpdate.text ?? '',
+          thinking: messageUpdate.thinking ?? '',
+          traceback: messageUpdate.traceback ?? '',
+          ...messageUpdate,
+        } as ChatMessage,
+      ];
+    });
+  };
+
   const executeChatRequest = async (
     userText: string,
     history: ChatMessage[],
@@ -75,30 +103,7 @@ export function useChatExecution({
         update: { text?: string; thinking?: string; traceback?: string }
       ) => {
         if (stopSignalRef.current) return;
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === msgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = {
-              ...next[messageIndex],
-              text: update.text ?? next[messageIndex].text,
-              thinking: update.thinking ?? next[messageIndex].thinking,
-              traceback: update.traceback ?? next[messageIndex].traceback,
-            };
-            return next;
-          }
-
-          return [
-            ...prev,
-            {
-              id: msgId,
-              role: 'model',
-              text: update.text ?? '',
-              thinking: update.thinking ?? '',
-              traceback: update.traceback ?? '',
-            },
-          ];
-        });
+        upsertChatMessage(msgId, update);
       };
 
       let currentMsgId = uuidv4();
@@ -134,15 +139,7 @@ export function useChatExecution({
           tool_calls: result.functionCalls,
         };
 
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === currentMsgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = assistantMessage;
-            return next;
-          }
-          return [...prev, assistantMessage];
-        });
+        upsertChatMessage(currentMsgId, assistantMessage);
 
         currentHistory.push(assistantMessage);
 
@@ -210,15 +207,7 @@ export function useChatExecution({
           thinking: result.thinking,
           tool_calls: result.functionCalls,
         };
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === currentMsgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = botMessage;
-            return next;
-          }
-          return [...prev, botMessage];
-        });
+        upsertChatMessage(currentMsgId, botMessage);
       }
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') {

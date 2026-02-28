@@ -8,9 +8,10 @@
 """Defines the mutate unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from fastapi import APIRouter, Path as FastAPIPath, Request
+from fastapi.responses import JSONResponse
 
 from augmentedquill.api.v1.chapters_routes.common import parse_json_body
-from augmentedquill.api.v1.http_responses import error_json, ok_json
+from augmentedquill.api.v1.http_responses import error_json
 from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
 from augmentedquill.services.chapters.chapters_api_ops import (
     reorder_books_in_project,
@@ -63,7 +64,9 @@ async def api_update_chapter_metadata(
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
 
-    return ok_json({"ok": True, "id": chap_id, "message": "Metadata updated"})
+    return JSONResponse(
+        content={"ok": True, "id": chap_id, "message": "Metadata updated"}
+    )
 
 
 @router.put("/chapters/{chap_id}/title")
@@ -92,8 +95,8 @@ async def api_update_chapter_title(
         return error_json(str(exc), status_code=404)
 
     _, path, _ = _chapter_by_id_or_404(chap_id)
-    return ok_json(
-        {
+    return JSONResponse(
+        content={
             "ok": True,
             "chapter": {
                 "id": chap_id,
@@ -130,8 +133,8 @@ async def api_create_chapter(request: Request):
     except Exception as exc:
         return error_json(f"Failed to create chapter: {exc}", status_code=500)
 
-    return ok_json(
-        {
+    return JSONResponse(
+        content={
             "ok": True,
             "id": chap_id,
             "title": title,
@@ -159,7 +162,7 @@ async def api_update_chapter_content(
     except Exception as exc:
         return error_json(f"Failed to write chapter: {exc}", status_code=500)
 
-    return ok_json({"ok": True})
+    return JSONResponse(content={"ok": True})
 
 
 @router.put("/chapters/{chap_id}/summary")
@@ -185,8 +188,8 @@ async def api_update_chapter_summary(
         return error_json(str(exc), status_code=404)
 
     _, path, _ = _chapter_by_id_or_404(chap_id)
-    return ok_json(
-        {
+    return JSONResponse(
+        content={
             "ok": True,
             "chapter": {
                 "id": chap_id,
@@ -204,7 +207,7 @@ async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)):
 
     try:
         delete_chapter(chap_id)
-        return ok_json({"ok": True})
+        return JSONResponse(content={"ok": True})
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
     except Exception as exc:
@@ -228,7 +231,7 @@ async def api_reorder_chapters(request: Request):
     except Exception as exc:
         return error_json(f"Failed to update story.json: {exc}", status_code=500)
 
-    return ok_json({"ok": True})
+    return JSONResponse(content={"ok": True})
 
 
 @router.post("/books/reorder")
@@ -246,4 +249,4 @@ async def api_reorder_books(request: Request):
     except Exception as exc:
         return error_json(f"Failed to update story.json: {exc}", status_code=500)
 
-    return ok_json({"ok": True})
+    return JSONResponse(content={"ok": True})

@@ -10,29 +10,21 @@
  */
 
 import { ListImagesResponse } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, postJson } from './shared';
 
 export const booksApi = {
   create: async (title: string) => {
-    return fetchJson<{ ok: boolean; book_id?: string; story?: unknown }>(
+    return postJson<{ ok: boolean; book_id?: string; story?: unknown }>(
       '/books/create',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: title }),
-      },
+      { name: title },
       'Failed to create book'
     );
   },
 
   delete: async (id: string) => {
-    return fetchJson<{ ok: boolean; story?: unknown }>(
+    return postJson<{ ok: boolean; story?: unknown }>(
       '/books/delete',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: id }),
-      },
+      { name: id },
       'Failed to delete book'
     );
   },
@@ -56,25 +48,17 @@ export const booksApi = {
   },
 
   deleteImage: async (filename: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean }>(
       '/projects/images/delete',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename }),
-      },
+      { filename },
       'Failed to delete image'
     );
   },
 
   reorder: async (bookIds: string[]) => {
-    return fetchJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean }>(
       '/books/reorder',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_ids: bookIds }),
-      },
+      { book_ids: bookIds },
       'Failed to reorder books'
     );
   },
@@ -88,13 +72,9 @@ export const booksApi = {
       private_notes?: string;
     }
   ) => {
-    return fetchJson<{ ok: boolean; detail?: string }>(
+    return postJson<{ ok: boolean; detail?: string }>(
       `/books/${bookId}/metadata`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      },
+      data,
       'Failed to update book metadata'
     );
   },

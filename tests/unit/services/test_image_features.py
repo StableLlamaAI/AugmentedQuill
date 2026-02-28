@@ -24,7 +24,7 @@ from augmentedquill.utils.image_helpers import (
     get_project_images,
     update_image_metadata,
 )
-from augmentedquill.api.v1.chat import _inject_project_images
+from augmentedquill.services.chat.chat_api_helpers import inject_project_images
 from augmentedquill.services.chat.chat_tool_dispatcher import exec_chat_tool
 
 
@@ -168,7 +168,7 @@ class ImageFeaturesTest(TestCase):
 
     async def _test_inject_images_impl(self):
         """Test that images mentioned in user message are injected as base64."""
-        # Setup async test for _inject_project_images
+        # Setup async test for inject_project_images
 
         # Create image
         img_path = self.images_dir / "ref.png"
@@ -176,7 +176,7 @@ class ImageFeaturesTest(TestCase):
 
         messages = [{"role": "user", "content": "Look at ref.png please."}]
 
-        await _inject_project_images(messages)
+        await inject_project_images(messages)
 
         new_content = messages[0]["content"]
         self.assertIsInstance(new_content, list)

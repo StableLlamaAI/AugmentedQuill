@@ -35,6 +35,14 @@ type UseProjectManagementParams = {
   setIsSettingsOpen: (open: boolean) => void;
 };
 
+const mapProjectsList = (projects: ProjectListItem[]) =>
+  projects.map((project) => ({
+    id: project.name,
+    title: project.title || project.name,
+    type: project.type || 'novel',
+    updatedAt: Date.now(),
+  }));
+
 export function useProjectManagement({
   story,
   refreshStory,
@@ -59,14 +67,7 @@ export function useProjectManagement({
     try {
       const data = await api.projects.list();
       if (data.available) {
-        setProjects(
-          data.available.map((project: ProjectListItem) => ({
-            id: project.name,
-            title: project.title || project.name,
-            type: project.type || 'novel',
-            updatedAt: Date.now(),
-          }))
-        );
+        setProjects(mapProjectsList(data.available));
       }
     } catch (error) {
       console.error('Failed to fetch projects', error);
@@ -149,14 +150,7 @@ export function useProjectManagement({
       try {
         const response = await api.projects.import(file);
         if (response.ok && response.available) {
-          setProjects(
-            response.available.map((project: ProjectListItem) => ({
-              id: project.name,
-              title: project.title || project.name,
-              type: project.type || 'novel',
-              updatedAt: Date.now(),
-            }))
-          );
+          setProjects(mapProjectsList(response.available));
         }
       } catch (error) {
         notifyError(`Import failed: ${getErrorMessage(error, 'Unknown error')}`, error);
@@ -177,13 +171,7 @@ export function useProjectManagement({
 
         const listing = await api.projects.list();
         if (listing.projects) {
-          setProjects(
-            listing.projects.map((project: ProjectListItem) => ({
-              id: project.name,
-              title: project.title || project.name,
-              updatedAt: Date.now(),
-            }))
-          );
+          setProjects(mapProjectsList(listing.projects));
         }
 
         if (result.story) {

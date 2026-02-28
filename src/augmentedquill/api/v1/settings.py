@@ -40,7 +40,7 @@ from augmentedquill.services.settings.settings_machine_ops import (
     remote_model_exists,
 )
 from augmentedquill.services.settings.settings_update_ops import run_story_config_update
-from augmentedquill.api.v1.http_responses import error_json, ok_json
+from augmentedquill.api.v1.http_responses import error_json
 
 router = APIRouter(tags=["Settings"])
 
@@ -87,7 +87,7 @@ async def api_settings_post(request: Request) -> JSONResponse:
     except Exception as e:
         return error_json(f"Failed to write configs: {e}", status_code=500)
 
-    return ok_json({"ok": True})
+    return JSONResponse(content={"ok": True})
 
 
 @router.get("/prompts")
@@ -311,7 +311,7 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
     except Exception as e:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
 
-    return ok_json({"ok": True, "tags": tags})
+    return JSONResponse(content={"ok": True, "tags": tags})
 
 
 @router.post("/settings/update_story_config")
