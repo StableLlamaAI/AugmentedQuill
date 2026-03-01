@@ -14,6 +14,7 @@ import { Ghost, Globe, History, Plus, Settings2, Sparkles, Trash2 } from 'lucide
 
 type ChatHeaderProps = {
   title: string;
+  headerBg?: string;
   currentSessionId: string | null;
   isIncognito: boolean;
   showHistory: boolean;
@@ -28,6 +29,7 @@ type ChatHeaderProps = {
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   title,
+  headerBg = 'bg-brand-gray-100 dark:bg-brand-gray-900',
   currentSessionId,
   isIncognito,
   showHistory,
@@ -40,7 +42,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onToggleWebSearch,
 }) => {
   return (
-    <div className="p-4 border-b flex items-center justify-between bg-brand-gray-100 dark:bg-brand-gray-900 border-brand-gray-200 dark:border-brand-gray-800">
+    <div
+      className={`p-4 border-b flex items-center justify-between ${headerBg} border-brand-gray-200 dark:border-brand-gray-800`}
+    >
       <div className="flex items-center space-x-2 overflow-hidden">
         <Sparkles className="text-blue-600 shrink-0" size={20} />
         <h2 className="font-semibold truncate">{title}</h2>

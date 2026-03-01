@@ -190,6 +190,7 @@ export const Chat: React.FC<ChatProps> = ({
     >
       <ChatHeader
         title={isIncognito ? 'Incognito Chat' : 'Writing Partner'}
+        headerBg={headerBg}
         currentSessionId={currentSessionId}
         isIncognito={isIncognito}
         showHistory={showHistory}
