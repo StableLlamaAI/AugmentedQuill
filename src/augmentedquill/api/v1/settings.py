@@ -16,6 +16,7 @@ import json as _json
 
 from augmentedquill.core.config import (
     load_machine_config,
+    save_story_config,
     CURRENT_SCHEMA_VERSION,
     BASE_DIR,
     CONFIG_DIR,
@@ -26,6 +27,7 @@ from augmentedquill.core.prompts import (
     load_model_prompt_overrides,
     DEFAULT_SYSTEM_MESSAGES,
     DEFAULT_USER_PROMPTS,
+    PROMPT_TYPES,
     ensure_string,
 )
 from augmentedquill.services.settings.settings_api_ops import (
@@ -40,6 +42,7 @@ from augmentedquill.services.settings.settings_machine_ops import (
     remote_model_exists,
 )
 from augmentedquill.services.settings.settings_update_ops import run_story_config_update
+from augmentedquill.utils.llm_utils import verify_model_capabilities
 from augmentedquill.api.v1.http_responses import error_json
 
 router = APIRouter(tags=["Settings"])
@@ -80,8 +83,6 @@ async def api_settings_post(request: Request) -> JSONResponse:
         machine_path = CONFIG_DIR / "machine.json"
         story_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.parent.mkdir(parents=True, exist_ok=True)
-        from augmentedquill.core.config import save_story_config
-
         save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
@@ -110,8 +111,6 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
         user_prompts[key] = ensure_string(
             model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
         )
-
-    from augmentedquill.core.prompts import PROMPT_TYPES
 
     return JSONResponse(
         status_code=200,
@@ -199,8 +198,6 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
     model_id_str = str(model_id or "").strip()
     # Perform dynamic capability verification
-    from augmentedquill.utils.llm_utils import verify_model_capabilities
-
     caps = await verify_model_capabilities(
         base_url=base_url,
         api_key=api_key,

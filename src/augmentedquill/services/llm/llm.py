@@ -79,11 +79,10 @@ def resolve_openai_credentials(
 
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
     if not (isinstance(models, list) and models):
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400,
-            detail="No OpenAI models configured. Configure openai.models[] in machine.json.",
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
         )
 
     chosen = find_model_in_list(models, selected_name) or models[0]
@@ -101,11 +100,9 @@ def resolve_openai_credentials(
         api_key = env_key
 
     if not base_url or not model_id:
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400, detail="Missing base_url or model in configuration"
-        )
+        raise ConfigurationError("Missing base_url or model in configuration")
 
     try:
         ts = int(timeout_s or 60)

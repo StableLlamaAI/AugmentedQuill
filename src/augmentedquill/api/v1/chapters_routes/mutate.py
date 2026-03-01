@@ -17,7 +17,15 @@ from augmentedquill.services.chapters.chapters_api_ops import (
     reorder_books_in_project,
     reorder_chapters_in_project,
 )
-from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.services.projects.projects import (
+    create_new_chapter,
+    delete_chapter,
+    get_active_project_dir,
+    update_chapter_metadata,
+    write_chapter_content,
+    write_chapter_summary,
+    write_chapter_title,
+)
 
 router = APIRouter(tags=["Chapters"])
 
@@ -49,8 +57,6 @@ async def api_update_chapter_metadata(
         private_notes = str(private_notes)
     if conflicts is not None and not isinstance(conflicts, list):
         return error_json("conflicts must be a list", status_code=400)
-
-    from augmentedquill.services.projects.projects import update_chapter_metadata
 
     try:
         update_chapter_metadata(
@@ -87,8 +93,6 @@ async def api_update_chapter_title(
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
-    from augmentedquill.services.projects.projects import write_chapter_title
-
     try:
         write_chapter_title(chap_id, new_title_str)
     except ValueError as exc:
@@ -118,11 +122,6 @@ async def api_create_chapter(request: Request):
     title = str(payload.get("title", "")).strip()
     content = payload.get("content") or ""
     book_id = payload.get("book_id")
-
-    from augmentedquill.services.projects.projects import (
-        create_new_chapter,
-        write_chapter_content,
-    )
 
     try:
         chap_id = create_new_chapter(title, book_id=book_id)
@@ -180,8 +179,6 @@ async def api_update_chapter_summary(
 
     new_summary = str(payload.get("summary", "")).strip()
 
-    from augmentedquill.services.projects.projects import write_chapter_summary
-
     try:
         write_chapter_summary(chap_id, new_summary)
     except ValueError as exc:
@@ -203,8 +200,6 @@ async def api_update_chapter_summary(
 @router.delete("/chapters/{chap_id}")
 async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)):
     """Api Delete Chapter."""
-    from augmentedquill.services.projects.projects import delete_chapter
-
     try:
         delete_chapter(chap_id)
         return JSONResponse(content={"ok": True})

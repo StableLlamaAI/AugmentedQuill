@@ -12,9 +12,9 @@ from __future__ import annotations
 import datetime
 
 import httpx
-from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
+from augmentedquill.services.exceptions import BadRequestError, UpstreamError
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
 
 
@@ -25,7 +25,7 @@ async def proxy_openai_models(payload: dict) -> JSONResponse:
     timeout_s = (payload or {}).get("timeout_s") or 60
 
     if not isinstance(base_url, str) or not base_url:
-        raise HTTPException(status_code=400, detail="base_url is required")
+        raise BadRequestError("base_url is required")
 
     url = base_url.rstrip("/") + "/models"
     headers = {}
@@ -59,4 +59,4 @@ async def proxy_openai_models(payload: dict) -> JSONResponse:
                 )
             return JSONResponse(status_code=200, content=content)
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Upstream request failed: {exc}")
+        raise UpstreamError(f"Upstream request failed: {exc}") from exc

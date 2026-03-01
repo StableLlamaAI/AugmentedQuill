@@ -13,8 +13,9 @@ import re
 import shutil
 from pathlib import Path
 
-from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+
+from augmentedquill.services.exceptions import BadRequestError
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.projects.project_helpers import (
@@ -151,7 +152,7 @@ def create_project_response(name: str, project_type: str) -> JSONResponse:
 def convert_project_response(new_type: str) -> JSONResponse:
     """Convert Project Response."""
     if not new_type:
-        raise HTTPException(status_code=400, detail="new_type is required")
+        raise BadRequestError("new_type is required")
 
     ok, msg = change_project_type(new_type)
     if not ok:
@@ -172,7 +173,7 @@ def convert_project_response(new_type: str) -> JSONResponse:
 def create_book_response(title: str) -> JSONResponse:
     """Create Book Response."""
     if not title:
-        raise HTTPException(status_code=400, detail="Book title is required")
+        raise BadRequestError("Book title is required")
 
     try:
         bid = create_new_book(title)
@@ -194,11 +195,11 @@ def create_book_response(title: str) -> JSONResponse:
 def delete_book_response(book_id: str) -> JSONResponse:
     """Delete Book Response."""
     if not book_id:
-        raise HTTPException(status_code=400, detail="book_id is required")
+        raise BadRequestError("book_id is required")
 
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}

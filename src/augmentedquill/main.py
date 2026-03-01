@@ -17,11 +17,13 @@ import argparse
 from typing import Optional
 import os
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from augmentedquill.core.config import load_machine_config, STATIC_DIR, CONFIG_DIR
+from augmentedquill.services.exceptions import ServiceError
 
 # Import API routers
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
@@ -75,6 +77,16 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_v1_router)
+
+    # --------------- global exception handler ---------------
+    @app.exception_handler(ServiceError)
+    async def _service_error_handler(
+        _request: Request, exc: ServiceError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"ok": False, "detail": exc.detail},
+        )
 
     return app
 

@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+from augmentedquill.services.exceptions import BadRequestError
 
 from augmentedquill.core.config import BASE_DIR
 from augmentedquill.services.story.story_api_prompt_ops import (
@@ -22,11 +22,11 @@ from augmentedquill.services.story.story_api_prompt_ops import (
 from augmentedquill.services.story.story_api_state_ops import (
     collect_chapter_summaries,
     ensure_chapter_slot,
-    get_active_story_or_http_error,
+    get_active_story_or_raise,
     get_all_normalized_chapters,
     get_chapter_locator,
     get_normalized_chapters,
-    read_text_or_http_500,
+    read_text_or_raise,
 )
 
 
@@ -34,15 +34,15 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     """Prepare Story Summary Generation."""
     mode = (mode or "").lower()
     if mode not in ("discard", "update", ""):
-        raise HTTPException(status_code=400, detail="mode must be discard|update")
+        raise BadRequestError("mode must be discard|update")
 
-    _, story_path, story = get_active_story_or_http_error()
+    _, story_path, story = get_active_story_or_raise()
     chapters_data = get_all_normalized_chapters(story)
     current_story_summary = story.get("story_summary", "")
 
     chapter_summaries = collect_chapter_summaries(chapters_data)
     if not chapter_summaries:
-        raise HTTPException(status_code=400, detail="No chapter summaries available")
+        raise BadRequestError("No chapter summaries available")
 
     base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
         payload=payload,
@@ -69,15 +69,15 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
 def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -> dict:
     """Prepare Chapter Summary Generation."""
     if not isinstance(chap_id, int):
-        raise HTTPException(status_code=400, detail="chap_id is required")
+        raise BadRequestError("chap_id is required")
 
     mode = (mode or "").lower()
     if mode not in ("discard", "update", ""):
-        raise HTTPException(status_code=400, detail="mode must be discard|update")
+        raise BadRequestError("mode must be discard|update")
 
     _, path, pos = get_chapter_locator(chap_id)
-    chapter_text = read_text_or_http_500(path)
-    _, story_path, story = get_active_story_or_http_error()
+    chapter_text = read_text_or_raise(path)
+    _, story_path, story = get_active_story_or_raise()
 
     chapters_data = get_normalized_chapters(story)
     ensure_chapter_slot(chapters_data, pos)
@@ -112,16 +112,14 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
 def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
     """Prepare Write Chapter Generation."""
     if not isinstance(chap_id, int):
-        raise HTTPException(status_code=400, detail="chap_id is required")
+        raise BadRequestError("chap_id is required")
 
     _, path, pos = get_chapter_locator(chap_id)
-    _, _, story = get_active_story_or_http_error()
+    _, _, story = get_active_story_or_raise()
 
     chapters_data = get_normalized_chapters(story)
     if pos >= len(chapters_data):
-        raise HTTPException(
-            status_code=400, detail="No summary available for this chapter"
-        )
+        raise BadRequestError("No summary available for this chapter")
 
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
@@ -152,17 +150,15 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
 def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
     """Prepare Continue Chapter Generation."""
     if not isinstance(chap_id, int):
-        raise HTTPException(status_code=400, detail="chap_id is required")
+        raise BadRequestError("chap_id is required")
 
     _, path, pos = get_chapter_locator(chap_id)
-    existing = read_text_or_http_500(path)
+    existing = read_text_or_raise(path)
 
-    _, _, story = get_active_story_or_http_error()
+    _, _, story = get_active_story_or_raise()
     chapters_data = get_normalized_chapters(story)
     if pos >= len(chapters_data):
-        raise HTTPException(
-            status_code=400, detail="No summary available for this chapter"
-        )
+        raise BadRequestError("No summary available for this chapter")
 
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name

@@ -34,8 +34,9 @@ import json as _json
 from collections.abc import Callable
 from typing import Any, get_args, get_origin
 
-from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
+
+from augmentedquill.services.exceptions import ServiceError
 
 # Global registry of all chat tools
 _TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
@@ -206,7 +207,7 @@ async def execute_registered_tool(
 
     try:
         return await tool_fn(args_obj, call_id, payload, mutations)
-    except HTTPException as e:
+    except ServiceError as e:
         return _tool_error(name, call_id, f"Tool failed: {e.detail}")
     except Exception as e:
         return {

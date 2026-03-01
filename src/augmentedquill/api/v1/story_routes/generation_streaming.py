@@ -18,10 +18,10 @@ from augmentedquill.services.story.story_api_prompt_ops import (
 )
 from augmentedquill.services.story.story_api_state_ops import (
     ensure_chapter_slot,
-    get_active_story_or_http_error,
+    get_active_story_or_raise,
     get_chapter_locator,
     get_normalized_chapters,
-    read_text_or_http_500,
+    read_text_or_raise,
 )
 from augmentedquill.services.story.story_generation_common import (
     prepare_chapter_summary_generation,
@@ -66,9 +66,9 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     _, path, pos = get_chapter_locator(chap_id)
     current_text = (payload or {}).get("current_text")
     if not isinstance(current_text, str):
-        current_text = read_text_or_http_500(path)
+        current_text = read_text_or_raise(path)
 
-    _, _, story = get_active_story_or_http_error()
+    _, _, story = get_active_story_or_raise()
     chapters_data = get_normalized_chapters(story)
     ensure_chapter_slot(chapters_data, pos)
     summary = chapters_data[pos].get("summary", "")

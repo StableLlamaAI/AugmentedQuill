@@ -7,15 +7,20 @@
 
 """Defines the metadata unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from fastapi import APIRouter, Request, HTTPException, Path as FastAPIPath
+from fastapi import APIRouter, Request, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
 from augmentedquill.core.config import save_story_config
+from augmentedquill.services.exceptions import ServiceError
 from augmentedquill.services.projects.project_helpers import (
     normalize_story_for_frontend,
 )
+from augmentedquill.services.projects.projects import (
+    update_book_metadata,
+    update_story_metadata,
+)
 from augmentedquill.services.story.story_api_state_ops import (
-    get_active_story_or_http_error,
+    get_active_story_or_raise,
 )
 from augmentedquill.api.v1.story_routes.common import (
     parse_json_body,
@@ -36,8 +41,8 @@ async def api_story_title(request: Request) -> JSONResponse:
             raise StoryBadRequestError("Title cannot be empty")
 
         try:
-            _, story_path, story = get_active_story_or_http_error()
-        except HTTPException:
+            _, story_path, story = get_active_story_or_raise()
+        except ServiceError:
             raise StoryBadRequestError("No active project")
 
         story["project_title"] = title
@@ -54,8 +59,8 @@ async def api_story_settings(request: Request) -> JSONResponse:
         payload = await parse_json_body(request)
 
         try:
-            _, story_path, story = get_active_story_or_http_error()
-        except HTTPException:
+            _, story_path, story = get_active_story_or_raise()
+        except ServiceError:
             raise StoryBadRequestError("No active project")
 
         if "image_style" in payload:
@@ -80,8 +85,8 @@ async def api_story_metadata(request: Request) -> JSONResponse:
         payload = await parse_json_body(request)
 
         try:
-            get_active_story_or_http_error()
-        except HTTPException:
+            get_active_story_or_raise()
+        except ServiceError:
             raise StoryBadRequestError("No active project")
 
         title = payload.get("title")
@@ -89,8 +94,6 @@ async def api_story_metadata(request: Request) -> JSONResponse:
         tags = payload.get("tags")
         notes = payload.get("notes")
         private_notes = payload.get("private_notes")
-
-        from augmentedquill.services.projects.projects import update_story_metadata
 
         try:
             update_story_metadata(
@@ -118,16 +121,14 @@ async def api_book_metadata(
         payload = await parse_json_body(request)
 
         try:
-            get_active_story_or_http_error()
-        except HTTPException:
+            get_active_story_or_raise()
+        except ServiceError:
             raise StoryBadRequestError("No active project")
 
         title = payload.get("title")
         summary = payload.get("summary")
         notes = payload.get("notes")
         private_notes = payload.get("private_notes")
-
-        from augmentedquill.services.projects.projects import update_book_metadata
 
         try:
             update_book_metadata(

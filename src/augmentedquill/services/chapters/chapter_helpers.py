@@ -10,8 +10,8 @@
 import re
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
-from fastapi import HTTPException
 
+from augmentedquill.services.exceptions import NotFoundError
 from augmentedquill.core.config import load_story_config
 
 
@@ -144,9 +144,8 @@ def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
     )
     if not match:
         available = [f[0] for f in files]
-        raise HTTPException(
-            status_code=404,
-            detail=f"Chapter with ID {chap_id} not found. Available chapter IDs: {available}. "
+        raise NotFoundError(
+            f"Chapter with ID {chap_id} not found. Available chapter IDs: {available}. "
             f"Please call get_project_overview to refresh your knowledge of chapter IDs.",
         )
     return match  # (idx, path, pos)

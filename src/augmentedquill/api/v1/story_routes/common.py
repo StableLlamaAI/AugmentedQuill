@@ -13,19 +13,17 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from augmentedquill.api.v1.http_responses import error_json
+from augmentedquill.services.exceptions import ServiceError
 
 
-class StoryApiError(Exception):
-    """Base domain exception that carries an HTTP status code."""
+class StoryApiError(ServiceError):
+    """Base domain exception for story-related operations.
+
+    Inherits from ``ServiceError`` so the global handler can catch it,
+    while preserving backward-compatible subclass names used by story routes.
+    """
 
     default_status_code = 400
-
-    def __init__(self, detail: str, status_code: int | None = None):
-        super().__init__(detail)
-        self.detail = detail
-        self.status_code = (
-            status_code if status_code is not None else self.default_status_code
-        )
 
 
 class StoryBadRequestError(StoryApiError):
@@ -49,7 +47,7 @@ async def parse_json_body(request: Request) -> dict:
 
 
 def map_story_exception(exc: Exception) -> JSONResponse:
-    if isinstance(exc, StoryApiError):
+    if isinstance(exc, ServiceError):
         return error_json(exc.detail, exc.status_code)
     if isinstance(exc, HTTPException):
         return error_json(str(exc.detail), exc.status_code)
