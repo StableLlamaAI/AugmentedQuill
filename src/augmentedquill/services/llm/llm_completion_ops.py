@@ -148,21 +148,20 @@ async def unified_chat_complete(
 
 
 async def _execute_llm_request(url, headers, body, timeout_s):
-    log_entry = create_log_entry(url, "POST", headers, body)
+    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
+    safe_log_headers = {
+        k: (v if k.lower() != "authorization" else "REDACTED")
+        for k, v in headers.items()
+    }
+    log_entry = create_log_entry(url, "POST", safe_log_headers, body)
     add_llm_log(log_entry)
 
     timeout_obj = build_timeout(timeout_s)
 
-    # Security: Ensure sensitive headers (like Authorization) are masked in debug logs
-    safe_headers = {
-        k: (v if k.lower() != "authorization" else "REDACTED")
-        for k, v in log_entry["request"]["headers"].items()
-    }
-
     if _llm_debug_enabled():
         print(
             "LLM REQUEST:",
-            {"url": url, "headers": safe_headers, "body": body},
+            {"url": url, "headers": safe_log_headers, "body": body},
         )
 
     async with httpx.AsyncClient(timeout=timeout_obj) as client:
@@ -279,7 +278,12 @@ async def openai_chat_complete_stream(
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
 
-    log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
+    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
+    safe_log_headers = {
+        k: (v if k.lower() != "authorization" else "REDACTED")
+        for k, v in headers.items()
+    }
+    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
     add_llm_log(log_entry)
 
     timeout_obj = build_timeout(timeout_s)
@@ -330,6 +334,7 @@ async def openai_completions_stream(
     extra_body: dict | None = None,
 ) -> AsyncIterator[str]:
     """Stream content chunks from the text completions endpoint."""
+    _validate_base_url(base_url)
     url = str(base_url).rstrip("/") + "/completions"
     temperature, max_tokens = get_story_llm_preferences(
         config_dir=CONFIG_DIR,
@@ -350,7 +355,12 @@ async def openai_completions_stream(
     if extra_body:
         body.update(extra_body)
 
-    log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
+    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
+    safe_log_headers = {
+        k: (v if k.lower() != "authorization" else "REDACTED")
+        for k, v in headers.items()
+    }
+    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
     add_llm_log(log_entry)
 
     timeout_obj = build_timeout(timeout_s)

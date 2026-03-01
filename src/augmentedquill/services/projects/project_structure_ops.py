@@ -140,7 +140,17 @@ def create_new_book_in_project(active: Path, title: str) -> str:
     story["books"] = books
     save_story_config(story_path, story)
 
-    book_dir = active / "books" / book_id
+    # Security: Ensure book_id is safe (though it's a UUID here, CodeQL often flags the pattern)
+    if not book_id or ".." in book_id or "/" in book_id or "\\" in book_id:
+        raise ValueError(f"Invalid book_id: {book_id}")
+
+    books_parent = (active / "books").resolve()
+    books_parent.mkdir(parents=True, exist_ok=True)
+    book_dir = (books_parent / book_id).resolve()
+
+    if not book_dir.is_relative_to(books_parent):
+        raise ValueError(f"Access denied to book directory: {book_id}")
+
     (book_dir / "chapters").mkdir(parents=True, exist_ok=True)
     (book_dir / "images").mkdir(parents=True, exist_ok=True)
     (book_dir / "book_content.md").write_text("", encoding="utf-8")
