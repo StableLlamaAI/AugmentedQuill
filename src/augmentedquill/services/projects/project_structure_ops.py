@@ -61,12 +61,17 @@ def create_new_chapter_in_project(
             final_title = f"Chapter {current_count + 1}"
 
         # Security: Prevent path traversal by ensuring book_id is a simple name
-        if not book_id or ".." in book_id or "/" in book_id or "\\" in book_id:
+        # We use os.path.basename to strip any leading directory components
+        if not book_id:
+            raise ValueError("book_id is required")
+        book_id = os.path.basename(book_id)
+
+        if not book_id or book_id in (".", "..") or "/" in book_id or "\\" in book_id:
             raise ValueError(f"Invalid book_id: {book_id}")
 
-        book_dir = active / "books" / book_id
+        book_dir = (active / "books" / book_id).resolve()
         # Double check the dir is actually within the books directory
-        if not book_dir.resolve().is_relative_to((active / "books").resolve()):
+        if not book_dir.is_relative_to((active / "books").resolve()):
             raise ValueError(f"Access denied to book directory: {book_id}")
 
         chapters_dir = book_dir / "chapters"
@@ -141,7 +146,11 @@ def create_new_book_in_project(active: Path, title: str) -> str:
     save_story_config(story_path, story)
 
     # Security: Ensure book_id is safe (though it's a UUID here, CodeQL often flags the pattern)
-    if not book_id or ".." in book_id or "/" in book_id or "\\" in book_id:
+    if not book_id:
+        raise ValueError("book_id is required")
+    book_id = os.path.basename(book_id)
+
+    if not book_id or book_id in (".", "..") or "/" in book_id or "\\" in book_id:
         raise ValueError(f"Invalid book_id: {book_id}")
 
     books_parent = (active / "books").resolve()
@@ -269,12 +278,21 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
                 book = books[0]
                 book_id = book.get("id") or book.get("folder")
                 # Security: Prevent path traversal by ensuring book_id is a simple name
-                if not book_id or ".." in book_id or "/" in book_id or "\\" in book_id:
+                if not book_id:
+                    raise ValueError("book_id is required")
+                book_id = os.path.basename(book_id)
+
+                if (
+                    not book_id
+                    or book_id in (".", "..")
+                    or "/" in book_id
+                    or "\\" in book_id
+                ):
                     raise ValueError(f"Invalid book_id: {book_id}")
 
-                book_dir = active / "books" / book_id
+                book_dir = (active / "books" / book_id).resolve()
                 # Double check the dir is actually within the books directory
-                if not book_dir.resolve().is_relative_to((active / "books").resolve()):
+                if not book_dir.is_relative_to((active / "books").resolve()):
                     raise ValueError(f"Access denied to book directory: {book_id}")
 
                 (active / "chapters").mkdir(parents=True, exist_ok=True)

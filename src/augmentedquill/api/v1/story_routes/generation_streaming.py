@@ -9,6 +9,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+import json
 
 from augmentedquill.core.config import BASE_DIR, save_story_config
 from augmentedquill.core.prompts import get_user_prompt
@@ -53,10 +54,10 @@ async def _create_gen_source(prepared: dict):
     except ServiceError as e:
         # Re-raise service errors as they are handled by the global exception handler for REST,
         # but for streaming we might need to yield an error event.
-        yield f'data: {{"error": "{e.detail}"}}\n\n'
+        yield f"data: {json.dumps({'error': e.detail})}\n\n"
     except Exception:
         # Mask internal errors to avoid information exposure
-        yield 'data: {"error": "An internal error occurred during generation."}\n\n'
+        yield f"data: {json.dumps({'error': 'An internal error occurred during generation.'})}\n\n"
 
 
 def _as_streaming_response(gen_factory, media_type: str = "text/plain"):

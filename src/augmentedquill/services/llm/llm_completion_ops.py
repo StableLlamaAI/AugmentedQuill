@@ -43,6 +43,14 @@ def _validate_base_url(base_url: str) -> None:
     if not base_url:
         return
 
+    # Check for suspicious schemes or non-HTTP/HTTPS URLs
+    if not (base_url.startswith("http://") or base_url.startswith("https://")):
+        raise ValueError(f"Invalid base_url scheme: {base_url}")
+
+    # Check for forbidden characters in URL (basic SSRF protection)
+    if "@" in base_url or "[" in base_url or "]" in base_url:
+        raise ValueError(f"Potentially dangerous base_url: {base_url}")
+
     # 1. Check environment overrides (trusted)
     overrides = [
         os.getenv("OPENAI_BASE_URL"),
@@ -62,17 +70,20 @@ def _validate_base_url(base_url: str) -> None:
             + machine_config.get("google", {}).get("models", [])
         )
         for model in all_models:
-            if model.get("base_url") == base_url:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
                 return
 
     # 3. Allow localhost/127.0.0.1 for local inference servers (e.g. Ollama, LM Studio)
+    # We use a strict regex for local addresses to prevent bypass via other hostnames
     local_pattern = re.compile(
-        r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?$"
+        r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d{1,5})?(/.*)?$",
+        re.IGNORECASE,
     )
     if local_pattern.match(base_url):
         return
 
-    raise ValueError(f"Untrusted base_url: {base_url}")
+    raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 
 
 def _prepare_llm_request(
@@ -158,19 +169,14 @@ async def _execute_llm_request(url, headers, body, timeout_s):
 
     timeout_obj = build_timeout(timeout_s)
 
-    if _llm_debug_enabled():
-        print(
-            "LLM REQUEST:",
-            {"url": url, "headers": safe_log_headers, "body": body},
-        )
+    # Security: No longer printing raw headers or body to console to avoid sensitive information exposure.
+    # LLM logs are stored securely via add_llm_log.
 
     async with httpx.AsyncClient(timeout=timeout_obj) as client:
         try:
             r = await client.post(url, headers=headers, json=body)
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
             log_entry["response"]["status_code"] = r.status_code
-            if _llm_debug_enabled():
-                print("LLM RESPONSE:", r.status_code)
 
             r.raise_for_status()
             resp_json = r.json()
