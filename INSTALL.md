@@ -58,8 +58,8 @@ If you want to modify the code, contribute to the project, or just prefer runnin
 
 **Prerequisites:**
 
-- Python 3.11+
-- Node.js 18+
+- Python 3.12+
+- Node.js 24+
 - Git
 
 **Installation:**

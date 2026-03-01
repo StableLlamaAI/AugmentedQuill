@@ -4,7 +4,7 @@
 
 - AugmentedQuill is a web-based GUI for AI-assisted prose writing, with a FastAPI backend and a React + TypeScript SPA frontend (Vite).
 - Backend lives in src/augmentedquill/, frontend in src/frontend/, tests in tests/.
-- Python 3.11+ required (CI uses 3.11; local validation on 3.12.3). Node.js 18+ required (CI uses 18).
+- Python 3.12+ required (CI uses 3.12). Node.js 24+ required (CI uses 24).
 - The backend serves the built frontend from static/dist; frontend build output must be present for production-like runs.
 
 ## High-level structure and key files
