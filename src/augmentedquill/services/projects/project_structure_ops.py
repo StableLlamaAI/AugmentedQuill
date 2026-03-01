@@ -61,18 +61,25 @@ def create_new_chapter_in_project(
             final_title = f"Chapter {current_count + 1}"
 
         # Security: Prevent path traversal by ensuring book_id is a simple name
-        # We use os.path.basename to strip any leading directory components
+        # and validating it exists within the story metadata.
         if not book_id:
             raise ValueError("book_id is required")
-        book_id = os.path.basename(book_id)
 
-        if not book_id or book_id in (".", "..") or "/" in book_id or "\\" in book_id:
-            raise ValueError(f"Invalid book_id: {book_id}")
+        # Normalize book_id to just the filename component
+        safe_book_id = os.path.basename(book_id)
 
-        book_dir = (active / "books" / book_id).resolve()
+        # Validate that the book_id corresponds to a folder defined in story.json
+        # This prevents attackers from using existing directory names outside the books scope
+        valid_folders = {
+            b.get("folder") for b in books if isinstance(b.get("folder"), str)
+        }
+        if safe_book_id not in valid_folders:
+            raise ValueError(f"Unauthorized or invalid book_id: {book_id}")
+
+        book_dir = (active / "books" / safe_book_id).resolve()
         # Double check the dir is actually within the books directory
         if not book_dir.is_relative_to((active / "books").resolve()):
-            raise ValueError(f"Access denied to book directory: {book_id}")
+            raise ValueError(f"Access denied to book directory: {safe_book_id}")
 
         chapters_dir = book_dir / "chapters"
         (chapters_dir).mkdir(parents=True, exist_ok=True)

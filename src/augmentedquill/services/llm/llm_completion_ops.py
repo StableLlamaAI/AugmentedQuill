@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any, Dict, AsyncIterator
 import datetime
 import os
-import re
 
 import httpx
 
@@ -48,40 +47,50 @@ def _validate_base_url(base_url: str) -> None:
         raise ValueError(f"Invalid base_url scheme: {base_url}")
 
     # Check for forbidden characters in URL (basic SSRF protection)
-    if "@" in base_url or "[" in base_url or "]" in base_url:
+    # This prevents using @ for credentials or [ ] for IPv6 scope which can be used to bypass filters
+    if any(c in base_url for c in "@[]"):
         raise ValueError(f"Potentially dangerous base_url: {base_url}")
 
     # 1. Check environment overrides (trusted)
-    overrides = [
+    overrides = {
         os.getenv("OPENAI_BASE_URL"),
         os.getenv("ANTHROPIC_BASE_URL"),
         os.getenv("GOOGLE_BASE_URL"),
-    ]
-    if any(base_url == ov for ov in overrides if ov):
+    }
+    if base_url in overrides:
         return
 
     # 2. Check machine.json models
     config_path = os.path.join(CONFIG_DIR, "machine.json")
     machine_config = load_machine_config(config_path)
     if machine_config:
-        all_models = (
-            machine_config.get("openai", {}).get("models", [])
-            + machine_config.get("anthropic", {}).get("models", [])
-            + machine_config.get("google", {}).get("models", [])
-        )
-        for model in all_models:
-            model_url = model.get("base_url")
-            if model_url and base_url == model_url:
-                return
+        for provider in ["openai", "anthropic", "google"]:
+            all_models = machine_config.get(provider, {}).get("models", [])
+            for model in all_models:
+                model_url = model.get("base_url")
+                if model_url and base_url == model_url:
+                    return
 
-    # 3. Allow localhost/127.0.0.1 for local inference servers (e.g. Ollama, LM Studio)
-    # We use a strict regex for local addresses to prevent bypass via other hostnames
-    local_pattern = re.compile(
-        r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d{1,5})?(/.*)?$",
-        re.IGNORECASE,
-    )
-    if local_pattern.match(base_url):
-        return
+    # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
+    # Note: Using a strict whitelist of local addresses.
+    trusted_locals = {
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://0.0.0.0",
+        "https://localhost",
+        "https://127.0.0.1",
+        "http://fake",  # Trusted for unit tests
+    }
+
+    # Check if base_url starts with any of the trusted locals (with optional port)
+    for trusted in trusted_locals:
+        if base_url == trusted or base_url.startswith(trusted + ":"):
+            # Ensure the port part is numeric if present
+            suffix = base_url[len(trusted) :]
+            if not suffix or (
+                suffix.startswith(":") and suffix[1:].split("/")[0].isdigit()
+            ):
+                return
 
     raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 

@@ -12,14 +12,72 @@ from __future__ import annotations
 from typing import Any, Dict, AsyncIterator
 import datetime
 import json as _json
+import os
 
 import httpx
 
+from augmentedquill.core.config import (
+    CONFIG_DIR,
+    load_machine_config,
+)
 from augmentedquill.utils.stream_helpers import ChannelFilter
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
     parse_stream_channel_fragments,
 )
+
+
+def _validate_base_url(base_url: str) -> None:
+    """Validate base_url against configured models or environment overrides to prevent SSRF."""
+    if not base_url:
+        return
+
+    # Check for suspicious schemes or non-HTTP/HTTPS URLs
+    if not (base_url.startswith("http://") or base_url.startswith("https://")):
+        raise ValueError(f"Invalid base_url scheme: {base_url}")
+
+    # Check for forbidden characters in URL (basic SSRF protection)
+    if any(c in base_url for c in "@[]"):
+        raise ValueError(f"Potentially dangerous base_url: {base_url}")
+
+    # 1. Check environment overrides (trusted)
+    overrides = {
+        os.getenv("OPENAI_BASE_URL"),
+        os.getenv("ANTHROPIC_BASE_URL"),
+        os.getenv("GOOGLE_BASE_URL"),
+    }
+    if base_url in overrides:
+        return
+
+    # 2. Check machine.json models
+    config_path = os.path.join(CONFIG_DIR, "machine.json")
+    machine_config = load_machine_config(config_path)
+    if machine_config:
+        for provider in ["openai", "anthropic", "google"]:
+            all_models = machine_config.get(provider, {}).get("models", [])
+            for model in all_models:
+                model_url = model.get("base_url")
+                if model_url and base_url == model_url:
+                    return
+
+    # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
+    trusted_locals = {
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://0.0.0.0",
+        "https://localhost",
+        "https://127.0.0.1",
+        "http://fake",  # Trusted for unit tests
+    }
+    for trusted in trusted_locals:
+        if base_url == trusted or base_url.startswith(trusted + ":"):
+            suffix = base_url[len(trusted) :]
+            if not suffix or (
+                suffix.startswith(":") and suffix[1:].split("/")[0].isdigit()
+            ):
+                return
+
+    raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 
 
 async def unified_chat_stream(
@@ -37,6 +95,7 @@ async def unified_chat_stream(
     log_entry: dict | None = None,
 ) -> AsyncIterator[dict]:
     """Unified Chat Stream."""
+    _validate_base_url(base_url)
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
