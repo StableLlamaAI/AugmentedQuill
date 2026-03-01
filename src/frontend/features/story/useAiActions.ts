@@ -112,13 +112,10 @@ export function useAiActions({
         await updateChapter(currentChapter.id, { content: result });
       }
     } catch (error: unknown) {
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: 'model',
-        text: `AI Action Error: ${getErrorMessage(error, 'Failed to perform AI action')}`,
-        isError: true,
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
+      // AI action errors should be handled here, potentially with a notification
+      // rather than injecting into the conversational chat history if not requested.
+      console.error('AI Action Error:', error);
+      notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
       setIsAiActionLoading(false);
     }

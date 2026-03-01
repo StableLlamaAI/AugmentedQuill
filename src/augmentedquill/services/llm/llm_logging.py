@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import datetime
 import uuid
+import os
+import json
 from typing import Any, Dict, List
 
 # Global list to store LLM communication logs for the current session
@@ -18,10 +20,25 @@ llm_logs: List[Dict[str, Any]] = []
 
 
 def add_llm_log(log_entry: Dict[str, Any]):
-    """Add a log entry to the global list, keeping only the last 100 entries."""
+    """Add a log entry to the global list, keeping only the last 100 entries.
+
+    If AUGQ_LLM_DUMP is set, also append the raw log to a file.
+    """
     llm_logs.append(log_entry)
     if len(llm_logs) > 100:
         llm_logs.pop(0)
+
+    # Raw logging to file if enabled
+    if os.getenv("AUGQ_LLM_DUMP") == "1":
+        default_path = os.path.join("data", "logs", "llm_raw.log")
+        log_path = os.getenv("AUGQ_LLM_DUMP_PATH") or default_path
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry, default=str) + "\n")
+        except Exception:
+            # Silently fail if log cannot be written (dev-only feature)
+            pass
 
 
 def create_log_entry(

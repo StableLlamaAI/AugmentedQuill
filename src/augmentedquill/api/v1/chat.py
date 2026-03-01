@@ -250,6 +250,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 log_entry=log_entry,
+                skip_validation=True,  # Trust configured models
             ):
                 # Transform to client expected format
                 if "content" in chunk:

@@ -27,9 +27,9 @@ from augmentedquill.utils.llm_parsing import (
 )
 
 
-def _validate_base_url(base_url: str) -> None:
+def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
     """Validate base_url against configured models or environment overrides to prevent SSRF."""
-    if not base_url:
+    if not base_url or skip_validation:
         return
 
     # Check for suspicious schemes or non-HTTP/HTTPS URLs
@@ -93,9 +93,10 @@ async def unified_chat_stream(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     log_entry: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     """Unified Chat Stream."""
-    _validate_base_url(base_url)
+    _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:

@@ -67,8 +67,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({ theme = 'mixed' 
 
   useEffect(() => {
     loadEntries();
-    const interval = setInterval(loadEntries, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleCreate = async (entry: SourcebookUpsertPayload) => {

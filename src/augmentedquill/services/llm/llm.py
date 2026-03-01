@@ -124,6 +124,7 @@ async def unified_chat_stream(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     log_entry: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     # Keep tests monkeypatching augmentedquill.services.llm.llm.httpx effective.
     """Unified Chat Stream."""
@@ -140,6 +141,7 @@ async def unified_chat_stream(
         temperature=temperature,
         max_tokens=max_tokens,
         log_entry=log_entry,
+        skip_validation=skip_validation,
     ):
         yield chunk
 
