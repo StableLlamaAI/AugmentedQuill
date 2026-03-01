@@ -51,14 +51,14 @@ async def _create_gen_source(prepared: dict):
             timeout_s=prepared["timeout_s"],
         ):
             yield chunk
-    except ServiceError:
+    except ServiceError as e:
         # Re-raise service errors as they are handled by the global exception handler for REST,
         # but for streaming we might need to yield an error event.
         # Security: Mask internal error details to prevent information exposure.
-        yield f"data: {json.dumps({'error': 'A service error occurred during generation.'})}\n\n"
-    except Exception:
+        yield f"data: {json.dumps({'error': f'A service error occurred during generation: {e.detail}'})}\n\n"
+    except Exception as e:
         # Mask internal errors to avoid information exposure
-        yield f"data: {json.dumps({'error': 'An internal error occurred during generation.'})}\n\n"
+        yield f"data: {json.dumps({'error': f'An internal error occurred during generation. {e}'})}\n\n"
 
 
 def _as_streaming_response(gen_factory, media_type: str = "text/plain"):
@@ -143,11 +143,11 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail="An internal story suggestion error occurred.",
+            detail=f"An internal story suggestion error occurred: {e}",
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=500, detail="An internal story suggestion error occurred."
+            status_code=500, detail=f"An internal story suggestion error occurred: {e}"
         )
 
 
@@ -174,11 +174,11 @@ async def api_story_summary_stream(request: Request):
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail="An internal story summary error occurred.",
+            detail=f"An internal story summary error occurred: {e}",
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=500, detail="An internal story summary error occurred."
+            status_code=500, detail=f"An internal story summary error occurred: {e}"
         )
 
 
@@ -198,11 +198,12 @@ async def api_story_write_stream(request: Request):
         )
     except ServiceError as e:
         raise HTTPException(
-            status_code=e.status_code, detail="An internal story write error occurred."
+            status_code=e.status_code,
+            detail=f"An internal story write error occurred: {e}",
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=500, detail="An internal story write error occurred."
+            status_code=500, detail=f"An internal story write error occurred: {e}"
         )
 
 
@@ -234,11 +235,11 @@ async def api_story_continue_stream(request: Request):
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail="An internal story continue error occurred.",
+            detail=f"An internal story continue error occurred: {e}",
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=500, detail="An internal story continue error occurred."
+            status_code=500, detail=f"An internal story continue error occurred: {e}"
         )
 
 
@@ -261,9 +262,10 @@ async def api_story_story_summary_stream(request: Request):
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail="An internal story-wide summary error occurred.",
+            detail=f"An internal story-wide summary error occurred: {e}",
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=500, detail="An internal story-wide summary error occurred."
+            status_code=500,
+            detail=f"An internal story-wide summary error occurred: {e}",
         )

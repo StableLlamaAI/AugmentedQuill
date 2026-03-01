@@ -206,7 +206,7 @@ async def _execute_llm_request(url, headers, body, timeout_s):
             log_entry["response"]["error_detail"] = str(e)
             log_entry["response"][
                 "error"
-            ] = "An internal error occurred during the LLM request."
+            ] = f"An internal error occurred during the LLM request: {e}"
             raise
 
 
@@ -349,7 +349,7 @@ async def openai_chat_complete_stream(
             log_entry["response"]["error_detail"] = str(e)
             log_entry["response"][
                 "error"
-            ] = "An internal error occurred during the LLM request."
+            ] = f"An internal error occurred during the LLM request: {e}"
             raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
@@ -429,7 +429,7 @@ async def openai_completions_stream(
             log_entry["response"]["error_detail"] = str(e)
             log_entry["response"][
                 "error"
-            ] = "An internal error occurred during the LLM request."
+            ] = f"An internal error occurred during the LLM request: {e}"
             raise
         finally:
             log_entry["timestamp_end"] = datetime.datetime.now().isoformat()

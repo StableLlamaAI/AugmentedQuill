@@ -75,7 +75,9 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
             timeout_s = int(payload.get("timeout_s") or 60)
 
         # Security: Prevent SSRF by validating the base_url
-        llm.llm_completion_ops._validate_base_url(base_url)
+        from augmentedquill.services.llm import llm_completion_ops
+
+        llm_completion_ops._validate_base_url(base_url)
 
         mime_type = "image/png"
         s = img_path.suffix.lower()

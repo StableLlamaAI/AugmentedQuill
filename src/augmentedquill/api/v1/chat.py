@@ -258,9 +258,12 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                     yield f"data: {_json.dumps({'thinking': chunk['thinking']})}\n\n"
                 if "tool_calls" in chunk:
                     yield f"data: {_json.dumps({'tool_calls': chunk['tool_calls']})}\n\n"
-        except Exception:
-            # Mask internal errors to prevent information exposure
-            yield f"data: {_json.dumps({'error': 'An internal chat stream error occurred.'})}\n\n"
+        except Exception as e:
+            # Mask internal errors to prevent information exposure, but log for debugability
+            import logging
+
+            logging.error(f"Chat stream error: {e}", exc_info=True)
+            yield f"data: {_json.dumps({'error': f'An internal chat stream error occurred: {e}'})}\n\n"
         finally:
             yield "data: [DONE]\n\n"
 
