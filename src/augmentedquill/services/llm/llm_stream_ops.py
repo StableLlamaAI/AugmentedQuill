@@ -285,6 +285,17 @@ async def unified_chat_stream(
                                 for event in events:
                                     yield event
 
+                                if log_entry:
+                                    log_entry["timestamp_end"] = (
+                                        datetime.datetime.now().isoformat()
+                                    )
+                                    # Force re-logging on completion so we get full_content and chunks
+                                    from augmentedquill.services.llm.llm_logging import (
+                                        add_llm_log,
+                                    )
+
+                                    add_llm_log(log_entry)
+
                                 yield {"done": True}
                                 break
 

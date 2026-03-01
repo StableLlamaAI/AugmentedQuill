@@ -24,9 +24,10 @@ def add_llm_log(log_entry: Dict[str, Any]):
 
     If AUGQ_LLM_DUMP is set, also append the raw log to a file.
     """
-    llm_logs.append(log_entry)
-    if len(llm_logs) > 100:
-        llm_logs.pop(0)
+    if log_entry not in llm_logs:
+        llm_logs.append(log_entry)
+        if len(llm_logs) > 100:
+            llm_logs.pop(0)
 
     # Raw logging to file if enabled
     if os.getenv("AUGQ_LLM_DUMP") == "1":
@@ -34,8 +35,45 @@ def add_llm_log(log_entry: Dict[str, Any]):
         log_path = os.getenv("AUGQ_LLM_DUMP_PATH") or default_path
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
+            # Custom formatting: collapse tool definitions to one line each for readability
+            processed_entry = json.loads(json.dumps(log_entry, default=str))
+
+            # If there are tools in the request body, collapse them
+            if (
+                isinstance(processed_entry, dict)
+                and "request" in processed_entry
+                and isinstance(processed_entry["request"], dict)
+                and "body" in processed_entry["request"]
+                and isinstance(processed_entry["request"]["body"], dict)
+                and "tools" in processed_entry["request"]["body"]
+            ):
+
+                tools = processed_entry["request"]["body"]["tools"]
+                if isinstance(tools, list):
+                    collapsed_tools = []
+                    for tool in tools:
+                        collapsed_tools.append(json.dumps(tool, default=str))
+                    # Replace with the collapsed string list for the final JSON dump
+                    processed_entry["request"]["body"]["tools"] = collapsed_tools
+
             with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, default=str) + "\n")
+                f.write("=" * 80 + "\n")
+                f.write(f"TIMESTAMP: {datetime.datetime.now().isoformat()}\n")
+                f.write("-" * 80 + "\n")
+
+                # Render JSON
+                log_text = json.dumps(processed_entry, indent=2, default=str)
+
+                # Post-process to unquote and unescape the collapsed tool strings so they appear as flat JSON lines
+                if "request" in processed_entry:
+                    # Look for the strings we just created that start with tool markers
+                    # This is a bit hacky but keeps the output valid JSON-ish and very readable
+                    for tool in collapsed_tools:
+                        quoted_tool = json.dumps(tool)
+                        log_text = log_text.replace(quoted_tool, tool)
+
+                f.write(log_text + "\n")
+                f.write("=" * 80 + "\n\n")
         except Exception:
             # Silently fail if log cannot be written (dev-only feature)
             pass
