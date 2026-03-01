@@ -407,6 +407,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setEditingProviderId(newProvider.id);
   };
 
+  const duplicateProvider = (id: string) => {
+    setLocalSettings((prev) => {
+      const source = prev.providers.find((p) => p.id === id);
+      if (!source) return prev;
+      const newProvider: LLMConfig = {
+        ...source,
+        id: Date.now().toString(),
+        name: `${source.name} (Copy)`,
+      };
+      setEditingProviderId(newProvider.id);
+      return {
+        ...prev,
+        providers: [...prev.providers, newProvider],
+      };
+    });
+  };
+
   const updateProvider = (id: string, updates: Partial<LLMConfig>) => {
     setLocalSettings((prev) => ({
       ...prev,
@@ -557,6 +574,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 theme={theme}
                 defaultPrompts={defaultPrompts}
                 onAddProvider={addProvider}
+                onDuplicateProvider={duplicateProvider}
                 onUpdateProvider={updateProvider}
                 onRemoveProvider={removeProvider}
               />
