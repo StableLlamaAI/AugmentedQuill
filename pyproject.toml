@@ -7,7 +7,7 @@ name = "AugmentedQuill"
 version = "0.1.0"
 description = "Web GUI for LLM assisted prose writing"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     {name = "StableLlamaAI"},
 ]

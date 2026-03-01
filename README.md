@@ -43,7 +43,7 @@ You can convert between project types in the Settings panel, with validation to 
 
 The application follows a modular FastAPI architecture:
 
-- **Backend**: FastAPI with modular routers for different API endpoints (Python 3.11+).
+- **Backend**: FastAPI with modular routers for different API endpoints (Python 3.12+).
 - **Frontend**: React SPA served by FastAPI (built with Vite, TypeScript).
 - **Configuration**: JSON-based config files with environment variable support, versioning, and schema validation.
 - **LLM Integration**: Client-side integration with OpenAI-compatible APIs (OpenAI, local models like Ollama/vLLM).
