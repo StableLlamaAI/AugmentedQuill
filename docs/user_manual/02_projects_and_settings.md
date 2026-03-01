@@ -80,8 +80,9 @@ The left column of the Machine Settings tab shows all configured providers as cl
 - A **connection status dot**: green = connected, red = failed, grey = not yet tested.
 - A **model status dot**: shows whether the configured model ID was confirmed available.
 - **Vision** (<img src="assets/eye.svg" alt="Eye icon" width="16" height="16" style="vertical-align:text-bottom;" />) and/or **Function Calling** (<img src="assets/wand.svg" alt="Wand icon" width="16" height="16" style="vertical-align:text-bottom;" />) capability icons when those features are enabled.
+- Duplication icon (<img src="assets/copy-plus.svg" alt="Copy Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />): appears on hover over the provider card.
 
-Click the **+** button above the list to add a new provider. Click any card to select it for editing.
+Click the **+** button above the list to add a new provider from scratch. Click the **Duplicate** icon (<img src="assets/copy-plus.svg" alt="Copy Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />) on an existing provider's card to create an exact copy of its configuration (including prompt overrides). This is useful for testing different temperatures or prompts on the same model. Click any card to select it for editing.
 
 ### Provider Configuration Form
 

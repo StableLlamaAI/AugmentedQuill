@@ -19,6 +19,7 @@ import {
   Key,
   ChevronDown,
   Plus,
+  CopyPlus,
   Eye,
   Wand2,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ interface SettingsMachineProps {
     user_prompts: Record<string, string>;
   };
   onAddProvider: () => void;
+  onDuplicateProvider: (id: string) => void;
   onUpdateProvider: (id: string, updates: Partial<LLMConfig>) => void;
   onRemoveProvider: (id: string) => void;
 }
@@ -60,6 +62,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   theme,
   defaultPrompts,
   onAddProvider,
+  onDuplicateProvider,
   onUpdateProvider,
   onRemoveProvider,
 }) => {
@@ -176,7 +179,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
             <div
               key={p.id}
               onClick={() => setEditingProviderId(p.id)}
-              className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 ${
+              className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 group ${
                 editingProviderId === p.id
                   ? 'bg-brand-50 border-brand-500/50'
                   : isLight
@@ -248,22 +251,38 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {p.id === localSettings.activeWritingProviderId && (
-                  <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
-                    <BookOpen size={10} /> Writing
-                  </span>
-                )}
-                {p.id === localSettings.activeEditingProviderId && (
-                  <span className="text-[9px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded border border-fuchsia-200 flex items-center gap-1">
-                    <Edit2 size={10} /> Editing
-                  </span>
-                )}
-                {p.id === localSettings.activeChatProviderId && (
-                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                    <MessageSquare size={10} /> Chat
-                  </span>
-                )}
+              <div className="flex justify-between items-start">
+                <div className="flex flex-wrap gap-1">
+                  {p.id === localSettings.activeWritingProviderId && (
+                    <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
+                      <BookOpen size={10} /> Writing
+                    </span>
+                  )}
+                  {p.id === localSettings.activeEditingProviderId && (
+                    <span className="text-[9px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded border border-fuchsia-200 flex items-center gap-1">
+                      <Edit2 size={10} /> Editing
+                    </span>
+                  )}
+                  {p.id === localSettings.activeChatProviderId && (
+                    <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                      <MessageSquare size={10} /> Chat
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDuplicateProvider(p.id);
+                  }}
+                  className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                    isLight
+                      ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-200'
+                      : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-700'
+                  }`}
+                  title="Duplicate provider"
+                >
+                  <CopyPlus size={12} />
+                </button>
               </div>
             </div>
           ))}
