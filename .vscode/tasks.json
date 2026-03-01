@@ -13,6 +13,15 @@
       "presentation": {
         "reveal": "silent"
       }
+    },
+    {
+      "label": "backend: clear-llm-log",
+      "type": "shell",
+      "command": "rm -f ${workspaceFolder}/data/logs/llm_raw.log",
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      }
     }
   ]
 }

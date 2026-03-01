@@ -309,8 +309,14 @@ async def unified_chat_stream(
                                     continue
                                 delta = choices[0].get("delta", {})
 
-                                reasoning = delta.get("reasoning_content")
+                                reasoning = delta.get("reasoning_content") or delta.get(
+                                    "reasoning"
+                                )
                                 if reasoning:
+                                    if log_entry:
+                                        if "thinking" not in log_entry["response"]:
+                                            log_entry["response"]["thinking"] = ""
+                                        log_entry["response"]["thinking"] += reasoning
                                     yield {"thinking": reasoning}
 
                                 content = delta.get("content")

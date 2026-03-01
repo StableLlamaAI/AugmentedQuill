@@ -39,6 +39,7 @@ def add_llm_log(log_entry: Dict[str, Any]):
             processed_entry = json.loads(json.dumps(log_entry, default=str))
 
             # If there are tools in the request body, collapse them
+            collapsed_tools = []
             if (
                 isinstance(processed_entry, dict)
                 and "request" in processed_entry
@@ -50,7 +51,6 @@ def add_llm_log(log_entry: Dict[str, Any]):
 
                 tools = processed_entry["request"]["body"]["tools"]
                 if isinstance(tools, list):
-                    collapsed_tools = []
                     for tool in tools:
                         collapsed_tools.append(json.dumps(tool, default=str))
                     # Replace with the collapsed string list for the final JSON dump
@@ -65,7 +65,7 @@ def add_llm_log(log_entry: Dict[str, Any]):
                 log_text = json.dumps(processed_entry, indent=2, default=str)
 
                 # Post-process to unquote and unescape the collapsed tool strings so they appear as flat JSON lines
-                if "request" in processed_entry:
+                if "request" in processed_entry and collapsed_tools:
                     # Look for the strings we just created that start with tool markers
                     # This is a bit hacky but keeps the output valid JSON-ish and very readable
                     for tool in collapsed_tools:

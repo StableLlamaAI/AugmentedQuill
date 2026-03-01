@@ -371,6 +371,18 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                                 </div>
                               </div>
                             )}
+                            {log.response.thinking && (
+                              <div className="space-y-1">
+                                <span className="text-blue-400">thinking:</span>
+                                <div
+                                  className={
+                                    'mt-1 p-2 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 whitespace-pre-wrap font-sans text-sm italic'
+                                  }
+                                >
+                                  {log.response.thinking}
+                                </div>
+                              </div>
+                            )}
                             <div className="space-y-1">
                               <span className="text-blue-400">full_content:</span>
                               <div
