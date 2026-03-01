@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the llm unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""LLM adapter facade.
+"""Defines the llm unit so this responsibility stays isolated, testable, and easy to evolve.
+
 
 Public API is kept stable while implementations are split into:
 - llm_stream_ops: streaming + tool parsing stream pipeline
@@ -79,11 +79,10 @@ def resolve_openai_credentials(
 
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
     if not (isinstance(models, list) and models):
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400,
-            detail="No OpenAI models configured. Configure openai.models[] in machine.json.",
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
         )
 
     chosen = find_model_in_list(models, selected_name) or models[0]
@@ -101,11 +100,9 @@ def resolve_openai_credentials(
         api_key = env_key
 
     if not base_url or not model_id:
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400, detail="Missing base_url or model in configuration"
-        )
+        raise ConfigurationError("Missing base_url or model in configuration")
 
     try:
         ts = int(timeout_s or 60)
@@ -127,8 +124,10 @@ async def unified_chat_stream(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     log_entry: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     # Keep tests monkeypatching augmentedquill.services.llm.llm.httpx effective.
+    """Unified Chat Stream."""
     _llm_stream_ops.httpx = httpx
     async for chunk in _llm_stream_ops.unified_chat_stream(
         messages=messages,
@@ -142,6 +141,7 @@ async def unified_chat_stream(
         temperature=temperature,
         max_tokens=max_tokens,
         log_entry=log_entry,
+        skip_validation=skip_validation,
     ):
         yield chunk
 
@@ -158,7 +158,9 @@ async def unified_chat_complete(
     tool_choice: str | None = None,
     temperature: float = 0.7,
     max_tokens: int | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Unified Chat Complete."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.unified_chat_complete(
         messages=messages,
@@ -171,6 +173,7 @@ async def unified_chat_complete(
         tool_choice=tool_choice,
         temperature=temperature,
         max_tokens=max_tokens,
+        skip_validation=skip_validation,
     )
 
 
@@ -182,7 +185,9 @@ async def openai_chat_complete(
     model_id: str,
     timeout_s: int,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Openai Chat Complete."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_chat_complete(
         messages=messages,
@@ -191,6 +196,7 @@ async def openai_chat_complete(
         model_id=model_id,
         timeout_s=timeout_s,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     )
 
 
@@ -203,7 +209,9 @@ async def openai_completions(
     timeout_s: int,
     n: int = 1,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Openai Completions."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_completions(
         prompt=prompt,
@@ -213,6 +221,7 @@ async def openai_completions(
         timeout_s=timeout_s,
         n=n,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     )
 
 
@@ -223,7 +232,9 @@ async def openai_chat_complete_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    skip_validation: bool = False,
 ) -> AsyncIterator[str]:
+    """Openai Chat Complete Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_chat_complete_stream(
         messages=messages,
@@ -231,6 +242,7 @@ async def openai_chat_complete_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        skip_validation=skip_validation,
     ):
         yield chunk
 
@@ -243,7 +255,9 @@ async def openai_completions_stream(
     model_id: str,
     timeout_s: int,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[str]:
+    """Openai Completions Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_completions_stream(
         prompt=prompt,
@@ -252,5 +266,6 @@ async def openai_completions_stream(
         model_id=model_id,
         timeout_s=timeout_s,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     ):
         yield chunk

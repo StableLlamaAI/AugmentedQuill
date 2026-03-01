@@ -4,14 +4,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the config unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the config unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Configuration loading utilities for AugmentedQuill.
 
 Conventions:
-- Machine-specific config: config/machine.json
-- Story-specific config: config/story.json
+- Machine-specific config: resources/config/machine.json
+- Story-specific config: resources/config/story.json
 - Environment variables override JSON values.
 - JSON values can reference environment variables using ${VAR_NAME} placeholders.
 
@@ -41,6 +41,8 @@ LOGS_DIR = DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 
 CURRENT_SCHEMA_VERSION = 2
+DEFAULT_MACHINE_CONFIG_PATH = CONFIG_DIR / "machine.json"
+DEFAULT_STORY_CONFIG_PATH = CONFIG_DIR / "story.json"
 
 
 def _get_story_schema(version: int) -> Dict[str, Any]:
@@ -59,12 +61,9 @@ def _interpolate_env(value: Any) -> Any:
     Non-string types are returned unchanged.
     """
     if isinstance(value, str):
-
-        def replace(match: re.Match[str]) -> str:
-            var = match.group(1)
-            return os.getenv(var, match.group(0))  # leave placeholder if unset
-
-        return _ENV_PATTERN.sub(replace, value)
+        return _ENV_PATTERN.sub(
+            lambda match: os.getenv(match.group(1), match.group(0)), value
+        )
     if isinstance(value, dict):
         return {k: _interpolate_env(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -138,7 +137,7 @@ def _env_overrides_for_openai() -> Dict[str, Any]:
 
 
 def load_machine_config(
-    path: os.PathLike[str] | str | None = "config/machine.json",
+    path: os.PathLike[str] | str | None = DEFAULT_MACHINE_CONFIG_PATH,
     defaults: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Load machine configuration applying precedence and interpolation.
@@ -155,7 +154,7 @@ def load_machine_config(
 
 
 def load_story_config(
-    path: os.PathLike[str] | str | None = "config/story.json",
+    path: os.PathLike[str] | str | None = DEFAULT_STORY_CONFIG_PATH,
     defaults: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Load story-specific configuration with env interpolation only.
@@ -176,6 +175,7 @@ def load_story_config(
 
 
 def save_story_config(path: os.PathLike[str] | str, config: Dict[str, Any]) -> None:
+    """Save Story Config."""
     p = Path(path)
     if not p.parent.exists():
         p.parent.mkdir(parents=True)

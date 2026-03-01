@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from fastapi import APIRouter
 from augmentedquill.services.llm.llm import llm_logs
@@ -12,10 +13,7 @@ from augmentedquill.services.llm.llm import llm_logs
 router = APIRouter(prefix="/debug", tags=["debug"])
 
 
-@router.get("/llm_logs")
-async def get_llm_logs():
-    """Return the list of LLM communication logs."""
-    return llm_logs
+router.add_api_route("/llm_logs", endpoint=lambda: llm_logs, methods=["GET"])
 
 
 @router.delete("/llm_logs")

@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test metadata endpoints unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test metadata endpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import os
 import tempfile
@@ -92,7 +93,8 @@ class MetadataEndpointsTest(TestCase):
         chap_id = create_new_chapter("My Chapter")
         payload = {"conflicts": "not a list"}
         resp = self.client.put(f"/api/v1/chapters/{chap_id}/metadata", json=payload)
-        self.assertEqual(resp.status_code, 400)
+        # 422 is returned by FastAPI/Pydantic when validation fails
+        self.assertEqual(resp.status_code, 422)
 
     def test_update_chapter_metadata_missing_entry(self):
         """Test that update works even if the metadata entry is missing from story.json."""

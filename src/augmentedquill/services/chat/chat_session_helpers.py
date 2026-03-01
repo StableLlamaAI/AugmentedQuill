@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chat session helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chat session helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -15,20 +16,9 @@ from pathlib import Path
 from typing import Dict, List
 
 
-def _now_iso() -> str:
-    return datetime.now().isoformat()
-
-
-def _ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def get_chats_dir(project_path: Path) -> Path:
-    return project_path / "chats"
-
-
 def list_chats(project_path: Path) -> List[Dict]:
-    chats_dir = get_chats_dir(project_path)
+    """List Chats."""
+    chats_dir = project_path / "chats"
     if not chats_dir.exists():
         return []
 
@@ -54,7 +44,8 @@ def list_chats(project_path: Path) -> List[Dict]:
 
 
 def load_chat(project_path: Path, chat_id: str) -> Dict | None:
-    chat_file = get_chats_dir(project_path) / f"{chat_id}.json"
+    """Load Chat."""
+    chat_file = project_path / "chats" / f"{chat_id}.json"
     if not chat_file.exists():
         return None
     try:
@@ -64,17 +55,18 @@ def load_chat(project_path: Path, chat_id: str) -> Dict | None:
 
 
 def save_chat(project_path: Path, chat_id: str, chat_data: Dict) -> None:
-    chats_dir = get_chats_dir(project_path)
-    _ensure_dir(chats_dir)
+    """Save Chat."""
+    chats_dir = project_path / "chats"
+    (chats_dir).mkdir(parents=True, exist_ok=True)
     chat_file = chats_dir / f"{chat_id}.json"
-    chat_data["updated_at"] = _now_iso()
+    chat_data["updated_at"] = datetime.now().isoformat()
     if "created_at" not in chat_data:
         chat_data["created_at"] = chat_data["updated_at"]
     chat_file.write_text(json.dumps(chat_data, indent=2), encoding="utf-8")
 
 
 def delete_chat(project_path: Path, chat_id: str) -> bool:
-    chat_file = get_chats_dir(project_path) / f"{chat_id}.json"
+    chat_file = project_path / "chats" / f"{chat_id}.json"
     if not chat_file.exists():
         return False
     chat_file.unlink()
@@ -82,7 +74,7 @@ def delete_chat(project_path: Path, chat_id: str) -> bool:
 
 
 def delete_all_chats(project_path: Path) -> None:
-    chats_dir = get_chats_dir(project_path)
+    chats_dir = project_path / "chats"
     if chats_dir.exists():
         shutil.rmtree(chats_dir)
     chats_dir.mkdir(parents=True, exist_ok=True)

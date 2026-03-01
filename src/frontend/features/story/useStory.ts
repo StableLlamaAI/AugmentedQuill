@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { StoryState, Chapter, Book } from '../../types';
@@ -309,10 +312,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const chaptersRes = await api.chapters.list();
       const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
 
-      // Prefer backend-returned identity, then fallback to list tail for compatibility.
-      const newChapter =
-        newChapters.find((c) => c.id === String(res.id)) ||
-        newChapters[newChapters.length - 1];
+      const newChapter = newChapters.find((c) => c.id === String(res.id));
+      if (!newChapter) {
+        throw new Error('Created chapter not found in refreshed chapter list');
+      }
 
       const newState: StoryState = {
         ...story,

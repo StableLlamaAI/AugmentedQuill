@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the settings update ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the settings update ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ def run_story_config_update(
     story_path: Path | None,
     current_schema_version: int,
 ) -> tuple[bool, str]:
+    """Run Story Config Update."""
     target_story_path = story_path or (config_dir / "story.json")
 
     defaults = {}

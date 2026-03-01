@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
 API endpoints for project-related operations including creation, deletion, and management.
 """
 
@@ -84,36 +84,38 @@ async def api_books_delete(body: BookDeleteRequest) -> JSONResponse:
 
 
 @router.get("/projects/images/list")
-async def api_list_images() -> JSONResponse:
+async def api_projects_images_list() -> JSONResponse:
     return list_images_response()
 
 
 @router.post("/projects/images/update_description")
-async def api_update_image_description(
+async def api_projects_images_update_description(
     body: ImageDescriptionUpdateRequest,
 ) -> JSONResponse:
     return update_image_description_response(body.model_dump())
 
 
 @router.post("/projects/images/create_placeholder")
-async def api_create_image_placeholder(body: ImagePlaceholderRequest) -> JSONResponse:
+async def api_projects_images_create_placeholder(
+    body: ImagePlaceholderRequest,
+) -> JSONResponse:
     return create_image_placeholder_response(body.model_dump())
 
 
 @router.post("/projects/images/upload")
-async def api_upload_image(
+async def api_projects_images_upload(
     file: UploadFile = File(...), target_name: str | None = None
 ) -> JSONResponse:
     return await upload_image_response(file=file, target_name=target_name)
 
 
 @router.post("/projects/images/delete")
-async def api_delete_image(body: ImageDeleteRequest) -> JSONResponse:
+async def api_projects_images_delete(body: ImageDeleteRequest) -> JSONResponse:
     return delete_image_response(body.model_dump())
 
 
 @router.get("/projects/images/{filename}")
-async def api_projects_get_image(filename: str):
+async def api_projects_images_get(filename: str):
     return get_image_file_response(filename)
 
 

@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the debug logs unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the debug logs unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -365,6 +368,18 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                                   {typeof log.response.error === 'string'
                                     ? log.response.error
                                     : JSON.stringify(log.response.error, null, 2)}
+                                </div>
+                              </div>
+                            )}
+                            {log.response.thinking && (
+                              <div className="space-y-1">
+                                <span className="text-blue-400">thinking:</span>
+                                <div
+                                  className={
+                                    'mt-1 p-2 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 whitespace-pre-wrap font-sans text-sm italic'
+                                  }
+                                >
+                                  {log.response.thinking}
                                 </div>
                               </div>
                             )}

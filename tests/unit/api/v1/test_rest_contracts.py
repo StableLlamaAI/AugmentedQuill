@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Adds REST API contract tests for successful execution and graceful invalid-input handling across backend endpoints.
+
+"""Adds REST API contract tests for successful execution and graceful invalid-input handling across backend endpoints."""
 
 import io
 import json
@@ -75,7 +76,7 @@ class RestContractsTest(TestCase):
         # Graceful malformed JSON handling
         r_bad = self.client.post(
             "/api/v1/chat/tools",
-            data="{not-json",
+            content="{not-json",
             headers={"content-type": "application/json"},
         )
         self.assertEqual(r_bad.status_code, 400)
@@ -108,7 +109,7 @@ class RestContractsTest(TestCase):
 
         r_settings_bad = self.client.post(
             "/api/v1/settings",
-            data="{bad-json",
+            content="{bad-json",
             headers={"content-type": "application/json"},
         )
         self.assertEqual(r_settings_bad.status_code, 400)
@@ -323,7 +324,7 @@ class RestContractsTest(TestCase):
 
         r_invalid = self.client.post(
             "/api/v1/openai/models",
-            data="{bad-json",
+            content="{bad-json",
             headers={"content-type": "application/json"},
         )
         self.assertEqual(r_invalid.status_code, 400)

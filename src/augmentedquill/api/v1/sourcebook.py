@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the sourcebook unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the sourcebook unit so this responsibility stays isolated, testable, and easy to evolve.
+
 API endpoints for managing the sourcebook (knowledge base) associated with a project.
 """
 
@@ -16,10 +16,10 @@ from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_list,
-    sb_create,
-    sb_update,
-    sb_delete,
+    sourcebook_list_entries,
+    sourcebook_create_entry,
+    sourcebook_update_entry,
+    sourcebook_delete_entry,
 )
 
 router = APIRouter(tags=["Sourcebook"])
@@ -55,16 +55,17 @@ async def get_sourcebook() -> List[SourcebookEntry]:
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
-    return [SourcebookEntry(**entry) for entry in sb_list()]
+    return [SourcebookEntry(**entry) for entry in sourcebook_list_entries()]
 
 
 @router.post("/sourcebook")
 async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEntry:
+    """Create Sourcebook Entry."""
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    created = sb_create(
+    created = sourcebook_create_entry(
         name=entry.name,
         description=entry.description,
         category=entry.category,
@@ -79,11 +80,12 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
 async def update_sourcebook_entry(
     entry_name: str, updates: SourcebookEntryUpdate
 ) -> SourcebookEntry:
+    """Update Sourcebook Entry."""
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    result = sb_update(
+    result = sourcebook_update_entry(
         name_or_id=entry_name,
         name=updates.name,
         description=updates.description,
@@ -99,10 +101,11 @@ async def update_sourcebook_entry(
 
 @router.delete("/sourcebook/{entry_name}")
 async def delete_sourcebook_entry(entry_name: str):
+    """Delete Sourcebook Entry."""
     active = get_active_project_dir()
     if not active:
         raise HTTPException(status_code=400, detail="No active project")
 
-    if not sb_delete(entry_name):
+    if not sourcebook_delete_entry(entry_name):
         raise HTTPException(status_code=404, detail="Entry not found")
     return {"ok": True}

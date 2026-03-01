@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the read unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the read unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from fastapi import APIRouter, HTTPException, Path as FastAPIPath
 
@@ -29,6 +30,7 @@ async def api_chapters() -> ChaptersListResponse:
 async def api_chapter_content(
     chap_id: int = FastAPIPath(..., ge=0)
 ) -> ChapterDetailResponse:
+    """Api Chapter Content."""
     _, path, _ = _chapter_by_id_or_404(chap_id)
     active = get_active_project_dir()
     chapter = chapter_detail_payload(active, chap_id, path)

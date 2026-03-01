@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the header appearance controls unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the header appearance controls unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { RefObject } from 'react';
 import {
@@ -51,6 +54,35 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
   sliderClass,
   setIsDebugLogsOpen,
 }) => {
+  const renderSlider = (
+    icon: React.ReactNode,
+    label: string,
+    valueDisplay: string,
+    min: string,
+    max: string,
+    step: string | undefined,
+    value: number,
+    onChange: (val: number) => void
+  ) => (
+    <div className="space-y-2">
+      <div className={`flex justify-between items-center text-sm ${textMain}`}>
+        <span className="flex items-center gap-2">
+          {icon} {label}
+        </span>
+        <span className="font-mono text-xs text-brand-gray-500">{valueDisplay}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        {...(step ? { step } : {})}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className={sliderClass}
+      />
+    </div>
+  );
+
   return (
     <div className="relative" ref={appearanceRef}>
       <Button
@@ -128,122 +160,56 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
                 </button>
               </div>
             </div>
-            <div className="space-y-2">
-              <div className={`flex justify-between items-center text-sm ${textMain}`}>
-                <span className="flex items-center gap-2">
-                  <Sun size={14} /> Brightness
-                </span>
-                <span className="font-mono text-xs text-brand-gray-500">
-                  {Math.round(editorSettings.brightness * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="100"
-                value={editorSettings.brightness * 100}
-                onChange={(event) =>
-                  setEditorSettings({
-                    ...editorSettings,
-                    brightness: Number(event.target.value) / 100,
-                  })
-                }
-                className={sliderClass}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className={`flex justify-between items-center text-sm ${textMain}`}>
-                <span className="flex items-center gap-2">
-                  <Moon size={14} /> Contrast
-                </span>
-                <span className="font-mono text-xs text-brand-gray-500">
-                  {Math.round(editorSettings.contrast * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="100"
-                value={editorSettings.contrast * 100}
-                onChange={(event) =>
-                  setEditorSettings({
-                    ...editorSettings,
-                    contrast: Number(event.target.value) / 100,
-                  })
-                }
-                className={sliderClass}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className={`flex justify-between items-center text-sm ${textMain}`}>
-                <span className="flex items-center gap-2">
-                  <Type size={14} /> Font Size
-                </span>
-                <span className="font-mono text-xs text-brand-gray-500">
-                  {editorSettings.fontSize}px
-                </span>
-              </div>
-              <input
-                type="range"
-                min="12"
-                max="32"
-                value={editorSettings.fontSize}
-                onChange={(event) =>
-                  setEditorSettings({
-                    ...editorSettings,
-                    fontSize: Number(event.target.value),
-                  })
-                }
-                className={sliderClass}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className={`flex justify-between items-center text-sm ${textMain}`}>
-                <span className="flex items-center gap-2">
-                  <Monitor size={14} /> Line Width
-                </span>
-                <span className="font-mono text-xs text-brand-gray-500">
-                  {editorSettings.maxWidth}ch
-                </span>
-              </div>
-              <input
-                type="range"
-                min="40"
-                max="100"
-                value={editorSettings.maxWidth}
-                onChange={(event) =>
-                  setEditorSettings({
-                    ...editorSettings,
-                    maxWidth: Number(event.target.value),
-                  })
-                }
-                className={sliderClass}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className={`flex justify-between items-center text-sm ${textMain}`}>
-                <span className="flex items-center gap-2">
-                  <SplitSquareHorizontal size={14} /> Sidebar Width
-                </span>
-                <span className="font-mono text-xs text-brand-gray-500">
-                  {editorSettings.sidebarWidth}px
-                </span>
-              </div>
-              <input
-                type="range"
-                min="200"
-                max="600"
-                step="10"
-                value={editorSettings.sidebarWidth}
-                onChange={(event) =>
-                  setEditorSettings({
-                    ...editorSettings,
-                    sidebarWidth: Number(event.target.value),
-                  })
-                }
-                className={sliderClass}
-              />
-            </div>
+            {renderSlider(
+              <Sun size={14} />,
+              'Brightness',
+              `${Math.round(editorSettings.brightness * 100)}%`,
+              '50',
+              '100',
+              undefined,
+              editorSettings.brightness * 100,
+              (val) => setEditorSettings({ ...editorSettings, brightness: val / 100 })
+            )}
+            {renderSlider(
+              <Moon size={14} />,
+              'Contrast',
+              `${Math.round(editorSettings.contrast * 100)}%`,
+              '50',
+              '100',
+              undefined,
+              editorSettings.contrast * 100,
+              (val) => setEditorSettings({ ...editorSettings, contrast: val / 100 })
+            )}
+            {renderSlider(
+              <Type size={14} />,
+              'Font Size',
+              `${editorSettings.fontSize}px`,
+              '12',
+              '32',
+              undefined,
+              editorSettings.fontSize,
+              (val) => setEditorSettings({ ...editorSettings, fontSize: val })
+            )}
+            {renderSlider(
+              <Monitor size={14} />,
+              'Line Width',
+              `${editorSettings.maxWidth}ch`,
+              '40',
+              '100',
+              undefined,
+              editorSettings.maxWidth,
+              (val) => setEditorSettings({ ...editorSettings, maxWidth: val })
+            )}
+            {renderSlider(
+              <SplitSquareHorizontal size={14} />,
+              'Sidebar Width',
+              `${editorSettings.sidebarWidth}px`,
+              '200',
+              '600',
+              '10',
+              editorSettings.sidebarWidth,
+              (val) => setEditorSettings({ ...editorSettings, sidebarWidth: val })
+            )}
           </div>
         </div>
       )}

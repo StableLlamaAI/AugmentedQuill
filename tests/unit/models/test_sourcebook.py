@@ -4,17 +4,18 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test sourcebook unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test sourcebook unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import tempfile
 import os
 from pathlib import Path
 from unittest import TestCase
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_create,
-    sb_get,
-    sb_search,
-    sb_delete,
+    sourcebook_create_entry,
+    sourcebook_get_entry,
+    sourcebook_search_entries,
+    sourcebook_delete_entry,
 )
 
 
@@ -64,7 +65,7 @@ class SourcebookTest(TestCase):
 
     def test_sourcebook_features(self):
         # 1. Create
-        entry = sb_create(
+        entry = sourcebook_create_entry(
             name="Test Character",
             description="A test character description.",
             category="character",
@@ -76,26 +77,26 @@ class SourcebookTest(TestCase):
         self.assertIn("Tester", entry["synonyms"])
 
         # 2. Get
-        fetched = sb_get(entry["id"])
+        fetched = sourcebook_get_entry(entry["id"])
         self.assertIsNotNone(fetched)
         self.assertEqual(fetched["name"], "Test Character")
 
-        fetched_by_name = sb_get("Test Character")
+        fetched_by_name = sourcebook_get_entry("Test Character")
         self.assertEqual(fetched_by_name["id"], entry["id"])
 
-        fetched_by_synonym = sb_get("Tester")
+        fetched_by_synonym = sourcebook_get_entry("Tester")
         self.assertEqual(fetched_by_synonym["id"], entry["id"])
 
         # 3. Search
-        results = sb_search("Tester")
+        results = sourcebook_search_entries("Tester")
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], entry["id"])
 
-        results_desc = sb_search("description")
+        results_desc = sourcebook_search_entries("description")
         self.assertEqual(len(results_desc), 1)
 
         # 4. Delete
-        deleted = sb_delete(entry["id"])
+        deleted = sourcebook_delete_entry(entry["id"])
         self.assertTrue(deleted)
 
-        self.assertIsNone(sb_get(entry["id"]))
+        self.assertIsNone(sourcebook_get_entry(entry["id"]))

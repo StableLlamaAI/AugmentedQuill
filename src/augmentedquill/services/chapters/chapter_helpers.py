@@ -4,13 +4,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chapter helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chapter helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import re
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
-from fastapi import HTTPException
 
+from augmentedquill.services.exceptions import NotFoundError
 from augmentedquill.core.config import load_story_config
 
 
@@ -136,15 +137,15 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, Any]:
 
 
 def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
+    """Chapter By Id Or 404."""
     files = _scan_chapter_files()
     match = next(
         ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
     )
     if not match:
         available = [f[0] for f in files]
-        raise HTTPException(
-            status_code=404,
-            detail=f"Chapter with ID {chap_id} not found. Available chapter IDs: {available}. "
+        raise NotFoundError(
+            f"Chapter with ID {chap_id} not found. Available chapter IDs: {available}. "
             f"Please call get_project_overview to refresh your knowledge of chapter IDs.",
         )
     return match  # (idx, path, pos)

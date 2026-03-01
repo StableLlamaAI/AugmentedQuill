@@ -4,14 +4,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the story api state ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the story api state ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import HTTPException
-
+from augmentedquill.services.exceptions import BadRequestError, PersistenceError
 from augmentedquill.core.config import load_story_config
 from augmentedquill.services.chapters.chapter_helpers import (
     _chapter_by_id_or_404,
@@ -20,24 +20,24 @@ from augmentedquill.services.chapters.chapter_helpers import (
 from augmentedquill.services.projects.projects import get_active_project_dir
 
 
-def get_active_story_or_http_error() -> tuple[Path, Path, dict]:
+def get_active_story_or_raise() -> tuple[Path, Path, dict]:
+    """Get Active Story Or Raise."""
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     return active, story_path, story
 
 
-def get_chapter_locator(chap_id: int) -> tuple[int, Path, int]:
-    return _chapter_by_id_or_404(chap_id)
+get_chapter_locator = _chapter_by_id_or_404
 
 
-def read_text_or_http_500(path: Path, message: str = "Failed to read chapter") -> str:
+def read_text_or_raise(path: Path, message: str = "Failed to read chapter") -> str:
     try:
         return path.read_text(encoding="utf-8")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"{message}: {exc}")
+        raise PersistenceError(f"{message}: {exc}") from exc
 
 
 def get_normalized_chapters(story: dict) -> list[dict]:
@@ -68,6 +68,7 @@ def ensure_chapter_slot(chapters_data: list[dict], pos: int) -> None:
 
 
 def collect_chapter_summaries(chapters_data: list[dict]) -> list[str]:
+    """Collect Chapter Summaries."""
     chapter_summaries: list[str] = []
     for index, chapter in enumerate(chapters_data):
         summary = chapter.get("summary", "").strip()

@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Decorator for defining chat tools with automatic schema generation from Pydantic models.
 
-"""
+"""Decorator for defining chat tools with automatic schema generation from Pydantic models.
+
 Decorator system for chat tools that maintains co-location of schemas and implementations.
 
 This module provides a decorator that:
@@ -36,6 +36,8 @@ from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
+from augmentedquill.services.exceptions import ServiceError
+
 # Global registry of all chat tools
 _TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
 
@@ -51,7 +53,7 @@ def _tool_message(name: str, call_id: str, content) -> dict:
 
 
 def _tool_error(name: str, call_id: str, message: str) -> dict:
-    """Format a tool error message."""
+    """Format a tool error response message."""
     return _tool_message(name, call_id, {"error": message})
 
 
@@ -73,6 +75,7 @@ def chat_tool(
     """
 
     def decorator(func: Callable) -> Callable:
+        """Decorator."""
         tool_name = name or func.__name__
 
         # Extract parameter schema from function signature
@@ -128,19 +131,24 @@ def chat_tool(
         async def wrapper(
             args_obj: dict, call_id: str, payload: dict, mutations: dict
         ) -> dict:
+            """Wrapper."""
             try:
                 # Validate and parse arguments using Pydantic
                 params = params_type.model_validate(args_obj)
             except ValidationError as e:
                 # Return validation error to LLM
                 error_details = e.errors()
-                return _tool_error(
+                return _tool_message(
                     tool_name,
                     call_id,
-                    f"Invalid parameters: {error_details}",
+                    {"error": f"Invalid parameters: {error_details}"},
                 )
             except Exception as e:
-                return _tool_error(tool_name, call_id, f"Validation error: {str(e)}")
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Validation error: {str(e)}"},
+                )
 
             try:
                 # Call the original function with validated params
@@ -148,7 +156,11 @@ def chat_tool(
                 # Wrap the result in tool message format
                 return _tool_message(tool_name, call_id, result)
             except Exception as e:
-                return _tool_error(tool_name, call_id, f"Execution error: {str(e)}")
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Execution error: {str(e)}"},
+                )
 
         # Register the tool
         _TOOL_REGISTRY[tool_name] = {
@@ -173,11 +185,36 @@ def get_tool_function(name: str) -> Callable | None:
     return info["function"] if info else None
 
 
-def get_all_tool_names() -> list[str]:
-    """Return list of all registered tool names."""
-    return list(_TOOL_REGISTRY.keys())
+def ensure_tool_registry_loaded() -> None:
+    """Ensure all chat tool modules are imported so decorator registration has run."""
+    from augmentedquill.services.chat import chat_tools  # noqa: F401
 
 
-def clear_registry():
-    """Clear the tool registry (useful for testing)."""
-    _TOOL_REGISTRY.clear()
+def get_registered_tool_schemas() -> list[dict]:
+    """Get OpenAI tool schemas from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    return get_tool_schemas()
+
+
+async def execute_registered_tool(
+    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+) -> dict:
+    """Execute a tool from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    tool_fn = get_tool_function(name)
+    if tool_fn is None:
+        return _tool_error(name, call_id, f"Unknown tool: {name}")
+
+    try:
+        return await tool_fn(args_obj, call_id, payload, mutations)
+    except ServiceError as e:
+        return _tool_error(name, call_id, f"Tool failed: {e.detail}")
+    except Exception as e:
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": _json.dumps(
+                {"error": f"Tool failed with unexpected error: {e}"}
+            ),
+        }

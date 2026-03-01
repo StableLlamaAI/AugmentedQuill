@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test web search features unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test web search features unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
 from pathlib import Path
@@ -29,7 +30,7 @@ class WebSearchFeaturesTest(TestCase):
     def test_delete_all_chats_endpoint(self):
         """Test the DELETE /api/v1/chats endpoint."""
         import tempfile
-        from augmentedquill.services.projects.projects import delete_all_chats
+        from augmentedquill.services.chat.chat_session_helpers import delete_all_chats
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

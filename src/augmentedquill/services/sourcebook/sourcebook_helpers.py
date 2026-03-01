@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the sourcebook helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the sourcebook helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from typing import List, Optional, Dict
 from augmentedquill.services.projects.projects import get_active_project_dir
@@ -14,6 +15,7 @@ _UNSET = object()
 
 
 def _get_story_data():
+    """Get Story Data."""
     active = get_active_project_dir()
     if not active:
         return None, None
@@ -22,7 +24,8 @@ def _get_story_data():
     return story, story_path
 
 
-def sb_list() -> List[Dict]:
+def sourcebook_list_entries() -> List[Dict]:
+    """Sourcebook List Entries."""
     story, _ = _get_story_data()
     if not story:
         return []
@@ -41,7 +44,8 @@ def sb_list() -> List[Dict]:
     return results
 
 
-def sb_search(query: str) -> List[Dict]:
+def sourcebook_search_entries(query: str) -> List[Dict]:
+    """Sourcebook Search Entries."""
     story, _ = _get_story_data()
     if not story:
         return []
@@ -70,7 +74,8 @@ def sb_search(query: str) -> List[Dict]:
     return results
 
 
-def sb_get(name_or_id: str) -> Optional[Dict]:
+def sourcebook_get_entry(name_or_id: str) -> Optional[Dict]:
+    """Sourcebook Get Entry."""
     if not name_or_id:
         return None
 
@@ -90,12 +95,13 @@ def sb_get(name_or_id: str) -> Optional[Dict]:
     return None
 
 
-def sb_create(
+def sourcebook_create_entry(
     name: str,
     description: str,
     category: str = None,
     synonyms: List[str] | object = _UNSET,
 ) -> Dict:
+    """Create a sourcebook entry for the active project."""
     if not name or not isinstance(name, str) or not name.strip():
         return {"error": "Invalid name: Name must be a non-empty string."}
 
@@ -117,8 +123,7 @@ def sb_create(
     sb_dict = story.get("sourcebook", {})
 
     if name in sb_dict:
-        # Check if it was because of migration
-        pass
+        return {"error": f"Entry '{name}' already exists."}
 
     new_entry_data = {
         "description": description,
@@ -133,7 +138,8 @@ def sb_create(
     return {"id": name, "name": name, **new_entry_data}
 
 
-def sb_delete(name_or_id: str) -> bool:
+def sourcebook_delete_entry(name_or_id: str) -> bool:
+    """Sourcebook Delete Entry."""
     if not name_or_id:
         return False
 
@@ -159,13 +165,14 @@ def sb_delete(name_or_id: str) -> bool:
     return False
 
 
-def sb_update(
+def sourcebook_update_entry(
     name_or_id: str,
     name: str = None,
     description: str = None,
     category: str = None,
     synonyms: List[str] = None,
 ) -> Dict:
+    """Sourcebook Update Entry."""
     if not name_or_id:
         return {"error": "Invalid identifier: name_or_id is required."}
 

@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the shared unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the shared unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 const API_BASE = '/api/v1';
 
@@ -48,4 +51,20 @@ export async function fetchBlob(
     throw new Error(await readErrorMessage(response, fallbackError));
   }
   return response.blob();
+}
+
+export async function postJson<T>(
+  path: string,
+  body: unknown,
+  fallbackError: string
+): Promise<T> {
+  return fetchJson<T>(
+    path,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    fallbackError
+  );
 }

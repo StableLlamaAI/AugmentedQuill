@@ -4,23 +4,26 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
+
 API endpoints for chat sessions and conversational interactions with the LLM writing partner.
 """
 
 import datetime
-import base64
 import augmentedquill.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from augmentedquill.core.config import load_machine_config, CONFIG_DIR
+from augmentedquill.api.v1.http_responses import error_json, ok_json
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
-from augmentedquill.services.chat.chat_tool_dispatcher import exec_chat_tool
-from augmentedquill.services.chat.chat_tools_schema import get_story_tools
+from augmentedquill.services.chat.chat_tool_decorator import (
+    execute_registered_tool,
+    get_registered_tool_schemas,
+)
+from augmentedquill.services.chat.chat_api_helpers import inject_project_images
 from augmentedquill.services.chat.chat_api_stream_ops import (
     normalize_chat_messages,
     resolve_stream_model_context,
@@ -96,10 +99,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
 
     messages = payload.get("messages") or []
     if not isinstance(messages, list):
-        return JSONResponse(
-            status_code=400,
-            content={"ok": False, "detail": "messages must be an array"},
-        )
+        return error_json("messages must be an array", status_code=400)
 
     last = messages[-1] if messages else None
     tool_calls: list = []
@@ -126,7 +126,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
             args_obj = {}
         if not name or not call_id:
             continue
-        msg = await exec_chat_tool(name, args_obj, call_id, payload, mutations)
+        msg = await execute_registered_tool(name, args_obj, call_id, payload, mutations)
         appended.append(msg)
 
     # Log tool execution if there were any
@@ -139,69 +139,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
         add_llm_log(log_entry)
 
-    return JSONResponse(
-        status_code=200,
-        content={"ok": True, "appended_messages": appended, "mutations": mutations},
-    )
-
-
-async def _inject_project_images(messages: list[dict]):
-    if not messages:
-        return
-
-    last_msg = messages[-1]
-    if last_msg.get("role") != "user":
-        return
-
-    content = last_msg.get("content")
-    if not isinstance(content, str):
-        return
-
-    active = get_active_project_dir()
-    if not active:
-        return
-
-    images_dir = active / "images"
-    if not images_dir.exists():
-        return
-
-    found_images = []
-    # Restrict lookup to known image types so user text cannot trigger
-    # accidental binary reads from unrelated project files.
-    allowed = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-
-    for f in images_dir.iterdir():
-        if f.is_file() and f.suffix.lower() in allowed:
-            # Filename matching keeps image attachment explicit and user-controlled.
-            if f.name in content:
-                found_images.append(f)
-
-    if not found_images:
-        return
-
-    # Preserve original text and append matched images as multimodal payload items.
-    new_content = [{"type": "text", "text": content}]
-
-    for path in found_images:
-        try:
-            mime = "image/png"
-            if path.suffix.lower() in [".jpg", ".jpeg"]:
-                mime = "image/jpeg"
-            elif path.suffix.lower() == ".webp":
-                mime = "image/webp"
-            elif path.suffix.lower() == ".gif":
-                mime = "image/gif"
-
-            with open(path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            new_content.append(
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
-            )
-        except Exception:
-            pass
-
-    last_msg["content"] = new_content
+    return ok_json(appended_messages=appended, mutations=mutations)
 
 
 @router.post("/chat/stream")
@@ -213,7 +151,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         "model_name": "name-of-configured-entry" | null,
         "model_type": "CHAT" | "WRITING" | "EDITING" | null,
         "messages": [{"role": "system|user|assistant", "content": str}, ...],
-        // optional overrides (otherwise pulled from config/machine.json)
+        // optional overrides (otherwise pulled from resources/config/machine.json)
         "base_url": str,
         "api_key": str,
         "model": str,
@@ -245,7 +183,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     # Inject images if referenced in the last user message and supported
     if is_multimodal:
-        await _inject_project_images(req_messages)
+        await inject_project_images(req_messages)
 
     # Prepend system message if not present
     ensure_system_message_if_missing(
@@ -281,7 +219,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
-    story_tools = get_story_tools()
+    story_tools = get_registered_tool_schemas()
     if supports_function_calling:
         tool_choice = (payload or {}).get("tool_choice")
         # If the client explicitly requests "none", do not send tools.
@@ -298,26 +236,37 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     add_llm_log(log_entry)
 
     async def _gen():
-        async for chunk in llm.unified_chat_stream(
-            messages=req_messages,
-            base_url=base_url,
-            api_key=api_key,
-            model_id=model_id,
-            timeout_s=timeout_s,
-            supports_function_calling=supports_function_calling,
-            tools=story_tools,
-            tool_choice=tool_choice if tool_choice != "none" else None,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            log_entry=log_entry,
-        ):
-            # Transform to client expected format
-            if "content" in chunk:
-                yield f"data: {_json.dumps({'content': chunk['content']})}\n\n"
-            if "thinking" in chunk:
-                yield f"data: {_json.dumps({'thinking': chunk['thinking']})}\n\n"
-            if "tool_calls" in chunk:
-                yield f"data: {_json.dumps({'tool_calls': chunk['tool_calls']})}\n\n"
+        """Gen."""
+        try:
+            async for chunk in llm.unified_chat_stream(
+                messages=req_messages,
+                base_url=base_url,
+                api_key=api_key,
+                model_id=model_id,
+                timeout_s=timeout_s,
+                supports_function_calling=supports_function_calling,
+                tools=story_tools,
+                tool_choice=tool_choice if tool_choice != "none" else None,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                log_entry=log_entry,
+                skip_validation=True,  # Trust configured models
+            ):
+                # Transform to client expected format
+                if "content" in chunk:
+                    yield f"data: {_json.dumps({'content': chunk['content']})}\n\n"
+                if "thinking" in chunk:
+                    yield f"data: {_json.dumps({'thinking': chunk['thinking']})}\n\n"
+                if "tool_calls" in chunk:
+                    yield f"data: {_json.dumps({'tool_calls': chunk['tool_calls']})}\n\n"
+        except Exception as e:
+            # Mask internal errors to prevent information exposure, but log for debugability
+            import logging
+
+            logging.error(f"Chat stream error: {e}", exc_info=True)
+            yield f"data: {_json.dumps({'error': f'An internal chat stream error occurred: {e}'})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
@@ -334,6 +283,7 @@ async def api_load_chat(chat_id: str):
 
 @router.post("/chats/{chat_id}")
 async def api_save_chat(chat_id: str, request: Request):
+    """Api Save Chat."""
     try:
         data = await request.json()
     except Exception:

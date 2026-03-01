@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test chat sessions unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test chat sessions unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import os
 import tempfile
@@ -16,7 +17,8 @@ from augmentedquill.main import app
 from augmentedquill.services.projects.projects import (
     initialize_project_dir,
     select_project,
-    get_chats_dir,
+)
+from augmentedquill.services.chat.chat_session_helpers import (
     list_chats,
     load_chat,
     save_chat,
@@ -56,7 +58,7 @@ class ChatSessionsTest(TestCase):
 
         # Save
         save_chat(self.project_path, chat_id, chat_data)
-        chats_dir = get_chats_dir(self.project_path)
+        chats_dir = self.project_path / "chats"
         self.assertTrue((chats_dir / f"{chat_id}.json").exists())
 
         # List

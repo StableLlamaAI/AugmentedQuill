@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the settings machine unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the settings machine unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState } from 'react';
 import {
@@ -63,6 +66,79 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
 
   const isLight = theme === 'light';
+
+  const renderCapabilitySelect = (
+    label: string,
+    field: 'isMultimodal' | 'supportsFunctionCalling',
+    detectedField: 'is_multimodal' | 'supports_function_calling'
+  ) => {
+    if (!activeProvider) return null;
+    const val = activeProvider[field];
+    const detected = detectedCapabilities[activeProvider.id]?.[detectedField];
+
+    return (
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          {label}
+        </label>
+        <select
+          value={val === true ? 'true' : val === false ? 'false' : 'auto'}
+          onChange={(e) => {
+            const v = e.target.value;
+            onUpdateProvider(activeProvider.id, {
+              [field]: v === 'auto' ? null : v === 'true',
+            });
+          }}
+          className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+          }`}
+        >
+          <option value="auto">
+            Auto
+            {detected !== undefined ? ` (${detected ? 'Yes' : 'No'})` : ''}
+          </option>
+          <option value="true">Supported</option>
+          <option value="false">Unsupported</option>
+        </select>
+      </div>
+    );
+  };
+
+  const renderSlider = (
+    label: string,
+    field: 'temperature' | 'topP',
+    min: number,
+    max: number,
+    step: number
+  ) => {
+    if (!activeProvider) return null;
+    return (
+      <div className="space-y-2">
+        <div
+          className={`flex justify-between text-xs ${
+            isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
+          }`}
+        >
+          <span>{label}</span> <span>{activeProvider[field]}</span>
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={activeProvider[field]}
+          onChange={(e) =>
+            onUpdateProvider(activeProvider.id, {
+              [field]: Number(e.target.value),
+            })
+          }
+          className="w-full accent-brand-500"
+        />
+      </div>
+    );
+  };
 
   const activeProvider = localSettings.providers.find(
     (p) => p.id === editingProviderId
@@ -530,86 +606,13 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Multimodal (Vision)
-                  </label>
-                  <select
-                    value={
-                      activeProvider.isMultimodal === true
-                        ? 'true'
-                        : activeProvider.isMultimodal === false
-                          ? 'false'
-                          : 'auto'
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdateProvider(activeProvider.id, {
-                        isMultimodal: val === 'auto' ? null : val === 'true',
-                      });
-                    }}
-                    className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                      isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                    }`}
-                  >
-                    <option value="auto">
-                      Auto
-                      {detectedCapabilities[activeProvider.id]?.is_multimodal !==
-                      undefined
-                        ? ` (${
-                            detectedCapabilities[activeProvider.id].is_multimodal
-                              ? 'Yes'
-                              : 'No'
-                          })`
-                        : ''}
-                    </option>
-                    <option value="true">Supported</option>
-                    <option value="false">Unsupported</option>
-                  </select>
-                </div>
+                {renderCapabilitySelect('Multimodal', 'isMultimodal', 'is_multimodal')}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Function Calling
-                  </label>
-                  <select
-                    value={
-                      activeProvider.supportsFunctionCalling === true
-                        ? 'true'
-                        : activeProvider.supportsFunctionCalling === false
-                          ? 'false'
-                          : 'auto'
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdateProvider(activeProvider.id, {
-                        supportsFunctionCalling: val === 'auto' ? null : val === 'true',
-                      });
-                    }}
-                    className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                      isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                    }`}
-                  >
-                    <option value="auto">
-                      Auto
-                      {detectedCapabilities[activeProvider.id]
-                        ?.supports_function_calling !== undefined
-                        ? ` (${
-                            detectedCapabilities[activeProvider.id]
-                              .supports_function_calling
-                              ? 'Yes'
-                              : 'No'
-                          })`
-                        : ''}
-                    </option>
-                    <option value="true">Supported</option>
-                    <option value="false">Unsupported</option>
-                  </select>
-                </div>
+                {renderCapabilitySelect(
+                  'Function Calling',
+                  'supportsFunctionCalling',
+                  'supports_function_calling'
+                )}
               </div>
 
               <div
@@ -625,50 +628,8 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   Parameters
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div
-                      className={`flex justify-between text-xs ${
-                        isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
-                      }`}
-                    >
-                      <span>Temperature</span> <span>{activeProvider.temperature}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      value={activeProvider.temperature}
-                      onChange={(e) =>
-                        onUpdateProvider(activeProvider.id, {
-                          temperature: Number(e.target.value),
-                        })
-                      }
-                      className="w-full accent-brand-500"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div
-                      className={`flex justify-between text-xs ${
-                        isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
-                      }`}
-                    >
-                      <span>Top P</span> <span>{activeProvider.topP}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={activeProvider.topP}
-                      onChange={(e) =>
-                        onUpdateProvider(activeProvider.id, {
-                          topP: Number(e.target.value),
-                        })
-                      }
-                      className="w-full accent-brand-500"
-                    />
-                  </div>
+                  {renderSlider('Temperature', 'temperature', 0, 2, 0.1)}
+                  {renderSlider('Top P', 'topP', 0, 1, 0.05)}
                 </div>
               </div>
 

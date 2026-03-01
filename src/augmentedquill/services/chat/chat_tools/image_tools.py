@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the image tools unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the image tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import base64
 import uuid
@@ -48,6 +49,7 @@ class SetImageMetadataParams(BaseModel):
 
 
 async def _tool_generate_image_description(filename: str, payload: dict) -> str:
+    """Tool Generate Image Description."""
     from augmentedquill.services.llm import llm
     from augmentedquill.utils.image_helpers import get_images_dir, update_image_metadata
 
@@ -71,6 +73,11 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
             api_key = payload.get("api_key")
             model_id = payload.get("model") or payload.get("model_name") or "dummy"
             timeout_s = int(payload.get("timeout_s") or 60)
+
+        # Security: Prevent SSRF by validating the base_url
+        from augmentedquill.services.llm import llm_completion_ops
+
+        llm_completion_ops._validate_base_url(base_url)
 
         mime_type = "image/png"
         s = img_path.suffix.lower()
@@ -126,6 +133,7 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
     description="List all images in the project with their filenames, descriptions, titles, and placeholder status."
 )
 async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
+    """List Images."""
     from augmentedquill.utils.image_helpers import get_project_images
 
     imgs = get_project_images()
@@ -157,6 +165,7 @@ async def generate_image_description(
 async def create_image_placeholder(
     params: CreateImagePlaceholderParams, payload: dict, mutations: dict
 ):
+    """Create Image Placeholder."""
     from augmentedquill.utils.image_helpers import update_image_metadata
 
     filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
@@ -175,6 +184,7 @@ async def create_image_placeholder(
 async def set_image_metadata(
     params: SetImageMetadataParams, payload: dict, mutations: dict
 ):
+    """Set Image Metadata."""
     from augmentedquill.utils.image_helpers import update_image_metadata
 
     update_image_metadata(

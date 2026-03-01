@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use ai actions unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use ai actions unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { Dispatch, SetStateAction, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -109,13 +112,10 @@ export function useAiActions({
         await updateChapter(currentChapter.id, { content: result });
       }
     } catch (error: unknown) {
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: 'model',
-        text: `AI Action Error: ${getErrorMessage(error, 'Failed to perform AI action')}`,
-        isError: true,
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
+      // AI action errors should be handled here, potentially with a notification
+      // rather than injecting into the conversational chat history if not requested.
+      console.error('AI Action Error:', error);
+      notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
       setIsAiActionLoading(false);
     }

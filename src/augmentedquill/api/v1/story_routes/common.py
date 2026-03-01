@@ -4,34 +4,38 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the common unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the common unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from augmentedquill.api.v1.http_responses import error_json
+from augmentedquill.services.exceptions import ServiceError
 
-class StoryApiError(Exception):
-    def __init__(self, detail: str, status_code: int = 400):
-        super().__init__(detail)
-        self.detail = detail
-        self.status_code = status_code
+
+class StoryApiError(ServiceError):
+    """Base domain exception for story-related operations.
+
+    Inherits from ``ServiceError`` so the global handler can catch it,
+    while preserving backward-compatible subclass names used by story routes.
+    """
+
+    default_status_code = 400
 
 
 class StoryBadRequestError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=400)
+    default_status_code = 400
 
 
 class StoryNotFoundError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=404)
+    default_status_code = 404
 
 
 class StoryPersistenceError(StoryApiError):
-    def __init__(self, detail: str):
-        super().__init__(detail=detail, status_code=500)
+    default_status_code = 500
 
 
 async def parse_json_body(request: Request) -> dict:
@@ -42,14 +46,8 @@ async def parse_json_body(request: Request) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def error_json(detail: str, status_code: int = 400) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code, content={"ok": False, "detail": detail}
-    )
-
-
 def map_story_exception(exc: Exception) -> JSONResponse:
-    if isinstance(exc, StoryApiError):
+    if isinstance(exc, ServiceError):
         return error_json(exc.detail, exc.status_code)
     if isinstance(exc, HTTPException):
         return error_json(str(exc.detail), exc.status_code)

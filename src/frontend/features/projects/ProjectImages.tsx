@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the project images unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the project images unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -208,33 +211,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       if (!activeProvider) throw new Error('No active chat provider configured');
 
       const system = prompts?.system_messages?.image_prompt_generator || '';
-      const userContentArray = [];
-      if (img.title) {
-        userContentArray.push(`Title:\n${img.title}`);
-      }
-      if (img.description) {
-        userContentArray.push(`Description:\n${img.description}`);
-      }
-      if (imageStyle) {
-        userContentArray.push(`Project image style:\n${imageStyle}`);
-      }
-      if (imageAdditionalInfo) {
-        userContentArray.push(`Additional information:\n${imageAdditionalInfo}`);
-      }
-      const userContent = userContentArray.join('\n\n');
 
-      await generateSimpleContent(userContent, system, activeProvider, 'EDITING', {
-        tool_choice: 'none',
-        onUpdate: (text) => {
-          const clean = text.replace(/^"|"$/g, '');
-          setPromptPopup((prev) => ({ ...prev, content: clean }));
-        },
+      await generateImagePrompt(img, activeProvider, system, (text) => {
+        setPromptPopup((prev) => ({ ...prev, content: text }));
       });
 
-      setPromptPopup((prev) => {
-        const clean = prev.content.replace(/^"|"$/g, '');
-        return { ...prev, content: clean, loading: false };
-      });
+      setPromptPopup((prev) => ({ ...prev, loading: false }));
     } catch (err: unknown) {
       setPromptPopup((prev) => ({
         ...prev,
@@ -262,23 +244,17 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       for (const img of placeholders) {
         if (!img.description) continue;
 
-        const userContent = `Title: ${img.title || 'Untitled'}\nDescription: ${img.description}\nProject Image Style: ${imageStyle || 'Not specified'}\nAdditional Information: ${imageAdditionalInfo || 'None'}`;
         const system = prompts?.system_messages?.image_prompt_generator || '';
 
         let currentItemText = '';
-        await generateSimpleContent(userContent, system, activeProvider, 'EDITING', {
-          tool_choice: 'none',
-          onUpdate: (text) => {
-            // Normalize output into single-line prompt format expected by generators.
-            const clean = text.replace(/^"|"$/g, '');
-            currentItemText = clean.replace(/[\r\n]+/g, ' ');
-            setPromptPopup((prev) => ({
-              ...prev,
-              content: completedOutput + currentItemText,
-            }));
-          },
+        await generateImagePrompt(img, activeProvider, system, (text) => {
+          currentItemText = text.replace(/[\r\n]+/g, ' ');
+          setPromptPopup((prev) => ({
+            ...prev,
+            content: completedOutput + currentItemText,
+          }));
         });
-        currentItemText = currentItemText.replace(/^"|"$/g, '');
+
         completedOutput += currentItemText + '\n';
         setPromptPopup((prev) => ({ ...prev, content: completedOutput }));
       }

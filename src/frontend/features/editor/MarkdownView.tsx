@@ -4,12 +4,16 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface MarkdownViewProps {
   content: string;
@@ -21,15 +25,6 @@ interface MarkdownViewProps {
 const renderer = new marked.Renderer();
 // @ts-ignore
 renderer.image = (href, title, text) => {
-  type LegacyImageArg = { href?: string; title?: string; text?: string };
-  // Support both legacy positional args and modern object-style image args.
-  if (typeof href === 'object' && href !== null) {
-    const obj = href as LegacyImageArg;
-    href = obj.href;
-    title = obj.title;
-    text = obj.text;
-  }
-
   if (
     typeof href === 'string' &&
     href &&
@@ -48,10 +43,16 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
   simple = false,
 }) => {
   if (!simple) {
+    const rawHtml = marked.parse(content) as string;
+    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+      ADD_TAGS: ['img'],
+      ADD_ATTR: ['src', 'alt', 'title', 'class'],
+    });
+
     return (
       <div
         className={`prose-editor whitespace-normal ${className}`}
-        dangerouslySetInnerHTML={{ __html: marked.parse(content) as string }}
+        dangerouslySetInnerHTML={{ __html: cleanHtml }}
       />
     );
   }

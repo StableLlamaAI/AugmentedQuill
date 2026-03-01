@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test project features unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test project features unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
 import io
@@ -19,8 +20,8 @@ from augmentedquill.services.projects.projects import (
     select_project,
     change_project_type,
     get_active_project_dir,
-    load_story_config,
 )
+from augmentedquill.core.config import load_story_config
 from augmentedquill.services.projects.project_helpers import _project_overview
 from fastapi.testclient import TestClient
 from augmentedquill.main import app

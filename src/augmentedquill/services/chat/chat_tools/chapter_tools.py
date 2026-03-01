@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chapter tools unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chapter tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json as _json
 
@@ -37,6 +38,7 @@ from augmentedquill.services.projects.projects import (
 
 
 def _overview_chapters():
+    """Overview Chapters."""
     ov = _project_overview()
     chapters = []
     if ov.get("project_type") == "series":
@@ -146,6 +148,7 @@ class DeleteChapterParams(BaseModel):
 async def get_chapter_metadata(
     params: GetChapterMetadataParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Metadata."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     _, path, _ = _chapter_by_id_or_404(params.chap_id)
@@ -164,6 +167,7 @@ async def get_chapter_metadata(
 async def update_chapter_metadata(
     params: UpdateChapterMetadataParams, payload: dict, mutations: dict
 ):
+    """Update Chapter Metadata."""
     conflicts = params.conflicts
     if isinstance(conflicts, str):
         try:
@@ -189,6 +193,7 @@ async def update_chapter_metadata(
 async def get_chapter_summaries(
     params: GetChapterSummariesParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Summaries."""
     ov = _project_overview()
     p_type = ov.get("project_type", "novel")
 
@@ -216,6 +221,7 @@ async def get_chapter_summaries(
 async def get_chapter_content(
     params: GetChapterContentParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Content."""
     chap_id = params.chap_id
     if chap_id is None:
         ac = payload.get("active_chapter_id")
@@ -278,6 +284,7 @@ async def continue_chapter(
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict
 ):
+    """Create New Chapter."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}
@@ -296,6 +303,7 @@ async def create_new_chapter(
 async def get_chapter_heading(
     params: GetChapterHeadingParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Heading."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -307,6 +315,7 @@ async def get_chapter_heading(
 async def write_chapter_heading(
     params: WriteChapterHeadingParams, payload: dict, mutations: dict
 ):
+    """Write Chapter Heading."""
     heading = params.heading.strip()
     write_chapter_title(params.chap_id, heading)
     mutations["story_changed"] = True
@@ -320,6 +329,7 @@ async def write_chapter_heading(
 async def get_chapter_summary(
     params: GetChapterSummaryParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Summary."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -331,6 +341,7 @@ async def get_chapter_summary(
     description="Delete a specific chapter. Requires confirmation by setting confirm=true."
 )
 async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: dict):
+    """Delete Chapter."""
     if not params.confirm:
         return {
             "status": "confirmation_required",

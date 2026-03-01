@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Validates all LLM-callable chat tools for successful execution and graceful handling of malformed and invalid tool-call inputs.
+
+"""Validates all LLM-callable chat tools for successful execution and graceful handling of malformed and invalid tool-call inputs."""
 
 import json
 import os
@@ -19,7 +20,9 @@ from fastapi.testclient import TestClient
 import augmentedquill.main as main
 from augmentedquill.services.chat.chat_tools_schema import get_story_tools
 from augmentedquill.services.projects.projects import select_project
-from augmentedquill.services.sourcebook.sourcebook_helpers import sb_create
+from augmentedquill.services.sourcebook.sourcebook_helpers import (
+    sourcebook_create_entry,
+)
 
 
 class ChatToolContractsTest(TestCase):
@@ -92,7 +95,9 @@ class ChatToolContractsTest(TestCase):
             "Initial story content.", encoding="utf-8"
         )
 
-        sb_create(name="Hero Entry", description="A known sourcebook character")
+        sourcebook_create_entry(
+            name="Hero Entry", description="A known sourcebook character"
+        )
 
     def _tool_names(self):
         return [t["function"]["name"] for t in get_story_tools()]

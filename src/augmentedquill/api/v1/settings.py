@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the settings unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the settings unit so this responsibility stays isolated, testable, and easy to evolve.
+
 API endpoints for application and machine settings management.
 """
 
@@ -16,6 +16,7 @@ import json as _json
 
 from augmentedquill.core.config import (
     load_machine_config,
+    save_story_config,
     CURRENT_SCHEMA_VERSION,
     BASE_DIR,
     CONFIG_DIR,
@@ -26,10 +27,10 @@ from augmentedquill.core.prompts import (
     load_model_prompt_overrides,
     DEFAULT_SYSTEM_MESSAGES,
     DEFAULT_USER_PROMPTS,
+    PROMPT_TYPES,
     ensure_string,
 )
 from augmentedquill.services.settings.settings_api_ops import (
-    ensure_parent_dir,
     build_story_cfg_from_payload,
     validate_and_fill_openai_cfg_for_settings,
     clean_machine_openai_cfg_for_put,
@@ -41,14 +42,10 @@ from augmentedquill.services.settings.settings_machine_ops import (
     remote_model_exists,
 )
 from augmentedquill.services.settings.settings_update_ops import run_story_config_update
-from augmentedquill.api.v1.http_responses import error_json, ok_json
-from pathlib import Path
+from augmentedquill.utils.llm_utils import verify_model_capabilities
+from augmentedquill.api.v1.http_responses import error_json
 
 router = APIRouter(tags=["Settings"])
-
-
-def _ensure_parent_dir(path: Path) -> None:
-    ensure_parent_dir(path)
 
 
 @router.post("/settings")
@@ -84,16 +81,14 @@ async def api_settings_post(request: Request) -> JSONResponse:
         active = get_active_project_dir()
         story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
         machine_path = CONFIG_DIR / "machine.json"
-        _ensure_parent_dir(story_path)
-        _ensure_parent_dir(machine_path)
-        from augmentedquill.core.config import save_story_config
-
+        story_path.parent.mkdir(parents=True, exist_ok=True)
+        machine_path.parent.mkdir(parents=True, exist_ok=True)
         save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
         return error_json(f"Failed to write configs: {e}", status_code=500)
 
-    return ok_json({"ok": True})
+    return JSONResponse(content={"ok": True})
 
 
 @router.get("/prompts")
@@ -116,8 +111,6 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
         user_prompts[key] = ensure_string(
             model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
         )
-
-    from augmentedquill.core.prompts import PROMPT_TYPES
 
     return JSONResponse(
         status_code=200,
@@ -205,8 +198,6 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
     model_id_str = str(model_id or "").strip()
     # Perform dynamic capability verification
-    from augmentedquill.utils.llm_utils import verify_model_capabilities
-
     caps = await verify_model_capabilities(
         base_url=base_url,
         api_key=api_key,
@@ -245,7 +236,7 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
 @router.put("/machine")
 async def api_machine_put(request: Request) -> JSONResponse:
-    """Persist machine config to config/machine.json.
+    """Persist machine config to resources/config/machine.json.
 
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
     Returns: { ok: bool, detail?: str }
@@ -265,7 +256,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
 
     try:
         machine_path = CONFIG_DIR / "machine.json"
-        _ensure_parent_dir(machine_path)
+        machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
         return JSONResponse(
@@ -317,7 +308,7 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
     except Exception as e:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
 
-    return ok_json({"ok": True, "tags": tags})
+    return JSONResponse(content={"ok": True, "tags": tags})
 
 
 @router.post("/settings/update_story_config")

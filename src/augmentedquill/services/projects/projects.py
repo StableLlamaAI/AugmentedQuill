@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -14,14 +15,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import os
 
-from augmentedquill.services.chat.chat_session_helpers import (
-    get_chats_dir as _get_chats_dir,
-    list_chats as _list_chats,
-    load_chat as _load_chat,
-    save_chat as _save_chat,
-    delete_chat as _delete_chat,
-    delete_all_chats as _delete_all_chats,
-)
 from augmentedquill.services.projects.project_story_ops import (
     update_book_metadata_in_project,
     read_book_content_in_project,
@@ -60,15 +53,9 @@ from augmentedquill.services.projects.project_lifecycle_ops import (
     select_project_under_root,
 )
 from augmentedquill.core.config import (
-    load_story_config as _load_story_config,
     CONFIG_DIR,
     PROJECTS_ROOT,
 )
-
-
-def get_registry_path() -> Path:
-    # Re-evaluate environment at call time to make tests able to redirect location
-    return Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
 
 
 def get_projects_root() -> Path:
@@ -79,11 +66,6 @@ def get_projects_root() -> Path:
     return Path(os.getenv("AUGQ_PROJECTS_ROOT", str(PROJECTS_ROOT)))
 
 
-def load_story_config(path: Path):
-    """Compatibility wrapper re-exporting story config loading."""
-    return _load_story_config(path)
-
-
 @dataclass
 class ProjectInfo:
     path: Path
@@ -91,50 +73,24 @@ class ProjectInfo:
     reason: str = ""
 
 
-def _now_iso() -> str:
-    return datetime.now().isoformat()
-
-
-def _ensure_dir(p: Path) -> None:
-    p.mkdir(parents=True, exist_ok=True)
-
-
 def load_registry() -> Dict:
-    return load_registry_from_path(get_registry_path())
-
-
-def save_registry(current: str, recent: List[str]) -> None:
-    save_registry_to_path(get_registry_path(), current, recent)
+    return load_registry_from_path(
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
+    )
 
 
 def set_active_project(path: Path) -> None:
     reg = load_registry()
-    current, recent = set_active_project_in_registry(get_registry_path(), path, reg)
-    save_registry(current, recent)
-
-
-def get_chats_dir(project_path: Path) -> Path:
-    return _get_chats_dir(project_path)
-
-
-def list_chats(project_path: Path) -> List[Dict]:
-    return _list_chats(project_path)
-
-
-def load_chat(project_path: Path, chat_id: str) -> Dict | None:
-    return _load_chat(project_path, chat_id)
-
-
-def save_chat(project_path: Path, chat_id: str, chat_data: Dict) -> None:
-    _save_chat(project_path, chat_id, chat_data)
-
-
-def delete_chat(project_path: Path, chat_id: str) -> bool:
-    return _delete_chat(project_path, chat_id)
-
-
-def delete_all_chats(project_path: Path) -> None:
-    _delete_all_chats(project_path)
+    current, recent = set_active_project_in_registry(
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        path,
+        reg,
+    )
+    save_registry_to_path(
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        current,
+        recent,
+    )
 
 
 def get_active_project_dir() -> Path | None:
@@ -159,7 +115,13 @@ def delete_project(name: str) -> Tuple[bool, str]:
         current_registry=load_registry(),
     )
     if ok:
-        save_registry(current, recent)
+        save_registry_to_path(
+            Path(
+                os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))
+            ),
+            current,
+            recent,
+        )
     return ok, msg
 
 
@@ -186,7 +148,7 @@ def initialize_project_dir(
         path=path,
         project_title=project_title,
         project_type=project_type,
-        now_iso=_now_iso(),
+        now_iso=datetime.now().isoformat(),
     )
 
 

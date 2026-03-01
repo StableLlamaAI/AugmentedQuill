@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the config story ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the config story ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ def normalize_validate_story_config(
     current_schema_version: int,
     schema_loader: Callable[[int], Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """Normalize story data to current invariants and validate against schema."""
     metadata = merged.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
@@ -113,7 +115,10 @@ def normalize_validate_story_config(
 
 
 def clean_story_config_for_disk(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip runtime-only fields and normalize sourcebook shape before persistence."""
+
     def _clean_for_disk(data, current_key=None):
+        """Clean For Disk."""
         if isinstance(data, dict):
             res = {}
             for k, v in data.items():

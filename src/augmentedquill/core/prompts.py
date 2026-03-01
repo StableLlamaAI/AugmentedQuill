@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the prompts unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the prompts unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Centralized prompts configuration for LLM interactions.
 
 This module contains all system messages and user prompt templates used throughout the application.
@@ -25,6 +25,7 @@ USER_PROMPTS_JSON_PATH = CONFIG_DIR / "prompts.json"
 
 def _load_prompts() -> Dict[str, Any]:
     # 1. Load internal defaults
+    """Load Prompts."""
     prompts = {"system_messages": {}, "user_prompts": {}, "prompt_types": {}}
     if DEFAULTS_JSON_PATH.exists():
         try:

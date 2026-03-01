@@ -4,13 +4,19 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test chat parser unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test chat parser unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import unittest
+import json
+
 from augmentedquill.services.llm.llm import (
     parse_tool_calls_from_content as _parse_tool_calls_from_content,
 )
-import json
+from augmentedquill.utils.llm_parsing import (
+    parse_complete_assistant_output,
+    parse_stream_channel_fragments,
+)
 
 
 class TestChatParser(unittest.TestCase):
@@ -112,6 +118,42 @@ class TestChatParser(unittest.TestCase):
 
         # Actually let's check what it does.
         pass
+
+    def test_parse_complete_assistant_output_includes_thinking_and_tools(self):
+        content = (
+            "<thinking>internal plan</thinking> "
+            '<tool_call>{"name": "list_images", "arguments": {}}</tool_call> '
+            "Visible answer."
+        )
+        parsed = parse_complete_assistant_output(content)
+        self.assertEqual(parsed["thinking"], "internal plan")
+        self.assertEqual(parsed["content"], "Visible answer.")
+        self.assertEqual(len(parsed["tool_calls"]), 1)
+        self.assertEqual(parsed["tool_calls"][0]["function"]["name"], "list_images")
+
+    def test_parse_stream_channel_fragments_generates_tool_call_event(self):
+        fragments = [
+            {
+                "channel": "commentary to=functions.get_project_overview",
+                "content": '{"verbose": true}',
+            }
+        ]
+        events = parse_stream_channel_fragments(fragments, set())
+        self.assertEqual(len(events), 1)
+        tc = events[0]["tool_calls"][0]
+        self.assertEqual(tc["function"]["name"], "get_project_overview")
+        self.assertEqual(tc["function"]["arguments"], '{"verbose": true}')
+
+    def test_parse_stream_channel_fragments_deduplicates_call_ids(self):
+        seen = {"call_get_project_overview"}
+        fragments = [
+            {
+                "channel": "commentary to=functions.get_project_overview",
+                "content": "{}",
+            }
+        ]
+        events = parse_stream_channel_fragments(fragments, seen)
+        self.assertEqual(events, [])
 
 
 if __name__ == "__main__":

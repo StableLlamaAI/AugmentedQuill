@@ -4,7 +4,10 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the story tools unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the story tools unit so this responsibility stays isolated, testable, and easy to evolve."""
+
+import os
 
 import json as _json
 
@@ -122,6 +125,7 @@ class WriteStorySummaryParams(BaseModel):
 async def get_story_metadata(
     params: GetStoryMetadataParams, payload: dict, mutations: dict
 ):
+    """Get Story Metadata."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     return {
@@ -139,6 +143,7 @@ async def get_story_metadata(
 async def update_story_metadata(
     params: UpdateStoryMetadataParams, payload: dict, mutations: dict
 ):
+    """Update Story Metadata."""
     _update_story_metadata(
         title=params.title, summary=params.summary, notes=params.notes, tags=params.tags
     )
@@ -169,12 +174,17 @@ async def write_story_content(
 async def get_book_metadata(
     params: GetBookMetadataParams, payload: dict, mutations: dict
 ):
+    """Get Book Metadata."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     books = story.get("books", [])
-    target = next((b for b in books if b.get("id") == params.book_id), None)
+
+    # Security: Ensure book_id has no path traversal components
+    book_id = os.path.basename(params.book_id) if params.book_id else ""
+
+    target = next((b for b in books if b.get("id") == book_id), None)
     if not target:
-        return {"error": f"Book ID {params.book_id} not found"}
+        return {"error": f"Book ID {book_id} not found"}
     return {
         "title": target.get("title", ""),
         "summary": target.get("summary", ""),
@@ -188,6 +198,7 @@ async def get_book_metadata(
 async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
 ):
+    """Update Book Metadata."""
     _update_book_metadata(
         params.book_id, title=params.title, summary=params.summary, notes=params.notes
     )
@@ -219,6 +230,7 @@ async def write_book_content(
 async def get_story_summary_tool(
     params: GetStorySummaryParams, payload: dict, mutations: dict
 ):
+    """Get Story Summary Tool."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     summary = story.get("story_summary", "")
@@ -235,6 +247,7 @@ async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: d
 
 @chat_tool(description="Set the tags for the story. Replaces all existing tags.")
 async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: dict):
+    """Set Story Tags."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}
@@ -256,6 +269,7 @@ async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: d
 async def sync_story_summary(
     params: SyncStorySummaryParams, payload: dict, mutations: dict
 ):
+    """Sync Story Summary."""
     from augmentedquill.services.story.story_generation_ops import (
         generate_story_summary,
     )
@@ -269,6 +283,7 @@ async def sync_story_summary(
 async def write_story_summary(
     params: WriteStorySummaryParams, payload: dict, mutations: dict
 ):
+    """Write Story Summary."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}

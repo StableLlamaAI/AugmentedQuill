@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the projects api manage ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the projects api manage ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -12,8 +13,9 @@ import re
 import shutil
 from pathlib import Path
 
-from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+
+from augmentedquill.services.exceptions import BadRequestError
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.projects.project_helpers import (
@@ -40,6 +42,7 @@ def normalize_registry(reg: dict) -> dict:
 
 
 def projects_listing_payload() -> dict:
+    """Projects Listing Payload."""
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
     available = list_projects()
@@ -51,6 +54,7 @@ def projects_listing_payload() -> dict:
 
 
 def delete_project_response(name: str) -> JSONResponse:
+    """Delete Project Response."""
     ok, msg = delete_project(name)
     if not ok:
         return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
@@ -70,6 +74,7 @@ def delete_project_response(name: str) -> JSONResponse:
 
 
 def select_project_response(name: str) -> JSONResponse:
+    """Select Project Response."""
     ok, msg = select_project(name)
     if not ok:
         return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
@@ -124,6 +129,7 @@ def select_project_response(name: str) -> JSONResponse:
 
 
 def create_project_response(name: str, project_type: str) -> JSONResponse:
+    """Create Project Response."""
     ok, msg = create_project(name, project_type=project_type)
     if not ok:
         return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
@@ -144,8 +150,9 @@ def create_project_response(name: str, project_type: str) -> JSONResponse:
 
 
 def convert_project_response(new_type: str) -> JSONResponse:
+    """Convert Project Response."""
     if not new_type:
-        raise HTTPException(status_code=400, detail="new_type is required")
+        raise BadRequestError("new_type is required")
 
     ok, msg = change_project_type(new_type)
     if not ok:
@@ -164,8 +171,9 @@ def convert_project_response(new_type: str) -> JSONResponse:
 
 
 def create_book_response(title: str) -> JSONResponse:
+    """Create Book Response."""
     if not title:
-        raise HTTPException(status_code=400, detail="Book title is required")
+        raise BadRequestError("Book title is required")
 
     try:
         bid = create_new_book(title)
@@ -185,12 +193,13 @@ def create_book_response(title: str) -> JSONResponse:
 
 
 def delete_book_response(book_id: str) -> JSONResponse:
+    """Delete Book Response."""
     if not book_id:
-        raise HTTPException(status_code=400, detail="book_id is required")
+        raise BadRequestError("book_id is required")
 
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}

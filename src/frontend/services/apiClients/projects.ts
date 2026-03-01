@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import {
   ListImagesResponse,
@@ -12,56 +15,40 @@ import {
   ProjectsListResponse,
   ProjectSelectResponse,
 } from '../apiTypes';
-import { fetchBlob, fetchJson } from './shared';
+import { fetchBlob, fetchJson, postJson } from './shared';
 
 export const projectsApi = {
   list: async () =>
     fetchJson<ProjectsListResponse>('/projects', undefined, 'Failed to list projects'),
 
   select: async (name: string) => {
-    return fetchJson<ProjectSelectResponse>(
+    return postJson<ProjectSelectResponse>(
       '/projects/select',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      },
+      { name },
       'Failed to select project'
     );
   },
 
   create: async (name: string, type: 'short-story' | 'novel' | 'series') => {
-    return fetchJson<ProjectMutationResponse>(
+    return postJson<ProjectMutationResponse>(
       '/projects/create',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, type }),
-      },
+      { name, type },
       'Failed to create project'
     );
   },
 
   convert: async (new_type: string) => {
-    return fetchJson<ProjectMutationResponse>(
+    return postJson<ProjectMutationResponse>(
       '/projects/convert',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_type }),
-      },
+      { new_type },
       'Failed to convert project'
     );
   },
 
   delete: async (name: string) => {
-    return fetchJson<ProjectMutationResponse>(
+    return postJson<ProjectMutationResponse>(
       '/projects/delete',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      },
+      { name },
       'Failed to delete project'
     );
   },
@@ -108,25 +95,17 @@ export const projectsApi = {
   },
 
   updateImage: async (filename: string, description?: string, title?: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean }>(
       '/projects/images/update_description',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, description, title }),
-      },
+      { filename, description, title },
       'Failed to update image metadata'
     );
   },
 
   createImagePlaceholder: async (description: string, title?: string) => {
-    return fetchJson<{ ok: boolean; filename: string }>(
+    return postJson<{ ok: boolean; filename: string }>(
       '/projects/images/create_placeholder',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, title }),
-      },
+      { description, title },
       'Failed to create placeholder'
     );
   },
@@ -140,13 +119,9 @@ export const projectsApi = {
   },
 
   deleteImage: async (filename: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean }>(
       '/projects/images/delete',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename }),
-      },
+      { filename },
       'Failed to delete image'
     );
   },

@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the projects api asset ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the projects api asset ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -14,8 +15,14 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
+
+from augmentedquill.services.exceptions import (
+    BadRequestError,
+    NotFoundError,
+    PersistenceError,
+)
 
 from augmentedquill.core.config import load_story_config
 from augmentedquill.utils.image_helpers import (
@@ -39,28 +46,30 @@ def list_images_response() -> JSONResponse:
 
 
 def update_image_description_response(payload: dict) -> JSONResponse:
+    """Update Image Description Response."""
     filename = payload.get("filename")
     description = payload.get("description")
     title = payload.get("title")
 
     if not filename:
-        raise HTTPException(status_code=400, detail="Filename required")
+        raise BadRequestError("Filename required")
 
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     update_image_metadata(filename, description=description, title=title)
     return JSONResponse(status_code=200, content={"ok": True})
 
 
 def create_image_placeholder_response(payload: dict) -> JSONResponse:
+    """Create Image Placeholder Response."""
     description = payload.get("description") or ""
     title = payload.get("title") or "Untitled Placeholder"
 
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
     update_image_metadata(filename, description=description, title=title)
@@ -74,9 +83,10 @@ def _sanitize_target_name(raw: str) -> str:
 async def upload_image_response(
     file: UploadFile, target_name: str | None = None
 ) -> JSONResponse:
+    """Upload Image Response."""
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     images_dir = active / "images"
     images_dir.mkdir(exist_ok=True)
@@ -105,7 +115,7 @@ async def upload_image_response(
         content = await file.read()
         target_path.write_bytes(content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save image: {e}")
+        raise PersistenceError(f"Failed to save image: {e}") from e
 
     return JSONResponse(
         status_code=200,
@@ -118,13 +128,14 @@ async def upload_image_response(
 
 
 def delete_image_response(payload: dict) -> JSONResponse:
+    """Delete Image Response."""
     filename = payload.get("filename")
     if not filename:
-        raise HTTPException(status_code=400, detail="Filename required")
+        raise BadRequestError("Filename required")
 
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        raise BadRequestError("No active project")
 
     img_path = active / "images" / Path(filename).name
     if img_path.exists():
@@ -135,25 +146,27 @@ def delete_image_response(payload: dict) -> JSONResponse:
 
 
 def get_image_file_response(filename: str) -> FileResponse:
+    """Get Image File Response."""
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=404, detail="No active project")
+        raise NotFoundError("No active project")
 
     clean_filename = Path(filename).name
     img_path = active / "images" / clean_filename
     if not img_path.exists():
-        raise HTTPException(status_code=404, detail="Image not found")
+        raise NotFoundError("Image not found")
     return FileResponse(img_path)
 
 
 def export_project_response(name: str | None = None) -> Response:
+    """Export Project Response."""
     if name:
         path = get_projects_root() / name
     else:
         path = get_active_project_dir()
 
     if not path or not path.exists():
-        raise HTTPException(status_code=400, detail="Project not found")
+        raise BadRequestError("Project not found")
 
     mem_zip = io.BytesIO()
     with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -172,8 +185,9 @@ def export_project_response(name: str | None = None) -> Response:
 
 
 async def import_project_response(file: UploadFile) -> JSONResponse:
+    """Import Project Response."""
     if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
+        raise BadRequestError("File must be a ZIP archive")
 
     projects_root = get_projects_root()
     temp_dir = projects_root / f"temp_{uuid.uuid4()}"
@@ -182,13 +196,16 @@ async def import_project_response(file: UploadFile) -> JSONResponse:
     try:
         content = await file.read()
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
-            zf.extractall(temp_dir)
+            for member in zf.infolist():
+                # Prevent Path Traversal (ZipSlip)
+                member_path = Path(member.filename)
+                if member_path.is_absolute() or ".." in member_path.parts:
+                    continue
+                zf.extract(member, temp_dir)
 
         if not (temp_dir / "story.json").exists():
             shutil.rmtree(temp_dir)
-            raise HTTPException(
-                status_code=400, detail="Invalid project: missing story.json"
-            )
+            raise BadRequestError("Invalid project: missing story.json")
 
         story = load_story_config(temp_dir / "story.json") or {}
         proposed_name = story.get("project_title") or "imported_project"
@@ -224,6 +241,6 @@ async def import_project_response(file: UploadFile) -> JSONResponse:
     except Exception as e:
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
-        if isinstance(e, HTTPException):
+        if isinstance(e, (BadRequestError, NotFoundError, PersistenceError)):
             raise
-        raise HTTPException(status_code=500, detail=str(e))
+        raise PersistenceError(str(e)) from e

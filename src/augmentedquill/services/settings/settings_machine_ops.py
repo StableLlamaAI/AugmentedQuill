@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the settings machine ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the settings machine ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -13,10 +14,7 @@ import datetime
 import httpx
 
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
-
-
-def normalize_base_url(base_url: str) -> str:
-    return str(base_url or "").strip().rstrip("/")
+from augmentedquill.services.llm.llm_completion_ops import _validate_base_url
 
 
 def auth_headers(api_key: str | None) -> dict[str, str]:
@@ -27,6 +25,7 @@ def auth_headers(api_key: str | None) -> dict[str, str]:
 
 
 def parse_connection_payload(payload: dict | None) -> tuple[str, str | None, int]:
+    """Parse Connection Payload."""
     base_url = (payload or {}).get("base_url") or ""
     api_key = (payload or {}).get("api_key") or None
     timeout_s = (payload or {}).get("timeout_s")
@@ -40,7 +39,15 @@ def parse_connection_payload(payload: dict | None) -> tuple[str, str | None, int
 async def list_remote_models(
     *, base_url: str, api_key: str | None, timeout_s: int
 ) -> tuple[bool, list[str], str | None]:
-    url = normalize_base_url(base_url) + "/models"
+    """List Remote Models."""
+    url = str(base_url or "").strip().rstrip("/") + "/models"
+    try:
+        # We allow any user-provided URL during the testing phase in settings.
+        # This is because the user is explicitly providing this URL, which confirms trust.
+        _validate_base_url(base_url, skip_validation=True)
+    except ValueError as e:
+        return False, [], str(e)
+
     headers = auth_headers(api_key)
     log_entry = create_log_entry(url, "GET", headers, None)
     add_llm_log(log_entry)
@@ -93,7 +100,15 @@ async def list_remote_models(
 async def remote_model_exists(
     *, base_url: str, api_key: str | None, model_id: str, timeout_s: int
 ) -> tuple[bool, str | None]:
-    base = normalize_base_url(base_url)
+    """Remote Model Exists."""
+    base = str(base_url or "").strip().rstrip("/")
+    try:
+        # We allow any user-provided URL during the testing phase in settings.
+        # This is because the user is explicitly providing this URL, which confirms trust.
+        _validate_base_url(base_url, skip_validation=True)
+    except ValueError as e:
+        return False, str(e)
+
     model_id = str(model_id or "").strip()
     if not model_id:
         return False, "Missing model_id"

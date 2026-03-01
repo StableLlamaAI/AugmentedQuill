@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the llm utils unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the llm utils unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Common LLM-related utility functions, including capability verification and URL normalization.
 """
 
@@ -17,21 +17,18 @@ import asyncio
 PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 
-def _normalize_base_url(base_url: str) -> str:
-    return str(base_url or "").strip().rstrip("/")
-
-
 async def verify_model_capabilities(
     base_url: str, api_key: str | None, model_id: str, timeout_s: int = 10
 ) -> dict:
     """
     Dynamically tests the model for Vision and Function Calling capabilities by sending minimal requests.
     """
-    url = _normalize_base_url(base_url) + "/chat/completions"
+    url = str(base_url or "").strip().rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     headers["Content-Type"] = "application/json"
 
     async def check_vision(client):
+        """Check Vision."""
         try:
             payload = {
                 "model": model_id,
@@ -58,6 +55,7 @@ async def verify_model_capabilities(
             return False
 
     async def check_function_calling(client):
+        """Check Function Calling."""
         try:
             payload = {
                 "model": model_id,

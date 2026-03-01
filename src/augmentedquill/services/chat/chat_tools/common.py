@@ -4,12 +4,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the common unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the common unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json as _json
 
 
 def tool_message(name: str, call_id: str, content) -> dict:
+    """Tool Message."""
     return {
         "role": "tool",
         "tool_call_id": call_id,

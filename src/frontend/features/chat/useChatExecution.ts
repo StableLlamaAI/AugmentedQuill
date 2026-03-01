@@ -4,9 +4,24 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use chat execution unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use chat execution unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { Dispatch, SetStateAction, useRef } from 'react';
+
+const createAssistantMessage = (
+  id: string,
+  result: { text?: string; thinking?: string; functionCalls?: any[] }
+): ChatMessage => ({
+  id,
+  role: 'model',
+  text: result.text || '',
+  thinking: result.thinking,
+  tool_calls: result.functionCalls,
+});
+
 import { v4 as uuidv4 } from 'uuid';
 
 import { api } from '../../services/api';
@@ -44,6 +59,34 @@ export function useChatExecution({
 }: UseChatExecutionParams) {
   const stopSignalRef = useRef(false);
 
+  const upsertChatMessage = (msgId: string, messageUpdate: Partial<ChatMessage>) => {
+    setChatMessages((prev) => {
+      const messageIndex = prev.findIndex((item) => item.id === msgId);
+      if (messageIndex !== -1) {
+        const next = [...prev];
+        next[messageIndex] = {
+          ...next[messageIndex],
+          ...messageUpdate,
+          text: messageUpdate.text ?? next[messageIndex].text,
+          thinking: messageUpdate.thinking ?? next[messageIndex].thinking,
+          traceback: messageUpdate.traceback ?? next[messageIndex].traceback,
+        } as ChatMessage;
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: msgId,
+          role: 'model',
+          text: messageUpdate.text ?? '',
+          thinking: messageUpdate.thinking ?? '',
+          traceback: messageUpdate.traceback ?? '',
+          ...messageUpdate,
+        } as ChatMessage,
+      ];
+    });
+  };
+
   const executeChatRequest = async (
     userText: string,
     history: ChatMessage[],
@@ -72,30 +115,7 @@ export function useChatExecution({
         update: { text?: string; thinking?: string; traceback?: string }
       ) => {
         if (stopSignalRef.current) return;
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === msgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = {
-              ...next[messageIndex],
-              text: update.text ?? next[messageIndex].text,
-              thinking: update.thinking ?? next[messageIndex].thinking,
-              traceback: update.traceback ?? next[messageIndex].traceback,
-            };
-            return next;
-          }
-
-          return [
-            ...prev,
-            {
-              id: msgId,
-              role: 'model',
-              text: update.text ?? '',
-              thinking: update.thinking ?? '',
-              traceback: update.traceback ?? '',
-            },
-          ];
-        });
+        upsertChatMessage(msgId, update);
       };
 
       let currentMsgId = uuidv4();
@@ -123,23 +143,9 @@ export function useChatExecution({
           }
         }
 
-        const assistantMessage: ChatMessage = {
-          id: currentMsgId,
-          role: 'model',
-          text: result.text || '',
-          thinking: result.thinking,
-          tool_calls: result.functionCalls,
-        };
+        const assistantMessage = createAssistantMessage(currentMsgId, result);
 
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === currentMsgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = assistantMessage;
-            return next;
-          }
-          return [...prev, assistantMessage];
-        });
+        upsertChatMessage(currentMsgId, assistantMessage);
 
         currentHistory.push(assistantMessage);
 
@@ -200,22 +206,8 @@ export function useChatExecution({
       }
 
       if (!stopSignalRef.current) {
-        const botMessage: ChatMessage = {
-          id: currentMsgId,
-          role: 'model',
-          text: result.text || '',
-          thinking: result.thinking,
-          tool_calls: result.functionCalls,
-        };
-        setChatMessages((prev) => {
-          const messageIndex = prev.findIndex((item) => item.id === currentMsgId);
-          if (messageIndex !== -1) {
-            const next = [...prev];
-            next[messageIndex] = botMessage;
-            return next;
-          }
-          return [...prev, botMessage];
-        });
+        const botMessage = createAssistantMessage(currentMsgId, result);
+        upsertChatMessage(currentMsgId, botMessage);
       }
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') {
