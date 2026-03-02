@@ -25,7 +25,8 @@ Each project in the list shows:
 - **Project name** — click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon next to the name to edit it inline. A text field appears; press **Enter** or click the **Save** icon to confirm. The name change takes effect on disk immediately.
 - **Active badge** — the currently loaded project has an "Active" label in place of the Open button.
 - **Project type selector** — a `<select>` dropdown that lets you convert the current type (Short Story → Novel → Series or any combination). Rules apply (see [Chapters and Books](04_chapters_and_books.md#story-types-and-when-to-upgrade) for the full conversion rules). When a conversion is blocked because of too much content, the blocked option shows "Too many items" and is disabled.
-- **Export** (↓ Download icon) — downloads a `.zip` archive of the project that you can share, move to another computer, or use as a backup.
+- **Export (EPUB)** (<img src="assets/book.svg" alt="Book icon" width="16" height="16" style="vertical-align:text-bottom;" /> Book icon) — compiles and downloads the project's contents as a formatted `.epub` e-book.
+- **Export (ZIP)** (<img src="assets/download.svg" alt="Download icon" width="16" height="16" style="vertical-align:text-bottom;" /> Download icon) — downloads a `.zip` archive of the project that you can share, move to another computer, or use as a backup.
 - **Open** button (secondary, non-active projects only) — loads that project and closes the Settings dialog.
 - **Delete** (<img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />) — permanently removes the project after a confirmation prompt. This cannot be undone.
 
