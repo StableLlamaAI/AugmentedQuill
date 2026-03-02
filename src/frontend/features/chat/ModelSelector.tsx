@@ -41,7 +41,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isLight = theme === 'light';
 
-  const selectedOption = options.find((o) => o.id === value) || options[0];
+  const selectedOption = options.find((o) => o.id === value);
+
+  // If the provided value (ID) is not in our current options (e.g., after duplication or name change),
+  // but we find an option with the same name, we should probably switch to that ID.
+  // This helps when the backend/dialog uses names as IDs but the UI uses stable IDs or vice-versa.
+  useEffect(() => {
+    if (value && options.length > 0 && !selectedOption) {
+      // Try finding by name if ID mismatch (common if names are used as human-readable IDs in some places)
+      const byName = options.find((o) => o.name === value);
+      if (byName && byName.id !== value) {
+        onChange(byName.id);
+      }
+    }
+  }, [value, options, selectedOption, onChange]);
+
+  const activeOption = selectedOption || options[0];
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -91,13 +106,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         >
           {label}
         </label>
-        {selectedOption &&
-          hasCapability(selectedOption, 'isMultimodal', 'is_multimodal') && (
+        {activeOption &&
+          hasCapability(activeOption, 'isMultimodal', 'is_multimodal') && (
             <Eye size={8} className={labelColorClass} title="Multimodal" />
           )}
-        {selectedOption &&
+        {activeOption &&
           hasCapability(
-            selectedOption,
+            activeOption,
             'supportsFunctionCalling',
             'supports_function_calling'
           ) && <Wand2 size={8} className={labelColorClass} title="Function Calling" />}
@@ -110,10 +125,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             ? 'text-brand-gray-600 hover:text-brand-gray-900'
             : 'text-brand-gray-300 hover:text-brand-gray-100'
         }`}
-        title={`Selected: ${selectedOption?.name}`}
+        title={`Selected: ${activeOption?.name}`}
       >
         {getStatusIcon(value)}
-        <span className="truncate ml-1">{selectedOption?.name || 'Select...'}</span>
+        <span className="truncate ml-1">{activeOption?.name || 'Select...'}</span>
       </button>
 
       {isOpen && (
