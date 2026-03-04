@@ -98,6 +98,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const textareaRef = useRef<HTMLDivElement>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const {
       continuations,
@@ -505,6 +506,28 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       (option) => option && option.trim().length > 0
     );
 
+    const scrollMainContentToBottom = useCallback(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+    }, []);
+
+    useEffect(() => {
+      if (!isAiLoading && !isSuggesting && !hasContinuationOptions) return;
+
+      const raf = window.requestAnimationFrame(() => {
+        scrollMainContentToBottom();
+      });
+      return () => window.cancelAnimationFrame(raf);
+    }, [
+      chapter.content,
+      continuations,
+      isAiLoading,
+      isSuggesting,
+      hasContinuationOptions,
+      scrollMainContentToBottom,
+    ]);
+
     return (
       <div
         className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
@@ -569,6 +592,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
         {/* Main Scrollable Content Area */}
         <div
+          ref={scrollContainerRef}
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
