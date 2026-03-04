@@ -78,7 +78,18 @@ export function useChapterSuggestions({
         storyContext,
         systemPrompt,
         activeWritingConfig,
-        currentChapter.id
+        currentChapter.id,
+        {
+          onSuggestionUpdate: (index, text) => {
+            if (!text) return;
+            setContinuations((previous) => {
+              const next = [...previous];
+              if (next[index] === text) return previous;
+              next[index] = text;
+              return next;
+            });
+          },
+        }
       );
       setContinuations(options);
     } catch (error: unknown) {

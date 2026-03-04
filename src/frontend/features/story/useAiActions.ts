@@ -100,19 +100,37 @@ export function useAiActions({
     try {
       const modelType = target === 'summary' ? 'EDITING' : 'WRITING';
       const config = target === 'summary' ? activeEditingConfig : activeWritingConfig;
+      const isChapterStreamingAction =
+        target === 'chapter' && (action === 'extend' || action === 'rewrite');
+      const baseContent = currentChapter.content;
+      const separator =
+        action === 'extend' && baseContent.length > 0 && !baseContent.endsWith('\n')
+          ? '\n\n'
+          : '';
+      let lastPushed = '';
+      let lastPushAt = 0;
+      const pushProgress = (partial: string) => {
+        if (!isChapterStreamingAction) return;
+        if (partial === lastPushed) return;
+        const now = Date.now();
+        if (now - lastPushAt < 150) return;
+        lastPushAt = now;
+        lastPushed = partial;
+        const nextContent =
+          action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
+        void updateChapter(currentChapter.id, { content: nextContent });
+      };
+
       const result = await generateSimpleContent(prompt, sysMsg, config, modelType, {
         tool_choice: 'none',
+        onUpdate: pushProgress,
       });
 
       if (target === 'summary') {
         await updateChapter(currentChapter.id, { summary: result });
       } else if (action === 'extend') {
-        const separator =
-          currentChapter.content.length > 0 && !currentChapter.content.endsWith('\n')
-            ? '\n\n'
-            : '';
         await updateChapter(currentChapter.id, {
-          content: currentChapter.content + separator + result,
+          content: baseContent + separator + result,
         });
       } else {
         await updateChapter(currentChapter.id, { content: result });

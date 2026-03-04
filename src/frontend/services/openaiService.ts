@@ -385,11 +385,14 @@ export const generateContinuations = async (
   storyContext: string,
   systemInstruction: string,
   config: LLMConfig,
-  chapterId?: string
+  chapterId?: string,
+  options?: {
+    onSuggestionUpdate?: (index: number, text: string) => void;
+  }
 ): Promise<string[]> => {
   if (!chapterId) return [];
 
-  const fetchSuggestion = async () => {
+  const fetchSuggestion = async (index: number) => {
     try {
       const res = await fetch('/api/v1/story/suggest', {
         method: 'POST',
@@ -406,11 +409,15 @@ export const generateContinuations = async (
       const reader = res.body?.getReader();
       let text = '';
       if (reader) {
+        const decoder = new TextDecoder();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          text += new TextDecoder().decode(value);
+          text += decoder.decode(value, { stream: true });
+          options?.onSuggestionUpdate?.(index, text);
         }
+        text += decoder.decode();
+        options?.onSuggestionUpdate?.(index, text);
       }
       return text;
     } catch (e) {
@@ -418,6 +425,6 @@ export const generateContinuations = async (
     }
   };
 
-  const [opt1, opt2] = await Promise.all([fetchSuggestion(), fetchSuggestion()]);
-  return [opt1, opt2].filter((s) => s);
+  const [opt1, opt2] = await Promise.all([fetchSuggestion(0), fetchSuggestion(1)]);
+  return [opt1, opt2];
 };

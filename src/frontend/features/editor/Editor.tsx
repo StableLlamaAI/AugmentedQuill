@@ -501,6 +501,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       settings.theme === 'light'
         ? 'bg-brand-gray-50 border-t border-brand-gray-200'
         : 'bg-brand-gray-900 border-t border-brand-gray-800';
+    const hasContinuationOptions = continuations.some(
+      (option) => option && option.trim().length > 0
+    );
 
     return (
       <div
@@ -659,7 +662,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         <div
           className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
         >
-          {continuations.length > 0 ? (
+          {hasContinuationOptions ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center space-x-2 text-brand-500">
@@ -677,27 +680,32 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
-                {continuations.map((option, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => onAcceptContinuation(option)}
-                    className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
-                      settings.theme === 'light'
-                        ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                        : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
-                    }`}
-                  >
+                {continuations.map((option, idx) => {
+                  if (!option || option.trim().length === 0) {
+                    return null;
+                  }
+                  return (
                     <div
-                      className={`font-serif text-sm leading-relaxed ${
+                      key={idx}
+                      onClick={() => onAcceptContinuation(option)}
+                      className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
                         settings.theme === 'light'
-                          ? 'text-brand-gray-800'
-                          : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
+                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
                       }`}
                     >
-                      {option}
+                      <div
+                        className={`font-serif text-sm leading-relaxed ${
+                          settings.theme === 'light'
+                            ? 'text-brand-gray-800'
+                            : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                        }`}
+                      >
+                        {option}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
