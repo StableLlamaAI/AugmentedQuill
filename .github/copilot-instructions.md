@@ -112,6 +112,13 @@ Top-level directories (one level down):
 - Prefer frontend changes inside features/<domain>/ and keep API calls in services/.
 - Trust these instructions and only search the repo if something is missing or contradicts these notes.
 
+## Test Data Safety (Mandatory)
+
+- Never read from or write to real user runtime files under `data/config/`, `data/projects/`, or `data/logs/` when running tests.
+- For all automated tests, force the app to use a temporary user data root by setting `AUGQ_USER_DATA_DIR` to a temp directory (for example under `/tmp`).
+- Tests and AI-generated test code must isolate runtime paths via environment variables before importing app modules so default config constants resolve into temp paths.
+- When tests need projects/registry overrides, use temp values for `AUGQ_PROJECTS_ROOT` and `AUGQ_PROJECTS_REGISTRY` inside that same temp root.
+
 ## Branching and Release Policy
 
 The repository uses the following branch layout by default:

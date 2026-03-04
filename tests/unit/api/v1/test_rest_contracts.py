@@ -27,6 +27,25 @@ class RestContractsTest(TestCase):
         self.td = tempfile.TemporaryDirectory()
         self.addCleanup(self.td.cleanup)
 
+        self.config_root = Path(self.td.name) / "config"
+        self.config_root.mkdir(parents=True, exist_ok=True)
+        self.machine_cfg_path = self.config_root / "machine.json"
+        self.story_cfg_path = self.config_root / "story.json"
+
+        self._settings_cfg_patchers = [
+            patch(
+                "augmentedquill.api.v1.settings.DEFAULT_MACHINE_CONFIG_PATH",
+                self.machine_cfg_path,
+            ),
+            patch(
+                "augmentedquill.api.v1.settings.DEFAULT_STORY_CONFIG_PATH",
+                self.story_cfg_path,
+            ),
+        ]
+        for patcher in self._settings_cfg_patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
         self.projects_root = Path(self.td.name) / "projects"
         self.projects_root.mkdir(parents=True, exist_ok=True)
         self.registry_path = Path(self.td.name) / "projects.json"
