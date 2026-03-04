@@ -161,11 +161,17 @@ def get_image_file_response(filename: str) -> FileResponse:
 def export_project_response(name: str | None = None) -> Response:
     """Export Project Response."""
     if name:
+        # Prevent path traversal
+        if ".." in name or "/" in name or "\\" in name:
+            raise BadRequestError("Invalid project name")
         path = get_projects_root() / name
     else:
         path = get_active_project_dir()
 
-    if not path or not path.exists():
+    if not path or not path.resolve().is_relative_to(get_projects_root().resolve()):
+        raise BadRequestError("Project not found")
+
+    if not path.exists():
         raise BadRequestError("Project not found")
 
     mem_zip = io.BytesIO()

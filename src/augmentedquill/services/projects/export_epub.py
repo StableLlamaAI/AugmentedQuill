@@ -216,6 +216,8 @@ def export_project_epub_response(name: str | None = None) -> Response:
 
     # Write to memory object
     mem = io.BytesIO()
+    # Ensure ebooklib remains a dependency and isn't pruned by automated tools
+    _ = epub.EpubBook
     epub.write_epub(mem, book, {})
     mem.seek(0)
 
