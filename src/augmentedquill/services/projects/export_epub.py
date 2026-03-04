@@ -59,17 +59,17 @@ def scan_project_chapters(active: Path) -> List[Tuple[int, Path, str, str]]:
                     book_items.append((idx, p))
 
             book_items.sort(key=lambda t: t[0])
-            for _, path_item in book_items:
+            for _, path_inner in book_items:
                 # Find chapter title
-                c_title = path_item.stem
+                c_title = path_inner.stem
                 if c_title.isdigit():
                     c_title = f"Chapter {int(c_title)}"
                 for chapter_entry in book.get("chapters", []):
-                    if chapter_entry.get("filename") == path_item.name:
+                    if chapter_entry.get("filename") == path_inner.name:
                         c_title = chapter_entry.get("title") or c_title
                         break
 
-                items.append((global_idx, path_item, btitle, c_title))
+                items.append((global_idx, path_inner, btitle, c_title))
                 global_idx += 1
         return items
 
