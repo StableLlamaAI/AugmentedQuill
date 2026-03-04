@@ -18,6 +18,7 @@ import {
   BookOpen,
   Upload,
   Download,
+  Book,
   FileText,
   Library,
   RefreshCw,
@@ -120,6 +121,21 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
       window.URL.revokeObjectURL(url);
     } catch (e) {
       notifyError('Export failed', e);
+    }
+  };
+
+  const handleExportEpub = async (id: string) => {
+    try {
+      const blob = await api.projects.exportEpub(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${id}.epub`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      notifyError('EPUB Export failed', e);
     }
   };
 
@@ -275,6 +291,17 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
             </div>
 
             <div className="flex items-center space-x-3 justify-end">
+              <button
+                className={`p-2 rounded transition-colors ${
+                  isLight
+                    ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-100'
+                    : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-800'
+                }`}
+                onClick={() => handleExportEpub(proj.id)}
+                title="Export Project (EPUB)"
+              >
+                <Book size={18} />
+              </button>
               <button
                 className={`p-2 rounded transition-colors ${
                   isLight

@@ -19,6 +19,9 @@ dependencies = [
     "httpx>=0.27",
     "python-multipart",
     "jsonschema>=4.0",
+    "EbookLib>=0.18",
+    "beautifulsoup4>=4.12",
+    "Markdown>=3.6",
 ]
 
 [project.optional-dependencies]

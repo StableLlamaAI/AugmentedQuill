@@ -60,6 +60,13 @@ export const projectsApi = {
     return fetchBlob(path, undefined, 'Failed to export project');
   },
 
+  exportEpub: async (name?: string) => {
+    const path = name
+      ? `/projects/export/epub?name=${encodeURIComponent(name)}`
+      : '/projects/export/epub';
+    return fetchBlob(path, undefined, 'Failed to export project as EPUB');
+  },
+
   updateConfig: async () => {
     return fetchJson<{ ok?: boolean; detail?: string }>(
       '/settings/update_story_config',

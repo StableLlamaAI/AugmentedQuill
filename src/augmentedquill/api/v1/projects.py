@@ -31,6 +31,7 @@ from augmentedquill.services.projects.projects_api_asset_ops import (
     export_project_response,
     import_project_response,
 )
+from augmentedquill.services.projects.export_epub import export_project_epub_response
 
 from augmentedquill.models.projects import (
     ProjectDeleteRequest,
@@ -122,6 +123,11 @@ async def api_projects_images_get(filename: str):
 @router.get("/projects/export")
 async def api_projects_export(name: str = None):
     return export_project_response(name=name)
+
+
+@router.get("/projects/export/epub")
+async def api_projects_export_epub(name: str = None):
+    return export_project_epub_response(name=name)
 
 
 @router.post("/projects/import")
