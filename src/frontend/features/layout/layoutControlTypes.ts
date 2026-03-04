@@ -117,7 +117,7 @@ export type MainSidebarControls = {
   handleReorderChapters: (chapterIds: number[], bookId?: string) => Promise<void>;
   handleReorderBooks: (bookIds: string[]) => Promise<void>;
   handleSidebarAiAction: (
-    type: 'chapter' | 'book',
+    type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void

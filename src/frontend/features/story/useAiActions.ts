@@ -128,7 +128,7 @@ export function useAiActions({
   };
 
   const handleSidebarAiAction = async (
-    type: 'chapter' | 'book',
+    type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
@@ -147,7 +147,7 @@ export function useAiActions({
         if (!chapter) return undefined;
         currentSummary = chapter.summary;
         contentContext = chapter.content || '';
-      } else {
+      } else if (type === 'book') {
         const book = story.books.find((item) => item.id === id);
         if (!book) return undefined;
         currentSummary = book.summary || '';
@@ -160,6 +160,15 @@ export function useAiActions({
           )
           .join('\n\n');
         contentContext = `Book Title: ${book.title}\n\nChapters:\n${chaptersText}`;
+      } else {
+        currentSummary = story.summary || '';
+        const chaptersText = story.chapters
+          .map(
+            (chapter) =>
+              `Chapter: ${chapter.title}\nSummary: ${chapter.summary || 'No summary'}`
+          )
+          .join('\n\n');
+        contentContext = `Story Title: ${story.title}\n\nTags: ${story.styleTags.join(', ')}\n\nStory Notes:\n${story.notes || 'No notes'}\n\nStory Summary:\n${story.summary || 'No summary'}\n\nChapters:\n${chaptersText}`;
       }
 
       if (action === 'update' && !currentSummary.trim()) {

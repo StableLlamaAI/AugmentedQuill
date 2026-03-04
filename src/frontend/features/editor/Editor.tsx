@@ -108,6 +108,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       onKeyboardSuggestionAction,
     } = suggestionControls;
     const { onAiAction, isAiLoading, isWritingAvailable = true } = aiControls;
+    const writingUnavailableReason =
+      'This action is unavailable because no working WRITING model is configured.';
 
     const [isDragging, setIsDragging] = useState(false);
 
@@ -533,7 +535,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   onClick={() => onAiAction('chapter', 'extend')}
                   disabled={isAiLoading || !isWritingAvailable}
                   icon={<Wand2 size={12} />}
-                  title="Extend Chapter (WRITING model)"
+                  title={
+                    !isWritingAvailable
+                      ? writingUnavailableReason
+                      : 'Extend Chapter (WRITING model)'
+                  }
                 >
                   Extend
                 </Button>
@@ -545,7 +551,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   onClick={() => onAiAction('chapter', 'rewrite')}
                   disabled={isAiLoading || !isWritingAvailable}
                   icon={<FileEdit size={12} />}
-                  title="Rewrite Chapter (WRITING model)"
+                  title={
+                    !isWritingAvailable
+                      ? writingUnavailableReason
+                      : 'Rewrite Chapter (WRITING model)'
+                  }
                 >
                   Rewrite
                 </Button>
@@ -700,7 +710,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
                     : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
                 }`}
-                title="Get AI Suggestions (WRITING model)"
+                title={
+                  !isWritingAvailable
+                    ? writingUnavailableReason
+                    : 'Get AI Suggestions (WRITING model)'
+                }
               >
                 {isSuggesting || isAiLoading ? (
                   <>

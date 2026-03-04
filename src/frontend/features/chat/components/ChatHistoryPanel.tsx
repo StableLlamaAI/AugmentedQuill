@@ -16,6 +16,8 @@ import { ChatSession } from '../../../types';
 type ChatHistoryPanelProps = {
   sessions: ChatSession[];
   currentSessionId: string | null;
+  isDisabled?: boolean;
+  disabledReason?: string;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onDeleteAllSessions?: () => void;
@@ -25,11 +27,17 @@ type ChatHistoryPanelProps = {
 export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
   sessions,
   currentSessionId,
+  isDisabled = false,
+  disabledReason,
   onSelectSession,
   onDeleteSession,
   onDeleteAllSessions,
   onClose,
 }) => {
+  const reason =
+    disabledReason ||
+    'Chat is unavailable because no working CHAT model is configured.';
+
   return (
     <div className="p-4 border-b max-h-60 overflow-y-auto bg-brand-gray-100 dark:bg-brand-gray-900 border-brand-gray-200 dark:border-brand-gray-800">
       <div className="flex items-center justify-between mb-2">
@@ -39,8 +47,13 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
           </h3>
           {sessions.length > 0 && onDeleteAllSessions && (
             <button
-              onClick={onDeleteAllSessions}
+              onClick={() => {
+                if (isDisabled) return;
+                onDeleteAllSessions();
+              }}
               className="text-[10px] text-red-500 hover:text-red-600 font-bold uppercase hover:underline ml-2"
+              title={isDisabled ? reason : 'Delete all chat sessions'}
+              disabled={isDisabled}
             >
               Clear All
             </button>
@@ -68,11 +81,13 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 currentSessionId === session.id
                   ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600 font-medium'
                   : 'hover:bg-brand-gray-200/50 dark:hover:bg-brand-gray-800/50'
-              }`}
+              } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
+                if (isDisabled) return;
                 onSelectSession(session.id);
                 onClose();
               }}
+              title={isDisabled ? reason : session.name}
             >
               <div className="flex flex-col overflow-hidden">
                 <div className="flex items-center space-x-1">
@@ -92,11 +107,14 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isDisabled) return;
                   if (confirm('Delete this chat?')) {
                     onDeleteSession(session.id);
                   }
                 }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 hover:text-red-600 transition-all"
+                title={isDisabled ? reason : 'Delete this chat'}
+                disabled={isDisabled}
               >
                 <Trash2 size={14} />
               </button>

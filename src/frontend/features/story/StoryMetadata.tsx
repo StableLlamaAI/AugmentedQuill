@@ -35,6 +35,11 @@ interface StoryMetadataProps {
     notes?: string,
     private_notes?: string
   ) => void;
+  onAiGenerateSummary?: (
+    action: 'write' | 'update' | 'rewrite',
+    onProgress?: (text: string) => void
+  ) => Promise<string | undefined>;
+  summaryAiDisabledReason?: string;
   theme?: AppTheme;
 }
 
@@ -45,6 +50,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   notes,
   private_notes,
   onUpdate,
+  onAiGenerateSummary,
+  summaryAiDisabledReason,
   theme = 'mixed',
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -101,6 +108,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           }}
           onSave={handleMetadataSave}
           onClose={() => setMetadataModalOpen(false)}
+          onAiGenerate={onAiGenerateSummary}
+          aiDisabledReason={summaryAiDisabledReason}
           theme={theme}
         />
       )}

@@ -48,6 +48,7 @@ interface Props {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
   ) => Promise<string | undefined>;
+  aiDisabledReason?: string;
 }
 
 export function MetadataEditorDialog({
@@ -58,6 +59,7 @@ export function MetadataEditorDialog({
   title,
   theme = 'mixed',
   onAiGenerate,
+  aiDisabledReason,
 }: Props) {
   const [data, setData] = useState<MetadataParams>(initialData);
   const [activeTab, setActiveTab] = useState<
@@ -227,6 +229,7 @@ export function MetadataEditorDialog({
   };
 
   const handleAiGenerate = async (action: 'write' | 'update' | 'rewrite') => {
+    if (aiDisabledReason) return;
     if (!onAiGenerate) return;
     setIsAiGenerating(true);
     try {
@@ -245,6 +248,12 @@ export function MetadataEditorDialog({
   };
 
   const isDarkMode = theme === 'dark' || theme === 'mixed';
+  const hasAiSummaryControls = !!onAiGenerate || !!aiDisabledReason;
+  const aiTooltip =
+    aiDisabledReason ||
+    (type === 'story'
+      ? 'Generate story summary with AI (EDITING model)'
+      : 'Generate summary with AI (EDITING model)');
 
   const modalContent = (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -390,7 +399,7 @@ export function MetadataEditorDialog({
             <div className="flex-1 p-4 min-h-[500px]">
               {activeTab === 'summary' && (
                 <div className="h-full flex flex-col gap-2">
-                  {onAiGenerate && (
+                  {hasAiSummaryControls && (
                     <div className="flex items-center gap-2 justify-end">
                       {isAiGenerating ? (
                         <span className="text-xs text-brand-500 flex items-center gap-1">
@@ -405,8 +414,9 @@ export function MetadataEditorDialog({
                               size="sm"
                               icon={<Wand2 size={14} />}
                               onClick={() => handleAiGenerate('write')}
-                              disabled={isAiGenerating}
+                              disabled={isAiGenerating || !!aiDisabledReason}
                               className="text-xs py-1 h-7"
+                              title={aiTooltip}
                             >
                               AI Write
                             </Button>
@@ -418,8 +428,9 @@ export function MetadataEditorDialog({
                                 size="sm"
                                 icon={<RefreshCw size={14} />}
                                 onClick={() => handleAiGenerate('update')}
-                                disabled={isAiGenerating}
+                                disabled={isAiGenerating || !!aiDisabledReason}
                                 className="text-xs py-1 h-7"
+                                title={aiTooltip}
                               >
                                 AI Update
                               </Button>
@@ -429,8 +440,9 @@ export function MetadataEditorDialog({
                                 size="sm"
                                 icon={<PenLine size={14} />}
                                 onClick={() => handleAiGenerate('rewrite')}
-                                disabled={isAiGenerating}
+                                disabled={isAiGenerating || !!aiDisabledReason}
                                 className="text-xs py-1 h-7"
+                                title={aiTooltip}
                               >
                                 AI Rewrite
                               </Button>

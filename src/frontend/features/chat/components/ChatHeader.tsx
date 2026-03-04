@@ -17,6 +17,8 @@ type ChatHeaderProps = {
   headerBg?: string;
   currentSessionId: string | null;
   isIncognito: boolean;
+  isDisabled?: boolean;
+  disabledReason?: string;
   showHistory: boolean;
   setShowHistory: (value: boolean) => void;
   showSystemPrompt: boolean;
@@ -32,6 +34,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   headerBg = 'bg-brand-gray-100 dark:bg-brand-gray-900',
   currentSessionId,
   isIncognito,
+  isDisabled = false,
+  disabledReason,
   showHistory,
   setShowHistory,
   showSystemPrompt,
@@ -41,6 +45,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onNewSession,
   onToggleWebSearch,
 }) => {
+  const reason =
+    disabledReason ||
+    'Chat is unavailable because no working CHAT model is configured.';
+
   return (
     <div
       className={`p-4 border-b flex items-center justify-between ${headerBg} border-brand-gray-200 dark:border-brand-gray-800`}
@@ -52,62 +60,95 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       <div className="flex items-center space-x-1">
         <button
           onClick={() => {
+            if (isDisabled) return;
             if (currentSessionId) {
               onDeleteSession(currentSessionId);
             }
           }}
           className="p-1.5 rounded hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
-          title="Delete Current Chat"
-          disabled={!currentSessionId}
+          title={
+            isDisabled
+              ? reason
+              : !currentSessionId
+                ? 'No active chat to delete'
+                : 'Delete Current Chat'
+          }
+          disabled={isDisabled || !currentSessionId}
         >
           <Trash2 size={16} />
         </button>
         <button
-          onClick={() => onNewSession(false)}
+          onClick={() => {
+            if (isDisabled) return;
+            onNewSession(false);
+          }}
           className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
-          title="New Chat"
+          title={isDisabled ? reason : 'New Chat'}
+          disabled={isDisabled}
         >
           <Plus size={16} />
         </button>
         <button
-          onClick={() => onNewSession(true)}
+          onClick={() => {
+            if (isDisabled) return;
+            onNewSession(true);
+          }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
             isIncognito ? 'text-purple-500 bg-purple-500/10' : 'text-brand-gray-500'
           }`}
-          title="Incognito Chat (Not Saved)"
+          title={isDisabled ? reason : 'Incognito Chat (Not Saved)'}
+          disabled={isDisabled}
         >
           <Ghost size={16} />
         </button>
         <button
-          onClick={() => setShowHistory(!showHistory)}
+          onClick={() => {
+            if (isDisabled) return;
+            setShowHistory(!showHistory);
+          }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
             showHistory
               ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
               : 'text-brand-gray-500'
           }`}
-          title="Chat History"
+          title={isDisabled ? reason : 'Chat History'}
+          disabled={isDisabled}
         >
           <History size={16} />
         </button>
         <button
-          onClick={() => onToggleWebSearch(!allowWebSearch)}
+          onClick={() => {
+            if (isDisabled) return;
+            onToggleWebSearch(!allowWebSearch);
+          }}
           className={`p-1.5 rounded border transition-all ${
             allowWebSearch
               ? 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/20 dark:border-blue-500/30 shadow-sm'
               : 'text-brand-gray-500 border-transparent hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800'
           }`}
-          title={allowWebSearch ? 'Web Search Enabled' : 'Enable Web Search'}
+          title={
+            isDisabled
+              ? reason
+              : allowWebSearch
+                ? 'Web Search Enabled'
+                : 'Enable Web Search'
+          }
+          disabled={isDisabled}
         >
           <Globe size={16} />
         </button>
         <button
-          onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+          onClick={() => {
+            if (isDisabled) return;
+            setShowSystemPrompt(!showSystemPrompt);
+          }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
             showSystemPrompt
               ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
               : 'text-brand-gray-500'
           }`}
-          title="Chat Settings"
+          title={isDisabled ? reason : 'Chat Settings'}
+          disabled={isDisabled}
         >
           <Settings2 size={16} />
         </button>

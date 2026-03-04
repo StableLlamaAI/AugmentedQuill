@@ -114,6 +114,14 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           notes={story.notes}
           private_notes={story.private_notes}
           conflicts={story.conflicts}
+          onAiGenerateSummary={(action, onProgress) =>
+            handleSidebarAiAction('story', story.id, action, onProgress)
+          }
+          summaryAiDisabledReason={
+            !isEditingAvailable
+              ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              : undefined
+          }
           onUpdate={updateStoryMetadata}
           theme={currentTheme}
         />

@@ -406,8 +406,13 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           onSave={saveMetadata}
           onClose={() => setEditingMetadata(null)}
           theme={theme}
+          aiDisabledReason={
+            !isAiAvailable
+              ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              : undefined
+          }
           onAiGenerate={
-            onAiAction && isAiAvailable && editingMetadata
+            onAiAction && editingMetadata
               ? (action, onProgress) =>
                   onAiAction(
                     editingMetadata.type,
