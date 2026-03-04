@@ -118,6 +118,10 @@ class RestContractsTest(TestCase):
         self.assertEqual(r_prompts.status_code, 200)
         self.assertTrue(r_prompts.json().get("ok"))
 
+        r_presets = self.client.get("/api/v1/machine/presets")
+        self.assertEqual(r_presets.status_code, 200)
+        self.assertIn("presets", r_presets.json())
+
         async def fake_list_remote_models(**kwargs):
             return True, ["gpt-demo"], ""
 

@@ -17,6 +17,18 @@ export interface MachineModelConfig {
   api_key?: string;
   model: string;
   timeout_s?: number;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  stop?: string[];
+  seed?: number;
+  top_k?: number;
+  min_p?: number;
+  extra_body?: string;
+  preset_id?: string;
+  writing_warning?: string;
   is_multimodal?: boolean;
   supports_function_calling?: boolean;
   prompt_overrides?: Record<string, string>;
@@ -28,6 +40,23 @@ export interface MachineOpenAIConfig {
   selected_chat?: string;
   selected_writing?: string;
   selected_editing?: string;
+}
+
+export interface ModelPresetWarning {
+  writing?: string;
+}
+
+export interface ModelPresetEntry {
+  id: string;
+  name: string;
+  description: string;
+  model_id_patterns: string[];
+  parameters: Partial<MachineModelConfig>;
+  warnings?: ModelPresetWarning;
+}
+
+export interface MachinePresetsResponse {
+  presets: ModelPresetEntry[];
 }
 
 export interface MachineConfigResponse {

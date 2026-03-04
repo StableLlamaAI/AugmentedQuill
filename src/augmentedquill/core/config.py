@@ -10,8 +10,8 @@
 Configuration loading utilities for AugmentedQuill.
 
 Conventions:
-- Machine-specific config: resources/config/machine.json
-- Story-specific config: resources/config/story.json
+- Runtime user config: data/config/{machine,story,projects}.json
+- Project-shipped config assets: resources/config/*.json (e.g., model presets)
 - Environment variables override JSON values.
 - JSON values can reference environment variables using ${VAR_NAME} placeholders.
 
@@ -41,8 +41,11 @@ LOGS_DIR = DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 
 CURRENT_SCHEMA_VERSION = 2
-DEFAULT_MACHINE_CONFIG_PATH = CONFIG_DIR / "machine.json"
-DEFAULT_STORY_CONFIG_PATH = CONFIG_DIR / "story.json"
+USER_CONFIG_DIR = DATA_DIR / "config"
+DEFAULT_MACHINE_CONFIG_PATH = USER_CONFIG_DIR / "machine.json"
+DEFAULT_STORY_CONFIG_PATH = USER_CONFIG_DIR / "story.json"
+DEFAULT_PROJECTS_REGISTRY_PATH = USER_CONFIG_DIR / "projects.json"
+DEFAULT_MODEL_PRESETS_PATH = CONFIG_DIR / "model_presets.json"
 
 
 def _get_story_schema(version: int) -> Dict[str, Any]:
@@ -184,3 +187,47 @@ def save_story_config(path: os.PathLike[str] | str, config: Dict[str, Any]) -> N
 
     with p.open("w", encoding="utf-8") as f:
         json.dump(clean_config, f, indent=2, ensure_ascii=False)
+
+
+def load_model_presets_config(
+    path: os.PathLike[str] | str | None = DEFAULT_MODEL_PRESETS_PATH,
+) -> Dict[str, Any]:
+    """Load global model preset database JSON."""
+    return load_json_file(path)
+
+
+def ensure_runtime_user_config_files() -> None:
+    """Create missing runtime user config files with safe defaults.
+
+    This keeps first startup usable without manual setup.
+    """
+    USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    machine_path = DEFAULT_MACHINE_CONFIG_PATH
+    if not machine_path.exists():
+        machine_path.write_text("{}\n", encoding="utf-8")
+
+    story_path = DEFAULT_STORY_CONFIG_PATH
+    if not story_path.exists():
+        story_payload: Dict[str, Any] = {
+            "project_title": "Untitled Project",
+            "project_type": "novel",
+            "chapters": [],
+            "format": "markdown",
+            "metadata": {"version": CURRENT_SCHEMA_VERSION},
+            "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+            "sourcebook": {},
+            "story_summary": "",
+            "tags": [],
+        }
+        story_path.write_text(
+            json.dumps(story_payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    projects_registry_path = DEFAULT_PROJECTS_REGISTRY_PATH
+    if not projects_registry_path.exists():
+        projects_registry_path.write_text(
+            json.dumps({"current": "", "recent": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )

@@ -50,6 +50,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     handleReorderChapters,
     handleReorderBooks,
     handleSidebarAiAction,
+    isEditingAvailable,
     handleOpenImages,
     updateStoryMetadata,
   } = sidebarControls;
@@ -131,6 +132,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           onReorderChapters={handleReorderChapters}
           onReorderBooks={handleReorderBooks}
           onAiAction={handleSidebarAiAction}
+          isAiAvailable={isEditingAvailable}
           theme={currentTheme}
           onOpenImages={handleOpenImages}
         />
@@ -159,6 +161,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               aiControls={{
                 onAiAction: aiControls.handleAiAction,
                 isAiLoading: aiControls.isAiActionLoading,
+                isWritingAvailable: aiControls.isWritingAvailable,
               }}
               onContextChange={setActiveFormats}
               showWhitespace={showWhitespace}
@@ -183,6 +186,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           <Chat
             messages={chatMessages}
             isLoading={isChatLoading}
+            isModelAvailable={chatControls.isChatAvailable}
             systemPrompt={systemPrompt}
             onSendMessage={handleSendMessage}
             onStop={handleStopChat}

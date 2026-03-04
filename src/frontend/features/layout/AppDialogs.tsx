@@ -43,6 +43,7 @@ type AppDialogsProps = {
   updateStoryImageSettings: React.ComponentProps<
     typeof ProjectImages
   >['onUpdateSettings'];
+  imageActionsAvailable: boolean;
   editorRef: RefObject<EditorHandle | null>;
 
   isCreateProjectOpen: boolean;
@@ -71,6 +72,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
   isImagesOpen,
   setIsImagesOpen,
   updateStoryImageSettings,
+  imageActionsAvailable,
   editorRef,
   isCreateProjectOpen,
   setIsCreateProjectOpen,
@@ -107,6 +109,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
         theme={currentTheme}
         settings={appSettings}
         prompts={prompts}
+        imageActionsAvailable={imageActionsAvailable}
         imageStyle={story.image_style}
         imageAdditionalInfo={story.image_additional_info}
         onUpdateSettings={updateStoryImageSettings}

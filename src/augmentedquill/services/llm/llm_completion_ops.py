@@ -12,12 +12,14 @@ from __future__ import annotations
 from typing import Any, Dict, AsyncIterator
 import datetime
 import os
+import json
 
 import httpx
 
 from augmentedquill.core.config import (
     load_story_config,
-    CONFIG_DIR,
+    DEFAULT_STORY_CONFIG_PATH,
+    DEFAULT_MACHINE_CONFIG_PATH,
     load_machine_config,
 )
 from augmentedquill.services.projects.projects import get_active_project_dir
@@ -61,8 +63,7 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
         return
 
     # 2. Check machine.json models
-    config_path = os.path.join(CONFIG_DIR, "machine.json")
-    machine_config = load_machine_config(config_path)
+    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH)
     if machine_config:
         for provider in ["openai", "anthropic", "google"]:
             all_models = machine_config.get(provider, {}).get("models", [])
@@ -115,6 +116,102 @@ def _prepare_llm_request(
     return url, headers, body
 
 
+def _resolve_temperature_max_tokens(
+    temperature: float | None,
+    max_tokens: int | None,
+    model_cfg: dict | None = None,
+) -> tuple[float, int | None]:
+    """Resolve runtime temperature/max_tokens with story defaults fallback."""
+    if temperature is not None and max_tokens is not None:
+        return float(temperature), int(max_tokens)
+
+    model_temperature = None
+    model_max_tokens = None
+    if isinstance(model_cfg, dict):
+        try:
+            if model_cfg.get("temperature") not in (None, ""):
+                model_temperature = float(model_cfg.get("temperature"))
+        except Exception:
+            model_temperature = None
+        try:
+            if model_cfg.get("max_tokens") not in (None, ""):
+                model_max_tokens = int(model_cfg.get("max_tokens"))
+        except Exception:
+            model_max_tokens = None
+
+    if temperature is None:
+        temperature = model_temperature
+    if max_tokens is None:
+        max_tokens = model_max_tokens
+
+    if temperature is not None and max_tokens is not None:
+        return float(temperature), int(max_tokens)
+
+    story_temperature, story_max_tokens = get_story_llm_preferences(
+        config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
+    )
+    return (
+        float(temperature) if temperature is not None else story_temperature,
+        int(max_tokens) if max_tokens is not None else story_max_tokens,
+    )
+
+
+def _resolve_machine_model_cfg(base_url: str, model_id: str) -> dict:
+    """Resolve machine model entry matching base_url + model_id."""
+    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    openai_cfg = (
+        machine_config.get("openai") if isinstance(machine_config, dict) else {}
+    )
+    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else []
+    if not isinstance(models, list):
+        return {}
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        if str(model.get("base_url") or "") != str(base_url or ""):
+            continue
+        if str(model.get("model") or "") != str(model_id or ""):
+            continue
+        return model
+    return {}
+
+
+def _build_model_extra_body(model_cfg: dict) -> dict:
+    """Build extra_body payload from machine model parameters."""
+    if not isinstance(model_cfg, dict):
+        return {}
+
+    extra: dict = {}
+    for key in (
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "top_k",
+        "min_p",
+    ):
+        value = model_cfg.get(key)
+        if value is not None:
+            extra[key] = value
+
+    stop = model_cfg.get("stop")
+    if isinstance(stop, list) and stop:
+        extra["stop"] = [str(entry) for entry in stop]
+
+    raw_extra_body = model_cfg.get("extra_body")
+    if isinstance(raw_extra_body, str) and raw_extra_body.strip():
+        try:
+            parsed = json.loads(raw_extra_body)
+            if isinstance(parsed, dict):
+                extra.update(parsed)
+        except Exception:
+            pass
+
+    return extra
+
+
 async def unified_chat_complete(
     *,
     messages: list[dict],
@@ -127,14 +224,15 @@ async def unified_chat_complete(
     tool_choice: str | None = None,
     temperature: float = 0.7,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Execute a non-streaming chat completion and normalize tool/thinking output."""
-    extra_body = {}
+    merged_extra_body = dict(extra_body or {})
     if supports_function_calling and tools and tool_choice != "none":
-        extra_body["tools"] = tools
+        merged_extra_body["tools"] = tools
         if tool_choice:
-            extra_body["tool_choice"] = tool_choice
+            merged_extra_body["tool_choice"] = tool_choice
 
     resp_json = await openai_chat_complete(
         messages=messages,
@@ -142,7 +240,9 @@ async def unified_chat_complete(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
-        extra_body=extra_body,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=merged_extra_body,
         skip_validation=skip_validation,
     )
 
@@ -223,15 +323,16 @@ async def openai_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Call the OpenAI-compatible chat completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     url = str(base_url).rstrip("/") + "/chat/completions"
@@ -244,6 +345,9 @@ async def openai_chat_complete(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 
@@ -258,15 +362,16 @@ async def openai_completions(
     model_id: str,
     timeout_s: int,
     n: int = 1,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Call the OpenAI-compatible text completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     url = str(base_url).rstrip("/") + "/completions"
@@ -280,6 +385,9 @@ async def openai_completions(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 
@@ -293,15 +401,17 @@ async def openai_chat_complete_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
     """Stream content chunks from the chat completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/chat/completions"
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     headers = build_headers(api_key)
@@ -314,6 +424,11 @@ async def openai_chat_complete_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
+    if extra_body:
+        body.update(extra_body)
 
     # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
     safe_log_headers = {
@@ -373,16 +488,17 @@ async def openai_completions_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
     """Stream content chunks from the text completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/completions"
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     headers = build_headers(api_key)
@@ -395,6 +511,9 @@ async def openai_completions_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 

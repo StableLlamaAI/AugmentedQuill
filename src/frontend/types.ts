@@ -120,6 +120,16 @@ export interface LLMConfig {
   modelId: string;
   temperature?: number;
   topP?: number;
+  maxTokens?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  stop?: string[];
+  seed?: number;
+  topK?: number;
+  minP?: number;
+  extraBody?: string;
+  presetId?: string | null;
+  writingWarning?: string | null;
   isMultimodal?: boolean | null; // null/undefined = auto-detect
   supportsFunctionCalling?: boolean | null; // null/undefined = auto-detect
   prompts: {
@@ -139,6 +149,15 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   modelId: 'gpt-4o',
   temperature: 0.7,
   topP: 0.95,
+  maxTokens: 2048,
+  presencePenalty: 0,
+  frequencyPenalty: 0,
+  stop: [],
+  seed: undefined,
+  topK: undefined,
+  minP: undefined,
+  extraBody: '',
+  presetId: null,
   prompts: { system: '', continuation: '', summary: '' },
 };
 

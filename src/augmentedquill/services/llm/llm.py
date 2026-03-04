@@ -20,7 +20,7 @@ import os
 
 import httpx
 
-from augmentedquill.core.config import load_machine_config, CONFIG_DIR
+from augmentedquill.core.config import load_machine_config, DEFAULT_MACHINE_CONFIG_PATH
 from augmentedquill.services.llm import llm_logging as _llm_logging
 from augmentedquill.services.llm import llm_stream_ops as _llm_stream_ops
 from augmentedquill.services.llm import llm_completion_ops as _llm_completion_ops
@@ -39,7 +39,7 @@ def get_selected_model_name(
     payload: Dict[str, Any], model_type: str | None = None
 ) -> str | None:
     """Get the selected model name based on payload and model_type."""
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = payload.get("model_name")
@@ -67,7 +67,7 @@ def resolve_openai_credentials(
     2. Payload overrides: base_url, api_key, model, timeout_s or model_name (by name)
     3. machine.json -> openai.models[] (selected by name based on model_type)
     """
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = get_selected_model_name(payload, model_type)
@@ -123,6 +123,7 @@ async def unified_chat_stream(
     tool_choice: str | None = None,
     temperature: float = 0.7,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
     log_entry: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
@@ -140,6 +141,7 @@ async def unified_chat_stream(
         tool_choice=tool_choice,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
         log_entry=log_entry,
         skip_validation=skip_validation,
     ):
@@ -158,6 +160,7 @@ async def unified_chat_complete(
     tool_choice: str | None = None,
     temperature: float = 0.7,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Unified Chat Complete."""
@@ -173,6 +176,7 @@ async def unified_chat_complete(
         tool_choice=tool_choice,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
         skip_validation=skip_validation,
     )
 
@@ -184,6 +188,8 @@ async def openai_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
@@ -195,6 +201,8 @@ async def openai_chat_complete(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
         skip_validation=skip_validation,
     )
@@ -208,6 +216,8 @@ async def openai_completions(
     model_id: str,
     timeout_s: int,
     n: int = 1,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
@@ -220,6 +230,8 @@ async def openai_completions(
         model_id=model_id,
         timeout_s=timeout_s,
         n=n,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
         skip_validation=skip_validation,
     )
@@ -232,6 +244,9 @@ async def openai_chat_complete_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
     """Openai Chat Complete Stream."""
@@ -242,6 +257,9 @@ async def openai_chat_complete_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=extra_body,
         skip_validation=skip_validation,
     ):
         yield chunk
@@ -254,6 +272,8 @@ async def openai_completions_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
@@ -265,6 +285,8 @@ async def openai_completions_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
         skip_validation=skip_validation,
     ):

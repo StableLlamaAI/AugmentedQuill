@@ -14,6 +14,7 @@ import {
   MessageSquare,
   BookOpen,
   Edit2,
+  AlertTriangle,
   Trash2,
   Terminal,
   Key,
@@ -24,6 +25,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { AppTheme, AppSettings, LLMConfig } from '../../../types';
+import { ModelPresetEntry } from '../../../services/apiTypes';
 import { Button } from '../../../components/ui/Button';
 import { SettingsPrompts } from './SettingsPrompts';
 
@@ -39,6 +41,7 @@ interface SettingsMachineProps {
     { is_multimodal: boolean; supports_function_calling: boolean }
   >;
   modelLists: Record<string, string[]>;
+  modelPresets: ModelPresetEntry[];
   theme: AppTheme;
   defaultPrompts: {
     system_messages: Record<string, string>;
@@ -59,6 +62,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   modelStatus,
   detectedCapabilities,
   modelLists,
+  modelPresets,
   theme,
   defaultPrompts,
   onAddProvider,
@@ -67,6 +71,9 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   onRemoveProvider,
 }) => {
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
+  const [suggestedPresetByProvider, setSuggestedPresetByProvider] = useState<
+    Record<string, string | null>
+  >({});
 
   const isLight = theme === 'light';
 
@@ -146,6 +153,98 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   const activeProvider = localSettings.providers.find(
     (p) => p.id === editingProviderId
   );
+  const isActiveProviderAvailable =
+    !!activeProvider &&
+    !!(activeProvider.modelId || '').trim() &&
+    modelStatus[activeProvider.id] === 'success';
+
+  const getPresetById = (id?: string | null) => {
+    if (!id) return null;
+    return modelPresets.find((preset) => preset.id === id) || null;
+  };
+
+  const suggestPresetForModelId = (modelId: string): ModelPresetEntry | null => {
+    const modelIdTrimmed = (modelId || '').trim();
+    if (!modelIdTrimmed) return null;
+
+    for (const preset of modelPresets) {
+      if (!Array.isArray(preset.model_id_patterns)) continue;
+      const matches = preset.model_id_patterns.some((pattern) => {
+        try {
+          return new RegExp(pattern, 'i').test(modelIdTrimmed);
+        } catch {
+          return false;
+        }
+      });
+      if (matches) return preset;
+    }
+    return null;
+  };
+
+  const applyPreset = (providerId: string, preset: ModelPresetEntry | null) => {
+    if (!preset) return;
+    const p = preset.parameters || {};
+    const nextStop = Array.isArray(p.stop) ? p.stop.map((entry) => String(entry)) : [];
+
+    onUpdateProvider(providerId, {
+      temperature: p.temperature,
+      topP: p.top_p,
+      maxTokens: p.max_tokens,
+      presencePenalty: p.presence_penalty,
+      frequencyPenalty: p.frequency_penalty,
+      stop: nextStop,
+      seed: p.seed,
+      topK: p.top_k,
+      minP: p.min_p,
+      extraBody: p.extra_body || '',
+      presetId: preset.id,
+      writingWarning: preset.warnings?.writing || null,
+    });
+    setSuggestedPresetByProvider((previous) => ({
+      ...previous,
+      [providerId]: null,
+    }));
+  };
+
+  const renderNumberInput = (
+    label: string,
+    field:
+      | 'maxTokens'
+      | 'presencePenalty'
+      | 'frequencyPenalty'
+      | 'seed'
+      | 'topK'
+      | 'minP',
+    placeholder = ''
+  ) => {
+    if (!activeProvider) return null;
+    return (
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+          {label}
+        </label>
+        <input
+          type="number"
+          step={
+            field === 'seed' || field === 'topK' || field === 'maxTokens' ? 1 : 0.01
+          }
+          value={activeProvider[field] ?? ''}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onUpdateProvider(activeProvider.id, {
+              [field]: raw === '' ? undefined : Number(raw),
+            });
+          }}
+          className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+          }`}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col md:flex-row h-full gap-4 md:gap-6">
@@ -333,6 +432,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                     activeWritingProviderId: activeProvider.id,
                   }))
                 }
+                disabled={!isActiveProviderAvailable}
                 className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
                   localSettings.activeWritingProviderId === activeProvider.id
                     ? isLight
@@ -353,6 +453,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                     activeEditingProviderId: activeProvider.id,
                   }))
                 }
+                disabled={!isActiveProviderAvailable}
                 className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
                   localSettings.activeEditingProviderId === activeProvider.id
                     ? isLight
@@ -373,6 +474,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                     activeChatProviderId: activeProvider.id,
                   }))
                 }
+                disabled={!isActiveProviderAvailable}
                 className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
                   localSettings.activeChatProviderId === activeProvider.id
                     ? isLight
@@ -483,6 +585,48 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
+                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                    Preset
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={activeProvider.presetId || ''}
+                      onChange={(e) => {
+                        const preset = getPresetById(e.target.value || null);
+                        if (!preset) {
+                          onUpdateProvider(activeProvider.id, {
+                            presetId: null,
+                            writingWarning: null,
+                          });
+                          return;
+                        }
+                        applyPreset(activeProvider.id, preset);
+                      }}
+                      className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                        isLight
+                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                      }`}
+                      title={
+                        getPresetById(activeProvider.presetId)?.description ||
+                        'Choose a preset'
+                      }
+                    >
+                      <option value="">No preset</option>
+                      {modelPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {getPresetById(activeProvider.presetId)?.description && (
+                    <p className="text-[11px] text-brand-gray-500">
+                      {getPresetById(activeProvider.presetId)?.description}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between">
                     <span>Model ID</span>
                     <span className="text-xs text-brand-gray-400">
@@ -498,9 +642,15 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                         setTimeout(() => setModelPickerOpenFor(null), 120);
                       }}
                       onChange={(e) => {
+                        const nextModelId = e.target.value;
                         onUpdateProvider(activeProvider.id, {
-                          modelId: e.target.value,
+                          modelId: nextModelId,
                         });
+                        const suggested = suggestPresetForModelId(nextModelId);
+                        setSuggestedPresetByProvider((previous) => ({
+                          ...previous,
+                          [activeProvider.id]: suggested?.id || null,
+                        }));
                       }}
                       placeholder="Select or type a model id"
                       className={`w-full border rounded p-2 pr-9 text-sm focus:border-brand-500 focus:outline-none ${
@@ -573,6 +723,29 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                         </div>
                       )}
                   </div>
+                  {suggestedPresetByProvider[activeProvider.id] && (
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs rounded border border-amber-500/40 bg-amber-100/50 dark:bg-amber-900/20 p-2">
+                      <span className="text-amber-700 dark:text-amber-300">
+                        Suggested preset:{' '}
+                        {
+                          getPresetById(suggestedPresetByProvider[activeProvider.id])
+                            ?.name
+                        }
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          applyPreset(
+                            activeProvider.id,
+                            getPresetById(suggestedPresetByProvider[activeProvider.id])
+                          )
+                        }
+                        className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
                   {/* Model availability indicator */}
                   <div className="mt-1 flex items-center gap-2 text-xs">
                     <span
@@ -649,6 +822,62 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   {renderSlider('Temperature', 'temperature', 0, 2, 0.1)}
                   {renderSlider('Top P', 'topP', 0, 1, 0.05)}
+                  {renderNumberInput('Max Tokens', 'maxTokens')}
+                  {renderNumberInput('Seed', 'seed')}
+                  {renderNumberInput('Presence Penalty', 'presencePenalty')}
+                  {renderNumberInput('Frequency Penalty', 'frequencyPenalty')}
+                  {renderNumberInput('Top K', 'topK')}
+                  {renderNumberInput('Min P', 'minP')}
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                      Stop Sequences (one per line)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={(activeProvider.stop || []).join('\n')}
+                      onChange={(e) =>
+                        onUpdateProvider(activeProvider.id, {
+                          stop: e.target.value
+                            .split('\n')
+                            .map((line) => line.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                      className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                        isLight
+                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                      Extra Body (JSON)
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={activeProvider.extraBody || ''}
+                      onChange={(e) =>
+                        onUpdateProvider(activeProvider.id, {
+                          extraBody: e.target.value,
+                        })
+                      }
+                      placeholder='{"reasoning": {"enabled": false}}'
+                      className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none font-mono ${
+                        isLight
+                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                      }`}
+                    />
+                    {activeProvider.writingWarning && (
+                      <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-300">
+                        <AlertTriangle size={12} />
+                        <span>{activeProvider.writingWarning}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

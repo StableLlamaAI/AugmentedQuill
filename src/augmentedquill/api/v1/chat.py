@@ -15,7 +15,11 @@ import augmentedquill.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from augmentedquill.core.config import load_machine_config, CONFIG_DIR
+from augmentedquill.core.config import (
+    load_machine_config,
+    DEFAULT_MACHINE_CONFIG_PATH,
+    DEFAULT_STORY_CONFIG_PATH,
+)
 from augmentedquill.api.v1.http_responses import error_json, ok_json
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
@@ -51,7 +55,7 @@ httpx = _chat_api_proxy_ops.httpx
 @router.get("/chat", response_model=ChatInitialStateResponse)
 async def api_get_chat() -> ChatInitialStateResponse:
     """Return initial state for chat view: models and current selection."""
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     openai_cfg = (machine.get("openai") or {}) if isinstance(machine, dict) else {}
     models_list = openai_cfg.get("models") if isinstance(openai_cfg, dict) else []
 
@@ -151,7 +155,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         "model_name": "name-of-configured-entry" | null,
         "model_type": "CHAT" | "WRITING" | "EDITING" | null,
         "messages": [{"role": "system|user|assistant", "content": str}, ...],
-        // optional overrides (otherwise pulled from resources/config/machine.json)
+        // optional overrides (otherwise pulled from runtime user machine config)
         "base_url": str,
         "api_key": str,
         "model": str,
@@ -170,7 +174,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         raise HTTPException(status_code=400, detail="messages array is required")
 
     # Load config to determine model capabilities and overrides
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     stream_ctx = resolve_stream_model_context(payload, machine)
     model_type = stream_ctx["model_type"]
     selected_name = stream_ctx["selected_name"]
@@ -180,6 +184,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     timeout_s = stream_ctx["timeout_s"]
     is_multimodal = stream_ctx["is_multimodal"]
     supports_function_calling = stream_ctx["supports_function_calling"]
+    chosen = stream_ctx["chosen"]
 
     # Inject images if referenced in the last user message and supported
     if is_multimodal:
@@ -204,18 +209,71 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         headers["Authorization"] = f"Bearer {api_key}"
 
     temperature, max_tokens = resolve_story_llm_prefs(
-        config_dir=CONFIG_DIR,
+        config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
         active_project_dir=get_active_project_dir(),
     )
+
+    def _to_float(value):
+        try:
+            if value is None or value == "":
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    def _to_int(value):
+        try:
+            if value is None or value == "":
+                return None
+            return int(value)
+        except Exception:
+            return None
+
+    model_temperature = _to_float((chosen or {}).get("temperature"))
+    if model_temperature is None:
+        model_temperature = temperature
+
+    model_max_tokens = _to_int((chosen or {}).get("max_tokens"))
+    if model_max_tokens is None:
+        model_max_tokens = max_tokens
+
+    extra_body: Dict[str, Any] = {}
+    for key in (
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "top_k",
+        "min_p",
+    ):
+        value = (chosen or {}).get(key)
+        if value is not None:
+            extra_body[key] = value
+
+    stop = (chosen or {}).get("stop")
+    if isinstance(stop, list) and stop:
+        extra_body["stop"] = [str(entry) for entry in stop]
+
+    raw_extra_body = (chosen or {}).get("extra_body")
+    if isinstance(raw_extra_body, str) and raw_extra_body.strip():
+        try:
+            parsed_extra = _json.loads(raw_extra_body)
+            if isinstance(parsed_extra, dict):
+                extra_body.update(parsed_extra)
+        except Exception:
+            # Invalid JSON is ignored by design so users can save drafts safely.
+            pass
 
     body: Dict[str, Any] = {
         "model": model_id,
         "messages": req_messages,
-        "temperature": temperature,
+        "temperature": model_temperature,
         "stream": True,
     }
-    if isinstance(max_tokens, int):
-        body["max_tokens"] = max_tokens
+    if isinstance(model_max_tokens, int):
+        body["max_tokens"] = model_max_tokens
+    if extra_body:
+        body.update(extra_body)
 
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
@@ -247,8 +305,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 supports_function_calling=supports_function_calling,
                 tools=story_tools,
                 tool_choice=tool_choice if tool_choice != "none" else None,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                temperature=model_temperature,
+                max_tokens=model_max_tokens,
+                extra_body=extra_body,
                 log_entry=log_entry,
                 skip_validation=True,  # Trust configured models
             ):

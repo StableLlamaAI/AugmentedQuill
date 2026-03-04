@@ -43,6 +43,7 @@ interface ChapterListProps {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
   ) => Promise<string | undefined>;
+  isAiAvailable?: boolean;
   theme?: AppTheme;
   onOpenImages?: () => void;
 }
@@ -62,6 +63,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onReorderChapters,
   onReorderBooks,
   onAiAction,
+  isAiAvailable = true,
   theme = 'mixed',
   onOpenImages,
 }) => {
@@ -405,7 +407,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           onClose={() => setEditingMetadata(null)}
           theme={theme}
           onAiGenerate={
-            onAiAction && editingMetadata
+            onAiAction && isAiAvailable && editingMetadata
               ? (action, onProgress) =>
                   onAiAction(
                     editingMetadata.type,

@@ -28,6 +28,8 @@ type UseAiActionsParams = {
   systemPrompt: string;
   activeEditingConfig: LLMConfig;
   activeWritingConfig: LLMConfig;
+  isEditingAvailable: boolean;
+  isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
@@ -40,6 +42,8 @@ export function useAiActions({
   systemPrompt,
   activeEditingConfig,
   activeWritingConfig,
+  isEditingAvailable,
+  isWritingAvailable,
   updateChapter,
   setChatMessages,
   getErrorMessage,
@@ -51,6 +55,8 @@ export function useAiActions({
     action: 'update' | 'rewrite' | 'extend'
   ) => {
     if (!currentChapter) return;
+    if (target === 'summary' && !isEditingAvailable) return;
+    if (target === 'chapter' && !isWritingAvailable) return;
     setIsAiActionLoading(true);
     let prompt = '';
     let sysMsg = systemPrompt;
@@ -127,6 +133,7 @@ export function useAiActions({
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
   ): Promise<string | undefined> => {
+    if (!isEditingAvailable) return undefined;
     setIsAiActionLoading(true);
     try {
       let prompt = '';

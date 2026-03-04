@@ -53,8 +53,8 @@ from augmentedquill.services.projects.project_lifecycle_ops import (
     select_project_under_root,
 )
 from augmentedquill.core.config import (
-    CONFIG_DIR,
     PROJECTS_ROOT,
+    DEFAULT_PROJECTS_REGISTRY_PATH,
 )
 
 
@@ -75,19 +75,19 @@ class ProjectInfo:
 
 def load_registry() -> Dict:
     return load_registry_from_path(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH)))
     )
 
 
 def set_active_project(path: Path) -> None:
     reg = load_registry()
     current, recent = set_active_project_in_registry(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))),
         path,
         reg,
     )
     save_registry_to_path(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))),
         current,
         recent,
     )
@@ -117,7 +117,7 @@ def delete_project(name: str) -> Tuple[bool, str]:
     if ok:
         save_registry_to_path(
             Path(
-                os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))
+                os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))
             ),
             current,
             recent,

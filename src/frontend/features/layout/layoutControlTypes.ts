@@ -66,6 +66,7 @@ export type HeaderAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
 };
 
 export type HeaderModelControls = {
@@ -121,6 +122,7 @@ export type MainSidebarControls = {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
   ) => Promise<string | undefined>;
+  isEditingAvailable: boolean;
   handleOpenImages: () => void;
   updateStoryMetadata: (
     updates: Partial<{
@@ -156,6 +158,7 @@ export type MainEditorAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
 };
 
 export type MainEditorControls = {
@@ -175,6 +178,7 @@ export type MainChatControls = {
   isChatOpen: boolean;
   chatMessages: ChatMessage[];
   isChatLoading: boolean;
+  isChatAvailable: boolean;
   systemPrompt: string;
   handleSendMessage: (text: string) => Promise<void>;
   handleStopChat: () => void;

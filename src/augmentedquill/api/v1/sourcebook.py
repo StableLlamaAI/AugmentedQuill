@@ -54,7 +54,7 @@ class SourcebookEntryUpdate(BaseModel):
 async def get_sourcebook() -> List[SourcebookEntry]:
     active = get_active_project_dir()
     if not active:
-        raise HTTPException(status_code=400, detail="No active project")
+        return []
     return [SourcebookEntry(**entry) for entry in sourcebook_list_entries()]
 
 

@@ -34,6 +34,7 @@ import { ChatComposer } from './components/ChatComposer';
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  isModelAvailable?: boolean;
   systemPrompt: string;
   onSendMessage: (text: string) => void;
   onStop?: () => void;
@@ -58,6 +59,7 @@ interface ChatProps {
 export const Chat: React.FC<ChatProps> = ({
   messages,
   isLoading,
+  isModelAvailable = true,
   systemPrompt,
   onSendMessage,
   onStop,
@@ -146,7 +148,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (input.trim() && !isLoading) {
+    if (input.trim() && !isLoading && isModelAvailable) {
       onSendMessage(input.trim());
       setInput('');
       if (textareaRef.current) {
@@ -182,7 +184,7 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const lastMessage = messages[messages.length - 1];
-  const canRegenerate = !isLoading && lastMessage?.role === 'model';
+  const canRegenerate = !isLoading && isModelAvailable && lastMessage?.role === 'model';
 
   return (
     <div
@@ -512,6 +514,7 @@ export const Chat: React.FC<ChatProps> = ({
                 size="sm"
                 variant="secondary"
                 onClick={onRegenerate}
+                disabled={!isModelAvailable}
                 icon={<RefreshCw size={12} />}
                 className="text-xs py-1 h-7 border-dashed"
                 title="Regenerate last response (CHAT model)"
@@ -527,6 +530,7 @@ export const Chat: React.FC<ChatProps> = ({
           input={input}
           setInput={setInput}
           isLoading={isLoading}
+          isModelAvailable={isModelAvailable}
           inputBg={inputBg}
           onSubmit={handleSubmit}
         />

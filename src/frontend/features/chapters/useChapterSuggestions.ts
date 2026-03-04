@@ -22,6 +22,7 @@ type UseChapterSuggestionsParams = {
   story: StoryState;
   systemPrompt: string;
   activeWritingConfig: LLMConfig;
+  isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   viewMode: ViewMode;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
@@ -34,6 +35,7 @@ export function useChapterSuggestions({
   story,
   systemPrompt,
   activeWritingConfig,
+  isWritingAvailable,
   updateChapter,
   viewMode,
   setChatMessages,
@@ -58,6 +60,7 @@ export function useChapterSuggestions({
     enableSuggestionMode: boolean = true
   ) => {
     if (!currentChapter) return;
+    if (!isWritingAvailable) return;
     if (isSuggesting) return;
 
     const baseContent = contentOverride ?? currentChapter.content;

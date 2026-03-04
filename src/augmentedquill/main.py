@@ -22,7 +22,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from augmentedquill.core.config import load_machine_config, STATIC_DIR, CONFIG_DIR
+from augmentedquill.core.config import (
+    load_machine_config,
+    STATIC_DIR,
+    DEFAULT_MACHINE_CONFIG_PATH,
+    ensure_runtime_user_config_files,
+)
 from augmentedquill.services.exceptions import ServiceError
 
 # Import API routers
@@ -43,6 +48,7 @@ def create_app() -> FastAPI:
     """
 
     app = FastAPI(title="AugmentedQuill")
+    ensure_runtime_user_config_files()
 
     # Dynamic CORS origin handler to support variable ports
     async def get_origins(request: Request) -> list[str]:
@@ -87,7 +93,7 @@ def create_app() -> FastAPI:
     )
     api_v1_router.add_api_route(
         "/machine",
-        endpoint=lambda: load_machine_config(CONFIG_DIR / "machine.json") or {},
+        endpoint=lambda: load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {},
         methods=["GET"],
     )
 

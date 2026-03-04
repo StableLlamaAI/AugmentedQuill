@@ -16,10 +16,13 @@ import json as _json
 
 from augmentedquill.core.config import (
     load_machine_config,
+    load_model_presets_config,
     save_story_config,
     CURRENT_SCHEMA_VERSION,
     BASE_DIR,
-    CONFIG_DIR,
+    DEFAULT_MACHINE_CONFIG_PATH,
+    DEFAULT_STORY_CONFIG_PATH,
+    DEFAULT_MODEL_PRESETS_PATH,
 )
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.prompts import (
@@ -79,8 +82,8 @@ async def api_settings_post(request: Request) -> JSONResponse:
 
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
-        machine_path = CONFIG_DIR / "machine.json"
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+        machine_path = DEFAULT_MACHINE_CONFIG_PATH
         story_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         save_story_config(story_path, story_cfg)
@@ -94,7 +97,7 @@ async def api_settings_post(request: Request) -> JSONResponse:
 @router.get("/prompts")
 async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
     """Get all resolved prompts (defaults + global overrides + model overrides)."""
-    machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     if not model_name:
         model_name = machine_config.get("openai", {}).get("selected")
 
@@ -152,6 +155,16 @@ async def api_machine_test(request: Request) -> JSONResponse:
         status_code=200,
         content={"ok": ok, "models": models, **({"detail": detail} if detail else {})},
     )
+
+
+@router.get("/machine/presets")
+async def api_machine_presets_get() -> JSONResponse:
+    """Return model preset database used by Machine Settings UI."""
+    data = load_model_presets_config(DEFAULT_MODEL_PRESETS_PATH) or {}
+    presets = data.get("presets") if isinstance(data, dict) else []
+    if not isinstance(presets, list):
+        presets = []
+    return JSONResponse(status_code=200, content={"presets": presets})
 
 
 @router.post("/machine/test_model")
@@ -236,7 +249,7 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
 
 @router.put("/machine")
 async def api_machine_put(request: Request) -> JSONResponse:
-    """Persist machine config to resources/config/machine.json.
+    """Persist machine config to runtime user config path.
 
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
     Returns: { ok: bool, detail?: str }
@@ -255,7 +268,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
         )
 
     try:
-        machine_path = CONFIG_DIR / "machine.json"
+        machine_path = DEFAULT_MACHINE_CONFIG_PATH
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
@@ -278,7 +291,7 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
     summary = payload.get("summary", "")
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         update_story_field(story_path, "story_summary", summary)
     except Exception as e:
         return JSONResponse(
@@ -303,7 +316,7 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
 
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         update_story_field(story_path, "tags", tags)
     except Exception as e:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
@@ -316,10 +329,10 @@ async def update_story_config(request: Request):
     """Update the story config to the latest version."""
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         ok, message = run_story_config_update(
             base_dir=BASE_DIR,
-            config_dir=CONFIG_DIR,
+            config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
             story_path=story_path,
             current_schema_version=CURRENT_SCHEMA_VERSION,
         )

@@ -64,6 +64,7 @@ interface EditorProps {
       action: 'update' | 'rewrite' | 'extend'
     ) => void;
     isAiLoading: boolean;
+    isWritingAvailable?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
 }
@@ -106,7 +107,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isSuggestionMode,
       onKeyboardSuggestionAction,
     } = suggestionControls;
-    const { onAiAction, isAiLoading } = aiControls;
+    const { onAiAction, isAiLoading, isWritingAvailable = true } = aiControls;
 
     const [isDragging, setIsDragging] = useState(false);
 
@@ -530,7 +531,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   variant="ghost"
                   className="text-xs h-7"
                   onClick={() => onAiAction('chapter', 'extend')}
-                  disabled={isAiLoading}
+                  disabled={isAiLoading || !isWritingAvailable}
                   icon={<Wand2 size={12} />}
                   title="Extend Chapter (WRITING model)"
                 >
@@ -542,7 +543,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   variant="ghost"
                   className="text-xs h-7"
                   onClick={() => onAiAction('chapter', 'rewrite')}
-                  disabled={isAiLoading}
+                  disabled={isAiLoading || !isWritingAvailable}
                   icon={<FileEdit size={12} />}
                   title="Rewrite Chapter (WRITING model)"
                 >
@@ -693,7 +694,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             <div className="p-3 flex justify-center items-center space-x-3">
               <button
                 onClick={onTriggerSuggestions}
-                disabled={isSuggesting || isAiLoading}
+                disabled={isSuggesting || isAiLoading || !isWritingAvailable}
                 className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.theme === 'light'
                     ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'

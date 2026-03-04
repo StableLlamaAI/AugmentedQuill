@@ -218,6 +218,7 @@ __marimo__/
 # User configuration and data
 resources/config/*.json
 !resources/config/examples/*.json
+!resources/config/model_presets.json
 data/
 
 # Build artifacts

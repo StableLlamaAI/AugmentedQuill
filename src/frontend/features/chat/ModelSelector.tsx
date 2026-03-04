@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, Wand2, ChevronDown, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
 import { LLMConfig, AppTheme } from '../../types';
 
 interface ModelSelectorProps {
@@ -116,6 +116,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             'supportsFunctionCalling',
             'supports_function_calling'
           ) && <Wand2 size={8} className={labelColorClass} title="Function Calling" />}
+        {label === 'Writing' && activeOption?.writingWarning && (
+          <AlertTriangle
+            size={8}
+            className="text-amber-500"
+            title={activeOption.writingWarning}
+          />
+        )}
       </div>
 
       <button
@@ -175,6 +182,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   ) && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
                       <Wand2 size={8} className="mr-0.5" /> Fn
+                    </span>
+                  )}
+                  {label === 'Writing' && opt.writingWarning && (
+                    <span
+                      className="flex items-center text-[9px] text-amber-500"
+                      title={opt.writingWarning}
+                    >
+                      <AlertTriangle size={8} className="mr-0.5" /> Warn
                     </span>
                   )}
                 </div>

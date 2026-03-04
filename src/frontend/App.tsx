@@ -39,6 +39,8 @@ import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
+  resolveRoleAvailability,
+  supportsImageActions,
 } from './features/app/appSelectors';
 
 const App: React.FC = () => {
@@ -73,6 +75,13 @@ const App: React.FC = () => {
 
   const { modelConnectionStatus, detectedCapabilities } =
     useProviderHealth(appSettings);
+
+  const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
+  const imageActionsAvailable = supportsImageActions(
+    appSettings,
+    detectedCapabilities,
+    modelConnectionStatus
+  );
 
   const [toolCallLoopDialog, setToolCallLoopDialog] = useState<{
     count: number;
@@ -186,6 +195,8 @@ const App: React.FC = () => {
     systemPrompt,
     activeEditingConfig,
     activeWritingConfig,
+    isEditingAvailable: roleAvailability.editing,
+    isWritingAvailable: roleAvailability.writing,
     updateChapter,
     setChatMessages,
     getErrorMessage,
@@ -209,6 +220,7 @@ const App: React.FC = () => {
     story,
     systemPrompt,
     activeWritingConfig,
+    isWritingAvailable: roleAvailability.writing,
     updateChapter,
     viewMode,
     setChatMessages,
@@ -255,6 +267,7 @@ const App: React.FC = () => {
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     systemPrompt,
     activeChatConfig,
+    isChatAvailable: roleAvailability.chat,
     allowWebSearch,
     currentChapterId,
     chatMessages,
@@ -299,6 +312,7 @@ const App: React.FC = () => {
           isImagesOpen={isImagesOpen}
           setIsImagesOpen={setIsImagesOpen}
           updateStoryImageSettings={updateStoryImageSettings}
+          imageActionsAvailable={imageActionsAvailable}
           editorRef={editorRef}
           isCreateProjectOpen={isCreateProjectOpen}
           setIsCreateProjectOpen={setIsCreateProjectOpen}
@@ -330,7 +344,11 @@ const App: React.FC = () => {
             isMobileFormatMenuOpen,
             setIsMobileFormatMenuOpen,
           }}
-          aiControls={{ handleAiAction, isAiActionLoading }}
+          aiControls={{
+            handleAiAction,
+            isAiActionLoading,
+            isWritingAvailable: roleAvailability.writing,
+          }}
           modelControls={{
             appSettings,
             setAppSettings,
@@ -364,6 +382,7 @@ const App: React.FC = () => {
             handleReorderChapters,
             handleReorderBooks,
             handleSidebarAiAction,
+            isEditingAvailable: roleAvailability.editing,
             handleOpenImages,
             updateStoryMetadata,
           }}
@@ -384,6 +403,7 @@ const App: React.FC = () => {
             aiControls: {
               handleAiAction,
               isAiActionLoading,
+              isWritingAvailable: roleAvailability.writing,
             },
             setActiveFormats,
             showWhitespace,
@@ -393,6 +413,7 @@ const App: React.FC = () => {
             isChatOpen,
             chatMessages,
             isChatLoading,
+            isChatAvailable: roleAvailability.chat,
             systemPrompt,
             handleSendMessage,
             handleStopChat,

@@ -68,7 +68,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     isMobileFormatMenuOpen,
     setIsMobileFormatMenuOpen,
   } = formatControls;
-  const { handleAiAction, isAiActionLoading } = aiControls;
+  const { handleAiAction, isAiActionLoading, isWritingAvailable } = aiControls;
   const { appSettings, setAppSettings, modelConnectionStatus, detectedCapabilities } =
     modelControls;
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
@@ -464,7 +464,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'extend')}
-            disabled={isAiActionLoading}
+            disabled={isAiActionLoading || !isWritingAvailable}
             icon={<Wand2 size={12} />}
             title="Extend Chapter (WRITING model)"
           >
@@ -476,7 +476,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'rewrite')}
-            disabled={isAiActionLoading}
+            disabled={isAiActionLoading || !isWritingAvailable}
             icon={<FileEdit size={12} />}
             title="Rewrite Chapter (WRITING model)"
           >

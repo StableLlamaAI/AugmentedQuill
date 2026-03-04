@@ -20,6 +20,7 @@ from augmentedquill.core.config import (
     CONFIG_DIR,
     load_machine_config,
 )
+from augmentedquill.services.llm.llm_logging import add_llm_log
 from augmentedquill.utils.stream_helpers import ChannelFilter
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
@@ -92,6 +93,7 @@ async def unified_chat_stream(
     tool_choice: str | None = None,
     temperature: float = 0.7,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
     log_entry: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
@@ -110,6 +112,8 @@ async def unified_chat_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    if isinstance(extra_body, dict):
+        body.update(extra_body)
 
     if supports_function_calling and tools and tool_choice != "none":
         body["tools"] = tools
@@ -189,6 +193,7 @@ async def unified_chat_stream(
                             error_data = _json.loads(error_content)
                             if log_entry:
                                 log_entry["response"]["error"] = error_data
+                                add_llm_log(log_entry)
                             yield {
                                 "error": "Upstream error",
                                 "status": resp.status_code,
@@ -198,6 +203,7 @@ async def unified_chat_stream(
                             err_text = error_content.decode("utf-8", errors="ignore")
                             if log_entry:
                                 log_entry["response"]["error"] = err_text
+                                add_llm_log(log_entry)
                             yield {
                                 "error": "Upstream error",
                                 "status": resp.status_code,
@@ -250,6 +256,15 @@ async def unified_chat_stream(
 
                             yield {"done": True}
                         except Exception as e:
+                            if log_entry:
+                                log_entry["timestamp_end"] = (
+                                    datetime.datetime.now().isoformat()
+                                )
+                                log_entry["response"]["error_detail"] = str(e)
+                                log_entry["response"][
+                                    "error"
+                                ] = "Failed to parse non-stream response"
+                                add_llm_log(log_entry)
                             yield {
                                 "error": "Failed to parse response",
                                 "message": f"An error occurred while processing the response: {e}",
@@ -290,10 +305,6 @@ async def unified_chat_stream(
                                         datetime.datetime.now().isoformat()
                                     )
                                     # Force re-logging on completion so we get full_content and chunks
-                                    from augmentedquill.services.llm.llm_logging import (
-                                        add_llm_log,
-                                    )
-
                                     add_llm_log(log_entry)
 
                                 yield {"done": True}
@@ -341,10 +352,16 @@ async def unified_chat_stream(
                     break
 
         except Exception as e:
+            err_text = str(e).strip() or f"{type(e).__name__}: {repr(e)}"
             if log_entry:
-                log_entry["response"]["error_detail"] = str(e)
+                log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+                log_entry["response"]["error_detail"] = err_text
                 log_entry["response"][
                     "error"
-                ] = f"An internal error occurred during the LLM request: {e}"
-            yield {"error": "Connection error", "message": f"An error occurred: {e}."}
+                ] = f"An internal error occurred during the LLM request: {err_text}"
+                add_llm_log(log_entry)
+            yield {
+                "error": "Connection error",
+                "message": f"An error occurred: {err_text}.",
+            }
             break

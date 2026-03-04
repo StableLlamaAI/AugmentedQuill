@@ -262,7 +262,7 @@ export const createChatSession = (
           body: JSON.stringify({
             messages,
             model_type: modelType,
-            model_name: config.id,
+            model_name: config.name || config.id,
             allow_web_search: options?.allowWebSearch,
           }),
         });
@@ -359,7 +359,7 @@ export const generateSimpleContent = async (
       body: JSON.stringify({
         messages,
         model_type: modelType,
-        model_name: config.id,
+        model_name: config.name || config.id,
         tool_choice: options?.tool_choice,
       }),
     });
@@ -396,7 +396,7 @@ export const generateContinuations = async (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chap_id: Number(chapterId),
-          model_name: config.id,
+          model_name: config.name || config.id,
           current_text: currentContent,
         }),
       });
