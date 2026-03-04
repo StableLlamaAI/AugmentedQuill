@@ -355,6 +355,13 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   {p.id === localSettings.activeWritingProviderId && (
                     <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
                       <BookOpen size={10} /> Writing
+                      {p.writingWarning && (
+                        <AlertTriangle
+                          size={10}
+                          className="text-amber-500"
+                          title={p.writingWarning}
+                        />
+                      )}
                     </span>
                   )}
                   {p.id === localSettings.activeEditingProviderId && (
@@ -445,6 +452,14 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
               >
                 <BookOpen size={14} />
                 Writing
+                {localSettings.activeWritingProviderId === activeProvider.id &&
+                  activeProvider.writingWarning && (
+                    <AlertTriangle
+                      size={12}
+                      className="text-amber-300"
+                      title={activeProvider.writingWarning}
+                    />
+                  )}
               </button>
               <button
                 onClick={() =>
@@ -872,8 +887,14 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                       }`}
                     />
                     {activeProvider.writingWarning && (
-                      <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-300">
-                        <AlertTriangle size={12} />
+                      <div
+                        className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-300"
+                        title={activeProvider.writingWarning}
+                      >
+                        <AlertTriangle
+                          size={12}
+                          title={activeProvider.writingWarning}
+                        />
                         <span>{activeProvider.writingWarning}</span>
                       </div>
                     )}
