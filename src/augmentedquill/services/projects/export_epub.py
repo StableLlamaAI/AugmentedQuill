@@ -106,11 +106,17 @@ def scan_project_chapters(active: Path) -> List[Tuple[int, Path, str, str]]:
 def export_project_epub_response(name: str | None = None) -> Response:
     """Export the project as an EPUB file."""
     if name:
+        # Prevent path traversal
+        if ".." in name or "/" in name or "\\" in name:
+            raise BadRequestError("Invalid project name")
         path = get_projects_root() / name
     else:
         path = get_active_project_dir()
 
-    if not path or not path.exists():
+    if not path or not path.resolve().is_relative_to(get_projects_root().resolve()):
+        raise BadRequestError("Project not found")
+
+    if not path.exists():
         raise BadRequestError("Project not found")
 
     story = load_story_config(path / "story.json") or {}
@@ -125,8 +131,14 @@ def export_project_epub_response(name: str | None = None) -> Response:
     def process_html_images(html_text: str) -> str:
         def replacer(match):
             img_filename = match.group(1)
+            # Prevent path traversal
+            if ".." in img_filename or "/" in img_filename or "\\" in img_filename:
+                return match.group(0)
+
             img_path = path / "images" / img_filename
-            if img_path.exists():
+            if img_path.exists() and img_path.resolve().is_relative_to(
+                path.resolve() / "images"
+            ):
                 if img_filename not in added_images:
                     with open(img_path, "rb") as bf:
                         img_data = bf.read()
