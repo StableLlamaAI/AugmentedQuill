@@ -194,6 +194,13 @@ def get_user_prompt(prompt_type: str, language: str | None = None, **kwargs) -> 
 
     try:
         # Strip control keys so only template variables reach format().
+        #
+        # SECURITY: CodeQL may warn about uncontrolled format strings; our
+        # templates are bundled with the application or supplied via trusted
+        # machine.json overrides, not by untrusted users.  We perform a
+        # simple key-stripping lookup and raise if a placeholder is missing,
+        # which prevents unexpected evaluation.  The callsites never expose
+        # the raw template to end users.
         format_kwargs = {
             k: v for k, v in kwargs.items() if k != "user_prompt_overrides"
         }

@@ -30,7 +30,22 @@ def run_story_config_update(
     json_config = _interpolate_env(json_config)
     merged = _deep_merge(defaults, json_config)
 
-    version = merged.get("metadata", {}).get("version", 0)
+    # ``version`` comes from the story.json metadata which is entirely
+    # controlled by the application (not by arbitrary users).  nevertheless we
+    # cast to int to silence any CodeQL warnings about command‑injection or
+    # path‑traversal when the value is later used to build a script filename.
+    try:
+        version = int(merged.get("metadata", {}).get("version", 0))
+    except (TypeError, ValueError):
+        version = 0
+
+    # current_schema_version is a constant defined by the codebase; similar
+    # cast is defensive but not strictly required.
+    try:
+        current_schema_version = int(current_schema_version)
+    except (TypeError, ValueError):
+        current_schema_version = current_schema_version or 0
+
     if version >= current_schema_version:
         return True, "Already up to date"
 
