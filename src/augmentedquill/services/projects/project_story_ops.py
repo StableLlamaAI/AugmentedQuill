@@ -92,6 +92,7 @@ def update_story_metadata_in_project(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    language: str = None,
 ) -> None:
     """Update Story Metadata In Project."""
     story_path = active / "story.json"
@@ -107,6 +108,8 @@ def update_story_metadata_in_project(
         story["notes"] = notes
     if private_notes is not None:
         story["private_notes"] = private_notes
+    if language is not None:
+        story["language"] = language
 
     save_story_config(story_path, story)
 

@@ -128,9 +128,11 @@ def select_project_response(name: str) -> JSONResponse:
     )
 
 
-def create_project_response(name: str, project_type: str) -> JSONResponse:
+def create_project_response(
+    name: str, project_type: str, language: str = "en"
+) -> JSONResponse:
     """Create Project Response."""
-    ok, msg = create_project(name, project_type=project_type)
+    ok, msg = create_project(name, project_type=project_type, language=language)
     if not ok:
         return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
 

@@ -22,7 +22,7 @@ Three buttons sit above the project list:
 
 Each project in the list shows:
 
-- **Project name** — click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon next to the name to edit it inline. A text field appears; press **Enter** or click the **Save** icon to confirm. The name change takes effect on disk immediately.
+- **Project name** — click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon next to the name to edit it inline. A text field appears; press **Enter** or click the **Save** icon to confirm. The name change takes effect on disk immediately. While editing you can also change the **Project Language** using the adjacent dropdown.
 - **Active badge** — the currently loaded project has an "Active" label in place of the Open button.
 - **Project type selector** — a `<select>` dropdown that lets you convert the current type (Short Story → Novel → Series or any combination). Rules apply (see [Chapters and Books](04_chapters_and_books.md#story-types-and-when-to-upgrade) for the full conversion rules). When a conversion is blocked because of too much content, the blocked option shows "Too many items" and is disabled.
 - **Export (EPUB)** (<img src="assets/book.svg" alt="Book icon" width="16" height="16" style="vertical-align:text-bottom;" /> Book icon) — compiles and downloads the project's contents as a formatted `.epub` e-book.
@@ -36,14 +36,15 @@ Clicking **New Project** opens a small dialog:
 
 `[SCREENSHOT: The Create Project dialog showing the name field and three project type radio buttons]`
 
-| Field                        | Description                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Project Name** text field  | Type the title of your new story. The **Create Project** button stays disabled until you enter at least one character.   |
-| **Short Story** radio button | Best for poems, flash fiction, or a single-scene story — gives you exactly one chapter to work in.                       |
-| **Novel** radio button       | Standard multi-chapter structure. Use this for any full-length story.                                                    |
-| **Series** radio button      | Chapters are organized inside books. Choose this for a trilogy, serial fiction, or any work that spans multiple volumes. |
-| **Cancel**                   | Closes the dialog without creating anything.                                                                             |
-| **Create Project**           | Creates the project and loads it immediately.                                                                            |
+| Field                         | Description                                                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Project Name** text field   | Type the title of your new story. The **Create Project** button stays disabled until you enter at least one character.                   |
+| **Project Language** dropdown | Choose the language used for LLM instructions; available options come from the bundled `instructions.json` file (e.g. English, Spanish). |
+| **Short Story** radio button  | Best for poems, flash fiction, or a single-scene story — gives you exactly one chapter to work in.                                       |
+| **Novel** radio button        | Standard multi-chapter structure. Use this for any full-length story.                                                                    |
+| **Series** radio button       | Chapters are organized inside books. Choose this for a trilogy, serial fiction, or any work that spans multiple volumes.                 |
+| **Cancel**                    | Closes the dialog without creating anything.                                                                                             |
+| **Create Project**            | Creates the project and loads it immediately.                                                                                            |
 
 ---
 

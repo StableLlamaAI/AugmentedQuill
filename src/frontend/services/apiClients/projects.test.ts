@@ -54,6 +54,14 @@ describe('projectsApi', () => {
       'Failed to create project'
     );
 
+    // language parameter should be forwarded when supplied
+    await projectsApi.create('demo', 'novel', 'es');
+    expect(postJson).toHaveBeenCalledWith(
+      '/projects/create',
+      { name: 'demo', type: 'novel', language: 'es' },
+      'Failed to create project'
+    );
+
     await projectsApi.convert('series');
     expect(postJson).toHaveBeenCalledWith(
       '/projects/convert',

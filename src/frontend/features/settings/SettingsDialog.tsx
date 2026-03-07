@@ -42,7 +42,7 @@ interface SettingsDialogProps {
   onLoadProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, newName: string) => void;
+  onRenameProject: (id: string, newName: string, newLang?: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
   onRefreshProjects: () => void;
@@ -56,6 +56,7 @@ interface SettingsDialogProps {
     system_messages: Record<string, string>;
     user_prompts: Record<string, string>;
   };
+  projectLanguages: string[];
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -76,6 +77,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
   defaultPrompts = { system_messages: {}, user_prompts: {} },
+  projectLanguages,
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -611,6 +613,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 activeProjectType={activeProjectType}
                 activeProjectStats={activeProjectStats}
                 theme={theme}
+                languages={projectLanguages}
               />
             )}
 

@@ -24,9 +24,10 @@ afterEach(() => {
 
 describe('settingsApi', () => {
   it('calls GET /prompts without query when model name is missing', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, languages: ['en'] });
 
-    await settingsApi.getPrompts();
+    const result = await settingsApi.getPrompts();
+    expect(result.languages).toEqual(['en']);
 
     expect(fetchJson).toHaveBeenCalledWith(
       '/prompts',
@@ -36,9 +37,10 @@ describe('settingsApi', () => {
   });
 
   it('calls GET /prompts?model_name=... when model name is provided', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, languages: [] });
 
-    await settingsApi.getPrompts('my model');
+    const result = await settingsApi.getPrompts('my model');
+    expect(result.languages).toEqual([]);
 
     expect(fetchJson).toHaveBeenCalledWith(
       '/prompts?model_name=my%20model',

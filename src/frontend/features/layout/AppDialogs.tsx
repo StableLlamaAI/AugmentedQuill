@@ -37,6 +37,7 @@ type AppDialogsProps = {
   refreshProjects: React.ComponentProps<typeof SettingsDialog>['onRefreshProjects'];
   currentTheme: AppTheme;
   prompts: PromptsValue;
+  instructionLanguages: string[];
 
   isImagesOpen: boolean;
   setIsImagesOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -69,6 +70,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
   refreshProjects,
   currentTheme,
   prompts,
+  instructionLanguages,
   isImagesOpen,
   setIsImagesOpen,
   updateStoryImageSettings,
@@ -101,6 +103,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
         }}
         theme={currentTheme}
         defaultPrompts={prompts}
+        projectLanguages={instructionLanguages}
       />
 
       <ProjectImages
@@ -124,6 +127,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
       <CreateProjectDialog
         isOpen={isCreateProjectOpen}
         onClose={() => setIsCreateProjectOpen(false)}
+        languages={instructionLanguages}
         onCreate={handleCreateProjectConfirm}
         theme={currentTheme}
       />

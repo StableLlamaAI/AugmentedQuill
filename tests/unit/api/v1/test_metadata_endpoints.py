@@ -132,6 +132,7 @@ class MetadataEndpointsTest(TestCase):
             "tags": ["Sci-Fi", "Noir"],
             "notes": "Story notes",
             "private_notes": "Story private notes",
+            "language": "es",
         }
         resp = self.client.post("/api/v1/story/metadata", json=payload)
         self.assertEqual(resp.status_code, 200)
@@ -143,6 +144,7 @@ class MetadataEndpointsTest(TestCase):
         self.assertEqual(story_json["tags"], ["Sci-Fi", "Noir"])
         self.assertEqual(story_json["notes"], "Story notes")
         self.assertEqual(story_json["private_notes"], "Story private notes")
+        self.assertEqual(story_json.get("language"), "es")
 
     def test_update_story_metadata_ignores_conflicts(self):
         # Sending conflicts to story metadata should be ignored now

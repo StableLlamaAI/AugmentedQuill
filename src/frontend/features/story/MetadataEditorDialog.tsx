@@ -34,6 +34,7 @@ interface MetadataParams {
   tags?: string[];
   notes?: string;
   private_notes?: string;
+  language?: string;
   conflicts?: Conflict[];
 }
 
@@ -44,6 +45,7 @@ interface Props {
   onClose: () => void;
   title: string;
   theme?: AppTheme;
+  languages?: string[];
   onAiGenerate?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
@@ -341,6 +343,24 @@ export function MetadataEditorDialog({
                     className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
                     placeholder="e.g. Noir, Sci-Fi, First-Person"
                   />
+                  {languages && (
+                    <>
+                      <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
+                        Language
+                      </label>
+                      <select
+                        value={data.language || ''}
+                        onChange={(e) => setData({ ...data, language: e.target.value })}
+                        className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                      >
+                        {languages.map((lng) => (
+                          <option key={lng} value={lng}>
+                            {lng.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </>
               )}
             </div>

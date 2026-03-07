@@ -55,6 +55,7 @@ export interface Story {
   image_additional_info?: string;
   chapters: Chapter[];
   projectType: 'short-story' | 'novel' | 'series';
+  language?: string;
   books?: Book[];
   sourcebook?: SourcebookEntry[];
   llm_prefs?: {
@@ -176,6 +177,7 @@ export interface ProjectMetadata {
   title: string;
   type: 'short-story' | 'novel' | 'series';
   updatedAt: number;
+  language?: string; // two-letter code
 }
 
 // Tool definitions

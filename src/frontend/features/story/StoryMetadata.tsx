@@ -28,12 +28,16 @@ interface StoryMetadataProps {
   tags: string[];
   notes?: string;
   private_notes?: string;
+  language?: string;
+  /** available instruction languages, used by the metadata dialog */
+  languages?: string[];
   onUpdate: (
     title: string,
     summary: string,
     tags: string[],
     notes?: string,
-    private_notes?: string
+    private_notes?: string,
+    language?: string
   ) => void;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
@@ -49,6 +53,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   tags,
   notes,
   private_notes,
+  language,
+  languages,
   onUpdate,
   onAiGenerateSummary,
   summaryAiDisabledReason,
@@ -71,6 +77,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     tags: string[];
     notes?: string;
     private_notes?: string;
+    language?: string;
   }) => {
     try {
       await api.story.updateMetadata({
@@ -79,13 +86,15 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         tags: data.tags,
         notes: data.notes,
         private_notes: data.private_notes,
+        language: data.language,
       });
       onUpdate(
         data.title,
         data.summary,
         data.tags || [],
         data.notes,
-        data.private_notes
+        data.private_notes,
+        data.language
       );
       // Keep dialog open because saves are triggered by autosave while editing.
     } catch (e) {
@@ -105,7 +114,9 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             tags,
             notes,
             private_notes,
+            language,
           }}
+          languages={languages}
           onSave={handleMetadataSave}
           onClose={() => setMetadataModalOpen(false)}
           onAiGenerate={onAiGenerateSummary}
@@ -114,7 +125,14 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         />
       )}
       <div className="flex justify-between items-start mb-3">
-        <h1 className="text-xl font-bold font-serif tracking-wide">{title}</h1>
+        <h1 className="text-xl font-bold font-serif tracking-wide">
+          {title}
+          {language && (
+            <span className="ml-2 text-sm text-brand-gray-500">
+              ({language.toUpperCase()})
+            </span>
+          )}
+        </h1>
         <button
           onClick={() => setMetadataModalOpen(true)}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"

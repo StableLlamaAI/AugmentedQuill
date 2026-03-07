@@ -36,15 +36,23 @@ def _build_messages(
     system_message_key: str,
     user_prompt_key: str,
     model_overrides: dict,
+    language: str | None = None,
     **prompt_kwargs,
 ) -> list[dict[str, str]]:
-    """Build a two-message system/user prompt pair for story generation flows."""
+    """Build a two-message system/user prompt pair for story generation flows.
+
+    ``language`` is the story/project language code and is forwarded to the
+    prompt helpers.
+    """
     sys_msg = {
         "role": "system",
-        "content": get_system_message(system_message_key, model_overrides),
+        "content": get_system_message(
+            system_message_key, model_overrides, language=language
+        ),
     }
     user_prompt = get_user_prompt(
         user_prompt_key,
+        language=language,
         user_prompt_overrides=model_overrides,
         **prompt_kwargs,
     )
@@ -52,22 +60,31 @@ def _build_messages(
 
 
 def build_chapter_summary_messages(
-    *, mode: str, current_summary: str, chapter_text: str, model_overrides: dict
+    *,
+    mode: str,
+    current_summary: str,
+    chapter_text: str,
+    model_overrides: dict,
+    language: str | None = None,
 ):
     """Build messages for creating or updating a chapter summary."""
     sys_msg = {
         "role": "system",
-        "content": get_system_message("chapter_summarizer", model_overrides),
+        "content": get_system_message(
+            "chapter_summarizer", model_overrides, language=language
+        ),
     }
     if mode == "discard" or not current_summary:
         user_prompt = get_user_prompt(
             "chapter_summary_new",
+            language=language,
             chapter_text=chapter_text,
             user_prompt_overrides=model_overrides,
         )
     else:
         user_prompt = get_user_prompt(
             "chapter_summary_update",
+            language=language,
             existing_summary=current_summary,
             chapter_text=chapter_text,
             user_prompt_overrides=model_overrides,
@@ -81,21 +98,26 @@ def build_story_summary_messages(
     current_story_summary: str,
     chapter_summaries: list[str],
     model_overrides: dict,
+    language: str | None = None,
 ):
     """Build messages for creating or updating a story-level summary."""
     sys_msg = {
         "role": "system",
-        "content": get_system_message("story_summarizer", model_overrides),
+        "content": get_system_message(
+            "story_summarizer", model_overrides, language=language
+        ),
     }
     if mode == "discard" or not current_story_summary:
         user_prompt = get_user_prompt(
             "story_summary_new",
+            language=language,
             chapter_summaries="\n\n".join(chapter_summaries),
             user_prompt_overrides=model_overrides,
         )
     else:
         user_prompt = get_user_prompt(
             "story_summary_update",
+            language=language,
             existing_summary=current_story_summary,
             chapter_summaries="\n\n".join(chapter_summaries),
             user_prompt_overrides=model_overrides,
@@ -109,12 +131,14 @@ def build_write_chapter_messages(
     chapter_title: str,
     chapter_summary: str,
     model_overrides: dict,
+    language: str | None = None,
 ):
     """Build messages for first-pass chapter drafting."""
     return _build_messages(
         system_message_key="story_writer",
         user_prompt_key="write_chapter",
         model_overrides=model_overrides,
+        language=language,
         project_title=project_title,
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
@@ -127,12 +151,14 @@ def build_continue_chapter_messages(
     chapter_summary: str,
     existing_text: str,
     model_overrides: dict,
+    language: str | None = None,
 ):
     """Build messages for continuing an existing chapter draft."""
     return _build_messages(
         system_message_key="story_continuer",
         user_prompt_key="continue_chapter",
         model_overrides=model_overrides,
+        language=language,
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         existing_text=existing_text,

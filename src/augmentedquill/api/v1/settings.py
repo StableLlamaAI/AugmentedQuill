@@ -28,9 +28,8 @@ from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.prompts import (
     get_system_message,
     load_model_prompt_overrides,
-    DEFAULT_SYSTEM_MESSAGES,
-    DEFAULT_USER_PROMPTS,
-    PROMPT_TYPES,
+    get_available_languages,
+    DEFAULT_PROMPTS,
     ensure_string,
 )
 from augmentedquill.services.settings.settings_api_ops import (
@@ -96,24 +95,48 @@ async def api_settings_post(request: Request) -> JSONResponse:
 
 @router.get("/prompts")
 async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
-    """Get all resolved prompts (defaults + global overrides + model overrides)."""
+    """Get all resolved prompts (defaults + global overrides + model overrides).
+
+    The response now also includes the list of available languages as
+    determined by the bundled instructions file, and the values returned
+    for ``system_messages``/``user_prompts`` are resolved into the active
+    project's language (falling back to English).
+    """
     machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     if not model_name:
         model_name = machine_config.get("openai", {}).get("selected")
+
+    # figure out project language if there's an active project
+    from augmentedquill.services.projects.projects import get_active_project_dir
+    from augmentedquill.core.config import load_story_config
+
+    project_language = "en"
+    active = get_active_project_dir()
+    if active:
+        story = load_story_config(active / "story.json") or {}
+        project_language = str(story.get("language", "en") or "en")
 
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
 
     # Resolve all system messages
     system_messages = {}
-    for key in DEFAULT_SYSTEM_MESSAGES.keys():
-        system_messages[key] = get_system_message(key, model_overrides)
-
-    # Resolve all user prompts (templates)
     user_prompts = {}
-    for key in DEFAULT_USER_PROMPTS.keys():
-        user_prompts[key] = ensure_string(
-            model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
+    for key in DEFAULT_PROMPTS.keys():
+        # fill both maps with identical raw templates; the frontend can
+        # display them separately if desired but they originate from the
+        # same source.
+        system_messages[key] = get_system_message(
+            key, model_overrides, language=project_language
         )
+
+        entry = DEFAULT_PROMPTS.get(key, {})
+        if isinstance(entry, dict):
+            template = entry.get(project_language) or entry.get("en") or ""
+        else:
+            template = ensure_string(entry)
+        if key in model_overrides:
+            template = ensure_string(model_overrides[key])
+        user_prompts[key] = template
 
     return JSONResponse(
         status_code=200,
@@ -121,7 +144,8 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
             "ok": True,
             "system_messages": system_messages,
             "user_prompts": user_prompts,
-            "prompt_types": PROMPT_TYPES,
+            "languages": get_available_languages(),
+            "project_language": project_language,
         },
     )
 

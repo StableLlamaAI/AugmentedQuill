@@ -62,6 +62,7 @@ export const mapSelectStoryToState = (
     image_additional_info: story.image_additional_info || '',
     chapters,
     projectType: story.project_type || 'novel',
+    language: story.language || 'en',
     books: story.books || [],
     sourcebook: story.sourcebook || [],
     conflicts: story.conflicts || [],

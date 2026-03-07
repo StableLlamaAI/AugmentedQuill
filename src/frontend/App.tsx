@@ -165,6 +165,7 @@ const App: React.FC = () => {
     refreshProjects,
     isCreateProjectOpen,
     setIsCreateProjectOpen,
+    instructionLanguages,
     handleLoadProject,
     handleImportProject,
     handleCreateProject,
@@ -309,6 +310,7 @@ const App: React.FC = () => {
           refreshProjects={refreshProjects}
           currentTheme={currentTheme}
           prompts={prompts}
+          instructionLanguages={instructionLanguages}
           isImagesOpen={isImagesOpen}
           setIsImagesOpen={setIsImagesOpen}
           updateStoryImageSettings={updateStoryImageSettings}
@@ -434,6 +436,7 @@ const App: React.FC = () => {
             allowWebSearch,
             setAllowWebSearch,
           }}
+          instructionLanguages={instructionLanguages}
         />
 
         <DebugLogs

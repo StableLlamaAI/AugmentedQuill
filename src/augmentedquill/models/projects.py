@@ -25,6 +25,7 @@ class ProjectSelectRequest(BaseModel):
 class ProjectCreateRequest(BaseModel):
     name: str
     type: str  # 'short-story', 'novel', 'series'
+    language: Optional[str] = "en"
 
 
 class ProjectConvertRequest(BaseModel):

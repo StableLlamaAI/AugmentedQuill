@@ -141,7 +141,10 @@ def validate_project_dir(path: Path) -> ProjectInfo:
 
 
 def initialize_project_dir(
-    path: Path, project_title: str = "Untitled Project", project_type: str = "novel"
+    path: Path,
+    project_title: str = "Untitled Project",
+    project_type: str = "novel",
+    language: str = "en",
 ) -> None:
     """Create minimal project structure at the given path."""
     initialize_project_dir_data(
@@ -149,6 +152,7 @@ def initialize_project_dir(
         project_title=project_title,
         project_type=project_type,
         now_iso=datetime.now().isoformat(),
+        language=language,
     )
 
 
@@ -247,7 +251,9 @@ def delete_chapter(chap_id: int) -> None:
     delete_chapter_in_project(active=active, chap_id=chap_id)
 
 
-def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
+def create_project(
+    name: str, project_type: str = "novel", language: str = "en"
+) -> Tuple[bool, str]:
     """Create a new project explicitly."""
     ok, msg, path = create_project_under_root(
         name=name,
@@ -255,6 +261,7 @@ def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
         projects_root=get_projects_root(),
         initialize_project=initialize_project_dir,
         validate_project=validate_project_dir,
+        language=language,
     )
     if ok and path is not None:
         set_active_project(path)
@@ -343,6 +350,7 @@ def update_story_metadata(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    language: str = None,
 ) -> None:
     """Update general story metadata."""
     active = _require_active_project()
@@ -353,6 +361,7 @@ def update_story_metadata(
         tags=tags,
         notes=notes,
         private_notes=private_notes,
+        language=language,
     )
 
 

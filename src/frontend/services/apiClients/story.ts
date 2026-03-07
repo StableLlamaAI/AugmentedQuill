@@ -69,6 +69,7 @@ export const storyApi = {
     tags?: string[];
     notes?: string;
     private_notes?: string;
+    language?: string;
   }) => {
     return fetchJson<{ ok: boolean; detail?: string }>(
       '/story/metadata',

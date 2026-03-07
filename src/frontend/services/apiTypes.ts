@@ -69,6 +69,7 @@ export interface ProjectListItem {
   type?: 'short-story' | 'novel' | 'series';
   path?: string;
   is_valid?: boolean;
+  language?: string;
 }
 
 export interface StoryApiPayload {

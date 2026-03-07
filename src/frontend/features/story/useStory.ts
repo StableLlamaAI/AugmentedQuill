@@ -232,7 +232,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     summary: string,
     tags: string[],
     notes?: string,
-    private_notes?: string
+    private_notes?: string,
+    language?: string
   ) => {
     const newState = {
       ...story,
@@ -241,6 +242,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       styleTags: tags,
       notes,
       private_notes,
+      language,
     };
     pushState(newState);
 
@@ -251,6 +253,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         tags,
         notes,
         private_notes,
+        language,
       });
       await api.story.updateTags(tags);
     } catch (e) {

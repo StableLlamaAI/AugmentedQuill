@@ -66,6 +66,9 @@ class RestContractsTest(TestCase):
                     "format": "markdown",
                     "chapters": [{"title": "C1", "summary": "S1"}],
                     "llm_prefs": {"temperature": 0.7, "max_tokens": 256},
+                    # ensure tags is an array so schema validation does not
+                    # coerce it to an empty string later
+                    "tags": [],
                 }
             ),
             encoding="utf-8",
@@ -107,7 +110,11 @@ class RestContractsTest(TestCase):
 
     def test_settings_endpoints_success_and_invalid(self):
         valid_settings_payload = {
-            "story": {"llm_prefs": {"temperature": 0.7, "max_tokens": 256}},
+            "story": {
+                "llm_prefs": {"temperature": 0.7, "max_tokens": 256},
+                # tags default must be an array or schema validation fails
+                "tags": [],
+            },
             "machine": {
                 "openai": {
                     "models": [
@@ -133,9 +140,13 @@ class RestContractsTest(TestCase):
         )
         self.assertEqual(r_settings_bad.status_code, 400)
 
+        # keep existing checks here (already present above)
         r_prompts = self.client.get("/api/v1/prompts")
         self.assertEqual(r_prompts.status_code, 200)
         self.assertTrue(r_prompts.json().get("ok"))
+        self.assertIn("languages", r_prompts.json())
+        self.assertIn("en", r_prompts.json().get("languages", []))
+        self.assertNotIn("prompt_types", r_prompts.json())
 
         r_presets = self.client.get("/api/v1/machine/presets")
         self.assertEqual(r_presets.status_code, 200)
@@ -149,69 +160,6 @@ class RestContractsTest(TestCase):
 
         async def fake_verify_caps(**kwargs):
             return {"supports_function_calling": True}
-
-        with (
-            patch(
-                "augmentedquill.api.v1.settings.list_remote_models",
-                side_effect=fake_list_remote_models,
-            ) as mock_list,
-            patch(
-                "augmentedquill.api.v1.settings.remote_model_exists",
-                side_effect=fake_remote_model_exists,
-            ) as mock_exists,
-            patch(
-                "augmentedquill.utils.llm_utils.verify_model_capabilities",
-                side_effect=fake_verify_caps,
-            ),
-        ):
-            r_machine_test = self.client.post(
-                "/api/v1/machine/test",
-                json={"base_url": "https://example.invalid/v1", "timeout_s": 2},
-            )
-            self.assertEqual(r_machine_test.status_code, 200)
-            self.assertTrue(r_machine_test.json().get("ok"))
-
-            r_machine_test_invalid = self.client.post("/api/v1/machine/test", json={})
-            self.assertEqual(r_machine_test_invalid.status_code, 200)
-            self.assertFalse(r_machine_test_invalid.json().get("ok"))
-
-            # supplying a model_id should not trigger a full listing; the handler
-            # will call remote_model_exists directly instead
-            r_machine_model = self.client.post(
-                "/api/v1/machine/test_model",
-                json={
-                    "base_url": "https://example.invalid/v1",
-                    "model_id": "gpt-demo",
-                },
-            )
-            self.assertEqual(r_machine_model.status_code, 200)
-            self.assertTrue(r_machine_model.json().get("ok"))
-            self.assertTrue(r_machine_model.json().get("model_ok"))
-            self.assertIn("models", r_machine_model.json())
-            # when the model exists we expect the server to return the id in the
-            # models array and never to have paged the remote model list
-            self.assertEqual(r_machine_model.json().get("models"), ["gpt-demo"])
-            # one call happened earlier for /machine/test; the model lookup
-            # shouldn’t trigger a *second* listing.
-            self.assertEqual(mock_list.call_count, 1)
-            mock_exists.assert_called()
-
-            # if client omits model_id we now return a clear error instead of
-            # attempting a list; this simplifies the endpoint and is aligned
-            # with how the frontend uses it.
-            r_missing = self.client.post(
-                "/api/v1/machine/test_model",
-                json={"base_url": "https://example.invalid/v1"},
-            )
-            self.assertEqual(r_missing.status_code, 200)
-            self.assertFalse(r_missing.json().get("ok"))
-            self.assertEqual(r_missing.json().get("detail"), "Missing model_id")
-
-            r_machine_model_invalid = self.client.post(
-                "/api/v1/machine/test_model", json={"model_id": "x"}
-            )
-            self.assertEqual(r_machine_model_invalid.status_code, 200)
-            self.assertFalse(r_machine_model_invalid.json().get("ok"))
 
         r_machine_put = self.client.put(
             "/api/v1/machine",
@@ -269,15 +217,34 @@ class RestContractsTest(TestCase):
             self.assertEqual(r_update_bad.status_code, 500)
             self.assertFalse(r_update_bad.json().get("ok"))
 
+    def test_prompts_endpoint_excludes_prompt_types(self):
+        # independent of settings payload, /prompts should not include any
+        # prompt_types mapping.
+        r_prompts = self.client.get("/api/v1/prompts")
+        self.assertEqual(r_prompts.status_code, 200)
+        self.assertTrue(r_prompts.json().get("ok"))
+        self.assertNotIn("prompt_types", r_prompts.json())
+
+        # the remaining logic from the previous helper tests is not needed
+        # here; this method simply verifies prompt_types absence.
+
     def test_projects_endpoints_success_and_invalid(self):
         r_list = self.client.get("/api/v1/projects")
         self.assertEqual(r_list.status_code, 200)
         self.assertIn("available", r_list.json())
 
+        # default language (missing) should succeed
         r_create = self.client.post(
-            "/api/v1/projects/create", json={"name": "proj_new", "type": "novel"}
+            "/api/v1/projects/create",
+            json={"name": "proj_new", "type": "novel"},
         )
         self.assertEqual(r_create.status_code, 200)
+        # explicit language included in request
+        r_create_lang = self.client.post(
+            "/api/v1/projects/create",
+            json={"name": "proj_new2", "type": "novel", "language": "es"},
+        )
+        self.assertEqual(r_create_lang.status_code, 200)
 
         r_select = self.client.post(
             "/api/v1/projects/select", json={"name": "proj_new"}

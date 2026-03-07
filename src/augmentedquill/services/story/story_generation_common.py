@@ -54,6 +54,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         current_story_summary=current_story_summary,
         chapter_summaries=chapter_summaries,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
     return {
         "story": story,
@@ -93,6 +94,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         current_summary=current_summary,
         chapter_text=chapter_text,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {
@@ -134,6 +136,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_title=title,
         chapter_summary=summary,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {
@@ -173,6 +176,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_summary=summary,
         existing_text=existing,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {

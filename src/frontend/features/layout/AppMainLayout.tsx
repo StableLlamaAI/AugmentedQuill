@@ -27,12 +27,15 @@ type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
   editorControls: MainEditorControls;
   chatControls: MainChatControls;
+  /** languages available for instructions; used by the metadata editor */
+  instructionLanguages: string[];
 };
 
 export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
   sidebarControls,
   editorControls,
   chatControls,
+  instructionLanguages,
 }) => {
   const { bgMain, isLight, currentTheme } = useTheme();
   const {
@@ -113,6 +116,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           tags={story.styleTags}
           notes={story.notes}
           private_notes={story.private_notes}
+          language={story.language}
           conflicts={story.conflicts}
           onAiGenerateSummary={(action, onProgress) =>
             handleSidebarAiAction('story', story.id, action, onProgress)
@@ -124,6 +128,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           }
           onUpdate={updateStoryMetadata}
           theme={currentTheme}
+          languages={instructionLanguages}
         />
         <ChapterList
           chapters={story.chapters}

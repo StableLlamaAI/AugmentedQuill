@@ -25,7 +25,10 @@ def build_story_cfg_from_payload(story: dict) -> dict:
         "project_title": (story.get("project_title") or "Untitled Project"),
         "format": (story.get("format") or "markdown"),
         "story_summary": (story.get("story_summary") or ""),
-        "tags": (story.get("tags") or ""),
+        # tags should be an array; avoid falling back to an empty string
+        # which breaks JSON schema validation.  Use an empty list if not
+        # provided.
+        "tags": story.get("tags") if isinstance(story.get("tags"), list) else [],
         "chapters": normalized_chapters,
         "llm_prefs": {
             "temperature": float(story.get("llm_prefs", {}).get("temperature", 0.7)),

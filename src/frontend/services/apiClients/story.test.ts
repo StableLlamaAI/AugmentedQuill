@@ -109,5 +109,18 @@ describe('storyApi', () => {
       },
       'Failed to update story metadata'
     );
+
+    // language forwarding
+    const payload2 = { ...payload, language: 'es' };
+    await storyApi.updateMetadata(payload2);
+    expect(fetchJson).toHaveBeenCalledWith(
+      '/story/metadata',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload2),
+      },
+      'Failed to update story metadata'
+    );
   });
 });

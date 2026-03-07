@@ -124,15 +124,15 @@ export type MainSidebarControls = {
   ) => Promise<string | undefined>;
   isEditingAvailable: boolean;
   handleOpenImages: () => void;
+  // story metadata updates now include optional language so that the UI
+  // can propagate project language changes from the metadata editor.
   updateStoryMetadata: (
-    updates: Partial<{
-      title: string;
-      summary: string;
-      styleTags: string[];
-      notes: string;
-      private_notes: string;
-      conflicts: string[];
-    }>
+    title: string,
+    summary: string,
+    tags: string[],
+    notes?: string,
+    private_notes?: string,
+    language?: string
   ) => Promise<void>;
 };
 

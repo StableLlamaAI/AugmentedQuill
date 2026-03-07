@@ -26,6 +26,11 @@ def normalize_story_for_frontend(story: dict) -> dict:
         return {}
     res = story.copy()
 
+    # ensure language field is surfaced; frontend may use it to display
+    # or to pass back when creating new content.
+    if "language" not in res:
+        res["language"] = "en"
+
     # Frontend expects a list shape; normalizing here keeps storage format
     # decoupled from UI transport format.
     sb = res.get("sourcebook", {})

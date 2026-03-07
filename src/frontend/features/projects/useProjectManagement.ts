@@ -25,7 +25,10 @@ type UseProjectManagementParams = {
   updateStoryMetadata: (
     title: string,
     summary: string,
-    tags: string[]
+    tags: string[],
+    notes?: string,
+    private_notes?: string,
+    language?: string
   ) => Promise<void>;
   handleSelectChat: (id: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
@@ -41,6 +44,7 @@ const mapProjectsList = (projects: ProjectListItem[]) =>
     title: project.title || project.name,
     type: project.type || 'novel',
     updatedAt: Date.now(),
+    language: project.language || 'en',
   }));
 
 export function useProjectManagement({
@@ -62,6 +66,7 @@ export function useProjectManagement({
       : [{ id: story.id, title: story.title, updatedAt: Date.now() }];
   });
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [instructionLanguages, setInstructionLanguages] = useState<string[]>(['en']);
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -163,10 +168,25 @@ export function useProjectManagement({
     setIsCreateProjectOpen(true);
   }, []);
 
-  const handleCreateProjectConfirm = useCallback(
-    async (name: string, type: CreateProjectType) => {
+  // gather languages from the instructions endpoint so the create dialog can
+  // populate its dropdown
+  useEffect(() => {
+    const loadLangs = async () => {
       try {
-        const result = await api.projects.create(name, type);
+        const data = await api.settings.getPrompts();
+        if (data.languages) setInstructionLanguages(data.languages);
+      } catch (e) {
+        console.error('unable to load instruction languages', e);
+        setInstructionLanguages(['en']);
+      }
+    };
+    loadLangs();
+  }, []);
+
+  const handleCreateProjectConfirm = useCallback(
+    async (name: string, type: CreateProjectType, language: string = 'en') => {
+      try {
+        const result = await api.projects.create(name, type, language);
         if (!result.ok) return;
 
         const listing = await api.projects.list();
@@ -242,21 +262,32 @@ export function useProjectManagement({
   );
 
   const handleRenameProject = useCallback(
-    (id: string, newName: string) => {
+    (id: string, newName: string, newLang?: string) => {
       if (id === story.id) {
-        updateStoryMetadata(newName, story.summary, story.styleTags);
+        // if the active project is renamed, update story metadata
+        updateStoryMetadata(
+          newName,
+          story.summary,
+          story.styleTags,
+          undefined,
+          undefined,
+          newLang
+        );
         return;
       }
 
       setProjects((prev) =>
         prev.map((project) =>
-          project.id === id ? { ...project, title: newName } : project
+          project.id === id
+            ? { ...project, title: newName, language: newLang || project.language }
+            : project
         )
       );
       const saved = localStorage.getItem(`project_${id}`);
       if (!saved) return;
       const loaded = JSON.parse(saved);
       loaded.title = newName;
+      if (newLang) loaded.language = newLang;
       localStorage.setItem(`project_${id}`, JSON.stringify(loaded));
     },
     [story.id, story.summary, story.styleTags, updateStoryMetadata]
@@ -268,6 +299,7 @@ export function useProjectManagement({
     refreshProjects,
     isCreateProjectOpen,
     setIsCreateProjectOpen,
+    instructionLanguages,
     handleLoadProject,
     handleImportProject,
     handleCreateProject,

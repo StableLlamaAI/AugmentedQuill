@@ -94,6 +94,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
 
         prompt = get_user_prompt(
             "suggest_continuation",
+            language=story.get("language", "en"),
             chapter_title=title or "",
             chapter_summary=summary or "",
             current_text=current_text or "",
