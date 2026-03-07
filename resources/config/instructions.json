@@ -211,7 +211,7 @@
     "suggest_continuation": {
       "_use": "WRITING",
       "en": [
-        "{chapter_title}",
+        "# {chapter_title}",
         "",
         "{chapter_summary}",
         "",

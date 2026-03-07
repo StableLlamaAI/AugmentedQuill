@@ -512,8 +512,26 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       container.scrollTop = container.scrollHeight;
     }, []);
 
+    // We need to scroll in a few scenarios:
+    //   * the LLM is in the middle of loading or suggesting content, since
+    //     new text streaming at the bottom should always be visible.  By
+    //     including `continuations` in the dependency list we rerun the effect
+    //     each time the options array is updated; while `isSuggesting` is true
+    //     this ensures the viewport keeps up with an expanding suggestion.
+    //   * the continuation panel first becomes visible
+    //     (`hasContinuationOptions` transitions from false to true), because
+    //     its appearance can push the editor content upward and may hide the
+    //     current viewport.
+    //
+    // We deliberately *do not* auto-scroll when the user is editing while the
+    // panel is already present; the guard below prevents scrolling unless an
+    // LLM action is active or the panel just opened.
+    const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
     useEffect(() => {
-      if (!isAiLoading && !isSuggesting && !hasContinuationOptions) return;
+      const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
+      prevHasContinuationRef.current = hasContinuationOptions;
+
+      if (!(isAiLoading || isSuggesting || justOpened)) return;
 
       const raf = window.requestAnimationFrame(() => {
         scrollMainContentToBottom();
@@ -593,6 +611,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         {/* Main Scrollable Content Area */}
         <div
           ref={scrollContainerRef}
+          data-testid="editor-scroll-container"
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
