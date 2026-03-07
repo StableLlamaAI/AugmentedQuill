@@ -80,9 +80,25 @@ def add_llm_log(log_entry: Dict[str, Any]):
 
 
 def create_log_entry(
-    url: str, method: str, headers: Dict[str, str], body: Any, streaming: bool = False
+    url: str,
+    method: str,
+    headers: Dict[str, str],
+    body: Any,
+    streaming: bool = False,
+    include_response: bool = True,
 ) -> Dict[str, Any]:
-    """Create a new log entry structure."""
+    """Create a new log entry structure.
+
+    The returned dictionary is the shape that gets stored in ``llm_logs`` along
+    with the timestamp.  By default a ``response`` object is included,
+    pre‑populated with placeholders for the status, body, etc.  When
+    ``include_response`` is ``False`` (used for the initial "request started"
+    entry) we instead set the field to ``None`` so that the resulting log is
+    easier to read and doesn't misleadingly show an empty response object.
+    The caller is responsible for constructing the response later when the
+    response is actually available.
+    """
+
     safe_body = body
     if isinstance(body, dict):
         safe_body = body.copy()
@@ -90,7 +106,7 @@ def create_log_entry(
             if key in safe_body:
                 safe_body[key] = "REDACTED"
 
-    return {
+    entry: Dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "timestamp_start": datetime.datetime.now().isoformat(),
         "timestamp_end": None,
@@ -103,12 +119,18 @@ def create_log_entry(
             },
             "body": safe_body,
         },
-        "response": {
+    }
+
+    if include_response:
+        entry["response"] = {
             "status_code": None,
             "streaming": streaming,
             "chunks": [] if streaming else None,
             "full_content": "" if streaming else None,
             "body": None if not streaming else None,
             "error_detail": None,
-        },
-    }
+        }
+    else:
+        entry["response"] = None
+
+    return entry

@@ -94,7 +94,25 @@ def _finalize_log_entry(
     error: str | None = None,
     error_detail: str | None = None,
 ) -> None:
+    """Fill in the trailing fields of a log entry and write it.
+
+    Callers may pass in a log entry that was created with
+    ``include_response=False``; in that case ``response`` will be ``None`` and
+    we need to build a default structure before setting individual fields.
+    """
     log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+
+    # ensure a response container exists so downstream code can index it
+    if log_entry.get("response") is None:
+        log_entry["response"] = {
+            "status_code": None,
+            "streaming": False,
+            "chunks": None,
+            "full_content": None,
+            "body": None,
+            "error_detail": None,
+        }
+
     if status_code is not None:
         log_entry["response"]["status_code"] = status_code
     if response_body is not None:
@@ -116,12 +134,17 @@ async def logged_request(
     raise_for_status: bool = False,
 ) -> httpx.Response:
     """Execute one HTTP request with guaranteed request/response logging."""
+    # log the request start; we intentionally omit the response object here
+    # (it will be filled in later when the request completes).  setting the
+    # field to ``None`` keeps the raw log easier to read and avoids confusion
+    # when inspecting the dump.
     log_entry = create_log_entry(
         url,
         str(method).upper(),
         _safe_log_headers(headers),
         _safe_log_body(body),
         streaming=False,
+        include_response=False,
     )
     log_entry["origin"] = _resolve_call_origin()
     add_llm_log(log_entry)
