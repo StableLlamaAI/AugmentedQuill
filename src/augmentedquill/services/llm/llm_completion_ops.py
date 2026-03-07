@@ -10,11 +10,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, AsyncIterator
-import datetime
 import os
 import json
-
-import httpx
 
 from augmentedquill.core.config import (
     load_story_config,
@@ -26,7 +23,10 @@ from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
 )
-from augmentedquill.services.llm.llm_logging import add_llm_log, create_log_entry
+from augmentedquill.services.llm.llm_http_ops import (
+    logged_request,
+    logged_stream_request,
+)
 from augmentedquill.services.llm.llm_request_helpers import (
     get_story_llm_preferences,
     build_headers,
@@ -270,50 +270,16 @@ async def unified_chat_complete(
 
 
 async def _execute_llm_request(url, headers, body, timeout_s):
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    # We also mask common keys in the body that might contain credentials
-    safe_log_headers = {
-        k: (v if k.lower() not in ("authorization", "x-api-key") else "REDACTED")
-        for k, v in headers.items()
-    }
-
-    # Clone body to avoid mutating original and mask potentially sensitive fields
-    safe_body = body
-    if isinstance(body, dict):
-        safe_body = body.copy()
-        for key in ["api_key", "secret", "password"]:
-            if key in safe_body:
-                safe_body[key] = "REDACTED"
-
-    log_entry = create_log_entry(url, "POST", safe_log_headers, safe_body)
-    add_llm_log(log_entry)
-
     timeout_obj = build_timeout(timeout_s)
-
-    # Security: No longer printing raw headers or body to console to avoid sensitive information exposure.
-    # LLM logs are stored securely via add_llm_log.
-
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            r = await client.post(url, headers=headers, json=body)
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["status_code"] = r.status_code
-
-            r.raise_for_status()
-            resp_json = r.json()
-            log_entry["response"]["body"] = resp_json
-            # Re-log with the response body
-            add_llm_log(log_entry)
-            return resp_json
-        except Exception as e:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            # Re-log with error details
-            add_llm_log(log_entry)
-            raise
+    response = await logged_request(
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+        raise_for_status=True,
+    )
+    return response.json()
 
 
 async def openai_chat_complete(
@@ -430,55 +396,40 @@ async def openai_chat_complete_stream(
     if extra_body:
         body.update(extra_body)
 
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    safe_log_headers = {
-        k: (v if k.lower() != "authorization" else "REDACTED")
-        for k, v in headers.items()
-    }
-    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
-    add_llm_log(log_entry)
-
     timeout_obj = build_timeout(timeout_s)
 
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            async with client.stream("POST", url, headers=headers, json=body) as resp:
-                log_entry["response"]["status_code"] = resp.status_code
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data = line[len("data: ") :].strip()
-                        if data == "[DONE]":
-                            break
+    async with logged_stream_request(
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+    ) as (resp, log_entry):
+        resp.raise_for_status()
+        async for line in resp.aiter_lines():
+            if not line:
+                continue
+            if line.startswith("data: "):
+                data = line[len("data: ") :].strip()
+                if data == "[DONE]":
+                    break
 
-                        import json as _json
+                import json as _json
 
-                        try:
-                            obj = _json.loads(data)
-                            log_entry["response"]["chunks"].append(obj)
-                        except Exception:
-                            obj = None
-                        if not isinstance(obj, dict):
-                            continue
-                        try:
-                            content = obj["choices"][0]["delta"].get("content")
-                        except Exception:
-                            content = None
-                        if content:
-                            log_entry["response"]["full_content"] += content
-                            yield content
-        except Exception as e:
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            add_llm_log(log_entry)
-            raise
-        finally:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            add_llm_log(log_entry)
+                try:
+                    obj = _json.loads(data)
+                    log_entry["response"]["chunks"].append(obj)
+                except Exception:
+                    obj = None
+                if not isinstance(obj, dict):
+                    continue
+                try:
+                    content = obj["choices"][0]["delta"].get("content")
+                except Exception:
+                    content = None
+                if content:
+                    log_entry["response"]["full_content"] += content
+                    yield content
 
 
 async def openai_completions_stream(
@@ -517,52 +468,37 @@ async def openai_completions_stream(
     if extra_body:
         body.update(extra_body)
 
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    safe_log_headers = {
-        k: (v if k.lower() != "authorization" else "REDACTED")
-        for k, v in headers.items()
-    }
-    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
-    add_llm_log(log_entry)
-
     timeout_obj = build_timeout(timeout_s)
 
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            async with client.stream("POST", url, headers=headers, json=body) as resp:
-                log_entry["response"]["status_code"] = resp.status_code
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data = line[len("data: ") :].strip()
-                        if data == "[DONE]":
-                            break
+    async with logged_stream_request(
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+    ) as (resp, log_entry):
+        resp.raise_for_status()
+        async for line in resp.aiter_lines():
+            if not line:
+                continue
+            if line.startswith("data: "):
+                data = line[len("data: ") :].strip()
+                if data == "[DONE]":
+                    break
 
-                        import json as _json
+                import json as _json
 
-                        try:
-                            obj = _json.loads(data)
-                            log_entry["response"]["chunks"].append(obj)
-                        except Exception:
-                            obj = None
-                        if not isinstance(obj, dict):
-                            continue
-                        try:
-                            content = obj["choices"][0]["text"]
-                        except Exception:
-                            content = None
-                        if content:
-                            log_entry["response"]["full_content"] += content
-                            yield content
-        except Exception as e:
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            add_llm_log(log_entry)
-            raise
-        finally:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            add_llm_log(log_entry)
+                try:
+                    obj = _json.loads(data)
+                    log_entry["response"]["chunks"].append(obj)
+                except Exception:
+                    obj = None
+                if not isinstance(obj, dict):
+                    continue
+                try:
+                    content = obj["choices"][0]["text"]
+                except Exception:
+                    content = None
+                if content:
+                    log_entry["response"]["full_content"] += content
+                    yield content

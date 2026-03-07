@@ -9,11 +9,9 @@
 
 from __future__ import annotations
 
-import datetime
-
 import httpx
 
-from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
+from augmentedquill.services.llm.llm_http_ops import logged_request
 from augmentedquill.services.llm.llm_completion_ops import _validate_base_url
 
 
@@ -49,8 +47,6 @@ async def list_remote_models(
         return False, [], str(e)
 
     headers = auth_headers(api_key)
-    log_entry = create_log_entry(url, "GET", headers, None)
-    add_llm_log(log_entry)
 
     try:
         timeout_obj = httpx.Timeout(float(timeout_s))
@@ -58,18 +54,18 @@ async def list_remote_models(
         timeout_obj = httpx.Timeout(10.0)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_obj) as client:
-            response = await client.get(url, headers=headers)
-            log_entry["response"]["status_code"] = response.status_code
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            if not response.is_success:
-                log_entry["response"]["error"] = f"HTTP {response.status_code}"
-                return False, [], f"HTTP {response.status_code}"
-            data = response.json()
-            log_entry["response"]["body"] = data
+        response = await logged_request(
+            method="GET",
+            url=url,
+            headers=headers,
+            timeout=timeout_obj,
+            body=None,
+            raise_for_status=False,
+        )
+        if not response.is_success:
+            return False, [], f"HTTP {response.status_code}"
+        data = response.json()
     except Exception as exc:
-        log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-        log_entry["response"]["error"] = str(exc)
         return False, [], str(exc)
 
     models: list[str] = []
@@ -121,38 +117,38 @@ async def remote_model_exists(
     headers = {"Content-Type": "application/json", **auth_headers(api_key)}
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_obj) as client:
-            url1 = f"{base}/models/{model_id}"
-            log_entry1 = create_log_entry(url1, "GET", auth_headers(api_key), None)
-            add_llm_log(log_entry1)
+        url1 = f"{base}/models/{model_id}"
+        response = await logged_request(
+            method="GET",
+            url=url1,
+            headers=auth_headers(api_key),
+            timeout=timeout_obj,
+            body=None,
+            raise_for_status=False,
+        )
 
-            response = await client.get(url1, headers=auth_headers(api_key))
-            log_entry1["response"]["status_code"] = response.status_code
-            log_entry1["timestamp_end"] = datetime.datetime.now().isoformat()
+        if response.is_success:
+            return True, None
 
-            if response.is_success:
-                log_entry1["response"]["body"] = response.json()
-                return True, None
+        url2 = f"{base}/chat/completions"
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "temperature": 0,
+        }
 
-            url2 = f"{base}/chat/completions"
-            payload = {
-                "model": model_id,
-                "messages": [{"role": "user", "content": "ping"}],
-                "max_tokens": 1,
-                "temperature": 0,
-            }
-            log_entry2 = create_log_entry(url2, "POST", headers, payload)
-            add_llm_log(log_entry2)
+        response2 = await logged_request(
+            method="POST",
+            url=url2,
+            headers=headers,
+            timeout=timeout_obj,
+            body=payload,
+            raise_for_status=False,
+        )
+        if response2.is_success:
+            return True, None
 
-            response2 = await client.post(url2, headers=headers, json=payload)
-            log_entry2["response"]["status_code"] = response2.status_code
-            log_entry2["timestamp_end"] = datetime.datetime.now().isoformat()
-
-            if response2.is_success:
-                log_entry2["response"]["body"] = response2.json()
-                return True, None
-
-            log_entry2["response"]["error"] = f"HTTP {response2.status_code}"
-            return False, f"HTTP {response2.status_code}"
+        return False, f"HTTP {response2.status_code}"
     except Exception as exc:
         return False, str(exc)

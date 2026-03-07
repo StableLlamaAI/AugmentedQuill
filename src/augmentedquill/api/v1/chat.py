@@ -203,11 +203,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             status_code=400, detail="Missing base_url or model in configuration"
         )
 
-    url = str(base_url).rstrip("/") + "/chat/completions"
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
     temperature, max_tokens = resolve_story_llm_prefs(
         config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
         active_project_dir=get_active_project_dir(),
@@ -264,17 +259,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             # Invalid JSON is ignored by design so users can save drafts safely.
             pass
 
-    body: Dict[str, Any] = {
-        "model": model_id,
-        "messages": req_messages,
-        "temperature": model_temperature,
-        "stream": True,
-    }
-    if isinstance(model_max_tokens, int):
-        body["max_tokens"] = model_max_tokens
-    if extra_body:
-        body.update(extra_body)
-
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
     story_tools = get_registered_tool_schemas()
@@ -284,14 +268,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         # This prevents some models from hallucinating tool usage even when told not to.
         if tool_choice == "none":
             pass
-        else:
-            body["tools"] = story_tools
-            if tool_choice:
-                body["tool_choice"] = tool_choice
-
-    log_entry = create_log_entry(url, "POST", headers, body, streaming=True)
-    log_entry["model_type"] = model_type
-    add_llm_log(log_entry)
 
     async def _gen():
         """Gen."""
@@ -308,7 +284,6 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 temperature=model_temperature,
                 max_tokens=model_max_tokens,
                 extra_body=extra_body,
-                log_entry=log_entry,
                 skip_validation=True,  # Trust configured models
             ):
                 # Transform to client expected format

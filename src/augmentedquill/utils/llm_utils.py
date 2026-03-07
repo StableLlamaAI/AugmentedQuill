@@ -16,6 +16,8 @@ import time
 
 import httpx
 
+from augmentedquill.services.llm.llm_http_ops import logged_request
+
 # 1x1 transparent pixel
 PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
@@ -45,7 +47,7 @@ async def _probe_model_capabilities(
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     headers["Content-Type"] = "application/json"
 
-    async def check_vision(client):
+    async def check_vision():
         """Check Vision."""
         try:
             payload = {
@@ -66,12 +68,19 @@ async def _probe_model_capabilities(
                 ],
                 "max_tokens": 1,
             }
-            response = await client.post(url, json=payload, headers=headers)
+            response = await logged_request(
+                method="POST",
+                url=url,
+                headers=headers,
+                timeout=httpx.Timeout(float(timeout_s or 10)),
+                body=payload,
+                raise_for_status=False,
+            )
             return response.status_code == 200
         except Exception:
             return False
 
-    async def check_function_calling(client):
+    async def check_function_calling():
         """Check Function Calling."""
         try:
             payload = {
@@ -90,18 +99,24 @@ async def _probe_model_capabilities(
                 "tool_choice": "auto",
                 "max_tokens": 1,
             }
-            response = await client.post(url, json=payload, headers=headers)
+            response = await logged_request(
+                method="POST",
+                url=url,
+                headers=headers,
+                timeout=httpx.Timeout(float(timeout_s or 10)),
+                body=payload,
+                raise_for_status=False,
+            )
             return response.status_code == 200
         except Exception:
             return False
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_s) as client:
-            results = await asyncio.gather(
-                check_vision(client),
-                check_function_calling(client),
-                return_exceptions=True,
-            )
+        results = await asyncio.gather(
+            check_vision(),
+            check_function_calling(),
+            return_exceptions=True,
+        )
     except Exception:
         results = [False, False]
 
