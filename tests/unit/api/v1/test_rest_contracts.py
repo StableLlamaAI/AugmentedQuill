@@ -154,11 +154,11 @@ class RestContractsTest(TestCase):
             patch(
                 "augmentedquill.api.v1.settings.list_remote_models",
                 side_effect=fake_list_remote_models,
-            ),
+            ) as mock_list,
             patch(
                 "augmentedquill.api.v1.settings.remote_model_exists",
                 side_effect=fake_remote_model_exists,
-            ),
+            ) as mock_exists,
             patch(
                 "augmentedquill.utils.llm_utils.verify_model_capabilities",
                 side_effect=fake_verify_caps,
@@ -175,6 +175,8 @@ class RestContractsTest(TestCase):
             self.assertEqual(r_machine_test_invalid.status_code, 200)
             self.assertFalse(r_machine_test_invalid.json().get("ok"))
 
+            # supplying a model_id should not trigger a full listing; the handler
+            # will call remote_model_exists directly instead
             r_machine_model = self.client.post(
                 "/api/v1/machine/test_model",
                 json={
@@ -185,6 +187,25 @@ class RestContractsTest(TestCase):
             self.assertEqual(r_machine_model.status_code, 200)
             self.assertTrue(r_machine_model.json().get("ok"))
             self.assertTrue(r_machine_model.json().get("model_ok"))
+            self.assertIn("models", r_machine_model.json())
+            # when the model exists we expect the server to return the id in the
+            # models array and never to have paged the remote model list
+            self.assertEqual(r_machine_model.json().get("models"), ["gpt-demo"])
+            # one call happened earlier for /machine/test; the model lookup
+            # shouldn’t trigger a *second* listing.
+            self.assertEqual(mock_list.call_count, 1)
+            mock_exists.assert_called()
+
+            # if client omits model_id we now return a clear error instead of
+            # attempting a list; this simplifies the endpoint and is aligned
+            # with how the frontend uses it.
+            r_missing = self.client.post(
+                "/api/v1/machine/test_model",
+                json={"base_url": "https://example.invalid/v1"},
+            )
+            self.assertEqual(r_missing.status_code, 200)
+            self.assertFalse(r_missing.json().get("ok"))
+            self.assertEqual(r_missing.json().get("detail"), "Missing model_id")
 
             r_machine_model_invalid = self.client.post(
                 "/api/v1/machine/test_model", json={"model_id": "x"}

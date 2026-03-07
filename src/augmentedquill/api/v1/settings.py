@@ -193,24 +193,29 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
             },
         )
 
-    ok, models, detail = await list_remote_models(
-        base_url=base_url,
-        api_key=api_key,
-        timeout_s=timeout_s,
-    )
-    if not ok:
+    model_id_str = str(model_id or "").strip()
+
+    if not model_id_str:
         return JSONResponse(
             status_code=200,
             content={
                 "ok": False,
                 "model_ok": False,
                 "models": [],
-                **({"detail": detail} if detail else {}),
+                "detail": "Missing model_id",
             },
         )
 
-    model_id_str = str(model_id or "").strip()
-    # Perform dynamic capability verification
+    # existence check implicitly exercises base_url validation.
+    model_ok, model_detail = await remote_model_exists(
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id_str,
+        timeout_s=timeout_s,
+    )
+
+    # capabilities are fetched via a cached helper; cost is negligible
+    # after the initial probe.
     caps = await verify_model_capabilities(
         base_url=base_url,
         api_key=api_key,
@@ -218,31 +223,15 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
         timeout_s=timeout_s,
     )
 
-    if model_id_str and model_id_str in set(models):
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "model_ok": True,
-                "models": models,
-                "capabilities": caps,
-            },
-        )
-
-    model_ok, model_detail = await remote_model_exists(
-        base_url=base_url,
-        api_key=api_key,
-        model_id=model_id_str,
-        timeout_s=timeout_s,
-    )
     return JSONResponse(
         status_code=200,
         content={
-            "ok": True,
-            "model_ok": bool(model_ok),
-            "models": models,
-            "detail": model_detail,
-            "capabilities": caps if model_ok else {},
+            "ok": model_ok,
+            "model_ok": model_ok,
+            # include only the single model; callers don't generally use the list
+            "models": [model_id_str] if model_ok else [],
+            **({"detail": model_detail} if model_detail and not model_ok else {}),
+            **({"capabilities": caps} if caps else {}),
         },
     )
 
