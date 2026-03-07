@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { computeSyncUpdates, MetadataParams } from './metadataSync';
 import { createPortal } from 'react-dom';
 import {
   Maximize2,
@@ -27,16 +28,6 @@ import {
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
-
-interface MetadataParams {
-  title?: string;
-  summary?: string;
-  tags?: string[];
-  notes?: string;
-  private_notes?: string;
-  language?: string;
-  conflicts?: Conflict[];
-}
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -88,8 +79,16 @@ export function MetadataEditorDialog({
   );
 
   // Reconcile external updates (for example, AI writes) without clobbering
-  // in-flight autosave operations.
+  // in-flight autosave operations.  We only want to pull changes from
+  // `initialData` if the corresponding field has not been edited locally
+  // since the last time we synchronized.  Otherwise a race between the
+  // autosave round-trip and user typing can cause keystrokes to be lost.
+  const prevInitialRef = useRef<MetadataParams>(initialData);
+
   useEffect(() => {
+    const prevInitial = prevInitialRef.current;
+    prevInitialRef.current = initialData;
+
     const normalizedPropConflicts = (initialData.conflicts || []).map((c) => ({
       description: c.description || '',
       resolution: c.resolution || 'TBD',
@@ -99,33 +98,33 @@ export function MetadataEditorDialog({
       resolution: c.resolution,
     }));
 
+    const prevNormalizedConflicts = (prevInitial.conflicts || []).map((c) => ({
+      description: c.description || '',
+      resolution: c.resolution || 'TBD',
+    }));
+
     const hasConflictsChanged =
       JSON.stringify(normalizedPropConflicts) !==
-      JSON.stringify(normalizedLocalConflicts);
+      JSON.stringify(prevNormalizedConflicts);
 
-    if (hasConflictsChanged && saveStatus !== 'saving') {
+    const conflictsDirty =
+      JSON.stringify(normalizedLocalConflicts) !==
+      JSON.stringify(prevNormalizedConflicts);
+
+    if (hasConflictsChanged && !conflictsDirty && saveStatus !== 'saving') {
       setConflicts((initialData.conflicts || []).map((c) => normalizeConflict(c)));
     }
 
+    // when initialData changes we compute a diff using a helper so the
+    // logic can be unit tested and kept simpler here.  tag handling remains
+    // inline since it has a slightly different rule (fall back only if the
+    // local copy is empty).
     if (saveStatus !== 'saving') {
-      const hasTitleChanged = (initialData.title || '') !== (data.title || '');
-      const hasSummaryChanged = (initialData.summary || '') !== (data.summary || '');
-      const hasNotesChanged = (initialData.notes || '') !== (data.notes || '');
-      const hasPrivateNotesChanged =
-        (initialData.private_notes || '') !== (data.private_notes || '');
-
-      if (
-        hasTitleChanged ||
-        hasSummaryChanged ||
-        hasNotesChanged ||
-        hasPrivateNotesChanged
-      ) {
+      const updates = computeSyncUpdates(prevInitial, initialData, data);
+      if (Object.keys(updates).length > 0) {
         setData((prev) => ({
           ...prev,
-          title: initialData.title || prev.title || '',
-          summary: initialData.summary || prev.summary || '',
-          notes: initialData.notes || prev.notes || '',
-          private_notes: initialData.private_notes || prev.private_notes || '',
+          ...updates,
           tags: prev.tags && prev.tags.length > 0 ? prev.tags : initialData.tags || [],
         }));
       }
