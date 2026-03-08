@@ -115,7 +115,7 @@ class StoryActionsTest(TestCase):
         )
         self.assertEqual(r.status_code, 404)
 
-    def test_action_stream_extend_chapter_persists(self):
+    def test_action_stream_extend_chapter(self):
         pdir = self._make_project()
         chap_f = pdir / "chapters" / "0001.txt"
 
@@ -124,20 +124,21 @@ class StoryActionsTest(TestCase):
             json={"target": "chapter", "action": "extend", "chap_id": 1},
         )
         self.assertEqual(r.status_code, 200)
-        # Consume the stream to trigger persistence
+
+        # Check SSE format
+        found_content = False
         for line in r.iter_lines():
-            # Check SSE format
-            if line:
-                decoded = line
-                if decoded.startswith("data: "):
-                    content = json.loads(decoded[6:])
-                    self.assertEqual(content["content"], "Generated content chunk.")
+            if line and line.startswith("data: "):
+                content = json.loads(line[6:])
+                self.assertEqual(content["content"], "Generated content chunk.")
+                found_content = True
+        self.assertTrue(found_content)
 
+        # Verify NO persistence (Frontend is master)
         new_content = chap_f.read_text(encoding="utf-8")
-        self.assertIn("Existing chapter content.", new_content)
-        self.assertIn("Generated content chunk.", new_content)
+        self.assertEqual(new_content, "Existing chapter content.")
 
-    def test_action_stream_rewrite_chapter_persists(self):
+    def test_action_stream_rewrite_chapter(self):
         pdir = self._make_project()
         chap_f = pdir / "chapters" / "0001.txt"
 
@@ -149,10 +150,11 @@ class StoryActionsTest(TestCase):
         for line in r.iter_lines():
             pass
 
+        # Verify NO persistence
         new_content = chap_f.read_text(encoding="utf-8")
-        self.assertEqual(new_content, "Generated content chunk.")
+        self.assertEqual(new_content, "Existing chapter content.")
 
-    def test_action_stream_update_summary_persists(self):
+    def test_action_stream_update_summary(self):
         pdir = self._make_project()
         story_f = pdir / "story.json"
 
@@ -164,24 +166,6 @@ class StoryActionsTest(TestCase):
         for line in r.iter_lines():
             pass
 
+        # Verify NO persistence
         story_cfg = json.loads(story_f.read_text(encoding="utf-8"))
-        self.assertEqual(
-            story_cfg["chapters"][0]["summary"], "Generated content chunk."
-        )
-
-    def test_action_stream_rewrite_summary_persists(self):
-        pdir = self._make_project()
-        story_f = pdir / "story.json"
-
-        r = self.client.post(
-            "/api/v1/story/action/stream",
-            json={"target": "summary", "action": "rewrite", "chap_id": 1},
-        )
-        self.assertEqual(r.status_code, 200)
-        for line in r.iter_lines():
-            pass
-
-        story_cfg = json.loads(story_f.read_text(encoding="utf-8"))
-        self.assertEqual(
-            story_cfg["chapters"][0]["summary"], "Generated content chunk."
-        )
+        self.assertEqual(story_cfg["chapters"][0]["summary"], "Initial summary")

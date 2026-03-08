@@ -26,7 +26,11 @@ type UseAiActionsParams = {
   prompts: PromptsState;
   isEditingAvailable: boolean;
   isWritingAvailable: boolean;
-  updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
+  updateChapter: (
+    id: string,
+    partial: Partial<Chapter>,
+    sync?: boolean
+  ) => Promise<void>;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
@@ -66,12 +70,15 @@ export function useAiActions({
         if (!isChapterStreamingAction) return;
         if (partial === lastPushed) return;
         const now = Date.now();
-        if (now - lastPushAt < 150) return;
+        if (now - lastPushAt < 50) return; // Faster for local UI
         lastPushAt = now;
         lastPushed = partial;
+
         const nextContent =
           action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
-        void updateChapter(currentChapter.id, { content: nextContent });
+
+        // Atomic local state update WITHOUT server sync during stream
+        void updateChapter(currentChapter.id, { content: nextContent }, false);
       };
 
       const result = await streamAiAction(

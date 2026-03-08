@@ -35,7 +35,6 @@ from augmentedquill.services.story.story_generation_common import (
     sanitize_prompt,
 )
 from augmentedquill.services.story.story_api_stream_ops import (
-    stream_collect_and_persist,
     stream_unified_chat_content,
 )
 from augmentedquill.services.exceptions import ServiceError
@@ -318,7 +317,7 @@ async def api_story_summary_stream(request: Request):
             save_story_config(prepared["story_path"], prepared["story"])
 
         return StreamingResponse(
-            stream_collect_and_persist(lambda: _create_gen_source(prepared), _persist),
+            _create_gen_source(prepared),
             media_type="text/event-stream",
         )
     except ServiceError as e:
@@ -339,11 +338,8 @@ async def api_story_write_stream(request: Request):
         payload = await parse_json_body(request)
         prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
 
-        def _persist(content: str) -> None:
-            prepared["path"].write_text(content, encoding="utf-8")
-
         return StreamingResponse(
-            stream_collect_and_persist(lambda: _create_gen_source(prepared), _persist),
+            _create_gen_source(prepared),
             media_type="text/event-stream",
         )
     except ServiceError as e:
@@ -364,24 +360,7 @@ async def api_story_continue_stream(request: Request):
         payload = await parse_json_body(request)
         prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
 
-        def _persist(appended: str) -> None:
-            """Persist."""
-            new_content = (
-                prepared["existing"]
-                + (
-                    "\n"
-                    if prepared["existing"] and not prepared["existing"].endswith("\n")
-                    else ""
-                )
-                + appended
-            )
-            prepared["path"].write_text(new_content, encoding="utf-8")
-
-        return _as_streaming_response(
-            lambda: stream_collect_and_persist(
-                lambda: _create_gen_source(prepared), _persist
-            )
-        )
+        return _as_streaming_response(lambda: _create_gen_source(prepared))
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -400,15 +379,7 @@ async def api_story_story_summary_stream(request: Request):
         payload = await parse_json_body(request)
         prepared = prepare_story_summary_generation(payload, payload.get("mode") or "")
 
-        def _persist(new_summary: str) -> None:
-            prepared["story"]["story_summary"] = new_summary
-            save_story_config(prepared["story_path"], prepared["story"])
-
-        return _as_streaming_response(
-            lambda: stream_collect_and_persist(
-                lambda: _create_gen_source(prepared), _persist
-            )
-        )
+        return _as_streaming_response(lambda: _create_gen_source(prepared))
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -428,37 +399,7 @@ async def api_story_action_stream(request: Request):
         payload = await parse_json_body(request)
         prepared = prepare_ai_action_generation(payload)
 
-        def _persist(content: str) -> None:
-            target = prepared["target"]
-            action = prepared["action"]
-
-            if target == "chapter":
-                if action == "extend":
-                    existing = prepared["existing_content"]
-                    new_content = (
-                        existing
-                        + ("\n" if existing and not existing.endswith("\n") else "")
-                        + content
-                    )
-                    prepared["path"].write_text(new_content, encoding="utf-8")
-                else:
-                    # rewrite
-                    prepared["path"].write_text(content, encoding="utf-8")
-            elif target == "summary":
-                # rewrite or update summary
-                prepared["chapters_data"][prepared["pos"]]["summary"] = content
-                prepared["story"]["chapters"] = prepared["chapters_data"]
-                save_story_config(prepared["story_path"], prepared["story"])
-
-        return _as_streaming_response(
-            lambda: stream_collect_and_persist(
-                lambda: _create_gen_source(prepared),
-                _persist,
-                chunk_transformer=lambda c: (
-                    json.loads(c[6:])["content"] if c.startswith("data: ") else c
-                ),
-            )
-        )
+        return _as_streaming_response(lambda: _create_gen_source(prepared))
     except ServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
     except Exception as e:
