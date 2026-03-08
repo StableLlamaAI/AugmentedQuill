@@ -17,10 +17,24 @@ from typing import Any, AsyncIterator
 import datetime
 import os
 import traceback
+from urllib.parse import urlparse
 
 import httpx
 
 from augmentedquill.services.llm.llm_logging import add_llm_log, create_log_entry
+
+
+def _ensure_allowed_request_url(url: str) -> None:
+    """Validate outbound target URL with lightweight SSRF guardrails.
+
+    Users can configure arbitrary internet endpoints for LLM providers, so we
+    only enforce structural URL safety here.
+    """
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Only HTTP(S) URLs are allowed for outbound LLM requests.")
+    if parsed.username or parsed.password or any(c in parsed.netloc for c in "[]"):
+        raise ValueError("Potentially dangerous URL format for outbound LLM request.")
 
 
 def _relpath_for_log(path: str) -> str:
@@ -134,6 +148,7 @@ async def logged_request(
     raise_for_status: bool = False,
 ) -> httpx.Response:
     """Execute one HTTP request with guaranteed request/response logging."""
+    _ensure_allowed_request_url(url)
     # log the request start; we intentionally omit the response object here
     # (it will be filled in later when the request completes).  setting the
     # field to ``None`` keeps the raw log easier to read and avoids confusion
@@ -194,6 +209,7 @@ async def logged_stream_request(
     body: Any = None,
 ) -> AsyncIterator[tuple[httpx.Response, dict[str, Any]]]:
     """Open one streaming HTTP request with guaranteed lifecycle logging."""
+    _ensure_allowed_request_url(url)
     log_entry = create_log_entry(
         url,
         str(method).upper(),

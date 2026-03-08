@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import time
 import httpx
 
@@ -114,8 +113,9 @@ def _exists_cache_key(
     """Normalize inputs for caching key."""
     normalized_base = str(base_url or "").strip().rstrip("/").lower()
     normalized_model = str(model_id or "").strip()
-    api_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest() if api_key else ""
-    return normalized_base, normalized_model, api_hash
+    # Keep key material in-memory only; avoid custom hashing of secrets.
+    api_scope = str(api_key or "")
+    return normalized_base, normalized_model, api_scope
 
 
 async def _remote_model_exists_probe(

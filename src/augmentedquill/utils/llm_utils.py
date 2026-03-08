@@ -11,7 +11,6 @@ Common LLM-related utility functions, including capability verification and URL 
 """
 
 import asyncio
-import hashlib
 import time
 
 import httpx
@@ -33,10 +32,9 @@ def _cache_key(
     """Build stable cache key for provider/model/account scope."""
     normalized_base_url = str(base_url or "").strip().rstrip("/").lower()
     normalized_model_id = str(model_id or "").strip()
-    api_key_hash = (
-        hashlib.sha256(api_key.encode("utf-8")).hexdigest() if api_key else ""
-    )
-    return normalized_base_url, normalized_model_id, api_key_hash
+    # Keep key material in-memory only; avoid custom hashing of secrets.
+    api_scope = str(api_key or "")
+    return normalized_base_url, normalized_model_id, api_scope
 
 
 async def _probe_model_capabilities(
