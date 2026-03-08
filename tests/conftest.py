@@ -26,8 +26,7 @@ _SESSION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 _SESSION_CONFIG_DIR = _SESSION_ROOT / "config"
 _SESSION_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 _SESSION_MACHINE_JSON = _SESSION_CONFIG_DIR / "machine.json"
-_SESSION_MACHINE_JSON.write_text(
-    """
+_SESSION_MACHINE_JSON.write_text("""
 {
   "openai": {
     "models": [
@@ -39,8 +38,7 @@ _SESSION_MACHINE_JSON.write_text(
     ]
   }
 }
-"""
-)
+""")
 
 _ORIG_USER_DATA_DIR = os.environ.get("AUGQ_USER_DATA_DIR")
 _ORIG_PROJECTS_ROOT = os.environ.get("AUGQ_PROJECTS_ROOT")
