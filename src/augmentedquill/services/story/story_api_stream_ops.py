@@ -41,13 +41,16 @@ async def stream_unified_chat_content(
 async def stream_collect_and_persist(
     stream_factory: Callable[[], AsyncIterator[str]],
     persist_on_complete: Callable[[str], None],
+    chunk_transformer: Callable[[str], str] | None = None,
 ) -> AsyncIterator[str]:
     """Stream Collect And Persist."""
     buf: list[str] = []
     try:
         async for chunk in stream_factory():
             if chunk:
-                buf.append(chunk)
+                # Store transformed (raw) chunk for persistence
+                raw_chunk = chunk_transformer(chunk) if chunk_transformer else chunk
+                buf.append(raw_chunk)
                 yield chunk
     except asyncio.CancelledError:
         return

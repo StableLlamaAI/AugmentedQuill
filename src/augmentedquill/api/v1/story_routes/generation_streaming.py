@@ -26,10 +26,13 @@ from augmentedquill.services.story.story_api_state_ops import (
     read_text_or_raise,
 )
 from augmentedquill.services.story.story_generation_common import (
+    gather_writing_context,
+    prepare_ai_action_generation,
     prepare_chapter_summary_generation,
     prepare_continue_chapter_generation,
     prepare_story_summary_generation,
     prepare_write_chapter_generation,
+    sanitize_prompt,
 )
 from augmentedquill.services.story.story_api_stream_ops import (
     stream_collect_and_persist,
@@ -52,7 +55,7 @@ async def _create_gen_source(prepared: dict):
             timeout_s=prepared["timeout_s"],
             model_name=prepared.get("model_name"),
         ):
-            yield chunk
+            yield f"data: {json.dumps({'content': chunk})}\n\n"
     except ServiceError as e:
         # Re-raise service errors as they are handled by the global exception handler for REST,
         # but for streaming we might need to yield an error event.
@@ -63,7 +66,7 @@ async def _create_gen_source(prepared: dict):
         yield f"data: {json.dumps({'error': f'An internal error occurred during generation. {e}'})}\n\n"
 
 
-def _as_streaming_response(gen_factory, media_type: str = "text/plain"):
+def _as_streaming_response(gen_factory, media_type: str = "text/event-stream"):
     return StreamingResponse(gen_factory(), media_type=media_type)
 
 
@@ -217,7 +220,6 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         chapters_data = get_normalized_chapters(story)
         ensure_chapter_slot(chapters_data, pos)
         summary = chapters_data[pos].get("summary", "")
-        raw_conflicts = chapters_data[pos].get("conflicts", [])
         title = chapters_data[pos].get("title") or path.name
 
         base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
@@ -228,96 +230,25 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             )
         )
 
-        conflict_lines = []
-        if isinstance(raw_conflicts, list):
-            for c in raw_conflicts:
-                desc = c.get("description", "").strip()
-                res = c.get("resolution", "").strip()
-                if desc and not c.get("resolved", False):
-                    line = f"- {desc}"
-                    if res:
-                        line += f" -> {res}"
-                    conflict_lines.append(line)
-        conflicts_text = "\n".join(conflict_lines)
-
-        # gather additional context for improved suggestions
-        story_title = story.get("project_title", "")
-        story_summary = story.get("story_summary", "")
-        tags = story.get("tags", [])
-        if isinstance(tags, list):
-            story_tags = ", ".join(str(t) for t in tags)
-        else:
-            story_tags = str(tags)
-
-        # pull in a bit of background from the sourcebook; use chapter title
-        # and summary as queries so that only potentially relevant entries are
-        # included.  dedupe by id in case both queries hit the same item.
-        background = ""
-        try:
-            from augmentedquill.services.sourcebook.sourcebook_helpers import (
-                sourcebook_search_entries,
-                sourcebook_get_entry,
-            )
-            import re
-
-            queries = []
-            if title:
-                queries.append(title)
-            if summary:
-                queries.append(summary)
-            seen = set()
-            lines = []
-            for q in queries:
-                for entry in sourcebook_search_entries(q):
-                    eid = entry.get("id")
-                    if not eid or eid in seen:
-                        continue
-                    seen.add(eid)
-                    desc = entry.get("description", "")
-                    lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
-
-            # include any explicitly checked entries passed by the client
-            checked = (payload or {}).get("checked_sourcebook") or []
-            if isinstance(checked, list):
-                for sid in checked:
-                    try:
-                        entry = sourcebook_get_entry(sid)
-                    except Exception:
-                        entry = None
-                    if entry:
-                        eid = entry.get("id")
-                        if eid and eid not in seen:
-                            seen.add(eid)
-                            desc = entry.get("description", "")
-                            lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
-
-            background = "\n".join(lines)
-
-            # we already gathered entries by searching the sourcebook for the
-            # chapter title/summary above, and we also appended any names the
-            # client explicitly passed in `checked_sourcebook`.  The older
-            # logic previously made an extra EDITING-model call here to select
-            # additional entries based on recent paragraphs, but that is now
-            # redundant with the asynchronous relevance computation and also
-            # prone to timeouts.  Avoid the extra request entirely.
-            # note: any client‑checked entries were already added to `background`
-            # earlier, so nothing further is required here.
-
-        except Exception:
-            # if any of the sourcebook logic fails, continue with whatever
-            # background we've managed to collect above
-            background = background
+        context = gather_writing_context(
+            story=story,
+            chapters_data=chapters_data,
+            pos=pos,
+            title=title or "",
+            summary=summary or "",
+            payload=payload,
+        )
 
         prompt = get_user_prompt(
             "suggest_continuation",
             language=story.get("language", "en"),
-            story_title=story_title,
-            story_summary=story_summary,
-            story_tags=story_tags,
-            background=background,
+            story_title=context["story_title"],
+            story_summary=context["story_summary"],
+            story_tags=context["story_tags"],
+            background=context["background"],
             chapter_title=title or "",
             chapter_summary=summary or "",
-            chapter_conflicts=conflicts_text,
+            chapter_conflicts=context["chapter_conflicts"],
             current_text=current_text or "",
             user_prompt_overrides=model_overrides,
         )
@@ -326,40 +257,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         # labels and collapse multiple blank lines to a single one.  this
         # keeps the model input lean and stops it from seeing meaningless
         # placeholders.
-        import re
-
-        lines = prompt.splitlines()
-        filtered: list[str] = []
-        for i, line in enumerate(lines):
-            # drop any line that looks like a label with nothing after colon
-            # UNLESS the next lines contain content for this label
-            if re.match(r"^[A-Za-z ]+:\s*$", line):
-                has_content = False
-                for next_line in lines[i + 1 :]:
-                    next_line = next_line.strip()
-                    if not next_line:
-                        continue
-                    if next_line == "---":
-                        break
-                    if re.match(r"^[A-Za-z ]+:\s*$", next_line):
-                        break
-                    has_content = True
-                    break
-                if not has_content:
-                    continue
-            filtered.append(line)
-        # collapse consecutive blank lines
-        cleaned: list[str] = []
-        prev_blank = False
-        for line in filtered:
-            if not line.strip():
-                if not prev_blank:
-                    cleaned.append("")
-                prev_blank = True
-            else:
-                cleaned.append(line)
-                prev_blank = False
-        prompt = "\n".join(cleaned)
+        prompt = sanitize_prompt(prompt)
 
         async def generate_suggestion():
             """Generate Suggestion."""
@@ -521,3 +419,47 @@ async def api_story_story_summary_stream(request: Request):
             status_code=500,
             detail=f"An internal story-wide summary error occurred: {e}",
         )
+
+
+@router.post("/story/action/stream")
+async def api_story_action_stream(request: Request):
+    """Stream generic AI Actions (Extend/Rewrite/Summary update)."""
+    try:
+        payload = await parse_json_body(request)
+        prepared = prepare_ai_action_generation(payload)
+
+        def _persist(content: str) -> None:
+            target = prepared["target"]
+            action = prepared["action"]
+
+            if target == "chapter":
+                if action == "extend":
+                    existing = prepared["existing_content"]
+                    new_content = (
+                        existing
+                        + ("\n" if existing and not existing.endswith("\n") else "")
+                        + content
+                    )
+                    prepared["path"].write_text(new_content, encoding="utf-8")
+                else:
+                    # rewrite
+                    prepared["path"].write_text(content, encoding="utf-8")
+            elif target == "summary":
+                # rewrite or update summary
+                prepared["chapters_data"][prepared["pos"]]["summary"] = content
+                prepared["story"]["chapters"] = prepared["chapters_data"]
+                save_story_config(prepared["story_path"], prepared["story"])
+
+        return _as_streaming_response(
+            lambda: stream_collect_and_persist(
+                lambda: _create_gen_source(prepared),
+                _persist,
+                chunk_transformer=lambda c: (
+                    json.loads(c[6:])["content"] if c.startswith("data: ") else c
+                ),
+            )
+        )
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

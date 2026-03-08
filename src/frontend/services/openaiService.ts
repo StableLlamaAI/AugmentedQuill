@@ -380,6 +380,40 @@ export const generateSimpleContent = async (
   }
 };
 
+export const streamAiAction = async (
+  target: 'book_summary' | 'story_summary' | 'summary' | 'chapter',
+  action: 'write' | 'update' | 'rewrite' | 'extend',
+  chapId: string,
+  currentText: string,
+  onUpdate?: (fullText: string) => void
+): Promise<string> => {
+  const res = await fetch('/api/v1/story/action/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target,
+      action,
+      chap_id: action === 'extend' || action === 'rewrite' ? Number(chapId) : 0,
+      target_id: Number(chapId),
+      current_text: currentText,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || 'Action failed');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) return '';
+
+  let accumulated = '';
+  return await readSSEStream(reader, undefined, undefined, (delta) => {
+    accumulated += delta;
+    onUpdate?.(accumulated);
+  });
+};
+
 export const generateContinuations = async (
   currentContent: string,
   storyContext: string,

@@ -127,9 +127,13 @@ def build_story_summary_messages(
 
 def build_write_chapter_messages(
     *,
-    project_title: str,
+    story_title: str,
+    story_summary: str,
+    story_tags: str,
+    background: str,
     chapter_title: str,
     chapter_summary: str,
+    chapter_conflicts: str,
     model_overrides: dict,
     language: str | None = None,
 ):
@@ -139,16 +143,25 @@ def build_write_chapter_messages(
         user_prompt_key="write_chapter",
         model_overrides=model_overrides,
         language=language,
-        project_title=project_title,
+        story_title=story_title,
+        story_summary=story_summary,
+        story_tags=story_tags,
+        background=background,
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
+        chapter_conflicts=chapter_conflicts,
     )
 
 
 def build_continue_chapter_messages(
     *,
+    story_title: str,
+    story_summary: str,
+    story_tags: str,
+    background: str,
     chapter_title: str,
     chapter_summary: str,
+    chapter_conflicts: str,
     existing_text: str,
     model_overrides: dict,
     language: str | None = None,
@@ -159,7 +172,75 @@ def build_continue_chapter_messages(
         user_prompt_key="continue_chapter",
         model_overrides=model_overrides,
         language=language,
+        story_title=story_title,
+        story_summary=story_summary,
+        story_tags=story_tags,
+        background=background,
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
+        chapter_conflicts=chapter_conflicts,
         existing_text=existing_text,
+    )
+
+
+def build_ai_action_messages(
+    *,
+    target: str,
+    action: str,
+    story_title: str,
+    story_summary: str,
+    story_tags: str,
+    chapter_title: str,
+    chapter_summary: str,
+    chapter_conflicts: str,
+    existing_content: str,
+    style_tags: str,
+    model_overrides: dict,
+    language: str | None = None,
+):
+    """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
+    # Map target/action to prompt keys
+    if target == "summary":
+        sys_key = f"ai_action_summary_{action}"
+        user_key = f"ai_action_summary_{action}_user"
+    elif target == "book_summary":
+        sys_key = "ai_action_summary_rewrite"
+        user_key = "ai_action_summary_rewrite_user"
+    elif target == "story_summary":
+        sys_key = "ai_action_summary_rewrite"
+        user_key = "ai_action_summary_rewrite_user"
+    else:
+        sys_key = f"ai_action_chapter_{action}"
+        user_key = f"ai_action_chapter_{action}_user"
+
+    # User templates for AI actions are currently same as standard ones
+    if user_key.startswith("ai_action_chapter_"):
+        if action == "extend":
+            user_key = "continue_chapter"
+        elif action == "rewrite":
+            user_key = "write_chapter"
+    elif user_key.startswith("ai_action_summary_"):
+        if action == "rewrite":
+            user_key = "chapter_summary_new"
+        else:
+            user_key = "chapter_summary_update"
+
+    return _build_messages(
+        system_message_key=sys_key,
+        user_prompt_key=user_key,
+        model_overrides=model_overrides,
+        language=language,
+        story_title=story_title,
+        story_summary=story_summary,
+        story_tags=story_tags,
+        chapter_title=chapter_title,
+        chapter_summary=chapter_summary,
+        chapter_conflicts=chapter_conflicts,
+        chapter_content=existing_content,
+        chapter_text=existing_content,
+        existing_text=existing_content,
+        current_summary=chapter_summary,
+        existing_summary=chapter_summary,
+        style_tags=style_tags,
+        background="",  # Background is not used for AI actions for now
     )

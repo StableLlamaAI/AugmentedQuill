@@ -120,7 +120,8 @@
     "_use": "WRITING",
     "en": [
       "You are a skilled novelist.",
-      "Continue the story chapter based on the existing content and the summary.",
+      "Continue the story chapter based on the provided story context, existing content and the summary.",
+      "Respect the story's themes, tags, and any unresolved conflicts provided in the prompt.",
       "Append the new text to the end. Do not repeat existing content."
     ]
   },
@@ -128,7 +129,8 @@
     "_use": "WRITING",
     "en": [
       "You are a skilled novelist.",
-      "Rewrite the FULL content for this chapter based strictly based on the following summary."
+      "Rewrite the FULL content for this chapter based on the provided story context and strictly based on the following summary.",
+      "Respect the story's themes, tags, and any unresolved conflicts provided in the prompt."
     ]
   },
   "user_prompts": {
@@ -159,12 +161,25 @@
     "write_chapter": {
       "_use": "WRITING",
       "en": [
-        "Project: {project_title}",
+        "Story title: {story_title}",
+        "",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "---",
+        "",
         "Title: {chapter_title}",
         "",
         "Summary:",
         "",
         "{chapter_summary}",
+        "",
+        "Chapter conflicts:\n{chapter_conflicts}",
+        "",
+        "---",
         "",
         "Task: Write the full chapter as continuous prose. Maintain voice and pacing."
       ]
@@ -172,10 +187,24 @@
     "continue_chapter": {
       "_use": "WRITING",
       "en": [
+        "Story title: {story_title}",
+        "",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "---",
+        "",
         "Title: {chapter_title}",
         "",
         "Summary:",
         "{chapter_summary}",
+        "",
+        "Chapter conflicts:\n{chapter_conflicts}",
+        "",
+        "---",
         "",
         "Existing chapter text (do not change):",
         "",
