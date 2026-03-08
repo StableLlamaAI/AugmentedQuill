@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 import json
 
 from augmentedquill.core.config import BASE_DIR, save_story_config
-from augmentedquill.core.prompts import get_user_prompt
+from augmentedquill.core.prompts import get_user_prompt, get_system_message
 from augmentedquill.services.llm import llm
 from augmentedquill.services.story.story_api_prompt_ops import (
     resolve_model_runtime,
@@ -92,23 +92,156 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             base_dir=BASE_DIR,
         )
 
+        # gather additional context for improved suggestions
+        story_title = story.get("project_title", "")
+        story_summary = story.get("story_summary", "")
+        tags = story.get("tags", [])
+        if isinstance(tags, list):
+            story_tags = ", ".join(str(t) for t in tags)
+        else:
+            story_tags = str(tags)
+
+        # pull in a bit of background from the sourcebook; use chapter title
+        # and summary as queries so that only potentially relevant entries are
+        # included.  dedupe by id in case both queries hit the same item.
+        background = ""
+        try:
+            from augmentedquill.services.sourcebook.sourcebook_helpers import (
+                sourcebook_search_entries,
+                sourcebook_list_entries,
+            )
+            import re
+
+            queries = []
+            if title:
+                queries.append(title)
+            if summary:
+                queries.append(summary)
+            seen = set()
+            lines = []
+            for q in queries:
+                for entry in sourcebook_search_entries(q):
+                    eid = entry.get("id")
+                    if not eid or eid in seen:
+                        continue
+                    seen.add(eid)
+                    desc = entry.get("description", "")
+                    lines.append(f"{entry.get('name', eid)}: {desc}")
+            background = "\n".join(lines)
+
+            # now also run an EDITING model pass to pick entries matching the
+            # last few paragraphs of the chapter text
+            text_for_relevance = current_text or ""
+            paras = [p for p in re.split(r"\n\n+", text_for_relevance) if p.strip()]
+            recent = "\n\n".join(paras[-3:]) if paras else ""
+            all_entries = sourcebook_list_entries()
+            selected_names: list[str] = []
+            if all_entries and recent:
+
+                # construct human-readable entry list and prompt using the
+                # user prompt template defined in instructions.json; this keeps
+                # all localized text out of Python code.
+                entry_lines = []
+                for e in all_entries:
+                    syns = e.get("synonyms", []) or []
+                    syn_text = f" ({', '.join(syns)})" if syns else ""
+                    entry_lines.append(f"{e.get('name')}{syn_text}")
+
+                selector_prompt = get_user_prompt(
+                    "select_relevant_entries",
+                    language=story.get("language", "en"),
+                    recent_paragraphs=recent,
+                    entries="\n".join(entry_lines),
+                    user_prompt_overrides=model_overrides,
+                )
+
+                # note: we use the generic editing system message so the model
+                # behaves consistently with other editing tasks
+                edit_base, edit_key, edit_model, edit_timeout, _ = (
+                    resolve_model_runtime(
+                        payload=payload, model_type="EDITING", base_dir=BASE_DIR
+                    )
+                )
+                sel_res = await llm.unified_chat_complete(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": get_system_message(
+                                "editing_llm",
+                                model_overrides,
+                                language=story.get("language", "en"),
+                            ),
+                        },
+                        {"role": "user", "content": selector_prompt},
+                    ],
+                    base_url=edit_base,
+                    api_key=edit_key,
+                    model_id=edit_model,
+                    timeout_s=edit_timeout,
+                )
+                for name in re.split(r"[\n,]+", sel_res.get("content", "")):
+                    name = name.strip()
+                    if name:
+                        selected_names.append(name)
+
+            # append descriptions for any selected entries if not already present
+            for name in selected_names:
+                for entry in all_entries:
+                    if entry.get("name") == name or name in (
+                        entry.get("synonyms") or []
+                    ):
+                        eid = entry.get("id")
+                        if eid and eid not in {
+                            line.split(":")[0] for line in background.splitlines()
+                        }:
+                            desc = entry.get("description", "")
+                            background += (
+                                "\n" if background else ""
+                            ) + f"{entry.get('name')}: {desc}"
+                        break
+        except Exception:
+            # if any of the sourcebook logic fails, continue with whatever
+            # background we've managed to collect above
+            background = background
+
         prompt = get_user_prompt(
             "suggest_continuation",
             language=story.get("language", "en"),
+            story_title=story_title,
+            story_summary=story_summary,
+            story_tags=story_tags,
+            background=background,
             chapter_title=title or "",
             chapter_summary=summary or "",
             current_text=current_text or "",
             user_prompt_overrides=model_overrides,
         )
 
-        extra_body = {
-            "max_tokens": 500,
-            "temperature": 1.0,
-            "top_k": 0,
-            "top_p": 1.0,
-            "min_p": 0.02,
-            "repeat_penalty": 1.0,
-        }
+        # remove any sections that produced empty content to avoid blank
+        # labels and collapse multiple blank lines to a single one.  this
+        # keeps the model input lean and stops it from seeing meaningless
+        # placeholders.
+        import re
+
+        lines = prompt.splitlines()
+        filtered: list[str] = []
+        for line in lines:
+            # drop any line that looks like a label with nothing after colon
+            if re.match(r"^[A-Za-z ]+:\s*$", line):
+                continue
+            filtered.append(line)
+        # collapse consecutive blank lines
+        cleaned: list[str] = []
+        prev_blank = False
+        for line in filtered:
+            if not line.strip():
+                if not prev_blank:
+                    cleaned.append("")
+                prev_blank = True
+            else:
+                cleaned.append(line)
+                prev_blank = False
+        prompt = "\n".join(cleaned)
 
         async def generate_suggestion():
             """Generate Suggestion."""
@@ -121,7 +254,6 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
                     api_key=api_key,
                     model_id=model_id,
                     timeout_s=timeout_s,
-                    extra_body=extra_body,
                 ):
                     while chunk.lstrip(" \t").startswith("\n") and not startFound:
                         chunk = chunk.lstrip(" \t")[1:]

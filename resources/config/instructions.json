@@ -211,9 +211,19 @@
     "suggest_continuation": {
       "_use": "WRITING",
       "en": [
-        "# {chapter_title}",
+        "Story title: {story_title}",
         "",
-        "{chapter_summary}",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "---",
+        "",
+        "Chapter title: {chapter_title}",
+        "",
+        "Chapter description: {chapter_summary}",
         "",
         "---",
         "",
@@ -229,6 +239,19 @@
         "[Current Content End]",
         "",
         "User Request: {user_text}"
+      ]
+    },
+    "select_relevant_entries": {
+      "_use": "EDITING",
+      "en": [
+        "You are an assistant that selects relevant sourcebook entries.",
+        "Given the recent paragraphs and a list of entries (names plus synonyms),",
+        "return the names of entries that appear relevant, one per line.",
+        "Include names only; no explanation should be provided.",
+        "",
+        "Recent paragraphs:\n{recent_paragraphs}",
+        "",
+        "Entries:\n{entries}"
       ]
     }
   }
