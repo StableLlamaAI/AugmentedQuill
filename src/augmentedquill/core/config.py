@@ -61,6 +61,19 @@ DEFAULT_PROJECTS_REGISTRY_PATH = (
 DEFAULT_MODEL_PRESETS_PATH = CONFIG_DIR / "model_presets.json"
 
 
+def _resolve_default_machine_config_path() -> Path:
+    """Resolve machine config path from current environment at call time."""
+    explicit = os.getenv("AUGQ_MACHINE_CONFIG_PATH")
+    if explicit:
+        return Path(explicit)
+
+    user_data = os.getenv("AUGQ_USER_DATA_DIR")
+    if user_data:
+        return Path(user_data) / "config" / "machine.json"
+
+    return USER_CONFIG_DIR / "machine.json"
+
+
 def _get_story_schema(version: int) -> Dict[str, Any]:
     """Get the JSON schema for a given story config version."""
     schema_path = SCHEMAS_DIR / f"story-v{version}.schema.json"
@@ -153,7 +166,7 @@ def _env_overrides_for_openai() -> Dict[str, Any]:
 
 
 def load_machine_config(
-    path: os.PathLike[str] | str | None = DEFAULT_MACHINE_CONFIG_PATH,
+    path: os.PathLike[str] | str | None = None,
     defaults: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Load machine configuration applying precedence and interpolation.
@@ -161,7 +174,8 @@ def load_machine_config(
     Precedence: env overrides > JSON file > defaults
     """
     defaults = dict(defaults or {})
-    json_config = load_json_file(path)
+    resolved_path = _resolve_default_machine_config_path() if path is None else path
+    json_config = load_json_file(resolved_path)
     json_config = _interpolate_env(json_config)
     # Merge JSON over defaults, then env over that
     merged = _deep_merge(defaults, json_config)
