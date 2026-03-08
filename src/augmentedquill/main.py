@@ -25,7 +25,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from augmentedquill.core.config import (
     load_machine_config,
     STATIC_DIR,
-    DEFAULT_MACHINE_CONFIG_PATH,
     ensure_runtime_user_config_files,
 )
 from augmentedquill.services.exceptions import ServiceError
@@ -93,7 +92,7 @@ def create_app() -> FastAPI:
     )
     api_v1_router.add_api_route(
         "/machine",
-        endpoint=lambda: load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {},
+        endpoint=lambda: load_machine_config() or {},
         methods=["GET"],
     )
 

@@ -20,7 +20,7 @@ import os
 
 import httpx
 
-from augmentedquill.core.config import load_machine_config, DEFAULT_MACHINE_CONFIG_PATH
+from augmentedquill.core.config import load_machine_config
 from augmentedquill.services.llm import llm_logging as _llm_logging
 from augmentedquill.services.llm import llm_stream_ops as _llm_stream_ops
 from augmentedquill.services.llm import llm_completion_ops as _llm_completion_ops
@@ -39,7 +39,7 @@ def get_selected_model_name(
     payload: Dict[str, Any], model_type: str | None = None
 ) -> str | None:
     """Get the selected model name based on payload and model_type."""
-    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine = load_machine_config() or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = payload.get("model_name")
@@ -67,7 +67,7 @@ def resolve_openai_credentials(
     2. Payload overrides: base_url, api_key, model, timeout_s or model_name (by name)
     3. machine.json -> openai.models[] (selected by name based on model_type)
     """
-    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine = load_machine_config() or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = get_selected_model_name(payload, model_type)

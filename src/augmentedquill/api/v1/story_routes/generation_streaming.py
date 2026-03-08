@@ -35,6 +35,7 @@ from augmentedquill.services.story.story_generation_common import (
     sanitize_prompt,
 )
 from augmentedquill.services.story.story_api_stream_ops import (
+    stream_collect_and_persist,
     stream_unified_chat_content,
 )
 from augmentedquill.services.exceptions import ServiceError
@@ -43,17 +44,23 @@ from augmentedquill.api.v1.story_routes.common import parse_json_body
 router = APIRouter(tags=["Story"])
 
 
-async def _create_gen_source(prepared: dict):
+async def _create_gen_source_pure(prepared: dict):
     """Create a generator source for streaming."""
+    async for chunk in stream_unified_chat_content(
+        messages=prepared["messages"],
+        base_url=prepared["base_url"],
+        api_key=prepared["api_key"],
+        model_id=prepared["model_id"],
+        timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
+    ):
+        yield chunk
+
+
+async def _create_gen_source(prepared: dict):
+    """Create a generator source for streaming wrapped in SSE data events."""
     try:
-        async for chunk in stream_unified_chat_content(
-            messages=prepared["messages"],
-            base_url=prepared["base_url"],
-            api_key=prepared["api_key"],
-            model_id=prepared["model_id"],
-            timeout_s=prepared["timeout_s"],
-            model_name=prepared.get("model_name"),
-        ):
+        async for chunk in _create_gen_source_pure(prepared):
             yield f"data: {json.dumps({'content': chunk})}\n\n"
     except ServiceError as e:
         # Re-raise service errors as they are handled by the global exception handler for REST,
@@ -317,7 +324,10 @@ async def api_story_summary_stream(request: Request):
             save_story_config(prepared["story_path"], prepared["story"])
 
         return StreamingResponse(
-            _create_gen_source(prepared),
+            stream_collect_and_persist(
+                lambda: _create_gen_source_pure(prepared),
+                persist_on_complete=_persist,
+            ),
             media_type="text/event-stream",
         )
     except ServiceError as e:
@@ -339,7 +349,12 @@ async def api_story_write_stream(request: Request):
         prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
 
         return StreamingResponse(
-            _create_gen_source(prepared),
+            stream_collect_and_persist(
+                lambda: _create_gen_source_pure(prepared),
+                persist_on_complete=lambda content: prepared["path"].write_text(
+                    content, encoding="utf-8"
+                ),
+            ),
             media_type="text/event-stream",
         )
     except ServiceError as e:
@@ -360,7 +375,14 @@ async def api_story_continue_stream(request: Request):
         payload = await parse_json_body(request)
         prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
 
-        return _as_streaming_response(lambda: _create_gen_source(prepared))
+        return _as_streaming_response(
+            lambda: stream_collect_and_persist(
+                lambda: _create_gen_source_pure(prepared),
+                persist_on_complete=lambda content: prepared["path"].write_text(
+                    (read_text_or_raise(prepared["path"]) + content), encoding="utf-8"
+                ),
+            )
+        )
     except ServiceError as e:
         raise HTTPException(
             status_code=e.status_code,

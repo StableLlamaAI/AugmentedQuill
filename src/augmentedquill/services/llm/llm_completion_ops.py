@@ -16,7 +16,6 @@ import json
 from augmentedquill.core.config import (
     load_story_config,
     DEFAULT_STORY_CONFIG_PATH,
-    DEFAULT_MACHINE_CONFIG_PATH,
     load_machine_config,
 )
 from augmentedquill.services.projects.projects import get_active_project_dir
@@ -63,14 +62,20 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
         return
 
     # 2. Check machine.json models
-    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH)
-    if machine_config:
-        for provider in ["openai", "anthropic", "google"]:
-            all_models = machine_config.get(provider, {}).get("models", [])
-            for model in all_models:
-                model_url = model.get("base_url")
-                if model_url and base_url == model_url:
-                    return
+    machine_config = load_machine_config()
+    if not machine_config:
+        from augmentedquill.services.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    for provider in ["openai", "anthropic", "google"]:
+        all_models = machine_config.get(provider, {}).get("models", [])
+        for model in all_models:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
+                return
 
     # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
     # Note: Using a strict whitelist of local addresses.
@@ -162,7 +167,7 @@ def _resolve_machine_model_cfg(
     base_url: str, model_id: str, model_name: str | None = None
 ) -> dict:
     """Resolve machine model entry matching name or base_url + model_id."""
-    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine_config = load_machine_config() or {}
     openai_cfg = (
         machine_config.get("openai") if isinstance(machine_config, dict) else {}
     )

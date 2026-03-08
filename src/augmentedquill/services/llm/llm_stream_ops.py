@@ -16,7 +16,6 @@ import os
 import httpx
 
 from augmentedquill.core.config import (
-    CONFIG_DIR,
     load_machine_config,
 )
 from augmentedquill.services.llm.llm_http_ops import logged_stream_request
@@ -50,15 +49,20 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
         return
 
     # 2. Check machine.json models
-    config_path = os.path.join(CONFIG_DIR, "machine.json")
-    machine_config = load_machine_config(config_path)
-    if machine_config:
-        for provider in ["openai", "anthropic", "google"]:
-            all_models = machine_config.get(provider, {}).get("models", [])
-            for model in all_models:
-                model_url = model.get("base_url")
-                if model_url and base_url == model_url:
-                    return
+    machine_config = load_machine_config()
+    if not machine_config:
+        from augmentedquill.services.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    for provider in ["openai", "anthropic", "google"]:
+        all_models = machine_config.get(provider, {}).get("models", [])
+        for model in all_models:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
+                return
 
     # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
     trusted_locals = {

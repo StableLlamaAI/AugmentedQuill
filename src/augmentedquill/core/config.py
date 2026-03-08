@@ -43,9 +43,21 @@ STATIC_DIR = BASE_DIR / "static"
 
 CURRENT_SCHEMA_VERSION = 2
 USER_CONFIG_DIR = DATA_DIR / "config"
-DEFAULT_MACHINE_CONFIG_PATH = USER_CONFIG_DIR / "machine.json"
-DEFAULT_STORY_CONFIG_PATH = USER_CONFIG_DIR / "story.json"
-DEFAULT_PROJECTS_REGISTRY_PATH = USER_CONFIG_DIR / "projects.json"
+DEFAULT_MACHINE_CONFIG_PATH = (
+    Path(os.getenv("AUGQ_MACHINE_CONFIG_PATH"))
+    if os.getenv("AUGQ_MACHINE_CONFIG_PATH")
+    else USER_CONFIG_DIR / "machine.json"
+)
+DEFAULT_STORY_CONFIG_PATH = (
+    Path(os.getenv("AUGQ_STORY_CONFIG_PATH"))
+    if os.getenv("AUGQ_STORY_CONFIG_PATH")
+    else USER_CONFIG_DIR / "story.json"
+)
+DEFAULT_PROJECTS_REGISTRY_PATH = (
+    Path(os.getenv("AUGQ_PROJECTS_REGISTRY"))
+    if os.getenv("AUGQ_PROJECTS_REGISTRY")
+    else USER_CONFIG_DIR / "projects.json"
+)
 DEFAULT_MODEL_PRESETS_PATH = CONFIG_DIR / "model_presets.json"
 
 

@@ -102,7 +102,7 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
     for ``system_messages``/``user_prompts`` are resolved into the active
     project's language (falling back to English).
     """
-    machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine_config = load_machine_config() or {}
     if not model_name:
         model_name = machine_config.get("openai", {}).get("selected")
 

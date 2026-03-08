@@ -17,7 +17,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from augmentedquill.core.config import (
     load_machine_config,
-    DEFAULT_MACHINE_CONFIG_PATH,
     DEFAULT_STORY_CONFIG_PATH,
 )
 from augmentedquill.api.v1.http_responses import error_json, ok_json
@@ -55,7 +54,7 @@ httpx = _chat_api_proxy_ops.httpx
 @router.get("/chat", response_model=ChatInitialStateResponse)
 async def api_get_chat() -> ChatInitialStateResponse:
     """Return initial state for chat view: models and current selection."""
-    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine = load_machine_config() or {}
     openai_cfg = (machine.get("openai") or {}) if isinstance(machine, dict) else {}
     models_list = openai_cfg.get("models") if isinstance(openai_cfg, dict) else []
 
@@ -174,7 +173,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         raise HTTPException(status_code=400, detail="messages array is required")
 
     # Load config to determine model capabilities and overrides
-    machine = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
+    machine = load_machine_config() or {}
     stream_ctx = resolve_stream_model_context(payload, machine)
     model_type = stream_ctx["model_type"]
     selected_name = stream_ctx["selected_name"]
