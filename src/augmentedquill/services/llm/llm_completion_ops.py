@@ -158,8 +158,10 @@ def _resolve_temperature_max_tokens(
     )
 
 
-def _resolve_machine_model_cfg(base_url: str, model_id: str) -> dict:
-    """Resolve machine model entry matching base_url + model_id."""
+def _resolve_machine_model_cfg(
+    base_url: str, model_id: str, model_name: str | None = None
+) -> dict:
+    """Resolve machine model entry matching name or base_url + model_id."""
     machine_config = load_machine_config(DEFAULT_MACHINE_CONFIG_PATH) or {}
     openai_cfg = (
         machine_config.get("openai") if isinstance(machine_config, dict) else {}
@@ -170,11 +172,15 @@ def _resolve_machine_model_cfg(base_url: str, model_id: str) -> dict:
     for model in models:
         if not isinstance(model, dict):
             continue
-        if str(model.get("base_url") or "") != str(base_url or ""):
-            continue
-        if str(model.get("model") or "") != str(model_id or ""):
-            continue
-        return model
+        if model_name:
+            if model.get("name") == model_name:
+                return model
+        else:
+            if str(model.get("base_url") or "") != str(base_url or ""):
+                continue
+            if str(model.get("model") or "") != str(model_id or ""):
+                continue
+            return model
     return {}
 
 
@@ -219,10 +225,11 @@ async def unified_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
@@ -240,6 +247,7 @@ async def unified_chat_complete(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=merged_extra_body,
@@ -289,6 +297,7 @@ async def openai_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -296,7 +305,7 @@ async def openai_chat_complete(
 ) -> dict:
     """Call the OpenAI-compatible chat completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
     temperature, max_tokens = _resolve_temperature_max_tokens(
         temperature, max_tokens, model_cfg
     )
@@ -327,6 +336,7 @@ async def openai_completions(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     n: int = 1,
     temperature: float | None = None,
     max_tokens: int | None = None,
@@ -335,7 +345,7 @@ async def openai_completions(
 ) -> dict:
     """Call the OpenAI-compatible text completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
     temperature, max_tokens = _resolve_temperature_max_tokens(
         temperature, max_tokens, model_cfg
     )
@@ -367,6 +377,7 @@ async def openai_chat_complete_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -375,7 +386,7 @@ async def openai_chat_complete_stream(
     """Stream content chunks from the chat completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/chat/completions"
-    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
     temperature, max_tokens = _resolve_temperature_max_tokens(
         temperature, max_tokens, model_cfg
     )
@@ -439,6 +450,7 @@ async def openai_completions_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -447,7 +459,7 @@ async def openai_completions_stream(
     """Stream content chunks from the text completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/completions"
-    model_cfg = _resolve_machine_model_cfg(base_url, model_id)
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
     temperature, max_tokens = _resolve_temperature_max_tokens(
         temperature, max_tokens, model_cfg
     )

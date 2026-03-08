@@ -281,7 +281,14 @@ class ToolParityTest(TestCase):
         # We need to mock the LLM for sync_summary because it calls unified_chat_complete
         from unittest.mock import patch, AsyncMock
 
-        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
         # We patch both unified_chat_complete and openai credential resolution so the
         # tool doesn't attempt to read real machine.json or make network calls.
         with (
@@ -291,7 +298,7 @@ class ToolParityTest(TestCase):
             ) as mock_llm,
             patch(
                 "augmentedquill.services.llm.llm.resolve_openai_credentials",
-                return_value=_dummy_runtime[:4],
+                return_value=_dummy_runtime[:5],
             ),
             patch(
                 "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
@@ -313,7 +320,14 @@ class ToolParityTest(TestCase):
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
 
-        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
         with (
             patch(
                 "augmentedquill.services.llm.llm.unified_chat_complete",
@@ -321,7 +335,7 @@ class ToolParityTest(TestCase):
             ) as mock_llm,
             patch(
                 "augmentedquill.services.llm.llm.resolve_openai_credentials",
-                return_value=_dummy_runtime[:4],
+                return_value=_dummy_runtime[:5],
             ),
             patch(
                 "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",

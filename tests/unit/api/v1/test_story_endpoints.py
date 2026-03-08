@@ -127,6 +127,7 @@ class StoryEndpointsTest(TestCase):
             None,
             "fake-model",
             5,
+            "fake-model",
         )  # type: ignore
         llm.unified_chat_complete = fake_complete  # type: ignore
 
@@ -238,6 +239,7 @@ class StoryEndpointsTest(TestCase):
             None,
             "fake-model",
             5,
+            "fake-model",
         )  # type: ignore
 
         def _undo():
@@ -296,6 +298,7 @@ class StoryEndpointsTest(TestCase):
             None,
             "fake-model",
             5,
+            "fake-model",
         )  # type: ignore
 
         def _undo2():

@@ -134,6 +134,9 @@ export type MainSidebarControls = {
     private_notes?: string,
     language?: string
   ) => Promise<void>;
+  // optional sourcebook relevance controls (provided by suggestions hook)
+  checkedSourcebookIds?: string[];
+  onToggleSourcebook?: (id: string, checked: boolean) => void;
 };
 
 export type MainEditorSuggestionControls = {

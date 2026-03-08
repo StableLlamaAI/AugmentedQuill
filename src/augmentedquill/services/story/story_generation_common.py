@@ -44,10 +44,12 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     if not chapter_summaries:
         raise BadRequestError("No chapter summaries available")
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="EDITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="EDITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_story_summary_messages(
         mode=mode,
@@ -63,6 +65,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -84,10 +87,12 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     ensure_chapter_slot(chapters_data, pos)
     current_summary = chapters_data[pos].get("summary", "")
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="EDITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="EDITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_chapter_summary_messages(
         mode=mode,
@@ -107,6 +112,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -126,10 +132,12 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="WRITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_write_chapter_messages(
         project_title=story.get("project_title", "Story"),
@@ -146,6 +154,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -166,10 +175,12 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="WRITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_continue_chapter_messages(
         chapter_title=title,
@@ -186,5 +197,6 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }

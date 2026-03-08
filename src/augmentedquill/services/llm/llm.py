@@ -59,7 +59,7 @@ def get_selected_model_name(
 def resolve_openai_credentials(
     payload: Dict[str, Any],
     model_type: str | None = None,
-) -> Tuple[str, str | None, str, int]:
+) -> Tuple[str, str | None, str, int, str | None]:
     """Resolve (base_url, api_key, model_id, timeout_s) from machine config and overrides.
 
     Precedence:
@@ -108,7 +108,13 @@ def resolve_openai_credentials(
         ts = int(timeout_s or 60)
     except Exception:
         ts = 60
-    return str(base_url), (str(api_key) if api_key else None), str(model_id), ts
+    return (
+        str(base_url),
+        (str(api_key) if api_key else None),
+        str(model_id),
+        ts,
+        selected_name,
+    )
 
 
 async def unified_chat_stream(
@@ -118,10 +124,11 @@ async def unified_chat_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
@@ -135,6 +142,7 @@ async def unified_chat_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         supports_function_calling=supports_function_calling,
         tools=tools,
         tool_choice=tool_choice,
@@ -153,10 +161,11 @@ async def unified_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
@@ -169,6 +178,7 @@ async def unified_chat_complete(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         supports_function_calling=supports_function_calling,
         tools=tools,
         tool_choice=tool_choice,
@@ -186,6 +196,7 @@ async def openai_chat_complete(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -199,6 +210,7 @@ async def openai_chat_complete(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
@@ -213,6 +225,7 @@ async def openai_completions(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     n: int = 1,
     temperature: float | None = None,
     max_tokens: int | None = None,
@@ -227,6 +240,7 @@ async def openai_completions(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         n=n,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -242,6 +256,7 @@ async def openai_chat_complete_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -255,6 +270,7 @@ async def openai_chat_complete_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,
@@ -270,6 +286,7 @@ async def openai_completions_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
@@ -283,6 +300,7 @@ async def openai_completions_stream(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_body=extra_body,

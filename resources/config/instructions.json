@@ -225,6 +225,8 @@
         "",
         "Chapter description: {chapter_summary}",
         "",
+        "Chapter conflicts:\n{chapter_conflicts}",
+        "",
         "---",
         "",
         "{current_text}"
@@ -254,5 +256,12 @@
         "Entries:\n{entries}"
       ]
     }
+  },
+  "entry_selector": {
+    "_use": "WRITING",
+    "en": [
+      "You are an analytical assistant.",
+      "Your only job is to process the user's instructions and extract the requested data exactly as formatted."
+    ]
   }
 }

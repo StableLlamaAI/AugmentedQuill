@@ -35,6 +35,7 @@ async def generate_story_summary(
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     new_summary = data.get("content", "")
@@ -56,6 +57,7 @@ async def generate_chapter_summary(
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     new_summary = data.get("content", "")
@@ -91,6 +93,7 @@ async def write_chapter_from_summary(
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     content = data.get("content", "")
@@ -111,6 +114,7 @@ async def continue_chapter_from_summary(
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     appended = data.get("content", "")

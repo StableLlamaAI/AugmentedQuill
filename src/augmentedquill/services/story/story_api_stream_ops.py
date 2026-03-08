@@ -16,7 +16,13 @@ from augmentedquill.services.llm import llm
 
 
 async def stream_unified_chat_content(
-    *, messages: list, base_url: str, api_key: str | None, model_id: str, timeout_s: int
+    *,
+    messages: list,
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+    timeout_s: int,
+    model_name: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream Unified Chat Content."""
     async for chunk_dict in llm.unified_chat_stream(
@@ -25,6 +31,7 @@ async def stream_unified_chat_content(
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
     ):
         chunk = chunk_dict.get("content", "")
         if chunk:

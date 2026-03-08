@@ -278,6 +278,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 api_key=api_key,
                 model_id=model_id,
                 timeout_s=timeout_s,
+                model_name=selected_name,
                 supports_function_calling=supports_function_calling,
                 tools=story_tools,
                 tool_choice=tool_choice if tool_choice != "none" else None,

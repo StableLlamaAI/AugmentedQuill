@@ -22,13 +22,13 @@ from augmentedquill.core.prompts import (
 
 def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
     """Resolve runtime model credentials and prompt overrides for a request."""
-    base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
         payload, model_type=model_type
     )
     machine_config = load_machine_config(base_dir / "config" / "machine.json") or {}
-    selected_model_name = llm.get_selected_model_name(payload, model_type=model_type)
-    model_overrides = load_model_prompt_overrides(machine_config, selected_model_name)
-    return base_url, api_key, model_id, timeout_s, model_overrides
+    # model_name returned from resolve_openai_credentials is the selected name!
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    return base_url, api_key, model_id, timeout_s, model_name, model_overrides
 
 
 def _build_messages(

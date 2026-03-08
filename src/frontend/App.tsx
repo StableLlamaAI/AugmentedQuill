@@ -215,6 +215,8 @@ const App: React.FC = () => {
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    checkedEntries,
+    handleToggleEntry,
   } = useChapterSuggestions({
     currentChapter,
     currentChapterId,
@@ -387,6 +389,8 @@ const App: React.FC = () => {
             isEditingAvailable: roleAvailability.editing,
             handleOpenImages,
             updateStoryMetadata,
+            checkedSourcebookIds: Array.from(checkedEntries),
+            onToggleSourcebook: handleToggleEntry,
           }}
           editorControls={{
             currentChapter,

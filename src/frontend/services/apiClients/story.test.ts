@@ -123,4 +123,20 @@ describe('storyApi', () => {
       'Failed to update story metadata'
     );
   });
+
+  it('calls POST /story/sourcebook/relevance', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({ relevant: ['A', 'B'] });
+
+    await storyApi.computeSourcebookRelevance('1', 'text');
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      '/story/sourcebook/relevance',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap_id: 1, current_text: 'text' }),
+      },
+      'Failed to compute sourcebook relevance'
+    );
+  });
 });

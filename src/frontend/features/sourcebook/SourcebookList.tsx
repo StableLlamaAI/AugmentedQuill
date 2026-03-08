@@ -42,9 +42,16 @@ const CATEGORY_DETAILS: Record<string, { icon: React.ElementType }> = {
 
 interface SourcebookListProps {
   theme?: AppTheme;
+  // ids currently checked by the relevance engine or user
+  checkedIds?: string[];
+  onToggle?: (id: string, checked: boolean) => void;
 }
 
-export const SourcebookList: React.FC<SourcebookListProps> = ({ theme = 'mixed' }) => {
+export const SourcebookList: React.FC<SourcebookListProps> = ({
+  theme = 'mixed',
+  checkedIds = [],
+  onToggle,
+}) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>([]);
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
@@ -181,6 +188,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({ theme = 'mixed' 
         <div className="space-y-0.5">
           {filtered.map((e) => {
             const CategoryIcon = CATEGORY_DETAILS[e.category]?.icon || HelpCircle;
+            const isChecked = checkedIds.includes(e.id);
             return (
               <div
                 key={e.id}
@@ -197,6 +205,15 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({ theme = 'mixed' 
                   className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
                 />
                 <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={(ev) => {
+                    ev.stopPropagation();
+                    onToggle?.(e.id, ev.target.checked);
+                  }}
+                  className="ml-auto"
+                />
               </div>
             );
           })}

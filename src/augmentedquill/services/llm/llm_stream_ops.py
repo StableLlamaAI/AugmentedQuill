@@ -87,16 +87,32 @@ async def unified_chat_stream(
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     """Unified Chat Stream."""
+    from augmentedquill.services.llm.llm_completion_ops import (
+        _resolve_machine_model_cfg,
+        _resolve_temperature_max_tokens,
+        _build_model_extra_body,
+    )
+
     _validate_base_url(base_url, skip_validation=skip_validation)
+
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
+    )
+
+    merged_extra_body = dict(extra_body or {})
+    merged_extra_body.update(_build_model_extra_body(model_cfg))
+
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -110,8 +126,8 @@ async def unified_chat_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
-    if isinstance(extra_body, dict):
-        body.update(extra_body)
+    if merged_extra_body:
+        body.update(merged_extra_body)
 
     if supports_function_calling and tools and tool_choice != "none":
         body["tools"] = tools

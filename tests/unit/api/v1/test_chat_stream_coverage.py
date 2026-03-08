@@ -546,12 +546,12 @@ class TestChatStreamCoverage(TestCase):
             "augmentedquill.services.llm.llm.load_machine_config", return_value=cfg
         ):
             # Test default (selected = model-a)
-            url, key, mod, to = llm.resolve_openai_credentials({}, model_type="CHAT")
+            url, key, mod, to, _ = llm.resolve_openai_credentials({}, model_type="CHAT")
             self.assertEqual(url, "http://a")
             self.assertEqual(mod, "gpt-a")
 
             # Test explicit model_name
-            url, key, mod, to = llm.resolve_openai_credentials(
+            url, key, mod, to, _ = llm.resolve_openai_credentials(
                 {"model_name": "model-b"}, model_type="CHAT"
             )
             self.assertEqual(url, "http://b")

@@ -386,6 +386,7 @@ export const generateContinuations = async (
   systemInstruction: string,
   config: LLMConfig,
   chapterId?: string,
+  checkedSourcebookIds?: string[],
   options?: {
     onSuggestionUpdate?: (index: number, text: string) => void;
   }
@@ -394,14 +395,18 @@ export const generateContinuations = async (
 
   const fetchSuggestion = async (index: number) => {
     try {
+      const body: any = {
+        chap_id: Number(chapterId),
+        model_name: config.name || config.id,
+        current_text: currentContent,
+      };
+      if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+        body.checked_sourcebook = checkedSourcebookIds;
+      }
       const res = await fetch('/api/v1/story/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chap_id: Number(chapterId),
-          model_name: config.name || config.id,
-          current_text: currentContent,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) return '';

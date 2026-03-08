@@ -155,15 +155,18 @@ async def logged_request(
                 method=method, url=url, headers=headers, json=body
             )
     except Exception as exc:
-        # capture full traceback rather than just message so the dump
-        # contains actionable information about why the HTTP request
-        # failed (e.g. DNS error, timeout).  callers will still see the
-        # exception propagate as before.
-        tb = traceback.format_exc()
+        # For the common case of a ReadTimeout or other transport-level
+        # error, we don't need the entire Python traceback in the log; the
+        # message is usually sufficient and saves space.  Otherwise fall back
+        # to formatting the full traceback for diagnostics.
+        if isinstance(exc, (httpx.ReadTimeout, httpx.RequestError)):
+            detail = f"{type(exc).__name__}: {str(exc)}"
+        else:
+            detail = traceback.format_exc()
         _finalize_log_entry(
             log_entry,
-            error=f"An internal error occurred during the LLM request: {exc}",
-            error_detail=tb,
+            error=f"An internal error occurred during the LLM request: {type(exc).__name__} {exc}",
+            error_detail=detail,
         )
         raise
 
@@ -212,7 +215,7 @@ async def logged_stream_request(
         tb = traceback.format_exc()
         _finalize_log_entry(
             log_entry,
-            error=f"An internal error occurred during the LLM request: {exc}",
+            error=f"An internal error occurred during the LLM request: {type(exc).__name__} {exc}",
             error_detail=tb,
         )
         raise

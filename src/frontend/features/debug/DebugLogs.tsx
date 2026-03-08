@@ -253,9 +253,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               <p>No LLM communications logged yet.</p>
             </div>
           ) : (
-            logs.map((log) => (
+            logs.map((log, idx) => (
               <div
-                key={log.id}
+                key={log.id ?? idx}
                 className={`border rounded-lg overflow-hidden ${borderMain} ${
                   expandedLogs[log.id] ? 'ring-1 ring-blue-500/30' : ''
                 }`}
@@ -274,15 +274,17 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                     )}
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-mono px-1.5 py-0.5 rounded ${
-                            log.request.method === 'POST'
-                              ? 'bg-green-500/10 text-green-500'
-                              : 'bg-blue-500/10 text-blue-500'
-                          }`}
-                        >
-                          {log.request.method}
-                        </span>
+                        {log.request && (
+                          <span
+                            className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                              log.request.method === 'POST'
+                                ? 'bg-green-500/10 text-green-500'
+                                : 'bg-blue-500/10 text-blue-500'
+                            }`}
+                          >
+                            {log.request.method}
+                          </span>
+                        )}
                         {log.model_type && (
                           <span
                             className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
@@ -297,7 +299,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           </span>
                         )}
                         <span className={`text-sm font-medium truncate ${textMain}`}>
-                          {log.request.url.split('/').pop()}
+                          {log.request?.url?.split('/').pop() || ''}
                         </span>
                         {log.response?.status_code && (
                           <span

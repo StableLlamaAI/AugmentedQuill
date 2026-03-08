@@ -56,6 +56,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     isEditingAvailable,
     handleOpenImages,
     updateStoryMetadata,
+    checkedSourcebookIds,
+    onToggleSourcebook,
   } = sidebarControls;
   const {
     currentChapter,
@@ -149,7 +151,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           theme={currentTheme}
           onOpenImages={handleOpenImages}
         />
-        <SourcebookList theme={currentTheme} />
+        <SourcebookList
+          theme={currentTheme}
+          checkedIds={checkedSourcebookIds || []}
+          onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
+        />
       </div>
       <div
         className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
