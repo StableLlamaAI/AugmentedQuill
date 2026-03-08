@@ -155,10 +155,15 @@ async def logged_request(
                 method=method, url=url, headers=headers, json=body
             )
     except Exception as exc:
+        # capture full traceback rather than just message so the dump
+        # contains actionable information about why the HTTP request
+        # failed (e.g. DNS error, timeout).  callers will still see the
+        # exception propagate as before.
+        tb = traceback.format_exc()
         _finalize_log_entry(
             log_entry,
             error=f"An internal error occurred during the LLM request: {exc}",
-            error_detail=str(exc),
+            error_detail=tb,
         )
         raise
 
@@ -204,10 +209,11 @@ async def logged_stream_request(
                 log_entry["response"]["status_code"] = response.status_code
                 yield response, log_entry
     except Exception as exc:
+        tb = traceback.format_exc()
         _finalize_log_entry(
             log_entry,
             error=f"An internal error occurred during the LLM request: {exc}",
-            error_detail=str(exc),
+            error_detail=tb,
         )
         raise
     finally:

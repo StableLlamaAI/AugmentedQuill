@@ -89,3 +89,45 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
         # recorded call had response == None
         self.assertGreaterEqual(len(seen), 1)
         self.assertIsNone(seen[0].get("response"))
+
+    async def test_logged_request_exception_includes_traceback(self):
+        """When the HTTP client throws, we log the full traceback in error_detail."""
+
+        class BrokenClient:
+            def __init__(self, timeout):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def request(self, *args, **kwargs):
+                raise RuntimeError("boom")
+
+        seen = []
+
+        def record(entry):
+            seen.append(entry.copy())
+
+        with patch(
+            "augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient",
+            return_value=BrokenClient(None),
+        ):
+            with patch.object(llm_http_ops, "add_llm_log", new=record):
+                with self.assertRaises(RuntimeError):
+                    await llm_http_ops.logged_request(
+                        method="GET",
+                        url="http://example.invalid",
+                        headers={},
+                        timeout=httpx.Timeout(1.0),
+                    )
+
+        # ensure we recorded at least one entry and its error_detail contains the
+        # exception message and a stack trace.
+        self.assertGreaterEqual(len(seen), 1)
+        err = seen[-1]["response"]["error_detail"]
+        self.assertIsInstance(err, str)
+        self.assertIn("RuntimeError", err)
+        self.assertIn("boom", err)
