@@ -23,6 +23,7 @@ import {
   Calendar,
   HelpCircle,
   Image as ImageIcon,
+  Check,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { SourcebookEntryDialog } from './SourcebookEntryDialog';
@@ -205,15 +206,20 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
                   className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
                 />
                 <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={(ev) => {
+                <button
+                  onClick={(ev) => {
                     ev.stopPropagation();
-                    onToggle?.(e.id, ev.target.checked);
+                    onToggle?.(e.id, !isChecked);
                   }}
-                  className="ml-auto"
-                />
+                  className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                    isChecked
+                      ? 'bg-brand-500 border-brand-500 text-white'
+                      : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                  }`}
+                  title={isChecked ? 'Exclude from context' : 'Include in context'}
+                >
+                  {isChecked && <Check size={10} strokeWidth={4} />}
+                </button>
               </div>
             );
           })}

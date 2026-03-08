@@ -8,12 +8,13 @@ The Sourcebook is your story's encyclopedia. It is crucial for keeping both you 
 
 The Sourcebook list lives at the bottom of the left sidebar, below the chapter list. It shows every entry in the current project as a scrollable list. Each row displays the category icon, the entry name, and (on hover) a floating preview tooltip with the description excerpt and associated image.
 
-| Control                         | Description                                                                                                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **+** (Plus icon) in the header | Opens the **Sourcebook Entry Dialog** to create a new entry.                                                                                                         |
-| **Search / filter** text field  | Type to filter the list in real time by name, category name, or any synonym. Useful in large world-building projects with dozens or hundreds of entries.             |
-| **Entry row** (click)           | Opens the entry in the Sourcebook Entry Dialog for editing.                                                                                                          |
-| **Hover tooltip**               | Appears automatically when you hover an entry — shows the category badge, description preview, and primary image thumbnail (if any) without opening the full dialog. |
+| Control                         | Description                                                                                                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **+** (Plus icon) in the header | Opens the **Sourcebook Entry Dialog** to create a new entry.                                                                                                                 |
+| **Search / filter** text field  | Type to filter the list in real time by name, category name, or any synonym. Useful in large world-building projects with dozens or hundreds of entries.                     |
+| **Entry row** (click)           | Opens the entry in the Sourcebook Entry Dialog for editing.                                                                                                                  |
+| **Include/Exclude** (Checkbox)  | Toggle whether this entry is explicitly included in the AI context. When checked, the entry remains pinned for AI consideration regardless of automatic relevance detection. |
+| **Hover tooltip**               | Appears automatically when you hover an entry — shows the category badge, description preview, and primary image thumbnail (if any) without opening the full dialog.         |
 
 ---
 
