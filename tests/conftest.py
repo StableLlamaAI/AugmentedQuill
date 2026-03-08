@@ -21,13 +21,36 @@ _SESSION_ROOT = Path(_SESSION_TEMP_DIR.name)
 _SESSION_DATA_DIR = _SESSION_ROOT / "data"
 _SESSION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Provide a default machine config for tests so that SSRF validation
+# and model-related services don't fail by default.
+_SESSION_CONFIG_DIR = _SESSION_ROOT / "config"
+_SESSION_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+_SESSION_MACHINE_JSON = _SESSION_CONFIG_DIR / "machine.json"
+_SESSION_MACHINE_JSON.write_text(
+    """
+{
+  "openai": {
+    "models": [
+      {
+        "name": "gpt-4o",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o"
+      }
+    ]
+  }
+}
+"""
+)
+
 _ORIG_USER_DATA_DIR = os.environ.get("AUGQ_USER_DATA_DIR")
 _ORIG_PROJECTS_ROOT = os.environ.get("AUGQ_PROJECTS_ROOT")
 _ORIG_PROJECTS_REGISTRY = os.environ.get("AUGQ_PROJECTS_REGISTRY")
+_ORIG_MACHINE_CONFIG_PATH = os.environ.get("AUGQ_MACHINE_CONFIG_PATH")
 
 os.environ["AUGQ_USER_DATA_DIR"] = str(_SESSION_DATA_DIR)
 os.environ["AUGQ_PROJECTS_ROOT"] = str(_SESSION_ROOT / "projects")
 os.environ["AUGQ_PROJECTS_REGISTRY"] = str(_SESSION_ROOT / "projects.json")
+os.environ["AUGQ_MACHINE_CONFIG_PATH"] = str(_SESSION_MACHINE_JSON)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -58,3 +81,8 @@ def session_temp_env():
         os.environ["AUGQ_PROJECTS_REGISTRY"] = _ORIG_PROJECTS_REGISTRY
     else:
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+
+    if _ORIG_MACHINE_CONFIG_PATH is not None:
+        os.environ["AUGQ_MACHINE_CONFIG_PATH"] = _ORIG_MACHINE_CONFIG_PATH
+    else:
+        os.environ.pop("AUGQ_MACHINE_CONFIG_PATH", None)
