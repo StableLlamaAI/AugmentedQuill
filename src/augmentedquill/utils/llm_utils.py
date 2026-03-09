@@ -67,6 +67,7 @@ async def _probe_model_capabilities(
                 "max_tokens": 1,
             }
             response = await logged_request(
+                caller_id="llm_utils.probe_model_capabilities.check_vision",
                 method="POST",
                 url=url,
                 headers=headers,
@@ -98,6 +99,7 @@ async def _probe_model_capabilities(
                 "max_tokens": 1,
             }
             response = await logged_request(
+                caller_id="llm_utils.probe_model_capabilities.check_function_calling",
                 method="POST",
                 url=url,
                 headers=headers,

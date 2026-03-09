@@ -315,6 +315,11 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1">
+                        {log.caller_id && (
+                          <span className="text-[10px] text-brand-gray-500 font-mono">
+                            Caller: {log.caller_id}
+                          </span>
+                        )}
                         <span className="text-[10px] text-brand-gray-500 font-mono">
                           Start: {new Date(log.timestamp_start).toLocaleTimeString()}
                         </span>
@@ -332,6 +337,20 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                   <div
                     className={`p-4 border-t ${borderMain} space-y-4 font-mono text-xs`}
                   >
+                    {log.caller_id && (
+                      <div className="space-y-2">
+                        <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
+                          Caller
+                        </h4>
+                        <div
+                          className={`p-3 rounded-lg overflow-x-auto ${
+                            isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900'
+                          }`}
+                        >
+                          <span className="text-blue-400">{log.caller_id}</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
                         Request

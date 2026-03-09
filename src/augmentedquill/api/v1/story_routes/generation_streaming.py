@@ -148,6 +148,7 @@ async def api_story_sourcebook_relevance(request: Request):
         # frontend can continue working without an error dialog.
         try:
             res = await llm.unified_chat_complete(
+                caller_id="api.story.sourcebook_relevance",
                 messages=[
                     {
                         "role": "system",
@@ -271,6 +272,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
                 startFound = False
                 isNewParagraph = False
                 async for chunk in llm.openai_completions_stream(
+                    caller_id="api.story.suggest",
                     prompt=prompt,
                     base_url=base_url,
                     api_key=api_key,

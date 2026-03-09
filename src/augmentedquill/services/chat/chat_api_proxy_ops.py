@@ -36,6 +36,7 @@ async def proxy_openai_models(payload: dict) -> JSONResponse:
 
     try:
         response = await logged_request(
+            caller_id="chat_api_proxy.proxy_openai_models",
             method="GET",
             url=url,
             headers=headers,

@@ -201,6 +201,7 @@ export interface SourcebookUpsertPayload {
 
 export interface DebugLogEntry {
   id: string;
+  caller_id?: string;
   model_type?: string;
   timestamp_start: string;
   timestamp_end: string | null;

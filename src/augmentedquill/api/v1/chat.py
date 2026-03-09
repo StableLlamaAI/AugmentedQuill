@@ -272,6 +272,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         """Gen."""
         try:
             async for chunk in llm.unified_chat_stream(
+                caller_id="api.chat.stream",
                 messages=req_messages,
                 base_url=base_url,
                 api_key=api_key,

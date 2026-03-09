@@ -15,7 +15,6 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 import datetime
-import os
 import traceback
 from urllib.parse import urlparse
 
@@ -37,38 +36,12 @@ def _ensure_allowed_request_url(url: str) -> None:
         raise ValueError("Potentially dangerous URL format for outbound LLM request.")
 
 
-def _relpath_for_log(path: str) -> str:
-    """Return a stable, readable path for log output."""
-    try:
-        return os.path.relpath(path, start=os.getcwd())
-    except Exception:
-        return path
-
-
-def _resolve_call_origin() -> str:
-    """Infer a compact origin string for the current LLM request."""
-    stack = traceback.extract_stack()
-
-    app_frames = []
-    for frame in stack:
-        filename = str(frame.filename)
-        normalized = filename.replace("\\", "/")
-        if "/augmentedquill/" not in normalized:
-            continue
-        if normalized.endswith("/llm_http_ops.py"):
-            continue
-        if normalized.endswith("/llm_logging.py"):
-            continue
-        app_frames.append(frame)
-
-    if not app_frames:
-        return "unknown:0 unknown"
-
-    caller = app_frames[-1]
-    return (
-        f"{_relpath_for_log(str(caller.filename))}:{int(caller.lineno)}"
-        f" {str(caller.name)}"
-    )
+def _require_caller_id(caller_id: str) -> str:
+    """Validate and normalize caller identity used for LLM diagnostics."""
+    normalized = str(caller_id or "").strip()
+    if not normalized:
+        raise ValueError("caller_id is required for LLM requests.")
+    return normalized
 
 
 def _safe_log_headers(headers: dict[str, str] | None) -> dict[str, str]:
@@ -140,6 +113,7 @@ def _finalize_log_entry(
 
 async def logged_request(
     *,
+    caller_id: str,
     method: str,
     url: str,
     headers: dict[str, str] | None,
@@ -148,6 +122,7 @@ async def logged_request(
     raise_for_status: bool = False,
 ) -> httpx.Response:
     """Execute one HTTP request with guaranteed request/response logging."""
+    caller_id = _require_caller_id(caller_id)
     _ensure_allowed_request_url(url)
     # log the request start; we intentionally omit the response object here
     # (it will be filled in later when the request completes).  setting the
@@ -161,7 +136,7 @@ async def logged_request(
         streaming=False,
         include_response=False,
     )
-    log_entry["origin"] = _resolve_call_origin()
+    log_entry["caller_id"] = caller_id
     add_llm_log(log_entry)
 
     try:
@@ -202,6 +177,7 @@ async def logged_request(
 @asynccontextmanager
 async def logged_stream_request(
     *,
+    caller_id: str,
     method: str,
     url: str,
     headers: dict[str, str] | None,
@@ -209,6 +185,7 @@ async def logged_stream_request(
     body: Any = None,
 ) -> AsyncIterator[tuple[httpx.Response, dict[str, Any]]]:
     """Open one streaming HTTP request with guaranteed lifecycle logging."""
+    caller_id = _require_caller_id(caller_id)
     _ensure_allowed_request_url(url)
     log_entry = create_log_entry(
         url,
@@ -217,7 +194,7 @@ async def logged_stream_request(
         _safe_log_body(body),
         streaming=True,
     )
-    log_entry["origin"] = _resolve_call_origin()
+    log_entry["caller_id"] = caller_id
     add_llm_log(log_entry)
 
     try:

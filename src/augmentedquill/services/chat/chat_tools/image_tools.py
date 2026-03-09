@@ -110,6 +110,7 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
         ]
 
         data = await llm.unified_chat_complete(
+            caller_id="chat_tool.image.generate_description",
             messages=messages,
             base_url=base_url,
             api_key=api_key,

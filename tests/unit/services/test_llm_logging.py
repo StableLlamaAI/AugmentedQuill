@@ -78,6 +78,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             with patch.object(llm_http_ops, "add_llm_log", new=record):
                 # perform the request, ignore the result
                 await llm_http_ops.logged_request(
+                    caller_id="tests.llm_logging.initial_entry",
                     method="GET",
                     url="http://example.invalid",
                     headers={},
@@ -118,6 +119,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             with patch.object(llm_http_ops, "add_llm_log", new=record):
                 with self.assertRaises(RuntimeError):
                     await llm_http_ops.logged_request(
+                        caller_id="tests.llm_logging.exception_entry",
                         method="GET",
                         url="http://example.invalid",
                         headers={},

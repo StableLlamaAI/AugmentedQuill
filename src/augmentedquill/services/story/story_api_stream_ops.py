@@ -26,6 +26,7 @@ async def stream_unified_chat_content(
 ) -> AsyncIterator[str]:
     """Stream Unified Chat Content."""
     async for chunk_dict in llm.unified_chat_stream(
+        caller_id="story_api_stream.stream_unified_chat_content",
         messages=messages,
         base_url=base_url,
         api_key=api_key,

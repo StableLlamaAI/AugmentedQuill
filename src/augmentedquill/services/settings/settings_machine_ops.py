@@ -56,6 +56,7 @@ async def list_remote_models(
 
     try:
         response = await logged_request(
+            caller_id="settings_machine.list_remote_models",
             method="GET",
             url=url,
             headers=headers,
@@ -147,6 +148,7 @@ async def _remote_model_exists_probe(
     try:
         url1 = f"{base}/models/{model_id}"
         response = await logged_request(
+            caller_id="settings_machine.remote_model_exists_get_model",
             method="GET",
             url=url1,
             headers=auth_headers(api_key),
@@ -167,6 +169,7 @@ async def _remote_model_exists_probe(
         }
 
         response2 = await logged_request(
+            caller_id="settings_machine.remote_model_exists_chat_probe",
             method="POST",
             url=url2,
             headers=headers,

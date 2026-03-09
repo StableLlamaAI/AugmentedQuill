@@ -225,6 +225,7 @@ def _build_model_extra_body(model_cfg: dict) -> dict:
 
 async def unified_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -247,6 +248,7 @@ async def unified_chat_complete(
             merged_extra_body["tool_choice"] = tool_choice
 
     resp_json = await openai_chat_complete(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -282,9 +284,10 @@ async def unified_chat_complete(
     }
 
 
-async def _execute_llm_request(url, headers, body, timeout_s):
+async def _execute_llm_request(caller_id, url, headers, body, timeout_s):
     timeout_obj = build_timeout(timeout_s)
     response = await logged_request(
+        caller_id=caller_id,
         method="POST",
         url=url,
         headers=headers,
@@ -297,6 +300,7 @@ async def _execute_llm_request(url, headers, body, timeout_s):
 
 async def openai_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -331,11 +335,12 @@ async def openai_chat_complete(
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(url, headers, body, timeout_s)
+    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
 
 
 async def openai_completions(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -372,11 +377,12 @@ async def openai_completions(
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(url, headers, body, timeout_s)
+    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
 
 
 async def openai_chat_complete_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -415,6 +421,7 @@ async def openai_chat_complete_stream(
     timeout_obj = build_timeout(timeout_s)
 
     async with logged_stream_request(
+        caller_id=caller_id,
         method="POST",
         url=url,
         headers=headers,
@@ -450,6 +457,7 @@ async def openai_chat_complete_stream(
 
 async def openai_completions_stream(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -488,6 +496,7 @@ async def openai_completions_stream(
     timeout_obj = build_timeout(timeout_s)
 
     async with logged_stream_request(
+        caller_id=caller_id,
         method="POST",
         url=url,
         headers=headers,

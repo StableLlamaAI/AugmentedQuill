@@ -119,6 +119,7 @@ def resolve_openai_credentials(
 
 async def unified_chat_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -137,6 +138,7 @@ async def unified_chat_stream(
     """Unified Chat Stream."""
     _llm_stream_ops.httpx = httpx
     async for chunk in _llm_stream_ops.unified_chat_stream(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -156,6 +158,7 @@ async def unified_chat_stream(
 
 async def unified_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -173,6 +176,7 @@ async def unified_chat_complete(
     """Unified Chat Complete."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.unified_chat_complete(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -191,6 +195,7 @@ async def unified_chat_complete(
 
 async def openai_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -205,6 +210,7 @@ async def openai_chat_complete(
     """Openai Chat Complete."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_chat_complete(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -220,6 +226,7 @@ async def openai_chat_complete(
 
 async def openai_completions(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -235,6 +242,7 @@ async def openai_completions(
     """Openai Completions."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_completions(
+        caller_id=caller_id,
         prompt=prompt,
         base_url=base_url,
         api_key=api_key,
@@ -251,6 +259,7 @@ async def openai_completions(
 
 async def openai_chat_complete_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -265,6 +274,7 @@ async def openai_chat_complete_stream(
     """Openai Chat Complete Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_chat_complete_stream(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -281,6 +291,7 @@ async def openai_chat_complete_stream(
 
 async def openai_completions_stream(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -295,6 +306,7 @@ async def openai_completions_stream(
     """Openai Completions Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_completions_stream(
+        caller_id=caller_id,
         prompt=prompt,
         base_url=base_url,
         api_key=api_key,

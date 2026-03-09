@@ -30,6 +30,7 @@ async def generate_story_summary(
     prepared = prepare_story_summary_generation(payload, mode)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.generate_story_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
@@ -52,6 +53,7 @@ async def generate_chapter_summary(
     prepared = prepare_chapter_summary_generation(payload, chap_id, mode)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.generate_chapter_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
@@ -88,6 +90,7 @@ async def write_chapter_from_summary(
     prepared = prepare_write_chapter_generation(payload, chap_id)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.write_chapter_from_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
@@ -109,6 +112,7 @@ async def continue_chapter_from_summary(
     prepared = prepare_continue_chapter_generation(payload, chap_id)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.continue_chapter_from_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
