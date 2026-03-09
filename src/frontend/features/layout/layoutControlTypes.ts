@@ -137,6 +137,9 @@ export type MainSidebarControls = {
   // optional sourcebook relevance controls (provided by suggestions hook)
   checkedSourcebookIds?: string[];
   onToggleSourcebook?: (id: string, checked: boolean) => void;
+  isAutoSourcebookSelectionEnabled?: boolean;
+  onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
+  isSourcebookSelectionRunning?: boolean;
 };
 
 export type MainEditorSuggestionControls = {

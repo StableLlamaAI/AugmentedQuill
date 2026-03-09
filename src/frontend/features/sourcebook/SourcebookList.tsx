@@ -24,6 +24,7 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Check,
+  LoaderCircle,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { SourcebookEntryDialog } from './SourcebookEntryDialog';
@@ -46,12 +47,18 @@ interface SourcebookListProps {
   // ids currently checked by the relevance engine or user
   checkedIds?: string[];
   onToggle?: (id: string, checked: boolean) => void;
+  isAutoSelectionEnabled?: boolean;
+  isAutoSelectionRunning?: boolean;
+  onToggleAutoSelection?: (enabled: boolean) => void;
 }
 
 export const SourcebookList: React.FC<SourcebookListProps> = ({
   theme = 'mixed',
   checkedIds = [],
   onToggle,
+  isAutoSelectionEnabled = true,
+  isAutoSelectionRunning = false,
+  onToggleAutoSelection,
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>([]);
   const [search, setSearch] = useState('');
@@ -119,6 +126,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   const inputBg = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
   const inputBorder = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const inputPlace = 'placeholder-brand-gray-500';
+  const btnHover = isLight
+    ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
+    : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
 
   // Resolve image metadata lazily to avoid extra API traffic during normal list browsing.
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
@@ -143,25 +153,52 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       className={`flex flex-col border-t ${borderClass} mt-0 flex-1 min-h-[200px] bg-opacity-50`}
     >
       {/* Title Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-transparent">
-        <h3
-          className={`text-sm font-semibold uppercase tracking-wider ${textHeaderClass} flex items-center gap-2`}
+      <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h3
+            className={`text-sm font-semibold uppercase tracking-wider ${textHeaderClass} flex items-center gap-2`}
+          >
+            SOURCEBOOK
+          </h3>
+          <button
+            onClick={() => {
+              setSelectedEntry(null);
+              setIsDialogOpen(true);
+            }}
+            className={`p-1 rounded-full transition-colors ${btnHover}`}
+            title="Add Entry"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+
+        <div
+          className={`flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide ${subTextClass}`}
+          title="Enable automatic sourcebook entry selection. While enabled, the AI picks relevant entries and manual entry checkboxes are locked. Disable to stop this AI helper and choose entries manually."
         >
-          SOURCEBOOK
-        </h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          theme={theme}
-          className="h-6 w-6 p-0"
-          onClick={() => {
-            setSelectedEntry(null);
-            setIsDialogOpen(true);
-          }}
-          title="Add Entry"
-        >
-          <Plus size={14} />
-        </Button>
+          <span className="whitespace-nowrap">AUTO SELECTION</span>
+          {isAutoSelectionRunning && (
+            <LoaderCircle
+              size={12}
+              className="animate-spin text-brand-500"
+              title="Automatic sourcebook selection is running"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => onToggleAutoSelection?.(!isAutoSelectionEnabled)}
+            className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+              isAutoSelectionEnabled
+                ? 'bg-brand-500 border-brand-500 text-white'
+                : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+            }`}
+            title="Toggle automatic sourcebook selection"
+            aria-label="Toggle automatic sourcebook selection"
+            aria-pressed={isAutoSelectionEnabled}
+          >
+            {isAutoSelectionEnabled && <Check size={10} strokeWidth={4} />}
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -209,14 +246,24 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
                 <button
                   onClick={(ev) => {
                     ev.stopPropagation();
+                    if (isAutoSelectionEnabled) return;
                     onToggle?.(e.id, !isChecked);
                   }}
+                  disabled={isAutoSelectionEnabled}
                   className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                    isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
+                  } ${
                     isChecked
                       ? 'bg-brand-500 border-brand-500 text-white'
                       : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
                   }`}
-                  title={isChecked ? 'Exclude from context' : 'Include in context'}
+                  title={
+                    isAutoSelectionEnabled
+                      ? 'Automatic selection is enabled; disable Auto to change this manually'
+                      : isChecked
+                        ? 'Exclude from context'
+                        : 'Include in context'
+                  }
                 >
                   {isChecked && <Check size={10} strokeWidth={4} />}
                 </button>

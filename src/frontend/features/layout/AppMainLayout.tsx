@@ -58,6 +58,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     updateStoryMetadata,
     checkedSourcebookIds,
     onToggleSourcebook,
+    isAutoSourcebookSelectionEnabled,
+    onToggleAutoSourcebookSelection,
+    isSourcebookSelectionRunning,
   } = sidebarControls;
   const {
     currentChapter,
@@ -155,6 +158,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           theme={currentTheme}
           checkedIds={checkedSourcebookIds || []}
           onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
+          isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
+          onToggleAutoSelection={onToggleAutoSourcebookSelection}
+          isAutoSelectionRunning={isSourcebookSelectionRunning}
         />
       </div>
       <div

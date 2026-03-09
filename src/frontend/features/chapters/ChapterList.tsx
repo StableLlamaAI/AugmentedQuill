@@ -429,18 +429,23 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
         }`}
       >
-        <h2 className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}>
-          {projectType === 'series' ? 'Books & Chapters' : 'Chapters'}
-        </h2>
-        {projectType === 'novel' && (
-          <button
-            onClick={() => onCreate()}
-            className={`p-1 rounded-full transition-colors ${btnHover}`}
-            title="New Chapter"
+        {/* title with inline create button so it hugs the header text */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h2
+            className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}
           >
-            <Plus size={18} />
-          </button>
-        )}
+            {projectType === 'series' ? 'Books & Chapters' : 'Chapters'}
+          </h2>
+          {projectType === 'novel' && (
+            <button
+              onClick={() => onCreate()}
+              className={`p-1 rounded-full transition-colors ${btnHover}`}
+              title="New Chapter"
+            >
+              <Plus size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">

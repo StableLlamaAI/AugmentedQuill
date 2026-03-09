@@ -9,7 +9,7 @@
  * Defines the use chapter suggestions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useState, useEffect } from 'react';
+import { Dispatch, SetStateAction, useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../types';
@@ -45,12 +45,22 @@ export function useChapterSuggestions({
   const [continuations, setContinuations] = useState<string[]>([]);
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
+  const [isAutoSourcebookSelectionEnabled, setIsAutoSourcebookSelectionEnabled] =
+    useState(true);
+  const [isSourcebookSelectionRunning, setIsSourcebookSelectionRunning] =
+    useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isSuggestionMode, setIsSuggestionMode] = useState(false);
   const [suggestCursor, setSuggestCursor] = useState<number | null>(null);
   const [suggestUndoStack, setSuggestUndoStack] = useState<
     Array<{ content: string; cursor: number }>
   >([]);
+  const autoSelectionEnabledRef = useRef(isAutoSourcebookSelectionEnabled);
+  const relevanceInFlightRef = useRef(0);
+
+  useEffect(() => {
+    autoSelectionEnabledRef.current = isAutoSourcebookSelectionEnabled;
+  }, [isAutoSourcebookSelectionEnabled]);
 
   const clampCursor = (cursor: number, content: string) => {
     if (!Number.isFinite(cursor)) return content.length;
@@ -60,13 +70,21 @@ export function useChapterSuggestions({
   // request the backend to recompute which sourcebook entries appear
   // relevant given the provided text; results replace the current checks.
   const fetchRelevance = async (text: string) => {
-    if (!currentChapterId) return;
+    if (!currentChapterId || !autoSelectionEnabledRef.current) return;
+    relevanceInFlightRef.current += 1;
+    setIsSourcebookSelectionRunning(true);
     try {
       const res = await api.story.computeSourcebookRelevance(currentChapterId, text);
+      if (!autoSelectionEnabledRef.current) return;
       const relevant = new Set<string>(res.relevant || []);
       setCheckedEntries(relevant);
     } catch {
       // ignore failures; relevance is a nice‑to‑have
+    } finally {
+      relevanceInFlightRef.current = Math.max(0, relevanceInFlightRef.current - 1);
+      if (relevanceInFlightRef.current === 0) {
+        setIsSourcebookSelectionRunning(false);
+      }
     }
   };
 
@@ -85,12 +103,12 @@ export function useChapterSuggestions({
   // when chapter content changes, recompute sourcebook relevance after a
   // pause; this prevents a flood of model calls while the user types.
   useEffect(() => {
-    if (!currentChapter) return;
+    if (!currentChapter || !isAutoSourcebookSelectionEnabled) return;
     const timer = setTimeout(() => {
       fetchRelevance(currentChapter.content);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [currentChapter?.content]);
+  }, [currentChapter?.content, isAutoSourcebookSelectionEnabled]);
 
   const handleTriggerSuggestions = async (
     cursor?: number,
@@ -242,5 +260,8 @@ export function useChapterSuggestions({
     handleAcceptContinuation,
     checkedEntries,
     handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
   };
 }

@@ -214,6 +214,9 @@ const App: React.FC = () => {
     handleAcceptContinuation,
     checkedEntries,
     handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
   } = useChapterSuggestions({
     currentChapter,
     currentChapterId,
@@ -388,6 +391,9 @@ const App: React.FC = () => {
             updateStoryMetadata,
             checkedSourcebookIds: Array.from(checkedEntries),
             onToggleSourcebook: handleToggleEntry,
+            isAutoSourcebookSelectionEnabled,
+            onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+            isSourcebookSelectionRunning,
           }}
           editorControls={{
             currentChapter,
