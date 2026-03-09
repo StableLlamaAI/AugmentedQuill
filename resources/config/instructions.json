@@ -265,9 +265,6 @@
       "_use": "CHAT",
       "en": [
         "[Current Chapter Context: ID={chapter_id}, Title=\"{chapter_title}\"]",
-        "[Current Content Start]",
-        "{chapter_content}",
-        "[Current Content End]",
         "",
         "User Request: {user_text}"
       ]

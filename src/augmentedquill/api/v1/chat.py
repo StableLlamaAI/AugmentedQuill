@@ -14,9 +14,11 @@ import datetime
 import augmentedquill.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
+from pathlib import Path
 
 from augmentedquill.core.config import (
     load_machine_config,
+    load_story_config,
     DEFAULT_STORY_CONFIG_PATH,
 )
 from augmentedquill.api.v1.http_responses import error_json, ok_json
@@ -32,6 +34,7 @@ from augmentedquill.services.chat.chat_api_stream_ops import (
     resolve_stream_model_context,
     ensure_system_message_if_missing,
     resolve_story_llm_prefs,
+    inject_chat_user_context,
 )
 from augmentedquill.services.chat.chat_api_session_ops import (
     list_active_chats,
@@ -196,6 +199,20 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         machine=machine,
         selected_name=selected_name,
     )
+
+    # If it's a chat, inject current chapter context into the latest user message
+    if model_type == "CHAT":
+        try:
+            story = (
+                load_story_config(
+                    (get_active_project_dir() or Path(".")) / "story.json"
+                )
+                or {}
+            )
+            project_lang = str(story.get("language", "en") or "en")
+        except Exception:
+            project_lang = "en"
+        inject_chat_user_context(req_messages, payload, language=project_lang)
 
     if not base_url or not model_id:
         raise HTTPException(

@@ -66,6 +66,9 @@ const App: React.FC = () => {
   } = useStory({ confirm, alert: window.alert });
 
   const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const currentChapterContext = currentChapter
+    ? { id: currentChapter.id, title: currentChapter.title }
+    : null;
   const editorRef = useRef<EditorHandle | null>(null);
   const appearanceRef = useRef<HTMLDivElement>(null);
 
@@ -273,6 +276,7 @@ const App: React.FC = () => {
     isChatAvailable: roleAvailability.chat,
     allowWebSearch,
     currentChapterId,
+    currentChapter: currentChapterContext,
     chatMessages,
     setChatMessages,
     isChatLoading,

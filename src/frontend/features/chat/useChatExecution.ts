@@ -36,6 +36,7 @@ type UseChatExecutionParams = {
   isChatAvailable: boolean;
   allowWebSearch: boolean;
   currentChapterId: string | null;
+  currentChapter?: { id: string; title: string } | null;
   chatMessages: ChatMessage[];
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   isChatLoading: boolean;
@@ -51,6 +52,7 @@ export function useChatExecution({
   isChatAvailable,
   allowWebSearch,
   currentChapterId,
+  currentChapter,
   chatMessages,
   setChatMessages,
   isChatLoading,
@@ -109,6 +111,7 @@ export function useChatExecution({
         'CHAT',
         {
           allowWebSearch,
+          currentChapter,
         }
       );
 
@@ -199,6 +202,7 @@ export function useChatExecution({
           'CHAT',
           {
             allowWebSearch,
+            currentChapter,
           }
         );
         currentMsgId = uuidv4();
