@@ -89,6 +89,12 @@ class WriteChapterContentParams(BaseModel):
     content: str = Field(..., description="The content to write")
 
 
+class ReplaceTextInChapterParams(BaseModel):
+    chap_id: int = Field(..., description="The chapter ID to edit")
+    old_text: str = Field(..., description="The exact literal text to replace")
+    new_text: str = Field(..., description="The new text to insert instead")
+
+
 class WriteChapterSummaryParams(BaseModel):
     chap_id: int = Field(..., description="The chapter ID to write summary to")
     summary: str = Field(..., description="The summary to write")
@@ -243,6 +249,33 @@ async def write_chapter_content(
     _write_chapter_content(params.chap_id, params.content)
     mutations["story_changed"] = True
     return {"message": f"Content written to chapter {params.chap_id} successfully"}
+
+
+@chat_tool(
+    description="Replace an exact literal string in a chapter with a new string. Better for small edits to avoid JSON truncation errors."
+)
+async def replace_text_in_chapter(
+    params: ReplaceTextInChapterParams, payload: dict, mutations: dict
+):
+    # Retrieve current text
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    if params.old_text not in text:
+        return {
+            "error": "The exact old_text was not found in the chapter. Please ensure it matches exactly or use get_chapter_content to verify the exact string."
+        }
+
+    occurrences = text.count(params.old_text)
+    if occurrences > 1:
+        return {
+            "error": f"The old_text was found {occurrences} times. Please provide a more specific old_text to ensure only one instance is replaced, or replace them one by one."
+        }
+
+    new_content = text.replace(params.old_text, params.new_text, 1)
+    _write_chapter_content(params.chap_id, new_content)
+    mutations["story_changed"] = True
+    return {"message": f"Successfully replaced text in chapter {params.chap_id}"}
 
 
 @chat_tool(description="Write summary to a specific chapter.")
@@ -469,16 +502,28 @@ async def call_editing_assistant(
 
     final_output = ""
     for _ in range(7):  # max 7 steps
-        res = await llm.unified_chat_complete(
-            caller_id="chat_tools.call_editing_assistant",
-            messages=messages,
-            base_url=base_url,
-            api_key=api_key,
-            model_id=model_id,
-            timeout_s=timeout_s,
-            model_name=model_name,
-            tools=tools,
-        )
+        try:
+            res = await llm.unified_chat_complete(
+                caller_id="chat_tools.call_editing_assistant",
+                messages=messages,
+                base_url=base_url,
+                api_key=api_key,
+                model_id=model_id,
+                timeout_s=timeout_s,
+                model_name=model_name,
+                tools=tools,
+            )
+        except Exception as e:
+            # Llama.cpp and some endpoints return 500 when tool call JSON is malformed
+            # Catching it gives the subagent a chance to adjust (e.g. use smaller chunk sizes)
+            err_msg = str(e)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"System Warning: Your previous attempt failed with an API/parsing error ({err_msg}). This typically occurs if your output was truncated due to length limits or formed invalid JSON. Please try again using smaller operations, shorter text chunks, or a different approach.",
+                }
+            )
+            continue
 
         tool_calls = res.get("tool_calls", [])
         content = res.get("content", "")
