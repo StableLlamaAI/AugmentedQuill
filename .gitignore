@@ -215,9 +215,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# User configuration and data
-resources/config/*.json
-!resources/config/examples/*.json
+# User configuration at data
 data/
 
 # Build artifacts

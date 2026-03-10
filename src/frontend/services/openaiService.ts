@@ -211,7 +211,10 @@ export const createChatSession = (
   history: HistoryMessage[],
   config: LLMConfig,
   modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
-  options?: { allowWebSearch?: boolean }
+  options?: {
+    allowWebSearch?: boolean;
+    currentChapter?: { id: string; title: string } | null;
+  }
 ): UnifiedChat => {
   return {
     sendMessage: async (msg, onUpdate) => {
@@ -262,8 +265,9 @@ export const createChatSession = (
           body: JSON.stringify({
             messages,
             model_type: modelType,
-            model_name: config.id,
+            model_name: config.name || config.id,
             allow_web_search: options?.allowWebSearch,
+            current_chapter: options?.currentChapter,
           }),
         });
 
@@ -359,7 +363,7 @@ export const generateSimpleContent = async (
       body: JSON.stringify({
         messages,
         model_type: modelType,
-        model_name: config.id,
+        model_name: config.name || config.id,
         tool_choice: options?.tool_choice,
       }),
     });
@@ -380,25 +384,67 @@ export const generateSimpleContent = async (
   }
 };
 
+export const streamAiAction = async (
+  target: 'book_summary' | 'story_summary' | 'summary' | 'chapter',
+  action: 'write' | 'update' | 'rewrite' | 'extend',
+  chapId: string,
+  currentText: string,
+  onUpdate?: (fullText: string) => void
+): Promise<string> => {
+  const res = await fetch('/api/v1/story/action/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target,
+      action,
+      chap_id: action === 'extend' || action === 'rewrite' ? Number(chapId) : 0,
+      target_id: Number(chapId),
+      current_text: currentText,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || 'Action failed');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) return '';
+
+  let accumulated = '';
+  return await readSSEStream(reader, undefined, undefined, (delta) => {
+    accumulated += delta;
+    onUpdate?.(accumulated);
+  });
+};
+
 export const generateContinuations = async (
   currentContent: string,
   storyContext: string,
   systemInstruction: string,
   config: LLMConfig,
-  chapterId?: string
+  chapterId?: string,
+  checkedSourcebookIds?: string[],
+  options?: {
+    onSuggestionUpdate?: (index: number, text: string) => void;
+  }
 ): Promise<string[]> => {
   if (!chapterId) return [];
 
-  const fetchSuggestion = async () => {
+  const fetchSuggestion = async (index: number) => {
     try {
+      const body: any = {
+        chap_id: Number(chapterId),
+        model_name: config.name || config.id,
+        current_text: currentContent,
+      };
+      if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+        body.checked_sourcebook = checkedSourcebookIds;
+      }
       const res = await fetch('/api/v1/story/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chap_id: Number(chapterId),
-          model_name: config.id,
-          current_text: currentContent,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) return '';
@@ -406,11 +452,15 @@ export const generateContinuations = async (
       const reader = res.body?.getReader();
       let text = '';
       if (reader) {
+        const decoder = new TextDecoder();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          text += new TextDecoder().decode(value);
+          text += decoder.decode(value, { stream: true });
+          options?.onSuggestionUpdate?.(index, text);
         }
+        text += decoder.decode();
+        options?.onSuggestionUpdate?.(index, text);
       }
       return text;
     } catch (e) {
@@ -418,6 +468,6 @@ export const generateContinuations = async (
     }
   };
 
-  const [opt1, opt2] = await Promise.all([fetchSuggestion(), fetchSuggestion()]);
-  return [opt1, opt2].filter((s) => s);
+  const [opt1, opt2] = await Promise.all([fetchSuggestion(0), fetchSuggestion(1)]);
+  return [opt1, opt2];
 };

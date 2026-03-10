@@ -66,7 +66,8 @@ async def api_projects_select(body: ProjectSelectRequest) -> JSONResponse:
 
 @router.post("/projects/create")
 async def api_projects_create(body: ProjectCreateRequest) -> JSONResponse:
-    return create_project_response(body.name, body.type)
+    # language is optional, default occurs downstream
+    return create_project_response(body.name, body.type, body.language or "en")
 
 
 @router.post("/projects/convert")

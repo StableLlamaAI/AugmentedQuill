@@ -34,6 +34,7 @@ import { ChatComposer } from './components/ChatComposer';
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  isModelAvailable?: boolean;
   systemPrompt: string;
   onSendMessage: (text: string) => void;
   onStop?: () => void;
@@ -58,6 +59,7 @@ interface ChatProps {
 export const Chat: React.FC<ChatProps> = ({
   messages,
   isLoading,
+  isModelAvailable = true,
   systemPrompt,
   onSendMessage,
   onStop,
@@ -78,6 +80,9 @@ export const Chat: React.FC<ChatProps> = ({
   allowWebSearch,
   onToggleWebSearch,
 }) => {
+  const chatDisabledReason =
+    'Chat is unavailable because no working CHAT model is configured.';
+
   const [input, setInput] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -146,7 +151,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (input.trim() && !isLoading) {
+    if (input.trim() && !isLoading && isModelAvailable) {
       onSendMessage(input.trim());
       setInput('');
       if (textareaRef.current) {
@@ -182,7 +187,7 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const lastMessage = messages[messages.length - 1];
-  const canRegenerate = !isLoading && lastMessage?.role === 'model';
+  const canRegenerate = !isLoading && isModelAvailable && lastMessage?.role === 'model';
 
   return (
     <div
@@ -193,6 +198,8 @@ export const Chat: React.FC<ChatProps> = ({
         headerBg={headerBg}
         currentSessionId={currentSessionId}
         isIncognito={isIncognito}
+        isDisabled={!isModelAvailable}
+        disabledReason={chatDisabledReason}
         showHistory={showHistory}
         setShowHistory={setShowHistory}
         showSystemPrompt={showSystemPrompt}
@@ -207,6 +214,8 @@ export const Chat: React.FC<ChatProps> = ({
         <ChatHistoryPanel
           sessions={sessions}
           currentSessionId={currentSessionId}
+          isDisabled={!isModelAvailable}
+          disabledReason={chatDisabledReason}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
           onDeleteAllSessions={onDeleteAllSessions}
@@ -226,6 +235,8 @@ export const Chat: React.FC<ChatProps> = ({
             onChange={(e) => setTempSystemPrompt(e.target.value)}
             className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
             placeholder="Define the AI's persona and rules..."
+            disabled={!isModelAvailable}
+            title={!isModelAvailable ? chatDisabledReason : 'System Instruction'}
           />
           <div className="flex justify-end space-x-2">
             <Button
@@ -233,6 +244,8 @@ export const Chat: React.FC<ChatProps> = ({
               size="sm"
               variant="ghost"
               onClick={() => setShowSystemPrompt(false)}
+              disabled={!isModelAvailable}
+              title={!isModelAvailable ? chatDisabledReason : 'Cancel'}
             >
               Cancel
             </Button>
@@ -241,6 +254,8 @@ export const Chat: React.FC<ChatProps> = ({
               size="sm"
               variant="primary"
               onClick={handleSystemPromptSave}
+              disabled={!isModelAvailable}
+              title={!isModelAvailable ? chatDisabledReason : 'Update Persona'}
             >
               Update Persona
             </Button>
@@ -255,6 +270,18 @@ export const Chat: React.FC<ChatProps> = ({
           isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
       >
+        {!isModelAvailable && (
+          <div
+            className={`rounded-md border px-3 py-2 text-xs ${
+              isLight
+                ? 'border-amber-500/40 bg-amber-100/50 text-amber-700'
+                : 'border-amber-500/40 bg-amber-900/20 text-amber-300'
+            }`}
+          >
+            {chatDisabledReason}
+          </div>
+        )}
+
         {messages.length === 0 && !showSystemPrompt && (
           <div className="text-center text-brand-gray-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
@@ -353,6 +380,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   size="sm"
                                   variant="secondary"
                                   onClick={() => {
+                                    if (!isModelAvailable) return;
                                     // Extract project name from either raw text or JSON message field
                                     let projectName = '';
                                     try {
@@ -377,6 +405,12 @@ export const Chat: React.FC<ChatProps> = ({
                                     }
                                   }}
                                   icon={<ArrowRight size={14} />}
+                                  disabled={!isModelAvailable}
+                                  title={
+                                    !isModelAvailable
+                                      ? chatDisabledReason
+                                      : 'Switch to New Project'
+                                  }
                                 >
                                   Switch to New Project
                                 </Button>
@@ -447,16 +481,24 @@ export const Chat: React.FC<ChatProps> = ({
                   } opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1`}
                 >
                   <button
-                    onClick={() => startEditing(msg)}
+                    onClick={() => {
+                      if (!isModelAvailable) return;
+                      startEditing(msg);
+                    }}
                     className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
-                    title="Edit"
+                    title={!isModelAvailable ? chatDisabledReason : 'Edit'}
+                    disabled={!isModelAvailable}
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
-                    onClick={() => onDeleteMessage(msg.id)}
+                    onClick={() => {
+                      if (!isModelAvailable) return;
+                      onDeleteMessage(msg.id);
+                    }}
                     className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
-                    title="Delete"
+                    title={!isModelAvailable ? chatDisabledReason : 'Delete'}
+                    disabled={!isModelAvailable}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -512,9 +554,14 @@ export const Chat: React.FC<ChatProps> = ({
                 size="sm"
                 variant="secondary"
                 onClick={onRegenerate}
+                disabled={!isModelAvailable}
                 icon={<RefreshCw size={12} />}
                 className="text-xs py-1 h-7 border-dashed"
-                title="Regenerate last response (CHAT model)"
+                title={
+                  !isModelAvailable
+                    ? chatDisabledReason
+                    : 'Regenerate last response (CHAT model)'
+                }
               >
                 Regenerate last response
               </Button>
@@ -527,6 +574,8 @@ export const Chat: React.FC<ChatProps> = ({
           input={input}
           setInput={setInput}
           isLoading={isLoading}
+          isModelAvailable={isModelAvailable}
+          disabledReason={chatDisabledReason}
           inputBg={inputBg}
           onSubmit={handleSubmit}
         />

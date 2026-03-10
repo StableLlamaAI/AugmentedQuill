@@ -64,6 +64,7 @@ interface EditorProps {
       action: 'update' | 'rewrite' | 'extend'
     ) => void;
     isAiLoading: boolean;
+    isWritingAvailable?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
 }
@@ -97,6 +98,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const textareaRef = useRef<HTMLDivElement>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const {
       continuations,
@@ -106,7 +108,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isSuggestionMode,
       onKeyboardSuggestionAction,
     } = suggestionControls;
-    const { onAiAction, isAiLoading } = aiControls;
+    const { onAiAction, isAiLoading, isWritingAvailable = true } = aiControls;
+    const writingUnavailableReason =
+      'This action is unavailable because no working WRITING model is configured.';
 
     const [isDragging, setIsDragging] = useState(false);
 
@@ -498,6 +502,49 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       settings.theme === 'light'
         ? 'bg-brand-gray-50 border-t border-brand-gray-200'
         : 'bg-brand-gray-900 border-t border-brand-gray-800';
+    const hasContinuationOptions = continuations.some(
+      (option) => option && option.trim().length > 0
+    );
+
+    const scrollMainContentToBottom = useCallback(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+    }, []);
+
+    // We need to scroll in a few scenarios:
+    //   * the LLM is in the middle of loading or suggesting content, since
+    //     new text streaming at the bottom should always be visible.  By
+    //     including `continuations` in the dependency list we rerun the effect
+    //     each time the options array is updated; while `isSuggesting` is true
+    //     this ensures the viewport keeps up with an expanding suggestion.
+    //   * the continuation panel first becomes visible
+    //     (`hasContinuationOptions` transitions from false to true), because
+    //     its appearance can push the editor content upward and may hide the
+    //     current viewport.
+    //
+    // We deliberately *do not* auto-scroll when the user is editing while the
+    // panel is already present; the guard below prevents scrolling unless an
+    // LLM action is active or the panel just opened.
+    const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
+    useEffect(() => {
+      const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
+      prevHasContinuationRef.current = hasContinuationOptions;
+
+      if (!(isAiLoading || isSuggesting || justOpened)) return;
+
+      const raf = window.requestAnimationFrame(() => {
+        scrollMainContentToBottom();
+      });
+      return () => window.cancelAnimationFrame(raf);
+    }, [
+      chapter.content,
+      continuations,
+      isAiLoading,
+      isSuggesting,
+      hasContinuationOptions,
+      scrollMainContentToBottom,
+    ]);
 
     return (
       <div
@@ -530,9 +577,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   variant="ghost"
                   className="text-xs h-7"
                   onClick={() => onAiAction('chapter', 'extend')}
-                  disabled={isAiLoading}
+                  disabled={isAiLoading || !isWritingAvailable}
                   icon={<Wand2 size={12} />}
-                  title="Extend Chapter (WRITING model)"
+                  title={
+                    !isWritingAvailable
+                      ? writingUnavailableReason
+                      : 'Extend Chapter (WRITING model)'
+                  }
                 >
                   Extend
                 </Button>
@@ -542,9 +593,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   variant="ghost"
                   className="text-xs h-7"
                   onClick={() => onAiAction('chapter', 'rewrite')}
-                  disabled={isAiLoading}
+                  disabled={isAiLoading || !isWritingAvailable}
                   icon={<FileEdit size={12} />}
-                  title="Rewrite Chapter (WRITING model)"
+                  title={
+                    !isWritingAvailable
+                      ? writingUnavailableReason
+                      : 'Rewrite Chapter (WRITING model)'
+                  }
                 >
                   Rewrite
                 </Button>
@@ -555,6 +610,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
         {/* Main Scrollable Content Area */}
         <div
+          ref={scrollContainerRef}
+          data-testid="editor-scroll-container"
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -648,7 +705,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         <div
           className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
         >
-          {continuations.length > 0 ? (
+          {hasContinuationOptions ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center space-x-2 text-brand-500">
@@ -666,40 +723,49 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
-                {continuations.map((option, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => onAcceptContinuation(option)}
-                    className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
-                      settings.theme === 'light'
-                        ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                        : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
-                    }`}
-                  >
+                {continuations.map((option, idx) => {
+                  if (!option || option.trim().length === 0) {
+                    return null;
+                  }
+                  return (
                     <div
-                      className={`font-serif text-sm leading-relaxed ${
+                      key={idx}
+                      onClick={() => onAcceptContinuation(option)}
+                      className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
                         settings.theme === 'light'
-                          ? 'text-brand-gray-800'
-                          : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
+                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
                       }`}
                     >
-                      {option}
+                      <div
+                        className={`font-serif text-sm leading-relaxed ${
+                          settings.theme === 'light'
+                            ? 'text-brand-gray-800'
+                            : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                        }`}
+                      >
+                        {option}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
             <div className="p-3 flex justify-center items-center space-x-3">
               <button
                 onClick={onTriggerSuggestions}
-                disabled={isSuggesting || isAiLoading}
+                disabled={isSuggesting || isAiLoading || !isWritingAvailable}
                 className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.theme === 'light'
                     ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
                     : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
                 }`}
-                title="Get AI Suggestions (WRITING model)"
+                title={
+                  !isWritingAvailable
+                    ? writingUnavailableReason
+                    : 'Get AI Suggestions (WRITING model)'
+                }
               >
                 {isSuggesting || isAiLoading ? (
                   <>

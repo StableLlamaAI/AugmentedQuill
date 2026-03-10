@@ -17,8 +17,10 @@ import { AppTheme } from '../../types';
 interface CreateProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (name: string, type: string) => void;
+  // third argument is ISO language code (e.g. 'en', 'es')
+  onCreate: (name: string, type: string, language: string) => void;
   theme: AppTheme;
+  languages: string[];
 }
 
 export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
@@ -26,9 +28,13 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   onClose,
   onCreate,
   theme,
+  languages,
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('novel');
+  const [language, setLanguage] = useState(() =>
+    languages && languages.length ? languages[0] : 'en'
+  );
 
   if (!isOpen) return null;
 
@@ -61,6 +67,20 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               placeholder="My Story"
               autoFocus
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Project Language</label>
+            <select
+              className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              {languages.map((lng) => (
+                <option key={lng} value={lng}>
+                  {lng.toUpperCase()}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -147,7 +167,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
             <Button
               variant="primary"
               onClick={() => {
-                if (name.trim()) onCreate(name, type);
+                if (name.trim()) onCreate(name, type, language);
               }}
               disabled={!name.trim()}
               theme={theme}

@@ -281,12 +281,25 @@ class ToolParityTest(TestCase):
         # We need to mock the LLM for sync_summary because it calls unified_chat_complete
         from unittest.mock import patch, AsyncMock
 
-        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
+        # We patch both unified_chat_complete and openai credential resolution so the
+        # tool doesn't attempt to read real machine.json or make network calls.
         with (
             patch(
                 "augmentedquill.services.llm.llm.unified_chat_complete",
                 new_callable=AsyncMock,
             ) as mock_llm,
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=_dummy_runtime[:5],
+            ),
             patch(
                 "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
                 return_value=_dummy_runtime,
@@ -301,18 +314,29 @@ class ToolParityTest(TestCase):
             # This tool uses payload["messages"] to get the content of the chapter usually?
             # No, sync_summary reads from disk.
             res = self._call_tool("sync_summary", {"chap_id": 1})
-            self.assertTrue("summary" in res)
+            self.assertTrue("summary" in res, f"response lacked summary: {res}")
             self.assertEqual(res["summary"], "Synced summary")
 
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
 
-        _dummy_runtime = ("http://localhost:11434/v1", None, "dummy-model", 60, {})
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
         with (
             patch(
                 "augmentedquill.services.llm.llm.unified_chat_complete",
                 new_callable=AsyncMock,
             ) as mock_llm,
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=_dummy_runtime[:5],
+            ),
             patch(
                 "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
                 return_value=_dummy_runtime,
@@ -324,7 +348,7 @@ class ToolParityTest(TestCase):
                 "thinking": "",
             }
             res = self._call_tool("sync_story_summary", {})
-            self.assertTrue("summary" in res)
+            self.assertTrue("summary" in res, f"response lacked summary: {res}")
             self.assertEqual(res["summary"], "Synced story summary")
 
     def test_project_management_tools(self):

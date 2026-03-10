@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 from augmentedquill.core.config import load_story_config
-from augmentedquill.core.prompts import get_system_message, load_model_prompt_overrides
+from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.core.prompts import (
+    get_system_message,
+    load_model_prompt_overrides,
+    get_user_prompt,
+)
 from augmentedquill.services.llm.llm_request_helpers import find_model_in_list
 
 
@@ -110,8 +115,57 @@ def ensure_system_message_if_missing(
         sys_msg_key = "editing_llm"
 
     model_overrides = load_model_prompt_overrides(machine, selected_name)
-    system_content = get_system_message(sys_msg_key, model_overrides)
+    # determine project language so that the default system message
+    # is in the correct language
+    project_lang = "en"
+    try:
+        story = (
+            load_story_config((get_active_project_dir() or Path(".")) / "story.json")
+            or {}
+        )
+        project_lang = str(story.get("language", "en") or "en")
+    except Exception:
+        pass
+    system_content = get_system_message(
+        sys_msg_key, model_overrides, language=project_lang
+    )
     req_messages.insert(0, {"role": "system", "content": system_content})
+
+
+def inject_chat_user_context(
+    req_messages: list[dict], payload: dict, language: str = "en"
+) -> None:
+    """Inject current chapter context into the beginning of the latest user message if available."""
+    current_chapter = payload.get("current_chapter")
+    if not current_chapter or not isinstance(current_chapter, dict):
+        return
+
+    chapter_id = current_chapter.get("id", "Unknown")
+    chapter_title = current_chapter.get("title", "Untitled")
+
+    # Find the last user message to inject context into
+    last_user_idx = -1
+    for i in range(len(req_messages) - 1, -1, -1):
+        if req_messages[i].get("role") == "user":
+            last_user_idx = i
+            break
+
+    if last_user_idx == -1:
+        return
+
+    user_text = req_messages[last_user_idx].get("content") or ""
+
+    # Use the template from instructions.json
+    context_msg = get_user_prompt(
+        "chat_user_context",
+        language=language,
+        chapter_id=chapter_id,
+        chapter_title=chapter_title,
+        user_text=user_text,
+    )
+
+    if context_msg:
+        req_messages[last_user_idx]["content"] = context_msg
 
 
 def resolve_story_llm_prefs(

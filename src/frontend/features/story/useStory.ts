@@ -148,16 +148,25 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     }
   }, [story.id, currentChapterId]);
 
-  const selectChapter = useCallback((id: string | null) => {
-    setCurrentChapterId(id);
-  }, []);
+  const selectChapter = useCallback(
+    (id: string | null) => {
+      if (id !== currentChapterId) {
+        lastLoadedChapterId.current = null;
+        setCurrentChapterId(id);
+      }
+    },
+    [currentChapterId]
+  );
+
+  const lastLoadedChapterId = useRef<string | null>(null);
 
   // Load chapter content lazily so list refreshes stay responsive.
   useEffect(() => {
-    if (currentChapterId) {
+    if (currentChapterId && currentChapterId !== lastLoadedChapterId.current) {
       const loadContent = async () => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
+          lastLoadedChapterId.current = currentChapterId;
           setStory((prev) => {
             const updatedChapters = prev.chapters.map((c) =>
               c.id === currentChapterId
@@ -232,7 +241,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     summary: string,
     tags: string[],
     notes?: string,
-    private_notes?: string
+    private_notes?: string,
+    language?: string
   ) => {
     const newState = {
       ...story,
@@ -241,6 +251,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       styleTags: tags,
       notes,
       private_notes,
+      language,
     };
     pushState(newState);
 
@@ -251,6 +262,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         tags,
         notes,
         private_notes,
+        language,
       });
       await api.story.updateTags(tags);
     } catch (e) {
@@ -271,12 +283,18 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     }
   };
 
-  const updateChapter = async (id: string, partial: Partial<Chapter>) => {
+  const updateChapter = async (
+    id: string,
+    partial: Partial<Chapter>,
+    sync: boolean = true
+  ) => {
     const newChapters = story.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
     const newState = { ...story, chapters: newChapters };
     pushState(newState);
+
+    if (!sync) return;
 
     try {
       const numId = Number(id);

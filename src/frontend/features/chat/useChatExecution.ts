@@ -33,8 +33,10 @@ type ToolLoopChoice = 'stop' | 'continue' | 'unlimited';
 type UseChatExecutionParams = {
   systemPrompt: string;
   activeChatConfig: LLMConfig;
+  isChatAvailable: boolean;
   allowWebSearch: boolean;
   currentChapterId: string | null;
+  currentChapter?: { id: string; title: string } | null;
   chatMessages: ChatMessage[];
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   isChatLoading: boolean;
@@ -47,8 +49,10 @@ type UseChatExecutionParams = {
 export function useChatExecution({
   systemPrompt,
   activeChatConfig,
+  isChatAvailable,
   allowWebSearch,
   currentChapterId,
+  currentChapter,
   chatMessages,
   setChatMessages,
   isChatLoading,
@@ -107,6 +111,7 @@ export function useChatExecution({
         'CHAT',
         {
           allowWebSearch,
+          currentChapter,
         }
       );
 
@@ -197,6 +202,7 @@ export function useChatExecution({
           'CHAT',
           {
             allowWebSearch,
+            currentChapter,
           }
         );
         currentMsgId = uuidv4();
@@ -241,6 +247,7 @@ export function useChatExecution({
   };
 
   const handleSendMessage = async (text: string) => {
+    if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const newMessage: ChatMessage = { id: userMsgId, role: 'user', text };
     const historyBefore = [...chatMessages];
@@ -254,6 +261,7 @@ export function useChatExecution({
   };
 
   const handleRegenerate = async () => {
+    if (!isChatAvailable) return;
     const lastMessageIndex = chatMessages.length - 1;
     if (lastMessageIndex < 0) return;
 

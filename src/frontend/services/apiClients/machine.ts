@@ -9,7 +9,7 @@
  * Defines the machine unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { MachineConfigResponse } from '../apiTypes';
+import { MachineConfigResponse, MachinePresetsResponse } from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const machineApi = {
@@ -65,6 +65,13 @@ export const machineApi = {
         body: JSON.stringify(payload),
       },
       'Failed to test model'
+    );
+  },
+  getPresets: async () => {
+    return fetchJson<MachinePresetsResponse>(
+      '/machine/presets',
+      undefined,
+      'Failed to load model presets'
     );
   },
 };

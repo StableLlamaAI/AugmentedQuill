@@ -69,6 +69,7 @@ export const storyApi = {
     tags?: string[];
     notes?: string;
     private_notes?: string;
+    language?: string;
   }) => {
     return fetchJson<{ ok: boolean; detail?: string }>(
       '/story/metadata',
@@ -78,6 +79,18 @@ export const storyApi = {
         body: JSON.stringify(data),
       },
       'Failed to update story metadata'
+    );
+  },
+
+  computeSourcebookRelevance: async (chapId: string, currentText: string) => {
+    return fetchJson<{ relevant: string[] }>(
+      '/story/sourcebook/relevance',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap_id: Number(chapId), current_text: currentText }),
+      },
+      'Failed to compute sourcebook relevance'
     );
   },
 };

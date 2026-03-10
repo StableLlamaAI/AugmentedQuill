@@ -38,7 +38,7 @@ class ChatAndTitlesTest(TestCase):
         # Patch load_machine_config to return models with an invalid selected name
         orig_lmc = augmentedquill.api.v1.chat.load_machine_config
 
-        def fake_lmc(_path):  # type: ignore
+        def fake_lmc(path=None, defaults=None):  # type: ignore
             return {
                 "openai": {
                     "models": [

@@ -11,6 +11,12 @@
 
 import { AppSettings, LLMConfig } from '../../types';
 
+type ConnectionStatus = 'idle' | 'success' | 'error' | 'loading';
+type ProviderCapabilities = {
+  is_multimodal: boolean;
+  supports_function_calling: boolean;
+};
+
 export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
@@ -32,4 +38,46 @@ export function resolveActiveProviderConfigs(appSettings: AppSettings): {
       appSettings.providers.find((p) => p.id === appSettings.activeEditingProviderId) ||
       fallback,
   };
+}
+
+export function resolveRoleAvailability(
+  appSettings: AppSettings,
+  modelConnectionStatus: Record<string, ConnectionStatus>
+): {
+  writing: boolean;
+  editing: boolean;
+  chat: boolean;
+} {
+  const byId = new Map(
+    appSettings.providers.map((provider) => [provider.id, provider])
+  );
+  const isAvailable = (providerId: string) => {
+    const provider = byId.get(providerId);
+    if (!provider) return false;
+    if (!(provider.modelId || '').trim()) return false;
+    return modelConnectionStatus[provider.id] === 'success';
+  };
+
+  return {
+    writing: isAvailable(appSettings.activeWritingProviderId),
+    editing: isAvailable(appSettings.activeEditingProviderId),
+    chat: isAvailable(appSettings.activeChatProviderId),
+  };
+}
+
+export function supportsImageActions(
+  appSettings: AppSettings,
+  detectedCapabilities: Record<string, ProviderCapabilities>,
+  modelConnectionStatus: Record<string, ConnectionStatus>
+): boolean {
+  const activeChatProvider = appSettings.providers.find(
+    (provider) => provider.id === appSettings.activeChatProviderId
+  );
+  if (!activeChatProvider) return false;
+  if (modelConnectionStatus[activeChatProvider.id] !== 'success') return false;
+
+  if (activeChatProvider.isMultimodal === true) return true;
+  if (activeChatProvider.isMultimodal === false) return false;
+
+  return !!detectedCapabilities[activeChatProvider.id]?.is_multimodal;
 }

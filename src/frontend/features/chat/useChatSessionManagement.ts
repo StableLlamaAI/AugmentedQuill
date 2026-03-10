@@ -52,7 +52,8 @@ export function useChatSessionManagement({
 
   const handleNewChat = useCallback(
     (incognito: boolean = false) => {
-      const newId = uuidv4();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const newId = incognito ? uuidv4() : `chat-${timestamp}`;
       if (incognito) {
         const newSession: ChatSession = {
           id: newId,

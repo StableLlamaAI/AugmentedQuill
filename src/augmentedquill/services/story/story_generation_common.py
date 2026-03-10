@@ -9,10 +9,13 @@
 
 from __future__ import annotations
 
+import re
+
 from augmentedquill.services.exceptions import BadRequestError
 
 from augmentedquill.core.config import BASE_DIR
 from augmentedquill.services.story.story_api_prompt_ops import (
+    build_ai_action_messages,
     build_chapter_summary_messages,
     build_continue_chapter_messages,
     build_story_summary_messages,
@@ -30,6 +33,128 @@ from augmentedquill.services.story.story_api_state_ops import (
 )
 
 
+def sanitize_prompt(prompt: str) -> str:
+    """Remove empty labels and collapse blank lines in a prompt."""
+    lines = prompt.splitlines()
+    filtered: list[str] = []
+    for i, line in enumerate(lines):
+        # drop any line that looks like a label with nothing after colon
+        # UNLESS the next lines contain content for this label
+        if re.match(r"^[A-Za-z ]+:\s*$", line):
+            has_content = False
+            for next_line in lines[i + 1 :]:
+                next_line = next_line.strip()
+                if not next_line:
+                    continue
+                if next_line == "---":
+                    break
+                if re.match(r"^[A-Za-z ]+:\s*$", next_line):
+                    break
+                has_content = True
+                break
+            if not has_content:
+                continue
+        filtered.append(line)
+
+    # collapse consecutive blank lines
+    cleaned: list[str] = []
+    prev_blank = False
+    for line in filtered:
+        if not line.strip():
+            if not prev_blank:
+                cleaned.append("")
+            prev_blank = True
+        else:
+            cleaned.append(line)
+            prev_blank = False
+    return "\n".join(cleaned)
+
+
+def gather_writing_context(
+    story: dict,
+    chapters_data: list[dict],
+    pos: int,
+    title: str,
+    summary: str,
+    payload: dict | None = None,
+) -> dict:
+    """Gather common context for writing tasks (conflicts, tags, background)."""
+    # story-level info
+    story_title = story.get("project_title", "")
+    story_summary = story.get("story_summary", "")
+    tags = story.get("tags", [])
+    if isinstance(tags, list):
+        story_tags = ", ".join(str(t) for t in tags)
+    else:
+        story_tags = str(tags)
+
+    # conflicts
+    raw_conflicts = chapters_data[pos].get("conflicts", [])
+    conflict_lines = []
+    if isinstance(raw_conflicts, list):
+        for c in raw_conflicts:
+            desc = c.get("description", "").strip()
+            res = c.get("resolution", "").strip()
+            if desc and not c.get("resolved", False):
+                line = f"- {desc}"
+                if res:
+                    line += f" -> {res}"
+                conflict_lines.append(line)
+    conflicts_text = "\n".join(conflict_lines)
+
+    # background (sourcebook)
+    background = ""
+    try:
+        from augmentedquill.services.sourcebook.sourcebook_helpers import (
+            sourcebook_search_entries,
+            sourcebook_get_entry,
+        )
+
+        queries = []
+        if title:
+            queries.append(title)
+        if summary:
+            queries.append(summary)
+        seen = set()
+        lines = []
+        for q in queries:
+            for entry in sourcebook_search_entries(q):
+                eid = entry.get("id")
+                if not eid or eid in seen:
+                    continue
+                seen.add(eid)
+                desc = entry.get("description", "")
+                lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+
+        # include any explicitly checked entries passed by the client
+        checked = (payload or {}).get("checked_sourcebook") or []
+        if isinstance(checked, list):
+            for sid in checked:
+                try:
+                    entry = sourcebook_get_entry(sid)
+                except Exception:
+                    entry = None
+                if entry:
+                    eid = entry.get("id")
+                    if eid and eid not in seen:
+                        seen.add(eid)
+                        desc = entry.get("description", "")
+                        lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+
+        background = "\n".join(lines)
+    except Exception:
+        # sourcebook is optional; don't fail generation if it's broken
+        pass
+
+    return {
+        "story_title": story_title,
+        "story_summary": story_summary,
+        "story_tags": story_tags,
+        "background": background,
+        "chapter_conflicts": conflicts_text,
+    }
+
+
 def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     """Prepare Story Summary Generation."""
     mode = (mode or "").lower()
@@ -44,16 +169,19 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     if not chapter_summaries:
         raise BadRequestError("No chapter summaries available")
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="EDITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="EDITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_story_summary_messages(
         mode=mode,
         current_story_summary=current_story_summary,
         chapter_summaries=chapter_summaries,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
     return {
         "story": story,
@@ -62,6 +190,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -83,16 +212,19 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     ensure_chapter_slot(chapters_data, pos)
     current_summary = chapters_data[pos].get("summary", "")
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
-        payload=payload,
-        model_type="EDITING",
-        base_dir=BASE_DIR,
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="EDITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_chapter_summary_messages(
         mode=mode,
         current_summary=current_summary,
         chapter_text=chapter_text,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {
@@ -105,6 +237,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -124,16 +257,32 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "").strip()
     title = chapters_data[pos].get("title") or path.name
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
+    context = gather_writing_context(
+        story=story,
+        chapters_data=chapters_data,
+        pos=pos,
+        title=title,
+        summary=summary,
         payload=payload,
-        model_type="WRITING",
-        base_dir=BASE_DIR,
+    )
+
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_write_chapter_messages(
-        project_title=story.get("project_title", "Story"),
+        story_title=context["story_title"],
+        story_summary=context["story_summary"],
+        story_tags=context["story_tags"],
+        background=context["background"],
         chapter_title=title,
         chapter_summary=summary,
+        chapter_conflicts=context["chapter_conflicts"],
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {
@@ -143,6 +292,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }
 
@@ -163,16 +313,33 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
     summary = chapters_data[pos].get("summary", "")
     title = chapters_data[pos].get("title") or path.name
 
-    base_url, api_key, model_id, timeout_s, model_overrides = resolve_model_runtime(
+    context = gather_writing_context(
+        story=story,
+        chapters_data=chapters_data,
+        pos=pos,
+        title=title,
+        summary=summary,
         payload=payload,
-        model_type="WRITING",
-        base_dir=BASE_DIR,
+    )
+
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
+        )
     )
     messages = build_continue_chapter_messages(
+        story_title=context["story_title"],
+        story_summary=context["story_summary"],
+        story_tags=context["story_tags"],
+        background=context["background"],
         chapter_title=title,
         chapter_summary=summary,
+        chapter_conflicts=context["chapter_conflicts"],
         existing_text=existing,
         model_overrides=model_overrides,
+        language=story.get("language", "en"),
     )
 
     return {
@@ -182,5 +349,83 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         "base_url": base_url,
         "api_key": api_key,
         "model_id": model_id,
+        "model_name": model_name,
+        "timeout_s": timeout_s,
+    }
+
+
+def prepare_ai_action_generation(payload: dict) -> dict:
+    """Prepare generic AI action generation (Extend/Rewrite/Summary)."""
+    target = payload.get("target")  # 'summary' | 'chapter'
+    action = payload.get("action")  # 'update' | 'rewrite' | 'extend'
+    chap_id = payload.get("chap_id")
+
+    if not chap_id:
+        raise BadRequestError("chap_id is required")
+
+    _, path, pos = get_chapter_locator(chap_id)
+    existing_content = payload.get("current_text")
+    if not isinstance(existing_content, str):
+        existing_content = read_text_or_raise(path)
+
+    _, story_path, story = get_active_story_or_raise()
+    chapters_data = get_normalized_chapters(story)
+    ensure_chapter_slot(chapters_data, pos)
+
+    chapter_summary = chapters_data[pos].get("summary", "")
+    chapter_title = chapters_data[pos].get("title") or path.name
+
+    context = gather_writing_context(
+        story=story,
+        chapters_data=chapters_data,
+        pos=pos,
+        title=chapter_title,
+        summary=chapter_summary,
+        payload=payload,
+    )
+
+    model_type = "EDITING" if target == "summary" else "WRITING"
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+        resolve_model_runtime(
+            payload=payload,
+            model_type=model_type,
+            base_dir=BASE_DIR,
+        )
+    )
+
+    messages = build_ai_action_messages(
+        target=target,
+        action=action,
+        story_title=context["story_title"],
+        story_summary=context["story_summary"],
+        story_tags=context["story_tags"],
+        chapter_title=chapter_title,
+        chapter_summary=chapter_summary,
+        chapter_conflicts=context["chapter_conflicts"],
+        existing_content=existing_content,
+        style_tags=context["story_tags"],
+        model_overrides=model_overrides,
+        language=story.get("language", "en"),
+    )
+
+    # Sanitize the last message content (the user prompt)
+    if messages and len(messages) > 0:
+        messages[-1]["content"] = sanitize_prompt(messages[-1]["content"])
+
+    return {
+        "target": target,
+        "action": action,
+        "chap_id": chap_id,
+        "path": path,
+        "pos": pos,
+        "story": story,
+        "story_path": story_path,
+        "chapters_data": chapters_data,
+        "existing_content": existing_content,
+        "messages": messages,
+        "base_url": base_url,
+        "api_key": api_key,
+        "model_id": model_id,
+        "model_name": model_name,
         "timeout_s": timeout_s,
     }

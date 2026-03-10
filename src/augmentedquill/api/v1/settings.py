@@ -16,18 +16,20 @@ import json as _json
 
 from augmentedquill.core.config import (
     load_machine_config,
+    load_model_presets_config,
     save_story_config,
     CURRENT_SCHEMA_VERSION,
     BASE_DIR,
-    CONFIG_DIR,
+    DEFAULT_MACHINE_CONFIG_PATH,
+    DEFAULT_STORY_CONFIG_PATH,
+    DEFAULT_MODEL_PRESETS_PATH,
 )
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.prompts import (
     get_system_message,
     load_model_prompt_overrides,
-    DEFAULT_SYSTEM_MESSAGES,
-    DEFAULT_USER_PROMPTS,
-    PROMPT_TYPES,
+    get_available_languages,
+    DEFAULT_PROMPTS,
     ensure_string,
 )
 from augmentedquill.services.settings.settings_api_ops import (
@@ -79,8 +81,8 @@ async def api_settings_post(request: Request) -> JSONResponse:
 
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
-        machine_path = CONFIG_DIR / "machine.json"
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+        machine_path = DEFAULT_MACHINE_CONFIG_PATH
         story_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         save_story_config(story_path, story_cfg)
@@ -93,24 +95,48 @@ async def api_settings_post(request: Request) -> JSONResponse:
 
 @router.get("/prompts")
 async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
-    """Get all resolved prompts (defaults + global overrides + model overrides)."""
-    machine_config = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    """Get all resolved prompts (defaults + global overrides + model overrides).
+
+    The response now also includes the list of available languages as
+    determined by the bundled instructions file, and the values returned
+    for ``system_messages``/``user_prompts`` are resolved into the active
+    project's language (falling back to English).
+    """
+    machine_config = load_machine_config() or {}
     if not model_name:
         model_name = machine_config.get("openai", {}).get("selected")
+
+    # figure out project language if there's an active project
+    from augmentedquill.services.projects.projects import get_active_project_dir
+    from augmentedquill.core.config import load_story_config
+
+    project_language = "en"
+    active = get_active_project_dir()
+    if active:
+        story = load_story_config(active / "story.json") or {}
+        project_language = str(story.get("language", "en") or "en")
 
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
 
     # Resolve all system messages
     system_messages = {}
-    for key in DEFAULT_SYSTEM_MESSAGES.keys():
-        system_messages[key] = get_system_message(key, model_overrides)
-
-    # Resolve all user prompts (templates)
     user_prompts = {}
-    for key in DEFAULT_USER_PROMPTS.keys():
-        user_prompts[key] = ensure_string(
-            model_overrides.get(key) or DEFAULT_USER_PROMPTS.get(key, "")
+    for key in DEFAULT_PROMPTS.keys():
+        # fill both maps with identical raw templates; the frontend can
+        # display them separately if desired but they originate from the
+        # same source.
+        system_messages[key] = get_system_message(
+            key, model_overrides, language=project_language
         )
+
+        entry = DEFAULT_PROMPTS.get(key, {})
+        if isinstance(entry, dict):
+            template = entry.get(project_language) or entry.get("en") or ""
+        else:
+            template = ensure_string(entry)
+        if key in model_overrides:
+            template = ensure_string(model_overrides[key])
+        user_prompts[key] = template
 
     return JSONResponse(
         status_code=200,
@@ -118,7 +144,8 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
             "ok": True,
             "system_messages": system_messages,
             "user_prompts": user_prompts,
-            "prompt_types": PROMPT_TYPES,
+            "languages": get_available_languages(),
+            "project_language": project_language,
         },
     )
 
@@ -154,6 +181,16 @@ async def api_machine_test(request: Request) -> JSONResponse:
     )
 
 
+@router.get("/machine/presets")
+async def api_machine_presets_get() -> JSONResponse:
+    """Return model preset database used by Machine Settings UI."""
+    data = load_model_presets_config(DEFAULT_MODEL_PRESETS_PATH) or {}
+    presets = data.get("presets") if isinstance(data, dict) else []
+    if not isinstance(presets, list):
+        presets = []
+    return JSONResponse(status_code=200, content={"presets": presets})
+
+
 @router.post("/machine/test_model")
 async def api_machine_test_model(request: Request) -> JSONResponse:
     """Test whether a model is available for base_url + api_key.
@@ -180,24 +217,29 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
             },
         )
 
-    ok, models, detail = await list_remote_models(
-        base_url=base_url,
-        api_key=api_key,
-        timeout_s=timeout_s,
-    )
-    if not ok:
+    model_id_str = str(model_id or "").strip()
+
+    if not model_id_str:
         return JSONResponse(
             status_code=200,
             content={
                 "ok": False,
                 "model_ok": False,
                 "models": [],
-                **({"detail": detail} if detail else {}),
+                "detail": "Missing model_id",
             },
         )
 
-    model_id_str = str(model_id or "").strip()
-    # Perform dynamic capability verification
+    # existence check implicitly exercises base_url validation.
+    model_ok, model_detail = await remote_model_exists(
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id_str,
+        timeout_s=timeout_s,
+    )
+
+    # capabilities are fetched via a cached helper; cost is negligible
+    # after the initial probe.
     caps = await verify_model_capabilities(
         base_url=base_url,
         api_key=api_key,
@@ -205,38 +247,22 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
         timeout_s=timeout_s,
     )
 
-    if model_id_str and model_id_str in set(models):
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "model_ok": True,
-                "models": models,
-                "capabilities": caps,
-            },
-        )
-
-    model_ok, model_detail = await remote_model_exists(
-        base_url=base_url,
-        api_key=api_key,
-        model_id=model_id_str,
-        timeout_s=timeout_s,
-    )
     return JSONResponse(
         status_code=200,
         content={
-            "ok": True,
-            "model_ok": bool(model_ok),
-            "models": models,
-            "detail": model_detail,
-            "capabilities": caps if model_ok else {},
+            "ok": model_ok,
+            "model_ok": model_ok,
+            # include only the single model; callers don't generally use the list
+            "models": [model_id_str] if model_ok else [],
+            **({"detail": model_detail} if model_detail and not model_ok else {}),
+            **({"capabilities": caps} if caps else {}),
         },
     )
 
 
 @router.put("/machine")
 async def api_machine_put(request: Request) -> JSONResponse:
-    """Persist machine config to resources/config/machine.json.
+    """Persist machine config to runtime user config path.
 
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
     Returns: { ok: bool, detail?: str }
@@ -255,7 +281,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
         )
 
     try:
-        machine_path = CONFIG_DIR / "machine.json"
+        machine_path = DEFAULT_MACHINE_CONFIG_PATH
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except Exception as e:
@@ -278,7 +304,7 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
     summary = payload.get("summary", "")
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         update_story_field(story_path, "story_summary", summary)
     except Exception as e:
         return JSONResponse(
@@ -303,7 +329,7 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
 
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         update_story_field(story_path, "tags", tags)
     except Exception as e:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
@@ -316,10 +342,10 @@ async def update_story_config(request: Request):
     """Update the story config to the latest version."""
     try:
         active = get_active_project_dir()
-        story_path = (active / "story.json") if active else (CONFIG_DIR / "story.json")
+        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
         ok, message = run_story_config_update(
             base_dir=BASE_DIR,
-            config_dir=CONFIG_DIR,
+            config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
             story_path=story_path,
             current_schema_version=CURRENT_SCHEMA_VERSION,
         )

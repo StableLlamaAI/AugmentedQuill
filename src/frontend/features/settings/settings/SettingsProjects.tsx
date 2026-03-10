@@ -34,7 +34,8 @@ interface SettingsProjectsProps {
   onLoadProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, newName: string) => void;
+  // new optional language parameter when renaming
+  onRenameProject: (id: string, newName: string, newLang?: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
   onRefreshProjects: () => void;
@@ -45,6 +46,7 @@ interface SettingsProjectsProps {
     bookCount: number;
   };
   theme: AppTheme;
+  languages: string[];
 }
 
 export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
@@ -61,9 +63,11 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   activeProjectType,
   activeProjectStats,
   theme,
+  languages,
 }) => {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
+  const [tempLang, setTempLang] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isLight = theme === 'light';
@@ -230,14 +234,29 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          onRenameProject(proj.id, tempName);
+                          onRenameProject(proj.id, tempName, tempLang);
                           setEditingNameId(null);
                         }
                       }}
                     />
+                    <select
+                      value={tempLang}
+                      onChange={(e) => setTempLang(e.target.value)}
+                      className={`ml-2 border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 ${
+                        isLight
+                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                          : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
+                      }`}
+                    >
+                      {languages.map((lng) => (
+                        <option key={lng} value={lng}>
+                          {lng.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       onClick={() => {
-                        onRenameProject(proj.id, tempName);
+                        onRenameProject(proj.id, tempName, tempLang);
                         setEditingNameId(null);
                       }}
                       className="text-brand-600 hover:text-brand-700"
@@ -263,10 +282,16 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                         >
                           {proj.title}
                         </h4>
+                        {proj.language && (
+                          <span className="ml-1 px-1 py-px text-[10px] font-medium uppercase rounded bg-gray-200 dark:bg-gray-700">
+                            {proj.language.toUpperCase()}
+                          </span>
+                        )}
                         <button
                           onClick={() => {
                             setEditingNameId(proj.id);
                             setTempName(proj.title);
+                            setTempLang(proj.language || 'en');
                           }}
                           className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${
                             isLight

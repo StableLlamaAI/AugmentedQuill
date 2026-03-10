@@ -30,6 +30,57 @@
               "model": {
                 "type": "string"
               },
+              "temperature": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 2
+              },
+              "top_p": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1
+              },
+              "max_tokens": {
+                "type": ["integer", "null"],
+                "minimum": 1
+              },
+              "presence_penalty": {
+                "type": ["number", "null"],
+                "minimum": -2,
+                "maximum": 2
+              },
+              "frequency_penalty": {
+                "type": ["number", "null"],
+                "minimum": -2,
+                "maximum": 2
+              },
+              "stop": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "seed": {
+                "type": ["integer", "null"]
+              },
+              "top_k": {
+                "type": ["integer", "null"],
+                "minimum": 1
+              },
+              "min_p": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1
+              },
+              "extra_body": {
+                "type": ["string", "null"]
+              },
+              "preset_id": {
+                "type": ["string", "null"]
+              },
+              "writing_warning": {
+                "type": ["string", "null"]
+              },
               "is_multimodal": {
                 "type": ["boolean", "null"]
               },
@@ -49,6 +100,15 @@
         "selected": {
           "type": "string",
           "description": "The selected model name"
+        },
+        "selected_chat": {
+          "type": "string"
+        },
+        "selected_writing": {
+          "type": "string"
+        },
+        "selected_editing": {
+          "type": "string"
         }
       },
       "required": ["models", "selected"]

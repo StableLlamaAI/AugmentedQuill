@@ -5,8 +5,9 @@ This directory contains JSON Schema files for validating configuration and proje
 ## Files
 
 - `story-v2.schema.json`: Schema for `story.json` files in project directories, with metadata.version = 2.
-- `projects.schema.json`: Schema for `resources/config/projects.json`.
-- `machine.schema.json`: Schema for `resources/config/machine.json`.
+- `projects.schema.json`: Schema for runtime `projects.json` settings.
+- `machine.schema.json`: Schema for runtime `data/config/machine.json` settings.
+- `model_presets.schema.json`: Schema for tracked preset DB `resources/config/model_presets.json`.
 
 ## Usage
 

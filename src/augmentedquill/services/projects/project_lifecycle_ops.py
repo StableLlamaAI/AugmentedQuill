@@ -114,8 +114,13 @@ def initialize_project_dir_data(
     project_title: str,
     project_type: str,
     now_iso: str,
+    language: str = "en",
 ) -> None:
-    """Initialize Project Dir Data."""
+    """Initialize Project Dir Data.
+
+    ``language`` is stored in story.json so the LLM helpers know which
+    translation to select.
+    """
     path.mkdir(parents=True, exist_ok=True)
     story_path = path / "story.json"
 
@@ -126,6 +131,7 @@ def initialize_project_dir_data(
             "metadata": {"version": 2},
             "project_title": project_title,
             "project_type": project_type,
+            "language": language,
             "chapters": [],
             "books": [],
             "content_file": "content.md",
@@ -170,6 +176,12 @@ def list_projects_under_root(
             except Exception:
                 pass
 
+        lang = "en"
+        try:
+            story = load_story_config(directory / "story.json") or {}
+            lang = str(story.get("language", "en") or "en")
+        except Exception:
+            pass
         items.append(
             {
                 "id": directory.name,
@@ -178,6 +190,7 @@ def list_projects_under_root(
                 "is_valid": getattr(info, "is_valid", False),
                 "title": title,
                 "type": project_type,
+                "language": lang,
             }
         )
 
@@ -188,8 +201,9 @@ def create_project_under_root(
     name: str,
     project_type: str,
     projects_root: Path,
-    initialize_project: Callable[[Path, str, str], None],
+    initialize_project: Callable[[Path, str, str, str], None],
     validate_project: Callable[[Path], object],
+    language: str = "en",
 ) -> Tuple[bool, str, Path | None]:
     """Create Project Under Root."""
     if not name:
@@ -212,7 +226,7 @@ def create_project_under_root(
         project_path = projects_root / f"{safe_name}_{counter}"
 
     projects_root.mkdir(parents=True, exist_ok=True)
-    initialize_project(project_path, name, project_type)
+    initialize_project(project_path, name, project_type, language)
 
     if not getattr(validate_project(project_path), "is_valid", False):
         return False, "Failed to initialize project", None

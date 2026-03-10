@@ -34,7 +34,13 @@ class StoryEndpointsTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
-    def _make_project(self, name: str = "novel") -> Path:
+    def _make_project(
+        self,
+        name: str = "novel",
+        story_summary: str | None = "Overall story summary.",
+        tags: list | None = ["fantasy", "adventure"],
+        sourcebook: dict | None = None,
+    ) -> Path:
         ok, msg = select_project(name)
         self.assertTrue(ok, msg)
         pdir = self.projects_root / name
@@ -42,10 +48,39 @@ class StoryEndpointsTest(TestCase):
         chdir.mkdir(parents=True, exist_ok=True)
         (chdir / "0001.txt").write_text("Chapter one text", encoding="utf-8")
         (chdir / "0002.txt").write_text("Chapter two text", encoding="utf-8")
-        (pdir / "story.json").write_text(
-            '{"project_title":"P","format":"markdown","chapters":[{"title":"T1","summary":"S1"},{"title":"T2","summary":"S2"}],"llm_prefs":{"temperature":0.7,"max_tokens":2048},"metadata":{"version":2}}',
-            encoding="utf-8",
-        )
+        # start with a baseline story config; allow overriding optional fields
+        story_cfg = {
+            "project_title": "P",
+            "format": "markdown",
+            "chapters": [
+                {"title": "T1", "summary": "S1"},
+                {"title": "T2", "summary": "S2"},
+            ],
+            "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+            "metadata": {"version": 2},
+        }
+        if story_summary is not None:
+            story_cfg["story_summary"] = story_summary
+        if tags is not None:
+            story_cfg["tags"] = tags
+        if sourcebook is not None:
+            story_cfg["sourcebook"] = sourcebook
+        else:
+            # default entry for previous tests
+            story_cfg.setdefault(
+                "sourcebook",
+                {
+                    "EntryOne": {
+                        "description": "A background character.",
+                        "category": "person",
+                        "synonyms": [],
+                    }
+                },
+            )
+
+        import json
+
+        (pdir / "story.json").write_text(json.dumps(story_cfg), encoding="utf-8")
         return pdir
 
     # ---- PUT /api/v1/chapters/{id}/summary ----
@@ -92,6 +127,7 @@ class StoryEndpointsTest(TestCase):
             None,
             "fake-model",
             5,
+            "fake-model",
         )  # type: ignore
         llm.unified_chat_complete = fake_complete  # type: ignore
 
@@ -159,14 +195,43 @@ class StoryEndpointsTest(TestCase):
         self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
+        # Patch the completions stream used by the suggest endpoint
         orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
 
         async def fake_stream(prompt: str, **kwargs):
+            # ensure our enhanced context made it into the prompt text
+            # it will be passed as the single argument to the llm call
+            self.assertIn("Story title: P", prompt)
+            self.assertIn("Story description: Overall story summary.", prompt)
+            self.assertIn("Story tags: fantasy, adventure", prompt)
+            # background entry should appear by name or description
+            self.assertIn("EntryOne", prompt)
+            # chapter fields stay present
+            self.assertIn("Chapter title: T1", prompt)
+            self.assertIn("Chapter description: S1", prompt)
+            # ensure extra_body was not provided (configured model should win)
+            self.assertTrue(
+                "extra_body" not in kwargs or kwargs.get("extra_body") is None
+            )
+
             # Yield a few chunks as the real stream would
             yield "First chunk of suggestion"
             yield " and the rest of the paragraph.\n"
 
+        async def fake_edit(**kwargs):
+            # confirm the selector prompt contained recent text and entry list
+            msgs = kwargs.get("messages", [])
+            self.assertTrue(
+                any("Recent paragraphs" in m.get("content", "") for m in msgs)
+            )
+            self.assertTrue(any("Entries:" in m.get("content", "") for m in msgs))
+            content = msgs[-1].get("content", "")
+            self.assertIn("EntryOne", content)
+            return {"content": "EntryOne"}
+
         llm.openai_completions_stream = fake_stream  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
         # Also ensure credential resolution succeeds for this test
         orig_resolve = llm.resolve_openai_credentials
         llm.resolve_openai_credentials = lambda payload, **kwargs: (
@@ -174,10 +239,12 @@ class StoryEndpointsTest(TestCase):
             None,
             "fake-model",
             5,
+            "fake-model",
         )  # type: ignore
 
         def _undo():
             llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
             llm.resolve_openai_credentials = orig_resolve  # type: ignore
 
         self.addCleanup(_undo)
@@ -188,6 +255,64 @@ class StoryEndpointsTest(TestCase):
         )
         self.assertEqual(r.status_code, 200, r.text)
         # Response should be plain text and return non-empty content
+        self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))
+        text = r.text or ""
+        self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")
+
+    def test_suggest_filters_empty_sections(self):
+        """Prompt should omit lines for empty story metadata or background."""
+        # create project with blanks
+        self._make_project(
+            name="novel2",
+            story_summary="",
+            tags=[],
+            sourcebook={},
+        )
+        self._patch_llm()
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+
+        async def fake_stream2(prompt: str, **kwargs):
+            self.assertIn("Story title: P", prompt)
+            self.assertNotIn("Story description:", prompt)
+            self.assertNotIn("Story tags:", prompt)
+            self.assertNotIn("Background information:", prompt)
+            # still includes chapter info
+            self.assertIn("Chapter title: T1", prompt)
+            yield "whatever"
+
+        llm.openai_completions_stream = fake_stream2  # type: ignore
+
+        async def fake_edit2(**kwargs):
+            # editing selector should be invoked even with no entries
+            msgs = kwargs.get("messages", [])
+            self.assertTrue(any("Entries:" in m.get("content", "") for m in msgs))
+            return {"content": ""}
+
+        llm.unified_chat_complete = fake_edit2  # type: ignore
+        # patch resolve
+        orig_resolve = llm.resolve_openai_credentials
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo2():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo2)
+
+        r = self.client.post(
+            "/api/v1/story/suggest", json={"chap_id": 1, "current_text": "Hi"}
+        )
+        self.assertEqual(r.status_code, 200)
+
         self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))
         text = r.text or ""
         self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")

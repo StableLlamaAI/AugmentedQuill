@@ -65,14 +65,15 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
 
     try:
         try:
-            base_url, api_key, model_id, timeout_s = llm.resolve_openai_credentials(
-                payload, model_type="EDITING"
+            base_url, api_key, model_id, timeout_s, model_name = (
+                llm.resolve_openai_credentials(payload, model_type="EDITING")
             )
         except Exception:
             base_url = payload.get("base_url") or "http://localhost"
             api_key = payload.get("api_key")
             model_id = payload.get("model") or payload.get("model_name") or "dummy"
             timeout_s = int(payload.get("timeout_s") or 60)
+            model_name = payload.get("model_name")
 
         # Security: Prevent SSRF by validating the base_url
         from augmentedquill.services.llm import llm_completion_ops
@@ -109,11 +110,13 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
         ]
 
         data = await llm.unified_chat_complete(
+            caller_id="chat_tool.image.generate_description",
             messages=messages,
             base_url=base_url,
             api_key=api_key,
             model_id=model_id,
             timeout_s=timeout_s,
+            model_name=model_name,
         )
 
         content = data.get("content")

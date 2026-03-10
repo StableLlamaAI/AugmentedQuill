@@ -46,6 +46,7 @@ interface ProjectImagesProps {
   onClose: () => void;
   theme: AppTheme;
   settings: AppSettings;
+  imageActionsAvailable?: boolean;
   prompts?: {
     system_messages: Record<string, string>;
     user_prompts: Record<string, string>;
@@ -61,6 +62,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   onClose,
   theme = 'mixed',
   settings,
+  imageActionsAvailable = true,
   prompts,
   imageStyle = '',
   imageAdditionalInfo = '',
@@ -162,6 +164,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleGenerateDescription = async (img: ImageEntry) => {
+    if (!imageActionsAvailable) return;
     if (generating) return;
     setGenerating(img.filename);
     setError(null);
@@ -199,6 +202,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleCreatePrompt = async (img: ImageEntry) => {
+    if (!imageActionsAvailable) return;
     if (!img.description) return;
 
     setPromptPopup({ isOpen: true, content: '', loading: true });
@@ -227,6 +231,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleGenerateAllPrompts = async () => {
+    if (!imageActionsAvailable) return;
     const placeholders = images.filter((i) => i.is_placeholder);
     if (placeholders.length === 0) return;
 
@@ -470,6 +475,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             <Button
               variant="secondary"
               onClick={handleGenerateAllPrompts}
+              disabled={!imageActionsAvailable}
               icon={<Sparkles className="w-4 h-4" />}
               title="Generate prompts for all placeholders"
               className="whitespace-nowrap"
@@ -640,7 +646,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleGenerateDescription(img)}
-                        disabled={!!generating}
+                        disabled={!!generating || !imageActionsAvailable}
                         icon={<Wand2 className="w-3 h-3" />}
                       >
                         {img.description
@@ -652,7 +658,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleCreatePrompt(img)}
-                        disabled={!img.description}
+                        disabled={!img.description || !imageActionsAvailable}
                         icon={<Sparkles className="w-3 h-3" />}
                         title="Create image generation prompt"
                       >

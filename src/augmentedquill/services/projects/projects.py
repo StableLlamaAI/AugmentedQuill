@@ -53,8 +53,8 @@ from augmentedquill.services.projects.project_lifecycle_ops import (
     select_project_under_root,
 )
 from augmentedquill.core.config import (
-    CONFIG_DIR,
     PROJECTS_ROOT,
+    DEFAULT_PROJECTS_REGISTRY_PATH,
 )
 
 
@@ -75,19 +75,19 @@ class ProjectInfo:
 
 def load_registry() -> Dict:
     return load_registry_from_path(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json")))
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH)))
     )
 
 
 def set_active_project(path: Path) -> None:
     reg = load_registry()
     current, recent = set_active_project_in_registry(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))),
         path,
         reg,
     )
     save_registry_to_path(
-        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))),
+        Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))),
         current,
         recent,
     )
@@ -117,7 +117,7 @@ def delete_project(name: str) -> Tuple[bool, str]:
     if ok:
         save_registry_to_path(
             Path(
-                os.getenv("AUGQ_PROJECTS_REGISTRY", str(CONFIG_DIR / "projects.json"))
+                os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))
             ),
             current,
             recent,
@@ -141,7 +141,10 @@ def validate_project_dir(path: Path) -> ProjectInfo:
 
 
 def initialize_project_dir(
-    path: Path, project_title: str = "Untitled Project", project_type: str = "novel"
+    path: Path,
+    project_title: str = "Untitled Project",
+    project_type: str = "novel",
+    language: str = "en",
 ) -> None:
     """Create minimal project structure at the given path."""
     initialize_project_dir_data(
@@ -149,6 +152,7 @@ def initialize_project_dir(
         project_title=project_title,
         project_type=project_type,
         now_iso=datetime.now().isoformat(),
+        language=language,
     )
 
 
@@ -247,7 +251,9 @@ def delete_chapter(chap_id: int) -> None:
     delete_chapter_in_project(active=active, chap_id=chap_id)
 
 
-def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
+def create_project(
+    name: str, project_type: str = "novel", language: str = "en"
+) -> Tuple[bool, str]:
     """Create a new project explicitly."""
     ok, msg, path = create_project_under_root(
         name=name,
@@ -255,6 +261,7 @@ def create_project(name: str, project_type: str = "novel") -> Tuple[bool, str]:
         projects_root=get_projects_root(),
         initialize_project=initialize_project_dir,
         validate_project=validate_project_dir,
+        language=language,
     )
     if ok and path is not None:
         set_active_project(path)
@@ -343,6 +350,7 @@ def update_story_metadata(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    language: str = None,
 ) -> None:
     """Update general story metadata."""
     active = _require_active_project()
@@ -353,6 +361,7 @@ def update_story_metadata(
         tags=tags,
         notes=notes,
         private_notes=private_notes,
+        language=language,
     )
 
 

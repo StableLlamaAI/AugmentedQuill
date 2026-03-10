@@ -27,12 +27,15 @@ type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
   editorControls: MainEditorControls;
   chatControls: MainChatControls;
+  /** languages available for instructions; used by the metadata editor */
+  instructionLanguages: string[];
 };
 
 export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
   sidebarControls,
   editorControls,
   chatControls,
+  instructionLanguages,
 }) => {
   const { bgMain, isLight, currentTheme } = useTheme();
   const {
@@ -50,8 +53,14 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     handleReorderChapters,
     handleReorderBooks,
     handleSidebarAiAction,
+    isEditingAvailable,
     handleOpenImages,
     updateStoryMetadata,
+    checkedSourcebookIds,
+    onToggleSourcebook,
+    isAutoSourcebookSelectionEnabled,
+    onToggleAutoSourcebookSelection,
+    isSourcebookSelectionRunning,
   } = sidebarControls;
   const {
     currentChapter,
@@ -112,9 +121,19 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           tags={story.styleTags}
           notes={story.notes}
           private_notes={story.private_notes}
+          language={story.language}
           conflicts={story.conflicts}
+          onAiGenerateSummary={(action, onProgress) =>
+            handleSidebarAiAction('story', story.id, action, onProgress)
+          }
+          summaryAiDisabledReason={
+            !isEditingAvailable
+              ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              : undefined
+          }
           onUpdate={updateStoryMetadata}
           theme={currentTheme}
+          languages={instructionLanguages}
         />
         <ChapterList
           chapters={story.chapters}
@@ -131,10 +150,18 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           onReorderChapters={handleReorderChapters}
           onReorderBooks={handleReorderBooks}
           onAiAction={handleSidebarAiAction}
+          isAiAvailable={isEditingAvailable}
           theme={currentTheme}
           onOpenImages={handleOpenImages}
         />
-        <SourcebookList theme={currentTheme} />
+        <SourcebookList
+          theme={currentTheme}
+          checkedIds={checkedSourcebookIds || []}
+          onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
+          isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
+          onToggleAutoSelection={onToggleAutoSourcebookSelection}
+          isAutoSelectionRunning={isSourcebookSelectionRunning}
+        />
       </div>
       <div
         className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
@@ -159,6 +186,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               aiControls={{
                 onAiAction: aiControls.handleAiAction,
                 isAiLoading: aiControls.isAiActionLoading,
+                isWritingAvailable: aiControls.isWritingAvailable,
               }}
               onContextChange={setActiveFormats}
               showWhitespace={showWhitespace}
@@ -183,6 +211,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           <Chat
             messages={chatMessages}
             isLoading={isChatLoading}
+            isModelAvailable={chatControls.isChatAvailable}
             systemPrompt={systemPrompt}
             onSendMessage={handleSendMessage}
             onStop={handleStopChat}

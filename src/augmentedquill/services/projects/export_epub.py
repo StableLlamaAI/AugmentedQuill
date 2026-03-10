@@ -124,7 +124,8 @@ def export_project_epub_response(name: str | None = None) -> Response:
 
     book = epub.EpubBook()
     book.set_title(project_title)
-    book.set_language("en")
+    lang = story.get("language", "en") if isinstance(story, dict) else "en"
+    book.set_language(lang)
 
     added_images = set()
 

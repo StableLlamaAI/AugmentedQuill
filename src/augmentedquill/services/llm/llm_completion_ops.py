@@ -10,21 +10,22 @@
 from __future__ import annotations
 
 from typing import Any, Dict, AsyncIterator
-import datetime
 import os
-
-import httpx
+import json
 
 from augmentedquill.core.config import (
     load_story_config,
-    CONFIG_DIR,
+    DEFAULT_STORY_CONFIG_PATH,
     load_machine_config,
 )
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
 )
-from augmentedquill.services.llm.llm_logging import add_llm_log, create_log_entry
+from augmentedquill.services.llm.llm_http_ops import (
+    logged_request,
+    logged_stream_request,
+)
 from augmentedquill.services.llm.llm_request_helpers import (
     get_story_llm_preferences,
     build_headers,
@@ -61,15 +62,20 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
         return
 
     # 2. Check machine.json models
-    config_path = os.path.join(CONFIG_DIR, "machine.json")
-    machine_config = load_machine_config(config_path)
-    if machine_config:
-        for provider in ["openai", "anthropic", "google"]:
-            all_models = machine_config.get(provider, {}).get("models", [])
-            for model in all_models:
-                model_url = model.get("base_url")
-                if model_url and base_url == model_url:
-                    return
+    machine_config = load_machine_config()
+    if not machine_config:
+        from augmentedquill.services.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    for provider in ["openai", "anthropic", "google"]:
+        all_models = machine_config.get(provider, {}).get("models", [])
+        for model in all_models:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
+                return
 
     # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
     # Note: Using a strict whitelist of local addresses.
@@ -115,34 +121,143 @@ def _prepare_llm_request(
     return url, headers, body
 
 
+def _resolve_temperature_max_tokens(
+    temperature: float | None,
+    max_tokens: int | None,
+    model_cfg: dict | None = None,
+) -> tuple[float, int | None]:
+    """Resolve runtime temperature/max_tokens with story defaults fallback."""
+    if temperature is not None and max_tokens is not None:
+        return float(temperature), int(max_tokens)
+
+    model_temperature = None
+    model_max_tokens = None
+    if isinstance(model_cfg, dict):
+        try:
+            if model_cfg.get("temperature") not in (None, ""):
+                model_temperature = float(model_cfg.get("temperature"))
+        except Exception:
+            model_temperature = None
+        try:
+            if model_cfg.get("max_tokens") not in (None, ""):
+                model_max_tokens = int(model_cfg.get("max_tokens"))
+        except Exception:
+            model_max_tokens = None
+
+    if temperature is None:
+        temperature = model_temperature
+    if max_tokens is None:
+        max_tokens = model_max_tokens
+
+    if temperature is not None and max_tokens is not None:
+        return float(temperature), int(max_tokens)
+
+    story_temperature, story_max_tokens = get_story_llm_preferences(
+        config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
+        get_active_project_dir=get_active_project_dir,
+        load_story_config=load_story_config,
+    )
+    return (
+        float(temperature) if temperature is not None else story_temperature,
+        int(max_tokens) if max_tokens is not None else story_max_tokens,
+    )
+
+
+def _resolve_machine_model_cfg(
+    base_url: str, model_id: str, model_name: str | None = None
+) -> dict:
+    """Resolve machine model entry matching name or base_url + model_id."""
+    machine_config = load_machine_config() or {}
+    openai_cfg = (
+        machine_config.get("openai") if isinstance(machine_config, dict) else {}
+    )
+    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else []
+    if not isinstance(models, list):
+        return {}
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        if model_name:
+            if model.get("name") == model_name:
+                return model
+        else:
+            if str(model.get("base_url") or "") != str(base_url or ""):
+                continue
+            if str(model.get("model") or "") != str(model_id or ""):
+                continue
+            return model
+    return {}
+
+
+def _build_model_extra_body(model_cfg: dict) -> dict:
+    """Build extra_body payload from machine model parameters."""
+    if not isinstance(model_cfg, dict):
+        return {}
+
+    extra: dict = {}
+    for key in (
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "top_k",
+        "min_p",
+    ):
+        value = model_cfg.get(key)
+        if value is not None:
+            extra[key] = value
+
+    stop = model_cfg.get("stop")
+    if isinstance(stop, list) and stop:
+        extra["stop"] = [str(entry) for entry in stop]
+
+    raw_extra_body = model_cfg.get("extra_body")
+    if isinstance(raw_extra_body, str) and raw_extra_body.strip():
+        try:
+            parsed = json.loads(raw_extra_body)
+            if isinstance(parsed, dict):
+                extra.update(parsed)
+        except Exception:
+            pass
+
+    return extra
+
+
 async def unified_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Execute a non-streaming chat completion and normalize tool/thinking output."""
-    extra_body = {}
+    merged_extra_body = dict(extra_body or {})
     if supports_function_calling and tools and tool_choice != "none":
-        extra_body["tools"] = tools
+        merged_extra_body["tools"] = tools
         if tool_choice:
-            extra_body["tool_choice"] = tool_choice
+            merged_extra_body["tool_choice"] = tool_choice
 
     resp_json = await openai_chat_complete(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
-        extra_body=extra_body,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=merged_extra_body,
         skip_validation=skip_validation,
     )
 
@@ -169,69 +284,39 @@ async def unified_chat_complete(
     }
 
 
-async def _execute_llm_request(url, headers, body, timeout_s):
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    # We also mask common keys in the body that might contain credentials
-    safe_log_headers = {
-        k: (v if k.lower() not in ("authorization", "x-api-key") else "REDACTED")
-        for k, v in headers.items()
-    }
-
-    # Clone body to avoid mutating original and mask potentially sensitive fields
-    safe_body = body
-    if isinstance(body, dict):
-        safe_body = body.copy()
-        for key in ["api_key", "secret", "password"]:
-            if key in safe_body:
-                safe_body[key] = "REDACTED"
-
-    log_entry = create_log_entry(url, "POST", safe_log_headers, safe_body)
-    add_llm_log(log_entry)
-
+async def _execute_llm_request(caller_id, url, headers, body, timeout_s):
     timeout_obj = build_timeout(timeout_s)
-
-    # Security: No longer printing raw headers or body to console to avoid sensitive information exposure.
-    # LLM logs are stored securely via add_llm_log.
-
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            r = await client.post(url, headers=headers, json=body)
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["status_code"] = r.status_code
-
-            r.raise_for_status()
-            resp_json = r.json()
-            log_entry["response"]["body"] = resp_json
-            # Re-log with the response body
-            add_llm_log(log_entry)
-            return resp_json
-        except Exception as e:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            # Re-log with error details
-            add_llm_log(log_entry)
-            raise
+    response = await logged_request(
+        caller_id=caller_id,
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+        raise_for_status=True,
+    )
+    return response.json()
 
 
 async def openai_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Call the OpenAI-compatible chat completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     url = str(base_url).rstrip("/") + "/chat/completions"
@@ -244,29 +329,35 @@ async def openai_chat_complete(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(url, headers, body, timeout_s)
+    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
 
 
 async def openai_completions(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     n: int = 1,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> dict:
     """Call the OpenAI-compatible text completions endpoint and return JSON."""
     _validate_base_url(base_url, skip_validation=skip_validation)
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     url = str(base_url).rstrip("/") + "/completions"
@@ -280,28 +371,35 @@ async def openai_completions(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(url, headers, body, timeout_s)
+    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
 
 
 async def openai_chat_complete_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
     """Stream content chunks from the chat completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/chat/completions"
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     headers = build_headers(api_key)
@@ -314,75 +412,69 @@ async def openai_chat_complete_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
-
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    safe_log_headers = {
-        k: (v if k.lower() != "authorization" else "REDACTED")
-        for k, v in headers.items()
-    }
-    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
-    add_llm_log(log_entry)
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
+    if extra_body:
+        body.update(extra_body)
 
     timeout_obj = build_timeout(timeout_s)
 
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            async with client.stream("POST", url, headers=headers, json=body) as resp:
-                log_entry["response"]["status_code"] = resp.status_code
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data = line[len("data: ") :].strip()
-                        if data == "[DONE]":
-                            break
+    async with logged_stream_request(
+        caller_id=caller_id,
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+    ) as (resp, log_entry):
+        resp.raise_for_status()
+        async for line in resp.aiter_lines():
+            if not line:
+                continue
+            if line.startswith("data: "):
+                data = line[len("data: ") :].strip()
+                if data == "[DONE]":
+                    break
 
-                        import json as _json
+                import json as _json
 
-                        try:
-                            obj = _json.loads(data)
-                            log_entry["response"]["chunks"].append(obj)
-                        except Exception:
-                            obj = None
-                        if not isinstance(obj, dict):
-                            continue
-                        try:
-                            content = obj["choices"][0]["delta"].get("content")
-                        except Exception:
-                            content = None
-                        if content:
-                            log_entry["response"]["full_content"] += content
-                            yield content
-        except Exception as e:
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            add_llm_log(log_entry)
-            raise
-        finally:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            add_llm_log(log_entry)
+                try:
+                    obj = _json.loads(data)
+                    log_entry["response"]["chunks"].append(obj)
+                except Exception:
+                    obj = None
+                if not isinstance(obj, dict):
+                    continue
+                try:
+                    content = obj["choices"][0]["delta"].get("content")
+                except Exception:
+                    content = None
+                if content:
+                    log_entry["response"]["full_content"] += content
+                    yield content
 
 
 async def openai_completions_stream(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[str]:
     """Stream content chunks from the text completions endpoint."""
     _validate_base_url(base_url, skip_validation=skip_validation)
     url = str(base_url).rstrip("/") + "/completions"
-    temperature, max_tokens = get_story_llm_preferences(
-        config_dir=CONFIG_DIR,
-        get_active_project_dir=get_active_project_dir,
-        load_story_config=load_story_config,
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
     )
 
     headers = build_headers(api_key)
@@ -395,55 +487,44 @@ async def openai_completions_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    model_extra = _build_model_extra_body(model_cfg)
+    if model_extra:
+        body.update(model_extra)
     if extra_body:
         body.update(extra_body)
 
-    # Security: Ensure sensitive headers (like Authorization) are masked BEFORE logging
-    safe_log_headers = {
-        k: (v if k.lower() != "authorization" else "REDACTED")
-        for k, v in headers.items()
-    }
-    log_entry = create_log_entry(url, "POST", safe_log_headers, body, streaming=True)
-    add_llm_log(log_entry)
-
     timeout_obj = build_timeout(timeout_s)
 
-    async with httpx.AsyncClient(timeout=timeout_obj) as client:
-        try:
-            async with client.stream("POST", url, headers=headers, json=body) as resp:
-                log_entry["response"]["status_code"] = resp.status_code
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data = line[len("data: ") :].strip()
-                        if data == "[DONE]":
-                            break
+    async with logged_stream_request(
+        caller_id=caller_id,
+        method="POST",
+        url=url,
+        headers=headers,
+        body=body,
+        timeout=timeout_obj,
+    ) as (resp, log_entry):
+        resp.raise_for_status()
+        async for line in resp.aiter_lines():
+            if not line:
+                continue
+            if line.startswith("data: "):
+                data = line[len("data: ") :].strip()
+                if data == "[DONE]":
+                    break
 
-                        import json as _json
+                import json as _json
 
-                        try:
-                            obj = _json.loads(data)
-                            log_entry["response"]["chunks"].append(obj)
-                        except Exception:
-                            obj = None
-                        if not isinstance(obj, dict):
-                            continue
-                        try:
-                            content = obj["choices"][0]["text"]
-                        except Exception:
-                            content = None
-                        if content:
-                            log_entry["response"]["full_content"] += content
-                            yield content
-        except Exception as e:
-            log_entry["response"]["error_detail"] = str(e)
-            log_entry["response"][
-                "error"
-            ] = f"An internal error occurred during the LLM request: {e}"
-            add_llm_log(log_entry)
-            raise
-        finally:
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            add_llm_log(log_entry)
+                try:
+                    obj = _json.loads(data)
+                    log_entry["response"]["chunks"].append(obj)
+                except Exception:
+                    obj = None
+                if not isinstance(obj, dict):
+                    continue
+                try:
+                    content = obj["choices"][0]["text"]
+                except Exception:
+                    content = None
+                if content:
+                    log_entry["response"]["full_content"] += content
+                    yield content

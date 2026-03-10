@@ -9,12 +9,13 @@
  * Defines the use chapter suggestions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
+import { api } from '../../services/api';
 
 type UseChapterSuggestionsParams = {
   currentChapter?: Chapter;
@@ -22,6 +23,7 @@ type UseChapterSuggestionsParams = {
   story: StoryState;
   systemPrompt: string;
   activeWritingConfig: LLMConfig;
+  isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   viewMode: ViewMode;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
@@ -34,23 +36,79 @@ export function useChapterSuggestions({
   story,
   systemPrompt,
   activeWritingConfig,
+  isWritingAvailable,
   updateChapter,
   viewMode,
   setChatMessages,
   getErrorMessage,
 }: UseChapterSuggestionsParams) {
   const [continuations, setContinuations] = useState<string[]>([]);
+  // ids of sourcebook entries currently checked (suggested by model or user)
+  const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
+  const [isAutoSourcebookSelectionEnabled, setIsAutoSourcebookSelectionEnabled] =
+    useState(true);
+  const [isSourcebookSelectionRunning, setIsSourcebookSelectionRunning] =
+    useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isSuggestionMode, setIsSuggestionMode] = useState(false);
   const [suggestCursor, setSuggestCursor] = useState<number | null>(null);
   const [suggestUndoStack, setSuggestUndoStack] = useState<
     Array<{ content: string; cursor: number }>
   >([]);
+  const autoSelectionEnabledRef = useRef(isAutoSourcebookSelectionEnabled);
+  const relevanceInFlightRef = useRef(0);
+
+  useEffect(() => {
+    autoSelectionEnabledRef.current = isAutoSourcebookSelectionEnabled;
+  }, [isAutoSourcebookSelectionEnabled]);
 
   const clampCursor = (cursor: number, content: string) => {
     if (!Number.isFinite(cursor)) return content.length;
     return Math.max(0, Math.min(Math.floor(cursor), content.length));
   };
+
+  // request the backend to recompute which sourcebook entries appear
+  // relevant given the provided text; results replace the current checks.
+  const fetchRelevance = async (text: string) => {
+    if (!currentChapterId || !autoSelectionEnabledRef.current) return;
+    relevanceInFlightRef.current += 1;
+    setIsSourcebookSelectionRunning(true);
+    try {
+      const res = await api.story.computeSourcebookRelevance(currentChapterId, text);
+      if (!autoSelectionEnabledRef.current) return;
+      const relevant = new Set<string>(res.relevant || []);
+      setCheckedEntries(relevant);
+    } catch {
+      // ignore failures; relevance is a nice‑to‑have
+    } finally {
+      relevanceInFlightRef.current = Math.max(0, relevanceInFlightRef.current - 1);
+      if (relevanceInFlightRef.current === 0) {
+        setIsSourcebookSelectionRunning(false);
+      }
+    }
+  };
+
+  // allow user to manually override a checkbox; these will be overwritten
+  // on the next model recompute triggered by text changes or suggestion
+  // acceptance.
+  const handleToggleEntry = (id: string, checked: boolean) => {
+    setCheckedEntries((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  // when chapter content changes, recompute sourcebook relevance after a
+  // pause; this prevents a flood of model calls while the user types.
+  useEffect(() => {
+    if (!currentChapter || !isAutoSourcebookSelectionEnabled) return;
+    const timer = setTimeout(() => {
+      fetchRelevance(currentChapter.content);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [currentChapter?.content, isAutoSourcebookSelectionEnabled]);
 
   const handleTriggerSuggestions = async (
     cursor?: number,
@@ -58,6 +116,7 @@ export function useChapterSuggestions({
     enableSuggestionMode: boolean = true
   ) => {
     if (!currentChapter) return;
+    if (!isWritingAvailable) return;
     if (isSuggesting) return;
 
     const baseContent = contentOverride ?? currentChapter.content;
@@ -75,7 +134,19 @@ export function useChapterSuggestions({
         storyContext,
         systemPrompt,
         activeWritingConfig,
-        currentChapter.id
+        currentChapter.id,
+        Array.from(checkedEntries),
+        {
+          onSuggestionUpdate: (index, text) => {
+            if (!text) return;
+            setContinuations((previous) => {
+              const next = [...previous];
+              if (next[index] === text) return previous;
+              next[index] = text;
+              return next;
+            });
+          },
+        }
       );
       setContinuations(options);
     } catch (error: unknown) {
@@ -120,6 +191,9 @@ export function useChapterSuggestions({
     const newCursor = c + separator.length + text.length;
     setSuggestCursor(newCursor);
     setIsSuggestionMode(true);
+
+    // recompute relevance immediately now that the text has been committed
+    await fetchRelevance(newContent);
 
     await handleTriggerSuggestions(newCursor, newContent, true);
   };
@@ -184,5 +258,10 @@ export function useChapterSuggestions({
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
   };
 }

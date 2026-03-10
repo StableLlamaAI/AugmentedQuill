@@ -68,7 +68,9 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     isMobileFormatMenuOpen,
     setIsMobileFormatMenuOpen,
   } = formatControls;
-  const { handleAiAction, isAiActionLoading } = aiControls;
+  const { handleAiAction, isAiActionLoading, isWritingAvailable } = aiControls;
+  const writingUnavailableReason =
+    'This action is unavailable because no working WRITING model is configured.';
   const { appSettings, setAppSettings, modelConnectionStatus, detectedCapabilities } =
     modelControls;
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
@@ -464,9 +466,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'extend')}
-            disabled={isAiActionLoading}
+            disabled={isAiActionLoading || !isWritingAvailable}
             icon={<Wand2 size={12} />}
-            title="Extend Chapter (WRITING model)"
+            title={
+              !isWritingAvailable
+                ? writingUnavailableReason
+                : 'Extend Chapter (WRITING model)'
+            }
           >
             <span className="hidden xl:inline">Extend</span>
           </Button>
@@ -476,9 +482,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'rewrite')}
-            disabled={isAiActionLoading}
+            disabled={isAiActionLoading || !isWritingAvailable}
             icon={<FileEdit size={12} />}
-            title="Rewrite Chapter (WRITING model)"
+            title={
+              !isWritingAvailable
+                ? writingUnavailableReason
+                : 'Rewrite Chapter (WRITING model)'
+            }
           >
             <span className="hidden xl:inline">Rewrite</span>
           </Button>

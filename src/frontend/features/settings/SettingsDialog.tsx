@@ -27,7 +27,7 @@ import {
   DEFAULT_LLM_CONFIG,
 } from '../../types';
 import { api } from '../../services/api';
-import { MachineModelConfig } from '../../services/apiTypes';
+import { MachineModelConfig, ModelPresetEntry } from '../../services/apiTypes';
 import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
 import { SettingsMachine } from './settings/SettingsMachine';
@@ -42,7 +42,7 @@ interface SettingsDialogProps {
   onLoadProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, newName: string) => void;
+  onRenameProject: (id: string, newName: string, newLang?: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
   onRefreshProjects: () => void;
@@ -56,6 +56,7 @@ interface SettingsDialogProps {
     system_messages: Record<string, string>;
     user_prompts: Record<string, string>;
   };
+  projectLanguages: string[];
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -76,6 +77,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
   defaultPrompts = { system_messages: {}, user_prompts: {} },
+  projectLanguages,
 }) => {
   const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -90,6 +92,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [detectedCapabilities, setDetectedCapabilities] = useState<
     Record<string, { is_multimodal: boolean; supports_function_calling: boolean }>
   >({});
+  const [modelPresets, setModelPresets] = useState<ModelPresetEntry[]>([]);
   const [saveError, setSaveError] = useState<string>('');
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
 
@@ -113,8 +116,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       let cancelled = false;
       (async () => {
         try {
-          const machine = await api.machine.get();
+          const [machine, presetsResponse] = await Promise.all([
+            api.machine.get(),
+            api.machine.getPresets(),
+          ]);
           const openai = machine?.openai || {};
+          setModelPresets(
+            Array.isArray(presetsResponse?.presets) ? presetsResponse.presets : []
+          );
           const models = Array.isArray(openai?.models) ? openai.models : [];
           const selectedName = (openai?.selected || '') as string;
 
@@ -133,6 +142,40 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   ? Math.max(1, timeoutS) * 1000
                   : 60000,
                 modelId: String(m.model || '').trim(),
+                temperature:
+                  m.temperature === null || m.temperature === undefined
+                    ? DEFAULT_LLM_CONFIG.temperature
+                    : Number(m.temperature),
+                topP:
+                  m.top_p === null || m.top_p === undefined
+                    ? DEFAULT_LLM_CONFIG.topP
+                    : Number(m.top_p),
+                maxTokens:
+                  m.max_tokens === null || m.max_tokens === undefined
+                    ? DEFAULT_LLM_CONFIG.maxTokens
+                    : Number(m.max_tokens),
+                presencePenalty:
+                  m.presence_penalty === null || m.presence_penalty === undefined
+                    ? DEFAULT_LLM_CONFIG.presencePenalty
+                    : Number(m.presence_penalty),
+                frequencyPenalty:
+                  m.frequency_penalty === null || m.frequency_penalty === undefined
+                    ? DEFAULT_LLM_CONFIG.frequencyPenalty
+                    : Number(m.frequency_penalty),
+                stop: Array.isArray(m.stop) ? m.stop.map((entry) => String(entry)) : [],
+                seed:
+                  m.seed === null || m.seed === undefined ? undefined : Number(m.seed),
+                topK:
+                  m.top_k === null || m.top_k === undefined
+                    ? undefined
+                    : Number(m.top_k),
+                minP:
+                  m.min_p === null || m.min_p === undefined
+                    ? undefined
+                    : Number(m.min_p),
+                extraBody: String(m.extra_body || ''),
+                presetId: m.preset_id || null,
+                writingWarning: m.writing_warning || null,
                 isMultimodal: m.is_multimodal,
                 supportsFunctionCalling: m.supports_function_calling,
                 prompts: {
@@ -373,6 +416,18 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             api_key: p.apiKey || '',
             timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
             model: (p.modelId || '').trim(),
+            temperature: p.temperature,
+            top_p: p.topP,
+            max_tokens: p.maxTokens,
+            presence_penalty: p.presencePenalty,
+            frequency_penalty: p.frequencyPenalty,
+            stop: p.stop || [],
+            seed: p.seed,
+            top_k: p.topK,
+            min_p: p.minP,
+            extra_body: p.extraBody || '',
+            preset_id: p.presetId || null,
+            writing_warning: p.writingWarning || null,
             is_multimodal: p.isMultimodal,
             supports_function_calling: p.supportsFunctionCalling,
             prompt_overrides: p.prompts || {},
@@ -558,6 +613,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 activeProjectType={activeProjectType}
                 activeProjectStats={activeProjectStats}
                 theme={theme}
+                languages={projectLanguages}
               />
             )}
 
@@ -571,6 +627,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 modelStatus={modelStatus}
                 detectedCapabilities={detectedCapabilities}
                 modelLists={modelLists}
+                modelPresets={modelPresets}
                 theme={theme}
                 defaultPrompts={defaultPrompts}
                 onAddProvider={addProvider}

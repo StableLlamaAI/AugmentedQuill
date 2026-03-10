@@ -54,7 +54,7 @@ class StreamingStoryTest(TestCase):
         self._orig_unified = llm.unified_chat_stream
 
         def fake_resolve(payload, **kwargs):  # type: ignore
-            return ("https://fake/v1", None, "fake-model", 5)
+            return ("https://fake/v1", None, "fake-model", 5, "fake-model")
 
         async def fake_unified(**kwargs):  # type: ignore
             # Yield three chunks to simulate SSE deltas

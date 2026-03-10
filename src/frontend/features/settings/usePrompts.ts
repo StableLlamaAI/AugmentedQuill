@@ -15,6 +15,7 @@ import { api } from '../../services/api';
 type PromptsState = {
   system_messages: Record<string, string>;
   user_prompts: Record<string, string>;
+  languages?: string[];
 };
 
 const EMPTY_PROMPTS: PromptsState = {
@@ -32,6 +33,7 @@ export function usePrompts(storyId: string) {
         setPrompts({
           system_messages: promptsData.system_messages || {},
           user_prompts: promptsData.user_prompts || {},
+          languages: promptsData.languages,
         });
       } catch (error) {
         console.error('Failed to load prompts', error);

@@ -20,6 +20,8 @@ export const settingsApi = {
       ok: boolean;
       system_messages: Record<string, string>;
       user_prompts: Record<string, string>;
+      languages?: string[];
+      project_language?: string;
     }>(path, undefined, 'Failed to fetch prompts');
   },
 };

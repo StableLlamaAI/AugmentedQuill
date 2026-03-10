@@ -39,6 +39,8 @@ import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
+  resolveRoleAvailability,
+  supportsImageActions,
 } from './features/app/appSelectors';
 
 const App: React.FC = () => {
@@ -64,6 +66,9 @@ const App: React.FC = () => {
   } = useStory({ confirm, alert: window.alert });
 
   const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const currentChapterContext = currentChapter
+    ? { id: currentChapter.id, title: currentChapter.title }
+    : null;
   const editorRef = useRef<EditorHandle | null>(null);
   const appearanceRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +78,13 @@ const App: React.FC = () => {
 
   const { modelConnectionStatus, detectedCapabilities } =
     useProviderHealth(appSettings);
+
+  const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
+  const imageActionsAvailable = supportsImageActions(
+    appSettings,
+    detectedCapabilities,
+    modelConnectionStatus
+  );
 
   const [toolCallLoopDialog, setToolCallLoopDialog] = useState<{
     count: number;
@@ -156,6 +168,7 @@ const App: React.FC = () => {
     refreshProjects,
     isCreateProjectOpen,
     setIsCreateProjectOpen,
+    instructionLanguages,
     handleLoadProject,
     handleImportProject,
     handleCreateProject,
@@ -183,9 +196,8 @@ const App: React.FC = () => {
     currentChapter,
     story,
     prompts,
-    systemPrompt,
-    activeEditingConfig,
-    activeWritingConfig,
+    isEditingAvailable: roleAvailability.editing,
+    isWritingAvailable: roleAvailability.writing,
     updateChapter,
     setChatMessages,
     getErrorMessage,
@@ -203,12 +215,18 @@ const App: React.FC = () => {
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
   } = useChapterSuggestions({
     currentChapter,
     currentChapterId,
     story,
     systemPrompt,
     activeWritingConfig,
+    isWritingAvailable: roleAvailability.writing,
     updateChapter,
     viewMode,
     setChatMessages,
@@ -255,8 +273,10 @@ const App: React.FC = () => {
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     systemPrompt,
     activeChatConfig,
+    isChatAvailable: roleAvailability.chat,
     allowWebSearch,
     currentChapterId,
+    currentChapter: currentChapterContext,
     chatMessages,
     setChatMessages,
     isChatLoading,
@@ -296,9 +316,11 @@ const App: React.FC = () => {
           refreshProjects={refreshProjects}
           currentTheme={currentTheme}
           prompts={prompts}
+          instructionLanguages={instructionLanguages}
           isImagesOpen={isImagesOpen}
           setIsImagesOpen={setIsImagesOpen}
           updateStoryImageSettings={updateStoryImageSettings}
+          imageActionsAvailable={imageActionsAvailable}
           editorRef={editorRef}
           isCreateProjectOpen={isCreateProjectOpen}
           setIsCreateProjectOpen={setIsCreateProjectOpen}
@@ -330,7 +352,11 @@ const App: React.FC = () => {
             isMobileFormatMenuOpen,
             setIsMobileFormatMenuOpen,
           }}
-          aiControls={{ handleAiAction, isAiActionLoading }}
+          aiControls={{
+            handleAiAction,
+            isAiActionLoading,
+            isWritingAvailable: roleAvailability.writing,
+          }}
           modelControls={{
             appSettings,
             setAppSettings,
@@ -364,8 +390,14 @@ const App: React.FC = () => {
             handleReorderChapters,
             handleReorderBooks,
             handleSidebarAiAction,
+            isEditingAvailable: roleAvailability.editing,
             handleOpenImages,
             updateStoryMetadata,
+            checkedSourcebookIds: Array.from(checkedEntries),
+            onToggleSourcebook: handleToggleEntry,
+            isAutoSourcebookSelectionEnabled,
+            onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+            isSourcebookSelectionRunning,
           }}
           editorControls={{
             currentChapter,
@@ -384,6 +416,7 @@ const App: React.FC = () => {
             aiControls: {
               handleAiAction,
               isAiActionLoading,
+              isWritingAvailable: roleAvailability.writing,
             },
             setActiveFormats,
             showWhitespace,
@@ -393,6 +426,7 @@ const App: React.FC = () => {
             isChatOpen,
             chatMessages,
             isChatLoading,
+            isChatAvailable: roleAvailability.chat,
             systemPrompt,
             handleSendMessage,
             handleStopChat,
@@ -413,6 +447,7 @@ const App: React.FC = () => {
             allowWebSearch,
             setAllowWebSearch,
           }}
+          instructionLanguages={instructionLanguages}
         />
 
         <DebugLogs

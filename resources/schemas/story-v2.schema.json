@@ -14,6 +14,11 @@
       "enum": ["novel", "series", "short-story"],
       "description": "The type of the project"
     },
+    "language": {
+      "type": "string",
+      "description": "Two‑letter language code used for prompt selection",
+      "default": "en"
+    },
     "chapters": {
       "type": "array",
       "items": {

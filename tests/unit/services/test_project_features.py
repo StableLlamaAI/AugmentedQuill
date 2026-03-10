@@ -45,8 +45,16 @@ class ProjectFeaturesTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
+    def test_project_language_is_recorded(self):
+        # language provided during creation should be persisted in story.json
+        create_project("lang_proj", project_type="novel", language="es")
+        select_project("lang_proj")
+        active = get_active_project_dir()
+        story = load_story_config(active / "story.json")
+        self.assertEqual(story.get("language"), "es")
+
     def test_convert_short_story_to_novel(self):
-        # 1. Create Short Story project
+        # 1. Create Short Story project (default language should be english)
         create_project("test_sm", project_type="short-story")
         select_project("test_sm")
         active = get_active_project_dir()

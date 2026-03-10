@@ -10,16 +10,15 @@
 from __future__ import annotations
 
 from typing import Any, Dict, AsyncIterator
-import datetime
 import json as _json
 import os
 
 import httpx
 
 from augmentedquill.core.config import (
-    CONFIG_DIR,
     load_machine_config,
 )
+from augmentedquill.services.llm.llm_http_ops import logged_stream_request
 from augmentedquill.utils.stream_helpers import ChannelFilter
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
@@ -50,15 +49,20 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
         return
 
     # 2. Check machine.json models
-    config_path = os.path.join(CONFIG_DIR, "machine.json")
-    machine_config = load_machine_config(config_path)
-    if machine_config:
-        for provider in ["openai", "anthropic", "google"]:
-            all_models = machine_config.get(provider, {}).get("models", [])
-            for model in all_models:
-                model_url = model.get("base_url")
-                if model_url and base_url == model_url:
-                    return
+    machine_config = load_machine_config()
+    if not machine_config:
+        from augmentedquill.services.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    for provider in ["openai", "anthropic", "google"]:
+        all_models = machine_config.get(provider, {}).get("models", [])
+        for model in all_models:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
+                return
 
     # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
     trusted_locals = {
@@ -82,21 +86,38 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
 
 async def unified_chat_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
-    log_entry: dict | None = None,
+    extra_body: dict | None = None,
     skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     """Unified Chat Stream."""
+    from augmentedquill.services.llm.llm_completion_ops import (
+        _resolve_machine_model_cfg,
+        _resolve_temperature_max_tokens,
+        _build_model_extra_body,
+    )
+
     _validate_base_url(base_url, skip_validation=skip_validation)
+
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
+    )
+
+    merged_extra_body = dict(extra_body or {})
+    merged_extra_body.update(_build_model_extra_body(model_cfg))
+
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -110,6 +131,8 @@ async def unified_chat_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    if merged_extra_body:
+        body.update(merged_extra_body)
 
     if supports_function_calling and tools and tool_choice != "none":
         body["tools"] = tools
@@ -120,6 +143,7 @@ async def unified_chat_stream(
 
     for attempt in range(attempts):
         is_fallback = attempt == 1
+        request_log_entry: dict | None = None
         channel_filter = ChannelFilter()
         sent_tool_call_ids = set()
         full_content = ""
@@ -163,188 +187,181 @@ async def unified_chat_stream(
                 )
 
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(float(timeout_s or 60))
-            ) as client:
-                async with client.stream(
-                    "POST", url, headers=headers, json=current_body
-                ) as resp:
-                    if log_entry:
-                        log_entry["response"]["status_code"] = resp.status_code
+            async with logged_stream_request(
+                caller_id=caller_id,
+                method="POST",
+                url=url,
+                headers=headers,
+                body=current_body,
+                timeout=httpx.Timeout(float(timeout_s or 60)),
+            ) as (resp, request_log_entry):
 
-                    if resp.status_code >= 400:
-                        error_content = await resp.aread()
-                        if not is_fallback and supports_function_calling:
-                            err_text_check = error_content.decode(
-                                "utf-8", errors="ignore"
-                            )
-                            if "tool choice requires" in err_text_check:
-                                continue
-
-                        if log_entry:
-                            log_entry["timestamp_end"] = (
-                                datetime.datetime.now().isoformat()
-                            )
-                        try:
-                            error_data = _json.loads(error_content)
-                            if log_entry:
-                                log_entry["response"]["error"] = error_data
-                            yield {
-                                "error": "Upstream error",
-                                "status": resp.status_code,
-                                "data": error_data,
-                            }
-                        except Exception:
-                            err_text = error_content.decode("utf-8", errors="ignore")
-                            if log_entry:
-                                log_entry["response"]["error"] = err_text
-                            yield {
-                                "error": "Upstream error",
-                                "status": resp.status_code,
-                                "data": err_text,
-                            }
-                        return
-
-                    content_type = resp.headers.get("content-type", "")
-                    if "text/event-stream" not in content_type:
-                        try:
-                            response_data = await resp.json()
-                            if log_entry:
-                                log_entry["response"]["body"] = response_data
-                                log_entry["timestamp_end"] = (
-                                    datetime.datetime.now().isoformat()
-                                )
-
-                            choices = response_data.get("choices", [])
-                            if choices:
-                                choice = choices[0]
-                                message = choice.get("message", {})
-                                content = message.get("content", "")
-
-                                if content:
-                                    events = parse_stream_channel_fragments(
-                                        channel_filter.feed(content), sent_tool_call_ids
-                                    )
-                                    for event in events:
-                                        yield event
-
-                                    parsed_full = parse_complete_assistant_output(
-                                        content,
-                                    )
-                                    parsed_calls = parsed_full["tool_calls"]
-                                    if parsed_calls:
-                                        new_calls = [
-                                            c
-                                            for c in parsed_calls
-                                            if c.get("id") not in sent_tool_call_ids
-                                        ]
-                                        if new_calls:
-                                            for call in new_calls:
-                                                call_id = call.get("id")
-                                                if isinstance(call_id, str):
-                                                    sent_tool_call_ids.add(call_id)
-                                            yield {"tool_calls": new_calls}
-
-                                if message.get("tool_calls"):
-                                    yield {"tool_calls": message["tool_calls"]}
-
-                            yield {"done": True}
-                        except Exception as e:
-                            yield {
-                                "error": "Failed to parse response",
-                                "message": f"An error occurred while processing the response: {e}",
-                            }
-                        break
-
-                    async for line in resp.aiter_lines():
-                        if not line.strip():
+                if resp.status_code >= 400:
+                    error_content = await resp.aread()
+                    if not is_fallback and supports_function_calling:
+                        err_text_check = error_content.decode("utf-8", errors="ignore")
+                        if "tool choice requires" in err_text_check:
                             continue
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            if data_str.strip() == "[DONE]":
-                                if full_content:
-                                    parsed_calls = parse_complete_assistant_output(
-                                        full_content
-                                    )["tool_calls"]
-                                    if parsed_calls:
-                                        new_calls = [
-                                            c
-                                            for c in parsed_calls
-                                            if c.get("id") not in sent_tool_call_ids
-                                        ]
-                                        if new_calls:
-                                            for call in new_calls:
-                                                call_id = call.get("id")
-                                                if isinstance(call_id, str):
-                                                    sent_tool_call_ids.add(call_id)
-                                            yield {"tool_calls": new_calls}
 
+                    try:
+                        error_data = _json.loads(error_content)
+                        if request_log_entry:
+                            request_log_entry["response"]["error"] = error_data
+                        yield {
+                            "error": "Upstream error",
+                            "status": resp.status_code,
+                            "data": error_data,
+                        }
+                    except Exception:
+                        err_text = error_content.decode("utf-8", errors="ignore")
+                        if request_log_entry:
+                            request_log_entry["response"]["error"] = err_text
+                        yield {
+                            "error": "Upstream error",
+                            "status": resp.status_code,
+                            "data": err_text,
+                        }
+                    return
+
+                content_type = resp.headers.get("content-type", "")
+                if "text/event-stream" not in content_type:
+                    try:
+                        response_data = await resp.json()
+                        if request_log_entry:
+                            request_log_entry["response"]["body"] = response_data
+
+                        choices = response_data.get("choices", [])
+                        if choices:
+                            choice = choices[0]
+                            message = choice.get("message", {})
+                            content = message.get("content", "")
+
+                            if content:
                                 events = parse_stream_channel_fragments(
-                                    channel_filter.flush(), sent_tool_call_ids
+                                    channel_filter.feed(content), sent_tool_call_ids
                                 )
                                 for event in events:
                                     yield event
 
-                                if log_entry:
-                                    log_entry["timestamp_end"] = (
-                                        datetime.datetime.now().isoformat()
-                                    )
-                                    # Force re-logging on completion so we get full_content and chunks
-                                    from augmentedquill.services.llm.llm_logging import (
-                                        add_llm_log,
-                                    )
-
-                                    add_llm_log(log_entry)
-
-                                yield {"done": True}
-                                break
-
-                            try:
-                                chunk = _json.loads(data_str)
-                                if log_entry:
-                                    log_entry["response"]["chunks"].append(chunk)
-
-                                choices = chunk.get("choices", [])
-                                if not choices:
-                                    continue
-                                delta = choices[0].get("delta", {})
-
-                                reasoning = delta.get("reasoning_content") or delta.get(
-                                    "reasoning"
+                                parsed_full = parse_complete_assistant_output(
+                                    content,
                                 )
-                                if reasoning:
-                                    if log_entry:
-                                        if "thinking" not in log_entry["response"]:
-                                            log_entry["response"]["thinking"] = ""
-                                        log_entry["response"]["thinking"] += reasoning
-                                    yield {"thinking": reasoning}
+                                parsed_calls = parsed_full["tool_calls"]
+                                if parsed_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
+                                                sent_tool_call_ids.add(call_id)
+                                        yield {"tool_calls": new_calls}
 
-                                content = delta.get("content")
-                                if content:
-                                    full_content += content
-                                    if log_entry:
-                                        log_entry["response"]["full_content"] += content
+                            if message.get("tool_calls"):
+                                yield {"tool_calls": message["tool_calls"]}
 
-                                    events = parse_stream_channel_fragments(
-                                        channel_filter.feed(content),
-                                        sent_tool_call_ids,
-                                    )
-                                    for event in events:
-                                        yield event
-
-                                tc = delta.get("tool_calls")
-                                if tc:
-                                    yield {"tool_calls": tc}
-
-                            except Exception:
-                                continue
+                        yield {"done": True}
+                    except Exception as e:
+                        if request_log_entry:
+                            request_log_entry["response"]["error_detail"] = str(e)
+                            request_log_entry["response"][
+                                "error"
+                            ] = "Failed to parse non-stream response"
+                        yield {
+                            "error": "Failed to parse response",
+                            "message": f"An error occurred while processing the response: {e}",
+                        }
                     break
 
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            if full_content:
+                                parsed_calls = parse_complete_assistant_output(
+                                    full_content
+                                )["tool_calls"]
+                                if parsed_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
+                                                sent_tool_call_ids.add(call_id)
+                                        yield {"tool_calls": new_calls}
+
+                            events = parse_stream_channel_fragments(
+                                channel_filter.flush(), sent_tool_call_ids
+                            )
+                            for event in events:
+                                yield event
+
+                            yield {"done": True}
+                            break
+
+                        try:
+                            chunk = _json.loads(data_str)
+                            if request_log_entry:
+                                request_log_entry["response"]["chunks"].append(chunk)
+
+                            choices = chunk.get("choices", [])
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {})
+
+                            reasoning = delta.get("reasoning_content") or delta.get(
+                                "reasoning"
+                            )
+                            if reasoning:
+                                if request_log_entry:
+                                    if "thinking" not in request_log_entry["response"]:
+                                        request_log_entry["response"]["thinking"] = ""
+                                    request_log_entry["response"][
+                                        "thinking"
+                                    ] += reasoning
+                                yield {"thinking": reasoning}
+
+                            content = delta.get("content")
+                            if content:
+                                full_content += content
+                                if request_log_entry:
+                                    request_log_entry["response"][
+                                        "full_content"
+                                    ] += content
+
+                                events = parse_stream_channel_fragments(
+                                    channel_filter.feed(content),
+                                    sent_tool_call_ids,
+                                )
+                                for event in events:
+                                    yield event
+
+                            tc = delta.get("tool_calls")
+                            if tc:
+                                yield {"tool_calls": tc}
+
+                        except Exception:
+                            continue
+                break
+
         except Exception as e:
-            if log_entry:
-                log_entry["response"]["error_detail"] = str(e)
-                log_entry["response"][
+            err_text = str(e).strip() or f"{type(e).__name__}: {repr(e)}"
+            if request_log_entry:
+                request_log_entry["response"]["error_detail"] = err_text
+                request_log_entry["response"][
                     "error"
-                ] = f"An internal error occurred during the LLM request: {e}"
-            yield {"error": "Connection error", "message": f"An error occurred: {e}."}
+                ] = f"An internal error occurred during the LLM request: {err_text}"
+            yield {
+                "error": "Connection error",
+                "message": f"An error occurred: {err_text}.",
+            }
             break

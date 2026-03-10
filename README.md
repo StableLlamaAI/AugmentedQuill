@@ -81,11 +81,13 @@ If you want to modify the frontend and see changes on the fly:
 
 Configuration is JSON-based with environment variable precedence and interpolation.
 
-- Machine-specific config (API credentials/endpoints): resources/config/machine.json
-- Story-specific config (active project): resources/config/story.json
+- Runtime machine config (local user setting, not tracked): data/config/machine.json
+- Runtime story fallback config (local user setting, not tracked): data/config/story.json
+- Runtime projects registry (local user setting, not tracked): data/config/projects.json
+- Project-shipped model presets database (tracked): resources/config/model_presets.json
 - Environment variables always override JSON values. JSON may include placeholders like ${OPENAI_API_KEY}.
 
-Sample files can be found under resources/config/examples/:
+Sample files can be found under resources/config/examples/ (tracked and for inspiration only; the app does not auto-load them as runtime config):
 
 - resources/config/examples/machine.json
 - resources/config/examples/story.json

@@ -29,10 +29,14 @@ export const projectsApi = {
     );
   },
 
-  create: async (name: string, type: 'short-story' | 'novel' | 'series') => {
+  create: async (
+    name: string,
+    type: 'short-story' | 'novel' | 'series',
+    language?: string
+  ) => {
     return postJson<ProjectMutationResponse>(
       '/projects/create',
-      { name, type },
+      { name, type, ...(language ? { language } : {}) },
       'Failed to create project'
     );
   },

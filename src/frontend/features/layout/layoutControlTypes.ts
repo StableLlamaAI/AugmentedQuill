@@ -66,6 +66,7 @@ export type HeaderAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
 };
 
 export type HeaderModelControls = {
@@ -116,22 +117,29 @@ export type MainSidebarControls = {
   handleReorderChapters: (chapterIds: number[], bookId?: string) => Promise<void>;
   handleReorderBooks: (bookIds: string[]) => Promise<void>;
   handleSidebarAiAction: (
-    type: 'chapter' | 'book',
+    type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void
   ) => Promise<string | undefined>;
+  isEditingAvailable: boolean;
   handleOpenImages: () => void;
+  // story metadata updates now include optional language so that the UI
+  // can propagate project language changes from the metadata editor.
   updateStoryMetadata: (
-    updates: Partial<{
-      title: string;
-      summary: string;
-      styleTags: string[];
-      notes: string;
-      private_notes: string;
-      conflicts: string[];
-    }>
+    title: string,
+    summary: string,
+    tags: string[],
+    notes?: string,
+    private_notes?: string,
+    language?: string
   ) => Promise<void>;
+  // optional sourcebook relevance controls (provided by suggestions hook)
+  checkedSourcebookIds?: string[];
+  onToggleSourcebook?: (id: string, checked: boolean) => void;
+  isAutoSourcebookSelectionEnabled?: boolean;
+  onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
+  isSourcebookSelectionRunning?: boolean;
 };
 
 export type MainEditorSuggestionControls = {
@@ -156,6 +164,7 @@ export type MainEditorAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
 };
 
 export type MainEditorControls = {
@@ -175,6 +184,7 @@ export type MainChatControls = {
   isChatOpen: boolean;
   chatMessages: ChatMessage[];
   isChatLoading: boolean;
+  isChatAvailable: boolean;
   systemPrompt: string;
   handleSendMessage: (text: string) => Promise<void>;
   handleStopChat: () => void;
