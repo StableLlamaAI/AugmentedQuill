@@ -12,6 +12,7 @@
 import React from 'react';
 import { Ghost, Trash2, X } from 'lucide-react';
 import { ChatSession } from '../../../types';
+import { useTheme } from '../../layout/ThemeContext';
 
 type ChatHistoryPanelProps = {
   sessions: ChatSession[];
@@ -34,12 +35,19 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
   onDeleteAllSessions,
   onClose,
 }) => {
+  const { isLight } = useTheme();
   const reason =
     disabledReason ||
     'Chat is unavailable because no working CHAT model is configured.';
 
   return (
-    <div className="p-4 border-b max-h-60 overflow-y-auto bg-brand-gray-100 dark:bg-brand-gray-900 border-brand-gray-200 dark:border-brand-gray-800">
+    <div
+      className={`p-4 border-b max-h-60 overflow-y-auto ${
+        isLight
+          ? 'bg-brand-gray-100 border-brand-gray-200'
+          : 'bg-brand-gray-900 border-brand-gray-800'
+      }`}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-brand-gray-500">
@@ -79,8 +87,12 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
               key={session.id}
               className={`group flex items-center justify-between p-2 rounded text-sm cursor-pointer transition-colors ${
                 currentSessionId === session.id
-                  ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600 font-medium'
-                  : 'hover:bg-brand-gray-200/50 dark:hover:bg-brand-gray-800/50'
+                  ? isLight
+                    ? 'bg-brand-gray-200 text-brand-600 font-medium'
+                    : 'bg-brand-gray-800 text-brand-300 font-medium'
+                  : isLight
+                    ? 'hover:bg-brand-gray-200/50'
+                    : 'hover:bg-brand-gray-800/50'
               } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (isDisabled) return;
