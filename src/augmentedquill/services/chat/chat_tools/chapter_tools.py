@@ -371,3 +371,154 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
 
     mutations["story_changed"] = True
     return {"ok": True, "message": "Chapter deleted"}
+
+
+class CallWritingLlmParams(BaseModel):
+    instruction: str = Field(
+        ...,
+        description="The task for the WRITING LLM (e.g. 'Rewrite this paragraph to be more descriptive').",
+    )
+    context: str = Field(
+        ..., description="The text context the WRITING LLM needs to operate on."
+    )
+
+
+@chat_tool(
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated."
+)
+async def call_writing_llm(
+    params: CallWritingLlmParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="WRITING"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a skilled novelist. Provide the exact text requested without explanations.",
+        },
+        {
+            "role": "user",
+            "content": f"Instruction:\n{params.instruction}\n\nContext:\n{params.context}",
+        },
+    ]
+
+    response = await llm.unified_chat_complete(
+        caller_id="chat_tools.call_writing_llm",
+        messages=messages,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        model_name=model_name,
+    )
+    return {"generated_text": response.get("content", "")}
+
+
+class CallEditingAssistantParams(BaseModel):
+    task: str = Field(
+        ...,
+        description="The task the user wants the editor to perform (e.g., 'Fix the grammar in Chapter 1', 'Rewrite paragraph 2 to be more descriptive').",
+    )
+
+
+@chat_tool(
+    description="Delegate a complex story editing, text revision, or structural task to the EDITING LLM. Use this whenever the user asks for direct editing, fixing, rewriting or evaluating."
+)
+async def call_editing_assistant(
+    params: CallEditingAssistantParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+    from augmentedquill.services.chat.chat_tool_decorator import (
+        execute_registered_tool,
+        get_registered_tool_schemas,
+    )
+    from augmentedquill.core.prompts import (
+        load_model_prompt_overrides,
+        get_system_message,
+    )
+    from augmentedquill.core.config import load_machine_config, BASE_DIR
+    import json
+
+    # Resolve EDITING model
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="EDITING"
+    )
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    sys_msg = get_system_message("editing_llm", model_overrides, language="en")
+
+    messages = [
+        {"role": "system", "content": sys_msg},
+        {
+            "role": "user",
+            "content": f"Please perform the following editing task:\n{params.task}",
+        },
+    ]
+
+    all_tools = get_registered_tool_schemas()
+    tools = [
+        t
+        for t in all_tools
+        if t.get("function", {}).get("name") != "call_editing_assistant"
+    ]
+
+    final_output = ""
+    for _ in range(7):  # max 7 steps
+        res = await llm.unified_chat_complete(
+            caller_id="chat_tools.call_editing_assistant",
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+            model_name=model_name,
+            tools=tools,
+        )
+
+        tool_calls = res.get("tool_calls", [])
+        content = res.get("content", "")
+
+        assistant_msg = {"role": "assistant"}
+        if content:
+            assistant_msg["content"] = content
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+
+        messages.append(assistant_msg)
+
+        if not tool_calls:
+            final_output = content
+            break
+
+        for tcall in tool_calls:
+            func = tcall.get("function", {})
+            f_name = func.get("name")
+            f_args = func.get("arguments", "{}")
+            if isinstance(f_args, str):
+                try:
+                    f_args = json.loads(f_args)
+                except Exception:
+                    f_args = {}
+            tcall_id = tcall.get("id")
+
+            tool_res = await execute_registered_tool(
+                f_name, f_args, tcall_id, payload, mutations
+            )
+            if "role" not in tool_res:
+                tool_res = {
+                    "role": "tool",
+                    "tool_call_id": tcall_id,
+                    "name": f_name,
+                    "content": json.dumps(tool_res),
+                }
+            messages.append(tool_res)
+
+    if not final_output:
+        final_output = "Task completed using tools."
+
+    return {"message": "Editing Assistant finished", "response": final_output}

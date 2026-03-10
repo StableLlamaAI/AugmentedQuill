@@ -53,6 +53,14 @@ export const mapSelectStoryToState = (
     chapters
   );
 
+  const chaptersWithPreservedState = chapters.map((c) => {
+    const prev = previousChapters.find((pc) => pc.id === c.id);
+    if (prev) {
+      return { ...c, content: prev.content };
+    }
+    return c;
+  });
+
   return {
     id: projectId,
     title: story.project_title || projectId,
@@ -60,7 +68,7 @@ export const mapSelectStoryToState = (
     styleTags: story.tags || [],
     image_style: story.image_style || '',
     image_additional_info: story.image_additional_info || '',
-    chapters,
+    chapters: chaptersWithPreservedState,
     projectType: story.project_type || 'novel',
     language: story.language || 'en',
     books: story.books || [],

@@ -266,7 +266,14 @@ class ChatToolContractsTest(TestCase):
         async def fake_image_description(filename: str, payload: dict):
             return "Generated image description"
 
+        async def fake_unified_chat_complete(**kwargs):
+            return {"content": "Mocked WRITING response", "ok": True}
+
         with (
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                side_effect=fake_unified_chat_complete,
+            ),
             patch(
                 "augmentedquill.services.chat.chat_tools.chapter_tools.generate_chapter_summary",
                 side_effect=fake_generate_summary,
