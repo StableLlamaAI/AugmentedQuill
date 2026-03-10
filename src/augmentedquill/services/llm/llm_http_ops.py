@@ -114,6 +114,7 @@ def _finalize_log_entry(
 async def logged_request(
     *,
     caller_id: str,
+    model_type: str | None = None,
     method: str,
     url: str,
     headers: dict[str, str] | None,
@@ -137,6 +138,7 @@ async def logged_request(
         include_response=False,
     )
     log_entry["caller_id"] = caller_id
+    log_entry["model_type"] = model_type
     add_llm_log(log_entry)
 
     try:
@@ -178,6 +180,7 @@ async def logged_request(
 async def logged_stream_request(
     *,
     caller_id: str,
+    model_type: str | None = None,
     method: str,
     url: str,
     headers: dict[str, str] | None,
@@ -195,6 +198,7 @@ async def logged_stream_request(
         streaming=True,
     )
     log_entry["caller_id"] = caller_id
+    log_entry["model_type"] = model_type
     add_llm_log(log_entry)
 
     try:

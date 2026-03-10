@@ -120,6 +120,7 @@ def resolve_openai_credentials(
 async def unified_chat_stream(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -139,6 +140,7 @@ async def unified_chat_stream(
     _llm_stream_ops.httpx = httpx
     async for chunk in _llm_stream_ops.unified_chat_stream(
         caller_id=caller_id,
+        model_type=model_type,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -159,6 +161,7 @@ async def unified_chat_stream(
 async def unified_chat_complete(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -177,6 +180,7 @@ async def unified_chat_complete(
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.unified_chat_complete(
         caller_id=caller_id,
+        model_type=model_type,
         messages=messages,
         base_url=base_url,
         api_key=api_key,

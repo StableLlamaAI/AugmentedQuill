@@ -441,6 +441,7 @@ async def call_writing_llm(
 
     response = await llm.unified_chat_complete(
         caller_id="chat_tools.call_writing_llm",
+        model_type="WRITING",
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -505,6 +506,7 @@ async def call_editing_assistant(
         try:
             res = await llm.unified_chat_complete(
                 caller_id="chat_tools.call_editing_assistant",
+                model_type="EDITING",
                 messages=messages,
                 base_url=base_url,
                 api_key=api_key,

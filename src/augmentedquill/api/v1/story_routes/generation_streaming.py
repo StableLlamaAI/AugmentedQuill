@@ -53,6 +53,7 @@ async def _create_gen_source_pure(prepared: dict):
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
         model_name=prepared.get("model_name"),
+        model_type=prepared.get("model_type"),
     ):
         yield chunk
 
@@ -129,12 +130,18 @@ async def api_story_sourcebook_relevance(request: Request):
             user_prompt_overrides={},
         )
 
-        base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
-            resolve_model_runtime(
-                payload=payload,
-                model_type="WRITING",
-                base_dir=BASE_DIR,
-            )
+        (
+            base_url,
+            api_key,
+            model_id,
+            timeout_s,
+            model_name,
+            model_overrides,
+            _model_type,
+        ) = resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
         )
         # guarantee at least 120 seconds for background relevance requests to
         # reduce spurious ReadTimeouts when using slow reasoning models.
@@ -149,6 +156,7 @@ async def api_story_sourcebook_relevance(request: Request):
         try:
             res = await llm.unified_chat_complete(
                 caller_id="api.story.sourcebook_relevance",
+                model_type="WRITING",
                 messages=[
                     {
                         "role": "system",
@@ -229,12 +237,18 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         summary = chapters_data[pos].get("summary", "")
         title = chapters_data[pos].get("title") or path.name
 
-        base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
-            resolve_model_runtime(
-                payload=payload,
-                model_type="WRITING",
-                base_dir=BASE_DIR,
-            )
+        (
+            base_url,
+            api_key,
+            model_id,
+            timeout_s,
+            model_name,
+            model_overrides,
+            _model_type,
+        ) = resolve_model_runtime(
+            payload=payload,
+            model_type="WRITING",
+            base_dir=BASE_DIR,
         )
 
         context = gather_writing_context(

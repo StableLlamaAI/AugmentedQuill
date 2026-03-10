@@ -23,6 +23,7 @@ async def stream_unified_chat_content(
     model_id: str,
     timeout_s: int,
     model_name: str | None = None,
+    model_type: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream Unified Chat Content."""
     async for chunk_dict in llm.unified_chat_stream(
@@ -33,6 +34,7 @@ async def stream_unified_chat_content(
         model_id=model_id,
         timeout_s=timeout_s,
         model_name=model_name,
+        model_type=model_type,
     ):
         chunk = chunk_dict.get("content", "")
         if chunk:

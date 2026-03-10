@@ -169,7 +169,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     if not chapter_summaries:
         raise BadRequestError("No chapter summaries available")
 
-    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
             model_type="EDITING",
@@ -191,6 +191,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "api_key": api_key,
         "model_id": model_id,
         "model_name": model_name,
+        "model_type": model_type,
         "timeout_s": timeout_s,
     }
 
@@ -212,7 +213,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     ensure_chapter_slot(chapters_data, pos)
     current_summary = chapters_data[pos].get("summary", "")
 
-    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
             model_type="EDITING",
@@ -238,6 +239,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "api_key": api_key,
         "model_id": model_id,
         "model_name": model_name,
+        "model_type": model_type,
         "timeout_s": timeout_s,
     }
 
@@ -266,7 +268,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         payload=payload,
     )
 
-    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
             model_type="WRITING",
@@ -293,6 +295,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         "api_key": api_key,
         "model_id": model_id,
         "model_name": model_name,
+        "model_type": model_type,
         "timeout_s": timeout_s,
     }
 
@@ -322,7 +325,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         payload=payload,
     )
 
-    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
             model_type="WRITING",
@@ -350,6 +353,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         "api_key": api_key,
         "model_id": model_id,
         "model_name": model_name,
+        "model_type": model_type,
         "timeout_s": timeout_s,
     }
 
@@ -385,7 +389,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     )
 
     model_type = "EDITING" if target == "summary" else "WRITING"
-    base_url, api_key, model_id, timeout_s, model_name, model_overrides = (
+    base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
             model_type=model_type,
@@ -427,5 +431,6 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "api_key": api_key,
         "model_id": model_id,
         "model_name": model_name,
+        "model_type": model_type,
         "timeout_s": timeout_s,
     }

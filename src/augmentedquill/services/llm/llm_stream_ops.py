@@ -87,6 +87,7 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
 async def unified_chat_stream(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -189,6 +190,7 @@ async def unified_chat_stream(
         try:
             async with logged_stream_request(
                 caller_id=caller_id,
+                model_type=model_type,
                 method="POST",
                 url=url,
                 headers=headers,
