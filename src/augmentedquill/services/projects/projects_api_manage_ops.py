@@ -35,6 +35,29 @@ from augmentedquill.services.projects.projects import (
     select_project,
 )
 
+_BOOK_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_RESTORE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    base_resolved = base_dir.resolve()
+    candidate = base_resolved.joinpath(*parts).resolve()
+    if not candidate.is_relative_to(base_resolved):
+        raise BadRequestError("Invalid path component")
+    return candidate
+
+
+def _validate_book_id(book_id: str) -> str:
+    if not _BOOK_ID_PATTERN.fullmatch(book_id or ""):
+        raise BadRequestError("Invalid book_id")
+    return book_id
+
+
+def _validate_restore_id(restore_id: str) -> str:
+    if not _RESTORE_ID_PATTERN.fullmatch(restore_id or ""):
+        raise BadRequestError("Invalid restore_id")
+    return restore_id
+
 
 def normalize_registry(reg: dict) -> dict:
     cur = reg.get("current") or ""
@@ -204,16 +227,17 @@ def _deleted_books_dir(active: Path) -> Path:
 
 
 def _snapshot_book_for_restore(active: Path, story: dict, book_id: str) -> str:
+    safe_book_id = _validate_book_id(str(book_id))
     books = story.get("books", [])
     target_idx = next(
-        (idx for idx, book in enumerate(books) if str(book.get("id")) == str(book_id)),
+        (idx for idx, book in enumerate(books) if str(book.get("id")) == safe_book_id),
         -1,
     )
     if target_idx < 0:
         return ""
 
     target_book = books[target_idx]
-    book_dir = active / "books" / str(book_id)
+    book_dir = _safe_child_path(active, "books", safe_book_id)
     files: dict[str, str] = {}
     if book_dir.exists():
         for file_path in book_dir.rglob("*"):
@@ -224,12 +248,12 @@ def _snapshot_book_for_restore(active: Path, story: dict, book_id: str) -> str:
     restore_id = uuid4().hex
     snapshot = {
         "restore_id": restore_id,
-        "book_id": str(book_id),
+        "book_id": safe_book_id,
         "book": target_book,
         "index": target_idx,
         "files": files,
     }
-    (_deleted_books_dir(active) / f"{restore_id}.json").write_text(
+    _safe_child_path(_deleted_books_dir(active), f"{restore_id}.json").write_text(
         json.dumps(snapshot), encoding="utf-8"
     )
     return restore_id
@@ -239,6 +263,7 @@ def delete_book_response(book_id: str) -> JSONResponse:
     """Delete Book Response."""
     if not book_id:
         raise BadRequestError("book_id is required")
+    book_id = _validate_book_id(book_id)
 
     active = get_active_project_dir()
     if not active:
@@ -248,7 +273,7 @@ def delete_book_response(book_id: str) -> JSONResponse:
     story = load_story_config(story_path) or {}
     books = story.get("books", [])
 
-    exists = any(str(b.get("id")) == str(book_id) for b in books)
+    exists = any(str(b.get("id")) == book_id for b in books)
     if not exists:
         return JSONResponse(
             status_code=404, content={"ok": False, "detail": "Book not found"}
@@ -259,7 +284,7 @@ def delete_book_response(book_id: str) -> JSONResponse:
     story["books"] = [b for b in books if str(b.get("id")) != str(book_id)]
     save_story_config(story_path, story)
 
-    book_dir = active / "books" / book_id
+    book_dir = _safe_child_path(active, "books", book_id)
     if book_dir.exists():
         shutil.rmtree(book_dir)
 
@@ -278,12 +303,13 @@ def restore_book_response(restore_id: str) -> JSONResponse:
     """Restore a previously deleted book from a snapshot."""
     if not restore_id:
         raise BadRequestError("restore_id is required")
+    restore_id = _validate_restore_id(restore_id)
 
     active = get_active_project_dir()
     if not active:
         raise BadRequestError("No active project")
 
-    snapshot_path = _deleted_books_dir(active) / f"{restore_id}.json"
+    snapshot_path = _safe_child_path(_deleted_books_dir(active), f"{restore_id}.json")
     if not snapshot_path.exists():
         return JSONResponse(
             status_code=404,
@@ -317,7 +343,7 @@ def restore_book_response(restore_id: str) -> JSONResponse:
     story["books"] = books
     save_story_config(story_path, story)
 
-    book_dir = active / "books" / book_id
+    book_dir = _safe_child_path(active, "books", book_id)
     book_dir.mkdir(parents=True, exist_ok=True)
     for rel, encoded in files.items():
         target = (book_dir / rel).resolve()

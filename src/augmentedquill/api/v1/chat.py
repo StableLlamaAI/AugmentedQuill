@@ -12,6 +12,7 @@ API endpoints for chat sessions and conversational interactions with the LLM wri
 
 import datetime
 import base64
+import re
 import augmentedquill.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -56,6 +57,21 @@ proxy_openai_models = _chat_api_proxy_ops.proxy_openai_models
 httpx = _chat_api_proxy_ops.httpx
 
 _CHAT_TOOL_BATCH_DIR = ".aq_history/chat_tool_batches"
+_BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+
+
+def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    base_resolved = base_dir.resolve()
+    candidate = base_resolved.joinpath(*parts).resolve()
+    if not candidate.is_relative_to(base_resolved):
+        raise HTTPException(status_code=400, detail="Invalid path component")
+    return candidate
+
+
+def _validated_batch_id(batch_id: str) -> str:
+    if not _BATCH_ID_PATTERN.fullmatch(batch_id or ""):
+        raise HTTPException(status_code=400, detail="Invalid batch id")
+    return batch_id
 
 
 def _iter_project_files(project_dir: Path):
@@ -84,7 +100,8 @@ def _capture_project_snapshot(project_dir: Path) -> Dict[str, str]:
 
 
 def _snapshot_storage_dir(project_dir: Path, batch_id: str) -> Path:
-    return project_dir / _CHAT_TOOL_BATCH_DIR / batch_id
+    safe_batch_id = _validated_batch_id(batch_id)
+    return _safe_child_path(project_dir, _CHAT_TOOL_BATCH_DIR, safe_batch_id)
 
 
 def _store_chat_tool_batch_snapshot(
