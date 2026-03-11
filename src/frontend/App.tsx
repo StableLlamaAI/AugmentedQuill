@@ -423,6 +423,7 @@ const App: React.FC = () => {
     selectChapter,
     setIsSidebarOpen,
     setEditorSettings,
+    story,
     currentProjectType: story.projectType,
     refreshStory,
     getErrorMessage,
@@ -584,7 +585,7 @@ const App: React.FC = () => {
             isAutoSourcebookSelectionEnabled,
             onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
             isSourcebookSelectionRunning,
-            onSourcebookMutated: (label: string) => refreshStory(label),
+            onSourcebookMutated: pushExternalHistoryEntry,
           }}
           editorControls={{
             currentChapter,

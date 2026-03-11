@@ -25,6 +25,7 @@ type UseAppUiActionsParams = {
   selectChapter: (id: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
+  story: StoryState;
   currentProjectType: StoryState['projectType'];
   refreshStory: (historyLabel?: string) => Promise<void>;
   getErrorMessage: (error: unknown, fallback: string) => string;
@@ -43,6 +44,7 @@ export function useAppUiActions({
   selectChapter,
   setIsSidebarOpen,
   setEditorSettings,
+  story,
   currentProjectType,
   refreshStory,
   getErrorMessage,
@@ -99,8 +101,22 @@ export function useAppUiActions({
 
   const handleBookCreate = async (title: string) => {
     try {
-      await api.books.create(title);
-      await refreshStory(`Create book: ${title}`);
+      const created = await api.books.create(title);
+      let createdBookId = created.book_id || '';
+      await refreshStory();
+      recordHistoryEntry?.({
+        label: `Create book: ${title}`,
+        onUndo: async () => {
+          if (!createdBookId) return;
+          await api.books.delete(createdBookId);
+          await refreshStory();
+        },
+        onRedo: async () => {
+          const recreated = await api.books.create(title);
+          createdBookId = recreated.book_id || createdBookId;
+          await refreshStory();
+        },
+      });
     } catch (error: unknown) {
       notifyError(
         `Failed to create book: ${getErrorMessage(error, 'Unknown error')}`,
@@ -123,10 +139,23 @@ export function useAppUiActions({
 
   const handleReorderChapters = async (chapterIds: number[], bookId?: string) => {
     try {
+      const previousChapterIds = story.chapters
+        .filter((chapter) => (bookId ? chapter.book_id === bookId : true))
+        .map((chapter) => Number(chapter.id));
+
       await api.chapters.reorder(chapterIds, bookId);
-      await refreshStory(
-        bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters'
-      );
+      await refreshStory();
+      recordHistoryEntry?.({
+        label: bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters',
+        onUndo: async () => {
+          await api.chapters.reorder(previousChapterIds, bookId);
+          await refreshStory();
+        },
+        onRedo: async () => {
+          await api.chapters.reorder(chapterIds, bookId);
+          await refreshStory();
+        },
+      });
     } catch (error: unknown) {
       notifyError(
         `Failed to reorder chapters: ${getErrorMessage(error, 'Unknown error')}`,
@@ -137,8 +166,20 @@ export function useAppUiActions({
 
   const handleReorderBooks = async (bookIds: string[]) => {
     try {
+      const previousBookIds = (story.books || []).map((book) => book.id);
       await api.books.reorder(bookIds);
-      await refreshStory('Reorder books');
+      await refreshStory();
+      recordHistoryEntry?.({
+        label: 'Reorder books',
+        onUndo: async () => {
+          await api.books.reorder(previousBookIds);
+          await refreshStory();
+        },
+        onRedo: async () => {
+          await api.books.reorder(bookIds);
+          await refreshStory();
+        },
+      });
     } catch (error: unknown) {
       notifyError(
         `Failed to reorder books: ${getErrorMessage(error, 'Unknown error')}`,
