@@ -175,7 +175,20 @@ export interface ChatToolExecutionResponse {
     name: string;
     content: string;
   }>;
-  mutations?: { story_changed?: boolean };
+  mutations?: {
+    story_changed?: boolean;
+    tool_batch?: {
+      batch_id: string;
+      tool_names: string[];
+      operation_count: number;
+      label: string;
+    };
+  };
+}
+
+export interface ChatToolBatchMutationResponse {
+  ok: boolean;
+  batch_id: string;
 }
 
 export interface ProjectImage {

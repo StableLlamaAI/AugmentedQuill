@@ -34,8 +34,9 @@ import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage, ViewMode } from './types';
+import { AppSettings, ChatMessage, ViewMode } from './types';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
+import { api } from './services/api';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -63,6 +64,7 @@ const App: React.FC = () => {
     redo,
     undoSteps,
     redoSteps,
+    pushExternalHistoryEntry,
     undoOptions,
     redoOptions,
     nextUndoLabel,
@@ -168,6 +170,79 @@ const App: React.FC = () => {
   const appearanceRef = useRef<HTMLDivElement>(null);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
+
+  const buildMachinePayloadFromSettings = useCallback((settings: AppSettings) => {
+    const providers = settings.providers || [];
+    const activeChat =
+      providers.find((provider) => provider.id === settings.activeChatProviderId) ||
+      providers[0];
+    const activeWriting =
+      providers.find((provider) => provider.id === settings.activeWritingProviderId) ||
+      providers[0];
+    const activeEditing =
+      providers.find((provider) => provider.id === settings.activeEditingProviderId) ||
+      providers[0];
+
+    return {
+      openai: {
+        selected: activeChat?.name || '',
+        selected_chat: activeChat?.name || '',
+        selected_writing: activeWriting?.name || '',
+        selected_editing: activeEditing?.name || '',
+        models: providers.map((provider) => ({
+          name: (provider.name || '').trim(),
+          base_url: (provider.baseUrl || '').trim(),
+          api_key: provider.apiKey || '',
+          timeout_s: Math.max(1, Math.round((provider.timeout || 10000) / 1000)),
+          model: (provider.modelId || '').trim(),
+          temperature: provider.temperature,
+          top_p: provider.topP,
+          max_tokens: provider.maxTokens,
+          presence_penalty: provider.presencePenalty,
+          frequency_penalty: provider.frequencyPenalty,
+          stop: provider.stop || [],
+          seed: provider.seed,
+          top_k: provider.topK,
+          min_p: provider.minP,
+          extra_body: provider.extraBody || '',
+          preset_id: provider.presetId || null,
+          writing_warning: provider.writingWarning || null,
+          is_multimodal: provider.isMultimodal,
+          supports_function_calling: provider.supportsFunctionCalling,
+          prompt_overrides: provider.prompts || {},
+        })),
+      },
+    };
+  }, []);
+
+  const handleSaveSettings = useCallback(
+    (nextSettings: AppSettings) => {
+      const previousSettings = structuredClone(appSettings);
+      const nextSettingsSnapshot = structuredClone(nextSettings);
+      const previousPayload = buildMachinePayloadFromSettings(previousSettings);
+      const nextPayload = buildMachinePayloadFromSettings(nextSettingsSnapshot);
+
+      setAppSettings(nextSettingsSnapshot);
+
+      pushExternalHistoryEntry({
+        label: 'Update machine settings',
+        onUndo: async () => {
+          await api.machine.save(previousPayload);
+          setAppSettings(previousSettings);
+        },
+        onRedo: async () => {
+          await api.machine.save(nextPayload);
+          setAppSettings(nextSettingsSnapshot);
+        },
+      });
+    },
+    [
+      appSettings,
+      buildMachinePayloadFromSettings,
+      pushExternalHistoryEntry,
+      setAppSettings,
+    ]
+  );
 
   const prompts = usePrompts(story.id);
 
@@ -378,6 +453,7 @@ const App: React.FC = () => {
     setIsChatLoading,
     refreshProjects,
     refreshStory,
+    pushExternalHistoryEntry,
     requestToolCallLoopAccess,
   });
 
@@ -399,7 +475,7 @@ const App: React.FC = () => {
           isSettingsOpen={isSettingsOpen}
           setIsSettingsOpen={setIsSettingsOpen}
           appSettings={appSettings}
-          setAppSettings={setAppSettings}
+          setAppSettings={handleSaveSettings}
           projects={projects}
           story={story}
           handleLoadProject={handleLoadProject}

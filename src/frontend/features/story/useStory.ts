@@ -59,6 +59,8 @@ interface StoryHistoryEntry {
   id: string;
   label: string;
   state: StoryState;
+  onUndo?: () => Promise<void> | void;
+  onRedo?: () => Promise<void> | void;
 }
 
 const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
@@ -67,10 +69,16 @@ const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
   state: INITIAL_STORY,
 };
 
-const createHistoryEntry = (state: StoryState, label: string): StoryHistoryEntry => ({
+const createHistoryEntry = (
+  state: StoryState,
+  label: string,
+  handlers?: Pick<StoryHistoryEntry, 'onUndo' | 'onRedo'>
+): StoryHistoryEntry => ({
   id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   label,
   state,
+  onUndo: handlers?.onUndo,
+  onRedo: handlers?.onRedo,
 });
 
 const buildChapterUpdateLabel = (
@@ -110,6 +118,31 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setStory(updatedState);
     },
     [history, currentIndex]
+  );
+
+  const pushExternalHistoryEntry = useCallback(
+    (params: {
+      label: string;
+      state?: StoryState;
+      onUndo?: () => Promise<void> | void;
+      onRedo?: () => Promise<void> | void;
+    }) => {
+      const sourceState = params.state ?? story;
+      const updatedState = { ...sourceState, lastUpdated: Date.now() };
+      const trimmed = history.slice(0, currentIndex + 1);
+      trimmed.push(
+        createHistoryEntry(updatedState, params.label, {
+          onUndo: params.onUndo,
+          onRedo: params.onRedo,
+        })
+      );
+      const bounded = trimmed.slice(-MAX_HISTORY);
+      setHistory(bounded);
+      setCurrentIndex(bounded.length - 1);
+      setStory(updatedState);
+      setCurrentChapterId(updatedState.currentChapterId ?? null);
+    },
+    [story, history, currentIndex]
   );
 
   const lastLoadedChapterId = useRef<string | null>(null);
@@ -469,47 +502,57 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     [story.id, fetchStory]
   );
 
-  const undo = useCallback(() => {
-    if (currentIndex <= 0) return;
-    const prevIndex = currentIndex - 1;
-    setCurrentIndex(prevIndex);
-    const prevState = history[prevIndex].state;
-    setStory(prevState);
-    setCurrentChapterId(prevState.currentChapterId ?? null);
-  }, [currentIndex, history]);
-
   const undoSteps = useCallback(
-    (steps: number) => {
+    async (steps: number) => {
       if (steps <= 0 || currentIndex <= 0) return;
       const targetIndex = Math.max(0, currentIndex - steps);
+      const callbacks: Array<() => Promise<void> | void> = [];
+      for (let idx = currentIndex; idx > targetIndex; idx -= 1) {
+        const handler = history[idx].onUndo;
+        if (handler) callbacks.push(handler);
+      }
+
       setCurrentIndex(targetIndex);
       const prevState = history[targetIndex].state;
       setStory(prevState);
       setCurrentChapterId(prevState.currentChapterId ?? null);
+
+      for (const callback of callbacks) {
+        await callback();
+      }
     },
     [currentIndex, history]
   );
 
-  const redo = useCallback(() => {
-    if (currentIndex >= history.length - 1) return;
-    const nextIndex = currentIndex + 1;
-    setCurrentIndex(nextIndex);
-    const nextState = history[nextIndex].state;
-    setStory(nextState);
-    setCurrentChapterId(nextState.currentChapterId ?? null);
-  }, [currentIndex, history]);
-
   const redoSteps = useCallback(
-    (steps: number) => {
+    async (steps: number) => {
       if (steps <= 0 || currentIndex >= history.length - 1) return;
       const targetIndex = Math.min(history.length - 1, currentIndex + steps);
+      const callbacks: Array<() => Promise<void> | void> = [];
+      for (let idx = currentIndex + 1; idx <= targetIndex; idx += 1) {
+        const handler = history[idx].onRedo;
+        if (handler) callbacks.push(handler);
+      }
+
       setCurrentIndex(targetIndex);
       const nextState = history[targetIndex].state;
       setStory(nextState);
       setCurrentChapterId(nextState.currentChapterId ?? null);
+
+      for (const callback of callbacks) {
+        await callback();
+      }
     },
     [currentIndex, history]
   );
+
+  const undo = useCallback(async () => {
+    await undoSteps(1);
+  }, [undoSteps]);
+
+  const redo = useCallback(async () => {
+    await redoSteps(1);
+  }, [redoSteps]);
 
   const undoOptions: StoryHistoryOption[] = [];
   for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
@@ -549,6 +592,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     redo,
     undoSteps,
     redoSteps,
+    pushExternalHistoryEntry,
     undoOptions,
     redoOptions,
     nextUndoLabel: currentIndex > 0 ? history[currentIndex].label : null,

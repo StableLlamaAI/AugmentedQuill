@@ -11,10 +11,12 @@ API endpoints for chat sessions and conversational interactions with the LLM wri
 """
 
 import datetime
+import base64
 import augmentedquill.services.llm.llm as llm
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pathlib import Path
+from uuid import uuid4
 
 from augmentedquill.core.config import (
     load_machine_config,
@@ -52,6 +54,92 @@ router = APIRouter(tags=["Chat"])
 
 proxy_openai_models = _chat_api_proxy_ops.proxy_openai_models
 httpx = _chat_api_proxy_ops.httpx
+
+_CHAT_TOOL_BATCH_DIR = ".aq_history/chat_tool_batches"
+
+
+def _iter_project_files(project_dir: Path):
+    """Yield relative file paths for snapshot-able project files."""
+    for path in project_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(project_dir)
+        rel_parts = rel.parts
+        if not rel_parts:
+            continue
+        if rel_parts[0] in {".aq_history", "chats"}:
+            continue
+        yield rel
+
+
+def _capture_project_snapshot(project_dir: Path) -> Dict[str, str]:
+    """Capture project files as base64-encoded bytes keyed by relative path."""
+    snapshot: Dict[str, str] = {}
+    for rel_path in _iter_project_files(project_dir):
+        abs_path = project_dir / rel_path
+        snapshot[str(rel_path)] = base64.b64encode(abs_path.read_bytes()).decode(
+            "ascii"
+        )
+    return snapshot
+
+
+def _snapshot_storage_dir(project_dir: Path, batch_id: str) -> Path:
+    return project_dir / _CHAT_TOOL_BATCH_DIR / batch_id
+
+
+def _store_chat_tool_batch_snapshot(
+    project_dir: Path,
+    batch_id: str,
+    before_snapshot: Dict[str, str],
+    after_snapshot: Dict[str, str],
+    tool_names: list[str],
+):
+    """Persist before/after snapshots for reversible tool-call batches."""
+    target_dir = _snapshot_storage_dir(project_dir, batch_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    metadata = {
+        "batch_id": batch_id,
+        "created_at": datetime.datetime.now().isoformat(),
+        "tool_names": tool_names,
+        "before": before_snapshot,
+        "after": after_snapshot,
+    }
+    (target_dir / "batch.json").write_text(_json.dumps(metadata), encoding="utf-8")
+
+
+def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str, Any]:
+    batch_file = _snapshot_storage_dir(project_dir, batch_id) / "batch.json"
+    if not batch_file.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Unknown chat tool batch: {batch_id}"
+        )
+    return _json.loads(batch_file.read_text(encoding="utf-8"))
+
+
+def _restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
+    """Replace project files with the exact snapshot content."""
+    expected = set(snapshot.keys())
+    current = {str(rel): rel for rel in _iter_project_files(project_dir)}
+
+    for rel_str, rel_path in current.items():
+        if rel_str not in expected:
+            (project_dir / rel_path).unlink(missing_ok=True)
+
+    for rel_str, encoded in snapshot.items():
+        rel_path = Path(rel_str)
+        abs_path = project_dir / rel_path
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_bytes(base64.b64decode(encoded.encode("ascii")))
+
+
+def _build_chat_tool_batch_label(tool_names: list[str]) -> str:
+    if not tool_names:
+        return "AI tool batch"
+    if len(tool_names) == 1:
+        return f"AI tool: {tool_names[0]}"
+    if len(tool_names) == 2:
+        return f"AI tools: {tool_names[0]}, {tool_names[1]}"
+    return f"AI tools: {tool_names[0]} (+{len(tool_names) - 1})"
 
 
 @router.get("/chat", response_model=ChatInitialStateResponse)
@@ -116,6 +204,14 @@ async def api_chat_tools(request: Request) -> JSONResponse:
 
     appended: list[dict] = []
     mutations = {"story_changed": False}
+    tool_names: list[str] = []
+    active_project_dir = get_active_project_dir()
+    before_snapshot: Dict[str, str] | None = None
+    batch_id: str | None = None
+
+    if active_project_dir and tool_calls:
+        before_snapshot = _capture_project_snapshot(active_project_dir)
+        batch_id = f"batch-{uuid4().hex}"
 
     for call in tool_calls:
         if not isinstance(call, dict):
@@ -132,8 +228,30 @@ async def api_chat_tools(request: Request) -> JSONResponse:
             args_obj = {}
         if not name or not call_id:
             continue
+        tool_names.append(name)
         msg = await execute_registered_tool(name, args_obj, call_id, payload, mutations)
         appended.append(msg)
+
+    if (
+        active_project_dir
+        and batch_id
+        and before_snapshot is not None
+        and mutations.get("story_changed")
+    ):
+        after_snapshot = _capture_project_snapshot(active_project_dir)
+        _store_chat_tool_batch_snapshot(
+            active_project_dir,
+            batch_id,
+            before_snapshot,
+            after_snapshot,
+            tool_names,
+        )
+        mutations["tool_batch"] = {
+            "batch_id": batch_id,
+            "tool_names": tool_names,
+            "operation_count": len(tool_names),
+            "label": _build_chat_tool_batch_label(tool_names),
+        }
 
     # Log tool execution if there were any
     if appended:
@@ -146,6 +264,38 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         add_llm_log(log_entry)
 
     return ok_json(appended_messages=appended, mutations=mutations)
+
+
+@router.post("/chat/tools/undo/{batch_id}")
+async def api_chat_tools_undo(batch_id: str) -> JSONResponse:
+    """Undo a previously executed chat-tool batch by restoring snapshot content."""
+    project_dir = get_active_project_dir()
+    if not project_dir:
+        return error_json("No active project selected", status_code=400)
+
+    batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
+    before_snapshot = batch.get("before")
+    if not isinstance(before_snapshot, dict):
+        return error_json("Invalid chat tool batch snapshot", status_code=500)
+
+    _restore_project_snapshot(project_dir, before_snapshot)
+    return ok_json(ok=True, batch_id=batch_id)
+
+
+@router.post("/chat/tools/redo/{batch_id}")
+async def api_chat_tools_redo(batch_id: str) -> JSONResponse:
+    """Redo a previously undone chat-tool batch by restoring post-batch snapshot."""
+    project_dir = get_active_project_dir()
+    if not project_dir:
+        return error_json("No active project selected", status_code=400)
+
+    batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
+    after_snapshot = batch.get("after")
+    if not isinstance(after_snapshot, dict):
+        return error_json("Invalid chat tool batch snapshot", status_code=500)
+
+    _restore_project_snapshot(project_dir, after_snapshot)
+    return ok_json(ok=True, batch_id=batch_id)
 
 
 @router.post("/chat/stream")
