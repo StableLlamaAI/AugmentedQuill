@@ -88,6 +88,29 @@ def _get_deleted_images_dir(active: Path) -> Path:
     return deleted_dir
 
 
+def _capture_image_restore_snapshot(active: Path, filename: str) -> str:
+    """Persist an image+metadata snapshot and return its restore id."""
+    clean_name = Path(filename).name
+    images = get_project_images()
+    image_entry = next(
+        (item for item in images if item.get("filename") == clean_name), None
+    )
+    img_path = active / "images" / clean_name
+    if not img_path.exists():
+        return ""
+
+    restore_id = uuid.uuid4().hex
+    snapshot_path = _get_deleted_images_dir(active) / f"{restore_id}.json"
+    snapshot = {
+        "filename": clean_name,
+        "content_b64": base64.b64encode(img_path.read_bytes()).decode("ascii"),
+        "description": (image_entry or {}).get("description", ""),
+        "title": (image_entry or {}).get("title", ""),
+    }
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    return restore_id
+
+
 async def upload_image_response(
     file: UploadFile, target_name: str | None = None
 ) -> JSONResponse:
@@ -101,6 +124,7 @@ async def upload_image_response(
 
     original_name = Path(file.filename).name
 
+    overwrite_restore_id = ""
     if target_name:
         safe_target = _sanitize_target_name(target_name)
         if safe_target:
@@ -108,6 +132,11 @@ async def upload_image_response(
         else:
             safe_name = _sanitize_target_name(original_name)
             target_path = images_dir / safe_name
+
+        if target_path.exists():
+            overwrite_restore_id = _capture_image_restore_snapshot(
+                active, target_path.name
+            )
     else:
         safe_name = _sanitize_target_name(original_name)
         if not safe_name:
@@ -131,6 +160,7 @@ async def upload_image_response(
             "ok": True,
             "filename": target_path.name,
             "url": f"/api/v1/projects/images/{target_path.name}",
+            "restore_id": overwrite_restore_id,
         },
     )
 
@@ -146,24 +176,9 @@ def delete_image_response(payload: dict) -> JSONResponse:
         raise BadRequestError("No active project")
 
     clean_name = Path(filename).name
-    images = get_project_images()
-    image_entry = next(
-        (item for item in images if item.get("filename") == clean_name), None
-    )
-
     img_path = active / "images" / clean_name
-    restore_id = ""
+    restore_id = _capture_image_restore_snapshot(active, clean_name)
     if img_path.exists():
-        restore_id = uuid.uuid4().hex
-        deleted_dir = _get_deleted_images_dir(active)
-        snapshot_path = deleted_dir / f"{restore_id}.json"
-        snapshot = {
-            "filename": clean_name,
-            "content_b64": base64.b64encode(img_path.read_bytes()).decode("ascii"),
-            "description": (image_entry or {}).get("description", ""),
-            "title": (image_entry or {}).get("title", ""),
-        }
-        snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
         img_path.unlink()
 
     delete_image_metadata(clean_name)

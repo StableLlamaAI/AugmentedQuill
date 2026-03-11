@@ -309,7 +309,25 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       if (replaceTargetName) {
         // Keep replacement intent while preserving metadata when filenames differ.
         if (file.name === replaceTargetName) {
-          await api.projects.uploadImage(file, replaceTargetName);
+          const replaced = await api.projects.uploadImage(file, replaceTargetName);
+          let previousRestoreId = replaced.restore_id || '';
+          onRecordHistory?.({
+            label: `Replace image: ${replaceTargetName}`,
+            onUndo: async () => {
+              if (previousRestoreId) {
+                await api.projects.restoreImage(previousRestoreId);
+                await loadImages();
+              }
+            },
+            onRedo: async () => {
+              const redoReplace = await api.projects.uploadImage(
+                file,
+                replaceTargetName
+              );
+              previousRestoreId = redoReplace.restore_id || previousRestoreId;
+              await loadImages();
+            },
+          });
         } else {
           const res = await api.projects.uploadImage(file);
           const newFilename = res.filename;
@@ -322,7 +340,27 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               oldImage.title
             );
           }
-          await api.projects.deleteImage(replaceTargetName);
+          const deletedOld = await api.projects.deleteImage(replaceTargetName);
+          let oldRestoreId = deletedOld.restore_id || '';
+          let newRestoreId = '';
+          onRecordHistory?.({
+            label: `Replace image: ${replaceTargetName}`,
+            onUndo: async () => {
+              const deletedNew = await api.projects.deleteImage(newFilename);
+              newRestoreId = deletedNew.restore_id || newRestoreId;
+              if (oldRestoreId) {
+                await api.projects.restoreImage(oldRestoreId);
+              }
+              await loadImages();
+            },
+            onRedo: async () => {
+              if (!newRestoreId) return;
+              const deletedOldAgain = await api.projects.deleteImage(replaceTargetName);
+              oldRestoreId = deletedOldAgain.restore_id || oldRestoreId;
+              await api.projects.restoreImage(newRestoreId);
+              await loadImages();
+            },
+          });
         }
       } else {
         const uploaded = await api.projects.uploadImage(file);

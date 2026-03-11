@@ -98,11 +98,12 @@ export const projectsApi = {
     const path = targetName
       ? `/projects/images/upload?target_name=${encodeURIComponent(targetName)}`
       : '/projects/images/upload';
-    return fetchJson<{ ok: boolean; filename: string; url: string }>(
-      path,
-      { method: 'POST', body: formData },
-      'Failed to upload image'
-    );
+    return fetchJson<{
+      ok: boolean;
+      filename: string;
+      url: string;
+      restore_id?: string;
+    }>(path, { method: 'POST', body: formData }, 'Failed to upload image');
   },
 
   updateImage: async (filename: string, description?: string, title?: string) => {
