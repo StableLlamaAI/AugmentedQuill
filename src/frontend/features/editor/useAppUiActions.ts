@@ -127,8 +127,22 @@ export function useAppUiActions({
 
   const handleBookDelete = async (id: string) => {
     try {
-      await api.books.delete(id);
-      await refreshStory(`Delete book: ${id}`);
+      const deleted = await api.books.delete(id);
+      let latestRestoreId = deleted.restore_id || '';
+      await refreshStory();
+      recordHistoryEntry?.({
+        label: `Delete book: ${id}`,
+        onUndo: async () => {
+          if (!latestRestoreId) return;
+          await api.books.restore(latestRestoreId);
+          await refreshStory();
+        },
+        onRedo: async () => {
+          const redone = await api.books.delete(id);
+          latestRestoreId = redone.restore_id || latestRestoreId;
+          await refreshStory();
+        },
+      });
     } catch (error: unknown) {
       notifyError(
         `Failed to delete book: ${getErrorMessage(error, 'Unknown error')}`,

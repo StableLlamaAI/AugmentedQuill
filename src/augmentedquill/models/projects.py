@@ -40,6 +40,10 @@ class BookDeleteRequest(BaseModel):
     name: str
 
 
+class BookRestoreRequest(BaseModel):
+    restore_id: str
+
+
 class ImageDescriptionUpdateRequest(BaseModel):
     filename: str
     description: Optional[str] = ""

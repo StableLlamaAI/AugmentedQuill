@@ -20,6 +20,7 @@ from augmentedquill.services.projects.projects_api_manage_ops import (
     convert_project_response,
     create_book_response,
     delete_book_response,
+    restore_book_response,
 )
 from augmentedquill.services.projects.projects_api_asset_ops import (
     list_images_response,
@@ -41,6 +42,7 @@ from augmentedquill.models.projects import (
     ProjectConvertRequest,
     BookCreateRequest,
     BookDeleteRequest,
+    BookRestoreRequest,
     ImageDescriptionUpdateRequest,
     ImagePlaceholderRequest,
     ImageDeleteRequest,
@@ -85,6 +87,11 @@ async def api_books_create(body: BookCreateRequest) -> JSONResponse:
 @router.post("/books/delete")
 async def api_books_delete(body: BookDeleteRequest) -> JSONResponse:
     return delete_book_response(body.name)
+
+
+@router.post("/books/restore")
+async def api_books_restore(body: BookRestoreRequest) -> JSONResponse:
+    return restore_book_response(body.restore_id)
 
 
 @router.get("/projects/images/list")
