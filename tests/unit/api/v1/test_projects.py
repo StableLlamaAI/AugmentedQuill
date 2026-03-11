@@ -149,3 +149,54 @@ class ProjectsTest(TestCase):
         # Check the story.json was updated
         updated_story = json.loads(story_file.read_text(encoding="utf-8"))
         self.assertEqual(updated_story["chapters"][0]["summary"], new_summary)
+
+    def test_delete_and_restore_book(self):
+        # Create series project with a book and file content
+        name = "series_restore_book"
+        ok, msg = select_project(name)
+        self.assertTrue(ok, msg)
+        project_dir = self.projects_root / name
+
+        story_file = project_dir / "story.json"
+        story = json.loads(story_file.read_text(encoding="utf-8"))
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": "book-1",
+                "folder": "book-1",
+                "title": "Book One",
+                "chapters": [{"filename": "0001.txt", "title": "C1", "summary": ""}],
+            }
+        ]
+        story.pop("chapters", None)
+        story_file.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        book_dir = project_dir / "books" / "book-1"
+        (book_dir / "chapters").mkdir(parents=True, exist_ok=True)
+        (book_dir / "chapters" / "0001.txt").write_text(
+            "Book chapter", encoding="utf-8"
+        )
+        (book_dir / "book_content.md").write_text("Book intro", encoding="utf-8")
+
+        from fastapi.testclient import TestClient
+        import augmentedquill.main as main
+
+        client = TestClient(main.app)
+
+        delete_resp = client.post("/api/v1/books/delete", json={"name": "book-1"})
+        self.assertEqual(delete_resp.status_code, 200, delete_resp.text)
+        restore_id = delete_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertFalse((project_dir / "books" / "book-1").exists())
+
+        restore_resp = client.post(
+            "/api/v1/books/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200, restore_resp.text)
+        self.assertTrue((project_dir / "books" / "book-1").exists())
+        self.assertEqual(
+            (project_dir / "books" / "book-1" / "book_content.md").read_text(
+                encoding="utf-8"
+            ),
+            "Book intro",
+        )

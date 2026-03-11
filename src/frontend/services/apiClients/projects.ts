@@ -98,11 +98,12 @@ export const projectsApi = {
     const path = targetName
       ? `/projects/images/upload?target_name=${encodeURIComponent(targetName)}`
       : '/projects/images/upload';
-    return fetchJson<{ ok: boolean; filename: string; url: string }>(
-      path,
-      { method: 'POST', body: formData },
-      'Failed to upload image'
-    );
+    return fetchJson<{
+      ok: boolean;
+      filename: string;
+      url: string;
+      restore_id?: string;
+    }>(path, { method: 'POST', body: formData }, 'Failed to upload image');
   },
 
   updateImage: async (filename: string, description?: string, title?: string) => {
@@ -130,10 +131,18 @@ export const projectsApi = {
   },
 
   deleteImage: async (filename: string) => {
-    return postJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean; restore_id?: string }>(
       '/projects/images/delete',
       { filename },
       'Failed to delete image'
+    );
+  },
+
+  restoreImage: async (restoreId: string) => {
+    return postJson<{ ok: boolean; filename?: string }>(
+      '/projects/images/restore',
+      { restore_id: restoreId },
+      'Failed to restore image'
     );
   },
 };

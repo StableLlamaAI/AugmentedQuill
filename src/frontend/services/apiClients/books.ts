@@ -21,10 +21,18 @@ export const booksApi = {
   },
 
   delete: async (id: string) => {
-    return postJson<{ ok: boolean; story?: unknown }>(
+    return postJson<{ ok: boolean; story?: unknown; restore_id?: string }>(
       '/books/delete',
       { name: id },
       'Failed to delete book'
+    );
+  },
+
+  restore: async (restoreId: string) => {
+    return postJson<{ ok: boolean; story?: unknown; book_id?: string }>(
+      '/books/restore',
+      { restore_id: restoreId },
+      'Failed to restore book'
     );
   },
 

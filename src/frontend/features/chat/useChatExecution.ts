@@ -43,6 +43,11 @@ type UseChatExecutionParams = {
   setIsChatLoading: Dispatch<SetStateAction<boolean>>;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
+  pushExternalHistoryEntry?: (params: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
   requestToolCallLoopAccess: (count: number) => Promise<ToolLoopChoice>;
 };
 
@@ -59,6 +64,7 @@ export function useChatExecution({
   setIsChatLoading,
   refreshProjects,
   refreshStory,
+  pushExternalHistoryEntry,
   requestToolCallLoopAccess,
 }: UseChatExecutionParams) {
   const stopSignalRef = useRef(false);
@@ -191,6 +197,23 @@ export function useChatExecution({
         if (toolResponse.mutations?.story_changed) {
           await refreshProjects();
           await refreshStory();
+        }
+
+        const toolBatch = toolResponse.mutations?.tool_batch;
+        if (toolBatch?.batch_id) {
+          pushExternalHistoryEntry?.({
+            label: toolBatch.label || `AI tools (${toolBatch.operation_count})`,
+            onUndo: async () => {
+              await api.chat.undoToolBatch(toolBatch.batch_id);
+              await refreshProjects();
+              await refreshStory();
+            },
+            onRedo: async () => {
+              await api.chat.redoToolBatch(toolBatch.batch_id);
+              await refreshProjects();
+              await refreshStory();
+            },
+          });
         }
 
         if (stopSignalRef.current) break;

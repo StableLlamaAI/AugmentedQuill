@@ -61,6 +61,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     isAutoSourcebookSelectionEnabled,
     onToggleAutoSourcebookSelection,
     isSourcebookSelectionRunning,
+    onSourcebookMutated,
   } = sidebarControls;
   const {
     currentChapter,
@@ -161,6 +162,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
           onToggleAutoSelection={onToggleAutoSourcebookSelection}
           isAutoSelectionRunning={isSourcebookSelectionRunning}
+          onMutated={onSourcebookMutated}
         />
       </div>
       <div

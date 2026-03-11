@@ -40,6 +40,10 @@ class BookDeleteRequest(BaseModel):
     name: str
 
 
+class BookRestoreRequest(BaseModel):
+    restore_id: str
+
+
 class ImageDescriptionUpdateRequest(BaseModel):
     filename: str
     description: Optional[str] = ""
@@ -54,6 +58,10 @@ class ImagePlaceholderRequest(BaseModel):
 
 class ImageDeleteRequest(BaseModel):
     filename: str
+
+
+class ImageRestoreRequest(BaseModel):
+    restore_id: str
 
 
 # ---------------------------------------------------------------------------

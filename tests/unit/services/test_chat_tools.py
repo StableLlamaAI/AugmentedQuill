@@ -193,3 +193,51 @@ class ChatToolsTest(TestCase):
         story_file = self.projects_root / "demo" / "story.json"
         story = json.loads(story_file.read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "Updated summary")
+
+    def test_chat_tool_batch_can_undo_and_redo(self):
+        """Tool-call batches should expose batch_id and support undo/redo endpoints."""
+        self._bootstrap_project()
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original = chapter_file.read_text(encoding="utf-8")
+
+        body = {
+            "model_name": None,
+            "messages": [
+                {"role": "user", "content": "Update chapter"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_batch_1",
+                            "type": "function",
+                            "function": {
+                                "name": "write_chapter_content",
+                                "arguments": '{"chap_id":1,"content":"Batch updated content"}',
+                            },
+                        }
+                    ],
+                },
+            ],
+            "active_chapter_id": 1,
+        }
+
+        r = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        batch = (data.get("mutations") or {}).get("tool_batch") or {}
+        batch_id = batch.get("batch_id")
+        self.assertTrue(batch_id)
+        self.assertEqual(
+            chapter_file.read_text(encoding="utf-8"), "Batch updated content"
+        )
+
+        r_undo = self.client.post(f"/api/v1/chat/tools/undo/{batch_id}")
+        self.assertEqual(r_undo.status_code, 200, r_undo.text)
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), original)
+
+        r_redo = self.client.post(f"/api/v1/chat/tools/redo/{batch_id}")
+        self.assertEqual(r_redo.status_code, 200, r_redo.text)
+        self.assertEqual(
+            chapter_file.read_text(encoding="utf-8"), "Batch updated content"
+        )

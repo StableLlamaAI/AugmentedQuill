@@ -38,6 +38,12 @@ export type HeaderSettingsControls = {
 export type HeaderHistoryControls = {
   undo: () => void;
   redo: () => void;
+  undoSteps: (steps: number) => void;
+  redoSteps: (steps: number) => void;
+  undoOptions: Array<{ id: string; label: string; steps: number }>;
+  redoOptions: Array<{ id: string; label: string; steps: number }>;
+  nextUndoLabel: string | null;
+  nextRedoLabel: string | null;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -140,6 +146,11 @@ export type MainSidebarControls = {
   isAutoSourcebookSelectionEnabled?: boolean;
   onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
   isSourcebookSelectionRunning?: boolean;
+  onSourcebookMutated?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 };
 
 export type MainEditorSuggestionControls = {

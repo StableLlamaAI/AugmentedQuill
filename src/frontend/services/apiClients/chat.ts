@@ -10,7 +10,11 @@
  */
 
 import { ChatSession } from '../../types';
-import { ChatApiMessage, ChatToolExecutionResponse } from '../apiTypes';
+import {
+  ChatApiMessage,
+  ChatToolBatchMutationResponse,
+  ChatToolExecutionResponse,
+} from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const chatApi = {
@@ -70,6 +74,26 @@ export const chatApi = {
         body: JSON.stringify(payload),
       },
       'Failed to execute chat tools'
+    );
+  },
+
+  undoToolBatch: async (batchId: string) => {
+    return fetchJson<ChatToolBatchMutationResponse>(
+      `/chat/tools/undo/${encodeURIComponent(batchId)}`,
+      {
+        method: 'POST',
+      },
+      'Failed to undo AI tool batch'
+    );
+  },
+
+  redoToolBatch: async (batchId: string) => {
+    return fetchJson<ChatToolBatchMutationResponse>(
+      `/chat/tools/redo/${encodeURIComponent(batchId)}`,
+      {
+        method: 'POST',
+      },
+      'Failed to redo AI tool batch'
     );
   },
 };

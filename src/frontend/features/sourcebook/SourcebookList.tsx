@@ -50,6 +50,11 @@ interface SourcebookListProps {
   isAutoSelectionEnabled?: boolean;
   isAutoSelectionRunning?: boolean;
   onToggleAutoSelection?: (enabled: boolean) => void;
+  onMutated?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 }
 
 export const SourcebookList: React.FC<SourcebookListProps> = ({
@@ -59,6 +64,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   isAutoSelectionEnabled = true,
   isAutoSelectionRunning = false,
   onToggleAutoSelection,
+  onMutated,
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>([]);
   const [search, setSearch] = useState('');
@@ -85,18 +91,83 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   }, []);
 
   const handleCreate = async (entry: SourcebookUpsertPayload) => {
-    await api.sourcebook.create(entry);
-    loadEntries();
+    const created = await api.sourcebook.create(entry);
+    await loadEntries();
+    let createdId = created.id;
+    onMutated?.({
+      label: `Create sourcebook entry: ${entry.name}`,
+      onUndo: async () => {
+        await api.sourcebook.delete(createdId);
+        await loadEntries();
+      },
+      onRedo: async () => {
+        const recreated = await api.sourcebook.create(entry);
+        createdId = recreated.id;
+        await loadEntries();
+      },
+    });
   };
 
   const handleUpdate = async (entry: SourcebookUpsertPayload) => {
-    await api.sourcebook.update(entry.id, entry);
-    loadEntries();
+    const previous = entries.find((value) => value.id === entry.id);
+    const updated = await api.sourcebook.update(entry.id, entry);
+    await loadEntries();
+    if (!previous) return;
+
+    let activeId = updated.id;
+    onMutated?.({
+      label: `Update sourcebook entry: ${entry.name}`,
+      onUndo: async () => {
+        const reverted = await api.sourcebook.update(activeId, {
+          name: previous.name,
+          synonyms: previous.synonyms,
+          category: previous.category,
+          description: previous.description,
+          images: previous.images,
+        });
+        activeId = reverted.id;
+        await loadEntries();
+      },
+      onRedo: async () => {
+        const redone = await api.sourcebook.update(activeId, {
+          name: entry.name,
+          synonyms: entry.synonyms,
+          category: entry.category,
+          description: entry.description,
+          images: entry.images,
+        });
+        activeId = redone.id;
+        await loadEntries();
+      },
+    });
   };
 
   const handleDelete = async (id: string) => {
+    const deletedEntry = entries.find((entry) => entry.id === id);
     await api.sourcebook.delete(id);
-    loadEntries();
+    await loadEntries();
+    if (!deletedEntry) return;
+
+    let activeId = deletedEntry.id;
+    onMutated?.({
+      label: `Delete sourcebook entry: ${deletedEntry.name}`,
+      onUndo: async () => {
+        const restored = await api.sourcebook.create({
+          id: deletedEntry.id,
+          name: deletedEntry.name,
+          synonyms: deletedEntry.synonyms,
+          category: deletedEntry.category,
+          description: deletedEntry.description,
+          images: deletedEntry.images,
+        });
+        activeId = restored.id;
+        await loadEntries();
+      },
+      onRedo: async () => {
+        await api.sourcebook.delete(activeId);
+        await loadEntries();
+      },
+    });
   };
 
   const handleMouseEnter = (e: React.MouseEvent, entry: SourcebookEntry) => {

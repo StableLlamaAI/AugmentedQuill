@@ -45,6 +45,7 @@ type AppDialogsProps = {
     typeof ProjectImages
   >['onUpdateSettings'];
   imageActionsAvailable: boolean;
+  recordHistoryEntry?: React.ComponentProps<typeof ProjectImages>['onRecordHistory'];
   editorRef: RefObject<EditorHandle | null>;
 
   isCreateProjectOpen: boolean;
@@ -75,6 +76,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
   setIsImagesOpen,
   updateStoryImageSettings,
   imageActionsAvailable,
+  recordHistoryEntry,
   editorRef,
   isCreateProjectOpen,
   setIsCreateProjectOpen,
@@ -113,6 +115,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
         settings={appSettings}
         prompts={prompts}
         imageActionsAvailable={imageActionsAvailable}
+        onRecordHistory={recordHistoryEntry}
         imageStyle={story.image_style}
         imageAdditionalInfo={story.image_additional_info}
         onUpdateSettings={updateStoryImageSettings}
