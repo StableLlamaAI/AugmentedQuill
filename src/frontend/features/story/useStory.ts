@@ -49,10 +49,48 @@ const INITIAL_STORY: StoryState = {
   lastUpdated: Date.now(),
 };
 
+export interface StoryHistoryOption {
+  id: string;
+  label: string;
+  steps: number;
+}
+
+interface StoryHistoryEntry {
+  id: string;
+  label: string;
+  state: StoryState;
+}
+
+const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
+  id: `history-${Date.now()}`,
+  label: 'Initial story state',
+  state: INITIAL_STORY,
+};
+
+const createHistoryEntry = (state: StoryState, label: string): StoryHistoryEntry => ({
+  id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  label,
+  state,
+});
+
+const buildChapterUpdateLabel = (
+  chapter: Chapter | undefined,
+  partial: Partial<Chapter>
+): string => {
+  const chapterName = chapter?.title?.trim() || `Chapter ${chapter?.id || ''}`.trim();
+  if (partial.content !== undefined) return `Edit chapter content: ${chapterName}`;
+  if (partial.title !== undefined) return `Rename chapter: ${chapterName}`;
+  if (partial.summary !== undefined) return `Update chapter summary: ${chapterName}`;
+  if (partial.notes !== undefined || partial.private_notes !== undefined) {
+    return `Update chapter notes: ${chapterName}`;
+  }
+  return `Update chapter: ${chapterName}`;
+};
+
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const [story, setStory] = useState<StoryState>(INITIAL_STORY);
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null);
-  const [history, setHistory] = useState<StoryState[]>([INITIAL_STORY]);
+  const [history, setHistory] = useState<StoryHistoryEntry[]>([INITIAL_HISTORY_ENTRY]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const hasFetchedRef = useRef(false);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
@@ -62,10 +100,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   });
 
   const pushState = useCallback(
-    (newState: StoryState) => {
+    (newState: StoryState, label: string) => {
       const updatedState = { ...newState, lastUpdated: Date.now() };
       const trimmed = history.slice(0, currentIndex + 1);
-      trimmed.push(updatedState);
+      trimmed.push(createHistoryEntry(updatedState, label));
       const bounded = trimmed.slice(-MAX_HISTORY);
       setHistory(bounded);
       setCurrentIndex(bounded.length - 1);
@@ -220,7 +258,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           };
 
           setStory(newStory);
-          setHistory([newStory]);
+          setHistory([createHistoryEntry(newStory, 'Load story')]);
           setCurrentIndex(0);
 
           setCurrentChapterId(newStory.currentChapterId);
@@ -255,7 +293,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       private_notes,
       language,
     };
-    pushState(newState);
+    pushState(newState, `Update story metadata: ${title || story.title || 'Untitled'}`);
 
     try {
       await api.story.updateMetadata({
@@ -274,7 +312,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
   const updateStoryImageSettings = async (style: string, info: string) => {
     const newState = { ...story, image_style: style, image_additional_info: info };
-    pushState(newState);
+    pushState(newState, 'Update story image settings');
     try {
       await api.story.updateSettings({
         image_style: style,
@@ -290,11 +328,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     partial: Partial<Chapter>,
     sync: boolean = true
   ) => {
+    const chapter = story.chapters.find((ch) => ch.id === id);
     const newChapters = story.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
     const newState = { ...story, chapters: newChapters };
-    pushState(newState);
+    pushState(newState, buildChapterUpdateLabel(chapter, partial));
 
     if (!sync) return;
 
@@ -317,7 +356,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     const newBooks =
       story.books?.map((b) => (b.id === id ? { ...b, ...partial } : b)) || [];
     const newState = { ...story, books: newBooks };
-    pushState(newState);
+    const bookTitle =
+      story.books?.find((book) => book.id === id)?.title || partial.title || 'Untitled';
+    pushState(newState, `Update book: ${bookTitle}`);
     // Book persistence stays at call sites that own the surrounding workflow
     // (rename, reorder, metadata edit) to keep this hook narrowly scoped.
   };
@@ -343,7 +384,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentChapterId: newChapter.id,
         lastUpdated: Date.now(),
       };
-      pushState(newState);
+      pushState(newState, `Create chapter: ${newChapter.title || title}`);
     } catch (e) {
       console.error('Failed to add chapter', e);
     }
@@ -385,7 +426,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentChapterId: newSelection,
         lastUpdated: Date.now(),
       };
-      pushState(newState);
+      pushState(newState, `Delete chapter: ${deletedChapter?.title || id}`);
     } catch (e) {
       console.error('Failed to delete chapter', e);
     }
@@ -402,7 +443,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       }
 
       setStory(newStory);
-      setHistory([newStory]);
+      setHistory([createHistoryEntry(newStory, 'Load story')]);
       setCurrentIndex(0);
       if (newStory.currentChapterId) {
         setCurrentChapterId(newStory.currentChapterId);
@@ -416,24 +457,68 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   );
 
   const undo = useCallback(() => {
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
-      setCurrentIndex(prevIndex);
-      const prevState = history[prevIndex];
-      setStory(prevState);
-      if (prevState.currentChapterId) setCurrentChapterId(prevState.currentChapterId);
-    }
+    if (currentIndex <= 0) return;
+    const prevIndex = currentIndex - 1;
+    setCurrentIndex(prevIndex);
+    const prevState = history[prevIndex].state;
+    setStory(prevState);
+    setCurrentChapterId(prevState.currentChapterId ?? null);
   }, [currentIndex, history]);
 
+  const undoSteps = useCallback(
+    (steps: number) => {
+      if (steps <= 0 || currentIndex <= 0) return;
+      const targetIndex = Math.max(0, currentIndex - steps);
+      setCurrentIndex(targetIndex);
+      const prevState = history[targetIndex].state;
+      setStory(prevState);
+      setCurrentChapterId(prevState.currentChapterId ?? null);
+    },
+    [currentIndex, history]
+  );
+
   const redo = useCallback(() => {
-    if (currentIndex < history.length - 1) {
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      const nextState = history[nextIndex];
-      setStory(nextState);
-      if (nextState.currentChapterId) setCurrentChapterId(nextState.currentChapterId);
-    }
+    if (currentIndex >= history.length - 1) return;
+    const nextIndex = currentIndex + 1;
+    setCurrentIndex(nextIndex);
+    const nextState = history[nextIndex].state;
+    setStory(nextState);
+    setCurrentChapterId(nextState.currentChapterId ?? null);
   }, [currentIndex, history]);
+
+  const redoSteps = useCallback(
+    (steps: number) => {
+      if (steps <= 0 || currentIndex >= history.length - 1) return;
+      const targetIndex = Math.min(history.length - 1, currentIndex + steps);
+      setCurrentIndex(targetIndex);
+      const nextState = history[targetIndex].state;
+      setStory(nextState);
+      setCurrentChapterId(nextState.currentChapterId ?? null);
+    },
+    [currentIndex, history]
+  );
+
+  const undoOptions: StoryHistoryOption[] = [];
+  for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
+    undoOptions.push({
+      id: history[idx].id,
+      label: history[idx].label,
+      steps: currentIndex - idx + 1,
+    });
+  }
+
+  const redoOptions: StoryHistoryOption[] = [];
+  for (
+    let idx = currentIndex + 1;
+    idx < history.length && redoOptions.length < 10;
+    idx += 1
+  ) {
+    redoOptions.push({
+      id: history[idx].id,
+      label: history[idx].label,
+      steps: idx - currentIndex,
+    });
+  }
 
   return {
     story,
@@ -449,6 +534,15 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     refreshStory,
     undo,
     redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel: currentIndex > 0 ? history[currentIndex].label : null,
+    nextRedoLabel:
+      currentIndex < history.length - 1 ? history[currentIndex + 1].label : null,
+    historyIndex: currentIndex,
+    historySize: history.length,
     canUndo: currentIndex > 0,
     canRedo: currentIndex < history.length - 1,
   };

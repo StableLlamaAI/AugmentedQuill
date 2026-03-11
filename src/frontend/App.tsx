@@ -61,9 +61,100 @@ const App: React.FC = () => {
     refreshStory,
     undo,
     redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    historyIndex,
     canUndo,
     canRedo,
   } = useStory({ confirm, alert: window.alert });
+
+  const historyIndexRef = useRef(historyIndex);
+  const canUndoRef = useRef(canUndo);
+  const canRedoRef = useRef(canRedo);
+  const isPopStateUndoRedoRef = useRef(false);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+    canUndoRef.current = canUndo;
+    canRedoRef.current = canRedo;
+  }, [historyIndex, canUndo, canRedo]);
+
+  useEffect(() => {
+    const existing = window.history.state || {};
+    if (existing.aqUndoIndex !== historyIndex) {
+      window.history.replaceState({ ...existing, aqUndoIndex: historyIndex }, '');
+    }
+  }, [historyIndex]);
+
+  useEffect(() => {
+    if (isPopStateUndoRedoRef.current) {
+      isPopStateUndoRedoRef.current = false;
+      return;
+    }
+
+    const currentState = window.history.state || {};
+    if (currentState.aqUndoIndex === historyIndex) return;
+    window.history.pushState({ ...currentState, aqUndoIndex: historyIndex }, '');
+  }, [historyIndex]);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const targetIndex =
+        typeof event.state?.aqUndoIndex === 'number' ? event.state.aqUndoIndex : null;
+      if (targetIndex === null) return;
+
+      const current = historyIndexRef.current;
+      const delta = targetIndex - current;
+      if (delta === 0) return;
+
+      if (delta < 0 && canUndoRef.current) {
+        isPopStateUndoRedoRef.current = true;
+        undoSteps(Math.abs(delta));
+        return;
+      }
+
+      if (delta > 0 && canRedoRef.current) {
+        isPopStateUndoRedoRef.current = true;
+        redoSteps(delta);
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [undoSteps, redoSteps]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isCmdOrCtrl = event.metaKey || event.ctrlKey;
+      if (!isCmdOrCtrl || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      const isRedoKey = key === 'y' || (key === 'z' && event.shiftKey);
+      const isUndoKey = key === 'z' && !event.shiftKey;
+
+      if (isUndoKey && canUndoRef.current) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (isRedoKey && canRedoRef.current) {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [undo, redo]);
 
   const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
   const currentChapterContext = currentChapter
@@ -339,7 +430,18 @@ const App: React.FC = () => {
             setIsImagesOpen,
             setIsDebugLogsOpen,
           }}
-          historyControls={{ undo, redo, canUndo, canRedo }}
+          historyControls={{
+            undo,
+            redo,
+            undoSteps,
+            redoSteps,
+            undoOptions,
+            redoOptions,
+            nextUndoLabel,
+            nextRedoLabel,
+            canUndo,
+            canRedo,
+          }}
           viewControls={{
             viewMode,
             setViewMode,

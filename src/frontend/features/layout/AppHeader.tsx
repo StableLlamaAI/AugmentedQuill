@@ -9,9 +9,10 @@
  * Defines the app header unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeContext';
 import {
+  ChevronDown,
   Image as ImageIcon,
   Menu,
   PanelRightClose,
@@ -75,7 +76,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   const { isSidebarOpen, setIsSidebarOpen } = sidebarControls;
   const { setIsSettingsOpen, setIsImagesOpen, setIsDebugLogsOpen } = settingsControls;
-  const { undo, redo, canUndo, canRedo } = historyControls;
+  const {
+    undo,
+    redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    canUndo,
+    canRedo,
+  } = historyControls;
   const {
     appearanceRef,
     isAppearanceOpen,
@@ -85,10 +97,38 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     setEditorSettings,
   } = appearanceControls;
   const { isChatOpen, setIsChatOpen } = chatPanelControls;
+  const [isUndoMenuOpen, setIsUndoMenuOpen] = useState(false);
+  const [isRedoMenuOpen, setIsRedoMenuOpen] = useState(false);
+  const undoMenuRef = useRef<HTMLDivElement | null>(null);
+  const redoMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (undoMenuRef.current && !undoMenuRef.current.contains(target)) {
+        setIsUndoMenuOpen(false);
+      }
+      if (redoMenuRef.current && !redoMenuRef.current.contains(target)) {
+        setIsRedoMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onDocumentClick);
+    return () => {
+      document.removeEventListener('mousedown', onDocumentClick);
+    };
+  }, []);
+
+  const menuContainerClass = isLight
+    ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
+    : 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-700 bg-brand-gray-900 shadow-lg';
+  const menuButtonClass = isLight
+    ? 'w-full px-3 py-2 text-left text-xs text-brand-gray-700 hover:bg-brand-gray-100'
+    : 'w-full px-3 py-2 text-left text-xs text-brand-gray-300 hover:bg-brand-gray-800';
 
   return (
     <header
-      className={`h-14 border-b flex items-center justify-between px-3 md:px-4 shadow-sm z-40 relative shrink-0 ${headerBg}`}
+      className={`h-14 border-b flex items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
     >
       <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
         <button
@@ -130,26 +170,97 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         <div className={`h-6 w-px hidden sm:block ${dividerColor}`}></div>
 
         <div className="flex space-x-1">
-          <Button
-            theme={currentTheme}
-            variant="ghost"
-            size="sm"
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo"
-          >
-            <Undo size={16} />
-          </Button>
-          <Button
-            theme={currentTheme}
-            variant="ghost"
-            size="sm"
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo"
-          >
-            <Redo size={16} />
-          </Button>
+          <div className="relative flex" ref={undoMenuRef}>
+            <Button
+              theme={currentTheme}
+              variant="ghost"
+              size="sm"
+              onClick={undo}
+              disabled={!canUndo}
+              title={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
+              className="rounded-r-none"
+            >
+              <Undo size={16} />
+            </Button>
+            <Button
+              theme={currentTheme}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsUndoMenuOpen((open) => !open)}
+              disabled={!canUndo}
+              title="Undo multiple actions"
+              className="px-2 rounded-l-none border-l"
+            >
+              <ChevronDown size={12} />
+            </Button>
+            {isUndoMenuOpen && canUndo && (
+              <div className={menuContainerClass}>
+                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
+                  Undo Actions
+                </div>
+                {undoOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={menuButtonClass}
+                    onClick={() => {
+                      undoSteps(option.steps);
+                      setIsUndoMenuOpen(false);
+                    }}
+                    title={option.label}
+                  >
+                    Undo {option.steps}: {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative flex" ref={redoMenuRef}>
+            <Button
+              theme={currentTheme}
+              variant="ghost"
+              size="sm"
+              onClick={redo}
+              disabled={!canRedo}
+              title={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
+              className="rounded-r-none"
+            >
+              <Redo size={16} />
+            </Button>
+            <Button
+              theme={currentTheme}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsRedoMenuOpen((open) => !open)}
+              disabled={!canRedo}
+              title="Redo multiple actions"
+              className="px-2 rounded-l-none border-l"
+            >
+              <ChevronDown size={12} />
+            </Button>
+            {isRedoMenuOpen && canRedo && (
+              <div className={menuContainerClass}>
+                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
+                  Redo Actions
+                </div>
+                {redoOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={menuButtonClass}
+                    onClick={() => {
+                      redoSteps(option.steps);
+                      setIsRedoMenuOpen(false);
+                    }}
+                    title={option.label}
+                  >
+                    Redo {option.steps}: {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
