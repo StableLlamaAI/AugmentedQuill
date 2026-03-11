@@ -39,7 +39,10 @@ export const reanchorChapterSelection = (
 
   const matching = nextChapters.find(
     (chapter) =>
-      chapter.filename === oldChapter.filename && chapter.book_id === oldChapter.book_id
+      chapter.filename &&
+      chapter.book_id &&
+      chapter.filename === oldChapter.filename &&
+      chapter.book_id === oldChapter.book_id
   );
   return matching ? matching.id : null;
 };
