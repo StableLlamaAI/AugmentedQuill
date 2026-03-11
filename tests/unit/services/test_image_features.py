@@ -166,6 +166,61 @@ class ImageFeaturesTest(TestCase):
         meta = load_image_metadata()
         self.assertNotIn(filename, meta)
 
+    def test_delete_and_restore_image(self):
+        """Deleted images should be restorable with metadata and bytes."""
+        filename = "restore_me.png"
+        original_bytes = b"original-bytes"
+        (self.images_dir / filename).write_bytes(original_bytes)
+        update_image_metadata(
+            filename, description="Restore desc", title="Restore title"
+        )
+
+        delete_resp = self.client.post(
+            "/api/v1/projects/images/delete", json={"filename": filename}
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        restore_id = delete_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertFalse((self.images_dir / filename).exists())
+
+        restore_resp = self.client.post(
+            "/api/v1/projects/images/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200)
+        self.assertEqual(restore_resp.json().get("filename"), filename)
+        self.assertEqual((self.images_dir / filename).read_bytes(), original_bytes)
+
+        images = (
+            self.client.get("/api/v1/projects/images/list").json().get("images", [])
+        )
+        restored = next(
+            (item for item in images if item.get("filename") == filename), None
+        )
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.get("description"), "Restore desc")
+        self.assertEqual(restored.get("title"), "Restore title")
+
+    def test_upload_overwrite_returns_restore_id_and_can_restore(self):
+        """Overwriting an existing image should return restore_id for rollback."""
+        filename = "overwrite.png"
+        original_bytes = b"old-image"
+        (self.images_dir / filename).write_bytes(original_bytes)
+
+        files = {"file": (filename, b"new-image", "image/png")}
+        overwrite_resp = self.client.post(
+            f"/api/v1/projects/images/upload?target_name={filename}", files=files
+        )
+        self.assertEqual(overwrite_resp.status_code, 200)
+        restore_id = overwrite_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertEqual((self.images_dir / filename).read_bytes(), b"new-image")
+
+        restore_resp = self.client.post(
+            "/api/v1/projects/images/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200)
+        self.assertEqual((self.images_dir / filename).read_bytes(), original_bytes)
+
     async def _test_inject_images_impl(self):
         """Test that images mentioned in user message are injected as base64."""
         # Setup async test for inject_project_images
