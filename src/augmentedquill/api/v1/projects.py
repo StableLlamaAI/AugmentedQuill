@@ -27,6 +27,7 @@ from augmentedquill.services.projects.projects_api_asset_ops import (
     create_image_placeholder_response,
     upload_image_response,
     delete_image_response,
+    restore_image_response,
     get_image_file_response,
     export_project_response,
     import_project_response,
@@ -43,6 +44,7 @@ from augmentedquill.models.projects import (
     ImageDescriptionUpdateRequest,
     ImagePlaceholderRequest,
     ImageDeleteRequest,
+    ImageRestoreRequest,
     ProjectListResponse,
 )
 
@@ -114,6 +116,11 @@ async def api_projects_images_upload(
 @router.post("/projects/images/delete")
 async def api_projects_images_delete(body: ImageDeleteRequest) -> JSONResponse:
     return delete_image_response(body.model_dump())
+
+
+@router.post("/projects/images/restore")
+async def api_projects_images_restore(body: ImageRestoreRequest) -> JSONResponse:
+    return restore_image_response(body.model_dump())
 
 
 @router.get("/projects/images/{filename}")

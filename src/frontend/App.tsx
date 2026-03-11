@@ -356,6 +356,7 @@ const App: React.FC = () => {
     getErrorMessage,
     isSettingsOpen,
     setIsSettingsOpen,
+    recordHistoryEntry: pushExternalHistoryEntry,
   });
 
   // Get Active LLM Configs
@@ -492,6 +493,7 @@ const App: React.FC = () => {
           setIsImagesOpen={setIsImagesOpen}
           updateStoryImageSettings={updateStoryImageSettings}
           imageActionsAvailable={imageActionsAvailable}
+          recordHistoryEntry={pushExternalHistoryEntry}
           editorRef={editorRef}
           isCreateProjectOpen={isCreateProjectOpen}
           setIsCreateProjectOpen={setIsCreateProjectOpen}

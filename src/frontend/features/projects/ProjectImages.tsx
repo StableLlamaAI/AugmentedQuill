@@ -55,6 +55,11 @@ interface ProjectImagesProps {
   imageAdditionalInfo?: string;
   onUpdateSettings?: (style: string, info: string) => void;
   onInsert?: (filename: string, url: string | null, altText?: string) => void;
+  onRecordHistory?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 }
 
 export const ProjectImages: React.FC<ProjectImagesProps> = ({
@@ -68,6 +73,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   imageAdditionalInfo = '',
   onUpdateSettings,
   onInsert,
+  onRecordHistory,
 }) => {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -142,6 +148,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     const newDesc =
       edit.description !== undefined ? edit.description : original.description;
     const newTitle = edit.title !== undefined ? edit.title : original.title;
+    const oldDesc = original.description;
+    const oldTitle = original.title;
 
     try {
       await api.projects.updateImage(filename, newDesc, newTitle);
@@ -157,6 +165,17 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         const next = { ...prev };
         delete next[filename];
         return next;
+      });
+      onRecordHistory?.({
+        label: `Update image metadata: ${filename}`,
+        onUndo: async () => {
+          await api.projects.updateImage(filename, oldDesc, oldTitle);
+          await loadImages();
+        },
+        onRedo: async () => {
+          await api.projects.updateImage(filename, newDesc, newTitle);
+          await loadImages();
+        },
       });
     } catch (err: unknown) {
       setError('Failed to save metadata: ' + getErrorMessage(err, 'Unknown error'));
@@ -306,7 +325,22 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
           await api.projects.deleteImage(replaceTargetName);
         }
       } else {
-        await api.projects.uploadImage(file);
+        const uploaded = await api.projects.uploadImage(file);
+        let uploadedRestoreId = '';
+        onRecordHistory?.({
+          label: `Upload image: ${uploaded.filename}`,
+          onUndo: async () => {
+            const deleted = await api.projects.deleteImage(uploaded.filename);
+            uploadedRestoreId = deleted.restore_id || '';
+            await loadImages();
+          },
+          onRedo: async () => {
+            if (uploadedRestoreId) {
+              await api.projects.restoreImage(uploadedRestoreId);
+              await loadImages();
+            }
+          },
+        });
       }
       await loadImages();
       setReplaceTarget(null);
@@ -324,8 +358,23 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const handleDelete = async (filename: string) => {
     if (!window.confirm('Are you sure you want to delete this image?')) return;
     try {
-      await api.projects.deleteImage(filename);
+      const deleted = await api.projects.deleteImage(filename);
       setImages((prev) => prev.filter((i) => i.filename !== filename));
+      let latestRestoreId = deleted.restore_id || '';
+      onRecordHistory?.({
+        label: `Delete image: ${filename}`,
+        onUndo: async () => {
+          if (latestRestoreId) {
+            await api.projects.restoreImage(latestRestoreId);
+            await loadImages();
+          }
+        },
+        onRedo: async () => {
+          const redoDelete = await api.projects.deleteImage(filename);
+          latestRestoreId = redoDelete.restore_id || latestRestoreId;
+          await loadImages();
+        },
+      });
     } catch (err: unknown) {
       setError('Delete failed: ' + getErrorMessage(err, 'Unknown error'));
     }
@@ -333,8 +382,29 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 
   const handleCreatePlaceholder = async () => {
     try {
-      await api.projects.createImagePlaceholder('', '');
+      const created = await api.projects.createImagePlaceholder('', '');
       await loadImages();
+      let restoreId = '';
+      onRecordHistory?.({
+        label: `Create image placeholder: ${created.filename}`,
+        onUndo: async () => {
+          const deleted = await api.projects.deleteImage(created.filename);
+          restoreId = deleted.restore_id || '';
+          await loadImages();
+        },
+        onRedo: async () => {
+          if (restoreId) {
+            await api.projects.restoreImage(restoreId);
+          } else {
+            await api.projects.updateImage(
+              created.filename,
+              '',
+              'Untitled Placeholder'
+            );
+          }
+          await loadImages();
+        },
+      });
     } catch (e: unknown) {
       setError('Failed to create placeholder: ' + getErrorMessage(e, 'Unknown error'));
     }

@@ -56,6 +56,10 @@ class ImageDeleteRequest(BaseModel):
     filename: str
 
 
+class ImageRestoreRequest(BaseModel):
+    restore_id: str
+
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------

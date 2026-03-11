@@ -36,6 +36,11 @@ type UseProjectManagementParams = {
   getErrorMessage: (error: unknown, fallback: string) => string;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
+  recordHistoryEntry?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 };
 
 const mapProjectsList = (projects: ProjectListItem[]) =>
@@ -58,6 +63,7 @@ export function useProjectManagement({
   getErrorMessage,
   isSettingsOpen,
   setIsSettingsOpen,
+  recordHistoryEntry,
 }: UseProjectManagementParams) {
   const [projects, setProjects] = useState<ProjectMetadata[]>(() => {
     const saved = localStorage.getItem('augmentedquill_projects_meta');
@@ -186,6 +192,7 @@ export function useProjectManagement({
   const handleCreateProjectConfirm = useCallback(
     async (name: string, type: CreateProjectType, language: string = 'en') => {
       try {
+        const previousProjectId = story.id;
         const result = await api.projects.create(name, type, language);
         if (!result.ok) return;
 
@@ -227,6 +234,22 @@ export function useProjectManagement({
 
           loadStory(mappedStory);
           handleNewChat(false);
+
+          recordHistoryEntry?.({
+            label: `Create project: ${name}`,
+            onUndo: async () => {
+              await api.projects.delete(name);
+              await refreshProjects();
+              if (previousProjectId && previousProjectId !== name) {
+                await handleLoadProject(previousProjectId);
+              }
+            },
+            onRedo: async () => {
+              await api.projects.create(name, type, language);
+              await refreshProjects();
+              await handleLoadProject(name);
+            },
+          });
         }
 
         setIsCreateProjectOpen(false);
@@ -235,7 +258,16 @@ export function useProjectManagement({
         notifyError(`Failed to create project: ${formatError(error)}`, error);
       }
     },
-    [loadStory, handleNewChat, isSettingsOpen, setIsSettingsOpen]
+    [
+      story.id,
+      loadStory,
+      handleNewChat,
+      refreshProjects,
+      handleLoadProject,
+      recordHistoryEntry,
+      isSettingsOpen,
+      setIsSettingsOpen,
+    ]
   );
 
   const handleDeleteProject = useCallback(
@@ -243,6 +275,13 @@ export function useProjectManagement({
       if (projects.length <= 1) return;
 
       try {
+        let exported: Blob | null = null;
+        try {
+          exported = await api.projects.export(id);
+        } catch (snapshotError) {
+          console.warn('Project export snapshot failed before delete', snapshotError);
+        }
+
         await api.projects.delete(id);
         const newProjects = projects.filter((project) => project.id !== id);
         setProjects(newProjects);
@@ -251,6 +290,24 @@ export function useProjectManagement({
         if (id === story.id && newProjects.length > 0) {
           await handleLoadProject(newProjects[0].id);
         }
+
+        if (exported) {
+          recordHistoryEntry?.({
+            label: `Delete project: ${id}`,
+            onUndo: async () => {
+              const snapshotFile = new File([exported as Blob], `${id}.zip`, {
+                type: 'application/zip',
+              });
+              await api.projects.import(snapshotFile);
+              await refreshProjects();
+              await handleLoadProject(id);
+            },
+            onRedo: async () => {
+              await api.projects.delete(id);
+              await refreshProjects();
+            },
+          });
+        }
       } catch (error) {
         notifyError(
           `Failed to delete project: ${getErrorMessage(error, 'Unknown error')}`,
@@ -258,7 +315,14 @@ export function useProjectManagement({
         );
       }
     },
-    [projects, story.id, handleLoadProject, getErrorMessage]
+    [
+      projects,
+      story.id,
+      handleLoadProject,
+      refreshProjects,
+      recordHistoryEntry,
+      getErrorMessage,
+    ]
   );
 
   const handleRenameProject = useCallback(

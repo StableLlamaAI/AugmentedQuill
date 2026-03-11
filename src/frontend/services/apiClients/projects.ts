@@ -130,10 +130,18 @@ export const projectsApi = {
   },
 
   deleteImage: async (filename: string) => {
-    return postJson<{ ok: boolean }>(
+    return postJson<{ ok: boolean; restore_id?: string }>(
       '/projects/images/delete',
       { filename },
       'Failed to delete image'
+    );
+  },
+
+  restoreImage: async (restoreId: string) => {
+    return postJson<{ ok: boolean; filename?: string }>(
+      '/projects/images/restore',
+      { restore_id: restoreId },
+      'Failed to restore image'
     );
   },
 };
