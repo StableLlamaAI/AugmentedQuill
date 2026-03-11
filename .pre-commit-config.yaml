@@ -7,7 +7,7 @@ repos:
         language_version: python3
 
   - repo: https://github.com/psf/black
-    rev: 25.12.0
+    rev: 26.1.0
     hooks:
       - id: black
         # Run black in check-only mode so it does not modify files automatically

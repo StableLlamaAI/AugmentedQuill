@@ -548,21 +548,21 @@ async def call_editing_assistant(
             f_args = func.get("arguments", "{}")
             if isinstance(f_args, str):
                 try:
-                    f_args = json.loads(f_args)
+                    args_obj = json.loads(f_args)
                 except Exception:
-                    f_args = {}
+                    args_obj = {}
+            else:
+                args_obj = f_args
+
             tcall_id = tcall.get("id")
 
             tool_res = await execute_registered_tool(
-                f_name, f_args, tcall_id, payload, mutations
+                f_name, args_obj, tcall_id, payload, mutations
             )
             if "role" not in tool_res:
-                tool_res = {
-                    "role": "tool",
-                    "tool_call_id": tcall_id,
-                    "name": f_name,
-                    "content": json.dumps(tool_res),
-                }
+                from augmentedquill.services.chat.chat_tools.common import tool_message
+
+                tool_res = tool_message(f_name, tcall_id, tool_res)
             messages.append(tool_res)
 
     if not final_output:

@@ -67,7 +67,11 @@ const App: React.FC = () => {
 
   const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
   const currentChapterContext = currentChapter
-    ? { id: currentChapter.id, title: currentChapter.title }
+    ? {
+        id: currentChapter.id,
+        title: currentChapter.title,
+        is_empty: !currentChapter.content || currentChapter.content.trim() === '',
+      }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
   const appearanceRef = useRef<HTMLDivElement>(null);

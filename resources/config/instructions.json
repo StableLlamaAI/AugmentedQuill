@@ -272,11 +272,7 @@
     },
     "chat_user_context": {
       "_use": "CHAT",
-      "en": [
-        "[Current Chapter Context: ID={chapter_id}, Title=\"{chapter_title}\"]",
-        "",
-        "User Request: {user_text}"
-      ]
+      "en": ["{header}", "", "User Request: {user_text}"]
     },
     "select_relevant_entries": {
       "_use": "EDITING",

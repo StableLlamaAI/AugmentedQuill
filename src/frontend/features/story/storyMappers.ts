@@ -25,8 +25,12 @@ export const reanchorChapterSelection = (
   nextChapters: Chapter[]
 ): string | null => {
   if (!previousSelection) {
-    return nextChapters.length > 0 ? null : null;
+    return null;
   }
+
+  // First try to find the exact same ID.
+  const exactMatch = nextChapters.find((c) => c.id === previousSelection);
+  if (exactMatch) return exactMatch.id;
 
   const oldChapter = previousChapters.find(
     (chapter) => chapter.id === previousSelection
