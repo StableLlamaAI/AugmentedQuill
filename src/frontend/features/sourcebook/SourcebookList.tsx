@@ -50,6 +50,7 @@ interface SourcebookListProps {
   isAutoSelectionEnabled?: boolean;
   isAutoSelectionRunning?: boolean;
   onToggleAutoSelection?: (enabled: boolean) => void;
+  onMutated?: (label: string) => Promise<void>;
 }
 
 export const SourcebookList: React.FC<SourcebookListProps> = ({
@@ -59,6 +60,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   isAutoSelectionEnabled = true,
   isAutoSelectionRunning = false,
   onToggleAutoSelection,
+  onMutated,
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>([]);
   const [search, setSearch] = useState('');
@@ -86,17 +88,21 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
 
   const handleCreate = async (entry: SourcebookUpsertPayload) => {
     await api.sourcebook.create(entry);
-    loadEntries();
+    await loadEntries();
+    await onMutated?.(`Create sourcebook entry: ${entry.name}`);
   };
 
   const handleUpdate = async (entry: SourcebookUpsertPayload) => {
     await api.sourcebook.update(entry.id, entry);
-    loadEntries();
+    await loadEntries();
+    await onMutated?.(`Update sourcebook entry: ${entry.name}`);
   };
 
   const handleDelete = async (id: string) => {
+    const deletedEntry = entries.find((entry) => entry.id === id);
     await api.sourcebook.delete(id);
-    loadEntries();
+    await loadEntries();
+    await onMutated?.(`Delete sourcebook entry: ${deletedEntry?.name || id}`);
   };
 
   const handleMouseEnter = (e: React.MouseEvent, entry: SourcebookEntry) => {

@@ -25,7 +25,7 @@ type UseAppUiActionsParams = {
   selectChapter: (id: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
-  refreshStory: () => Promise<void>;
+  refreshStory: (historyLabel?: string) => Promise<void>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
@@ -68,7 +68,7 @@ export function useAppUiActions({
   const handleConvertProject = async (newType: string) => {
     try {
       await api.projects.convert(newType);
-      await refreshStory();
+      await refreshStory('Convert project type');
     } catch (error: unknown) {
       notifyError(
         `Failed to convert project: ${getErrorMessage(error, 'Unknown error')}`,
@@ -80,7 +80,7 @@ export function useAppUiActions({
   const handleBookCreate = async (title: string) => {
     try {
       await api.books.create(title);
-      await refreshStory();
+      await refreshStory(`Create book: ${title}`);
     } catch (error: unknown) {
       notifyError(
         `Failed to create book: ${getErrorMessage(error, 'Unknown error')}`,
@@ -92,7 +92,7 @@ export function useAppUiActions({
   const handleBookDelete = async (id: string) => {
     try {
       await api.books.delete(id);
-      await refreshStory();
+      await refreshStory(`Delete book: ${id}`);
     } catch (error: unknown) {
       notifyError(
         `Failed to delete book: ${getErrorMessage(error, 'Unknown error')}`,
@@ -104,7 +104,9 @@ export function useAppUiActions({
   const handleReorderChapters = async (chapterIds: number[], bookId?: string) => {
     try {
       await api.chapters.reorder(chapterIds, bookId);
-      await refreshStory();
+      await refreshStory(
+        bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters'
+      );
     } catch (error: unknown) {
       notifyError(
         `Failed to reorder chapters: ${getErrorMessage(error, 'Unknown error')}`,
@@ -116,7 +118,7 @@ export function useAppUiActions({
   const handleReorderBooks = async (bookIds: string[]) => {
     try {
       await api.books.reorder(bookIds);
-      await refreshStory();
+      await refreshStory('Reorder books');
     } catch (error: unknown) {
       notifyError(
         `Failed to reorder books: ${getErrorMessage(error, 'Unknown error')}`,

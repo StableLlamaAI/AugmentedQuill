@@ -146,6 +146,7 @@ export type MainSidebarControls = {
   isAutoSourcebookSelectionEnabled?: boolean;
   onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
   isSourcebookSelectionRunning?: boolean;
+  onSourcebookMutated?: (label: string) => Promise<void>;
 };
 
 export type MainEditorSuggestionControls = {

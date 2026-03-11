@@ -504,6 +504,7 @@ const App: React.FC = () => {
             isAutoSourcebookSelectionEnabled,
             onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
             isSourcebookSelectionRunning,
+            onSourcebookMutated: (label: string) => refreshStory(label),
           }}
           editorControls={{
             currentChapter,
