@@ -89,6 +89,12 @@ class WriteChapterContentParams(BaseModel):
     content: str = Field(..., description="The content to write")
 
 
+class ReplaceTextInChapterParams(BaseModel):
+    chap_id: int = Field(..., description="The chapter ID to edit")
+    old_text: str = Field(..., description="The exact literal text to replace")
+    new_text: str = Field(..., description="The new text to insert instead")
+
+
 class WriteChapterSummaryParams(BaseModel):
     chap_id: int = Field(..., description="The chapter ID to write summary to")
     summary: str = Field(..., description="The summary to write")
@@ -245,6 +251,33 @@ async def write_chapter_content(
     return {"message": f"Content written to chapter {params.chap_id} successfully"}
 
 
+@chat_tool(
+    description="Replace an exact literal string in a chapter with a new string. Better for small edits to avoid JSON truncation errors."
+)
+async def replace_text_in_chapter(
+    params: ReplaceTextInChapterParams, payload: dict, mutations: dict
+):
+    # Retrieve current text
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    if params.old_text not in text:
+        return {
+            "error": "The exact old_text was not found in the chapter. Please ensure it matches exactly or use get_chapter_content to verify the exact string."
+        }
+
+    occurrences = text.count(params.old_text)
+    if occurrences > 1:
+        return {
+            "error": f"The old_text was found {occurrences} times. Please provide a more specific old_text to ensure only one instance is replaced, or replace them one by one."
+        }
+
+    new_content = text.replace(params.old_text, params.new_text, 1)
+    _write_chapter_content(params.chap_id, new_content)
+    mutations["story_changed"] = True
+    return {"message": f"Successfully replaced text in chapter {params.chap_id}"}
+
+
 @chat_tool(description="Write summary to a specific chapter.")
 async def write_chapter_summary(
     params: WriteChapterSummaryParams, payload: dict, mutations: dict
@@ -371,3 +404,168 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
 
     mutations["story_changed"] = True
     return {"ok": True, "message": "Chapter deleted"}
+
+
+class CallWritingLlmParams(BaseModel):
+    instruction: str = Field(
+        ...,
+        description="The task for the WRITING LLM (e.g. 'Rewrite this paragraph to be more descriptive').",
+    )
+    context: str = Field(
+        ..., description="The text context the WRITING LLM needs to operate on."
+    )
+
+
+@chat_tool(
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated."
+)
+async def call_writing_llm(
+    params: CallWritingLlmParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="WRITING"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a skilled novelist. Provide the exact text requested without explanations.",
+        },
+        {
+            "role": "user",
+            "content": f"Instruction:\n{params.instruction}\n\nContext:\n{params.context}",
+        },
+    ]
+
+    response = await llm.unified_chat_complete(
+        caller_id="chat_tools.call_writing_llm",
+        model_type="WRITING",
+        messages=messages,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        model_name=model_name,
+    )
+    return {"generated_text": response.get("content", "")}
+
+
+class CallEditingAssistantParams(BaseModel):
+    task: str = Field(
+        ...,
+        description="The task the user wants the editor to perform (e.g., 'Fix the grammar in Chapter 1', 'Rewrite paragraph 2 to be more descriptive').",
+    )
+
+
+@chat_tool(
+    description="Delegate a complex story editing, text revision, or structural task to the EDITING LLM. Use this whenever the user asks for direct editing, fixing, rewriting or evaluating."
+)
+async def call_editing_assistant(
+    params: CallEditingAssistantParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+    from augmentedquill.services.chat.chat_tool_decorator import (
+        execute_registered_tool,
+        get_registered_tool_schemas,
+    )
+    from augmentedquill.core.prompts import (
+        load_model_prompt_overrides,
+        get_system_message,
+    )
+    from augmentedquill.core.config import load_machine_config, BASE_DIR
+    import json
+
+    # Resolve EDITING model
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="EDITING"
+    )
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    sys_msg = get_system_message("editing_llm", model_overrides, language="en")
+
+    messages = [
+        {"role": "system", "content": sys_msg},
+        {
+            "role": "user",
+            "content": f"Please perform the following editing task:\n{params.task}",
+        },
+    ]
+
+    all_tools = get_registered_tool_schemas()
+    tools = [
+        t
+        for t in all_tools
+        if t.get("function", {}).get("name") != "call_editing_assistant"
+    ]
+
+    final_output = ""
+    for _ in range(7):  # max 7 steps
+        try:
+            res = await llm.unified_chat_complete(
+                caller_id="chat_tools.call_editing_assistant",
+                model_type="EDITING",
+                messages=messages,
+                base_url=base_url,
+                api_key=api_key,
+                model_id=model_id,
+                timeout_s=timeout_s,
+                model_name=model_name,
+                tools=tools,
+            )
+        except Exception as e:
+            # Llama.cpp and some endpoints return 500 when tool call JSON is malformed
+            # Catching it gives the subagent a chance to adjust (e.g. use smaller chunk sizes)
+            err_msg = str(e)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"System Warning: Your previous attempt failed with an API/parsing error ({err_msg}). This typically occurs if your output was truncated due to length limits or formed invalid JSON. Please try again using smaller operations, shorter text chunks, or a different approach.",
+                }
+            )
+            continue
+
+        tool_calls = res.get("tool_calls", [])
+        content = res.get("content", "")
+
+        assistant_msg = {"role": "assistant"}
+        if content:
+            assistant_msg["content"] = content
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+
+        messages.append(assistant_msg)
+
+        if not tool_calls:
+            final_output = content
+            break
+
+        for tcall in tool_calls:
+            func = tcall.get("function", {})
+            f_name = func.get("name")
+            f_args = func.get("arguments", "{}")
+            if isinstance(f_args, str):
+                try:
+                    args_obj = json.loads(f_args)
+                except Exception:
+                    args_obj = {}
+            else:
+                args_obj = f_args
+
+            tcall_id = tcall.get("id")
+
+            tool_res = await execute_registered_tool(
+                f_name, args_obj, tcall_id, payload, mutations
+            )
+            if "role" not in tool_res:
+                from augmentedquill.services.chat.chat_tools.common import tool_message
+
+                tool_res = tool_message(f_name, tcall_id, tool_res)
+            messages.append(tool_res)
+
+    if not final_output:
+        final_output = "Task completed using tools."
+
+    return {"message": "Editing Assistant finished", "response": final_output}

@@ -99,6 +99,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const isAtBottomRef = useRef<boolean>(true);
 
     const {
       continuations,
@@ -109,6 +110,22 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       onKeyboardSuggestionAction,
     } = suggestionControls;
     const { onAiAction, isAiLoading, isWritingAvailable = true } = aiControls;
+
+    // Detect if we are at the bottom of the scroll container
+    const handleScroll = useCallback(() => {
+      if (!scrollContainerRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      // Use a small buffer (5px) for "at bottom" detection
+      const atBottom = scrollHeight - scrollTop - clientHeight < 5;
+      isAtBottomRef.current = atBottom;
+    }, []);
+
+    // Effect to scroll to bottom if we were at the bottom when content changed or AI is loading
+    useEffect(() => {
+      if (isAiLoading && isAtBottomRef.current && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }, [chapter.content, isAiLoading]);
     const writingUnavailableReason =
       'This action is unavailable because no working WRITING model is configured.';
 
@@ -531,12 +548,16 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
       prevHasContinuationRef.current = hasContinuationOptions;
 
-      if (!(isAiLoading || isSuggesting || justOpened)) return;
+      if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
       const raf = window.requestAnimationFrame(() => {
-        scrollMainContentToBottom();
+        if (isAtBottomRef.current) {
+          scrollMainContentToBottom();
+        }
       });
-      return () => window.cancelAnimationFrame(raf);
+      return () => {
+        window.cancelAnimationFrame(raf);
+      };
     }, [
       chapter.content,
       continuations,
@@ -616,6 +637,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onScroll={handleScroll}
         >
           {isDragging && (
             <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">

@@ -141,7 +141,7 @@ def chat_tool(
                 return _tool_message(
                     tool_name,
                     call_id,
-                    {"error": f"Invalid parameters: {error_details}"},
+                    {"error": "Invalid parameters", "details": error_details},
                 )
             except Exception as e:
                 return _tool_message(
@@ -210,11 +210,6 @@ async def execute_registered_tool(
     except ServiceError as e:
         return _tool_error(name, call_id, f"Tool failed: {e.detail}")
     except Exception as e:
-        return {
-            "role": "tool",
-            "tool_call_id": call_id,
-            "name": name,
-            "content": _json.dumps(
-                {"error": f"Tool failed with unexpected error: {e}"}
-            ),
-        }
+        return _tool_error(
+            name, call_id, f"Tool failed with unexpected error: {str(e)}"
+        )

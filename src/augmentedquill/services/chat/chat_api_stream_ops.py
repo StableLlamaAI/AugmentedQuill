@@ -141,7 +141,20 @@ def inject_chat_user_context(
         return
 
     chapter_id = current_chapter.get("id", "Unknown")
-    chapter_title = current_chapter.get("title", "Untitled")
+    chapter_title = current_chapter.get("title", "")
+    is_empty = current_chapter.get("is_empty", False)
+
+    # Build the context header
+    # [Current Chapter Context: ID=1, Title="Content"]
+    # or [Current Chapter Context: ID=1]
+    # or [Current Chapter Context: ID=1 (Empty)]
+    parts = [f"ID={chapter_id}"]
+    if chapter_title and chapter_title != "Content":
+        parts.append(f'Title="{chapter_title}"')
+    if is_empty:
+        parts.append("(Empty)")
+
+    header = f"[Current Chapter Context: {', '.join(parts)}]"
 
     # Find the last user message to inject context into
     last_user_idx = -1
@@ -159,8 +172,7 @@ def inject_chat_user_context(
     context_msg = get_user_prompt(
         "chat_user_context",
         language=language,
-        chapter_id=chapter_id,
-        chapter_title=chapter_title,
+        header=header,
         user_text=user_text,
     )
 

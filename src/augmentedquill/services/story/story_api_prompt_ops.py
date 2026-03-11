@@ -28,7 +28,15 @@ def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
     machine_config = load_machine_config(base_dir / "config" / "machine.json") or {}
     # model_name returned from resolve_openai_credentials is the selected name!
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
-    return base_url, api_key, model_id, timeout_s, model_name, model_overrides
+    return (
+        base_url,
+        api_key,
+        model_id,
+        timeout_s,
+        model_name,
+        model_overrides,
+        model_type,
+    )
 
 
 def _build_messages(

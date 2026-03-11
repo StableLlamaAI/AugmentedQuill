@@ -25,8 +25,12 @@ export const reanchorChapterSelection = (
   nextChapters: Chapter[]
 ): string | null => {
   if (!previousSelection) {
-    return nextChapters.length > 0 ? null : null;
+    return null;
   }
+
+  // First try to find the exact same ID.
+  const exactMatch = nextChapters.find((c) => c.id === previousSelection);
+  if (exactMatch) return exactMatch.id;
 
   const oldChapter = previousChapters.find(
     (chapter) => chapter.id === previousSelection
@@ -35,7 +39,10 @@ export const reanchorChapterSelection = (
 
   const matching = nextChapters.find(
     (chapter) =>
-      chapter.filename === oldChapter.filename && chapter.book_id === oldChapter.book_id
+      chapter.filename &&
+      chapter.book_id &&
+      chapter.filename === oldChapter.filename &&
+      chapter.book_id === oldChapter.book_id
   );
   return matching ? matching.id : null;
 };
@@ -53,6 +60,14 @@ export const mapSelectStoryToState = (
     chapters
   );
 
+  const chaptersWithPreservedState = chapters.map((c) => {
+    const prev = previousChapters.find((pc) => pc.id === c.id);
+    if (prev) {
+      return { ...c, content: prev.content };
+    }
+    return c;
+  });
+
   return {
     id: projectId,
     title: story.project_title || projectId,
@@ -60,7 +75,7 @@ export const mapSelectStoryToState = (
     styleTags: story.tags || [],
     image_style: story.image_style || '',
     image_additional_info: story.image_additional_info || '',
-    chapters,
+    chapters: chaptersWithPreservedState,
     projectType: story.project_type || 'novel',
     language: story.language || 'en',
     books: story.books || [],

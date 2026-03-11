@@ -290,6 +290,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         try:
             async for chunk in llm.unified_chat_stream(
                 caller_id="api.chat.stream",
+                model_type=model_type,
                 messages=req_messages,
                 base_url=base_url,
                 api_key=api_key,

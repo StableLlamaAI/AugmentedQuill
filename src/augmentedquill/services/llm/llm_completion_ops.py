@@ -226,6 +226,7 @@ def _build_model_extra_body(model_cfg: dict) -> dict:
 async def unified_chat_complete(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -249,6 +250,7 @@ async def unified_chat_complete(
 
     resp_json = await openai_chat_complete(
         caller_id=caller_id,
+        model_type=model_type,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
@@ -284,10 +286,13 @@ async def unified_chat_complete(
     }
 
 
-async def _execute_llm_request(caller_id, url, headers, body, timeout_s):
+async def _execute_llm_request(
+    caller_id, url, headers, body, timeout_s, model_type=None
+):
     timeout_obj = build_timeout(timeout_s)
     response = await logged_request(
         caller_id=caller_id,
+        model_type=model_type,
         method="POST",
         url=url,
         headers=headers,
@@ -301,6 +306,7 @@ async def _execute_llm_request(caller_id, url, headers, body, timeout_s):
 async def openai_chat_complete(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -335,12 +341,15 @@ async def openai_chat_complete(
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
+    return await _execute_llm_request(
+        caller_id, url, headers, body, timeout_s, model_type=model_type
+    )
 
 
 async def openai_completions(
     *,
     caller_id: str,
+    model_type: str | None = None,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -377,12 +386,15 @@ async def openai_completions(
     if extra_body:
         body.update(extra_body)
 
-    return await _execute_llm_request(caller_id, url, headers, body, timeout_s)
+    return await _execute_llm_request(
+        caller_id, url, headers, body, timeout_s, model_type=model_type
+    )
 
 
 async def openai_chat_complete_stream(
     *,
     caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
@@ -422,6 +434,7 @@ async def openai_chat_complete_stream(
 
     async with logged_stream_request(
         caller_id=caller_id,
+        model_type=model_type,
         method="POST",
         url=url,
         headers=headers,
@@ -458,6 +471,7 @@ async def openai_chat_complete_stream(
 async def openai_completions_stream(
     *,
     caller_id: str,
+    model_type: str | None = None,
     prompt: str,
     base_url: str,
     api_key: str | None,
@@ -497,6 +511,7 @@ async def openai_completions_stream(
 
     async with logged_stream_request(
         caller_id=caller_id,
+        model_type=model_type,
         method="POST",
         url=url,
         headers=headers,

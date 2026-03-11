@@ -74,6 +74,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     [history, currentIndex]
   );
 
+  const lastLoadedChapterId = useRef<string | null>(null);
+
   const refreshStory = useCallback(async () => {
     try {
       const projects = await api.projects.list();
@@ -104,6 +106,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
                   story.chapters
                 );
 
+                lastLoadedChapterId.current = null;
                 setStory(newStory);
                 setCurrentChapterId(newStory.currentChapterId);
               } else if (res2.error) {
@@ -140,6 +143,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           story.chapters
         );
 
+        lastLoadedChapterId.current = null;
         setStory(newStory);
         setCurrentChapterId(newStory.currentChapterId);
       }
@@ -157,8 +161,6 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     },
     [currentChapterId]
   );
-
-  const lastLoadedChapterId = useRef<string | null>(null);
 
   // Load chapter content lazily so list refreshes stay responsive.
   useEffect(() => {

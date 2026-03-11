@@ -113,19 +113,25 @@ export const Chat: React.FC<ChatProps> = ({
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Consider "at bottom" if within 100px of the actual bottom to be more forgiving
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      // Consider "at bottom" if within 10px of the actual bottom
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
       isAtBottomRef.current = isAtBottom;
     }
   };
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    if (!scrollContainerRef.current) return;
+    const { scrollHeight } = scrollContainerRef.current;
+    scrollContainerRef.current.scrollTo({
+      top: scrollHeight,
+      behavior,
+    });
   };
 
   useEffect(() => {
     if (isAtBottomRef.current) {
-      scrollToBottom();
+      // Use 'auto' for streaming (isLoading) to avoid laggy smooth scroll
+      scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
   }, [messages, isLoading, editingMessageId]);
 
