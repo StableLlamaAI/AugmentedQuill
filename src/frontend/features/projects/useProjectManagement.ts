@@ -159,15 +159,53 @@ export function useProjectManagement({
   const handleImportProject = useCallback(
     async (file: File) => {
       try {
+        const previousActiveProjectId = story.id;
+        const importedFileSnapshot = file;
+        const knownProjectIds = new Set(projects.map((project) => project.id));
         const response = await api.projects.import(file);
         if (response.ok && response.available) {
           setProjects(mapProjectsList(response.available));
+
+          const importedNameFromList = response.available
+            .map((project) => project.name)
+            .find((name) => !knownProjectIds.has(name));
+          const importedNameFromMessage =
+            typeof response.message === 'string'
+              ? response.message.match(/Imported as\s+(.+)$/)?.[1]?.trim()
+              : undefined;
+          const importedProjectName =
+            importedNameFromList || importedNameFromMessage || null;
+
+          if (importedProjectName) {
+            recordHistoryEntry?.({
+              label: `Import project: ${importedProjectName}`,
+              onUndo: async () => {
+                await api.projects.delete(importedProjectName);
+                await refreshProjects();
+                if (previousActiveProjectId) {
+                  await handleLoadProject(previousActiveProjectId);
+                }
+              },
+              onRedo: async () => {
+                await api.projects.import(importedFileSnapshot);
+                await refreshProjects();
+                await handleLoadProject(importedProjectName);
+              },
+            });
+          }
         }
       } catch (error) {
         notifyError(`Import failed: ${getErrorMessage(error, 'Unknown error')}`, error);
       }
     },
-    [getErrorMessage]
+    [
+      story.id,
+      projects,
+      recordHistoryEntry,
+      refreshProjects,
+      handleLoadProject,
+      getErrorMessage,
+    ]
   );
 
   const handleCreateProject = useCallback(() => {

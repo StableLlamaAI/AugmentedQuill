@@ -423,8 +423,10 @@ const App: React.FC = () => {
     selectChapter,
     setIsSidebarOpen,
     setEditorSettings,
+    currentProjectType: story.projectType,
     refreshStory,
     getErrorMessage,
+    recordHistoryEntry: pushExternalHistoryEntry,
   });
 
   const requestToolCallLoopAccess = (

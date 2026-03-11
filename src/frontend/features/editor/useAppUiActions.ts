@@ -12,7 +12,7 @@
 import { Dispatch, RefObject, SetStateAction } from 'react';
 
 import { api } from '../../services/api';
-import { AppTheme, EditorSettings } from '../../types';
+import { AppTheme, EditorSettings, StoryState } from '../../types';
 import { EditorHandle } from './Editor';
 import { useTheme } from '../layout/ThemeContext';
 import { notifyError } from '../../services/errorNotifier';
@@ -25,8 +25,14 @@ type UseAppUiActionsParams = {
   selectChapter: (id: string) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
+  currentProjectType: StoryState['projectType'];
   refreshStory: (historyLabel?: string) => Promise<void>;
   getErrorMessage: (error: unknown, fallback: string) => string;
+  recordHistoryEntry?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 };
 
 export function useAppUiActions({
@@ -37,8 +43,10 @@ export function useAppUiActions({
   selectChapter,
   setIsSidebarOpen,
   setEditorSettings,
+  currentProjectType,
   refreshStory,
   getErrorMessage,
+  recordHistoryEntry,
 }: UseAppUiActionsParams) {
   const { buttonActive, isLight } = useTheme();
 
@@ -67,8 +75,20 @@ export function useAppUiActions({
 
   const handleConvertProject = async (newType: string) => {
     try {
+      if (newType === currentProjectType) return;
       await api.projects.convert(newType);
-      await refreshStory('Convert project type');
+      await refreshStory();
+      recordHistoryEntry?.({
+        label: `Convert project: ${currentProjectType} -> ${newType}`,
+        onUndo: async () => {
+          await api.projects.convert(currentProjectType);
+          await refreshStory();
+        },
+        onRedo: async () => {
+          await api.projects.convert(newType);
+          await refreshStory();
+        },
+      });
     } catch (error: unknown) {
       notifyError(
         `Failed to convert project: ${getErrorMessage(error, 'Unknown error')}`,
