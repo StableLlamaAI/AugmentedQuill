@@ -154,6 +154,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           isAiAvailable={isEditingAvailable}
           theme={currentTheme}
           onOpenImages={handleOpenImages}
+          languages={instructionLanguages}
         />
         <SourcebookList
           theme={currentTheme}

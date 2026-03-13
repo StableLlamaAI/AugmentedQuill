@@ -103,6 +103,10 @@ export function useProviderHealth(appSettings: AppSettings) {
     >
   >({});
 
+  const refreshHealth = () => {
+    promiseCache.current = {};
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -215,5 +219,5 @@ export function useProviderHealth(appSettings: AppSettings) {
     appSettings.activeWritingProviderId,
   ]);
 
-  return { modelConnectionStatus, detectedCapabilities };
+  return { modelConnectionStatus, detectedCapabilities, refreshHealth };
 }
