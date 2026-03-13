@@ -158,6 +158,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         />
         <SourcebookList
           theme={currentTheme}
+          externalEntries={story.sourcebook || []}
           checkedIds={checkedSourcebookIds || []}
           onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
           isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}

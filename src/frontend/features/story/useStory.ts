@@ -63,6 +63,15 @@ interface StoryHistoryEntry {
   onRedo?: () => Promise<void> | void;
 }
 
+export const resolveExternalHistorySourceState = (
+  explicitState: StoryState | undefined,
+  latestState: StoryState,
+  fallbackState: StoryState
+): StoryState => {
+  if (explicitState) return explicitState;
+  return latestState || fallbackState;
+};
+
 const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
   id: `history-${Date.now()}`,
   label: 'Initial story state',
@@ -101,11 +110,16 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const [history, setHistory] = useState<StoryHistoryEntry[]>([INITIAL_HISTORY_ENTRY]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const hasFetchedRef = useRef(false);
+  const latestStoryRef = useRef(story);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
   const dialogsRef = useRef(dialogs);
   useEffect(() => {
     dialogsRef.current = dialogs;
   });
+
+  useEffect(() => {
+    latestStoryRef.current = story;
+  }, [story]);
 
   const pushState = useCallback(
     (newState: StoryState, label: string) => {
@@ -116,6 +130,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setHistory(bounded);
       setCurrentIndex(bounded.length - 1);
       setStory(updatedState);
+      latestStoryRef.current = updatedState;
     },
     [history, currentIndex]
   );
@@ -127,7 +142,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       onUndo?: () => Promise<void> | void;
       onRedo?: () => Promise<void> | void;
     }) => {
-      const sourceState = params.state ?? story;
+      const sourceState = resolveExternalHistorySourceState(
+        params.state,
+        latestStoryRef.current,
+        story
+      );
       const updatedState = { ...sourceState, lastUpdated: Date.now() };
       const trimmed = history.slice(0, currentIndex + 1);
       trimmed.push(
@@ -140,6 +159,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setHistory(bounded);
       setCurrentIndex(bounded.length - 1);
       setStory(updatedState);
+      latestStoryRef.current = updatedState;
       setCurrentChapterId(updatedState.currentChapterId ?? null);
     },
     [story, history, currentIndex]
@@ -183,6 +203,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
                     pushState(newStory, historyLabel);
                   } else {
                     setStory(newStory);
+                    latestStoryRef.current = newStory;
                   }
                   setCurrentChapterId(newStory.currentChapterId);
                 } else if (res2.error) {
@@ -226,6 +247,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
             pushState(newStory, historyLabel);
           } else {
             setStory(newStory);
+            latestStoryRef.current = newStory;
           }
           setCurrentChapterId(newStory.currentChapterId);
         }
@@ -304,6 +326,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           };
 
           setStory(newStory);
+          latestStoryRef.current = newStory;
           setHistory([createHistoryEntry(newStory, 'Load story')]);
           setCurrentIndex(0);
 
@@ -489,6 +512,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       }
 
       setStory(newStory);
+      latestStoryRef.current = newStory;
       setHistory([createHistoryEntry(newStory, 'Load story')]);
       setCurrentIndex(0);
       if (newStory.currentChapterId) {
@@ -515,6 +539,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setCurrentIndex(targetIndex);
       const prevState = history[targetIndex].state;
       setStory(prevState);
+      latestStoryRef.current = prevState;
       setCurrentChapterId(prevState.currentChapterId ?? null);
 
       for (const callback of callbacks) {
@@ -537,6 +562,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setCurrentIndex(targetIndex);
       const nextState = history[targetIndex].state;
       setStory(nextState);
+      latestStoryRef.current = nextState;
       setCurrentChapterId(nextState.currentChapterId ?? null);
 
       for (const callback of callbacks) {

@@ -159,6 +159,8 @@ async def generate_image_description(
     params: GenerateImageDescriptionParams, payload: dict, mutations: dict
 ):
     desc = await _tool_generate_image_description(params.filename, payload)
+    if not str(desc).startswith("Error:"):
+        mutations["story_changed"] = True
     return {"description": desc}
 
 
@@ -173,6 +175,7 @@ async def create_image_placeholder(
 
     filename = f"placeholder_{uuid.uuid4().hex[:8]}.png"
     update_image_metadata(filename, description=params.description, title=params.title)
+    mutations["story_changed"] = True
 
     return {
         "filename": filename,
@@ -193,4 +196,5 @@ async def set_image_metadata(
     update_image_metadata(
         params.filename, description=params.description, title=params.title
     )
+    mutations["story_changed"] = True
     return {"ok": True}

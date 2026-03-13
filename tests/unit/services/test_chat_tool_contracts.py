@@ -26,6 +26,31 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 
 
 class ChatToolContractsTest(TestCase):
+    _SPECIAL_CASE_MUTATION_TOOLS = {
+        # Covered with nested-tool-call behavior assertions in test_chat_tools.py
+        "call_editing_assistant",
+    }
+
+    _READ_ONLY_TOOLS = {
+        "call_writing_llm",
+        "get_book_metadata",
+        "get_chapter_content",
+        "get_chapter_heading",
+        "get_chapter_metadata",
+        "get_chapter_summaries",
+        "get_chapter_summary",
+        "get_project_overview",
+        "get_sourcebook_entry",
+        "get_story_metadata",
+        "get_story_summary",
+        "get_story_tags",
+        "list_images",
+        "list_projects",
+        "read_book_content",
+        "read_story_content",
+        "search_sourcebook",
+    }
+
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
         self.addCleanup(self.td.cleanup)
@@ -135,6 +160,35 @@ class ChatToolContractsTest(TestCase):
         content = json.loads(msg.get("content") or "{}")
         self.assertIsInstance(content, (dict, list, str, int, float, bool, type(None)))
         return content
+
+    def _call_tool_with_payload(self, name: str, args):
+        if isinstance(args, str):
+            arguments = args
+        else:
+            arguments = json.dumps(args)
+
+        body = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": f"call_{name}",
+                            "type": "function",
+                            "function": {"name": name, "arguments": arguments},
+                        }
+                    ],
+                }
+            ],
+            "active_chapter_id": 1,
+        }
+        response = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        return payload, json.loads(
+            (payload.get("appended_messages") or [{}])[0].get("content") or "{}"
+        )
 
     def _base_valid_args(self, tool_name: str):
         args = {
@@ -305,3 +359,209 @@ class ChatToolContractsTest(TestCase):
 
                 self.assertNotIn("Execution error", json.dumps(content))
                 self.assertNotIn("Invalid parameters", json.dumps(content))
+
+    def test_all_project_mutation_tools_emit_story_changed_and_batch(self):
+        expected_mutation_tools = {
+            "create_project",
+            "delete_project",
+            "update_story_metadata",
+            "write_story_content",
+            "update_book_metadata",
+            "write_book_content",
+            "set_story_tags",
+            "sync_story_summary",
+            "write_story_summary",
+            "update_chapter_metadata",
+            "write_chapter_content",
+            "replace_text_in_chapter",
+            "write_chapter_summary",
+            "sync_summary",
+            "write_chapter",
+            "continue_chapter",
+            "create_new_chapter",
+            "write_chapter_heading",
+            "delete_chapter",
+            "reorder_chapters",
+            "reorder_books",
+            "delete_book",
+            "create_new_book",
+            "change_project_type",
+            "create_sourcebook_entry",
+            "update_sourcebook_entry",
+            "delete_sourcebook_entry",
+            "generate_image_description",
+            "create_image_placeholder",
+            "set_image_metadata",
+        }
+
+        tool_names = set(self._tool_names())
+        covered_tools = (
+            expected_mutation_tools
+            | self._READ_ONLY_TOOLS
+            | self._SPECIAL_CASE_MUTATION_TOOLS
+        )
+        self.assertEqual(
+            covered_tools,
+            tool_names,
+            f"Tool classification drift detected. Missing in tests: {sorted(tool_names - covered_tools)}; stale in tests: {sorted(covered_tools - tool_names)}",
+        )
+        self.assertTrue(
+            expected_mutation_tools.issubset(tool_names),
+            f"Missing tool coverage: {sorted(expected_mutation_tools - tool_names)}",
+        )
+
+        async def fake_generate_summary(**kwargs):
+            return {"summary": "AI generated chapter summary", "ok": True}
+
+        async def fake_write_chapter(**kwargs):
+            return {"content": "AI generated chapter", "ok": True}
+
+        async def fake_continue_chapter(**kwargs):
+            return {"content": "AI chapter continuation", "ok": True}
+
+        async def fake_story_summary(**kwargs):
+            return {"story_summary": "AI story summary", "ok": True}
+
+        async def fake_image_description(filename: str, payload: dict):
+            return "Generated image description"
+
+        mutation_calls = [
+            (
+                "create_project",
+                {"name": "chat_tools_mutation_tmp", "project_type": "novel"},
+            ),
+            ("update_story_metadata", {"title": "Mutated Title"}),
+            ("write_story_content", {"content": "Mutated story content"}),
+            (
+                "update_book_metadata",
+                {"book_id": self.book_id, "title": "Mutated Book Title"},
+            ),
+            (
+                "write_book_content",
+                {"book_id": self.book_id, "content": "Mutated book content"},
+            ),
+            ("set_story_tags", {"tags": ["mutated", "tag"]}),
+            ("sync_story_summary", {"mode": "update"}),
+            ("write_story_summary", {"summary": "Mutated story summary"}),
+            (
+                "update_chapter_metadata",
+                {"chap_id": 1, "title": "Mutated Chapter Title"},
+            ),
+            ("write_chapter_content", {"chap_id": 1, "content": "Mutated chapter"}),
+            (
+                "replace_text_in_chapter",
+                {
+                    "chap_id": 1,
+                    "old_text": "Mutated chapter",
+                    "new_text": "Mutated chapter replaced",
+                },
+            ),
+            ("write_chapter_summary", {"chap_id": 1, "summary": "Mutated summary"}),
+            ("sync_summary", {"chap_id": 1, "mode": "update"}),
+            ("write_chapter", {"chap_id": 1}),
+            ("continue_chapter", {"chap_id": 1}),
+            ("create_new_chapter", {"title": "Extra", "book_id": self.book_id}),
+            (
+                "write_chapter_heading",
+                {"chap_id": 1, "heading": "Mutated Heading"},
+            ),
+            ("delete_chapter", {"chap_id": 2, "confirm": True}),
+            ("reorder_chapters", {"chapter_ids": [1], "book_id": self.book_id}),
+            (
+                "create_sourcebook_entry",
+                {
+                    "name": "Mutation Entry",
+                    "description": "created by mutation test",
+                    "category": "character",
+                },
+            ),
+            (
+                "update_sourcebook_entry",
+                {
+                    "name_or_id": "Mutation Entry",
+                    "description": "updated by mutation test",
+                },
+            ),
+            ("delete_sourcebook_entry", {"name_or_id": "Mutation Entry"}),
+            (
+                "create_image_placeholder",
+                {"description": "placeholder mutation", "title": "ph"},
+            ),
+            (
+                "set_image_metadata",
+                {
+                    "filename": "sample.png",
+                    "title": "mutated",
+                    "description": "mutated",
+                },
+            ),
+            ("generate_image_description", {"filename": "sample.png"}),
+            ("delete_project", {"name": "chat_tools_mutation_tmp", "confirm": True}),
+        ]
+
+        with (
+            patch(
+                "augmentedquill.services.chat.chat_tools.chapter_tools.generate_chapter_summary",
+                side_effect=fake_generate_summary,
+            ),
+            patch(
+                "augmentedquill.services.chat.chat_tools.chapter_tools.write_chapter_from_summary",
+                side_effect=fake_write_chapter,
+            ),
+            patch(
+                "augmentedquill.services.chat.chat_tools.chapter_tools.continue_chapter_from_summary",
+                side_effect=fake_continue_chapter,
+            ),
+            patch(
+                "augmentedquill.services.story.story_generation_ops.generate_story_summary",
+                side_effect=fake_story_summary,
+            ),
+            patch(
+                "augmentedquill.services.chat.chat_tools.image_tools._tool_generate_image_description",
+                side_effect=fake_image_description,
+            ),
+        ):
+            for name, args in mutation_calls:
+                ok, msg = select_project("tool_contracts")
+                self.assertTrue(ok, msg)
+                payload, _content = self._call_tool_with_payload(name, args)
+                mutations = payload.get("mutations") or {}
+                self.assertTrue(
+                    mutations.get("story_changed"),
+                    f"Expected story_changed for tool {name}: {payload}",
+                )
+                batch = mutations.get("tool_batch") or {}
+                self.assertTrue(
+                    batch.get("batch_id"),
+                    f"Expected tool_batch batch_id for tool {name}: {payload}",
+                )
+
+            create_book_payload, create_book_content = self._call_tool_with_payload(
+                "create_new_book", {"title": "Book Two"}
+            )
+            self.assertTrue(
+                (create_book_payload.get("mutations") or {}).get("story_changed")
+            )
+            created_book_id = create_book_content.get("book_id")
+            self.assertTrue(created_book_id)
+
+            reorder_payload, _ = self._call_tool_with_payload(
+                "reorder_books", {"book_ids": [created_book_id, self.book_id]}
+            )
+            self.assertTrue(
+                (reorder_payload.get("mutations") or {}).get("story_changed")
+            )
+
+            delete_payload, _ = self._call_tool_with_payload(
+                "delete_book", {"book_id": created_book_id, "confirm": True}
+            )
+            self.assertTrue(
+                (delete_payload.get("mutations") or {}).get("story_changed")
+            )
+
+            change_payload, _ = self._call_tool_with_payload(
+                "change_project_type", {"new_type": "novel"}
+            )
+            self.assertTrue(
+                (change_payload.get("mutations") or {}).get("story_changed")
+            )
