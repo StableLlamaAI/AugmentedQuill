@@ -9,45 +9,67 @@
  * Defines chat composer UI so input handling is separated from message rendering.
  */
 
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Send } from 'lucide-react';
 
 type ChatComposerProps = {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  input: string;
-  setInput: (value: string) => void;
   isLoading: boolean;
   isModelAvailable?: boolean;
   disabledReason?: string;
   inputBg: string;
-  onSubmit: (e?: React.FormEvent) => void;
+  onSubmit: (text: string) => void;
 };
 
 export const ChatComposer: React.FC<ChatComposerProps> = ({
   textareaRef,
-  input,
-  setInput,
   isLoading,
   isModelAvailable = true,
   disabledReason,
   inputBg,
   onSubmit,
 }) => {
+  const [input, setInput] = useState('');
   const isDisabled = isLoading || !isModelAvailable;
   const disabledTitle = !isModelAvailable
     ? disabledReason ||
       'Chat is unavailable because no working CHAT model is configured.'
     : 'Send Message (CHAT model)';
 
+  useEffect(() => {
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    const maxHeight = window.innerHeight * 0.5;
+    const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
+    textareaRef.current.style.height = `${newHeight}px`;
+  }, [input, textareaRef]);
+
+  const submitCurrentInput = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed || isDisabled) return;
+
+    onSubmit(trimmed);
+    setInput('');
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [input, isDisabled, onSubmit, textareaRef]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSubmit();
+      submitCurrentInput();
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitCurrentInput();
+  };
+
   return (
-    <form onSubmit={onSubmit} className="relative">
+    <form onSubmit={handleSubmit} className="relative">
       <textarea
         ref={textareaRef}
         rows={1}
