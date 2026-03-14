@@ -121,7 +121,10 @@ class ChatToolContractsTest(TestCase):
         )
 
         sourcebook_create_entry(
-            name="Hero Entry", description="A known sourcebook character"
+            name="Hero Entry",
+            description="A known sourcebook character",
+            category="character",
+            synonyms=["The Hero"],
         )
 
     def _tool_names(self):
@@ -210,6 +213,8 @@ class ChatToolContractsTest(TestCase):
             "new_type": "series",
             "confirm": False,
             "mode": "update",
+            "category": "character",
+            "synonyms": ["Alias"],
         }
 
         if tool_name == "create_project":
@@ -224,6 +229,8 @@ class ChatToolContractsTest(TestCase):
         if tool_name == "create_sourcebook_entry":
             args["name"] = "Hero Entry 2"
             args["description"] = "Secondary sourcebook entry"
+            args["category"] = "character"
+            args["synonyms"] = ["Hero Alias"]
         if tool_name == "update_sourcebook_entry":
             args["name_or_id"] = "Hero Entry"
             args["description"] = "Updated sourcebook entry"

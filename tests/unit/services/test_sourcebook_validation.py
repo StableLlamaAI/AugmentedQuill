@@ -49,7 +49,7 @@ class SourcebookValidationTest(TestCase):
     def test_create_invalid_entry_returns_error(self):
         # Category is now mandatory, so we must provide it to test other fields
         result = sourcebook_create_entry(
-            name=None, description="Valid desc", category="Cat"
+            name=None, description="Valid desc", category="Character"
         )
         if "error" in result:
             self.assertIn("error", result)
@@ -62,7 +62,7 @@ class SourcebookValidationTest(TestCase):
 
     def test_create_entry_with_null_description_returns_error(self):
         result = sourcebook_create_entry(
-            name="Valid Name", description=None, category="Cat"
+            name="Valid Name", description=None, category="Character"
         )
         if "error" in result:
             self.assertIn("error", result)
@@ -82,11 +82,17 @@ class SourcebookValidationTest(TestCase):
         else:
             self.fail("Should create error for numeric category")
 
+    def test_create_entry_with_unknown_category_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category="NotARealCategory"
+        )
+        self.assertIn("error", result)
+
     def test_create_entry_with_invalid_synonyms_returns_error(self):
         result = sourcebook_create_entry(
             name="Valid Name",
             description="Valid",
-            category="Cat",
+            category="Character",
             synonyms="not a list",
         )
         if "error" in result:
@@ -96,7 +102,10 @@ class SourcebookValidationTest(TestCase):
 
     def test_create_entry_with_none_synonyms_returns_error(self):
         result = sourcebook_create_entry(
-            name="Valid Name", description="Valid", category="Cat", synonyms=None
+            name="Valid Name",
+            description="Valid",
+            category="Character",
+            synonyms=None,
         )
         if "error" in result:
             self.assertIn("error", result)
@@ -133,7 +142,7 @@ class SourcebookValidationTest(TestCase):
 
     def test_update_success(self):
         # Create valid entry
-        entry = sourcebook_create_entry("UpdateTarget", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget", "Desc", "Character")
         self.assertNotIn("error", entry)
         eid = entry["id"]
 
@@ -142,7 +151,7 @@ class SourcebookValidationTest(TestCase):
         self.assertNotIn("error", updated)
         self.assertEqual(updated["name"], "NewName")
         self.assertEqual(updated["description"], "NewDesc")
-        self.assertEqual(updated["category"], "Cat")  # Unchanged
+        self.assertEqual(updated["category"], "Character")  # Unchanged
 
         # Check persistence
         entries = self._get_entries()
@@ -156,7 +165,7 @@ class SourcebookValidationTest(TestCase):
 
     def test_update_with_invalid_fields_returns_error(self):
         # Create valid entry
-        entry = sourcebook_create_entry("UpdateTarget2", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget2", "Desc", "Character")
         eid = entry["id"]
 
         # Valid update
@@ -173,6 +182,11 @@ class SourcebookValidationTest(TestCase):
 
         # Invalid Type
         self.assertIn("error", sourcebook_update_entry(eid, category=123))
+
+        # Invalid Category Value
+        self.assertIn(
+            "error", sourcebook_update_entry(eid, category="NotARealCategory")
+        )
 
         # Invalid Identifier (None)
         self.assertIn("error", sourcebook_update_entry(None))

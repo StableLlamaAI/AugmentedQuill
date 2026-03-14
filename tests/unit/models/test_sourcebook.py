@@ -73,7 +73,7 @@ class SourcebookTest(TestCase):
         )
 
         self.assertEqual(entry["name"], "Test Character")
-        self.assertEqual(entry["category"], "character")
+        self.assertEqual(entry["category"], "Character")
         self.assertIn("Tester", entry["synonyms"])
 
         # 2. Get
