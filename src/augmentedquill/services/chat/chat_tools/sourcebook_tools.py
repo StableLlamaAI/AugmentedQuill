@@ -48,6 +48,10 @@ class CreateSourcebookEntryParams(BaseModel):
         default_factory=list,
         description="Optional list of synonyms/aliases.",
     )
+    images: list[str] = Field(
+        default_factory=list,
+        description="Optional list of image IDs to associate with this entry.",
+    )
 
 
 class UpdateSourcebookEntryParams(BaseModel):
@@ -59,6 +63,9 @@ class UpdateSourcebookEntryParams(BaseModel):
     category: str | None = Field(None, description="New category for the entry")
     synonyms: list[str] | None = Field(
         None, description="New list of synonyms for the entry"
+    )
+    images: list[str] | None = Field(
+        None, description="New list of image IDs for the entry"
     )
 
 
@@ -90,7 +97,7 @@ async def get_sourcebook_entry(
 
 
 @chat_tool(
-    description="Create a new sourcebook entry. Always provide name, description, and category. Allowed categories: Character, Location, Organization, Item, Event, Lore, Other. Synonyms are optional."
+    description="Create a new sourcebook entry. Always provide name, description, and category. Allowed categories: Character, Location, Organization, Item, Event, Lore, Other. Synonyms and images are optional."
 )
 async def create_sourcebook_entry(
     params: CreateSourcebookEntryParams, payload: dict, mutations: dict
@@ -101,6 +108,7 @@ async def create_sourcebook_entry(
         description=params.description,
         category=params.category,
         synonyms=params.synonyms,
+        images=params.images,
     )
     if "error" not in new_entry:
         mutations["story_changed"] = True
@@ -120,6 +128,7 @@ async def update_sourcebook_entry(
         description=params.description,
         category=params.category,
         synonyms=params.synonyms,
+        images=params.images,
     )
     if "error" not in result:
         mutations["story_changed"] = True

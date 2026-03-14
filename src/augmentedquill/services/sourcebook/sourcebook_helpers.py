@@ -162,6 +162,7 @@ def sourcebook_create_entry(
     description: str,
     category: str = None,
     synonyms: List[str] | object = _UNSET,
+    images: List[str] | object = _UNSET,
 ) -> Dict:
     """Create a sourcebook entry for the active project."""
     if not name or not isinstance(name, str) or not name.strip():
@@ -191,6 +192,19 @@ def sourcebook_create_entry(
         if cleaned and cleaned not in cleaned_synonyms:
             cleaned_synonyms.append(cleaned)
 
+    if images is _UNSET:
+        images = []
+    elif images is None or not isinstance(images, list):
+        return {"error": "Invalid images: Images must be a list of strings."}
+
+    cleaned_images: list[str] = []
+    for image in images:
+        if not isinstance(image, str):
+            return {"error": "Invalid images: Images must be a list of strings."}
+        cleaned_image = image.strip()
+        if cleaned_image and cleaned_image not in cleaned_images:
+            cleaned_images.append(cleaned_image)
+
     story, story_path = _get_story_data()
     if not story:
         return {"error": "No active project"}
@@ -204,7 +218,7 @@ def sourcebook_create_entry(
         "description": description,
         "category": normalized_category,
         "synonyms": cleaned_synonyms,
-        "images": [],
+        "images": cleaned_images,
     }
 
     sb_dict[name] = new_entry_data
@@ -246,6 +260,7 @@ def sourcebook_update_entry(
     description: str = None,
     category: str = None,
     synonyms: List[str] = None,
+    images: List[str] = None,
 ) -> Dict:
     """Sourcebook Update Entry."""
     if not name_or_id:
@@ -309,6 +324,18 @@ def sourcebook_update_entry(
             if cleaned and cleaned not in cleaned_synonyms:
                 cleaned_synonyms.append(cleaned)
         entry_data["synonyms"] = cleaned_synonyms
+
+    if images is not None:
+        if not isinstance(images, list):
+            return {"error": "Invalid images: Images must be a list of strings."}
+        cleaned_images: list[str] = []
+        for image in images:
+            if not isinstance(image, str):
+                return {"error": "Invalid images: Images must be a list of strings."}
+            cleaned_image = image.strip()
+            if cleaned_image and cleaned_image not in cleaned_images:
+                cleaned_images.append(cleaned_image)
+        entry_data["images"] = cleaned_images
 
     sb_dict[found_key] = entry_data
     story["sourcebook"] = sb_dict

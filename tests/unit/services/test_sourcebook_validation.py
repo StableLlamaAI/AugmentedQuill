@@ -100,6 +100,47 @@ class SourcebookValidationTest(TestCase):
         else:
             self.fail("Should create error for non-list synonyms")
 
+    def test_create_entry_with_invalid_images_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images",
+            description="Valid",
+            category="Character",
+            images="not a list",
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            self.fail("Should create error for non-list images")
+
+    def test_create_entry_with_none_images_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images 2",
+            description="Valid",
+            category="Character",
+            images=None,
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            entries = self._get_entries()
+            val = entries[0]["images"]
+            if val is None:
+                self.fail("Bug: images is None in database")
+            else:
+                self.fail(f"Bug: images is {val}")
+
+    def test_create_entry_with_invalid_image_type_inside_list_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images 3",
+            description="Valid",
+            category="Character",
+            images=[123, "img1"],
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            self.fail("Should create error for non-string image in list")
+
     def test_create_entry_with_none_synonyms_returns_error(self):
         result = sourcebook_create_entry(
             name="Valid Name",
@@ -147,11 +188,14 @@ class SourcebookValidationTest(TestCase):
         eid = entry["id"]
 
         # Update it
-        updated = sourcebook_update_entry(eid, name="NewName", description="NewDesc")
+        updated = sourcebook_update_entry(
+            eid, name="NewName", description="NewDesc", images=["img1"]
+        )
         self.assertNotIn("error", updated)
         self.assertEqual(updated["name"], "NewName")
         self.assertEqual(updated["description"], "NewDesc")
         self.assertEqual(updated["category"], "Character")  # Unchanged
+        self.assertEqual(updated["images"], ["img1"])
 
         # Check persistence
         entries = self._get_entries()
@@ -188,8 +232,60 @@ class SourcebookValidationTest(TestCase):
             "error", sourcebook_update_entry(eid, category="NotARealCategory")
         )
 
+        # Invalid Images
+        self.assertIn("error", sourcebook_update_entry(eid, images="Not A List"))
+        self.assertIn("error", sourcebook_update_entry(eid, images=[123]))
+
         # Invalid Identifier (None)
         self.assertIn("error", sourcebook_update_entry(None))
+
+    def test_pydantic_schema_validates_images_on_create_tool(self):
+        from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
+            CreateSourcebookEntryParams,
+        )
+        from pydantic import ValidationError
+
+        # Valid
+        params = CreateSourcebookEntryParams(
+            name="Valid Model",
+            description="Valid",
+            category="Character",
+            images=["img1", "img2"],
+        )
+        self.assertEqual(params.images, ["img1", "img2"])
+
+        # Default is empty list
+        params2 = CreateSourcebookEntryParams(
+            name="Valid Model 2", description="Valid", category="Character"
+        )
+        self.assertEqual(params2.images, [])
+
+        # Invalid
+        with self.assertRaises(ValidationError):
+            CreateSourcebookEntryParams(
+                name="Invalid Model",
+                description="Valid",
+                category="Character",
+                images="not a list",
+            )
+
+    def test_pydantic_schema_validates_images_on_update_tool(self):
+        from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
+            UpdateSourcebookEntryParams,
+        )
+        from pydantic import ValidationError
+
+        # Valid
+        params = UpdateSourcebookEntryParams(name_or_id="id1", images=["img1"])
+        self.assertEqual(params.images, ["img1"])
+
+        # Default is None
+        params2 = UpdateSourcebookEntryParams(name_or_id="id1")
+        self.assertIsNone(params2.images)
+
+        # Invalid
+        with self.assertRaises(ValidationError):
+            UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
 
     def _get_entries(self):
         story_path = self.pdir / "story.json"

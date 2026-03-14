@@ -117,12 +117,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setCategory(entry.category || Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms(entry.synonyms || []);
       setImages(entry.images || []);
+      setNewSynonym('');
     } else {
       setName('');
       setDescription('');
       setCategory(Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms([]);
       setImages([]);
+      setNewSynonym('');
     }
   }, [entry, isOpen]);
 
@@ -304,7 +306,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                       type="text"
                       value={newSynonym}
                       onChange={(e) => setNewSynonym(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addSynonym()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addSynonym();
+                        }
+                      }}
                       className="bg-transparent text-sm focus:outline-none w-full"
                       placeholder="Add (+)"
                     />
