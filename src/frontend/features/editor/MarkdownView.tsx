@@ -24,14 +24,18 @@ interface MarkdownViewProps {
 // Configure markdown rendering once to keep parsing behavior stable.
 const renderer = new marked.Renderer();
 // @ts-ignore
-renderer.image = (href, title, text) => {
+renderer.image = function (token) {
+  let href = typeof token === 'object' && token !== null ? token.href : arguments[0];
+  let title = typeof token === 'object' && token !== null ? token.title : arguments[1];
+  let text = typeof token === 'object' && token !== null ? token.text : arguments[2];
+
   if (
     typeof href === 'string' &&
     href &&
     !href.startsWith('http') &&
     !href.startsWith('/')
   ) {
-    href = `/api/projects/images/${href}`;
+    href = `/api/v1/projects/images/${href}`;
   }
   return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full h-auto rounded shadow-lg my-4" />`;
 };

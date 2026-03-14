@@ -34,6 +34,8 @@ type Decoration = {
   start: number;
   end: number;
   className: string;
+  imgSrc?: string;
+  imgAlt?: string;
 };
 
 const toWhitespaceDisplay = (source: string): { text: string; indexMap: number[] } => {
@@ -153,7 +155,13 @@ const decorateDelimitedToken = (
   }
 
   if (token.type === 'image') {
-    addDecoration(decorations, start, end, 'text-brand-gray-500');
+    decorations.push({
+      start,
+      end,
+      className: 'text-brand-gray-500',
+      imgSrc: token.href,
+      imgAlt: token.text,
+    });
   }
 };
 
@@ -262,23 +270,23 @@ const buildMarkdownDecorations = (source: string): Decoration[] => {
 const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): string => {
   if (!text) return '';
 
-  const starts = new Map<number, string[]>();
-  const ends = new Map<number, string[]>();
+  const starts = new Map<number, Decoration[]>();
+  const ends = new Map<number, Decoration[]>();
 
   for (const decoration of decorations) {
     if (!starts.has(decoration.start)) starts.set(decoration.start, []);
     if (!ends.has(decoration.end)) ends.set(decoration.end, []);
-    starts.get(decoration.start)!.push(decoration.className);
-    ends.get(decoration.end)!.push(decoration.className);
+    starts.get(decoration.start)!.push(decoration);
+    ends.get(decoration.end)!.push(decoration);
   }
 
   const active = new Set<string>();
   let html = '';
 
   for (let i = 0; i < text.length; i += 1) {
-    const startClasses = starts.get(i) || [];
-    for (const className of startClasses) {
-      active.add(className);
+    const startDecs = starts.get(i) || [];
+    for (const dec of startDecs) {
+      if (dec.className) active.add(dec.className);
     }
 
     const escapedChar = text[i] === '\n' ? '<br/>' : escapeHtml(text[i]);
@@ -288,9 +296,20 @@ const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): strin
       html += `<span class="${Array.from(active).join(' ')}">${escapedChar}</span>`;
     }
 
-    const endClasses = ends.get(i + 1) || [];
-    for (const className of endClasses) {
-      active.delete(className);
+    const endDecs = ends.get(i + 1) || [];
+    for (const dec of endDecs) {
+      if (dec.className) active.delete(dec.className);
+
+      // Render image preview at the end of the markdown tag
+      if (dec.imgSrc) {
+        let src = dec.imgSrc;
+        if (src && !src.startsWith('http') && !src.startsWith('/')) {
+          src = `/api/v1/projects/images/${src}`;
+        }
+
+        // We use display: inline-block with font-size: 0 so it doesn't create extra newlines in innerText!
+        html += `<span contenteditable="false" class="md-image-preview select-none" style="display: inline-block; width: 100%; font-size: 0; text-align: center; margin: 1rem 0;"><img src="${escapeHtml(src)}" alt="${escapeHtml(dec.imgAlt || '')}" style="max-width: 100%; height: auto; border-radius: 0.5rem; display: inline-block;" /></span>`;
+      }
     }
   }
 
