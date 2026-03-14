@@ -112,6 +112,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
   ) => {
     const textareaRef = useRef<HTMLDivElement>(null);
     const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
+    const lastWysiwygSelectionRef = useRef<Range | null>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -165,6 +166,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
           document.execCommand('insertHTML', false, html);
           wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (lastWysiwygSelectionRef.current) {
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(lastWysiwygSelectionRef.current);
+          document.execCommand('insertHTML', false, html);
+          wysiwygRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
         } else {
           const markdown = `\n![${alt}](${url})`;
           onChange(chapter.id, { content: chapter.content + markdown });
@@ -173,6 +180,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         const markdown = `![${alt}](${url})`;
         if (document.activeElement === textareaRef.current) {
           document.execCommand('insertText', false, markdown);
+        } else if (lastRawSelectionRef.current) {
+          const { start, end } = lastRawSelectionRef.current;
+          const newContent =
+            chapter.content.slice(0, start) + markdown + chapter.content.slice(end);
+          onChange(chapter.id, { content: newContent });
         } else {
           onChange(chapter.id, { content: chapter.content + '\n' + markdown });
         }
@@ -514,12 +526,18 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     }, [maybeHandleSuggestionHotkey]);
 
     useEffect(() => {
-      if (!(viewMode === 'raw' || viewMode === 'markdown')) {
-        return undefined;
-      }
-
       const onSelectionChange = () => {
-        syncLastRawSelectionFromEditor();
+        if (viewMode === 'raw' || viewMode === 'markdown') {
+          syncLastRawSelectionFromEditor();
+        } else if (viewMode === 'wysiwyg' && wysiwygRef.current) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (wysiwygRef.current.contains(range.commonAncestorContainer)) {
+              lastWysiwygSelectionRef.current = range.cloneRange();
+            }
+          }
+        }
       };
 
       document.addEventListener('selectionchange', onSelectionChange);
