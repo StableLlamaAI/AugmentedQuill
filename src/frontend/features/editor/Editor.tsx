@@ -647,20 +647,22 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               document.execCommand('insertOrderedList')
             );
             break;
-          case 'link':
+          case 'link': {
             const url = prompt('Enter URL:');
-            if (url)
+            if (url !== null)
               withRestoredWysiwygSelection(() =>
                 document.execCommand('createLink', false, url)
               );
             break;
-          case 'image':
+          }
+          case 'image': {
             const src = prompt('Enter Image URL:');
-            if (src)
+            if (src !== null)
               withRestoredWysiwygSelection(() =>
                 document.execCommand('insertImage', false, src)
               );
             break;
+          }
         }
         handleWysiwygInput();
         checkContext();
@@ -727,22 +729,50 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           return;
         }
 
+        el.focus();
+
         let prefix = '';
         let suffix = '';
+
+        const displayedText = el.innerText;
+        const rawText = showWhitespace
+          ? fromWhitespaceDisplayText(displayedText)
+          : displayedText;
+        const currentRawSelection = getCurrentRawSelectionFromEditor(el);
+        const { start: rawStart, end: rawEnd } = resolveInlineSelection(
+          currentRawSelection,
+          lastRawSelectionRef.current,
+          rawText.length
+        );
+        const selectedText = rawText.slice(rawStart, rawEnd);
 
         switch (type) {
           case 'link':
             prefix = '[';
-            suffix = '](url)';
+            suffix = `](${selectedText ? '' : 'url'})`;
             break;
           case 'image':
             prefix = '![';
-            suffix = '](url)';
+            suffix = `](${selectedText ? '' : 'url'})`;
             break;
         }
 
-        el.focus();
-        document.execCommand('insertText', false, prefix + suffix);
+        // We re-focus to ensure execCommand targets the right place,
+        // and we select the exact rawStart/rawEnd just like the bold/italic formatting does
+        // to handle focus loss correctly before insertText.
+        const displayedStart = rawOffsetToDisplayedOffset(
+          rawText,
+          rawStart,
+          !!showWhitespace
+        );
+        const displayedEnd = rawOffsetToDisplayedOffset(
+          rawText,
+          rawEnd,
+          !!showWhitespace
+        );
+        setSelectionOffsets(el, displayedStart, displayedEnd);
+
+        document.execCommand('insertText', false, prefix + selectedText + suffix);
         const nextContent = showWhitespace
           ? fromWhitespaceDisplayText(el.innerText)
           : el.innerText;
