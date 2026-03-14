@@ -34,6 +34,7 @@ import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry } from '../../types';
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
+import { PlainTextEditable } from '../editor/PlainTextEditable';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -164,6 +165,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const inputBgClass = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
   const inputBorderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const labelClass = isLight ? 'text-brand-gray-600' : 'text-brand-gray-400';
+  const descriptionSurfaceClass = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
+  const descriptionTextClass = isLight ? 'text-brand-gray-700' : 'text-brand-gray-300';
+  const descriptionPlaceholderClass = isLight
+    ? 'placeholder-brand-gray-400'
+    : 'placeholder-brand-gray-500';
 
   // Keep picker rendering derived from canonical selection state.
   const selectedImagesList = availableImages.filter((img) =>
@@ -174,7 +180,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
         <div
-          className={`${bgClass} ${textClass} w-full max-w-2xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[90vh]`}
+          className={`${bgClass} ${textClass} w-full max-w-6xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[94vh]`}
         >
           {/* Header */}
           <div
@@ -372,18 +378,25 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             </div>
 
             {/* Description */}
-            <div className="space-y-2 flex-1 flex flex-col">
+            <div className="space-y-2 flex-1 flex flex-col min-h-[320px]">
               <label
                 className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
               >
                 Description & Facts
               </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className={`w-full flex-1 p-4 text-sm font-mono rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors min-h-[150px] resize-y`}
-                placeholder="Detailed description, personality traits, history..."
-              />
+
+              <div
+                className={`rounded-md border ${inputBorderClass} ${descriptionSurfaceClass} ${descriptionTextClass} flex-1 min-h-[220px] overflow-y-auto`}
+              >
+                <PlainTextEditable
+                  value={description}
+                  onChange={setDescription}
+                  className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass} ${descriptionPlaceholderClass}`}
+                  placeholder="Detailed description, personality traits, history..."
+                  markdownHighlight
+                  style={{ minHeight: '220px' }}
+                />
+              </div>
             </div>
           </div>
 
