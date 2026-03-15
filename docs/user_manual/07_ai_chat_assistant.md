@@ -151,6 +151,22 @@ _Example:_ "What color are the uniforms of the Royal Guard?" (The AI will check 
 Want a second opinion?
 _Example:_ "Read the last three paragraphs I wrote. Is the dialogue natural? How can I make the tension higher?"
 
+### Targeted in‑chapter edits (marker + replacement tools)
+
+If you want to insert or replace text in the middle of a chapter without rewriting the entire chapter, you can use a **marker** and the AI’s editing tools.
+
+1. **Insert the marker `~~~` into your chapter** where you want new content to go.
+2. Tell the AI something like:
+   - "Insert a short scene at the `~~~` marker where the hero meets the rival."
+   - "Replace the marker `~~~` with a paragraph of dialogue and action."
+
+The system will automatically call the right tool (insert_text_at_marker) to replace just the marker location and keep the rest of your chapter unchanged.
+
+If you want to apply multiple small edits at once (search/replace style), the AI can also use tools like:
+
+- **replace_text_in_chapter** (safe single replacement)
+- **apply_chapter_replacements** (multiple replacements in one operation)
+
 ### Workflow Guidance
 
 CHAT is especially useful when you want the app to follow the recommended story-building flow: notes first, then title and style tags, then the preliminary story summary, then Sourcebook work, then chapter notes and conflicts, and finally prose drafting. For a short story that usually means a single chapter; for a novel it means a flat chapter list; for a series it usually means working book by book. This sequence is flexible: CHAT can loop backward and repair earlier metadata whenever a later chapter exposes a gap.

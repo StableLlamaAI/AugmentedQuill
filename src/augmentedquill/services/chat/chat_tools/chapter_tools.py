@@ -324,6 +324,110 @@ async def replace_text_in_chapter(
     return {"message": f"Successfully replaced text in chapter {params.chap_id}"}
 
 
+MARKER = "~~~"
+
+
+class InsertTextAtMarkerParams(BaseModel):
+    """Parameters for inserting text at the fixed marker in a chapter."""
+
+    chap_id: int = Field(..., description="The numeric ID of the chapter.")
+    insert_text: str = Field(..., description="Text to insert at the marker location.")
+    mode: str = Field(
+        "replace",
+        description="How to insert relative to the marker: 'replace' (default), 'before', or 'after'.",
+    )
+
+
+@chat_tool(
+    description="Insert or replace text at a specific marker string in a chapter.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def insert_text_at_marker(
+    params: InsertTextAtMarkerParams, payload: dict, mutations: dict
+):
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    idx = text.find(MARKER)
+    if idx < 0:
+        return {"error": f"Marker '{MARKER}' not found in chapter {params.chap_id}."}
+
+    if params.mode == "replace":
+        new_text = text[:idx] + params.insert_text + text[idx + len(MARKER) :]
+    elif params.mode == "before":
+        new_text = text[:idx] + params.insert_text + text[idx:]
+    elif params.mode == "after":
+        new_text = (
+            text[: idx + len(MARKER)] + params.insert_text + text[idx + len(MARKER) :]
+        )
+    else:
+        return {
+            "error": f"Unknown mode '{params.mode}'. Use 'replace', 'before', or 'after'."
+        }
+
+    _write_chapter_content(params.chap_id, new_text)
+    mutations["story_changed"] = True
+    return {
+        "chap_id": params.chap_id,
+        "marker": MARKER,
+        "mode": params.mode,
+        "inserted_length": len(params.insert_text),
+    }
+
+
+class ApplyChapterReplacementsParams(BaseModel):
+    """Parameters for applying multiple replacements in a chapter."""
+
+    chap_id: int = Field(..., description="The numeric ID of the chapter.")
+    replacements: list[dict] = Field(
+        ...,
+        description=(
+            "A list of replacements, each an object with 'old_text' and 'new_text'. "
+            "Each replacement will be applied sequentially."
+        ),
+    )
+
+
+@chat_tool(
+    description="Apply one or more search-and-replace edits to a chapter in sequence.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def apply_chapter_replacements(
+    params: ApplyChapterReplacementsParams, payload: dict, mutations: dict
+):
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    for i, rep in enumerate(params.replacements):
+        if not isinstance(rep, dict):
+            return {"error": f"Replacement #{i} is not an object."}
+        old_text = rep.get("old_text")
+        new_text = rep.get("new_text")
+        if not isinstance(old_text, str) or not isinstance(new_text, str):
+            return {
+                "error": f"Replacement #{i} must have string 'old_text' and 'new_text'."
+            }
+
+        occurrences = text.count(old_text)
+        if occurrences == 0:
+            return {"error": f"Replacement #{i}: old_text not found in chapter."}
+        if occurrences > 1:
+            return {
+                "error": (
+                    f"Replacement #{i}: old_text found {occurrences} times. "
+                    "Please make it more specific so only one instance matches."
+                )
+            }
+
+        text = text.replace(old_text, new_text, 1)
+
+    _write_chapter_content(params.chap_id, text)
+    mutations["story_changed"] = True
+    return {"chap_id": params.chap_id, "replacements_applied": len(params.replacements)}
+
+
 @chat_tool(
     description="Write summary to a specific chapter.",
     allowed_roles=(CHAT_ROLE,),

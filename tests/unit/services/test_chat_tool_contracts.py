@@ -55,6 +55,8 @@ class ChatToolContractsTest(TestCase):
 
     _EDITING_ONLY_TOOLS = {
         "replace_text_in_chapter",
+        "apply_chapter_replacements",
+        "insert_text_at_marker",
         "recommend_metadata_updates",
         "write_chapter_content",
     }
@@ -510,6 +512,8 @@ class ChatToolContractsTest(TestCase):
             "update_chapter_metadata",
             "write_chapter_content",
             "replace_text_in_chapter",
+            "apply_chapter_replacements",
+            "insert_text_at_marker",
             "write_chapter_summary",
             "sync_summary",
             "write_chapter",
