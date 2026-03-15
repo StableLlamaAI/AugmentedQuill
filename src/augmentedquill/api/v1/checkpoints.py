@@ -8,6 +8,7 @@
 """Defines the checkpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from datetime import datetime
+import re
 import shutil
 from pathlib import Path
 from pydantic import BaseModel
@@ -39,10 +40,29 @@ class CheckpointLoadDeleteRequest(BaseModel):
 _CHECKPOINTS_DIR_NAME = "checkpoints"
 
 
+_CHECKPOINT_NAME_RE = r"^[A-Za-z0-9_\-T]+$"
+
+
 def _get_checkpoints_dir(project_dir: Path) -> Path:
     d = project_dir / _CHECKPOINTS_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
+    """Resolve a checkpoint name to a safe, canonical directory inside the checkpoints folder."""
+    if not re.match(_CHECKPOINT_NAME_RE, name):
+        raise ValueError("Invalid checkpoint name")
+
+    checkpoints_dir = _get_checkpoints_dir(project_dir)
+    target_dir = checkpoints_dir / name
+
+    # Ensure the target stays inside the checkpoints directory (no path traversal)
+    target_dir_resolved = target_dir.resolve()
+    if not target_dir_resolved.is_relative_to(checkpoints_dir.resolve()):
+        raise ValueError("Invalid checkpoint name")
+
+    return target_dir_resolved
 
 
 @router.get("/checkpoints", response_model=CheckpointListResponse)
@@ -87,9 +107,10 @@ async def api_load_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONResponse
     if not project_dir:
         return error_json("No active project selected", status_code=400)
 
-    safe_timestamp = body.timestamp
-    checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / safe_timestamp
+    try:
+        target_dir = _resolve_checkpoint_dir(project_dir, body.timestamp)
+    except ValueError:
+        return error_json("Checkpoint not found", status_code=404)
 
     if not target_dir.exists() or not target_dir.is_dir():
         return error_json("Checkpoint not found", status_code=404)
@@ -107,9 +128,10 @@ async def api_delete_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONRespon
     if not project_dir:
         return error_json("No active project selected", status_code=400)
 
-    safe_timestamp = body.timestamp
-    checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / safe_timestamp
+    try:
+        target_dir = _resolve_checkpoint_dir(project_dir, body.timestamp)
+    except ValueError:
+        return error_json("Checkpoint not found", status_code=404)
 
     if target_dir.exists() and target_dir.is_dir():
         shutil.rmtree(target_dir)
