@@ -212,7 +212,13 @@ class ProjectFeaturesTest(TestCase):
 
         # Simulate LLM adding a summary to story.json
         story = load_story_config(active / "story.json")
-        story["chapters"] = [{"title": "The Beginning", "summary": "A great start"}]
+        story["chapters"] = [
+            {
+                "title": "The Beginning",
+                "summary": "A great start",
+                "conflicts": [{"description": "Should stay in chapter details"}],
+            }
+        ]
         (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
         # Check overview
@@ -223,6 +229,7 @@ class ProjectFeaturesTest(TestCase):
         self.assertEqual(chapters[0]["title"], "The Beginning")
         self.assertEqual(chapters[0]["summary"], "A great start")
         self.assertEqual(chapters[0]["filename"], "content.md")
+        self.assertNotIn("conflicts", chapters[0])
 
     def test_short_story_project_overview_defaults(self):
         """Test fallback when no metadata exists."""
@@ -267,12 +274,14 @@ class ProjectFeaturesTest(TestCase):
                 "title": "Chapter One",
                 "summary": "Novel summary",
                 "notes": "Novel chapter note",
+                "conflicts": [{"description": "Novel conflict"}],
             }
         ]
         (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
         overview = _project_overview(include_notes=True)
         self.assertEqual(overview["chapters"][0]["notes"], "Novel chapter note")
+        self.assertNotIn("conflicts", overview["chapters"][0])
 
     def test_project_overview_include_notes_for_series(self):
         create_project("test_series_notes", project_type="series")
@@ -296,6 +305,7 @@ class ProjectFeaturesTest(TestCase):
                         "title": "Book Chapter 1",
                         "summary": "Series summary",
                         "notes": "Series chapter note",
+                        "conflicts": [{"description": "Series conflict"}],
                     }
                 ],
             }
@@ -306,6 +316,7 @@ class ProjectFeaturesTest(TestCase):
         self.assertEqual(
             overview["books"][0]["chapters"][0]["notes"], "Series chapter note"
         )
+        self.assertNotIn("conflicts", overview["books"][0]["chapters"][0])
 
     def test_export_import_zip(self):
         # 1. Setup a project

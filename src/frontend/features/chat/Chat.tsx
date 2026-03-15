@@ -154,7 +154,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   useEffect(() => {
     const el = scrollContainerRef.current;
-    if (!el) return;
+    if (!el) return undefined;
 
     // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
     const observer = new MutationObserver(() => {
@@ -238,6 +238,7 @@ export const Chat: React.FC<ChatProps> = ({
       <ChatHeader
         title={isIncognito ? 'Incognito Chat' : 'Writing Partner'}
         headerBg={headerBg}
+        isLightTheme={isLight}
         currentSessionId={currentSessionId}
         isIncognito={isIncognito}
         contextUsage={contextUsage}

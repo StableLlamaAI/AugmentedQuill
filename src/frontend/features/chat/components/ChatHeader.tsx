@@ -16,6 +16,7 @@ import { ChatContextUsage } from '../chatContextBudget';
 type ChatHeaderProps = {
   title: string;
   headerBg?: string;
+  isLightTheme?: boolean;
   currentSessionId: string | null;
   isIncognito: boolean;
   contextUsage: ChatContextUsage;
@@ -34,6 +35,7 @@ type ChatHeaderProps = {
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   title,
   headerBg = 'bg-brand-gray-100 dark:bg-brand-gray-900',
+  isLightTheme = false,
   currentSessionId,
   isIncognito,
   contextUsage,
@@ -60,30 +62,42 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         : 'bg-emerald-500';
   const usageLabel =
     usagePercent >= 90 ? 'High' : usagePercent >= 75 ? 'Rising' : 'Healthy';
+  const usageTrackWidth = Math.max(8, Math.min(usagePercent, 100));
+  const contextPillClasses = isLightTheme
+    ? 'border-brand-gray-300/80 bg-brand-gray-100/80 text-brand-gray-600'
+    : 'border-brand-gray-700 bg-brand-gray-800/70 text-brand-gray-300';
+  const contextTrackClasses = isLightTheme
+    ? 'bg-brand-gray-300/80'
+    : 'bg-brand-gray-700';
 
   return (
     <div
       className={`p-4 border-b flex items-center justify-between gap-4 ${headerBg} border-brand-gray-200 dark:border-brand-gray-800`}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex items-center space-x-2 overflow-hidden">
+        <div className="flex items-center gap-2 overflow-hidden">
           <Sparkles className="text-blue-600 shrink-0" size={20} />
           <h2 className="font-semibold truncate">{title}</h2>
-        </div>
-        {contextUsage.enabled && (
-          <div className="mt-1.5 flex items-center gap-2 opacity-70">
-            <div className="h-1 w-20 overflow-hidden rounded-full bg-brand-gray-200 dark:bg-brand-gray-800">
+          {contextUsage.enabled && (
+            <div
+              className={`ml-1 inline-flex shrink-0 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] ${contextPillClasses}`}
+              title={`Context usage: ${usagePercent}%${contextUsage.compactionApplied ? ' (compacted)' : ''}`}
+            >
+              <span className="uppercase tracking-[0.14em] text-[10px] opacity-80">
+                ctx
+              </span>
               <div
-                className={`h-full rounded-full transition-all ${usageTone}`}
-                style={{ width: `${Math.min(usagePercent, 100)}%` }}
-              />
+                className={`h-1.5 w-12 overflow-hidden rounded-full ${contextTrackClasses}`}
+              >
+                <div
+                  className={`h-full rounded-full transition-all ${usageTone}`}
+                  style={{ width: `${usageTrackWidth}%` }}
+                />
+              </div>
+              <span className="tabular-nums">{usagePercent}%</span>
             </div>
-            <div className="text-[10px] text-brand-gray-500">
-              {usageLabel.toLowerCase()} {usagePercent}%
-              {contextUsage.compactionApplied ? ' compacted' : ''}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <div className="flex items-center space-x-1 shrink-0">
         <button

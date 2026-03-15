@@ -143,7 +143,6 @@ def _project_overview(include_notes: bool = False) -> dict:
             "filename": fn,
             "title": title,
             "summary": summary,
-            "conflicts": conflicts,
         }
         if include_notes:
             chapter_item["notes"] = notes
@@ -220,7 +219,6 @@ def _project_overview(include_notes: bool = False) -> dict:
                         "filename": path.name,
                         "title": meta.get("title") or path.stem,
                         "summary": meta.get("summary") or "",
-                        "conflicts": meta.get("conflicts") or [],
                     }
                     if include_notes:
                         chapter_item["notes"] = meta.get("notes") or ""
@@ -255,7 +253,6 @@ def _project_overview(include_notes: bool = False) -> dict:
             "filename": path.name,
             "title": title,
             "summary": summary,
-            "conflicts": conflicts,
         }
         if include_notes:
             chapter_item["notes"] = notes
