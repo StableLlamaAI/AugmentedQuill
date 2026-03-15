@@ -109,6 +109,73 @@ describe('prepareChatContext', () => {
     expect(prepared.usage.withinBudget).toBe(true);
   });
 
+  it('keeps summarized tool call arguments as valid JSON', () => {
+    const longSummary = 'Psychological contradiction and erotic tension. '.repeat(80);
+    const prepared = prepareChatContext({
+      systemInstruction: 'You are helpful.',
+      history: [
+        {
+          role: 'model',
+          text: '',
+          tool_calls: [
+            {
+              id: 'call_summary',
+              name: 'write_chapter_summary',
+              args: {
+                chap_id: 6,
+                summary: longSummary,
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          name: 'write_chapter_summary',
+          tool_call_id: 'call_summary',
+          text: JSON.stringify({
+            message: 'Summary written to chapter 6 successfully',
+          }),
+        },
+      ],
+      config: { ...config, contextWindowTokens: 4096, modelId: 'demo-4k' },
+      userMessageText: 'Continue.',
+    });
+
+    const toolCallArgs = prepared.messages[1].tool_calls?.[0].function.arguments;
+    expect(toolCallArgs).toBeTruthy();
+    expect(() => JSON.parse(toolCallArgs || '')).not.toThrow();
+  });
+
+  it('does not duplicate an existing earlier-tool-result prefix', () => {
+    const prepared = prepareChatContext({
+      systemInstruction: 'You are helpful.',
+      history: [
+        {
+          role: 'tool',
+          name: 'get_project_overview',
+          tool_call_id: 'call_1',
+          text:
+            '[Earlier tool result: get_project_overview] ' +
+            JSON.stringify({
+              project_title: 'Huge Project',
+              chapters: Array.from({ length: 20 }, (_, index) => ({
+                id: index + 1,
+                title: `Chapter ${index + 1}`,
+                summary: 'Long summary '.repeat(30),
+              })),
+            }),
+        },
+      ],
+      config: { ...config, contextWindowTokens: 4096, modelId: 'demo-4k' },
+      userMessageText: 'Continue.',
+    });
+
+    const toolMessage = prepared.messages[1].content || '';
+    expect(
+      toolMessage.match(/\[Earlier tool result: get_project_overview\]/g)?.length
+    ).toBe(1);
+  });
+
   it('respects explicit context window overrides', () => {
     const prepared = prepareChatContext({
       systemInstruction: 'You are helpful.',

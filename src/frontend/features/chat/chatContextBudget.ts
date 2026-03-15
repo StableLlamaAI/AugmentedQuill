@@ -60,6 +60,7 @@ const RECENT_NON_SYSTEM_MESSAGES_TO_KEEP = 6;
 const RECENT_USER_MESSAGES_TO_KEEP = 2;
 const MAX_TOOL_TEXT_PREVIEW = 480;
 const MAX_TEXT_EXCERPT = 280;
+const TOOL_RESULT_PREFIX_PATTERN = /^\[Earlier tool result(?:: [^\]]+)?\]\s*/;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -257,14 +258,19 @@ function summarizeToolContent(
   const label = toolName
     ? `[Earlier tool result: ${toolName}]`
     : '[Earlier tool result]';
+  const unwrapped = trimmed.replace(TOOL_RESULT_PREFIX_PATTERN, '');
 
   try {
-    const parsed = JSON.parse(trimmed) as unknown;
+    const parsed = JSON.parse(unwrapped) as unknown;
     const summarized = summarizeStructuredValue(parsed);
     const serialized = JSON.stringify(summarized);
-    if (serialized.length < trimmed.length) {
+    if (
+      serialized.length + 24 < unwrapped.length ||
+      unwrapped.length > MAX_TOOL_TEXT_PREVIEW
+    ) {
       return `${label} ${serialized}`;
     }
+    return trimmed;
   } catch {
     // Tool output is not structured JSON; fall back to text compaction.
   }
@@ -273,14 +279,28 @@ function summarizeToolContent(
     return trimmed;
   }
 
-  return `${label} ${summarizeText(trimmed, MAX_TOOL_TEXT_PREVIEW)}`;
+  return `${label} ${summarizeText(unwrapped, MAX_TOOL_TEXT_PREVIEW)}`;
 }
 
 function summarizeToolCall(
   toolCall: NonNullable<MutablePreparedMessage['tool_calls']>[number]
 ) {
   const args = toolCall.function.arguments || '';
-  const compactArgs = summarizeText(args, 180);
+  let compactArgs = summarizeText(args, 180);
+
+  try {
+    const parsed = JSON.parse(args) as unknown;
+    const summarized = summarizeStructuredValue(parsed);
+    const serialized = JSON.stringify(summarized);
+    if (serialized.length < args.length) {
+      compactArgs = serialized;
+    } else {
+      compactArgs = args;
+    }
+  } catch {
+    compactArgs = args;
+  }
+
   return {
     ...toolCall,
     function: {
