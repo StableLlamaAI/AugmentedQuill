@@ -53,6 +53,7 @@ import augmentedquill.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
 from augmentedquill.models.chat import ChatInitialStateResponse
+from augmentedquill.utils.json_repair import try_parse_json_robust
 
 router = APIRouter(tags=["Chat"])
 
@@ -202,7 +203,9 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
         try:
             args_obj = (
-                _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+                try_parse_json_robust(args_raw)
+                if isinstance(args_raw, str)
+                else (args_raw or {})
             )
         except Exception:
             args_obj = {}

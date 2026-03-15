@@ -15,6 +15,7 @@ from __future__ import annotations
 import json as _json
 import re
 from typing import Any
+from augmentedquill.utils.json_repair import try_parse_json_robust
 
 
 def parse_tool_calls_from_content(content: str) -> list[dict] | None:
@@ -39,7 +40,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         # Try JSON format: {"name": "...", "arguments": ...}
         if content_inner.startswith("{"):
             try:
-                json_obj = _json.loads(content_inner)
+                json_obj = try_parse_json_robust(content_inner)
                 if isinstance(json_obj, dict) and "name" in json_obj:
                     name = json_obj["name"]
                     args_obj = json_obj.get("arguments", {})
@@ -73,7 +74,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
             name = xml_match.group(1)
             args_str = xml_match.group(2).strip() or "{}"
             try:
-                args_obj = _json.loads(args_str)
+                args_obj = try_parse_json_robust(args_str)
             except Exception:
                 args_obj = {}
 
@@ -126,7 +127,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
             name = func_match.group(1)
             args_str = func_match.group(2).strip() if func_match.group(2) else "{}"
             try:
-                args_obj = _json.loads(args_str)
+                args_obj = try_parse_json_robust(args_str)
             except Exception:
                 args_obj = {}
 
@@ -151,7 +152,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         name = m.group(1)
         args_str = m.group(2).strip() if m.group(2) else "{}"
         try:
-            args_obj = _json.loads(args_str) if args_str != "{}" else {}
+            args_obj = try_parse_json_robust(args_str) if args_str != "{}" else {}
         except Exception:
             args_obj = {}
 
@@ -176,7 +177,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         name = m.group(1)
         args_str = m.group(2).strip() or "{}"
         try:
-            args_obj = _json.loads(args_str)
+            args_obj = try_parse_json_robust(args_str)
         except Exception:
             args_obj = {}
 
