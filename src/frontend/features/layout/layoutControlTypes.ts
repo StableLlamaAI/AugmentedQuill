@@ -80,6 +80,7 @@ export type HeaderModelControls = {
   setAppSettings: Dispatch<SetStateAction<AppSettings>>;
   modelConnectionStatus: ComponentProps<typeof ModelSelector>['connectionStatus'];
   detectedCapabilities: ComponentProps<typeof ModelSelector>['detectedCapabilities'];
+  recheckUnavailableProviderIfStale: (providerId: string, minAgeMs?: number) => void;
 };
 
 export type HeaderAppearanceControlsState = {

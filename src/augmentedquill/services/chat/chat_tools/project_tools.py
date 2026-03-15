@@ -97,6 +97,8 @@ async def create_project_tool(
     params: CreateProjectParams, payload: dict, mutations: dict
 ):
     ok, msg = create_project(params.name, params.project_type)
+    if ok:
+        mutations["story_changed"] = True
     return {"ok": ok, "message": msg}
 
 
@@ -126,6 +128,8 @@ async def delete_project_tool(
             "message": "This operation deletes the project. Call again with confirm=true to proceed.",
         }
     ok, msg = delete_project(params.name)
+    if ok:
+        mutations["story_changed"] = True
     return {"ok": ok, "message": msg}
 
 

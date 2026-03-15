@@ -68,6 +68,8 @@ export function useChatExecution({
   requestToolCallLoopAccess,
 }: UseChatExecutionParams) {
   const stopSignalRef = useRef(false);
+  const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
+  const updateFlushFrameRef = useRef<number | null>(null);
 
   const upsertChatMessage = (msgId: string, messageUpdate: Partial<ChatMessage>) => {
     setChatMessages((prev) => {
@@ -94,6 +96,75 @@ export function useChatExecution({
           ...messageUpdate,
         } as ChatMessage,
       ];
+    });
+  };
+
+  const flushPendingMessageUpdates = () => {
+    if (updateFlushFrameRef.current !== null) {
+      cancelAnimationFrame(updateFlushFrameRef.current);
+      updateFlushFrameRef.current = null;
+    }
+
+    const updates = pendingMessageUpdatesRef.current;
+    const updateEntries = Object.entries(updates);
+    if (updateEntries.length === 0) return;
+
+    pendingMessageUpdatesRef.current = {};
+
+    setChatMessages((prev) => {
+      const next = [...prev];
+      const messageIndexById = new Map<string, number>();
+
+      next.forEach((message, index) => {
+        messageIndexById.set(message.id, index);
+      });
+
+      for (const [messageId, messageUpdate] of updateEntries) {
+        const existingIndex = messageIndexById.get(messageId);
+
+        if (existingIndex !== undefined) {
+          const existing = next[existingIndex];
+          next[existingIndex] = {
+            ...existing,
+            ...messageUpdate,
+            text: messageUpdate.text ?? existing.text,
+            thinking: messageUpdate.thinking ?? existing.thinking,
+            traceback: messageUpdate.traceback ?? existing.traceback,
+          } as ChatMessage;
+        } else {
+          next.push({
+            id: messageId,
+            role: 'model',
+            text: messageUpdate.text ?? '',
+            thinking: messageUpdate.thinking ?? '',
+            traceback: messageUpdate.traceback ?? '',
+            ...messageUpdate,
+          } as ChatMessage);
+        }
+      }
+
+      return next;
+    });
+  };
+
+  const scheduleMessageUpdate = (
+    msgId: string,
+    messageUpdate: Partial<ChatMessage>
+  ) => {
+    const existingUpdate = pendingMessageUpdatesRef.current[msgId] || {};
+    pendingMessageUpdatesRef.current[msgId] = {
+      ...existingUpdate,
+      ...messageUpdate,
+      text: messageUpdate.text ?? existingUpdate.text,
+      thinking: messageUpdate.thinking ?? existingUpdate.thinking,
+      traceback: messageUpdate.traceback ?? existingUpdate.traceback,
+    };
+
+    if (updateFlushFrameRef.current !== null) return;
+
+    updateFlushFrameRef.current = requestAnimationFrame(() => {
+      updateFlushFrameRef.current = null;
+      flushPendingMessageUpdates();
     });
   };
 
@@ -126,7 +197,7 @@ export function useChatExecution({
         update: { text?: string; thinking?: string; traceback?: string }
       ) => {
         if (stopSignalRef.current) return;
-        upsertChatMessage(msgId, update);
+        scheduleMessageUpdate(msgId, update);
       };
 
       let currentMsgId = uuidv4();
@@ -156,6 +227,7 @@ export function useChatExecution({
 
         const assistantMessage = createAssistantMessage(currentMsgId, result);
 
+        flushPendingMessageUpdates();
         upsertChatMessage(currentMsgId, assistantMessage);
 
         currentHistory.push(assistantMessage);
@@ -236,6 +308,7 @@ export function useChatExecution({
 
       if (!stopSignalRef.current) {
         const botMessage = createAssistantMessage(currentMsgId, result);
+        flushPendingMessageUpdates();
         upsertChatMessage(currentMsgId, botMessage);
       }
     } catch (error: unknown) {
@@ -264,6 +337,7 @@ export function useChatExecution({
       };
       setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
+      flushPendingMessageUpdates();
       setIsChatLoading(false);
       stopSignalRef.current = false;
     }

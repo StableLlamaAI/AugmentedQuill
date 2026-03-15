@@ -215,6 +215,15 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const prompts = usePrompts(story.id);
+
+  const {
+    modelConnectionStatus,
+    detectedCapabilities,
+    refreshHealth,
+    recheckUnavailableProviderIfStale,
+  } = useProviderHealth(appSettings);
+
   const handleSaveSettings = useCallback(
     (nextSettings: AppSettings) => {
       const previousSettings = structuredClone(appSettings);
@@ -223,16 +232,19 @@ const App: React.FC = () => {
       const nextPayload = buildMachinePayloadFromSettings(nextSettingsSnapshot);
 
       setAppSettings(nextSettingsSnapshot);
+      refreshHealth();
 
       pushExternalHistoryEntry({
         label: 'Update machine settings',
         onUndo: async () => {
           await api.machine.save(previousPayload);
           setAppSettings(previousSettings);
+          refreshHealth();
         },
         onRedo: async () => {
           await api.machine.save(nextPayload);
           setAppSettings(nextSettingsSnapshot);
+          refreshHealth();
         },
       });
     },
@@ -241,13 +253,9 @@ const App: React.FC = () => {
       buildMachinePayloadFromSettings,
       pushExternalHistoryEntry,
       setAppSettings,
+      refreshHealth,
     ]
   );
-
-  const prompts = usePrompts(story.id);
-
-  const { modelConnectionStatus, detectedCapabilities } =
-    useProviderHealth(appSettings);
 
   const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
   const imageActionsAvailable = supportsImageActions(
@@ -549,6 +557,7 @@ const App: React.FC = () => {
             setAppSettings,
             modelConnectionStatus,
             detectedCapabilities,
+            recheckUnavailableProviderIfStale,
           }}
           appearanceControls={{
             appearanceRef,

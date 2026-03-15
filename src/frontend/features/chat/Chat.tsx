@@ -9,7 +9,7 @@
  * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage, AppTheme, ChatSession } from '../../types';
 import {
   Loader2,
@@ -56,6 +56,28 @@ interface ChatProps {
   onToggleWebSearch: (val: boolean) => void;
 }
 
+type ToolCallArgumentsProps = {
+  args: unknown;
+};
+
+const ToolCallArguments: React.FC<ToolCallArgumentsProps> = React.memo(({ args }) => {
+  const formattedArgs = useMemo(() => {
+    if (typeof args === 'string') return args;
+
+    try {
+      return JSON.stringify(args, null, 2);
+    } catch {
+      return String(args);
+    }
+  }, [args]);
+
+  return (
+    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
+      {formattedArgs}
+    </div>
+  );
+});
+
 export const Chat: React.FC<ChatProps> = ({
   messages,
   isLoading,
@@ -83,7 +105,6 @@ export const Chat: React.FC<ChatProps> = ({
   const chatDisabledReason =
     'Chat is unavailable because no working CHAT model is configured.';
 
-  const [input, setInput] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
@@ -113,8 +134,8 @@ export const Chat: React.FC<ChatProps> = ({
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Consider "at bottom" if within 10px of the actual bottom
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+      // Consider "at bottom" if within 50px of the actual bottom to handle fast layouts
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
       isAtBottomRef.current = isAtBottom;
     }
   };
@@ -129,10 +150,24 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
+    const observer = new MutationObserver(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom(isLoading ? 'auto' : 'smooth');
+      }
+    });
+
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+
+    // Ensure we scroll immediately if a basic dependency change caused an update too
     if (isAtBottomRef.current) {
-      // Use 'auto' for streaming (isLoading) to avoid laggy smooth scroll
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
+
+    return () => observer.disconnect();
   }, [messages, isLoading, editingMessageId]);
 
   // Always scroll to bottom on session switch
@@ -145,28 +180,17 @@ export const Chat: React.FC<ChatProps> = ({
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
-  // Handle textarea auto-resize
-  useEffect(() => {
+  const handleSubmit = (text: string) => {
+    if (isLoading || !isModelAvailable) return;
+
+    onSendMessage(text);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      const maxHeight = window.innerHeight * 0.5;
-      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
-      textareaRef.current.style.height = `${newHeight}px`;
     }
-  }, [input]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (input.trim() && !isLoading && isModelAvailable) {
-      onSendMessage(input.trim());
-      setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-      // Force scroll to bottom on user message
-      isAtBottomRef.current = true;
-      setTimeout(() => scrollToBottom('auto'), 0);
-    }
+    // Force scroll to bottom on user message
+    isAtBottomRef.current = true;
+    setTimeout(() => scrollToBottom('auto'), 0);
   };
 
   const startEditing = (msg: ChatMessage) => {
@@ -463,11 +487,7 @@ export const Chat: React.FC<ChatProps> = ({
                                 <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
                                   Call: {tc.name}
                                 </div>
-                                <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                  {typeof tc.args === 'string'
-                                    ? tc.args
-                                    : JSON.stringify(tc.args, null, 2)}
-                                </div>
+                                <ToolCallArguments args={tc.args} />
                               </div>
                             ))}
                           </div>
@@ -577,8 +597,6 @@ export const Chat: React.FC<ChatProps> = ({
 
         <ChatComposer
           textareaRef={textareaRef}
-          input={input}
-          setInput={setInput}
           isLoading={isLoading}
           isModelAvailable={isModelAvailable}
           disabledReason={chatDisabledReason}

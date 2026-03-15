@@ -38,7 +38,22 @@ import { notifyError } from '../../services/errorNotifier';
 import { marked } from 'marked';
 // @ts-ignore
 import TurndownService from 'turndown';
-import { PlainTextEditable } from './PlainTextEditable';
+import { PlainTextEditable, fromWhitespaceDisplayText } from './PlainTextEditable';
+import { getRangeLength, resolveNodeAndOffset } from './domUtils';
+import {
+  applyInlineFormatAtSelection,
+  displayedOffsetToRawOffset,
+  getBlockType,
+  getLineAtOffset,
+  isInlineFormatActiveAtSelection,
+  rawOffsetToDisplayedOffset,
+  resolveInlineSelection,
+  toggleBlockAtOffset,
+  toggleInlineFormatAtSelection,
+  InlineFormatType,
+  MarkdownBlockType,
+  TextSelectionRange,
+} from './markdownToolbarUtils';
 
 interface EditorProps {
   chapter: Chapter;
@@ -96,6 +111,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     ref
   ) => {
     const textareaRef = useRef<HTMLDivElement>(null);
+    const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
+    const lastWysiwygSelectionRef = useRef<Range | null>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +166,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
           document.execCommand('insertHTML', false, html);
           wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (lastWysiwygSelectionRef.current) {
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(lastWysiwygSelectionRef.current);
+          document.execCommand('insertHTML', false, html);
+          wysiwygRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
         } else {
           const markdown = `\n![${alt}](${url})`;
           onChange(chapter.id, { content: chapter.content + markdown });
@@ -157,6 +180,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         const markdown = `![${alt}](${url})`;
         if (document.activeElement === textareaRef.current) {
           document.execCommand('insertText', false, markdown);
+        } else if (lastRawSelectionRef.current) {
+          const { start, end } = lastRawSelectionRef.current;
+          const newContent =
+            chapter.content.slice(0, start) + markdown + chapter.content.slice(end);
+          onChange(chapter.id, { content: newContent });
         } else {
           onChange(chapter.id, { content: chapter.content + '\n' + markdown });
         }
@@ -238,12 +266,84 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           selection.rangeCount > 0 &&
           el.contains(selection.anchorNode)
         ) {
-          // Raw-mode context detection is intentionally conservative until
-          // selection-to-markdown offset mapping is implemented.
-          const text = el.innerText;
+          const displayedText = el.innerText;
+          const rawText = showWhitespace
+            ? fromWhitespaceDisplayText(displayedText)
+            : displayedText;
+          const displayedCaret = getCaretOffset(el);
+          const rawCaret =
+            displayedCaret === null
+              ? null
+              : showWhitespace
+                ? displayedOffsetToRawOffset(displayedText, displayedCaret)
+                : displayedCaret;
+
+          if (rawCaret !== null) {
+            const line = getLineAtOffset(rawText, rawCaret);
+            const blockType = getBlockType(line);
+            if (blockType) formats.push(blockType);
+
+            const rawSelection = getSelectionOffsets(el);
+            const rawStart = rawSelection
+              ? showWhitespace
+                ? displayedOffsetToRawOffset(displayedText, rawSelection.start)
+                : rawSelection.start
+              : rawCaret;
+            const rawEnd = rawSelection
+              ? showWhitespace
+                ? displayedOffsetToRawOffset(displayedText, rawSelection.end)
+                : rawSelection.end
+              : rawCaret;
+
+            lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
+
+            if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold')) {
+              formats.push('bold');
+            }
+            if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic')) {
+              formats.push('italic');
+            }
+
+            syncLastRawSelectionFromEditor();
+          }
         }
       }
       onContextChange(formats);
+    };
+
+    const toggleBlockAtCaret = (type: MarkdownBlockType) => {
+      const el = textareaRef.current;
+      if (!el) return;
+
+      const displayedText = el.innerText;
+      const rawText = showWhitespace
+        ? fromWhitespaceDisplayText(displayedText)
+        : displayedText;
+      const displayedCaret = getCaretOffset(el);
+      const rawCaret =
+        displayedCaret === null
+          ? rawText.length
+          : showWhitespace
+            ? displayedOffsetToRawOffset(displayedText, displayedCaret)
+            : displayedCaret;
+      const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
+        rawText,
+        rawCaret,
+        type
+      );
+
+      onChange(chapter.id, { content: nextRawText });
+      window.requestAnimationFrame(() => {
+        const root = textareaRef.current;
+        if (!root) return;
+        const displayedCaretOffset = rawOffsetToDisplayedOffset(
+          nextRawText,
+          nextRawCaret,
+          !!showWhitespace
+        );
+        root.focus();
+        setSelectionOffsets(root, displayedCaretOffset, displayedCaretOffset);
+      });
     };
 
     const getCaretOffset = (root: HTMLElement | null): number | null => {
@@ -255,7 +355,81 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       const preRange = range.cloneRange();
       preRange.selectNodeContents(root);
       preRange.setEnd(range.startContainer, range.startOffset);
-      return preRange.toString().length;
+      return getRangeLength(preRange);
+    };
+
+    const getSelectionOffsets = (
+      root: HTMLElement | null
+    ): { start: number; end: number } | null => {
+      if (!root) return null;
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return null;
+      const range = selection.getRangeAt(0);
+      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+        return null;
+      }
+
+      const startRange = range.cloneRange();
+      startRange.selectNodeContents(root);
+      startRange.setEnd(range.startContainer, range.startOffset);
+
+      const endRange = range.cloneRange();
+      endRange.selectNodeContents(root);
+      endRange.setEnd(range.endContainer, range.endOffset);
+
+      return {
+        start: getRangeLength(startRange),
+        end: getRangeLength(endRange),
+      };
+    };
+
+    const getCurrentRawSelectionFromEditor = (
+      root: HTMLElement | null
+    ): TextSelectionRange | null => {
+      if (!root) return null;
+      const displayedText = root.innerText;
+      const selectionOffsets = getSelectionOffsets(root);
+      if (!selectionOffsets) return null;
+
+      return {
+        start: showWhitespace
+          ? displayedOffsetToRawOffset(displayedText, selectionOffsets.start)
+          : selectionOffsets.start,
+        end: showWhitespace
+          ? displayedOffsetToRawOffset(displayedText, selectionOffsets.end)
+          : selectionOffsets.end,
+      };
+    };
+
+    const syncLastRawSelectionFromEditor = () => {
+      const root = textareaRef.current;
+      if (!root) return;
+
+      const selection = getCurrentRawSelectionFromEditor(root);
+      if (!selection) return;
+
+      const displayedText = root.innerText;
+      const rawText = showWhitespace
+        ? fromWhitespaceDisplayText(displayedText)
+        : displayedText;
+
+      lastRawSelectionRef.current = {
+        start: Math.max(0, Math.min(selection.start, rawText.length)),
+        end: Math.max(0, Math.min(selection.end, rawText.length)),
+      };
+    };
+
+    const setSelectionOffsets = (root: HTMLElement, start: number, end: number) => {
+      const selection = window.getSelection();
+      if (!selection) return;
+
+      const startPoint = resolveNodeAndOffset(root, Math.max(0, start));
+      const endPoint = resolveNodeAndOffset(root, Math.max(0, end));
+      const range = document.createRange();
+      range.setStart(startPoint.node, startPoint.nodeOffset);
+      range.setEnd(endPoint.node, endPoint.nodeOffset);
+      selection.removeAllRanges();
+      selection.addRange(range);
     };
 
     const getEditorCaretOffset = useCallback((): number | null => {
@@ -351,6 +525,25 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       return () => window.removeEventListener('keydown', onKeyDown, true);
     }, [maybeHandleSuggestionHotkey]);
 
+    useEffect(() => {
+      const onSelectionChange = () => {
+        if (viewMode === 'raw' || viewMode === 'markdown') {
+          syncLastRawSelectionFromEditor();
+        } else if (viewMode === 'wysiwyg' && wysiwygRef.current) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (wysiwygRef.current.contains(range.commonAncestorContainer)) {
+              lastWysiwygSelectionRef.current = range.cloneRange();
+            }
+          }
+        }
+      };
+
+      document.addEventListener('selectionchange', onSelectionChange);
+      return () => document.removeEventListener('selectionchange', onSelectionChange);
+    }, [viewMode, showWhitespace]);
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (maybeHandleSuggestionHotkey(e)) return;
 
@@ -364,93 +557,244 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       }
     };
 
+    const withRestoredWysiwygSelection = (action: () => void) => {
+      const root = wysiwygRef.current;
+      if (!root) return;
+
+      const selection = window.getSelection();
+      const savedRange =
+        selection && selection.rangeCount > 0
+          ? selection.getRangeAt(0).cloneRange()
+          : null;
+      const hasEditorSelection =
+        !!savedRange && root.contains(savedRange.startContainer);
+
+      root.focus();
+
+      if (hasEditorSelection && savedRange) {
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange);
+      }
+
+      action();
+    };
+
+    const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch);
+
+    const selectWordAtCollapsedCaret = (): boolean => {
+      const root = wysiwygRef.current;
+      const selection = window.getSelection();
+      if (!root || !selection || selection.rangeCount === 0) return false;
+
+      const range = selection.getRangeAt(0);
+      if (!range.collapsed || !root.contains(range.startContainer)) return false;
+      if (range.startContainer.nodeType !== Node.TEXT_NODE) return false;
+
+      const textNode = range.startContainer as Text;
+      const text = textNode.textContent || '';
+      const offset = range.startOffset;
+      if (!isWordChar(text[offset])) return false;
+
+      let start = offset;
+      let end = offset;
+
+      while (start > 0 && isWordChar(text[start - 1])) start -= 1;
+      while (end < text.length && isWordChar(text[end])) end += 1;
+      if (start === end) return false;
+
+      const wordRange = document.createRange();
+      wordRange.setStart(textNode, start);
+      wordRange.setEnd(textNode, end);
+      selection.removeAllRanges();
+      selection.addRange(wordRange);
+      return true;
+    };
+
+    const applyInlineWysiwygFormat = (command: 'bold' | 'italic') => {
+      withRestoredWysiwygSelection(() => {
+        const selection = window.getSelection();
+        const hasSelection = !!selection && selection.rangeCount > 0;
+        const isCollapsed = hasSelection ? selection!.getRangeAt(0).collapsed : true;
+
+        if (isCollapsed) {
+          // Match expected MD-like ergonomics in visual mode:
+          // if caret is inside a word, format that word; otherwise insert empty style toggle.
+          selectWordAtCollapsedCaret();
+        }
+
+        document.execCommand(command);
+      });
+    };
+
     const format = (type: string) => {
       if (viewMode === 'wysiwyg') {
-        wysiwygRef.current?.focus();
         switch (type) {
           case 'bold':
-            document.execCommand('bold');
+            applyInlineWysiwygFormat('bold');
             break;
           case 'italic':
-            document.execCommand('italic');
+            applyInlineWysiwygFormat('italic');
             break;
           case 'h1':
-            document.execCommand('formatBlock', false, 'H1');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('formatBlock', false, 'H1')
+            );
             break;
           case 'h2':
-            document.execCommand('formatBlock', false, 'H2');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('formatBlock', false, 'H2')
+            );
             break;
           case 'h3':
-            document.execCommand('formatBlock', false, 'H3');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('formatBlock', false, 'H3')
+            );
             break;
           case 'quote':
-            document.execCommand('formatBlock', false, 'BLOCKQUOTE');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('formatBlock', false, 'BLOCKQUOTE')
+            );
             break;
           case 'ul':
-            document.execCommand('insertUnorderedList');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('insertUnorderedList')
+            );
             break;
           case 'ol':
-            document.execCommand('insertOrderedList');
+            withRestoredWysiwygSelection(() =>
+              document.execCommand('insertOrderedList')
+            );
             break;
-          case 'link':
+          case 'link': {
             const url = prompt('Enter URL:');
-            if (url) document.execCommand('createLink', false, url);
+            if (url !== null)
+              withRestoredWysiwygSelection(() =>
+                document.execCommand('createLink', false, url)
+              );
             break;
-          case 'image':
+          }
+          case 'image': {
             const src = prompt('Enter Image URL:');
-            if (src) document.execCommand('insertImage', false, src);
+            if (src !== null)
+              withRestoredWysiwygSelection(() =>
+                document.execCommand('insertImage', false, src)
+              );
             break;
+          }
         }
         handleWysiwygInput();
+        checkContext();
       } else {
         // Raw mode formatting insertion
         if (!textareaRef.current) return;
         const el = textareaRef.current;
+
+        if (
+          type === 'h1' ||
+          type === 'h2' ||
+          type === 'h3' ||
+          type === 'quote' ||
+          type === 'ul' ||
+          type === 'ol'
+        ) {
+          toggleBlockAtCaret(type);
+          checkContext();
+          return;
+        }
+
+        if (type === 'bold' || type === 'italic') {
+          const displayedText = el.innerText;
+          const rawText = showWhitespace
+            ? fromWhitespaceDisplayText(displayedText)
+            : displayedText;
+          const currentRawSelection = getCurrentRawSelectionFromEditor(el);
+
+          const { start: rawStart, end: rawEnd } = resolveInlineSelection(
+            currentRawSelection,
+            lastRawSelectionRef.current,
+            rawText.length
+          );
+
+          const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
+            rawText,
+            rawStart,
+            rawEnd,
+            type as InlineFormatType
+          );
+
+          lastRawSelectionRef.current = { start: nextStart, end: nextEnd };
+
+          onChange(chapter.id, { content: nextRawText });
+
+          window.requestAnimationFrame(() => {
+            const root = textareaRef.current;
+            if (!root) return;
+            root.focus();
+            const displayedStart = rawOffsetToDisplayedOffset(
+              nextRawText,
+              nextStart,
+              !!showWhitespace
+            );
+            const displayedEnd = rawOffsetToDisplayedOffset(
+              nextRawText,
+              nextEnd,
+              !!showWhitespace
+            );
+            setSelectionOffsets(root, displayedStart, displayedEnd);
+          });
+
+          checkContext();
+          return;
+        }
+
         el.focus();
 
         let prefix = '';
         let suffix = '';
 
+        const displayedText = el.innerText;
+        const rawText = showWhitespace
+          ? fromWhitespaceDisplayText(displayedText)
+          : displayedText;
+        const currentRawSelection = getCurrentRawSelectionFromEditor(el);
+        const { start: rawStart, end: rawEnd } = resolveInlineSelection(
+          currentRawSelection,
+          lastRawSelectionRef.current,
+          rawText.length
+        );
+        const selectedText = rawText.slice(rawStart, rawEnd);
+
         switch (type) {
-          case 'bold':
-            prefix = '**';
-            suffix = '**';
-            break;
-          case 'italic':
-            prefix = '_';
-            suffix = '_';
-            break;
-          case 'h1':
-            prefix = '# ';
-            break;
-          case 'h2':
-            prefix = '## ';
-            break;
-          case 'h3':
-            prefix = '### ';
-            break;
-          case 'quote':
-            prefix = '> ';
-            break;
-          case 'ul':
-            prefix = '- ';
-            break;
-          case 'ol':
-            prefix = '1. ';
-            break;
           case 'link':
             prefix = '[';
-            suffix = '](url)';
+            suffix = `](${selectedText ? '' : 'url'})`;
             break;
           case 'image':
             prefix = '![';
-            suffix = '](url)';
+            suffix = `](${selectedText ? '' : 'url'})`;
             break;
         }
 
-        document.execCommand('insertText', false, prefix + suffix);
+        // We re-focus to ensure execCommand targets the right place,
+        // and we select the exact rawStart/rawEnd just like the bold/italic formatting does
+        // to handle focus loss correctly before insertText.
+        const displayedStart = rawOffsetToDisplayedOffset(
+          rawText,
+          rawStart,
+          !!showWhitespace
+        );
+        const displayedEnd = rawOffsetToDisplayedOffset(
+          rawText,
+          rawEnd,
+          !!showWhitespace
+        );
+        setSelectionOffsets(el, displayedStart, displayedEnd);
 
-        onChange(chapter.id, { content: el.innerText });
+        document.execCommand('insertText', false, prefix + selectedText + suffix);
+        const nextContent = showWhitespace
+          ? fromWhitespaceDisplayText(el.innerText)
+          : el.innerText;
+        onChange(chapter.id, { content: nextContent });
       }
     };
 
@@ -709,6 +1053,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     className="w-full bg-transparent text-inherit outline-none"
                     placeholder="Start writing your chapter here..."
                     showWhitespace={showWhitespace}
+                    markdownHighlight={viewMode === 'markdown'}
                     style={{
                       ...commonTextStyle,
                       color: showWhitespace ? 'inherit' : 'inherit',

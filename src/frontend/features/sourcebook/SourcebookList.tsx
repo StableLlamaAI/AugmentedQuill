@@ -44,6 +44,7 @@ const CATEGORY_DETAILS: Record<string, { icon: React.ElementType }> = {
 
 interface SourcebookListProps {
   theme?: AppTheme;
+  externalEntries?: SourcebookEntry[];
   // ids currently checked by the relevance engine or user
   checkedIds?: string[];
   onToggle?: (id: string, checked: boolean) => void;
@@ -57,8 +58,19 @@ interface SourcebookListProps {
   }) => void;
 }
 
+export const resolveExternalSourcebookEntries = (
+  externalEntries: SourcebookEntry[] | undefined,
+  currentEntries: SourcebookEntry[]
+): SourcebookEntry[] => {
+  if (Array.isArray(externalEntries)) {
+    return externalEntries;
+  }
+  return currentEntries;
+};
+
 export const SourcebookList: React.FC<SourcebookListProps> = ({
   theme = 'mixed',
+  externalEntries,
   checkedIds = [],
   onToggle,
   isAutoSelectionEnabled = true,
@@ -66,7 +78,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   onToggleAutoSelection,
   onMutated,
 }) => {
-  const [entries, setEntries] = useState<SourcebookEntry[]>([]);
+  const [entries, setEntries] = useState<SourcebookEntry[]>(
+    resolveExternalSourcebookEntries(externalEntries, [])
+  );
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -87,12 +101,30 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   };
 
   useEffect(() => {
-    loadEntries();
-  }, []);
+    if (Array.isArray(externalEntries)) {
+      setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
+    } else {
+      loadEntries();
+    }
+  }, [externalEntries]);
+
+  const syncEntries = async (
+    updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
+  ) => {
+    if (Array.isArray(externalEntries)) {
+      if (updater) {
+        setEntries((prev) => updater(prev));
+      } else {
+        setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
+      }
+      return;
+    }
+    await loadEntries();
+  };
 
   const handleCreate = async (entry: SourcebookUpsertPayload) => {
     const created = await api.sourcebook.create(entry);
-    await loadEntries();
+    await syncEntries((prev) => [...prev, created]);
     let createdId = created.id;
     onMutated?.({
       label: `Create sourcebook entry: ${entry.name}`,
@@ -111,7 +143,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   const handleUpdate = async (entry: SourcebookUpsertPayload) => {
     const previous = entries.find((value) => value.id === entry.id);
     const updated = await api.sourcebook.update(entry.id, entry);
-    await loadEntries();
+    await syncEntries((prev) =>
+      prev.map((value) => (value.id === updated.id ? updated : value))
+    );
     if (!previous) return;
 
     let activeId = updated.id;
@@ -145,7 +179,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   const handleDelete = async (id: string) => {
     const deletedEntry = entries.find((entry) => entry.id === id);
     await api.sourcebook.delete(id);
-    await loadEntries();
+    await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
     if (!deletedEntry) return;
 
     let activeId = deletedEntry.id;

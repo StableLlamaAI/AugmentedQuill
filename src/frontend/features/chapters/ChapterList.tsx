@@ -46,6 +46,7 @@ interface ChapterListProps {
   isAiAvailable?: boolean;
   theme?: AppTheme;
   onOpenImages?: () => void;
+  languages?: string[];
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -66,6 +67,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   isAiAvailable = true,
   theme = 'mixed',
   onOpenImages,
+  languages = [],
 }) => {
   const isLight = theme === 'light';
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
@@ -422,6 +424,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   )
               : undefined
           }
+          languages={languages}
         />
       )}
       <div

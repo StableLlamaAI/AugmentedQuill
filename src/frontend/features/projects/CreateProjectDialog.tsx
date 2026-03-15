@@ -60,6 +60,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
           <div>
             <label className="block text-sm font-medium mb-1">Project Name</label>
             <input
+              data-no-smart-quotes="true"
               type="text"
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={name}

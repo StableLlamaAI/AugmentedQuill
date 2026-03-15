@@ -106,6 +106,7 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
                       </label>
                     </div>
                     <textarea
+                      data-no-smart-quotes="true"
                       rows={5}
                       value={promptValue}
                       onChange={(e) =>

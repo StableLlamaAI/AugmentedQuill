@@ -16,6 +16,7 @@ import { LLMConfig, AppTheme } from '../../types';
 interface ModelSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  onSelectorClick?: () => void;
   options: LLMConfig[];
   label: string;
   theme: AppTheme;
@@ -30,6 +31,7 @@ interface ModelSelectorProps {
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   value,
   onChange,
+  onSelectorClick,
   options,
   label,
   theme,
@@ -126,7 +128,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       </div>
 
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          onSelectorClick?.();
+          setIsOpen(!isOpen);
+        }}
         className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 flex items-center justify-start font-medium truncate ${
           isLight
             ? 'text-brand-gray-600 hover:text-brand-gray-900'

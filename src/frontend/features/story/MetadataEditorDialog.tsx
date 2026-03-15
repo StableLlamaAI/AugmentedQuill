@@ -51,6 +51,7 @@ export function MetadataEditorDialog({
   onClose,
   title,
   theme = 'mixed',
+  languages = [],
   onAiGenerate,
   aiDisabledReason,
 }: Props) {

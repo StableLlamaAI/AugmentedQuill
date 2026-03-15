@@ -9,14 +9,14 @@
  * Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 interface MarkdownViewProps {
-  content: string;
+  content?: string | null;
   className?: string;
   simple?: boolean;
 }
@@ -24,31 +24,41 @@ interface MarkdownViewProps {
 // Configure markdown rendering once to keep parsing behavior stable.
 const renderer = new marked.Renderer();
 // @ts-ignore
-renderer.image = (href, title, text) => {
+renderer.image = function (token) {
+  let href = typeof token === 'object' && token !== null ? token.href : arguments[0];
+  let title = typeof token === 'object' && token !== null ? token.title : arguments[1];
+  let text = typeof token === 'object' && token !== null ? token.text : arguments[2];
+
   if (
     typeof href === 'string' &&
     href &&
     !href.startsWith('http') &&
     !href.startsWith('/')
   ) {
-    href = `/api/projects/images/${href}`;
+    href = `/api/v1/projects/images/${href}`;
   }
   return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full h-auto rounded shadow-lg my-4" />`;
 };
 marked.use({ renderer });
 
-export const MarkdownView: React.FC<MarkdownViewProps> = ({
+const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   content,
   className = '',
   simple = false,
 }) => {
-  if (!simple) {
-    const rawHtml = marked.parse(content) as string;
-    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+  const safeContent = typeof content === 'string' ? content : '';
+
+  const cleanHtml = useMemo(() => {
+    if (simple) return '';
+
+    const rawHtml = marked.parse(safeContent) as string;
+    return DOMPurify.sanitize(rawHtml, {
       ADD_TAGS: ['img'],
       ADD_ATTR: ['src', 'alt', 'title', 'class'],
     });
+  }, [safeContent, simple]);
 
+  if (!simple) {
     return (
       <div
         className={`prose-editor whitespace-normal ${className}`}
@@ -118,10 +128,12 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
 
   return (
     <div className={`whitespace-pre-wrap break-words ${className}`}>
-      {content.split('\n').map((line, i) => renderLine(line, i))}
+      {safeContent.split('\n').map((line, i) => renderLine(line, i))}
     </div>
   );
 };
+
+export const MarkdownView = React.memo(MarkdownViewComponent);
 
 export const hasUnsupportedSummaryMarkdown = (text: string): boolean => {
   const lines = text.split('\n');

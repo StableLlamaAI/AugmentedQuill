@@ -10,7 +10,7 @@
  */
 
 import { LLMConfig } from '../types';
-
+import { applySmartQuotes } from '../utils/textUtils';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
 type UserMessageInput = string | { message: string };
@@ -304,11 +304,11 @@ export const createChatSession = (
           },
           (t) => {
             thinking += t;
-            if (onUpdate) onUpdate({ thinking });
+            if (onUpdate) onUpdate({ thinking: applySmartQuotes(thinking) });
           },
           (chunk) => {
             fullText += chunk;
-            if (onUpdate) onUpdate({ text: fullText });
+            if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
           }
         );
 
@@ -329,8 +329,8 @@ export const createChatSession = (
           });
 
         return {
-          text,
-          thinking: thinking || undefined,
+          text: applySmartQuotes(text),
+          thinking: thinking ? applySmartQuotes(thinking) : undefined,
           functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
           traceback: undefined, // Or capture if needed
         };
@@ -374,10 +374,11 @@ export const generateSimpleContent = async (
     if (!reader) return '';
 
     let accumulated = '';
-    return await readSSEStream(reader, undefined, undefined, (delta) => {
+    const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
       accumulated += delta;
-      options?.onUpdate?.(accumulated);
+      options?.onUpdate?.(applySmartQuotes(accumulated));
     });
+    return applySmartQuotes(finalResult);
   } catch (e: unknown) {
     // Re-throw so the caller can handle it and show it to the user
     throw e;
@@ -412,10 +413,11 @@ export const streamAiAction = async (
   if (!reader) return '';
 
   let accumulated = '';
-  return await readSSEStream(reader, undefined, undefined, (delta) => {
+  const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
     accumulated += delta;
-    onUpdate?.(accumulated);
+    onUpdate?.(applySmartQuotes(accumulated));
   });
+  return applySmartQuotes(finalResult);
 };
 
 export const generateContinuations = async (
@@ -457,12 +459,12 @@ export const generateContinuations = async (
           const { done, value } = await reader.read();
           if (done) break;
           text += decoder.decode(value, { stream: true });
-          options?.onSuggestionUpdate?.(index, text);
+          options?.onSuggestionUpdate?.(index, applySmartQuotes(text));
         }
         text += decoder.decode();
-        options?.onSuggestionUpdate?.(index, text);
+        options?.onSuggestionUpdate?.(index, applySmartQuotes(text));
       }
-      return text;
+      return applySmartQuotes(text);
     } catch (e) {
       return '';
     }
