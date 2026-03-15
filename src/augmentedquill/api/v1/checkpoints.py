@@ -58,18 +58,17 @@ def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
     # Final check: Ensure the name is exactly as it would appear inside checkpoints_dir
     # with no path navigation whatsoever. Any name containing a slash or backslash
     # is invalid here.
-    if "/" in name or "\\" in name:
+    if "/" in name or "\\" in name or ".." in name:
         raise ValueError("Invalid checkpoint name")
 
-    checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / name
+    checkpoints_dir = (project_dir / _CHECKPOINTS_DIR_NAME).resolve()
+    target_dir = (checkpoints_dir / name).resolve()
 
     # Ensure the target stays inside the checkpoints directory (no path traversal)
-    target_dir_resolved = target_dir.resolve()
-    if not target_dir_resolved.is_relative_to(checkpoints_dir.resolve()):
+    if not target_dir.is_relative_to(checkpoints_dir):
         raise ValueError("Invalid checkpoint name")
 
-    return target_dir_resolved
+    return target_dir
 
 
 @router.get("/checkpoints", response_model=CheckpointListResponse)

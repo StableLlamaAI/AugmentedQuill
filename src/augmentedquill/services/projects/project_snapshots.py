@@ -58,48 +58,47 @@ def capture_project_snapshot(project_dir: Path) -> Dict[str, str]:
 
 def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
     """Replace project files with the exact snapshot content."""
+    resolved_root = project_dir.resolve()
     expected = set(snapshot.keys())
     current = {str(rel): rel for rel in iter_project_files(project_dir)}
 
     for rel_str, rel_path in current.items():
         if rel_str not in expected:
-            (project_dir / rel_path).unlink(missing_ok=True)
+            (resolved_root / rel_path).unlink(missing_ok=True)
 
     for rel_str, encoded in snapshot.items():
-        rel_path = Path(rel_str)
-
         # Reject any paths that could escape the project root.
+        rel_path = Path(rel_str)
         if not _is_safe_relative_path(rel_path):
             continue
 
-        abs_path = (project_dir / rel_path).resolve()
-        if not abs_path.is_relative_to(project_dir.resolve()):
+        # Construct destination path explicitly relative to resolved_root
+        dst_path = (resolved_root / rel_path).resolve()
+        if not dst_path.is_relative_to(resolved_root):
             continue
 
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
-        abs_path.write_bytes(base64.b64decode(encoded.encode("ascii")))
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        dst_path.write_bytes(base64.b64decode(encoded.encode("ascii")))
 
 
 def snapshot_to_directory(project_dir: Path, target_dir: Path):
     """Copy all snapshot-able project files to a target directory structure."""
-    # Resolve the project root for safety comparisons.
+    # Resolve the project root and target directory for safety comparisons.
     resolved_root = project_dir.resolve()
-
-    # Ensure the target directory is safe and within the project.
     resolved_target = target_dir.resolve()
-    if not resolved_target.is_relative_to(resolved_root):
-        raise ValueError("Checkpoint target directory must be within the project")
 
-    # Double check it is strictly inside the checkpoints folder of that project.
+    # Ensure the target directory is strictly inside the checkpoints folder of that project.
     checkpoints_base = (resolved_root / "checkpoints").resolve()
     if not resolved_target.is_relative_to(checkpoints_base):
         raise ValueError(
             "Checkpoint target directory must be within the checkpoints folder"
         )
+    if resolved_target == checkpoints_base:
+        raise ValueError("Cannot snapshot directly into the checkpoints base folder")
 
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
-    target_dir.mkdir(parents=True, exist_ok=True)
+    if resolved_target.exists():
+        shutil.rmtree(resolved_target)
+    resolved_target.mkdir(parents=True, exist_ok=True)
 
     for rel_path in iter_project_files(project_dir):
         # Additional safety check for the file source and destination.
@@ -121,20 +120,18 @@ def snapshot_to_directory(project_dir: Path, target_dir: Path):
 
 def restore_from_directory(project_dir: Path, source_dir: Path):
     """Restore project state from a checkpoint directory."""
-    # Resolve the project root for safety comparisons.
+    # Resolve the project root and source directory for safety comparisons.
     resolved_root = project_dir.resolve()
-
-    # Ensure the source directory is safe and within the project.
     resolved_source = source_dir.resolve()
-    if not resolved_source.is_relative_to(resolved_root):
-        raise ValueError("Checkpoint source directory must be within the project")
 
-    # Double check it is strictly inside the checkpoints folder of that project.
+    # Ensure the source directory is strictly inside the checkpoints folder of that project.
     checkpoints_base = (resolved_root / "checkpoints").resolve()
     if not resolved_source.is_relative_to(checkpoints_base):
         raise ValueError(
             "Checkpoint source directory must be within the checkpoints folder"
         )
+    if resolved_source == checkpoints_base:
+        raise ValueError("Cannot restore directly from the checkpoints base folder")
 
     # First delete existing files that should be overwritten or removed
     for rel_path in iter_project_files(project_dir):
@@ -145,8 +142,8 @@ def restore_from_directory(project_dir: Path, source_dir: Path):
             target_path.unlink(missing_ok=True)
 
     # Then copy all files from the snapshot directory
-    if source_dir.exists():
-        for path in source_dir.rglob("*"):
+    if resolved_source.exists():
+        for path in resolved_source.rglob("*"):
             if not path.is_file():
                 continue
 
@@ -157,6 +154,7 @@ def restore_from_directory(project_dir: Path, source_dir: Path):
             if not _is_safe_relative_path(rel_path):
                 continue
 
+            # Construct destination path explicitly relative to resolved_root
             dst_path = (resolved_root / rel_path).resolve()
             if not dst_path.is_relative_to(resolved_root):
                 continue
