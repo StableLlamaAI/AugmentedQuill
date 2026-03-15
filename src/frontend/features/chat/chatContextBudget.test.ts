@@ -186,4 +186,24 @@ describe('prepareChatContext', () => {
     expect(prepared.usage.contextWindowTokens).toBe(64000);
     expect(prepared.usage.promptBudgetTokens).toBeGreaterThan(32000);
   });
+
+  it('injects warning hint when context usage is high', () => {
+    // 32k window, 2k maxTokens, approx 29k budget tokens
+    // We need approx 85% of 32k window = 27k tokens.
+    // 1 token approx 4 chars, so ~100k chars content.
+    const bulkyUserText = 'Long user text '.repeat(8000);
+
+    const prepared = prepareChatContext({
+      systemInstruction: 'You are helpful.',
+      history: [{ role: 'user', text: bulkyUserText }],
+      config,
+      userMessageText: 'Final question.',
+    });
+
+    expect(prepared.usage.usageRatio).toBeGreaterThan(0.85);
+    const lastMsg = prepared.messages.at(-1);
+    expect(lastMsg?.role).toBe('user');
+    expect(lastMsg?.content).toContain('[SYSTEM HINT: The chat context is almost full');
+    expect(lastMsg?.content).toContain('write_scratchpad');
+  });
 });

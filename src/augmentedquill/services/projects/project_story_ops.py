@@ -142,3 +142,17 @@ def write_story_content_in_project(active: Path, content: str) -> None:
         content_path = active / "story_content.md"
 
     content_path.write_text(content, encoding="utf-8")
+
+
+def read_scratchpad_in_project(active: Path) -> str:
+    """Read Scratchpad In Project."""
+    scratchpad_path = active / "scratchpad.txt"
+    if not scratchpad_path.exists():
+        return ""
+    return scratchpad_path.read_text(encoding="utf-8")
+
+
+def write_scratchpad_in_project(active: Path, content: str) -> None:
+    """Write Scratchpad In Project."""
+    scratchpad_path = active / "scratchpad.txt"
+    scratchpad_path.write_text(content, encoding="utf-8")

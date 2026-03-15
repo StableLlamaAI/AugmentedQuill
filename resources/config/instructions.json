@@ -105,6 +105,7 @@
       "- sync_summary: Auto-generate a summary for a chapter from its content.",
       "- create_new_chapter / write_chapter_heading / reorder_chapters / reorder_books: Maintain story structure.",
       "- list_images / generate_image_description / create_image_placeholder / set_image_metadata: Manage project visuals.",
+      "- read_scratchpad / write_scratchpad: State management for your own internal planning or long-term memory across many turns.",
       "",
       "IDENTITY POLICY:",
       "- You MUST use the exact ID (numeric for chapters, UUID for books) provided by the tools.",

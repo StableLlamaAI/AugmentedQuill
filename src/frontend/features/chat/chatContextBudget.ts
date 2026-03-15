@@ -60,6 +60,7 @@ const RECENT_NON_SYSTEM_MESSAGES_TO_KEEP = 6;
 const RECENT_USER_MESSAGES_TO_KEEP = 2;
 const MAX_TOOL_TEXT_PREVIEW = 480;
 const MAX_TEXT_EXCERPT = 280;
+const CONTEXT_FULL_WARNING_THRESHOLD = 0.85;
 const TOOL_RESULT_PREFIX_PATTERN = /^\[Earlier tool result(?:: [^\]]+)?\]\s*/;
 
 function clamp(value: number, min: number, max: number): number {
@@ -568,6 +569,17 @@ export function prepareChatContext(params: {
   const promptBudgetTokens = buildPromptBudget(config, contextWindowTokens);
   const compacted = compactPreparedMessages(preparedMessages, promptBudgetTokens);
   const estimatedTokens = estimatePromptTokens(compacted.messages);
+  const usageRatio = clamp(estimatedTokens / Math.max(1, contextWindowTokens), 0, 1.5);
+
+  if (usageRatio > CONTEXT_FULL_WARNING_THRESHOLD && compacted.messages.length > 0) {
+    const lastIdx = compacted.messages.length - 1;
+    if (compacted.messages[lastIdx].role === 'user') {
+      compacted.messages[lastIdx].content +=
+        '\n\n[SYSTEM HINT: The chat context is almost full (approx. ' +
+        Math.round(usageRatio * 100) +
+        '%). Compaction may soon remove older tool results and text. If you have complex plans or findings to preserve, consider using `write_scratchpad` or updating story/book notes now.]';
+    }
+  }
 
   return {
     messages: compacted.messages,
@@ -576,7 +588,7 @@ export function prepareChatContext(params: {
       estimatedTokens,
       contextWindowTokens,
       promptBudgetTokens,
-      usageRatio: clamp(estimatedTokens / Math.max(1, contextWindowTokens), 0, 1.5),
+      usageRatio,
       withinBudget: estimatedTokens <= promptBudgetTokens,
       compactionApplied: compacted.compactedMessages > 0,
       compactedMessages: compacted.compactedMessages,
