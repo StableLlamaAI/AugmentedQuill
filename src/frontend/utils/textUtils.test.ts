@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { computeContentWithSeparator } from './textUtils';
+import { computeContentWithSeparator, applySmartQuotes } from './textUtils';
 
 describe('computeContentWithSeparator', () => {
   it('should handle empty prefix', () => {
@@ -103,5 +103,30 @@ describe('computeContentWithSeparator', () => {
       'markdown'
     );
     expect(separator).toBe('\n\n');
+  });
+});
+
+describe('applySmartQuotes', () => {
+  it('should convert standard double quotes to typographically correct ones', () => {
+    expect(applySmartQuotes('She said "Hello" to him.')).toBe(
+      'She said “Hello” to him.'
+    );
+    expect(applySmartQuotes('"Start and end"')).toBe('“Start and end”');
+    expect(applySmartQuotes('Word "quote" word')).toBe('Word “quote” word');
+  });
+
+  it('should convert standard single quotes/apostrophes correctly', () => {
+    expect(applySmartQuotes("It's a beautiful day.")).toBe('It’s a beautiful day.');
+    expect(applySmartQuotes("'Single quoted'")).toBe('‘Single quoted’');
+    expect(applySmartQuotes("She said 'Hello' to him")).toBe('She said ‘Hello’ to him');
+  });
+
+  it('should handle mixed typography and punctuation', () => {
+    expect(applySmartQuotes('He shouted—"Stop!"')).toBe('He shouted—“Stop!”');
+    expect(applySmartQuotes('("Wait," he said)')).toBe('(“Wait,” he said)');
+  });
+
+  it('should ignore empty strings without throwing', () => {
+    expect(applySmartQuotes('')).toBe('');
   });
 });

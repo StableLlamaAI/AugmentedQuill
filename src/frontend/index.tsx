@@ -13,11 +13,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppErrorBoundary } from './features/layout/AppErrorBoundary';
+import { setupSmartQuotesProxy } from './utils/textUtils';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Could not find root element to mount to');
 }
+
+setupSmartQuotesProxy();
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(

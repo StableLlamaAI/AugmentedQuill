@@ -68,3 +68,78 @@ export function computeContentWithSeparator(
     separator,
   };
 }
+
+/**
+ * Automatically adjusts straight quotes to typographic quotation marks.
+ * Handles both double (") and single (') quotes.
+ */
+export function applySmartQuotes(text: string): string {
+  if (!text) return text;
+
+  // Replace double quotes
+  let result = text.replace(/(^|[\s(\[{<—\-\*_])"/g, '$1“');
+  result = result.replace(/"/g, '”');
+
+  // Replace single quotes
+  result = result.replace(/(^|[\s(\[{<—\-\*_])'/g, '$1‘');
+  result = result.replace(/'/g, '’');
+
+  return result;
+}
+
+/**
+ * Installs a global capture-phase event listener to auto-convert
+ * straight quotes into typographic quotation marks across all
+ * textinputs and textareas.
+ */
+export function setupSmartQuotesProxy() {
+  if (typeof window === 'undefined') return;
+  document.addEventListener(
+    'input',
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (
+        (target.tagName === 'TEXTAREA' ||
+          (target.tagName === 'INPUT' &&
+            (target as HTMLInputElement).type === 'text')) &&
+        target.dataset.noSmartQuotes !== 'true'
+      ) {
+        const input = target as HTMLInputElement | HTMLTextAreaElement;
+        const oldVal = input.value;
+        const newVal = applySmartQuotes(oldVal);
+        if (newVal !== oldVal) {
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+
+          // Bypassing React's `_valueTracker` to ensure the controlled value
+          // observes the mutate correctly down the tree natively.
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value'
+          )?.set;
+          const nativeTextareaValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype,
+            'value'
+          )?.set;
+
+          if (target.tagName === 'TEXTAREA' && nativeTextareaValueSetter) {
+            nativeTextareaValueSetter.call(input, newVal);
+          } else if (target.tagName === 'INPUT' && nativeInputValueSetter) {
+            nativeInputValueSetter.call(input, newVal);
+          } else {
+            input.value = newVal;
+          }
+
+          if (start !== null && end !== null) {
+            input.setSelectionRange(start, end);
+          }
+
+          // Stop the original event to replace it cleanly if required,
+          // though `input` is not cancelable, React handles subsequent event.
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    },
+    { capture: true }
+  );
+}

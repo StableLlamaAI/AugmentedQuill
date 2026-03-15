@@ -512,6 +512,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                     Name
                   </label>
                   <input
+                    data-no-smart-quotes="true"
                     value={activeProvider.name}
                     onChange={(e) =>
                       onUpdateProvider(activeProvider.id, {
@@ -532,6 +533,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   <Terminal size={12} /> Base URL
                 </label>
                 <input
+                  data-no-smart-quotes="true"
                   value={activeProvider.baseUrl}
                   onChange={(e) =>
                     onUpdateProvider(activeProvider.id, {
@@ -553,6 +555,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 </label>
                 <div className="relative">
                   <input
+                    data-no-smart-quotes="true"
                     type="text"
                     value={activeProvider.apiKey}
                     onChange={(e) =>
@@ -650,6 +653,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   </label>
                   <div className="relative">
                     <input
+                      data-no-smart-quotes="true"
                       value={activeProvider.modelId}
                       onFocus={() => setModelPickerOpenFor(activeProvider.id)}
                       onBlur={() => {
@@ -850,6 +854,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                       Stop Sequences (one per line)
                     </label>
                     <textarea
+                      data-no-smart-quotes="true"
                       rows={3}
                       value={(activeProvider.stop || []).join('\n')}
                       onChange={(e) =>
@@ -872,6 +877,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                       Extra Body (JSON)
                     </label>
                     <textarea
+                      data-no-smart-quotes="true"
                       rows={4}
                       value={activeProvider.extraBody || ''}
                       onChange={(e) =>
