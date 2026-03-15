@@ -123,15 +123,74 @@ def chat_tool(
                     "type": "object",
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
+                    "additionalProperties": False,
                 },
             },
         }
+
+        allowed_params = set((schema.get("properties") or {}).keys())
+        required_params = set(schema.get("required") or [])
 
         # Create wrapper that validates and calls the original function
         async def wrapper(
             args_obj: dict, call_id: str, payload: dict, mutations: dict
         ) -> dict:
             """Wrapper."""
+            if not isinstance(args_obj, dict):
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "type_error.dict",
+                                "loc": ["arguments"],
+                                "msg": "Tool arguments must be a JSON object",
+                                "input": args_obj,
+                            }
+                        ],
+                    },
+                )
+
+            unknown_keys = sorted(set(args_obj.keys()) - allowed_params)
+            if unknown_keys:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "extra_forbidden",
+                                "loc": [key],
+                                "msg": "Extra inputs are not permitted",
+                                "input": args_obj.get(key),
+                            }
+                            for key in unknown_keys
+                        ],
+                    },
+                )
+
+            missing_required = sorted(required_params - set(args_obj.keys()))
+            if missing_required:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "missing",
+                                "loc": [key],
+                                "msg": "Field required",
+                                "input": args_obj,
+                            }
+                            for key in missing_required
+                        ],
+                    },
+                )
+
             try:
                 # Validate and parse arguments using Pydantic
                 params = params_type.model_validate(args_obj)

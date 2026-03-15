@@ -368,7 +368,9 @@ class ToolParityTest(TestCase):
         self.assertTrue("projects" in res)
 
         # create_project
-        res = self._call_tool("create_project", {"name": "new_proj", "type": "novel"})
+        res = self._call_tool(
+            "create_project", {"name": "new_proj", "project_type": "novel"}
+        )
         self.assertTrue(res.get("ok"))
 
         # delete_project (negative)

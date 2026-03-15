@@ -295,6 +295,19 @@ class ChatToolContractsTest(TestCase):
 
         return built
 
+    def _assert_invalid_parameters(self, tool_name: str, content):
+        self.assertIsInstance(content, dict, f"Expected dict response for {tool_name}")
+        self.assertEqual(
+            content.get("error"),
+            "Invalid parameters",
+            f"Expected Invalid parameters for {tool_name}: {content}",
+        )
+        self.assertIsInstance(
+            content.get("details"),
+            list,
+            f"Expected validation details list for {tool_name}: {content}",
+        )
+
     def test_all_tools_handle_malformed_arguments_gracefully(self):
         for name in self._tool_names():
             content = self._call_tool(name, "{this is not valid json")
@@ -310,6 +323,34 @@ class ChatToolContractsTest(TestCase):
             self.assertIsInstance(
                 content, (dict, list, str, int, float, bool, type(None))
             )
+
+    def test_all_tools_reject_unknown_argument_keys(self):
+        for tool_schema in get_story_tools():
+            tool_name = tool_schema["function"]["name"]
+            args = self._build_args_for_schema(tool_schema, invalid=False)
+            args["unexpected_key"] = "unexpected_value"
+            content = self._call_tool(tool_name, args)
+            self._assert_invalid_parameters(tool_name, content)
+
+    def test_all_tools_reject_missing_required_keys(self):
+        for tool_schema in get_story_tools():
+            fn = tool_schema["function"]
+            tool_name = fn["name"]
+            required = (fn.get("parameters") or {}).get("required") or []
+            if not required:
+                continue
+
+            args = self._build_args_for_schema(tool_schema, invalid=False)
+            missing_key = required[0]
+            self.assertIn(
+                missing_key,
+                args,
+                f"Test harness failed to build required key {missing_key} for {tool_name}",
+            )
+            args.pop(missing_key)
+
+            content = self._call_tool(tool_name, args)
+            self._assert_invalid_parameters(tool_name, content)
 
     def test_all_tools_have_successful_execution_path(self):
         async def fake_generate_summary(**kwargs):
