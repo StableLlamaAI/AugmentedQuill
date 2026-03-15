@@ -26,6 +26,8 @@ import { Button } from '../../components/ui/Button';
 import { HeaderAppearanceControls } from '../editor/HeaderAppearanceControls';
 import { HeaderCenterControls } from './header/HeaderCenterControls';
 import { CheckpointsMenu } from '../checkpoints/CheckpointsMenu';
+import { ConfirmDialog } from './ConfirmDialog';
+import { useConfirmDialog } from './useConfirmDialog';
 import {
   HeaderAiControls,
   HeaderAppearanceControlsState,
@@ -102,6 +104,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const [isRedoMenuOpen, setIsRedoMenuOpen] = useState(false);
   const undoMenuRef = useRef<HTMLDivElement | null>(null);
   const redoMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const { confirm, confirmDialogState, handleConfirm, handleCancel } =
+    useConfirmDialog();
 
   useEffect(() => {
     const onDocumentClick = (event: MouseEvent) => {
@@ -262,7 +267,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               </div>
             )}
           </div>
-          <CheckpointsMenu />
+          <CheckpointsMenu hasUnsavedChanges={canUndo} confirm={confirm} />
+          <ConfirmDialog
+            isOpen={confirmDialogState.isOpen}
+            title={confirmDialogState.title}
+            message={confirmDialogState.message}
+            confirmLabel={confirmDialogState.confirmLabel}
+            cancelLabel={confirmDialogState.cancelLabel}
+            variant={confirmDialogState.variant as any}
+            onConfirm={handleConfirm}
+            onCancel={handleCancel}
+          />
         </div>
       </div>
 

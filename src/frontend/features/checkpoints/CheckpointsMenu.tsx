@@ -20,20 +20,22 @@ import { CheckpointInfo } from '../../services/apiClients/checkpoints';
 interface CheckpointsMenuProps {
   onStateChange?: () => void;
   hasUnsavedChanges?: boolean;
+  confirm: (input: string | any) => Promise<boolean>;
 }
 
-export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({ onStateChange }) => {
-  const { isLight, currentTheme, buttonActive } = useTheme();
+export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
+  onStateChange,
+  hasUnsavedChanges = false,
+  confirm,
+}) => {
+  const { isLight, currentTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-
-  // Track if current state is backed up. We consider it "dirty" if user hasn't saved a checkpoint since page load or last save
-  // Better approach for now: Always show warning when loading if there are newer unsaved changes since last checkpoint.
-  const [unsavedChanges, setUnsavedChanges] = useState<boolean>(true);
+  const [isStateAlreadyBackedUpInSession, setIsStateAlreadyBackedUpInSession] =
+    useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const { confirm } = useConfirmDialog();
 
   const fetchCheckpoints = async () => {
     try {
@@ -51,6 +53,14 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({ onStateChange 
   }, [isOpen]);
 
   useEffect(() => {
+    // If external state indicates no changes, reset our session backup flag.
+    // This handles cases where user undoes everything manually.
+    if (!hasUnsavedChanges) {
+      setIsStateAlreadyBackedUpInSession(false);
+    }
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
     const onDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node;
       if (menuRef.current && !menuRef.current.contains(target)) {
@@ -65,7 +75,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({ onStateChange 
     setIsCreating(true);
     try {
       await api.checkpoints.create();
-      setUnsavedChanges(false);
+      setIsStateAlreadyBackedUpInSession(true);
       await fetchCheckpoints();
       if (onStateChange) onStateChange();
     } catch (err) {
@@ -76,7 +86,8 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({ onStateChange 
   };
 
   const handleLoad = async (timestamp: string) => {
-    if (unsavedChanges) {
+    const reallyHasUnsavedWork = hasUnsavedChanges && !isStateAlreadyBackedUpInSession;
+    if (reallyHasUnsavedWork) {
       const sure = await confirm({
         title: 'Load Checkpoint',
         message:
