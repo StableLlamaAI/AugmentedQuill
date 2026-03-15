@@ -19,12 +19,30 @@ def iter_project_files(project_dir: Path):
         if not path.is_file():
             continue
         rel = path.relative_to(project_dir)
-        rel_parts = rel.parts
-        if not rel_parts:
-            continue
-        if rel_parts[0] in {".aq_history", "chats", "checkpoints"}:
+        if not _is_safe_relative_path(rel):
             continue
         yield rel
+
+
+def _is_safe_relative_path(rel_path: Path) -> bool:
+    """Return True if a relative path is safe for use inside a project directory."""
+    # Reject absolute paths.
+    if rel_path.is_absolute():
+        return False
+
+    parts = rel_path.parts
+    if not parts:
+        return False
+
+    # Prevent traversal outside the project directory.
+    if any(p == ".." for p in parts):
+        return False
+
+    # Prevent access to internal metadata and checkpoints.
+    if parts[0] in {".aq_history", "chats", "checkpoints"}:
+        return False
+
+    return True
 
 
 def capture_project_snapshot(project_dir: Path) -> Dict[str, str]:
@@ -49,13 +67,25 @@ def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
 
     for rel_str, encoded in snapshot.items():
         rel_path = Path(rel_str)
-        abs_path = project_dir / rel_path
+
+        # Reject any paths that could escape the project root.
+        if not _is_safe_relative_path(rel_path):
+            continue
+
+        abs_path = (project_dir / rel_path).resolve()
+        if not abs_path.is_relative_to(project_dir.resolve()):
+            continue
+
         abs_path.parent.mkdir(parents=True, exist_ok=True)
         abs_path.write_bytes(base64.b64decode(encoded.encode("ascii")))
 
 
 def snapshot_to_directory(project_dir: Path, target_dir: Path):
     """Copy all snapshot-able project files to a target directory structure."""
+    # Ensure the target directory is within the project.
+    if not target_dir.resolve().is_relative_to(project_dir.resolve()):
+        raise ValueError("Checkpoint target directory must be within the project")
+
     if target_dir.exists():
         shutil.rmtree(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -78,13 +108,16 @@ def restore_from_directory(project_dir: Path, source_dir: Path):
         for path in source_dir.rglob("*"):
             if not path.is_file():
                 continue
+
             rel_path = path.relative_to(source_dir)
 
-            # Additional safety check
-            rel_parts = rel_path.parts
-            if rel_parts and rel_parts[0] in {".aq_history", "chats", "checkpoints"}:
+            # Additional safety checks
+            if not _is_safe_relative_path(rel_path):
                 continue
 
-            dst_path = project_dir / rel_path
+            dst_path = (project_dir / rel_path).resolve()
+            if not dst_path.is_relative_to(project_dir.resolve()):
+                continue
+
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, dst_path)

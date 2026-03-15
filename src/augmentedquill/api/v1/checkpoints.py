@@ -51,11 +51,16 @@ def _get_checkpoints_dir(project_dir: Path) -> Path:
 
 def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
     """Resolve a checkpoint name to a safe, canonical directory inside the checkpoints folder."""
+    # Basic validation to ensure the value cannot be used for path traversal.
     if not re.match(_CHECKPOINT_NAME_RE, name):
         raise ValueError("Invalid checkpoint name")
 
+    candidate = Path(name)
+    if candidate.is_absolute() or any(p == ".." for p in candidate.parts):
+        raise ValueError("Invalid checkpoint name")
+
     checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / name
+    target_dir = checkpoints_dir / candidate
 
     # Ensure the target stays inside the checkpoints directory (no path traversal)
     target_dir_resolved = target_dir.resolve()
