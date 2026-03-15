@@ -82,26 +82,67 @@ def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
 
 def snapshot_to_directory(project_dir: Path, target_dir: Path):
     """Copy all snapshot-able project files to a target directory structure."""
-    # Ensure the target directory is within the project.
-    if not target_dir.resolve().is_relative_to(project_dir.resolve()):
+    # Resolve the project root for safety comparisons.
+    resolved_root = project_dir.resolve()
+
+    # Ensure the target directory is safe and within the project.
+    resolved_target = target_dir.resolve()
+    if not resolved_target.is_relative_to(resolved_root):
         raise ValueError("Checkpoint target directory must be within the project")
+
+    # Double check it is strictly inside the checkpoints folder of that project.
+    checkpoints_base = (resolved_root / "checkpoints").resolve()
+    if not resolved_target.is_relative_to(checkpoints_base):
+        raise ValueError(
+            "Checkpoint target directory must be within the checkpoints folder"
+        )
 
     if target_dir.exists():
         shutil.rmtree(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for rel_path in iter_project_files(project_dir):
-        src_path = project_dir / rel_path
-        dst_path = target_dir / rel_path
+        # Additional safety check for the file source and destination.
+        if not _is_safe_relative_path(rel_path):
+            continue
+
+        src_path = (resolved_root / rel_path).resolve()
+        dst_path = (resolved_target / rel_path).resolve()
+
+        # Ensure we're not copying anything that could escape or overwrite internal metadata.
+        if not src_path.is_relative_to(resolved_root):
+            continue
+        if not dst_path.is_relative_to(resolved_target):
+            continue
+
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_path, dst_path)
 
 
 def restore_from_directory(project_dir: Path, source_dir: Path):
     """Restore project state from a checkpoint directory."""
+    # Resolve the project root for safety comparisons.
+    resolved_root = project_dir.resolve()
+
+    # Ensure the source directory is safe and within the project.
+    resolved_source = source_dir.resolve()
+    if not resolved_source.is_relative_to(resolved_root):
+        raise ValueError("Checkpoint source directory must be within the project")
+
+    # Double check it is strictly inside the checkpoints folder of that project.
+    checkpoints_base = (resolved_root / "checkpoints").resolve()
+    if not resolved_source.is_relative_to(checkpoints_base):
+        raise ValueError(
+            "Checkpoint source directory must be within the checkpoints folder"
+        )
+
     # First delete existing files that should be overwritten or removed
     for rel_path in iter_project_files(project_dir):
-        (project_dir / rel_path).unlink(missing_ok=True)
+        target_path = (resolved_root / rel_path).resolve()
+        if target_path.is_relative_to(resolved_root) and _is_safe_relative_path(
+            rel_path
+        ):
+            target_path.unlink(missing_ok=True)
 
     # Then copy all files from the snapshot directory
     if source_dir.exists():
@@ -109,14 +150,15 @@ def restore_from_directory(project_dir: Path, source_dir: Path):
             if not path.is_file():
                 continue
 
-            rel_path = path.relative_to(source_dir)
+            # This file is coming from inside the source_dir.
+            rel_path = path.relative_to(resolved_source)
 
-            # Additional safety checks
+            # Additional safety checks for relative destination path.
             if not _is_safe_relative_path(rel_path):
                 continue
 
-            dst_path = (project_dir / rel_path).resolve()
-            if not dst_path.is_relative_to(project_dir.resolve()):
+            dst_path = (resolved_root / rel_path).resolve()
+            if not dst_path.is_relative_to(resolved_root):
                 continue
 
             dst_path.parent.mkdir(parents=True, exist_ok=True)
