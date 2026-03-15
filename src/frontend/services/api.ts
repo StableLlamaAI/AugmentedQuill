@@ -18,6 +18,7 @@ import { settingsApi } from './apiClients/settings';
 import { chatApi } from './apiClients/chat';
 import { sourcebookApi } from './apiClients/sourcebook';
 import { debugApi } from './apiClients/debug';
+import { checkpointsApi } from './apiClients/checkpoints';
 
 export const api = {
   machine: machineApi,
@@ -29,4 +30,5 @@ export const api = {
   chat: chatApi,
   sourcebook: sourcebookApi,
   debug: debugApi,
+  checkpoints: checkpointsApi,
 };

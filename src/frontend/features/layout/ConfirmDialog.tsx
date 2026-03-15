@@ -13,26 +13,35 @@ import React from 'react';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
+  title?: string;
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
   confirmLabel?: string;
   cancelLabel?: string;
+  variant?: 'primary' | 'danger';
 }
 
 /**
  * Non-blocking confirmation dialog that replaces synchronous window.confirm().
  * Rendered via a portal-style overlay so it works within the React event loop.
  */
+import { useTheme } from './ThemeContext';
+
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
+  title,
   message,
   onConfirm,
   onCancel,
   confirmLabel = 'OK',
   cancelLabel = 'Cancel',
+  variant = 'primary',
 }) => {
+  const { isLight } = useTheme();
   if (!isOpen) return null;
+
+  const isDanger = variant === 'danger';
 
   return (
     <div
@@ -40,19 +49,50 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       role="dialog"
       aria-modal="true"
     >
-      <div className="bg-brand-gray-900 border border-brand-gray-700 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-        <p className="text-brand-gray-200 text-sm whitespace-pre-wrap mb-6">
+      <div
+        className={`${
+          isLight
+            ? 'bg-white border-brand-gray-200 shadow-lg'
+            : 'bg-brand-gray-900 border-brand-gray-700 shadow-xl'
+        } border rounded-lg p-6 max-w-md w-full mx-4`}
+      >
+        {title && (
+          <h2
+            className={`text-lg font-bold mb-2 ${
+              isDanger
+                ? 'text-red-600 dark:text-red-500'
+                : isLight
+                  ? 'text-brand-gray-900'
+                  : 'text-brand-gray-100'
+            }`}
+          >
+            {title}
+          </h2>
+        )}
+        <p
+          className={`${
+            isLight ? 'text-brand-gray-700' : 'text-brand-gray-200'
+          } text-sm whitespace-pre-wrap mb-6`}
+        >
           {message}
         </p>
         <div className="flex justify-end gap-3">
           <button
-            className="px-4 py-2 text-sm rounded-md bg-brand-gray-800 text-brand-gray-300 border border-brand-gray-700 hover:bg-brand-gray-700 transition-colors"
+            className={`${
+              isLight
+                ? 'bg-brand-gray-100 text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-200'
+                : 'bg-brand-gray-800 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-700'
+            } px-4 py-2 text-sm rounded-md border transition-colors`}
             onClick={onCancel}
           >
             {cancelLabel}
           </button>
           <button
-            className="px-4 py-2 text-sm rounded-md bg-brand-700 text-white border-transparent hover:bg-brand-600 transition-colors"
+            className={`${
+              isDanger
+                ? 'bg-red-600 hover:bg-red-500'
+                : 'bg-brand-700 hover:bg-brand-600'
+            } px-4 py-2 text-sm rounded-md text-white border-transparent transition-colors`}
             onClick={onConfirm}
             autoFocus
           >

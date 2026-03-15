@@ -661,13 +661,6 @@ const App: React.FC = () => {
           theme={currentTheme}
           onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
         />
-
-        <ConfirmDialog
-          isOpen={confirmDialogState.isOpen}
-          message={confirmDialogState.message}
-          onConfirm={handleConfirm}
-          onCancel={handleCancel}
-        />
       </div>
     </ThemeProvider>
   );

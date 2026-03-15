@@ -11,30 +11,35 @@
 
 import { useState, useCallback, useRef } from 'react';
 
-interface PendingConfirm {
+interface ConfirmOptions {
+  title?: string;
   message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: 'primary' | 'danger';
+}
+
+interface PendingConfirm {
+  options: ConfirmOptions;
   resolve: (value: boolean) => void;
 }
 
 /**
  * Hook that provides a non-blocking, Promise-based confirm() callback backed
  * by a React dialog instead of the synchronous window.confirm().
- *
- * Usage:
- *   const { confirm, confirmDialogState, handleConfirm, handleCancel } = useConfirmDialog();
- *   const story = useStory({ confirm });
- *   <ConfirmDialog isOpen={confirmDialogState.isOpen} message={confirmDialogState.message}
- *     onConfirm={handleConfirm} onCancel={handleCancel} />
  */
 export const useConfirmDialog = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [message, setMessage] = useState('');
+  const [options, setOptions] = useState<ConfirmOptions>({ message: '' });
   const pendingRef = useRef<PendingConfirm | null>(null);
 
-  const confirm = useCallback((msg: string): Promise<boolean> => {
+  const confirm = useCallback((input: string | ConfirmOptions): Promise<boolean> => {
+    const normalizedOptions: ConfirmOptions =
+      typeof input === 'string' ? { message: input } : input;
+
     return new Promise((resolve) => {
-      pendingRef.current = { message: msg, resolve };
-      setMessage(msg);
+      pendingRef.current = { options: normalizedOptions, resolve };
+      setOptions(normalizedOptions);
       setIsOpen(true);
     });
   }, []);
@@ -53,7 +58,14 @@ export const useConfirmDialog = () => {
 
   return {
     confirm,
-    confirmDialogState: { isOpen, message },
+    confirmDialogState: {
+      isOpen,
+      message: options.message,
+      title: options.title,
+      confirmLabel: options.confirmLabel,
+      cancelLabel: options.cancelLabel,
+      variant: options.variant,
+    },
     handleConfirm,
     handleCancel,
   };
