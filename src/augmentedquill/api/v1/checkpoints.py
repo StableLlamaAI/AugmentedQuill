@@ -55,12 +55,14 @@ def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
     if not re.match(_CHECKPOINT_NAME_RE, name):
         raise ValueError("Invalid checkpoint name")
 
-    candidate = Path(name)
-    if candidate.is_absolute() or any(p == ".." for p in candidate.parts):
+    # Final check: Ensure the name is exactly as it would appear inside checkpoints_dir
+    # with no path navigation whatsoever. Any name containing a slash or backslash
+    # is invalid here.
+    if "/" in name or "\\" in name:
         raise ValueError("Invalid checkpoint name")
 
     checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / candidate
+    target_dir = checkpoints_dir / name
 
     # Ensure the target stays inside the checkpoints directory (no path traversal)
     target_dir_resolved = target_dir.resolve()
@@ -98,8 +100,11 @@ async def api_create_checkpoint() -> JSONResponse:
     # To be safe with filenames, we'll replace colons
     safe_timestamp = timestamp.replace(":", "-")
 
-    checkpoints_dir = _get_checkpoints_dir(project_dir)
-    target_dir = checkpoints_dir / safe_timestamp
+    try:
+        # Resolve target_dir using the same logic as load/delete to satisfy CodeQL.
+        target_dir = _resolve_checkpoint_dir(project_dir, safe_timestamp)
+    except ValueError:
+        return error_json("Invalid checkpoint name generated", status_code=500)
 
     snapshot_to_directory(project_dir, target_dir)
 
