@@ -48,6 +48,32 @@ Clicking **New Project** opens a small dialog:
 
 ---
 
+## Project Checkpoints
+
+Project Checkpoints allow you to save the entire state of your project at a specific point in time and return to it later. This is useful before making major changes to your story structure or when experimenting with different plot directions.
+
+### Managing Checkpoints
+
+The Checkpoints menu is located in the top navigation bar, represented by a <img src="assets/save.svg" alt="Save icon" width="16" height="16" style="vertical-align:text-bottom;" /> **Checkpoints** button.
+
+- **Store Current State**: Creates a new snapshot of your project. This includes all chapters, books, sourcebook entries, and settings.
+- **Load Checkpoint**: Replaces the current project state with a previously saved version.
+  - _Note: Loading a checkpoint will overwrite your current unsaved changes. The application will prompt you with a warning if you have unsaved work._
+- **Delete Checkpoint**: Permanently removes a stored snapshot from your machine.
+
+### What is saved?
+
+Checkpoints capture:
+
+- Story metadata (title, summary, style tags).
+- All manuscript content (chapters and books).
+- The entire Sourcebook.
+- Project-specific settings.
+
+_Note: Chat histories and generated images are currently not included in project checkpoints to keep snapshot sizes manageable._
+
+---
+
 ## The Machine Settings Tab
 
 The Machine Settings tab is where you configure the AI models (providers) that power AugmentedQuill. You can add multiple providers and assign each one to specific roles.
