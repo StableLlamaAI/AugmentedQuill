@@ -25,6 +25,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { HeaderAppearanceControls } from '../editor/HeaderAppearanceControls';
 import { HeaderCenterControls } from './header/HeaderCenterControls';
+import { CheckpointsMenu } from '../checkpoints/CheckpointsMenu';
 import {
   HeaderAiControls,
   HeaderAppearanceControlsState,
@@ -261,6 +262,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               </div>
             )}
           </div>
+          <CheckpointsMenu />
         </div>
       </div>
 
