@@ -63,6 +63,11 @@ export function useAppSettings(defaultSettings: AppSettings) {
                   ? Math.max(1, timeoutS) * 1000
                   : 60000,
                 modelId: String(model.model || '').trim(),
+                contextWindowTokens:
+                  model.context_window_tokens === null ||
+                  model.context_window_tokens === undefined
+                    ? undefined
+                    : Number(model.context_window_tokens),
                 temperature:
                   model.temperature === null || model.temperature === undefined
                     ? fallbackProvider.temperature
