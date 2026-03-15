@@ -135,6 +135,13 @@ class ToolParityTest(TestCase):
         res = self._call_tool("read_story_content", {})
         self.assertEqual(res["content"], "Story intro content.")
 
+        # read_story_content with paging
+        res = self._call_tool("read_story_content", {"start": 0, "max_chars": 5})
+        self.assertEqual(res["content"], "Story")
+        self.assertEqual(res["start"], 0)
+        self.assertEqual(res["end"], 5)
+        self.assertEqual(res["total"], len("Story intro content."))
+
         # write_story_content
         res = self._call_tool(
             "write_story_content", {"content": "Updated story intro content."}
@@ -175,6 +182,15 @@ class ToolParityTest(TestCase):
         # read_book_content
         res = self._call_tool("read_book_content", {"book_id": self.book_id})
         self.assertEqual(res["content"], "Book 1 intro content.")
+
+        # read_book_content with paging
+        res = self._call_tool(
+            "read_book_content", {"book_id": self.book_id, "start": 0, "max_chars": 4}
+        )
+        self.assertEqual(res["content"], "Book")
+        self.assertEqual(res["start"], 0)
+        self.assertEqual(res["end"], 4)
+        self.assertEqual(res["total"], len("Book 1 intro content."))
 
         # write_book_content
         res = self._call_tool(
@@ -227,12 +243,22 @@ class ToolParityTest(TestCase):
         self.assertEqual(res["tags"], ["sci-fi", "noir"])
 
     def test_get_chapter_summaries(self):
+        # A chapter should always be listed, even if it has an empty summary.
         res = self._call_tool("get_chapter_summaries", {})
         self.assertEqual(len(res["chapter_summaries"]), 1)
         self.assertEqual(res["chapter_summaries"][0]["title"], "Chapter 1")
         self.assertEqual(
             res["chapter_summaries"][0]["summary"], "Initial chapter summary"
         )
+
+        # Clear the summary and ensure the chapter is still listed.
+        self._call_tool(
+            "update_chapter_metadata",
+            {"chap_id": 1, "summary": ""},
+        )
+        res = self._call_tool("get_chapter_summaries", {})
+        self.assertEqual(len(res["chapter_summaries"]), 1)
+        self.assertEqual(res["chapter_summaries"][0]["summary"], "")
 
     def test_delete_tools(self):
         # delete_chapter (negative first: no confirm)

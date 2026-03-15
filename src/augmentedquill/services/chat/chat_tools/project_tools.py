@@ -29,9 +29,12 @@ from augmentedquill.services.projects.projects import (
 
 
 class GetProjectOverviewParams(BaseModel):
-    """Parameters for get_project_overview (no parameters needed)."""
+    """Parameters for get_project_overview."""
 
-    pass
+    include_notes: bool = Field(
+        False,
+        description="If true, include per-chapter notes in the overview output (default false).",
+    )
 
 
 class CreateProjectParams(BaseModel):
@@ -94,7 +97,7 @@ class ChangeProjectTypeParams(BaseModel):
 async def get_project_overview(
     params: GetProjectOverviewParams, payload: dict, mutations: dict
 ):
-    data = _project_overview()
+    data = _project_overview(include_notes=params.include_notes)
     # Return data directly - decorator handles wrapping in tool message format
     return data
 

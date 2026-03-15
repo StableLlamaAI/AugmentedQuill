@@ -252,11 +252,10 @@ async def get_chapter_summaries(
         if isinstance(chapter, dict):
             chap_id = chapter.get("id")
             title = chapter.get("title", "").strip() or f"Chapter {chap_id}"
-            summary = chapter.get("summary", "").strip()
-            if summary:
-                summaries.append(
-                    {"chapter_id": chap_id, "title": title, "summary": summary}
-                )
+            summary = chapter.get("summary", "")
+            summaries.append(
+                {"chapter_id": chap_id, "title": title, "summary": summary}
+            )
     return {"chapter_summaries": summaries}
 
 

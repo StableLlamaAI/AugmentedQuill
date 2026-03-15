@@ -95,8 +95,11 @@ def normalize_story_for_frontend(story: dict) -> dict:
     return res
 
 
-def _project_overview() -> dict:
-    """Return project title and a list of chapters with id, filename, title, summary."""
+def _project_overview(include_notes: bool = False) -> dict:
+    """Return project title and a list of chapters with id, filename, title, summary.
+
+    Notes are excluded by default to keep the overview lightweight.
+    """
     active = get_active_project_dir()
     raw_story = load_story_config((active / "story.json") if active else None) or {}
     story = normalize_story_for_frontend(raw_story)
@@ -135,6 +138,22 @@ def _project_overview() -> dict:
             notes = ""
             conflicts = []
 
+        chapter_item = {
+            "id": 1,
+            "filename": fn,
+            "title": title,
+            "summary": summary,
+            "conflicts": conflicts,
+        }
+        if include_notes:
+            chapter_item["notes"] = notes
+
+        return {
+            **base_info,
+            "content_file": fn,
+            "chapters": [chapter_item],
+        }
+
         return {
             **base_info,
             "content_file": fn,
@@ -144,7 +163,6 @@ def _project_overview() -> dict:
                     "filename": fn,
                     "title": title,
                     "summary": summary,
-                    "notes": notes,
                     "conflicts": conflicts,
                 }
             ],
@@ -197,16 +215,16 @@ def _project_overview() -> dict:
             for vid, path in files:
                 if f"books/{bid}/" in str(path):
                     meta = id_to_meta.get(vid, {})
-                    b_chapters.append(
-                        {
-                            "id": vid,
-                            "filename": path.name,
-                            "title": meta.get("title") or path.stem,
-                            "summary": meta.get("summary") or "",
-                            "notes": meta.get("notes") or "",
-                            "conflicts": meta.get("conflicts") or [],
-                        }
-                    )
+                    chapter_item = {
+                        "id": vid,
+                        "filename": path.name,
+                        "title": meta.get("title") or path.stem,
+                        "summary": meta.get("summary") or "",
+                        "conflicts": meta.get("conflicts") or [],
+                    }
+                    if include_notes:
+                        chapter_item["notes"] = meta.get("notes") or ""
+                    b_chapters.append(chapter_item)
             enriched_books.append(
                 {
                     "id": bid,
@@ -223,25 +241,23 @@ def _project_overview() -> dict:
         pos = next((i for i, (cid, _) in enumerate(files) if cid == idx), None)
         title = None
         summary = ""
-        notes = ""
         conflicts = []
         if isinstance(pos, int) and pos < len(chapters_meta):
             title = chapters_meta[pos].get("title")
             summary = chapters_meta[pos].get("summary") or ""
-            notes = chapters_meta[pos].get("notes") or ""
             conflicts = chapters_meta[pos].get("conflicts") or []
         if not title or str(title).strip() in ("[object Object]", "object Object"):
             title = path.name
-        out.append(
-            {
-                "id": idx,
-                "filename": path.name,
-                "title": title,
-                "summary": summary,
-                "notes": notes,
-                "conflicts": conflicts,
-            }
-        )
+        chapter_item = {
+            "id": idx,
+            "filename": path.name,
+            "title": title,
+            "summary": summary,
+            "conflicts": conflicts,
+        }
+        if include_notes:
+            chapter_item["notes"] = notes
+        out.append(chapter_item)
     return {**base_info, "chapters": out}
 
 

@@ -281,6 +281,32 @@ def get_registered_tool_schemas(model_type: str | None = None) -> list[dict]:
     return get_tool_schemas(model_type=model_type)
 
 
+def write_tools_json_tempfile() -> str:
+    """Write the current tool schema to a temporary tools.json file.
+
+    Returns:
+        The path to the temporary file.
+    """
+
+    import json
+    import tempfile
+
+    schemas = get_registered_tool_schemas(model_type=None)
+
+    f = tempfile.NamedTemporaryFile(
+        prefix="augmentedquill-tools-",
+        suffix=".json",
+        delete=False,
+        mode="w",
+        encoding="utf-8",
+    )
+    json.dump(schemas, f, indent=2)
+    f.write("\n")
+    f.flush()
+    f.close()
+    return f.name
+
+
 async def execute_registered_tool(
     name: str,
     args_obj: dict,

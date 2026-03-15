@@ -48,9 +48,16 @@ class UpdateStoryMetadataParams(BaseModel):
 
 
 class ReadStoryContentParams(BaseModel):
-    """Parameters for read_story_content (no parameters needed)."""
+    """Parameters for read_story_content."""
 
-    pass
+    start: int = Field(
+        0,
+        description="Starting character index (0-based).",
+    )
+    max_chars: int = Field(
+        8000,
+        description="Maximum number of characters to return (max 8000).",
+    )
 
 
 class WriteStoryContentParams(BaseModel):
@@ -78,6 +85,14 @@ class ReadBookContentParams(BaseModel):
     """Parameters for reading book content."""
 
     book_id: str = Field(..., description="The UUID of the book")
+    start: int = Field(
+        0,
+        description="Starting character index (0-based).",
+    )
+    max_chars: int = Field(
+        8000,
+        description="Maximum number of characters to return (max 8000).",
+    )
 
 
 class WriteBookContentParams(BaseModel):
@@ -167,8 +182,16 @@ async def update_story_metadata(
 async def read_story_content(
     params: ReadStoryContentParams, payload: dict, mutations: dict
 ):
-    content = _read_story_content()
-    return {"content": content}
+    content = _read_story_content() or ""
+    start = max(0, params.start)
+    max_chars = max(1, min(8000, params.max_chars))
+    end = min(len(content), start + max_chars)
+    return {
+        "content": content[start:end],
+        "start": start,
+        "end": end,
+        "total": len(content),
+    }
 
 
 @chat_tool(
@@ -234,8 +257,16 @@ async def update_book_metadata(
 async def read_book_content(
     params: ReadBookContentParams, payload: dict, mutations: dict
 ):
-    content = _read_book_content(params.book_id)
-    return {"content": content}
+    content = _read_book_content(params.book_id) or ""
+    start = max(0, params.start)
+    max_chars = max(1, min(8000, params.max_chars))
+    end = min(len(content), start + max_chars)
+    return {
+        "content": content[start:end],
+        "start": start,
+        "end": end,
+        "total": len(content),
+    }
 
 
 @chat_tool(
