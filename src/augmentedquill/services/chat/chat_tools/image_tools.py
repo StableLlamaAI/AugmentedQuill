@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import CHAT_ROLE, chat_tool
 
 # Pydantic models for tool parameters
 
@@ -133,7 +133,9 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
 
 
 @chat_tool(
-    description="List all images in the project with their filenames, descriptions, titles, and placeholder status."
+    description="List all images in the project with their filenames, descriptions, titles, and placeholder status.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="image-admin",
 )
 async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
     """List Images."""
@@ -153,7 +155,9 @@ async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
 
 
 @chat_tool(
-    description="Generate a detailed description for an existing image using the EDIT LLM's vision capabilities."
+    description="Generate a detailed description for an existing image using the EDIT LLM's vision capabilities.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="image-admin",
 )
 async def generate_image_description(
     params: GenerateImageDescriptionParams, payload: dict, mutations: dict
@@ -165,7 +169,9 @@ async def generate_image_description(
 
 
 @chat_tool(
-    description="Create a new image placeholder with a description. Useful for noting images to be created later."
+    description="Create a new image placeholder with a description. Useful for noting images to be created later.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="image-admin",
 )
 async def create_image_placeholder(
     params: CreateImagePlaceholderParams, payload: dict, mutations: dict
@@ -185,7 +191,9 @@ async def create_image_placeholder(
 
 
 @chat_tool(
-    description="Update the title and/or description metadata for an existing image. Provide only the fields you want to change."
+    description="Update the title and/or description metadata for an existing image. Provide only the fields you want to change.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="image-admin",
 )
 async def set_image_metadata(
     params: SetImageMetadataParams, payload: dict, mutations: dict

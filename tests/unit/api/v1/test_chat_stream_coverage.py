@@ -120,6 +120,57 @@ class TestChatStreamCoverage(TestCase):
         found_tool = any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         self.assertTrue(found_tool, "Did not find list_images tool call")
 
+    def test_stream_advertises_role_filtered_tools(self):
+        captured: dict = {}
+
+        async def fake_stream(**kwargs):
+            captured.update(kwargs)
+            yield {"content": "ok"}
+
+        with patch(
+            "augmentedquill.api.v1.chat.llm.unified_chat_stream",
+            side_effect=fake_stream,
+        ):
+            response = self.client.post(
+                "/api/v1/chat/stream",
+                json={
+                    "messages": [{"role": "user", "content": "Review this chapter"}],
+                    "model_type": "EDITING",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        tool_names = {
+            tool["function"]["name"] for tool in (captured.get("tools") or [])
+        }
+        self.assertIn("replace_text_in_chapter", tool_names)
+        self.assertIn("recommend_metadata_updates", tool_names)
+        self.assertNotIn("update_story_metadata", tool_names)
+        self.assertNotIn("create_sourcebook_entry", tool_names)
+
+    def test_writing_stream_has_no_tools(self):
+        captured: dict = {}
+
+        async def fake_stream(**kwargs):
+            captured.update(kwargs)
+            yield {"content": "ok"}
+
+        with patch(
+            "augmentedquill.api.v1.chat.llm.unified_chat_stream",
+            side_effect=fake_stream,
+        ):
+            response = self.client.post(
+                "/api/v1/chat/stream",
+                json={
+                    "messages": [{"role": "user", "content": "Write the scene"}],
+                    "model_type": "WRITING",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertFalse(captured.get("supports_function_calling"))
+        self.assertIsNone(captured.get("tools"))
+
     @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
     def test_editing_model_tools(self, MockClientClass):
         mock_client_instance = MagicMock()

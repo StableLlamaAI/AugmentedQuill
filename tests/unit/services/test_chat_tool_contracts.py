@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 
 import augmentedquill.main as main
 from augmentedquill.services.chat.chat_tools_schema import get_story_tools
+from augmentedquill.services.chat.chat_tool_decorator import get_registered_tool_schemas
 from augmentedquill.services.projects.projects import select_project
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
@@ -48,7 +49,14 @@ class ChatToolContractsTest(TestCase):
         "list_projects",
         "read_book_content",
         "read_story_content",
+        "recommend_metadata_updates",
         "search_sourcebook",
+    }
+
+    _EDITING_ONLY_TOOLS = {
+        "replace_text_in_chapter",
+        "recommend_metadata_updates",
+        "write_chapter_content",
     }
 
     def setUp(self):
@@ -130,13 +138,14 @@ class ChatToolContractsTest(TestCase):
     def _tool_names(self):
         return [t["function"]["name"] for t in get_story_tools()]
 
-    def _call_tool(self, name: str, args):
+    def _call_tool(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
             arguments = args
         else:
             arguments = json.dumps(args)
 
         body = {
+            "model_type": model_type,
             "messages": [
                 {
                     "role": "assistant",
@@ -164,13 +173,14 @@ class ChatToolContractsTest(TestCase):
         self.assertIsInstance(content, (dict, list, str, int, float, bool, type(None)))
         return content
 
-    def _call_tool_with_payload(self, name: str, args):
+    def _call_tool_with_payload(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
             arguments = args
         else:
             arguments = json.dumps(args)
 
         body = {
+            "model_type": model_type,
             "messages": [
                 {
                     "role": "assistant",
@@ -192,6 +202,9 @@ class ChatToolContractsTest(TestCase):
         return payload, json.loads(
             (payload.get("appended_messages") or [{}])[0].get("content") or "{}"
         )
+
+    def _tool_role_for_execution(self, tool_name: str) -> str:
+        return "EDITING" if tool_name in self._EDITING_ONLY_TOOLS else "CHAT"
 
     def _base_valid_args(self, tool_name: str):
         args = {
@@ -310,7 +323,11 @@ class ChatToolContractsTest(TestCase):
 
     def test_all_tools_handle_malformed_arguments_gracefully(self):
         for name in self._tool_names():
-            content = self._call_tool(name, "{this is not valid json")
+            content = self._call_tool(
+                name,
+                "{this is not valid json",
+                model_type=self._tool_role_for_execution(name),
+            )
             self.assertIsInstance(
                 content, (dict, list, str, int, float, bool, type(None))
             )
@@ -318,7 +335,12 @@ class ChatToolContractsTest(TestCase):
     def test_all_tools_handle_invalid_content_gracefully(self):
         for tool_schema in get_story_tools():
             args = self._build_args_for_schema(tool_schema, invalid=True)
-            content = self._call_tool(tool_schema["function"]["name"], args)
+            tool_name = tool_schema["function"]["name"]
+            content = self._call_tool(
+                tool_name,
+                args,
+                model_type=self._tool_role_for_execution(tool_name),
+            )
             # Contract: invalid semantic input must never crash tool execution.
             self.assertIsInstance(
                 content, (dict, list, str, int, float, bool, type(None))
@@ -329,7 +351,11 @@ class ChatToolContractsTest(TestCase):
             tool_name = tool_schema["function"]["name"]
             args = self._build_args_for_schema(tool_schema, invalid=False)
             args["unexpected_key"] = "unexpected_value"
-            content = self._call_tool(tool_name, args)
+            content = self._call_tool(
+                tool_name,
+                args,
+                model_type=self._tool_role_for_execution(tool_name),
+            )
             self._assert_invalid_parameters(tool_name, content)
 
     def test_all_tools_reject_missing_required_keys(self):
@@ -349,8 +375,66 @@ class ChatToolContractsTest(TestCase):
             )
             args.pop(missing_key)
 
-            content = self._call_tool(tool_name, args)
+            content = self._call_tool(
+                tool_name,
+                args,
+                model_type=self._tool_role_for_execution(tool_name),
+            )
             self._assert_invalid_parameters(tool_name, content)
+
+    def test_tool_registry_filters_by_model_role(self):
+        writing_tools = {
+            tool["function"]["name"]
+            for tool in get_registered_tool_schemas(model_type="WRITING")
+        }
+        editing_tools = {
+            tool["function"]["name"]
+            for tool in get_registered_tool_schemas(model_type="EDITING")
+        }
+        chat_tools = {
+            tool["function"]["name"]
+            for tool in get_registered_tool_schemas(model_type="CHAT")
+        }
+
+        self.assertEqual(writing_tools, set())
+        self.assertIn("call_editing_assistant", chat_tools)
+        self.assertIn("update_story_metadata", chat_tools)
+        self.assertNotIn("replace_text_in_chapter", chat_tools)
+        self.assertIn("replace_text_in_chapter", editing_tools)
+        self.assertIn("recommend_metadata_updates", editing_tools)
+        self.assertNotIn("update_story_metadata", editing_tools)
+        self.assertNotIn("create_sourcebook_entry", editing_tools)
+
+    def test_project_tool_descriptions_cover_all_project_types(self):
+        schemas = {
+            tool["function"]["name"]: tool["function"]
+            for tool in get_registered_tool_schemas(model_type="CHAT")
+        }
+
+        self.assertIn(
+            "short story",
+            schemas["get_project_overview"]["description"].lower(),
+        )
+        self.assertIn("short-story", schemas["create_project"]["description"])
+        self.assertIn(
+            "short-story",
+            schemas["change_project_type"]["description"],
+        )
+
+    def test_tools_reject_wrong_model_role(self):
+        content = self._call_tool(
+            "update_story_metadata",
+            {"title": "Should fail"},
+            model_type="EDITING",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "recommend_metadata_updates",
+            {"story_summary": "Suggested only"},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
 
     def test_all_tools_have_successful_execution_path(self):
         async def fake_generate_summary(**kwargs):
@@ -403,7 +487,11 @@ class ChatToolContractsTest(TestCase):
 
                 name = tool_schema["function"]["name"]
                 args = self._build_args_for_schema(tool_schema, invalid=False)
-                content = self._call_tool(name, args)
+                content = self._call_tool(
+                    name,
+                    args,
+                    model_type=self._tool_role_for_execution(name),
+                )
 
                 self.assertNotIn("Execution error", json.dumps(content))
                 self.assertNotIn("Invalid parameters", json.dumps(content))
@@ -572,7 +660,11 @@ class ChatToolContractsTest(TestCase):
             for name, args in mutation_calls:
                 ok, msg = select_project("tool_contracts")
                 self.assertTrue(ok, msg)
-                payload, _content = self._call_tool_with_payload(name, args)
+                payload, _content = self._call_tool_with_payload(
+                    name,
+                    args,
+                    model_type=self._tool_role_for_execution(name),
+                )
                 mutations = payload.get("mutations") or {}
                 self.assertTrue(
                     mutations.get("story_changed"),
@@ -585,7 +677,7 @@ class ChatToolContractsTest(TestCase):
                 )
 
             create_book_payload, create_book_content = self._call_tool_with_payload(
-                "create_new_book", {"title": "Book Two"}
+                "create_new_book", {"title": "Book Two"}, model_type="CHAT"
             )
             self.assertTrue(
                 (create_book_payload.get("mutations") or {}).get("story_changed")
@@ -594,21 +686,25 @@ class ChatToolContractsTest(TestCase):
             self.assertTrue(created_book_id)
 
             reorder_payload, _ = self._call_tool_with_payload(
-                "reorder_books", {"book_ids": [created_book_id, self.book_id]}
+                "reorder_books",
+                {"book_ids": [created_book_id, self.book_id]},
+                model_type="CHAT",
             )
             self.assertTrue(
                 (reorder_payload.get("mutations") or {}).get("story_changed")
             )
 
             delete_payload, _ = self._call_tool_with_payload(
-                "delete_book", {"book_id": created_book_id, "confirm": True}
+                "delete_book",
+                {"book_id": created_book_id, "confirm": True},
+                model_type="CHAT",
             )
             self.assertTrue(
                 (delete_payload.get("mutations") or {}).get("story_changed")
             )
 
             change_payload, _ = self._call_tool_with_payload(
-                "change_project_type", {"new_type": "novel"}
+                "change_project_type", {"new_type": "novel"}, model_type="CHAT"
             )
             self.assertTrue(
                 (change_payload.get("mutations") or {}).get("story_changed")

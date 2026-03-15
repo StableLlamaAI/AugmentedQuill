@@ -59,19 +59,39 @@ The Machine Settings tab is where you configure the AI models (providers) that p
 AugmentedQuill uses three distinct model roles, each optimized for a specific part of the writing process. You can assign a different provider to each role based on its strengths. The application uses color hints everywhere in the UI to help you see which role is active.
 
 1. **WRITING Model** — <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Violet**
-   - Called when generating new prose: **Extend Chapter**, **Rewrite Chapter**, and **Suggest Next Paragraph**.
+   - Called when generating new prose: **Extend Chapter**, **Rewrite Chapter**, **Suggest Next Paragraph**, and any story text delegated from chat.
    - Optimized for creativity, narrative flow, and honoring your style tags.
+   - Starts each request cold; it only knows what the current prompt contains.
+   - This is the only model that should create fresh story prose.
 
 2. **EDITING Model** — <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Fuchsia**
    - Called for structured text tasks: writing or updating chapter summaries, story summaries, and the **AI Write / AI Update / AI Rewrite** summary buttons in the Metadata Editor.
    - Optimized for accuracy, conciseness, and following specific instructions without adding new plot points.
+   - Starts each request cold; it must rely on the current prompt and any tool results it fetches.
+   - It may refine existing prose, but if additional story content is needed it should delegate that work to WRITING.
 
 3. **CHAT Model** — <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Blue**
    - Powers the AI Chat Assistant panel.
    - Supports tool calls (creating Sourcebook entries, managing chapters, generating images, etc.) and optionally web search.
    - Optimized for conversation, reasoning, and multi-step actions.
+   - Uses only the current chat session history plus tool results from this session; starting a new chat does not carry over older chat sessions.
+   - Acts as the workflow brain: it keeps metadata and sourcebook information aligned, decides what step comes next, and delegates prose work to WRITING or EDITING.
 
 By separating these tasks you can use a highly creative model for writing, a precise model for editing, and a fast conversational model for chatting — mix and match according to your budget and needs.
+
+### Recommended Story Workflow
+
+AugmentedQuill treats the following sequence as the default workflow, not as a rigid law:
+
+1. Write story notes, ideas, and constraints in markdown.
+2. Set the title and style tags.
+3. Draft a preliminary story summary.
+4. Build the Sourcebook.
+5. Outline chapters and write chapter notes before prose.
+6. Track conflicts and expected resolutions, then refine chapter summaries.
+7. Write the actual prose in the appropriate structure: the single chapter for a short story, chapter by chapter for a novel, or book by book for a series.
+
+The CHAT model may revisit earlier steps whenever a later discovery reveals a missing setup detail.
 
 ### Provider List
 

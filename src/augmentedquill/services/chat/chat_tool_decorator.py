@@ -14,17 +14,7 @@ This module provides a decorator that:
 2. Auto-registers tools in a global registry
 3. Generates OpenAI function calling schemas
 4. Validates tool call arguments at runtime
-
-Usage:
-    from pydantic import BaseModel, Field
-
-    class MyToolParams(BaseModel):
-        name: str = Field(..., description="The name parameter")
-        count: int | None = Field(None, description="Optional count")
-
-    @chat_tool(description="Does something useful")
-    async def my_tool(params: MyToolParams, payload: dict, mutations: dict):
-        return {"result": params.name}
+5. Scopes tools to model roles so WRITING, EDITING, and CHAT can be isolated
 """
 
 from __future__ import annotations
@@ -32,14 +22,36 @@ from __future__ import annotations
 import inspect
 import json as _json
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
 from augmentedquill.services.exceptions import ServiceError
 
-# Global registry of all chat tools
+CHAT_ROLE = "CHAT"
+EDITING_ROLE = "EDITING"
+WRITING_ROLE = "WRITING"
+MODEL_ROLES = (CHAT_ROLE, EDITING_ROLE, WRITING_ROLE)
+
 _TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
+
+
+def normalize_model_role(role: str | None, default: str = CHAT_ROLE) -> str:
+    """Normalize a model role to a supported uppercase value."""
+    candidate = str(role or default).strip().upper()
+    return candidate if candidate in MODEL_ROLES else default
+
+
+def resolve_tool_role(payload: dict | None = None, tool_role: str | None = None) -> str:
+    """Resolve the role under which a tool should be validated."""
+    if tool_role:
+        return normalize_model_role(tool_role)
+    if isinstance(payload, dict):
+        return normalize_model_role(
+            payload.get("_tool_role") or payload.get("model_type")
+        )
+    return CHAT_ROLE
 
 
 def _tool_message(name: str, call_id: str, content) -> dict:
@@ -60,6 +72,8 @@ def _tool_error(name: str, call_id: str, message: str) -> dict:
 def chat_tool(
     description: str,
     name: str | None = None,
+    allowed_roles: tuple[str, ...] | list[str] | None = None,
+    capability: str | None = None,
 ) -> Callable:
     """
     Decorator for chat tools with automatic schema generation from Pydantic models.
@@ -67,6 +81,8 @@ def chat_tool(
     Args:
         description: Description of what the tool does (shown to LLM)
         name: Optional explicit tool name (defaults to function name)
+        allowed_roles: Model roles allowed to see and execute this tool
+        capability: Optional internal capability label used for tests and routing
 
     The decorated function should have signature:
         async def tool_fn(params: ParamsModel, payload: dict, mutations: dict) -> dict
@@ -77,29 +93,30 @@ def chat_tool(
     def decorator(func: Callable) -> Callable:
         """Decorator."""
         tool_name = name or func.__name__
+        normalized_roles = tuple(
+            dict.fromkeys(
+                normalize_model_role(role) for role in (allowed_roles or MODEL_ROLES)
+            )
+        )
+        if not normalized_roles:
+            raise ValueError(f"Tool function {tool_name} must allow at least one role")
 
-        # Extract parameter schema from function signature
         sig = inspect.signature(func)
         params_annotation = sig.parameters.get("params")
-
         if params_annotation is None:
             raise ValueError(
                 f"Tool function {tool_name} must have a 'params' parameter"
             )
 
         params_type = params_annotation.annotation
-
-        # Check if it's a Pydantic model
         if params_type is inspect.Parameter.empty:
             raise ValueError(
                 f"Tool function {tool_name} 'params' parameter must have a type annotation"
             )
 
-        # Handle Optional[ParamsModel] or ParamsModel | None
         origin = get_origin(params_type)
         if origin is not None:
             args = get_args(params_type)
-            # Find the BaseModel in the union
             for arg in args:
                 if isinstance(arg, type) and issubclass(arg, BaseModel):
                     params_type = arg
@@ -110,10 +127,7 @@ def chat_tool(
                 f"Tool function {tool_name} 'params' must be annotated with a Pydantic BaseModel"
             )
 
-        # Generate OpenAI function calling schema from Pydantic model
         schema = params_type.model_json_schema()
-
-        # Build the OpenAI tool definition
         tool_def = {
             "type": "function",
             "function": {
@@ -131,11 +145,10 @@ def chat_tool(
         allowed_params = set((schema.get("properties") or {}).keys())
         required_params = set(schema.get("required") or [])
 
-        # Create wrapper that validates and calls the original function
         async def wrapper(
             args_obj: dict, call_id: str, payload: dict, mutations: dict
         ) -> dict:
-            """Wrapper."""
+            """Validate arguments and execute the tool implementation."""
             if not isinstance(args_obj, dict):
                 return _tool_message(
                     tool_name,
@@ -192,15 +205,12 @@ def chat_tool(
                 )
 
             try:
-                # Validate and parse arguments using Pydantic
                 params = params_type.model_validate(args_obj)
             except ValidationError as e:
-                # Return validation error to LLM
-                error_details = e.errors()
                 return _tool_message(
                     tool_name,
                     call_id,
-                    {"error": "Invalid parameters", "details": error_details},
+                    {"error": "Invalid parameters", "details": e.errors()},
                 )
             except Exception as e:
                 return _tool_message(
@@ -210,9 +220,7 @@ def chat_tool(
                 )
 
             try:
-                # Call the original function with validated params
                 result = await func(params, payload, mutations)
-                # Wrap the result in tool message format
                 return _tool_message(tool_name, call_id, result)
             except Exception as e:
                 return _tool_message(
@@ -221,11 +229,12 @@ def chat_tool(
                     {"error": f"Execution error: {str(e)}"},
                 )
 
-        # Register the tool
         _TOOL_REGISTRY[tool_name] = {
             "function": wrapper,
             "schema": tool_def,
             "params_model": params_type,
+            "allowed_roles": normalized_roles,
+            "capability": capability,
         }
 
         return wrapper
@@ -233,9 +242,17 @@ def chat_tool(
     return decorator
 
 
-def get_tool_schemas() -> list[dict]:
-    """Return all registered tool schemas for passing to LLM."""
-    return [info["schema"] for info in _TOOL_REGISTRY.values()]
+def get_tool_schemas(model_type: str | None = None) -> list[dict]:
+    """Return registered tool schemas, optionally filtered by model role."""
+    normalized_role = normalize_model_role(model_type) if model_type else None
+    schemas: list[dict] = []
+    for info in _TOOL_REGISTRY.values():
+        if normalized_role and normalized_role not in info.get(
+            "allowed_roles", MODEL_ROLES
+        ):
+            continue
+        schemas.append(deepcopy(info["schema"]))
+    return schemas
 
 
 def get_tool_function(name: str) -> Callable | None:
@@ -249,20 +266,50 @@ def ensure_tool_registry_loaded() -> None:
     from augmentedquill.services.chat import chat_tools  # noqa: F401
 
 
-def get_registered_tool_schemas() -> list[dict]:
+def get_registered_tool_allowed_roles(name: str) -> tuple[str, ...] | None:
+    """Return allowed roles for a tool from the canonical registry."""
+    ensure_tool_registry_loaded()
+    info = _TOOL_REGISTRY.get(name)
+    if not info:
+        return None
+    return tuple(info.get("allowed_roles") or MODEL_ROLES)
+
+
+def get_registered_tool_schemas(model_type: str | None = None) -> list[dict]:
     """Get OpenAI tool schemas from the canonical decorator registry."""
     ensure_tool_registry_loaded()
-    return get_tool_schemas()
+    return get_tool_schemas(model_type=model_type)
 
 
 async def execute_registered_tool(
-    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+    name: str,
+    args_obj: dict,
+    call_id: str,
+    payload: dict,
+    mutations: dict,
+    tool_role: str | None = None,
 ) -> dict:
     """Execute a tool from the canonical decorator registry."""
     ensure_tool_registry_loaded()
     tool_fn = get_tool_function(name)
     if tool_fn is None:
         return _tool_error(name, call_id, f"Unknown tool: {name}")
+
+    effective_role = resolve_tool_role(payload, tool_role)
+    allowed_roles = get_registered_tool_allowed_roles(name) or MODEL_ROLES
+    if effective_role not in allowed_roles:
+        return _tool_message(
+            name,
+            call_id,
+            {
+                "error": "Tool unavailable for model role",
+                "details": {
+                    "tool": name,
+                    "model_role": effective_role,
+                    "allowed_roles": list(allowed_roles),
+                },
+            },
+        )
 
     try:
         return await tool_fn(args_obj, call_id, payload, mutations)

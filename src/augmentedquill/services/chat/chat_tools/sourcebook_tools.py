@@ -9,7 +9,11 @@
 
 from pydantic import BaseModel, Field
 
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
     sourcebook_delete_entry,
@@ -78,14 +82,22 @@ class DeleteSourcebookEntryParams(BaseModel):
 # Tool implementations with co-located schemas
 
 
-@chat_tool(description="Search the sourcebook for entries matching a query string.")
+@chat_tool(
+    description="Search the sourcebook for entries matching a query string.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="sourcebook-read",
+)
 async def search_sourcebook(
     params: SearchSourcebookParams, payload: dict, mutations: dict
 ):
     return sourcebook_search_entries(params.query)
 
 
-@chat_tool(description="Get a specific sourcebook entry by name or ID.")
+@chat_tool(
+    description="Get a specific sourcebook entry by name or ID.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="sourcebook-read",
+)
 async def get_sourcebook_entry(
     params: GetSourcebookEntryParams, payload: dict, mutations: dict
 ):
@@ -97,7 +109,9 @@ async def get_sourcebook_entry(
 
 
 @chat_tool(
-    description="Create a new sourcebook entry. Always provide name, description, and category. Allowed categories: Character, Location, Organization, Item, Event, Lore, Other. Synonyms and images are optional."
+    description="Create a new sourcebook entry. Always provide name, description, and category. Allowed categories: Character, Location, Organization, Item, Event, Lore, Other. Synonyms and images are optional.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="sourcebook-write",
 )
 async def create_sourcebook_entry(
     params: CreateSourcebookEntryParams, payload: dict, mutations: dict
@@ -116,7 +130,9 @@ async def create_sourcebook_entry(
 
 
 @chat_tool(
-    description="Update an existing sourcebook entry. Provide only the fields you want to change. If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other."
+    description="Update an existing sourcebook entry. Provide only the fields you want to change. If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="sourcebook-write",
 )
 async def update_sourcebook_entry(
     params: UpdateSourcebookEntryParams, payload: dict, mutations: dict
@@ -135,7 +151,11 @@ async def update_sourcebook_entry(
     return result
 
 
-@chat_tool(description="Delete a sourcebook entry by name or ID.")
+@chat_tool(
+    description="Delete a sourcebook entry by name or ID.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="sourcebook-write",
+)
 async def delete_sourcebook_entry(
     params: DeleteSourcebookEntryParams, payload: dict, mutations: dict
 ):

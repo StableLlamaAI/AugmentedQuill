@@ -17,7 +17,11 @@ from augmentedquill.services.chapters.chapter_helpers import (
     _get_chapter_metadata_entry,
     _scan_chapter_files,
 )
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 from augmentedquill.services.projects.project_helpers import (
     _chapter_content_slice,
     _project_overview,
@@ -143,13 +147,42 @@ class DeleteChapterParams(BaseModel):
     confirm: bool = Field(False, description="Set to true to confirm deletion")
 
 
+class RecommendMetadataUpdatesParams(BaseModel):
+    story_summary: str | None = Field(
+        None,
+        description="Suggested replacement or refinement for the story summary.",
+    )
+    story_notes: str | None = Field(
+        None,
+        description="Suggested addition or revision for story-level notes.",
+    )
+    story_tags: list[str] | None = Field(
+        None,
+        description="Suggested story style tags if they should be revised.",
+    )
+    chapter_updates: list[dict] = Field(
+        default_factory=list,
+        description="Suggested chapter metadata changes such as summary, notes, conflicts, or reminders.",
+    )
+    sourcebook_updates: list[dict] = Field(
+        default_factory=list,
+        description="Suggested sourcebook additions or updates for CHAT to review and apply.",
+    )
+    rationale: str | None = Field(
+        None,
+        description="Short explanation of why these metadata changes are recommended.",
+    )
+
+
 # ============================================================================
 # Tool Implementations
 # ============================================================================
 
 
 @chat_tool(
-    description="Get metadata for a specific chapter including title, summary, notes, and conflicts."
+    description="Get metadata for a specific chapter including title, summary, notes, and conflicts.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_chapter_metadata(
     params: GetChapterMetadataParams, payload: dict, mutations: dict
@@ -168,7 +201,9 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, private_notes, conflicts)."
+    description="Update metadata for a specific chapter (title, summary, notes, private_notes, conflicts).",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def update_chapter_metadata(
     params: UpdateChapterMetadataParams, payload: dict, mutations: dict
@@ -194,7 +229,9 @@ async def update_chapter_metadata(
 
 
 @chat_tool(
-    description="Get summaries for all chapters in the project (across all books if series)."
+    description="Get summaries for all chapters in the project (across all books if series).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_chapter_summaries(
     params: GetChapterSummariesParams, payload: dict, mutations: dict
@@ -223,7 +260,11 @@ async def get_chapter_summaries(
     return {"chapter_summaries": summaries}
 
 
-@chat_tool(description="Get content from a specific chapter with pagination support.")
+@chat_tool(
+    description="Get content from a specific chapter with pagination support.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="prose-read",
+)
 async def get_chapter_content(
     params: GetChapterContentParams, payload: dict, mutations: dict
 ):
@@ -242,7 +283,11 @@ async def get_chapter_content(
     return data
 
 
-@chat_tool(description="Write content to a specific chapter.")
+@chat_tool(
+    description="Write content to a specific chapter.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
 async def write_chapter_content(
     params: WriteChapterContentParams, payload: dict, mutations: dict
 ):
@@ -252,7 +297,9 @@ async def write_chapter_content(
 
 
 @chat_tool(
-    description="Replace an exact literal string in a chapter with a new string. Better for small edits to avoid JSON truncation errors."
+    description="Replace an exact literal string in a chapter with a new string. Better for small edits to avoid JSON truncation errors.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
 )
 async def replace_text_in_chapter(
     params: ReplaceTextInChapterParams, payload: dict, mutations: dict
@@ -278,7 +325,11 @@ async def replace_text_in_chapter(
     return {"message": f"Successfully replaced text in chapter {params.chap_id}"}
 
 
-@chat_tool(description="Write summary to a specific chapter.")
+@chat_tool(
+    description="Write summary to a specific chapter.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_chapter_summary(
     params: WriteChapterSummaryParams, payload: dict, mutations: dict
 ):
@@ -288,7 +339,9 @@ async def write_chapter_summary(
 
 
 @chat_tool(
-    description="Generate a chapter summary from its content using AI. Optionally specify a mode for generation style."
+    description="Generate a chapter summary from its content using AI. Optionally specify a mode for generation style.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict):
     mode = str(params.mode).lower()
@@ -297,14 +350,22 @@ async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict
     return data
 
 
-@chat_tool(description="Write a full chapter from its summary using AI.")
+@chat_tool(
+    description="Write a full chapter from its summary using AI.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="prose-write",
+)
 async def write_chapter(params: WriteChapterParams, payload: dict, mutations: dict):
     data = await write_chapter_from_summary(chap_id=params.chap_id)
     mutations["story_changed"] = True
     return data
 
 
-@chat_tool(description="Continue writing a chapter from its summary using AI.")
+@chat_tool(
+    description="Continue writing a chapter from its summary using AI.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="prose-write",
+)
 async def continue_chapter(
     params: ContinueChapterParams, payload: dict, mutations: dict
 ):
@@ -313,7 +374,11 @@ async def continue_chapter(
     return data
 
 
-@chat_tool(description="Create a new chapter with an optional title and book_id.")
+@chat_tool(
+    description="Create a new chapter with an optional title and book_id.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict
 ):
@@ -332,7 +397,11 @@ async def create_new_chapter(
     }
 
 
-@chat_tool(description="Get the heading (title) of a specific chapter.")
+@chat_tool(
+    description="Get the heading (title) of a specific chapter.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
 async def get_chapter_heading(
     params: GetChapterHeadingParams, payload: dict, mutations: dict
 ):
@@ -344,7 +413,11 @@ async def get_chapter_heading(
     return {"heading": heading}
 
 
-@chat_tool(description="Write the heading (title) of a specific chapter.")
+@chat_tool(
+    description="Write the heading (title) of a specific chapter.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_chapter_heading(
     params: WriteChapterHeadingParams, payload: dict, mutations: dict
 ):
@@ -358,7 +431,11 @@ async def write_chapter_heading(
     }
 
 
-@chat_tool(description="Get the summary of a specific chapter.")
+@chat_tool(
+    description="Get the summary of a specific chapter.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
 async def get_chapter_summary(
     params: GetChapterSummaryParams, payload: dict, mutations: dict
 ):
@@ -371,7 +448,9 @@ async def get_chapter_summary(
 
 
 @chat_tool(
-    description="Delete a specific chapter. Requires confirmation by setting confirm=true."
+    description="Delete a specific chapter. Requires confirmation by setting confirm=true.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: dict):
     """Delete Chapter."""
@@ -417,25 +496,45 @@ class CallWritingLlmParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated."
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="delegation",
 )
 async def call_writing_llm(
     params: CallWritingLlmParams, payload: dict, mutations: dict
 ):
+    from augmentedquill.core.config import BASE_DIR, load_machine_config
+    from augmentedquill.core.prompts import (
+        get_system_message,
+        load_model_prompt_overrides,
+    )
     from augmentedquill.services.llm import llm
 
     base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
         payload, model_type="WRITING"
     )
 
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    system_prompt = get_system_message(
+        "story_writer", model_overrides, language=project_lang
+    )
+
     messages = [
         {
             "role": "system",
-            "content": "You are a skilled novelist. Provide the exact text requested without explanations.",
+            "content": system_prompt,
         },
         {
             "role": "user",
-            "content": f"Instruction:\n{params.instruction}\n\nContext:\n{params.context}",
+            "content": (
+                f"Task for this request:\n{params.instruction}\n\n"
+                f"Context materials:\n{params.context}"
+            ),
         },
     ]
 
@@ -460,7 +559,9 @@ class CallEditingAssistantParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a complex story editing, text revision, or structural task to the EDITING LLM. Use this whenever the user asks for direct editing, fixing, rewriting or evaluating."
+    description="Delegate a complex story editing, text revision, or structural task to the EDITING LLM. Use this whenever the user asks for direct editing, fixing, rewriting or evaluating.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="delegation",
 )
 async def call_editing_assistant(
     params: CallEditingAssistantParams, payload: dict, mutations: dict
@@ -490,18 +591,18 @@ async def call_editing_assistant(
         {"role": "system", "content": sys_msg},
         {
             "role": "user",
-            "content": f"Please perform the following editing task:\n{params.task}",
+            "content": (
+                "Editing task for this request:\n"
+                f"{params.task}\n\n"
+                "Read any additional story, chapter, or sourcebook context you need with tools before editing."
+            ),
         },
     ]
 
-    all_tools = get_registered_tool_schemas()
-    tools = [
-        t
-        for t in all_tools
-        if t.get("function", {}).get("name") != "call_editing_assistant"
-    ]
+    tools = get_registered_tool_schemas(model_type=EDITING_ROLE)
 
     final_output = ""
+    recommended_updates: list[dict] = []
     for _ in range(7):  # max 7 steps
         try:
             res = await llm.unified_chat_complete(
@@ -556,16 +657,56 @@ async def call_editing_assistant(
 
             tcall_id = tcall.get("id")
 
+            nested_payload = dict(payload or {})
+            nested_payload["_tool_role"] = EDITING_ROLE
+
             tool_res = await execute_registered_tool(
-                f_name, args_obj, tcall_id, payload, mutations
+                f_name,
+                args_obj,
+                tcall_id,
+                nested_payload,
+                mutations,
+                tool_role=EDITING_ROLE,
             )
             if "role" not in tool_res:
                 from augmentedquill.services.chat.chat_tools.common import tool_message
 
                 tool_res = tool_message(f_name, tcall_id, tool_res)
+
+            if f_name == "recommend_metadata_updates":
+                try:
+                    tool_content = json.loads(tool_res.get("content") or "{}")
+                except Exception:
+                    tool_content = {}
+                recommendation = tool_content.get("recommended_updates")
+                if recommendation:
+                    recommended_updates.append(recommendation)
             messages.append(tool_res)
 
     if not final_output:
         final_output = "Task completed using tools."
 
-    return {"message": "Editing Assistant finished", "response": final_output}
+    result = {"message": "Editing Assistant finished", "response": final_output}
+    if recommended_updates:
+        result["recommended_updates"] = recommended_updates
+    return result
+
+
+@chat_tool(
+    description="Return structured metadata or sourcebook updates that CHAT should review and apply after an editing task. This tool does not modify project files.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="metadata-recommendation",
+)
+async def recommend_metadata_updates(
+    params: RecommendMetadataUpdatesParams, payload: dict, mutations: dict
+):
+    return {
+        "recommended_updates": {
+            "story_summary": params.story_summary,
+            "story_notes": params.story_notes,
+            "story_tags": params.story_tags,
+            "chapter_updates": params.chapter_updates,
+            "sourcebook_updates": params.sourcebook_updates,
+            "rationale": params.rationale,
+        }
+    }

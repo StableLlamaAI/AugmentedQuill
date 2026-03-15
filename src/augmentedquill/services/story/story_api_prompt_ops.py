@@ -135,6 +135,7 @@ def build_story_summary_messages(
 
 def build_write_chapter_messages(
     *,
+    project_type_label: str,
     story_title: str,
     story_summary: str,
     story_tags: str,
@@ -151,6 +152,7 @@ def build_write_chapter_messages(
         user_prompt_key="write_chapter",
         model_overrides=model_overrides,
         language=language,
+        project_type_label=project_type_label,
         story_title=story_title,
         story_summary=story_summary,
         story_tags=story_tags,
@@ -163,6 +165,7 @@ def build_write_chapter_messages(
 
 def build_continue_chapter_messages(
     *,
+    project_type_label: str,
     story_title: str,
     story_summary: str,
     story_tags: str,
@@ -180,6 +183,7 @@ def build_continue_chapter_messages(
         user_prompt_key="continue_chapter",
         model_overrides=model_overrides,
         language=language,
+        project_type_label=project_type_label,
         story_title=story_title,
         story_summary=story_summary,
         story_tags=story_tags,
@@ -195,6 +199,7 @@ def build_ai_action_messages(
     *,
     target: str,
     action: str,
+    project_type_label: str,
     story_title: str,
     story_summary: str,
     story_tags: str,
@@ -238,6 +243,7 @@ def build_ai_action_messages(
         user_prompt_key=user_key,
         model_overrides=model_overrides,
         language=language,
+        project_type_label=project_type_label,
         story_title=story_title,
         story_summary=story_summary,
         story_tags=story_tags,

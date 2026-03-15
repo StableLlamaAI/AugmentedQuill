@@ -45,6 +45,17 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
       >
         Expert: Prompt Overrides
       </h4>
+      <p
+        className={`mb-4 text-xs leading-relaxed ${
+          isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
+        }`}
+      >
+        Override prompts only when you want to fine-tune role behavior. WRITING should
+        stay focused on prose generation, EDITING on refinement and summaries, and CHAT
+        on planning, metadata, and delegation. Each role prompt should be
+        self-contained: assume the model starts cold and only knows what the current
+        prompt and session provide.
+      </p>
       <div className="space-y-4">
         {PROMPT_GROUPS.map((group) => (
           <div key={group.title} className="space-y-3">

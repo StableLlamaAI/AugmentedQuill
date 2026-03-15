@@ -70,6 +70,8 @@ This panel shows thumbnail images currently linked to this entry. Use images to 
 
 A large, resizable textarea where you write all the details about this entry that the AI should know — personality, history, rules, quirks, or appearance. There is no length limit; write as much or as little as the story needs. The content of this field is included in the AI context whenever this entry is relevant.
 
+This usually works best after you have rough story notes and a preliminary summary, but before heavy chapter drafting. CHAT uses Sourcebook material to maintain logic, while WRITING and EDITING receive relevant entries as read-only context.
+
 ### Dialog Footer
 
 | Button                                                                                                                      | Description                                                                                               |

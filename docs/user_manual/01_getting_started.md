@@ -6,11 +6,11 @@ AugmentedQuill is designed to be a seamless extension of your creative process. 
 
 Before diving in, it's helpful to understand how AugmentedQuill organizes your work:
 
-- **Projects**: A project is the container for your entire book or story. It holds everything related to that specific work.
+- **Projects**: A project is the container for your entire short story, novel, or series. It holds everything related to that specific work.
 - **Story Metadata**: The overarching information about your project — the title, synopsis, style tags, and notes that guide the AI.
-- **Chapters**: The actual prose of your story, broken down into manageable sections. In a series, chapters live inside books.
+- **Chapters**: The actual prose of your story. A short story exposes one chapter-like writing unit, a novel uses a flat chapter list, and a series stores chapters inside books.
 - **Sourcebook**: Your story's encyclopedia. This is where you keep track of characters, locations, lore, items, and other important details. The AI uses this to stay consistent.
-- **Chat Assistant**: Your AI co-writer. You can brainstorm, ask for suggestions, or have it generate text based on your instructions and the context of your story.
+- **Chat Assistant**: Your AI coordinator. You can brainstorm, ask for suggestions, let it maintain metadata, or let it delegate prose writing to WRITING and prose refinement to EDITING.
 
 ## The Main Interface
 
@@ -20,7 +20,7 @@ When you open AugmentedQuill, you'll be greeted by the main writing environment.
 
 1. **Left Sidebar** — Your project's control center. Scroll through it to find:
    - **Story Metadata**: The story title, summary, style tags, and LLM-visible notes at a glance. Click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon to open the full Metadata Editor.
-   - **Chapters** (or Books & Chapters in a series): The navigation list for your prose. Click any entry to open it in the editor; drag entries to reorder them.
+   - **Chapters** (or Books & Chapters in a series): The navigation list for your prose. In a short story this shows the single writing unit; in other project types it shows the active chapter structure. Click any entry to open it in the editor; drag entries to reorder them where supported.
    - **Sourcebook**: A searchable list of every character, location, and lore entry in your world.
 
 2. **Main Area (The Editor)** — The central writing canvas. It shows the active chapter title and body, along with the AI suggestion footer at the bottom.

@@ -110,7 +110,7 @@ def ensure_system_message_if_missing(
 
     sys_msg_key = "chat_llm"
     if model_type == "WRITING":
-        sys_msg_key = "writing_llm"
+        sys_msg_key = "story_writer"
     elif model_type == "EDITING":
         sys_msg_key = "editing_llm"
 

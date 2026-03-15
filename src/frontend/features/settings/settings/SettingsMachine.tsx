@@ -505,6 +505,19 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
               </button>
             </div>
 
+            <div
+              className={`text-xs leading-relaxed rounded-lg border p-3 ${
+                isLight
+                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-600'
+                  : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-400'
+              }`}
+            >
+              WRITING creates new prose. EDITING refines existing prose and summaries
+              without adding fresh story content. CHAT plans the workflow, maintains
+              metadata and sourcebook state, and decides when to delegate to WRITING or
+              EDITING.
+            </div>
+
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">

@@ -106,6 +106,8 @@ When you switch to a series, each book renders as a collapsible panel showing th
 
 Because every piece of metadata feeds the AI, treat the summary, tags, and notes as live prompts that get bundled into context whenever you ask the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> writing or <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> chat models for help.
 
+In practice, the strongest workflow is to write notes first, keep summaries current enough to explain intent, and use conflicts to track what still needs to pay off in later chapters.
+
 ---
 
 Next up: Build your story's world in [The Sourcebook](05_sourcebook.md).

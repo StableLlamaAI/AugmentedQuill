@@ -137,6 +137,10 @@ async def unified_chat_stream(
 ) -> AsyncIterator[dict]:
     # Keep tests monkeypatching augmentedquill.services.llm.llm.httpx effective.
     """Unified Chat Stream."""
+    if model_type == "WRITING":
+        tools = None
+        tool_choice = None
+        supports_function_calling = False
     _llm_stream_ops.httpx = httpx
     async for chunk in _llm_stream_ops.unified_chat_stream(
         caller_id=caller_id,
@@ -177,6 +181,10 @@ async def unified_chat_complete(
     skip_validation: bool = False,
 ) -> dict:
     """Unified Chat Complete."""
+    if model_type == "WRITING":
+        tools = None
+        tool_choice = None
+        supports_function_calling = False
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.unified_chat_complete(
         caller_id=caller_id,

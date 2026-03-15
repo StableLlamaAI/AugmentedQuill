@@ -79,6 +79,13 @@ def gather_writing_context(
     payload: dict | None = None,
 ) -> dict:
     """Gather common context for writing tasks (conflicts, tags, background)."""
+    project_type = str(story.get("project_type", "novel") or "novel")
+    project_type_label = {
+        "short-story": "Short Story",
+        "novel": "Novel",
+        "series": "Series",
+    }.get(project_type, project_type.replace("-", " ").title())
+
     # story-level info
     story_title = story.get("project_title", "")
     story_summary = story.get("story_summary", "")
@@ -147,6 +154,7 @@ def gather_writing_context(
         pass
 
     return {
+        "project_type_label": project_type_label,
         "story_title": story_title,
         "story_summary": story_summary,
         "story_tags": story_tags,
@@ -276,6 +284,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         )
     )
     messages = build_write_chapter_messages(
+        project_type_label=context["project_type_label"],
         story_title=context["story_title"],
         story_summary=context["story_summary"],
         story_tags=context["story_tags"],
@@ -333,6 +342,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         )
     )
     messages = build_continue_chapter_messages(
+        project_type_label=context["project_type_label"],
         story_title=context["story_title"],
         story_summary=context["story_summary"],
         story_tags=context["story_tags"],
@@ -400,6 +410,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     messages = build_ai_action_messages(
         target=target,
         action=action,
+        project_type_label=context["project_type_label"],
         story_title=context["story_title"],
         story_summary=context["story_summary"],
         story_tags=context["story_tags"],
