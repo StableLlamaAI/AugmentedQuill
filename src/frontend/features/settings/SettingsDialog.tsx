@@ -528,7 +528,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4">
+    <div
+      id="settings-dialog"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4"
+    >
       <div
         className={`w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
           isLight

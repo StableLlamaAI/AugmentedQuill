@@ -101,7 +101,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
   } = chatControls;
 
   return (
-    <div className="flex-1 flex overflow-hidden relative">
+    <div id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden"
@@ -109,6 +109,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         ></div>
       )}
       <div
+        id="aq-sidebar"
         className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
@@ -169,6 +170,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         />
       </div>
       <div
+        id="aq-editor"
         className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
       >
         <div className="flex-1 overflow-hidden h-full flex flex-col">
@@ -212,7 +214,10 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         </div>
       </div>
       {isChatOpen && (
-        <div className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full">
+        <div
+          id="aq-chat"
+          className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
+        >
           <Chat
             messages={chatMessages}
             isLoading={isChatLoading}

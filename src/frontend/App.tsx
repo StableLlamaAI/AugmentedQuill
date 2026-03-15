@@ -477,6 +477,7 @@ const App: React.FC = () => {
   return (
     <ThemeProvider currentTheme={currentTheme}>
       <div
+        id="aq-app-root"
         className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
         style={
           {

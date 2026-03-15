@@ -397,7 +397,10 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   };
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 border-r relative ${bgClass}`}>
+    <div
+      id="chapter-list"
+      className={`flex flex-col flex-1 min-h-0 border-r relative ${bgClass}`}
+    >
       {editingMetadata && activeEditingData && (
         <MetadataEditorDialog
           type={editingMetadata.type}

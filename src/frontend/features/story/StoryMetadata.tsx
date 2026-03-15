@@ -103,7 +103,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   };
 
   return (
-    <div className={`p-6 border-b ${containerClass}`}>
+    <div id="story-metadata" className={`p-6 border-b ${containerClass}`}>
       {metadataModalOpen && (
         <MetadataEditorDialog
           type="story"
