@@ -90,7 +90,39 @@ class DeleteSourcebookEntryParams(BaseModel):
 async def search_sourcebook(
     params: SearchSourcebookParams, payload: dict, mutations: dict
 ):
-    return sourcebook_search_entries(params.query)
+    """Search the sourcebook for entries matching a query string."""
+    query = params.query.lower()
+    entries = sourcebook_search_entries(params.query)
+
+    # 1. Exact match by name
+    exact_match = next((e for e in entries if e["name"].lower() == query), None)
+
+    # 2. Exact match by synonym
+    if not exact_match:
+        exact_match = next(
+            (
+                e
+                for e in entries
+                if any(s.lower() == query for s in e.get("synonyms", []))
+            ),
+            None,
+        )
+
+    # 3. If direct match is available, return it with suggestions for the others
+    if exact_match:
+        others = [e["name"] for e in entries if e["id"] != exact_match["id"]]
+        result = {
+            "entry": exact_match,
+        }
+        if others:
+            result["other_matches_found"] = others
+            result["instruction"] = (
+                "This entry was an exact match for your search. Other entries also matched the query and are listed in 'other_matches_found'. You can request them individually if needed."
+            )
+        return result
+
+    # 4. Otherwise return full list
+    return entries
 
 
 @chat_tool(
