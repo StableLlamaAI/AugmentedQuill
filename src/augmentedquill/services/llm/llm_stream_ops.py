@@ -19,10 +19,14 @@ from augmentedquill.core.config import (
     load_machine_config,
 )
 from augmentedquill.services.llm.llm_http_ops import logged_stream_request
+from augmentedquill.services.llm.llm_request_helpers import (
+    apply_native_tool_calling_mode,
+)
 from augmentedquill.utils.stream_helpers import ChannelFilter
 from augmentedquill.utils.llm_parsing import (
     parse_complete_assistant_output,
     parse_stream_channel_fragments,
+    parse_tool_calls_from_content,
 )
 
 
@@ -116,7 +120,12 @@ async def unified_chat_stream(
         temperature, max_tokens, model_cfg
     )
 
-    merged_extra_body = dict(extra_body or {})
+    merged_extra_body = apply_native_tool_calling_mode(
+        extra_body,
+        supports_function_calling=supports_function_calling,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
     merged_extra_body.update(_build_model_extra_body(model_cfg))
 
     url = str(base_url).rstrip("/") + "/chat/completions"
@@ -148,6 +157,7 @@ async def unified_chat_stream(
         channel_filter = ChannelFilter()
         sent_tool_call_ids = set()
         full_content = ""
+        full_reasoning = ""
 
         current_body = body.copy()
         if is_fallback:
@@ -286,7 +296,8 @@ async def unified_chat_stream(
                         if data_str.strip() == "[DONE]":
                             if full_content:
                                 parsed_calls = parse_complete_assistant_output(
-                                    full_content
+                                    full_content,
+                                    extra_tool_call_content=full_reasoning,
                                 )["tool_calls"]
                                 if parsed_calls:
                                     new_calls = [
@@ -324,12 +335,28 @@ async def unified_chat_stream(
                                 "reasoning"
                             )
                             if reasoning:
+                                full_reasoning += reasoning
                                 if request_log_entry:
                                     if "thinking" not in request_log_entry["response"]:
                                         request_log_entry["response"]["thinking"] = ""
                                     request_log_entry["response"][
                                         "thinking"
                                     ] += reasoning
+                                parsed_reasoning_calls = (
+                                    parse_tool_calls_from_content(full_reasoning) or []
+                                )
+                                if parsed_reasoning_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_reasoning_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
+                                                sent_tool_call_ids.add(call_id)
+                                        yield {"tool_calls": new_calls}
                                 yield {"thinking": reasoning}
 
                             content = delta.get("content")

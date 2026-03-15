@@ -449,6 +449,98 @@ class TestChatStreamCoverage(TestCase):
             any(tc["function"]["name"] == "list_images" for tc in tool_calls)
         )
 
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
+    def test_reasoning_tool_calling_stream_uses_xml_parameter_syntax(
+        self, MockClientClass
+    ):
+        """Reasoning-channel XML tool syntax should be converted into tool_calls."""
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            for piece in [
+                "<tool_call>",
+                "\n<function=get_chapter_metadata>",
+                "\n<parameter=chap_id>",
+                "\n6\n",
+                "</parameter>",
+                "\n</function>",
+                "\n</tool_call>",
+            ]:
+                yield "data: " + json.dumps(
+                    {"choices": [{"delta": {"reasoning_content": piece}}]}
+                ) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Chapter 6 metadata?"}],
+            "model_type": "CHAT",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        events = self._parse_sse_events(response.text)
+        tool_calls = []
+        for evt in events:
+            if "tool_calls" in evt:
+                tool_calls.extend(evt["tool_calls"])
+
+        self.assertTrue(tool_calls, f"Expected tool calls in events: {events}")
+        target = next(
+            tc for tc in tool_calls if tc["function"]["name"] == "get_chapter_metadata"
+        )
+        self.assertEqual(json.loads(target["function"]["arguments"])["chap_id"], 6)
+
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
+    def test_native_tool_calling_disables_thinking_template(self, MockClientClass):
+        """Requests with native tools should force non-thinking template mode."""
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Check chapter metadata"}],
+            "model_type": "CHAT",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        _, call_kwargs = mock_client_instance.stream.call_args
+        upstream_body = call_kwargs["json"]
+        self.assertIn("tools", upstream_body)
+        self.assertIn("chat_template_kwargs", upstream_body)
+        self.assertFalse(upstream_body["chat_template_kwargs"]["enable_thinking"])
+
     @patch("augmentedquill.api.v1.chat.httpx.AsyncClient")
     def test_stream_commentary_tool_call_suppresses_json(self, MockClientClass):
         """Commentary/tool-call output should emit tool_calls and no user-visible JSON."""
