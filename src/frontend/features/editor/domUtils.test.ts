@@ -5,6 +5,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+/**
+ * Defines the dom utils.test unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
 import { describe, expect, it, vi } from 'vitest';
 import { getRangeLength, resolveNodeAndOffset } from './domUtils';
 

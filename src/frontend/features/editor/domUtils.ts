@@ -5,6 +5,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+/**
+ * Defines the dom utils unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
 export const getRangeLength = (range: Range): number => {
   const frag = range.cloneContents();
   const walker = document.createTreeWalker(frag, NodeFilter.SHOW_ALL);
