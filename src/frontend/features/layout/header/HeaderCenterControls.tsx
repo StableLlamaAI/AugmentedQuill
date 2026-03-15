@@ -71,8 +71,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const { handleAiAction, isAiActionLoading, isWritingAvailable } = aiControls;
   const writingUnavailableReason =
     'This action is unavailable because no working WRITING model is configured.';
-  const { appSettings, setAppSettings, modelConnectionStatus, detectedCapabilities } =
-    modelControls;
+  const {
+    appSettings,
+    setAppSettings,
+    modelConnectionStatus,
+    detectedCapabilities,
+    recheckUnavailableProviderIfStale,
+  } = modelControls;
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
     themeTokens;
 
@@ -503,6 +508,9 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         <ModelSelector
           label="Writing"
           value={appSettings.activeWritingProviderId}
+          onSelectorClick={() => {
+            void recheckUnavailableProviderIfStale(appSettings.activeWritingProviderId);
+          }}
           onChange={(value) =>
             setAppSettings((previous) => ({
               ...previous,
@@ -518,6 +526,9 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         <ModelSelector
           label="Editing"
           value={appSettings.activeEditingProviderId}
+          onSelectorClick={() => {
+            void recheckUnavailableProviderIfStale(appSettings.activeEditingProviderId);
+          }}
           onChange={(value) =>
             setAppSettings((previous) => ({
               ...previous,
@@ -533,6 +544,9 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         <ModelSelector
           label="Chat"
           value={appSettings.activeChatProviderId}
+          onSelectorClick={() => {
+            void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
+          }}
           onChange={(value) =>
             setAppSettings((previous) => ({
               ...previous,

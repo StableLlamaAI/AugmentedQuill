@@ -217,8 +217,12 @@ const App: React.FC = () => {
 
   const prompts = usePrompts(story.id);
 
-  const { modelConnectionStatus, detectedCapabilities, refreshHealth } =
-    useProviderHealth(appSettings);
+  const {
+    modelConnectionStatus,
+    detectedCapabilities,
+    refreshHealth,
+    recheckUnavailableProviderIfStale,
+  } = useProviderHealth(appSettings);
 
   const handleSaveSettings = useCallback(
     (nextSettings: AppSettings) => {
@@ -553,6 +557,7 @@ const App: React.FC = () => {
             setAppSettings,
             modelConnectionStatus,
             detectedCapabilities,
+            recheckUnavailableProviderIfStale,
           }}
           appearanceControls={{
             appearanceRef,

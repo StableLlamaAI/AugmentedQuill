@@ -9,7 +9,7 @@
  * Defines the use provider health unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppSettings } from '../../types';
 import { api } from '../../services/api';
 
@@ -102,10 +102,96 @@ export function useProviderHealth(appSettings: AppSettings) {
       }>
     >
   >({});
+  const lastCheckedAt = useRef<Record<string, number>>({});
+
+  const setStatusForProviderIds = useCallback(
+    (providerIds: string[], status: ConnectionStatus) => {
+      providerIds.forEach((providerId) => {
+        setModelConnectionStatus((prev) => ({ ...prev, [providerId]: status }));
+      });
+    },
+    []
+  );
+
+  const markChecked = useCallback((providerIds: string[]) => {
+    const now = Date.now();
+    providerIds.forEach((providerId) => {
+      lastCheckedAt.current[providerId] = now;
+    });
+  }, []);
 
   const refreshHealth = () => {
     promiseCache.current = {};
   };
+
+  const recheckUnavailableProviderIfStale = useCallback(
+    async (providerId: string, minAgeMs = 5000) => {
+      if (!providerId) return;
+
+      const status = modelConnectionStatus[providerId] || 'idle';
+      if (status !== 'error') return;
+
+      const lastCheck = lastCheckedAt.current[providerId] || 0;
+      if (Date.now() - lastCheck < minAgeMs) return;
+
+      const provider = appSettings.providers.find((entry) => entry.id === providerId);
+      if (!provider) return;
+
+      const modelId = (provider.modelId || '').trim();
+      if (!modelId) {
+        setStatusForProviderIds([provider.id], 'idle');
+        markChecked([provider.id]);
+        return;
+      }
+
+      const activeIds = new Set([
+        appSettings.activeChatProviderId,
+        appSettings.activeWritingProviderId,
+        appSettings.activeEditingProviderId,
+      ]);
+      const groupedProviders = groupProviders(appSettings.providers, activeIds);
+      const key = makeProviderKey(provider.baseUrl || '', provider.apiKey, modelId);
+      const relatedProviderIds = groupedProviders[key]?.ids || [provider.id];
+      const payload = groupedProviders[key]?.payload || {
+        base_url: provider.baseUrl,
+        api_key: provider.apiKey,
+        timeout_s: Math.round((provider.timeout || 10000) / 1000),
+        model_id: modelId,
+      };
+
+      // Force a fresh network request for this provider key.
+      delete promiseCache.current[key];
+      setStatusForProviderIds(relatedProviderIds, 'loading');
+
+      try {
+        const result = await api.machine.testModel(payload);
+        const nextStatus: ConnectionStatus = result.model_ok ? 'success' : 'error';
+        setStatusForProviderIds(relatedProviderIds, nextStatus);
+
+        if (result.model_ok && result.capabilities) {
+          relatedProviderIds.forEach((id) => {
+            setDetectedCapabilities((prev) => ({
+              ...prev,
+              [id]: result.capabilities!,
+            }));
+          });
+        }
+      } catch {
+        setStatusForProviderIds(relatedProviderIds, 'error');
+      } finally {
+        markChecked(relatedProviderIds);
+      }
+    },
+    [
+      appSettings.activeChatProviderId,
+      appSettings.activeEditingProviderId,
+      appSettings.activeWritingProviderId,
+      appSettings.providers,
+      markChecked,
+      modelConnectionStatus,
+      setStatusForProviderIds,
+    ]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -189,11 +275,13 @@ export function useProviderHealth(appSettings: AppSettings) {
                 }));
               });
             }
+            markChecked(ids);
           } catch {
             if (cancelled) return;
             ids.forEach((pid) => {
               setModelConnectionStatus((prev) => ({ ...prev, [pid]: 'error' }));
             });
+            markChecked(ids);
           }
         })
       );
@@ -203,6 +291,7 @@ export function useProviderHealth(appSettings: AppSettings) {
       providersToCheck.forEach((provider) => {
         if (!provider.modelId?.trim()) {
           setModelConnectionStatus((prev) => ({ ...prev, [provider.id]: 'idle' }));
+          markChecked([provider.id]);
         }
       });
     };
@@ -217,7 +306,13 @@ export function useProviderHealth(appSettings: AppSettings) {
     appSettings.activeChatProviderId,
     appSettings.activeEditingProviderId,
     appSettings.activeWritingProviderId,
+    markChecked,
   ]);
 
-  return { modelConnectionStatus, detectedCapabilities, refreshHealth };
+  return {
+    modelConnectionStatus,
+    detectedCapabilities,
+    refreshHealth,
+    recheckUnavailableProviderIfStale,
+  };
 }
