@@ -14,7 +14,11 @@ import json as _json
 from pydantic import BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 from augmentedquill.services.projects.projects import (
     get_active_project_dir,
     read_book_content as _read_book_content,
@@ -44,9 +48,16 @@ class UpdateStoryMetadataParams(BaseModel):
 
 
 class ReadStoryContentParams(BaseModel):
-    """Parameters for read_story_content (no parameters needed)."""
+    """Parameters for read_story_content."""
 
-    pass
+    start: int = Field(
+        0,
+        description="Starting character index (0-based).",
+    )
+    max_chars: int = Field(
+        8000,
+        description="Maximum number of characters to return (max 8000).",
+    )
 
 
 class WriteStoryContentParams(BaseModel):
@@ -74,6 +85,14 @@ class ReadBookContentParams(BaseModel):
     """Parameters for reading book content."""
 
     book_id: str = Field(..., description="The UUID of the book")
+    start: int = Field(
+        0,
+        description="Starting character index (0-based).",
+    )
+    max_chars: int = Field(
+        8000,
+        description="Maximum number of characters to return (max 8000).",
+    )
 
 
 class WriteBookContentParams(BaseModel):
@@ -120,7 +139,9 @@ class WriteStorySummaryParams(BaseModel):
 
 
 @chat_tool(
-    description="Get the overall story title, summary, notes, tags, and project type."
+    description="Get the overall story title, summary, notes, tags, and project type.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_story_metadata(
     params: GetStoryMetadataParams, payload: dict, mutations: dict
@@ -138,7 +159,9 @@ async def get_story_metadata(
 
 
 @chat_tool(
-    description="Update the story title, summary, notes, or tags. Provide only the fields you want to change."
+    description="Update the story title, summary, notes, or tags. Provide only the fields you want to change.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def update_story_metadata(
     params: UpdateStoryMetadataParams, payload: dict, mutations: dict
@@ -151,15 +174,31 @@ async def update_story_metadata(
     return {"ok": True}
 
 
-@chat_tool(description="Read the story-level introduction or content file.")
+@chat_tool(
+    description="Read the story-level introduction or content file.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
 async def read_story_content(
     params: ReadStoryContentParams, payload: dict, mutations: dict
 ):
-    content = _read_story_content()
-    return {"content": content}
+    content = _read_story_content() or ""
+    start = max(0, params.start)
+    max_chars = max(1, min(8000, params.max_chars))
+    end = min(len(content), start + max_chars)
+    return {
+        "content": content[start:end],
+        "start": start,
+        "end": end,
+        "total": len(content),
+    }
 
 
-@chat_tool(description="Update the story-level introduction or content file.")
+@chat_tool(
+    description="Update the story-level introduction or content file.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_story_content(
     params: WriteStoryContentParams, payload: dict, mutations: dict
 ):
@@ -169,7 +208,9 @@ async def write_story_content(
 
 
 @chat_tool(
-    description="Get the title, summary, and notes of a specific book (only for series projects)."
+    description="Get the title, summary, and notes of a specific book (only for series projects).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_book_metadata(
     params: GetBookMetadataParams, payload: dict, mutations: dict
@@ -193,7 +234,9 @@ async def get_book_metadata(
 
 
 @chat_tool(
-    description="Update the title, summary, or notes of a specific book. Provide only the fields you want to change."
+    description="Update the title, summary, or notes of a specific book. Provide only the fields you want to change.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
@@ -206,15 +249,31 @@ async def update_book_metadata(
     return {"ok": True}
 
 
-@chat_tool(description="Read the content file for a specific book.")
+@chat_tool(
+    description="Read the content file for a specific book.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
 async def read_book_content(
     params: ReadBookContentParams, payload: dict, mutations: dict
 ):
-    content = _read_book_content(params.book_id)
-    return {"content": content}
+    content = _read_book_content(params.book_id) or ""
+    start = max(0, params.start)
+    max_chars = max(1, min(8000, params.max_chars))
+    end = min(len(content), start + max_chars)
+    return {
+        "content": content[start:end],
+        "start": start,
+        "end": end,
+        "total": len(content),
+    }
 
 
-@chat_tool(description="Update the content file for a specific book.")
+@chat_tool(
+    description="Update the content file for a specific book.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_book_content(
     params: WriteBookContentParams, payload: dict, mutations: dict
 ):
@@ -226,6 +285,8 @@ async def write_book_content(
 @chat_tool(
     name="get_story_summary",
     description="Get only the story summary (shortcut for get_story_metadata).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_story_summary_tool(
     params: GetStorySummaryParams, payload: dict, mutations: dict
@@ -237,7 +298,11 @@ async def get_story_summary_tool(
     return {"story_summary": summary}
 
 
-@chat_tool(description="Get the list of tags for the story.")
+@chat_tool(
+    description="Get the list of tags for the story.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
 async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: dict):
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -245,7 +310,11 @@ async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: d
     return {"tags": tags}
 
 
-@chat_tool(description="Set the tags for the story. Replaces all existing tags.")
+@chat_tool(
+    description="Set the tags for the story. Replaces all existing tags.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: dict):
     """Set Story Tags."""
     active = get_active_project_dir()
@@ -264,7 +333,9 @@ async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: d
 
 
 @chat_tool(
-    description="Auto-generate a story summary from chapter content. Uses the EDIT LLM."
+    description="Auto-generate a story summary from chapter content. Uses the EDIT LLM.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def sync_story_summary(
     params: SyncStorySummaryParams, payload: dict, mutations: dict
@@ -279,7 +350,11 @@ async def sync_story_summary(
     return data
 
 
-@chat_tool(description="Directly set the story summary without LLM generation.")
+@chat_tool(
+    description="Directly set the story summary without LLM generation.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_story_summary(
     params: WriteStorySummaryParams, payload: dict, mutations: dict
 ):

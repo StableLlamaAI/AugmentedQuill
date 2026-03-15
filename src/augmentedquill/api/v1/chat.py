@@ -209,6 +209,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     messages = payload.get("messages") or []
+    model_type = str((payload or {}).get("model_type") or "CHAT").upper()
     if not isinstance(messages, list):
         return error_json("messages must be an array", status_code=400)
 
@@ -246,7 +247,14 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         if not name or not call_id:
             continue
         tool_names.append(name)
-        msg = await execute_registered_tool(name, args_obj, call_id, payload, mutations)
+        msg = await execute_registered_tool(
+            name,
+            args_obj,
+            call_id,
+            payload,
+            mutations,
+            tool_role=model_type,
+        )
         appended.append(msg)
 
     if (
@@ -444,13 +452,17 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
-    story_tools = get_registered_tool_schemas()
+    story_tools = get_registered_tool_schemas(model_type=model_type)
     if supports_function_calling:
         tool_choice = (payload or {}).get("tool_choice")
         # If the client explicitly requests "none", do not send tools.
         # This prevents some models from hallucinating tool usage even when told not to.
         if tool_choice == "none":
             pass
+    if model_type == "WRITING":
+        story_tools = None
+        tool_choice = None
+        supports_function_calling = False
 
     async def _gen():
         """Gen."""

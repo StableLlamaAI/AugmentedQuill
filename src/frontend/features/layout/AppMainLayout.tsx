@@ -78,6 +78,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     isChatOpen,
     chatMessages,
     isChatLoading,
+    activeChatConfig,
     systemPrompt,
     handleSendMessage,
     handleStopChat,
@@ -216,6 +217,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             messages={chatMessages}
             isLoading={isChatLoading}
             isModelAvailable={chatControls.isChatAvailable}
+            activeChatConfig={activeChatConfig}
             systemPrompt={systemPrompt}
             onSendMessage={handleSendMessage}
             onStop={handleStopChat}

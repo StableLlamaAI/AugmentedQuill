@@ -76,7 +76,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Type your instruction..."
+        placeholder="Ask CHAT to plan, update metadata, or delegate writing/editing..."
         className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border resize-none overflow-y-auto disabled:cursor-not-allowed ${inputBg}`}
         disabled={isDisabled}
         title={disabledTitle}

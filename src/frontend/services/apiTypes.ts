@@ -17,6 +17,7 @@ export interface MachineModelConfig {
   api_key?: string;
   model: string;
   timeout_s?: number;
+  context_window_tokens?: number;
   temperature?: number;
   top_p?: number;
   max_tokens?: number;

@@ -28,6 +28,7 @@ from augmentedquill.core.config import (
     ensure_runtime_user_config_files,
 )
 from augmentedquill.services.exceptions import ServiceError
+from augmentedquill.services.chat.chat_tool_decorator import write_tools_json_tempfile
 
 # Import API routers
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
@@ -48,6 +49,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="AugmentedQuill")
     ensure_runtime_user_config_files()
+
+    # Generate a temporary tools.json for any tooling that wants it.
+    # This file is intentionally not checked in; it is regenerated on each run.
+    app.state.tools_json_path = write_tools_json_tempfile()
 
     # Dynamic CORS origin handler to support variable ports
     async def get_origins(request: Request) -> list[str]:

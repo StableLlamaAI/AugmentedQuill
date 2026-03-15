@@ -209,6 +209,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   const renderNumberInput = (
     label: string,
     field:
+      | 'contextWindowTokens'
       | 'maxTokens'
       | 'presencePenalty'
       | 'frequencyPenalty'
@@ -226,7 +227,12 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
         <input
           type="number"
           step={
-            field === 'seed' || field === 'topK' || field === 'maxTokens' ? 1 : 0.01
+            field === 'seed' ||
+            field === 'topK' ||
+            field === 'maxTokens' ||
+            field === 'contextWindowTokens'
+              ? 1
+              : 0.01
           }
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
@@ -503,6 +509,19 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 <MessageSquare size={14} />
                 Chat
               </button>
+            </div>
+
+            <div
+              className={`text-xs leading-relaxed rounded-lg border p-3 ${
+                isLight
+                  ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-600'
+                  : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-400'
+              }`}
+            >
+              WRITING creates new prose. EDITING refines existing prose and summaries
+              without adding fresh story content. CHAT plans the workflow, maintains
+              metadata and sourcebook state, and decides when to delegate to WRITING or
+              EDITING.
             </div>
 
             <div className="space-y-4">
@@ -841,6 +860,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   {renderSlider('Temperature', 'temperature', 0, 2, 0.1)}
                   {renderSlider('Top P', 'topP', 0, 1, 0.05)}
+                  {renderNumberInput('Context Window', 'contextWindowTokens')}
                   {renderNumberInput('Max Tokens', 'maxTokens')}
                   {renderNumberInput('Seed', 'seed')}
                   {renderNumberInput('Presence Penalty', 'presencePenalty')}

@@ -17,7 +17,14 @@ from augmentedquill.services.chat.chat_tool_decorator import execute_registered_
 
 
 async def exec_chat_tool(
-    name: str, args_obj: dict, call_id: str, payload: dict, mutations: dict
+    name: str,
+    args_obj: dict,
+    call_id: str,
+    payload: dict,
+    mutations: dict,
+    tool_role: str | None = None,
 ) -> dict:
     """Dispatch a single tool call using the canonical chat tool runtime."""
-    return await execute_registered_tool(name, args_obj, call_id, payload, mutations)
+    return await execute_registered_tool(
+        name, args_obj, call_id, payload, mutations, tool_role=tool_role
+    )

@@ -27,6 +27,10 @@
                 "type": "integer",
                 "minimum": 1
               },
+              "context_window_tokens": {
+                "type": ["integer", "null"],
+                "minimum": 2048
+              },
               "model": {
                 "type": "string"
               },

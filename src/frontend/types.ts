@@ -119,6 +119,7 @@ export interface LLMConfig {
   apiKey: string;
   timeout: number;
   modelId: string;
+  contextWindowTokens?: number;
   temperature?: number;
   topP?: number;
   maxTokens?: number;

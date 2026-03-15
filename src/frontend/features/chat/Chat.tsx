@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ChatMessage, AppTheme, ChatSession } from '../../types';
+import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
 import {
   Loader2,
   Bot,
@@ -30,11 +30,13 @@ import { WebSearchResults, VisitPageResult } from './components/ToolResultViews'
 import { ChatHeader } from './components/ChatHeader';
 import { ChatHistoryPanel } from './components/ChatHistoryPanel';
 import { ChatComposer } from './components/ChatComposer';
+import { estimateChatContextUsage } from './chatContextBudget';
 
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
   isModelAvailable?: boolean;
+  activeChatConfig: LLMConfig;
   systemPrompt: string;
   onSendMessage: (text: string) => void;
   onStop?: () => void;
@@ -82,6 +84,7 @@ export const Chat: React.FC<ChatProps> = ({
   messages,
   isLoading,
   isModelAvailable = true,
+  activeChatConfig,
   systemPrompt,
   onSendMessage,
   onStop,
@@ -151,7 +154,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   useEffect(() => {
     const el = scrollContainerRef.current;
-    if (!el) return;
+    if (!el) return undefined;
 
     // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
     const observer = new MutationObserver(() => {
@@ -218,6 +221,15 @@ export const Chat: React.FC<ChatProps> = ({
 
   const lastMessage = messages[messages.length - 1];
   const canRegenerate = !isLoading && isModelAvailable && lastMessage?.role === 'model';
+  const contextUsage = useMemo(
+    () =>
+      estimateChatContextUsage({
+        systemInstruction: systemPrompt,
+        messages,
+        config: activeChatConfig,
+      }),
+    [activeChatConfig, messages, systemPrompt]
+  );
 
   return (
     <div
@@ -226,8 +238,10 @@ export const Chat: React.FC<ChatProps> = ({
       <ChatHeader
         title={isIncognito ? 'Incognito Chat' : 'Writing Partner'}
         headerBg={headerBg}
+        isLightTheme={isLight}
         currentSessionId={currentSessionId}
         isIncognito={isIncognito}
+        contextUsage={contextUsage}
         isDisabled={!isModelAvailable}
         disabledReason={chatDisabledReason}
         showHistory={showHistory}

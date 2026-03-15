@@ -11,6 +11,10 @@
 
 import { LLMConfig } from '../types';
 import { applySmartQuotes } from '../utils/textUtils';
+import {
+  ChatContextUsage,
+  prepareChatContext,
+} from '../features/chat/chatContextBudget';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
 type UserMessageInput = string | { message: string };
@@ -28,19 +32,6 @@ type ParsedFunctionCall = {
   id: string;
   name: string;
   args: Record<string, unknown>;
-};
-
-type HistoryMessage = {
-  role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
-  text?: string;
-  parts?: Array<{ text?: string }>;
-  name?: string;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    name: string;
-    args: string | Record<string, unknown>;
-  }>;
 };
 
 type ModelsResponse = {
@@ -214,48 +205,24 @@ export const createChatSession = (
   options?: {
     allowWebSearch?: boolean;
     currentChapter?: { id: string; title: string } | null;
+    onContextUsage?: (usage: ChatContextUsage) => void;
   }
 ): UnifiedChat => {
   return {
     sendMessage: async (msg, onUpdate) => {
       const userMsgText = typeof msg === 'string' ? msg : msg.message;
+      const preparedContext = prepareChatContext({
+        systemInstruction,
+        history,
+        config,
+        userMessageText: userMsgText,
+      });
+      options?.onContextUsage?.(preparedContext.usage);
 
-      const messages = [
-        { role: 'system', content: systemInstruction },
-        ...history.map((h) => {
-          const m: {
-            role: string;
-            content: string;
-            name?: string;
-            tool_call_id?: string;
-            tool_calls?: Array<{
-              id: string;
-              type: 'function';
-              function: { name: string; arguments: string };
-            }>;
-          } = {
-            role: h.role === 'model' ? 'assistant' : h.role,
-            content: h.text || (h.parts && h.parts[0]?.text) || '',
-          };
-          if (h.name) m.name = h.name;
-          if (h.tool_call_id) m.tool_call_id = h.tool_call_id;
-          if (h.tool_calls) {
-            m.tool_calls = h.tool_calls.map((tc) => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments:
-                  typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args),
-              },
-            }));
-          }
-          return m;
-        }),
-      ];
-
-      if (userMsgText) {
-        messages.push({ role: 'user', content: userMsgText });
+      if (preparedContext.usage.enabled && !preparedContext.usage.withinBudget) {
+        throw new ChatError(
+          'Chat context is still too large after compaction. Start a new chat or remove older long messages.'
+        );
       }
 
       try {
@@ -263,7 +230,7 @@ export const createChatSession = (
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages,
+            messages: preparedContext.messages,
             model_type: modelType,
             model_name: config.name || config.id,
             allow_web_search: options?.allowWebSearch,

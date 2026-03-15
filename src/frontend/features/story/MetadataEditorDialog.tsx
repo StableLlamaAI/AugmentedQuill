@@ -343,6 +343,10 @@ export function MetadataEditorDialog({
                     className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
                     placeholder="e.g. Noir, Sci-Fi, First-Person"
                   />
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500">
+                    Style tags guide the WRITING model’s voice and the EDITING model’s
+                    tone checks. Keep them short, specific, and stable.
+                  </p>
                   {languages && (
                     <>
                       <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
@@ -419,6 +423,10 @@ export function MetadataEditorDialog({
             <div className="flex-1 p-4 min-h-[500px]">
               {activeTab === 'summary' && (
                 <div className="h-full flex flex-col gap-2">
+                  <div className="text-sm text-brand-gray-500 mb-1">
+                    This summary is part of the story logic that CHAT maintains and the
+                    other models read as context.
+                  </div>
                   {hasAiSummaryControls && (
                     <div className="flex items-center gap-2 justify-end">
                       {isAiGenerating ? (
@@ -483,6 +491,10 @@ export function MetadataEditorDialog({
               {activeTab === 'notes' && (
                 <div className="h-full flex flex-col">
                   <div className="text-sm text-brand-gray-500 mb-2">Visible to LLM</div>
+                  <div className="text-xs text-brand-gray-500 mb-2">
+                    Use notes for facts, intentions, foreshadowing, and constraints that
+                    should inform CHAT, EDITING, and WRITING.
+                  </div>
                   <textarea
                     value={data.notes || ''}
                     onChange={(e) => setData({ ...data, notes: e.target.value })}
@@ -496,6 +508,10 @@ export function MetadataEditorDialog({
                   <div className="text-sm text-brand-gray-500 mb-2">
                     Not visible to LLM
                   </div>
+                  <div className="text-xs text-brand-gray-500 mb-2">
+                    Keep private reminders, spoilers, and experiments here when they
+                    should stay outside model context.
+                  </div>
                   <textarea
                     value={data.private_notes || ''}
                     onChange={(e) =>
@@ -508,6 +524,10 @@ export function MetadataEditorDialog({
               )}
               {activeTab === 'conflicts' && (
                 <div className="space-y-4">
+                  <div className="text-sm text-brand-gray-500">
+                    Track unresolved tensions in story order. CHAT can use these to keep
+                    pacing and logic coherent while planning later chapters.
+                  </div>
                   <Button onClick={addConflict} variant="secondary" theme={theme}>
                     + Add Conflict
                   </Button>

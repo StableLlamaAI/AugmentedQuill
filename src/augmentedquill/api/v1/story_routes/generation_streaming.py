@@ -263,6 +263,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         prompt = get_user_prompt(
             "suggest_continuation",
             language=story.get("language", "en"),
+            project_type_label=context["project_type_label"],
             story_title=context["story_title"],
             story_summary=context["story_summary"],
             story_tags=context["story_tags"],

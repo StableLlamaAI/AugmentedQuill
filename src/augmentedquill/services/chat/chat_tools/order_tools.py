@@ -9,7 +9,7 @@
 
 from pydantic import BaseModel, Field
 
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import CHAT_ROLE, chat_tool
 
 # Pydantic models for tool parameters
 
@@ -22,7 +22,7 @@ class ReorderChaptersParams(BaseModel):
     )
     book_id: str | None = Field(
         None,
-        description="The UUID of the book (required for series projects, omit for novel projects)",
+        description="The UUID of the book (required for series projects, omit for short-story and novel projects)",
     )
 
 
@@ -38,7 +38,9 @@ class ReorderBooksParams(BaseModel):
 
 
 @chat_tool(
-    description="Reorder chapters within a book (series) or in the novel. Provide the complete list of chapter IDs in the desired order."
+    description="Reorder chapters within a book (series) or within the flat chapter list of a short story or novel. Provide the complete list of chapter IDs in the desired order.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def reorder_chapters(
     params: ReorderChaptersParams, payload: dict, mutations: dict
@@ -62,7 +64,9 @@ async def reorder_chapters(
 
 
 @chat_tool(
-    description="Reorder books in a series project. Provide the complete list of book UUIDs in the desired order."
+    description="Reorder books in a series project. Provide the complete list of book UUIDs in the desired order.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def reorder_books(params: ReorderBooksParams, payload: dict, mutations: dict):
     """Reorder Books."""

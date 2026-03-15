@@ -85,9 +85,10 @@ class ToolParityTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
-    def _call_tool(self, name, args):
+    def _call_tool(self, name, args, model_type: str = "CHAT"):
         body = {
             "model_name": "gpt-4o",
+            "model_type": model_type,
             "messages": [
                 {"role": "user", "content": f"Execute {name}"},
                 {
@@ -135,6 +136,13 @@ class ToolParityTest(TestCase):
         res = self._call_tool("read_story_content", {})
         self.assertEqual(res["content"], "Story intro content.")
 
+        # read_story_content with paging
+        res = self._call_tool("read_story_content", {"start": 0, "max_chars": 5})
+        self.assertEqual(res["content"], "Story")
+        self.assertEqual(res["start"], 0)
+        self.assertEqual(res["end"], 5)
+        self.assertEqual(res["total"], len("Story intro content."))
+
         # write_story_content
         res = self._call_tool(
             "write_story_content", {"content": "Updated story intro content."}
@@ -175,6 +183,15 @@ class ToolParityTest(TestCase):
         # read_book_content
         res = self._call_tool("read_book_content", {"book_id": self.book_id})
         self.assertEqual(res["content"], "Book 1 intro content.")
+
+        # read_book_content with paging
+        res = self._call_tool(
+            "read_book_content", {"book_id": self.book_id, "start": 0, "max_chars": 4}
+        )
+        self.assertEqual(res["content"], "Book")
+        self.assertEqual(res["start"], 0)
+        self.assertEqual(res["end"], 4)
+        self.assertEqual(res["total"], len("Book 1 intro content."))
 
         # write_book_content
         res = self._call_tool(
@@ -227,12 +244,22 @@ class ToolParityTest(TestCase):
         self.assertEqual(res["tags"], ["sci-fi", "noir"])
 
     def test_get_chapter_summaries(self):
+        # A chapter should always be listed, even if it has an empty summary.
         res = self._call_tool("get_chapter_summaries", {})
         self.assertEqual(len(res["chapter_summaries"]), 1)
         self.assertEqual(res["chapter_summaries"][0]["title"], "Chapter 1")
         self.assertEqual(
             res["chapter_summaries"][0]["summary"], "Initial chapter summary"
         )
+
+        # Clear the summary and ensure the chapter is still listed.
+        self._call_tool(
+            "update_chapter_metadata",
+            {"chap_id": 1, "summary": ""},
+        )
+        res = self._call_tool("get_chapter_summaries", {})
+        self.assertEqual(len(res["chapter_summaries"]), 1)
+        self.assertEqual(res["chapter_summaries"][0]["summary"], "")
 
     def test_delete_tools(self):
         # delete_chapter (negative first: no confirm)
@@ -392,6 +419,64 @@ class ToolParityTest(TestCase):
         # reorder_books
         res = self._call_tool("reorder_books", {"book_ids": [self.book_id]})
         self.assertTrue(res.get("ok"))
+
+    def test_insert_text_at_marker_tool(self):
+        # Insert a marker into the chapter, then replace it.
+        full = self._call_tool("get_chapter_content", {"chap_id": 1})["content"]
+        self.assertIn("Book 1 Chapter 1 content.", full)
+
+        # Insert a marker and then replace it using the tool.
+        marker = "~~~"
+        updated = full.replace("Chapter 1", f"Chapter 1 {marker}")
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": updated},
+            model_type="EDITING",
+        )
+
+        res = self._call_tool(
+            "insert_text_at_marker",
+            {
+                "chap_id": 1,
+                "insert_text": "(inserted)",
+                "mode": "replace",
+            },
+            model_type="EDITING",
+        )
+        self.assertEqual(res["marker"], marker)
+
+        # Verify that the marker is replaced
+        updated_content = self._call_tool("get_chapter_content", {"chap_id": 1})[
+            "content"
+        ]
+        self.assertNotIn(marker, updated_content)
+        self.assertIn("(inserted)", updated_content)
+
+    def test_apply_chapter_replacements_tool(self):
+        # Ensure the tool can apply multiple sequential replacements safely.
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "Alpha beta gamma"},
+            model_type="EDITING",
+        )
+
+        res = self._call_tool(
+            "apply_chapter_replacements",
+            {
+                "chap_id": 1,
+                "replacements": [
+                    {"old_text": "Alpha", "new_text": "A"},
+                    {"old_text": "gamma", "new_text": "G"},
+                ],
+            },
+            model_type="EDITING",
+        )
+        self.assertEqual(res["replacements_applied"], 2)
+
+        updated_content = self._call_tool("get_chapter_content", {"chap_id": 1})[
+            "content"
+        ]
+        self.assertEqual(updated_content, "A beta G")
 
     def test_image_tools(self):
         # set_image_metadata

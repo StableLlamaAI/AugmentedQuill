@@ -103,152 +103,148 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   // Reinitialize dialog state on open to avoid stale provider/test cache leakage.
   useEffect(() => {
-    if (isOpen) {
-      setLocalSettings(settings);
-      setEditingProviderId(settings.activeChatProviderId);
-      setSaveError('');
-      setModelLists({});
+    if (!isOpen) return undefined;
 
-      // Force fresh capability/model checks for the current editing session.
-      lastConnTestKeyRef.current = {};
-      prevModelIdRef.current = {};
+    setLocalSettings(settings);
+    setEditingProviderId(settings.activeChatProviderId);
+    setSaveError('');
+    setModelLists({});
 
-      let cancelled = false;
-      (async () => {
-        try {
-          const [machine, presetsResponse] = await Promise.all([
-            api.machine.get(),
-            api.machine.getPresets(),
-          ]);
-          const openai = machine?.openai || {};
-          setModelPresets(
-            Array.isArray(presetsResponse?.presets) ? presetsResponse.presets : []
-          );
-          const models = Array.isArray(openai?.models) ? openai.models : [];
-          const selectedName = (openai?.selected || '') as string;
+    // Force fresh capability/model checks for the current editing session.
+    lastConnTestKeyRef.current = {};
+    prevModelIdRef.current = {};
 
-          const providers: LLMConfig[] = models
-            .filter((m): m is MachineModelConfig => Boolean(m && typeof m === 'object'))
-            .map((m) => {
-              const name = String(m.name || '').trim() || 'Unnamed';
-              const timeoutS = Number(m.timeout_s ?? 60);
-              return {
-                ...DEFAULT_LLM_CONFIG,
-                id: name,
-                name,
-                baseUrl: String(m.base_url || '').trim(),
-                apiKey: String(m.api_key || ''),
-                timeout: Number.isFinite(timeoutS)
-                  ? Math.max(1, timeoutS) * 1000
-                  : 60000,
-                modelId: String(m.model || '').trim(),
-                temperature:
-                  m.temperature === null || m.temperature === undefined
-                    ? DEFAULT_LLM_CONFIG.temperature
-                    : Number(m.temperature),
-                topP:
-                  m.top_p === null || m.top_p === undefined
-                    ? DEFAULT_LLM_CONFIG.topP
-                    : Number(m.top_p),
-                maxTokens:
-                  m.max_tokens === null || m.max_tokens === undefined
-                    ? DEFAULT_LLM_CONFIG.maxTokens
-                    : Number(m.max_tokens),
-                presencePenalty:
-                  m.presence_penalty === null || m.presence_penalty === undefined
-                    ? DEFAULT_LLM_CONFIG.presencePenalty
-                    : Number(m.presence_penalty),
-                frequencyPenalty:
-                  m.frequency_penalty === null || m.frequency_penalty === undefined
-                    ? DEFAULT_LLM_CONFIG.frequencyPenalty
-                    : Number(m.frequency_penalty),
-                stop: Array.isArray(m.stop) ? m.stop.map((entry) => String(entry)) : [],
-                seed:
-                  m.seed === null || m.seed === undefined ? undefined : Number(m.seed),
-                topK:
-                  m.top_k === null || m.top_k === undefined
-                    ? undefined
-                    : Number(m.top_k),
-                minP:
-                  m.min_p === null || m.min_p === undefined
-                    ? undefined
-                    : Number(m.min_p),
-                extraBody: String(m.extra_body || ''),
-                presetId: m.preset_id || null,
-                writingWarning: m.writing_warning || null,
-                isMultimodal: m.is_multimodal,
-                supportsFunctionCalling: m.supports_function_calling,
-                prompts: {
-                  ...DEFAULT_LLM_CONFIG.prompts,
-                  ...(m.prompt_overrides || {}),
-                },
-              };
-            });
+    let cancelled = false;
+    (async () => {
+      try {
+        const [machine, presetsResponse] = await Promise.all([
+          api.machine.get(),
+          api.machine.getPresets(),
+        ]);
+        const openai = machine?.openai || {};
+        setModelPresets(
+          Array.isArray(presetsResponse?.presets) ? presetsResponse.presets : []
+        );
+        const models = Array.isArray(openai?.models) ? openai.models : [];
+        const selectedName = (openai?.selected || '') as string;
 
-          if (cancelled) return;
-
-          if (providers.length > 0) {
-            const fallbackId =
-              providers.find((p) => p.id === selectedName)?.id || providers[0].id;
-
-            const getValidId = (
-              currentId: string | undefined,
-              specificSaved: string | undefined
-            ) => {
-              // Prioritize current in-memory selection to preserve user intent.
-              if (currentId && providers.some((p) => p.id === currentId)) {
-                return currentId;
-              }
-              // Fall back to persisted per-role selection when available.
-              if (specificSaved && providers.some((p) => p.id === specificSaved)) {
-                return specificSaved;
-              }
-              // Final fallback keeps dialog operable with partially configured data.
-              return fallbackId;
+        const providers: LLMConfig[] = models
+          .filter((m): m is MachineModelConfig => Boolean(m && typeof m === 'object'))
+          .map((m) => {
+            const name = String(m.name || '').trim() || 'Unnamed';
+            const timeoutS = Number(m.timeout_s ?? 60);
+            return {
+              ...DEFAULT_LLM_CONFIG,
+              id: name,
+              name,
+              baseUrl: String(m.base_url || '').trim(),
+              apiKey: String(m.api_key || ''),
+              timeout: Number.isFinite(timeoutS) ? Math.max(1, timeoutS) * 1000 : 60000,
+              modelId: String(m.model || '').trim(),
+              contextWindowTokens:
+                m.context_window_tokens === null ||
+                m.context_window_tokens === undefined
+                  ? undefined
+                  : Number(m.context_window_tokens),
+              temperature:
+                m.temperature === null || m.temperature === undefined
+                  ? DEFAULT_LLM_CONFIG.temperature
+                  : Number(m.temperature),
+              topP:
+                m.top_p === null || m.top_p === undefined
+                  ? DEFAULT_LLM_CONFIG.topP
+                  : Number(m.top_p),
+              maxTokens:
+                m.max_tokens === null || m.max_tokens === undefined
+                  ? DEFAULT_LLM_CONFIG.maxTokens
+                  : Number(m.max_tokens),
+              presencePenalty:
+                m.presence_penalty === null || m.presence_penalty === undefined
+                  ? DEFAULT_LLM_CONFIG.presencePenalty
+                  : Number(m.presence_penalty),
+              frequencyPenalty:
+                m.frequency_penalty === null || m.frequency_penalty === undefined
+                  ? DEFAULT_LLM_CONFIG.frequencyPenalty
+                  : Number(m.frequency_penalty),
+              stop: Array.isArray(m.stop) ? m.stop.map((entry) => String(entry)) : [],
+              seed:
+                m.seed === null || m.seed === undefined ? undefined : Number(m.seed),
+              topK:
+                m.top_k === null || m.top_k === undefined ? undefined : Number(m.top_k),
+              minP:
+                m.min_p === null || m.min_p === undefined ? undefined : Number(m.min_p),
+              extraBody: String(m.extra_body || ''),
+              presetId: m.preset_id || null,
+              writingWarning: m.writing_warning || null,
+              isMultimodal: m.is_multimodal,
+              supportsFunctionCalling: m.supports_function_calling,
+              prompts: {
+                ...DEFAULT_LLM_CONFIG.prompts,
+                ...(m.prompt_overrides || {}),
+              },
             };
+          });
 
-            setLocalSettings((prev) => {
-              const selectedChat = openai.selected_chat;
-              const selectedWriting = openai.selected_writing;
-              const selectedEditing = openai.selected_editing;
+        if (cancelled) return;
 
-              const newChatId = getValidId(prev.activeChatProviderId, selectedChat);
-              // Keep the editor target stable unless it points to a removed provider.
-              setEditingProviderId((currEdit) => {
-                if (currEdit && providers.some((p) => p.id === currEdit))
-                  return currEdit;
-                return newChatId;
-              });
+        if (providers.length > 0) {
+          const fallbackId =
+            providers.find((p) => p.id === selectedName)?.id || providers[0].id;
 
-              return {
-                ...prev,
-                providers,
-                activeChatProviderId: newChatId,
-                activeWritingProviderId: getValidId(
-                  prev.activeWritingProviderId,
-                  selectedWriting
-                ),
-                activeEditingProviderId: getValidId(
-                  prev.activeEditingProviderId,
-                  selectedEditing
-                ),
-              };
+          const getValidId = (
+            currentId: string | undefined,
+            specificSaved: string | undefined
+          ) => {
+            if (currentId && providers.some((p) => p.id === currentId)) {
+              return currentId;
+            }
+            if (specificSaved && providers.some((p) => p.id === specificSaved)) {
+              return specificSaved;
+            }
+            return fallbackId;
+          };
+
+          setLocalSettings((prev) => {
+            const selectedChat = openai.selected_chat;
+            const selectedWriting = openai.selected_writing;
+            const selectedEditing = openai.selected_editing;
+
+            const newChatId = getValidId(prev.activeChatProviderId, selectedChat);
+            setEditingProviderId((currEdit) => {
+              if (currEdit && providers.some((p) => p.id === currEdit)) {
+                return currEdit;
+              }
+              return newChatId;
             });
-          }
-        } catch (e) {
-          console.error('Failed to load machine config', e);
-        }
-      })();
 
-      return () => {
-        cancelled = true;
-      };
-    }
+            return {
+              ...prev,
+              providers,
+              activeChatProviderId: newChatId,
+              activeWritingProviderId: getValidId(
+                prev.activeWritingProviderId,
+                selectedWriting
+              ),
+              activeEditingProviderId: getValidId(
+                prev.activeEditingProviderId,
+                selectedEditing
+              ),
+            };
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load machine config', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, settings]);
 
   // Auto-test connectivity so model selectors can rely on known-good endpoints.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
 
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -314,7 +310,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   // Validate selected model IDs only after connectivity succeeds.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
 
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -416,6 +412,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             api_key: p.apiKey || '',
             timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
             model: (p.modelId || '').trim(),
+            context_window_tokens: p.contextWindowTokens,
             temperature: p.temperature,
             top_p: p.topP,
             max_tokens: p.maxTokens,

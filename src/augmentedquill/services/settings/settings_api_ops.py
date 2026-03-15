@@ -117,6 +117,7 @@ def clean_machine_openai_cfg_for_put(
         model_id = (model.get("model") or "").strip()
         api_key = model.get("api_key")
         timeout_s = model.get("timeout_s", 60)
+        context_window_tokens = model.get("context_window_tokens")
         prompt_overrides = model.get("prompt_overrides", {})
 
         if not name:
@@ -175,6 +176,7 @@ def clean_machine_openai_cfg_for_put(
                 "base_url": base_url,
                 "api_key": api_key,
                 "timeout_s": timeout_s_int,
+                "context_window_tokens": _to_optional_int(context_window_tokens),
                 "model": model_id,
                 "temperature": _to_optional_float(model.get("temperature")),
                 "top_p": _to_optional_float(model.get("top_p")),

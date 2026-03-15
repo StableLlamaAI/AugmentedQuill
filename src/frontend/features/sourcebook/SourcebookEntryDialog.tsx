@@ -391,6 +391,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               >
                 Description & Facts
               </label>
+              <p className={`text-xs leading-relaxed ${labelClass}`}>
+                Describe the details the models should remember. CHAT uses this for
+                planning and consistency, while WRITING and EDITING receive relevant
+                entries as read-only context.
+              </p>
 
               <div
                 className={`rounded-md border ${inputBorderClass} ${descriptionSurfaceClass} ${descriptionTextClass} flex-1 min-h-[220px] overflow-y-auto`}
@@ -399,7 +404,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   value={description}
                   onChange={setDescription}
                   className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass} ${descriptionPlaceholderClass}`}
-                  placeholder="Detailed description, personality traits, history..."
+                  placeholder="Detailed description, personality traits, history, rules, and constraints the AI should remember..."
                   markdownHighlight
                   style={{ minHeight: '220px' }}
                 />

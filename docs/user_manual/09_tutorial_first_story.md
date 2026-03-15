@@ -2,6 +2,8 @@
 
 Welcome to the tutorial! In this guide, we won't just look at which buttons to click; we'll walk through the actual process of crafting a compelling story using AugmentedQuill. We will also show you how to perform each step manually or by using the AI Chat Assistant.
 
+Before you begin drafting prose, keep the default rhythm in mind: notes first, then title and style tags, then the story summary, then Sourcebook work, then chapter notes and conflicts, and only then full prose generation. You can always circle back and refine earlier metadata when the story evolves.
+
 ## Step 1: The Spark of an Idea
 
 Every story starts with a concept. Before you write a single word of prose, you need to know what your story is about.
@@ -90,7 +92,7 @@ As you write, you might hit a wall. Let's say you need to describe the antagonis
 
 1. Open the **[AI Chat Assistant](07_ai_chat_assistant.md)** in the right sidebar.
 2. Type: _"I just wrote 'The bad guy walked in and looked mean.' Can you rewrite this to be more intimidating and descriptive? Remember he is a ruthless treasure hunter named Silas."_
-3. Copy the AI's response and paste it into the Editor.
+3. Review the result. Depending on the task, CHAT may either return revised wording for review or use the EDITING workflow to update the chapter directly.
 
 `[SCREENSHOT: The suggestion footer open with continuation cards based on the current chapter context]`
 

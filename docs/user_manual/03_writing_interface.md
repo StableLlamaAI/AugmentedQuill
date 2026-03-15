@@ -93,7 +93,7 @@ The first Chapter AI button is `Extend` with the <img src="assets/wand.svg" alt=
 
 ### Rewrite Chapter
 
-Next to Extend is `Rewrite`, decorated with the <img src="assets/file-pen.svg" alt="File Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> File Edit icon. Unlike a simple grammar pass, Rewrite asks the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model to re-generate the chapter content entirely (using the same summary and style tags it already knows). This makes it easy to reset the voice or framing of a chapter while retaining the story structure.
+Next to Extend is `Rewrite`, decorated with the <img src="assets/file-pen.svg" alt="File Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> File Edit icon. Unlike a simple grammar pass, Rewrite asks the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model to re-generate the chapter content entirely using the story summary, style tags, sourcebook context, and chapter metadata included in that request. This makes it easy to reset the voice or framing of a chapter while retaining the story structure.
 
 ### Suggest Next Paragraph
 
@@ -118,6 +118,8 @@ While suggestions are still generating, the button shows a spinner and the word 
 ## Summary AI Controls (<img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> EDITING Model <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" />)
 
 The summary tab inside the Metadata Editor dialog (covered in [Chapters and Books](04_chapters_and_books.md)) exposes `AI Write`, `AI Update`, and `AI Rewrite` buttons. They use the <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> Fuchsia **EDITING** model <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> to craft concise descriptions, tweak tone, or polish the storytelling focus without touching the chapter body.
+
+These controls update the planning layer around a chapter rather than the prose itself. The summaries they produce help CHAT steer the project and help WRITING stay aligned when it generates new text.
 
 `[SCREENSHOT: Metadata summary tab with AI Write/Update/Rewrite buttons highlighted]`
 

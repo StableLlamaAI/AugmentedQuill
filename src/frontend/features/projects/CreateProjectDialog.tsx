@@ -101,12 +101,12 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                 <div>
                   <span
                     className="block font-bold text-sm"
-                    title="Short Story: No chapters"
+                    title="Short Story: One chapter"
                   >
                     Short Story
                   </span>
                   <span className="text-xs opacity-70 block">
-                    Best for short stories, poems, or notes.
+                    Single-chapter structure for short fiction, poems, or compact prose.
                   </span>
                 </div>
               </label>

@@ -1,11 +1,15 @@
 # The AI Chat Assistant
 
-The AI Chat Assistant is your dedicated co-writer, sounding board, and editor. It sits in the right sidebar alongside your writing interface, ready to help whenever you get stuck. Toggle it open with the **AI** button at the far right of the header, or close it with **Hide**.
+The AI Chat Assistant is your dedicated coordinator, sounding board, and editor. It sits in the right sidebar alongside your writing interface, ready to help whenever you get stuck. Toggle it open with the **AI** button at the far right of the header, or close it with **Hide**.
 
 `[SCREENSHOT: The AI Chat Assistant panel open in the right sidebar next to the text editor]`
 
 The Chat Assistant is powered by the <img src="assets/message-square.svg" alt="Message square icon" width="20" height="20" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **CHAT model**
 <img src="assets/message-square.svg" alt="Message square icon" width="20" height="20" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" />, which you can spot by the blue halo around the panel. You can swap the CHAT provider at any time using the model selector in the header without opening Settings.
+
+CHAT should not be treated as the model that writes final prose by itself. It manages workflow, metadata, Sourcebook state, and delegation. New story text should be handed to WRITING, and prose refinement or summary work should be handed to EDITING.
+
+Each chat session is independent. CHAT can rely on the messages in the current session plus the project data it reads with tools, but starting a new chat does not carry over older chat conversations.
 
 ---
 
@@ -125,7 +129,7 @@ To prevent runaway AI automation, AugmentedQuill monitors how many consecutive t
 
 ## How to Use the Chat
 
-You can talk to the AI just like you would a human collaborator. Because it has access to your [Story Metadata](04_chapters_and_books.md#story-metadata-panel), [Chapters](04_chapters_and_books.md), and [Sourcebook](05_sourcebook.md), it understands the context of your questions.
+You can talk to the AI just like you would a human collaborator. Because it can read your [Story Metadata](04_chapters_and_books.md#story-metadata-panel), [Chapters](04_chapters_and_books.md), and [Sourcebook](05_sourcebook.md) through tools, it can rebuild the context it needs inside the current session.
 
 ### Brainstorming
 
@@ -147,6 +151,26 @@ _Example:_ "What color are the uniforms of the Royal Guard?" (The AI will check 
 Want a second opinion?
 _Example:_ "Read the last three paragraphs I wrote. Is the dialogue natural? How can I make the tension higher?"
 
+### Targeted in‑chapter edits (marker + replacement tools)
+
+If you want to insert or replace text in the middle of a chapter without rewriting the entire chapter, you can use a **marker** and the AI’s editing tools.
+
+1. **Insert the marker `~~~` into your chapter** where you want new content to go.
+2. Tell the AI something like:
+   - "Insert a short scene at the `~~~` marker where the hero meets the rival."
+   - "Replace the marker `~~~` with a paragraph of dialogue and action."
+
+The system will automatically call the right tool (insert_text_at_marker) to replace just the marker location and keep the rest of your chapter unchanged.
+
+If you want to apply multiple small edits at once (search/replace style), the AI can also use tools like:
+
+- **replace_text_in_chapter** (safe single replacement)
+- **apply_chapter_replacements** (multiple replacements in one operation)
+
+### Workflow Guidance
+
+CHAT is especially useful when you want the app to follow the recommended story-building flow: notes first, then title and style tags, then the preliminary story summary, then Sourcebook work, then chapter notes and conflicts, and finally prose drafting. For a short story that usually means a single chapter; for a novel it means a flat chapter list; for a series it usually means working book by book. This sequence is flexible: CHAT can loop backward and repair earlier metadata whenever a later chapter exposes a gap.
+
 ---
 
 ## AI Actions
@@ -158,6 +182,8 @@ The AI isn't just a chatbot — it can take actions within your project. You can
 - "Generate an image of the Crystal Castle based on my Sourcebook description."
 - "Create a new chapter called 'The Betrayal' after Chapter 3."
 - "Add a conflict to Chapter 2: Elena knows about the letter but hasn't told anyone."
+
+When those actions involve prose, CHAT should orchestrate them instead of writing the text itself.
 
 ---
 

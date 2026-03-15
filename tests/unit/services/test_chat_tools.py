@@ -49,12 +49,18 @@ class ChatToolsTest(TestCase):
         )
 
     def _post_single_tool(self, name: str, arguments: dict | str):
+        return self._post_single_tool_for_role("CHAT", name, arguments)
+
+    def _post_single_tool_for_role(
+        self, model_type: str, name: str, arguments: dict | str
+    ):
         if isinstance(arguments, str):
             args = arguments
         else:
             args = json.dumps(arguments)
 
         body = {
+            "model_type": model_type,
             "messages": [
                 {
                     "role": "assistant",
@@ -70,7 +76,7 @@ class ChatToolsTest(TestCase):
                         }
                     ],
                 }
-            ]
+            ],
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200, response.text)
@@ -149,6 +155,7 @@ class ChatToolsTest(TestCase):
         # Test write_chapter_content
         body_content = {
             "model_name": None,
+            "model_type": "EDITING",
             "messages": [
                 {"role": "user", "content": "Write new content to chapter 1"},
                 {
@@ -231,6 +238,7 @@ class ChatToolsTest(TestCase):
 
         body = {
             "model_name": None,
+            "model_type": "EDITING",
             "messages": [
                 {"role": "user", "content": "Update chapter"},
                 {
@@ -271,10 +279,10 @@ class ChatToolsTest(TestCase):
             chapter_file.read_text(encoding="utf-8"), "Batch updated content"
         )
 
-    def test_call_editing_assistant_propagates_mutations_and_ui_refreshes(self):
+    def test_call_editing_assistant_propagates_prose_mutations_and_ui_refreshes(self):
         self._bootstrap_project()
-        story_file = self.projects_root / "demo" / "story.json"
-        before_story = story_file.read_text(encoding="utf-8")
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        before_text = chapter_file.read_text(encoding="utf-8")
 
         first_llm = {
             "content": "",
@@ -283,11 +291,11 @@ class ChatToolsTest(TestCase):
                     "id": "nested_1",
                     "type": "function",
                     "function": {
-                        "name": "update_story_metadata",
+                        "name": "write_chapter_content",
                         "arguments": json.dumps(
                             {
-                                "title": "Edited By Assistant",
-                                "summary": "Updated through nested tool call",
+                                "chap_id": 1,
+                                "content": "Edited chapter content",
                             }
                         ),
                     },
@@ -317,26 +325,81 @@ class ChatToolsTest(TestCase):
         batch_id = batch.get("batch_id")
         self.assertTrue(batch_id)
 
-        mutated_story = json.loads(story_file.read_text(encoding="utf-8"))
-        self.assertEqual(mutated_story.get("project_title"), "Edited By Assistant")
         self.assertEqual(
-            mutated_story.get("story_summary"), "Updated through nested tool call"
+            chapter_file.read_text(encoding="utf-8"), "Edited chapter content"
         )
 
         # Verify the data is visible via the same project-select endpoint the UI refresh path uses.
         selected = self.client.post("/api/v1/projects/select", json={"name": "demo"})
         self.assertEqual(selected.status_code, 200, selected.text)
         selected_story = (selected.json() or {}).get("story") or {}
-        self.assertEqual(selected_story.get("project_title"), "Edited By Assistant")
+        self.assertEqual(selected_story.get("chapters", [])[0].get("title"), "Intro")
 
         undo = self.client.post(f"/api/v1/chat/tools/undo/{batch_id}")
         self.assertEqual(undo.status_code, 200, undo.text)
-        self.assertEqual(story_file.read_text(encoding="utf-8"), before_story)
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), before_text)
 
         redo = self.client.post(f"/api/v1/chat/tools/redo/{batch_id}")
         self.assertEqual(redo.status_code, 200, redo.text)
-        redone_story = json.loads(story_file.read_text(encoding="utf-8"))
-        self.assertEqual(redone_story.get("project_title"), "Edited By Assistant")
+        self.assertEqual(
+            chapter_file.read_text(encoding="utf-8"), "Edited chapter content"
+        )
+
+    def test_call_editing_assistant_collects_metadata_recommendations(self):
+        self._bootstrap_project()
+
+        first_llm = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "nested_1",
+                    "type": "function",
+                    "function": {
+                        "name": "recommend_metadata_updates",
+                        "arguments": json.dumps(
+                            {
+                                "story_summary": "Sharper story summary",
+                                "chapter_updates": [
+                                    {
+                                        "chap_id": 1,
+                                        "summary": "Introduce the heirloom map earlier.",
+                                    }
+                                ],
+                                "rationale": "The opening chapter needs clearer setup.",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+        second_llm = {"content": "Done.", "tool_calls": []}
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.side_effect = [first_llm, second_llm]
+            data = self._post_single_tool(
+                "call_editing_assistant",
+                {"task": "Review chapter 1 for setup issues"},
+            )
+
+        payload = json.loads(
+            (data.get("appended_messages") or [])[0].get("content") or "{}"
+        )
+        self.assertFalse((data.get("mutations") or {}).get("story_changed"))
+        self.assertEqual(payload.get("response"), "Done.")
+        self.assertEqual(len(payload.get("recommended_updates") or []), 1)
+        self.assertEqual(
+            payload["recommended_updates"][0].get("story_summary"),
+            "Sharper story summary",
+        )
 
     def test_image_mutation_tools_emit_story_changed_and_support_undo_redo(self):
         self._bootstrap_project()
@@ -416,6 +479,19 @@ class ChatToolsTest(TestCase):
                 "call_writing_llm",
                 {"instruction": "Rewrite", "context": "Original text"},
             )
+
+        sent_messages = mock_chat.await_args.kwargs["messages"]
+        self.assertIn("You are a skilled novelist.", sent_messages[0]["content"])
+        self.assertIn("Task for this request:", sent_messages[1]["content"])
+        self.assertIn("Context materials:", sent_messages[1]["content"])
+        self.assertNotIn(
+            "Assume no prior knowledge of this application",
+            sent_messages[0]["content"],
+        )
+        self.assertNotIn(
+            "All context you may rely on for this request is below",
+            sent_messages[1]["content"],
+        )
 
         mutations = data.get("mutations") or {}
         self.assertFalse(mutations.get("story_changed"))
