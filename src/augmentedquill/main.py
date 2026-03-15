@@ -34,7 +34,8 @@ from augmentedquill.services.chat.chat_tool_decorator import write_tools_json_te
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
 from augmentedquill.api.v1.projects import router as projects_router  # noqa: E402
 from augmentedquill.api.v1.chapters import router as chapters_router  # noqa: E402
-from augmentedquill.api.v1.story import router as story_router  # noqa: E402
+from augmentedquill.api.v1.story import router as story_router
+from augmentedquill.api.v1.checkpoints import router as checkpoints_router  # noqa: E402
 from augmentedquill.api.v1.chat import router as chat_router  # noqa: E402
 from augmentedquill.api.v1.debug import router as debug_router  # noqa: E402
 from augmentedquill.api.v1.sourcebook import router as sourcebook_router  # noqa: E402
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     api_v1_router.include_router(projects_router)
     api_v1_router.include_router(chapters_router)
     api_v1_router.include_router(story_router)
+    api_v1_router.include_router(checkpoints_router)
     api_v1_router.include_router(chat_router)
     api_v1_router.include_router(debug_router)
     api_v1_router.include_router(sourcebook_router)
