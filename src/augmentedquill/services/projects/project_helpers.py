@@ -242,10 +242,12 @@ def _project_overview(include_notes: bool = False) -> dict:
         title = None
         summary = ""
         conflicts = []
+        notes = ""
         if isinstance(pos, int) and pos < len(chapters_meta):
             title = chapters_meta[pos].get("title")
             summary = chapters_meta[pos].get("summary") or ""
             conflicts = chapters_meta[pos].get("conflicts") or []
+            notes = chapters_meta[pos].get("notes") or ""
         if not title or str(title).strip() in ("[object Object]", "object Object"):
             title = path.name
         chapter_item = {

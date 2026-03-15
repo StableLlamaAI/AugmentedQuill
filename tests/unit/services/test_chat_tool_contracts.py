@@ -384,6 +384,16 @@ class ChatToolContractsTest(TestCase):
             )
             self._assert_invalid_parameters(tool_name, content)
 
+    def test_get_project_overview_include_notes_contract(self):
+        content = self._call_tool("get_project_overview", {"include_notes": True})
+        self.assertIsInstance(content, dict)
+        self.assertNotIn("Execution error", json.dumps(content))
+
+        invalid = self._call_tool(
+            "get_project_overview", {"include_notes": {"unexpected": True}}
+        )
+        self._assert_invalid_parameters("get_project_overview", invalid)
+
     def test_tool_registry_filters_by_model_role(self):
         writing_tools = {
             tool["function"]["name"]
