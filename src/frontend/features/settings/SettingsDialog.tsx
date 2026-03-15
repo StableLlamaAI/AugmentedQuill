@@ -142,6 +142,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   ? Math.max(1, timeoutS) * 1000
                   : 60000,
                 modelId: String(m.model || '').trim(),
+                contextWindowTokens:
+                  m.context_window_tokens === null ||
+                  m.context_window_tokens === undefined
+                    ? undefined
+                    : Number(m.context_window_tokens),
                 temperature:
                   m.temperature === null || m.temperature === undefined
                     ? DEFAULT_LLM_CONFIG.temperature
@@ -416,6 +421,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             api_key: p.apiKey || '',
             timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
             model: (p.modelId || '').trim(),
+            context_window_tokens: p.contextWindowTokens,
             temperature: p.temperature,
             top_p: p.topP,
             max_tokens: p.maxTokens,

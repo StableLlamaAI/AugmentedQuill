@@ -11,12 +11,14 @@
 
 import React from 'react';
 import { Ghost, Globe, History, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import { ChatContextUsage } from '../chatContextBudget';
 
 type ChatHeaderProps = {
   title: string;
   headerBg?: string;
   currentSessionId: string | null;
   isIncognito: boolean;
+  contextUsage: ChatContextUsage;
   isDisabled?: boolean;
   disabledReason?: string;
   showHistory: boolean;
@@ -34,6 +36,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   headerBg = 'bg-brand-gray-100 dark:bg-brand-gray-900',
   currentSessionId,
   isIncognito,
+  contextUsage,
   isDisabled = false,
   disabledReason,
   showHistory,
@@ -48,16 +51,41 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const reason =
     disabledReason ||
     'Chat is unavailable because no working CHAT model is configured.';
+  const usagePercent = Math.round(Math.min(contextUsage.usageRatio, 1) * 100);
+  const usageTone =
+    usagePercent >= 90
+      ? 'bg-red-500'
+      : usagePercent >= 75
+        ? 'bg-amber-500'
+        : 'bg-emerald-500';
+  const usageLabel =
+    usagePercent >= 90 ? 'High' : usagePercent >= 75 ? 'Rising' : 'Healthy';
 
   return (
     <div
-      className={`p-4 border-b flex items-center justify-between ${headerBg} border-brand-gray-200 dark:border-brand-gray-800`}
+      className={`p-4 border-b flex items-center justify-between gap-4 ${headerBg} border-brand-gray-200 dark:border-brand-gray-800`}
     >
-      <div className="flex items-center space-x-2 overflow-hidden">
-        <Sparkles className="text-blue-600 shrink-0" size={20} />
-        <h2 className="font-semibold truncate">{title}</h2>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center space-x-2 overflow-hidden">
+          <Sparkles className="text-blue-600 shrink-0" size={20} />
+          <h2 className="font-semibold truncate">{title}</h2>
+        </div>
+        {contextUsage.enabled && (
+          <div className="mt-1.5 flex items-center gap-2 opacity-70">
+            <div className="h-1 w-20 overflow-hidden rounded-full bg-brand-gray-200 dark:bg-brand-gray-800">
+              <div
+                className={`h-full rounded-full transition-all ${usageTone}`}
+                style={{ width: `${Math.min(usagePercent, 100)}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-brand-gray-500">
+              {usageLabel.toLowerCase()} {usagePercent}%
+              {contextUsage.compactionApplied ? ' compacted' : ''}
+            </div>
+          </div>
+        )}
       </div>
-      <div className="flex items-center space-x-1">
+      <div className="flex items-center space-x-1 shrink-0">
         <button
           onClick={() => {
             if (isDisabled) return;

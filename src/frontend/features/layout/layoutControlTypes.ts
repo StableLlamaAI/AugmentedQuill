@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   ChatSession,
   EditorSettings,
+  LLMConfig,
   StoryState,
   ViewMode,
 } from '../../types';
@@ -197,6 +198,7 @@ export type MainChatControls = {
   chatMessages: ChatMessage[];
   isChatLoading: boolean;
   isChatAvailable: boolean;
+  activeChatConfig: LLMConfig;
   systemPrompt: string;
   handleSendMessage: (text: string) => Promise<void>;
   handleStopChat: () => void;

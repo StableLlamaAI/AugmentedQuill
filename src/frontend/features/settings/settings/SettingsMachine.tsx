@@ -209,6 +209,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   const renderNumberInput = (
     label: string,
     field:
+      | 'contextWindowTokens'
       | 'maxTokens'
       | 'presencePenalty'
       | 'frequencyPenalty'
@@ -226,7 +227,12 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
         <input
           type="number"
           step={
-            field === 'seed' || field === 'topK' || field === 'maxTokens' ? 1 : 0.01
+            field === 'seed' ||
+            field === 'topK' ||
+            field === 'maxTokens' ||
+            field === 'contextWindowTokens'
+              ? 1
+              : 0.01
           }
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
@@ -854,6 +860,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   {renderSlider('Temperature', 'temperature', 0, 2, 0.1)}
                   {renderSlider('Top P', 'topP', 0, 1, 0.05)}
+                  {renderNumberInput('Context Window', 'contextWindowTokens')}
                   {renderNumberInput('Max Tokens', 'maxTokens')}
                   {renderNumberInput('Seed', 'seed')}
                   {renderNumberInput('Presence Penalty', 'presencePenalty')}
