@@ -114,7 +114,6 @@ export const Chat: React.FC<ChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollCheckFrameRef = useRef<number | null>(null);
   const isAtBottomRef = useRef(true);
 
   const isLight = theme === 'light';
@@ -133,17 +132,12 @@ export const Chat: React.FC<ChatProps> = ({
     : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
   const handleScroll = () => {
-    if (scrollCheckFrameRef.current !== null) return;
-
-    scrollCheckFrameRef.current = requestAnimationFrame(() => {
-      scrollCheckFrameRef.current = null;
-      if (scrollContainerRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-        // Consider "at bottom" if within 10px of the actual bottom
-        const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
-        isAtBottomRef.current = isAtBottom;
-      }
-    });
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      // Consider "at bottom" if within 50px of the actual bottom to handle fast layouts
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      isAtBottomRef.current = isAtBottom;
+    }
   };
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -156,10 +150,24 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
+    const observer = new MutationObserver(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom(isLoading ? 'auto' : 'smooth');
+      }
+    });
+
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+
+    // Ensure we scroll immediately if a basic dependency change caused an update too
     if (isAtBottomRef.current) {
-      // Use 'auto' for streaming (isLoading) to avoid laggy smooth scroll
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
+
+    return () => observer.disconnect();
   }, [messages, isLoading, editingMessageId]);
 
   // Always scroll to bottom on session switch
@@ -171,14 +179,6 @@ export const Chat: React.FC<ChatProps> = ({
   useEffect(() => {
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
-
-  useEffect(() => {
-    return () => {
-      if (scrollCheckFrameRef.current !== null) {
-        cancelAnimationFrame(scrollCheckFrameRef.current);
-      }
-    };
-  }, []);
 
   const handleSubmit = (text: string) => {
     if (isLoading || !isModelAvailable) return;
