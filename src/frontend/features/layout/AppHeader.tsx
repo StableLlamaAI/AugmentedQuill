@@ -134,6 +134,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <header
+      id="aq-header"
       className={`h-14 border-b flex items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
     >
       <div className="flex items-center space-x-2 md:space-x-4 shrink-0">

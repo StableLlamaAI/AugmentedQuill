@@ -233,6 +233,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   return (
     <div
+      id="chat-panel"
       className={`flex flex-col h-full border-l ${bgMain} ${borderMain} ${textMain}`}
     >
       <ChatHeader
