@@ -14,7 +14,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@google/genai": "^1.44.0",
+    "@google/genai": "^1.45.0",
     "@radix-ui/react-tooltip": "^1.2.8",
     "dompurify": "^3.3.2",
     "lucide-react": "^0.577.0",
