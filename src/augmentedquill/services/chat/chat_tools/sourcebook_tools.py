@@ -23,6 +23,27 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_update_entry,
 )
 
+
+def _strip_internal_sourcebook_fields(entry: dict | None) -> dict | None:
+    """Remove internal-only fields before returning data to tool callers."""
+    if not isinstance(entry, dict):
+        return entry
+    sanitized = dict(entry)
+    sanitized.pop("keywords", None)
+    return sanitized
+
+
+def _strip_internal_sourcebook_fields_list(entries: list[dict]) -> list[dict]:
+    """Apply response sanitization to every sourcebook entry in a list."""
+    return [
+        item
+        for item in (
+            _strip_internal_sourcebook_fields(entry) for entry in (entries or [])
+        )
+        if isinstance(item, dict)
+    ]
+
+
 # Pydantic models for tool parameters
 
 
@@ -115,8 +136,8 @@ async def search_sourcebook(
     if mode == "direct":
         if not entries:
             return []
-        return {"entry": entries[0]}
-    return entries
+        return {"entry": _strip_internal_sourcebook_fields(entries[0])}
+    return _strip_internal_sourcebook_fields_list(entries)
 
 
 @chat_tool(
@@ -131,7 +152,7 @@ async def get_sourcebook_entry(
     entry = sourcebook_get_entry(params.name_or_id)
     if not entry:
         return {"error": "Not found"}
-    return entry
+    return _strip_internal_sourcebook_fields(entry)
 
 
 @chat_tool(
@@ -155,7 +176,7 @@ async def create_sourcebook_entry(
         refreshed = await sourcebook_refresh_entry_keywords(new_entry["id"], payload)
         if isinstance(refreshed, dict):
             new_entry = refreshed
-    return new_entry
+    return _strip_internal_sourcebook_fields(new_entry)
 
 
 @chat_tool(
@@ -180,7 +201,7 @@ async def update_sourcebook_entry(
         refreshed = await sourcebook_refresh_entry_keywords(result["id"], payload)
         if isinstance(refreshed, dict):
             result = refreshed
-    return result
+    return _strip_internal_sourcebook_fields(result)
 
 
 @chat_tool(

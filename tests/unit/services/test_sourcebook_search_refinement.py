@@ -18,6 +18,7 @@ from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
+    sourcebook_update_entry,
 )
 
 
@@ -39,6 +40,7 @@ class SourcebookSearchRefinementTest(TestCase):
         sourcebook_create_entry(
             "Alaric", "A brave knight.", "Character", synonyms=["Knight of the Rose"]
         )
+        sourcebook_update_entry("Alaric", keywords=["rose", "hero"])
         sourcebook_create_entry("Alaric's Sword", "A sharp blade.", "Item")
         sourcebook_create_entry("Rose Castle", "Where Alaric lives.", "Location")
 
@@ -89,6 +91,7 @@ class SourcebookSearchRefinementTest(TestCase):
 
         self.assertIn("entry", content)
         self.assertEqual(content["entry"]["name"], "Alaric")
+        self.assertNotIn("keywords", content["entry"])
         self.assertEqual(set(content.keys()), {"entry"})
 
     def test_search_sourcebook_direct_match_synonym(self):
@@ -140,3 +143,4 @@ class SourcebookSearchRefinementTest(TestCase):
         names = [e["name"] for e in content]
         self.assertIn("Tom", names)
         self.assertIn("Daily Schedule", names)
+        self.assertTrue(all("keywords" not in entry for entry in content))

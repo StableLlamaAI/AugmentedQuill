@@ -12,7 +12,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { SourcebookEntry } from '../../types';
-import { resolveExternalSourcebookEntries } from './SourcebookList';
+import {
+  filterSourcebookEntries,
+  resolveExternalSourcebookEntries,
+} from './SourcebookList';
 
 const entry = (id: string, name: string): SourcebookEntry => ({
   id,
@@ -36,5 +39,64 @@ describe('sourcebook external entry sync', () => {
     const current = [entry('a', 'Existing')];
     const resolved = resolveExternalSourcebookEntries(undefined, current);
     expect(resolved).toEqual(current);
+  });
+
+  it('filters external entries by case-insensitive name substring', () => {
+    const entries = [entry('a', 'Tom'), entry('b', 'Rose Castle')];
+    expect(filterSourcebookEntries(entries, 'rose')).toEqual([entries[1]]);
+  });
+
+  it('filters external entries by synonym substring', () => {
+    const entries: SourcebookEntry[] = [
+      {
+        ...entry('a', 'Alaric'),
+        synonyms: ['Knight of the Rose'],
+      },
+    ];
+    expect(filterSourcebookEntries(entries, 'knight')).toEqual(entries);
+  });
+
+  it('filters external entries by keyword substring', () => {
+    const entries: SourcebookEntry[] = [
+      {
+        ...entry('a', 'Daily Schedule'),
+        keywords: ['routine', 'calendar'],
+      },
+      entry('b', 'Rose Castle'),
+    ];
+    expect(filterSourcebookEntries(entries, 'routi')).toEqual([entries[0]]);
+  });
+
+  it('filters external entries by description text', () => {
+    const entries: SourcebookEntry[] = [
+      {
+        ...entry('a', 'Cassandra'),
+        description: 'Includes post-operative breast augmentation care.',
+      },
+      entry('b', 'Rose Castle'),
+    ];
+    expect(filterSourcebookEntries(entries, 'breast augmentation')).toEqual([
+      entries[0],
+    ]);
+  });
+
+  it('filters external entries with tokenized multi-word fallback', () => {
+    const entries: SourcebookEntry[] = [
+      {
+        ...entry('a', 'Cassandra'),
+        synonyms: ['wife'],
+        keywords: ['augmentation'],
+        description: 'She receives post-operative breast care.',
+      },
+      entry('b', 'Rose Castle'),
+    ];
+    expect(filterSourcebookEntries(entries, 'breast augmentation')).toEqual([
+      entries[0],
+    ]);
+  });
+
+  it('returns all entries when query is blank', () => {
+    const entries = [entry('a', 'Tom'), entry('b', 'Rose Castle')];
+    expect(filterSourcebookEntries(entries, '   ')).toEqual(entries);
   });
 });

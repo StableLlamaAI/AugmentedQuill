@@ -68,6 +68,52 @@ export const resolveExternalSourcebookEntries = (
   return currentEntries;
 };
 
+export const filterSourcebookEntries = (
+  entries: SourcebookEntry[],
+  query: string
+): SourcebookEntry[] => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return entries;
+  }
+
+  return entries.filter((entry) => {
+    const description = (entry.description || '').toLowerCase();
+    if (entry.name.toLowerCase().includes(normalizedQuery)) {
+      return true;
+    }
+    if (
+      (entry.synonyms || []).some((syn) => syn.toLowerCase().includes(normalizedQuery))
+    ) {
+      return true;
+    }
+    if (
+      (entry.keywords || []).some((kw) => kw.toLowerCase().includes(normalizedQuery))
+    ) {
+      return true;
+    }
+    if (description.includes(normalizedQuery)) {
+      return true;
+    }
+
+    // Fallback for natural multi-word queries: require every token to appear
+    // in at least one searchable field.
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    if (!tokens.length) {
+      return false;
+    }
+
+    const fields = [
+      entry.name,
+      ...(entry.synonyms || []),
+      ...(entry.keywords || []),
+      entry.description || '',
+    ].map((value) => value.toLowerCase());
+
+    return tokens.every((token) => fields.some((field) => field.includes(token)));
+  });
+};
+
 export const SourcebookList: React.FC<SourcebookListProps> = ({
   theme = 'mixed',
   externalEntries,
@@ -101,24 +147,44 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   };
 
   useEffect(() => {
-    if (Array.isArray(externalEntries)) {
-      setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
-      return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const hasQuery = search.trim().length > 0;
+
+    // In embedded/external mode we still rely on backend search for non-empty
+    // queries so filtering uses canonical sourcebook data (including generated keywords).
+    if (Array.isArray(externalEntries) && !hasQuery) {
+      setEntries((prev) => {
+        const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
+        return filterSourcebookEntries(resolved, search);
+      });
+    } else {
+      timeoutId = setTimeout(() => {
+        loadEntries(search);
+      }, 300);
     }
-    const timeoutId = setTimeout(() => {
-      loadEntries(search);
-    }, 300);
-    return () => clearTimeout(timeoutId);
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [externalEntries, search]);
 
   const syncEntries = async (
     updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
   ) => {
     if (Array.isArray(externalEntries)) {
+      if (search.trim()) {
+        await loadEntries(search);
+        return;
+      }
       if (updater) {
-        setEntries((prev) => updater(prev));
+        setEntries((prev) => filterSourcebookEntries(updater(prev), search));
       } else {
-        setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
+        setEntries((prev) => {
+          const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
+          return filterSourcebookEntries(resolved, search);
+        });
       }
       return;
     }
