@@ -16,6 +16,7 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
     sourcebook_delete_entry,
     sourcebook_get_entry,
+    sourcebook_refresh_entry_keywords,
     sourcebook_update_entry,
 )
 from augmentedquill.services.projects.projects import select_project
@@ -287,6 +288,47 @@ class SourcebookValidationTest(TestCase):
         with self.assertRaises(ValidationError):
             UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
 
+    def test_keywords_stay_empty_without_editing_model(self):
+        description = (
+            "Anne is a disciplined caretaker, but she hides fear. "
+            "She maintains strict routines and records daily schedules. "
+            "She coordinates preparation rituals and tracks selected outfits."
+        )
+        created = sourcebook_create_entry(
+            name="Anne",
+            description=description,
+            category="Character",
+            synonyms=["caretaker"],
+        )
+        self.assertNotIn("error", created)
+
+        refreshed = self._run_async(
+            sourcebook_refresh_entry_keywords("Anne", payload={})
+        )
+        self.assertIsNotNone(refreshed)
+
+        entry = sourcebook_get_entry("Anne")
+        self.assertIsNotNone(entry)
+        keywords = entry.get("keywords", [])
+        self.assertEqual(keywords, [])
+
+    def test_description_update_clears_keywords(self):
+        created = sourcebook_create_entry(
+            name="Keyword Reset",
+            description="Original facts.",
+            category="Character",
+            keywords=["original", "facts"],
+        )
+        self.assertNotIn("error", created)
+        self.assertGreater(len(created.get("keywords", [])), 0)
+
+        updated = sourcebook_update_entry(
+            name_or_id="Keyword Reset",
+            description="Completely different facts now.",
+        )
+        self.assertNotIn("error", updated)
+        self.assertEqual(updated.get("keywords", []), [])
+
     def _get_entries(self):
         story_path = self.pdir / "story.json"
         story = json.loads(story_path.read_text())
@@ -295,3 +337,8 @@ class SourcebookValidationTest(TestCase):
             # Convert to list for tests that expect it
             return [{"id": name, "name": name, **data} for name, data in sb.items()]
         return sb
+
+    def _run_async(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)

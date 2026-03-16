@@ -172,6 +172,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const descriptionPlaceholderClass = isLight
     ? 'placeholder-brand-gray-400'
     : 'placeholder-brand-gray-500';
+  const showKeywordDebug =
+    typeof window !== 'undefined' &&
+    window.localStorage.getItem('aq-debug-sourcebook-keywords') === '1';
+  const debugKeywords = entry?.keywords || [];
 
   // Keep picker rendering derived from canonical selection state.
   const selectedImagesList = availableImages.filter((img) =>
@@ -319,6 +323,40 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 </div>
               </div>
             </div>
+
+            {showKeywordDebug && (
+              <div className="space-y-2">
+                <label
+                  className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+                >
+                  Debug Keywords (Auto)
+                </label>
+                <div
+                  className={`p-3 rounded-md border ${inputBorderClass} ${inputBgClass} min-h-[44px]`}
+                >
+                  {debugKeywords.length === 0 ? (
+                    <p className={`text-xs ${labelClass}`}>
+                      No generated keywords yet.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {debugKeywords.map((keyword) => (
+                        <span
+                          key={keyword}
+                          className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${
+                            isLight
+                              ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-800'
+                              : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-200'
+                          }`}
+                        >
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Images Section */}
             <div className="space-y-2">

@@ -91,9 +91,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
 
   const isLight = theme === 'light';
 
-  const loadEntries = async () => {
+  const loadEntries = async (query?: string) => {
     try {
-      const data = await api.sourcebook.list();
+      const data = await api.sourcebook.list(query, 'extensive', false);
       setEntries(data);
     } catch (e) {
       console.error('Failed to load sourcebook', e);
@@ -103,10 +103,13 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   useEffect(() => {
     if (Array.isArray(externalEntries)) {
       setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
-    } else {
-      loadEntries();
+      return;
     }
-  }, [externalEntries]);
+    const timeoutId = setTimeout(() => {
+      loadEntries(search);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [externalEntries, search]);
 
   const syncEntries = async (
     updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
@@ -213,14 +216,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     setHoveredEntry(entry);
   };
 
-  const filtered = entries.filter(
-    (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      (e.category && e.category.toLowerCase().includes(search.toLowerCase())) ||
-      (e.synonyms &&
-        e.synonyms.some((s: string) => s.toLowerCase().includes(search.toLowerCase())))
-  );
-
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
@@ -323,60 +318,63 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
 
       {/* List */}
       <div className="flex-1 overflow-y-auto px-1 pb-2">
-        {filtered.length === 0 && (
+        {entries.length === 0 && (
           <div className={`text-center py-4 text-xs ${subTextClass}`}>
-            {entries.length === 0 ? 'No entries yet.' : 'No matches.'}
+            No entries yet.
           </div>
         )}
 
-        <div className="space-y-0.5">
-          {filtered.map((e) => {
-            const CategoryIcon = CATEGORY_DETAILS[e.category]?.icon || HelpCircle;
-            const isChecked = checkedIds.includes(e.id);
-            return (
-              <div
-                key={e.id}
-                onClick={() => {
-                  setSelectedEntry(e);
-                  setIsDialogOpen(true);
-                }}
-                onMouseEnter={(evt) => handleMouseEnter(evt, e)}
-                onMouseLeave={() => setHoveredEntry(null)}
-                className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none`}
-              >
-                <CategoryIcon
-                  size={14}
-                  className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-                />
-                <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
-                <button
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    if (isAutoSelectionEnabled) return;
-                    onToggle?.(e.id, !isChecked);
+        {entries.length > 0 && (
+          <div className="space-y-0.5">
+            {entries.map((e) => {
+              const CategoryIcon =
+                (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
+              const isChecked = checkedIds.includes(e.id);
+              return (
+                <div
+                  key={e.id}
+                  onClick={() => {
+                    setSelectedEntry(e);
+                    setIsDialogOpen(true);
                   }}
-                  disabled={isAutoSelectionEnabled}
-                  className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                    isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
-                  } ${
-                    isChecked
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
-                  }`}
-                  title={
-                    isAutoSelectionEnabled
-                      ? 'Automatic selection is enabled; disable Auto to change this manually'
-                      : isChecked
-                        ? 'Exclude from context'
-                        : 'Include in context'
-                  }
+                  onMouseEnter={(evt) => handleMouseEnter(evt, e)}
+                  onMouseLeave={() => setHoveredEntry(null)}
+                  className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none`}
                 >
-                  {isChecked && <Check size={10} strokeWidth={4} />}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <CategoryIcon
+                    size={14}
+                    className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
+                  />
+                  <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                  <button
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (isAutoSelectionEnabled) return;
+                      onToggle?.(e.id, !isChecked);
+                    }}
+                    disabled={isAutoSelectionEnabled}
+                    className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                      isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
+                    } ${
+                      isChecked
+                        ? 'bg-brand-500 border-brand-500 text-white'
+                        : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                    }`}
+                    title={
+                      isAutoSelectionEnabled
+                        ? 'Automatic selection is enabled; disable Auto to change this manually'
+                        : isChecked
+                          ? 'Exclude from context'
+                          : 'Include in context'
+                    }
+                  >
+                    {isChecked && <Check size={10} strokeWidth={4} />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <SourcebookEntryDialog

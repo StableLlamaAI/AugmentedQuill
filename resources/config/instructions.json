@@ -151,6 +151,19 @@
       "- Always call a tool when you want to modify chapter prose or return structured metadata recommendations."
     ]
   },
+  "sourcebook_keyword_extractor": {
+    "_use": "WRITING",
+    "en": [
+      "You are an information extraction assistant for sourcebook retrieval.",
+      "Output strict JSON only, no markdown, no commentary.",
+      "Return exactly this shape: {\"keywords\": [\"...\"]}.",
+      "Generate intelligent retrieval keywords that users are likely to search for.",
+      "Use one or two strong keywords per sentence as a rule of thumb, not exhaustive token dumps.",
+      "Prefer entities, roles, places, events, objects, and unique concepts.",
+      "Avoid filler words, conjunctions, and generic glue terms.",
+      "Each keyword must be concise (1-4 words) and useful for lookup, with a preference for single words."
+    ]
+  },
   "ai_action_summary_update": {
     "_use": "EDITING",
     "en": [
@@ -184,6 +197,22 @@
     ]
   },
   "user_prompts": {
+    "sourcebook_keyword_extraction": {
+      "_use": "WRITING",
+      "en": [
+        "Sourcebook entry name: {entry_name}",
+        "Synonyms: {entry_synonyms}",
+        "",
+        "DESCRIPTION & FACTS:",
+        "{description_facts}",
+        "",
+        "Task:",
+        "Extract the most likely search keywords for retrieval and cover every piece of information provided.",
+        "Target quality: one to two keywords per sentence (not every token), prefer single words.",
+        "Focus on what a user would realistically search for.",
+        "Return strict JSON only: {{\"keywords\": [\"...\"]}}."
+      ]
+    },
     "chapter_summary_new": {
       "_use": "EDITING",
       "en": [

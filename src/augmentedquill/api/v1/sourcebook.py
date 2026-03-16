@@ -10,14 +10,16 @@
 API endpoints for managing the sourcebook (knowledge base) associated with a project.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_list_entries,
+    sourcebook_search_entries_with_keyword_refresh,
     sourcebook_create_entry,
+    sourcebook_refresh_entry_keywords,
     sourcebook_update_entry,
     sourcebook_delete_entry,
 )
@@ -32,6 +34,7 @@ class SourcebookEntry(BaseModel):
     category: Optional[str] = None
     description: str
     images: List[str] = []
+    keywords: List[str] = []
 
 
 class SourcebookEntryCreate(BaseModel):
@@ -51,10 +54,24 @@ class SourcebookEntryUpdate(BaseModel):
 
 
 @router.get("/sourcebook")
-async def get_sourcebook() -> List[SourcebookEntry]:
+async def get_sourcebook(
+    query: Optional[str] = None,
+    match_mode: Literal["direct", "extensive"] = "extensive",
+    split_query_fallback: bool = False,
+) -> List[SourcebookEntry]:
     active = get_active_project_dir()
     if not active:
         return []
+    if query:
+        return [
+            SourcebookEntry(**entry)
+            for entry in await sourcebook_search_entries_with_keyword_refresh(
+                query,
+                match_mode=match_mode,
+                split_query_fallback=split_query_fallback,
+                payload={},
+            )
+        ]
     return [SourcebookEntry(**entry) for entry in sourcebook_list_entries()]
 
 
@@ -70,9 +87,14 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
         description=entry.description,
         category=entry.category,
         synonyms=entry.synonyms,
+        images=entry.images,
     )
     if "error" in created:
         raise HTTPException(status_code=400, detail=created["error"])
+
+    refreshed = await sourcebook_refresh_entry_keywords(created["id"], payload={})
+    if isinstance(refreshed, dict):
+        created = refreshed
     return SourcebookEntry(**created)
 
 
@@ -91,11 +113,15 @@ async def update_sourcebook_entry(
         description=updates.description,
         category=updates.category,
         synonyms=updates.synonyms,
+        images=updates.images,
     )
     if "error" in result:
         detail = str(result["error"])
         status = 404 if "not found" in detail.lower() else 400
         raise HTTPException(status_code=status, detail=detail)
+    refreshed = await sourcebook_refresh_entry_keywords(result["id"], payload={})
+    if isinstance(refreshed, dict):
+        result = refreshed
     return SourcebookEntry(**result)
 
 

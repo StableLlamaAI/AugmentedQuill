@@ -46,7 +46,12 @@ class SourcebookSearchRefinementTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
-    def _call_search_sourcebook(self, query: str):
+    def _call_search_sourcebook(
+        self,
+        query: str,
+        match_mode: str = "direct",
+        split_query_fallback: bool = True,
+    ):
         body = {
             "model_type": "CHAT",
             "messages": [
@@ -59,7 +64,13 @@ class SourcebookSearchRefinementTest(TestCase):
                             "type": "function",
                             "function": {
                                 "name": "search_sourcebook",
-                                "arguments": json.dumps({"query": query}),
+                                "arguments": json.dumps(
+                                    {
+                                        "query": query,
+                                        "match_mode": match_mode,
+                                        "split_query_fallback": split_query_fallback,
+                                    }
+                                ),
                             },
                         }
                     ],
@@ -73,17 +84,12 @@ class SourcebookSearchRefinementTest(TestCase):
         return json.loads(appended[0]["content"])
 
     def test_search_sourcebook_direct_match_name(self):
-        """Test that a direct name match returns only that entry with others as suggestions."""
+        """Test that direct mode returns only exact name/synonym matches."""
         content = self._call_search_sourcebook("Alaric")
 
-        # Check that it's the refined format
         self.assertIn("entry", content)
         self.assertEqual(content["entry"]["name"], "Alaric")
-        self.assertIn("other_matches_found", content)
-        # Should include others that match query (at least "Alaric's Sword" and "Rose Castle" search in description/name)
-        self.assertIn("Alaric's Sword", content["other_matches_found"])
-        self.assertIn("Rose Castle", content["other_matches_found"])
-        self.assertIn("instruction", content)
+        self.assertEqual(set(content.keys()), {"entry"})
 
     def test_search_sourcebook_direct_match_synonym(self):
         """Test that a direct synonym match also uses the same refinement."""
@@ -95,12 +101,14 @@ class SourcebookSearchRefinementTest(TestCase):
         self.assertIsInstance(content, dict)
 
     def test_search_sourcebook_partial_matches_only(self):
-        """Test that if there is NO direct match, it still returns the full list."""
+        """Test extensive mode partial matches without split fallback."""
         # "Rose" matches:
         # 1. Alaric (synonym: Knight of the Rose)
         # 2. Rose Castle (name: Rose Castle)
         # Both are partial matches for the query "Rose"
-        content = self._call_search_sourcebook("Rose")
+        content = self._call_search_sourcebook(
+            "Rose", match_mode="extensive", split_query_fallback=False
+        )
 
         # Should return a list of matches
         self.assertIsInstance(content, list)
@@ -108,3 +116,27 @@ class SourcebookSearchRefinementTest(TestCase):
         names = [e["name"] for e in content]
         self.assertIn("Alaric", names)
         self.assertIn("Rose Castle", names)
+
+    def test_search_sourcebook_fuzzy_fallback(self):
+        """Test extensive mode split fallback when full query has no direct extensive hit."""
+        # Create an entry for Tom
+        sourcebook_create_entry("Tom", "A person who loves routine.", "Character")
+        sourcebook_create_entry(
+            "Daily Schedule",
+            "A list of daily activities.",
+            "Lore",
+            synonyms=["Daily Routine"],
+        )
+
+        # Search for "Tom schedule daily routine" - this exact string is NOT in name/synonyms/keywords of any single entry.
+        # But "Tom", "schedule", "daily", "routine" are present in different entries.
+        content = self._call_search_sourcebook(
+            "Tom schedule daily routine",
+            match_mode="extensive",
+            split_query_fallback=True,
+        )
+
+        self.assertIsInstance(content, list)
+        names = [e["name"] for e in content]
+        self.assertIn("Tom", names)
+        self.assertIn("Daily Schedule", names)

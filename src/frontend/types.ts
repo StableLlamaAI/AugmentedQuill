@@ -43,6 +43,7 @@ export interface SourcebookEntry {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
 }
 
 export interface Story {

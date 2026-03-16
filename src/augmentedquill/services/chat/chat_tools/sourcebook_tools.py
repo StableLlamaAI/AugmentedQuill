@@ -18,7 +18,8 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
     sourcebook_delete_entry,
     sourcebook_get_entry,
-    sourcebook_search_entries,
+    sourcebook_refresh_entry_keywords,
+    sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
 )
 
@@ -29,6 +30,14 @@ class SearchSourcebookParams(BaseModel):
     """Parameters for searching the sourcebook."""
 
     query: str = Field(..., description="The search query string")
+    match_mode: str = Field(
+        default="direct",
+        description="Search mode: 'direct' returns only exact name/synonym match. 'extensive' matches name, synonym, and generated keywords.",
+    )
+    split_query_fallback: bool = Field(
+        default=True,
+        description="If true and no extensive match is found, split query into tokens and match each token individually.",
+    )
 
 
 class GetSourcebookEntryParams(BaseModel):
@@ -91,37 +100,22 @@ async def search_sourcebook(
     params: SearchSourcebookParams, payload: dict, mutations: dict
 ):
     """Search the sourcebook for entries matching a query string."""
-    query = params.query.lower()
-    entries = sourcebook_search_entries(params.query)
-
-    # 1. Exact match by name
-    exact_match = next((e for e in entries if e["name"].lower() == query), None)
-
-    # 2. Exact match by synonym
-    if not exact_match:
-        exact_match = next(
-            (
-                e
-                for e in entries
-                if any(s.lower() == query for s in e.get("synonyms", []))
-            ),
-            None,
-        )
-
-    # 3. If direct match is available, return it with suggestions for the others
-    if exact_match:
-        others = [e["name"] for e in entries if e["id"] != exact_match["id"]]
-        result = {
-            "entry": exact_match,
+    mode = (params.match_mode or "direct").strip().lower()
+    if mode not in ("direct", "extensive"):
+        return {
+            "error": "Invalid match_mode. Allowed values are 'direct' or 'extensive'."
         }
-        if others:
-            result["other_matches_found"] = others
-            result["instruction"] = (
-                "This entry was an exact match for your search. Other entries also matched the query and are listed in 'other_matches_found'. You can request them individually if needed."
-            )
-        return result
 
-    # 4. Otherwise return full list
+    entries = await sourcebook_search_entries_with_keyword_refresh(
+        params.query,
+        match_mode=mode,
+        split_query_fallback=params.split_query_fallback,
+        payload=payload,
+    )
+    if mode == "direct":
+        if not entries:
+            return []
+        return {"entry": entries[0]}
     return entries
 
 
@@ -158,6 +152,9 @@ async def create_sourcebook_entry(
     )
     if "error" not in new_entry:
         mutations["story_changed"] = True
+        refreshed = await sourcebook_refresh_entry_keywords(new_entry["id"], payload)
+        if isinstance(refreshed, dict):
+            new_entry = refreshed
     return new_entry
 
 
@@ -180,6 +177,9 @@ async def update_sourcebook_entry(
     )
     if "error" not in result:
         mutations["story_changed"] = True
+        refreshed = await sourcebook_refresh_entry_keywords(result["id"], payload)
+        if isinstance(refreshed, dict):
+            result = refreshed
     return result
 
 

@@ -211,6 +211,7 @@ export interface SourcebookUpsertPayload {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
 }
 
 export interface DebugLogEntry {

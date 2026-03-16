@@ -92,8 +92,9 @@ class SourcebookTest(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], entry["id"])
 
+        # Extensive matching is based on name/synonyms/keywords, not raw description text.
         results_desc = sourcebook_search_entries("description")
-        self.assertEqual(len(results_desc), 1)
+        self.assertEqual(len(results_desc), 0)
 
         # 4. Delete
         deleted = sourcebook_delete_entry(entry["id"])
