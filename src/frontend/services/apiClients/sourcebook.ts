@@ -61,4 +61,20 @@ export const sourcebookApi = {
       'Failed to delete entry'
     );
   },
+
+  generateKeywords: async (payload: {
+    name: string;
+    description: string;
+    synonyms?: string[];
+  }) => {
+    return fetchJson<{ keywords: string[] }>(
+      '/sourcebook/keywords',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      'Failed to generate keywords'
+    );
+  },
 };

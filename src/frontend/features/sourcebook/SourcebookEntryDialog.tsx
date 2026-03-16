@@ -9,7 +9,7 @@
  * Defines the sourcebook entry dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -128,8 +128,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     }
   }, [entry, isOpen]);
 
-  if (!isOpen) return null;
-
   const handleSave = () => {
     onSave({
       ...entry,
@@ -172,15 +170,83 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const descriptionPlaceholderClass = isLight
     ? 'placeholder-brand-gray-400'
     : 'placeholder-brand-gray-500';
-  const showKeywordDebug =
-    typeof window !== 'undefined' &&
-    window.localStorage.getItem('aq-debug-sourcebook-keywords') === '1';
-  const debugKeywords = entry?.keywords || [];
+
+  const [keywords, setKeywords] = useState<string[]>(entry?.keywords || []);
+  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const keywordsTooltip = isGeneratingKeywords
+    ? '...generating...'
+    : keywords.length > 0
+      ? keywords.join(', ')
+      : 'No keywords yet.';
+
+  const lastGeneratedInputs = useRef<{
+    name: string;
+    description: string;
+    synonyms: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (entry) {
+      setKeywords(entry.keywords || []);
+      lastGeneratedInputs.current = {
+        name: entry.name || '',
+        description: entry.description || '',
+        synonyms: entry.synonyms || [],
+      };
+    } else {
+      setKeywords([]);
+      lastGeneratedInputs.current = null;
+    }
+  }, [entry, isOpen]);
+
+  useEffect(() => {
+    const currentInputs = { name, description, synonyms };
+    const isValid = Boolean(name.trim() && description.trim());
+    const last = lastGeneratedInputs.current;
+    const inputsMatch =
+      last &&
+      last.name === currentInputs.name &&
+      last.description === currentInputs.description &&
+      JSON.stringify(last.synonyms) === JSON.stringify(currentInputs.synonyms);
+
+    if (!isValid || inputsMatch) {
+      if (!isValid) {
+        setIsGeneratingKeywords(false);
+      }
+      return () => {
+        /* noop cleanup */
+      };
+    }
+
+    setIsGeneratingKeywords(true);
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await api.sourcebook.generateKeywords({
+          name: currentInputs.name,
+          description: currentInputs.description,
+          synonyms: currentInputs.synonyms,
+        });
+
+        setKeywords(res.keywords || []);
+        lastGeneratedInputs.current = currentInputs;
+      } catch {
+        // Fail quietly; UI will simply keep showing a placeholder state.
+      } finally {
+        setIsGeneratingKeywords(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(handle);
+  }, [name, description, synonyms]);
 
   // Keep picker rendering derived from canonical selection state.
   const selectedImagesList = availableImages.filter((img) =>
     images.includes(img.filename)
   );
+
+  if (!isOpen) {
+    return null;
+  }
 
   return createPortal(
     <>
@@ -324,40 +390,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               </div>
             </div>
 
-            {showKeywordDebug && (
-              <div className="space-y-2">
-                <label
-                  className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
-                >
-                  Debug Keywords (Auto)
-                </label>
-                <div
-                  className={`p-3 rounded-md border ${inputBorderClass} ${inputBgClass} min-h-[44px]`}
-                >
-                  {debugKeywords.length === 0 ? (
-                    <p className={`text-xs ${labelClass}`}>
-                      No generated keywords yet.
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {debugKeywords.map((keyword) => (
-                        <span
-                          key={keyword}
-                          className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${
-                            isLight
-                              ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-800'
-                              : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-200'
-                          }`}
-                        >
-                          {keyword}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Images Section */}
             <div className="space-y-2">
               <div className="flex justify-between items-end">
@@ -424,16 +456,26 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
             {/* Description */}
             <div className="space-y-2 flex-1 flex flex-col min-h-[320px]">
-              <label
-                className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
-              >
-                Description & Facts
-              </label>
-              <p className={`text-xs leading-relaxed ${labelClass}`}>
-                Describe the details the models should remember. CHAT uses this for
-                planning and consistency, while WRITING and EDITING receive relevant
-                entries as read-only context.
-              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <label
+                    className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+                  >
+                    Description & Facts
+                  </label>
+                  <p className={`text-xs leading-relaxed ${labelClass}`}>
+                    Describe the details the models should remember. CHAT uses this for
+                    planning and consistency, while WRITING and EDITING receive relevant
+                    entries as read-only context.
+                  </p>
+                </div>
+                <div
+                  className={`text-xs font-semibold tracking-wide cursor-help ${labelClass}`}
+                  title={keywordsTooltip}
+                >
+                  [KEYWORDS]
+                </div>
+              </div>
 
               <div
                 className={`rounded-md border ${inputBorderClass} ${descriptionSurfaceClass} ${descriptionTextClass} flex-1 min-h-[220px] overflow-y-auto`}

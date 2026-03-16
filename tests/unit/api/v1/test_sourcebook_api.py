@@ -225,3 +225,25 @@ class SourcebookApiTest(TestCase):
             body = update.json()
             self.assertEqual(body.get("keywords"), ["renowned archivist"])
             mocked_refresh.assert_awaited_once_with("Aelith", payload={})
+
+    def test_sourcebook_keywords_endpoint(self):
+        with patch(
+            "augmentedquill.api.v1.sourcebook.sourcebook_generate_keywords_with_editing_model",
+            new=AsyncMock(return_value=["alpha", "beta"]),
+        ) as mocked_gen:
+            res = self.client.post(
+                "/api/v1/sourcebook/keywords",
+                json={
+                    "name": "Aelith",
+                    "description": "A traveling archivist",
+                    "synonyms": ["Archivist"],
+                },
+            )
+            self.assertEqual(res.status_code, 200, res.text)
+            self.assertEqual(res.json(), {"keywords": ["alpha", "beta"]})
+            mocked_gen.assert_awaited_once_with(
+                name="Aelith",
+                description="A traveling archivist",
+                synonyms=["Archivist"],
+                payload={},
+            )

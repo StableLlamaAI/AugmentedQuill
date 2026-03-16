@@ -29,7 +29,7 @@ describe('sourcebookApi', () => {
     await sourcebookApi.list();
 
     expect(fetchJson).toHaveBeenCalledWith(
-      '/sourcebook',
+      '/sourcebook?match_mode=extensive&split_query_fallback=false',
       undefined,
       'Failed to load sourcebook'
     );
@@ -85,6 +85,30 @@ describe('sourcebookApi', () => {
       '/sourcebook/entry-id',
       { method: 'DELETE' },
       'Failed to delete entry'
+    );
+  });
+
+  it('calls POST /sourcebook/keywords', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({ keywords: ['a', 'b'] });
+
+    await sourcebookApi.generateKeywords({
+      name: 'Entry',
+      description: 'Desc',
+      synonyms: ['Alias'],
+    });
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      '/sourcebook/keywords',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Entry',
+          description: 'Desc',
+          synonyms: ['Alias'],
+        }),
+      },
+      'Failed to generate keywords'
     );
   });
 });

@@ -16,12 +16,13 @@ from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sourcebook_list_entries,
-    sourcebook_search_entries_with_keyword_refresh,
     sourcebook_create_entry,
-    sourcebook_refresh_entry_keywords,
-    sourcebook_update_entry,
     sourcebook_delete_entry,
+    sourcebook_generate_keywords_with_editing_model,
+    sourcebook_list_entries,
+    sourcebook_refresh_entry_keywords,
+    sourcebook_search_entries_with_keyword_refresh,
+    sourcebook_update_entry,
 )
 
 router = APIRouter(tags=["Sourcebook"])
@@ -51,6 +52,39 @@ class SourcebookEntryUpdate(BaseModel):
     category: Optional[str] = None
     description: Optional[str] = None
     images: Optional[List[str]] = None
+
+
+class SourcebookKeywordsRequest(BaseModel):
+    """Request payload for generating keywords from an entry description."""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    synonyms: Optional[List[str]] = None
+
+
+class SourcebookKeywordsResponse(BaseModel):
+    keywords: List[str]
+
+
+@router.post("/sourcebook/keywords")
+async def generate_sourcebook_keywords(
+    request: SourcebookKeywordsRequest,
+) -> SourcebookKeywordsResponse:
+    """Generate keywords from an entry description without persisting the entry."""
+    name = (request.name or "").strip()
+    description = (request.description or "").strip()
+    synonyms = request.synonyms or []
+
+    if not name or not description:
+        raise HTTPException(
+            status_code=400,
+            detail="Both name and description are required to generate keywords.",
+        )
+
+    keywords = await sourcebook_generate_keywords_with_editing_model(
+        name=name, description=description, synonyms=synonyms, payload={}
+    )
+    return SourcebookKeywordsResponse(keywords=keywords)
 
 
 @router.get("/sourcebook")
