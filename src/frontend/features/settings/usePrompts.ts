@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
+import { setSmartQuoteChars } from '../../utils/textUtils';
 
 type PromptsState = {
   system_messages: Record<string, string>;
@@ -30,14 +31,25 @@ export function usePrompts(storyId: string) {
     const fetchPrompts = async () => {
       try {
         const promptsData = await api.settings.getPrompts();
+        const system_messages = promptsData.system_messages || {};
+
         setPrompts({
-          system_messages: promptsData.system_messages || {},
+          system_messages,
           user_prompts: promptsData.user_prompts || {},
           languages: promptsData.languages,
+        });
+
+        // Ensure smart quotes use the project language's typographic quote characters.
+        setSmartQuoteChars({
+          doubleOpen: system_messages.typographic_quotes_open,
+          doubleClose: system_messages.typographic_quotes_close,
+          singleOpen: system_messages.typographic_single_quotes_open,
+          singleClose: system_messages.typographic_single_quotes_close,
         });
       } catch (error) {
         console.error('Failed to load prompts', error);
         setPrompts(EMPTY_PROMPTS);
+        setSmartQuoteChars({});
       }
     };
 

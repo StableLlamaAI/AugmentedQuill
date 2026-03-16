@@ -46,6 +46,15 @@ def test_try_parse_json_robust_success():
     assert parsed["id"] == 1
 
 
+def test_repair_json_uses_language_specific_quotes():
+    """Quotes should adapt to the given language from instructions.json."""
+    case = '{"text": "He said "Hello" to me"}'
+    repaired = repair_json_quotes(case, language="de")
+
+    parsed = json.loads(repaired)
+    assert parsed["text"] == "He said „Hello“ to me"
+
+
 def test_try_parse_json_robust_existing_escaped():
     """Ensure already escaped quotes are preserved and not double-processed in a way that breaks them."""
     # The regex (?<!\\)" handles this.

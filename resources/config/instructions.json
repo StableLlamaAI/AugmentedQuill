@@ -364,6 +364,34 @@
       ]
     }
   },
+  "typographic_quotes_open": {
+    "_use": "SYSTEM",
+    "en": "“",
+    "de": "„",
+    "fr": "«",
+    "es": "«"
+  },
+  "typographic_quotes_close": {
+    "_use": "SYSTEM",
+    "en": "”",
+    "de": "“",
+    "fr": "»",
+    "es": "»"
+  },
+  "typographic_single_quotes_open": {
+    "_use": "SYSTEM",
+    "en": "‘",
+    "de": "‚",
+    "fr": "‹",
+    "es": "‘"
+  },
+  "typographic_single_quotes_close": {
+    "_use": "SYSTEM",
+    "en": "’",
+    "de": "‘",
+    "fr": "›",
+    "es": "’"
+  },
   "entry_selector": {
     "_use": "WRITING",
     "en": [

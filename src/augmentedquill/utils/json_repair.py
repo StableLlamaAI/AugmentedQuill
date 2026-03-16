@@ -16,14 +16,73 @@ import json as _json
 import re
 from typing import Any
 
+from augmentedquill.core.prompts import get_system_message
 
-def repair_json_quotes(json_str: str) -> str:
+
+def _get_typographic_quotes(language: str = "en") -> tuple[str, str, str, str]:
+    """Return the opening/closing typographic quote characters for a language."""
+
+    double_open = (
+        get_system_message("typographic_quotes_open", language=language) or "“"
+    )
+    double_close = (
+        get_system_message("typographic_quotes_close", language=language) or "”"
+    )
+    single_open = (
+        get_system_message("typographic_single_quotes_open", language=language) or "‘"
+    )
+    single_close = (
+        get_system_message("typographic_single_quotes_close", language=language) or "’"
+    )
+
+    # Fallback if the prompts file contains unexpected values.
+    if not double_open:
+        double_open = "“"
+    if not double_close:
+        double_close = "”"
+    if not single_open:
+        single_open = "‘"
+    if not single_close:
+        single_close = "’"
+
+    return double_open, double_close, single_open, single_close
+
+
+def _apply_typographic_quotes(text: str, language: str = "en") -> str:
+    """Convert straight quotes in `text` into typographic quotes for the language."""
+
+    double_open, double_close, single_open, single_close = _get_typographic_quotes(
+        language
+    )
+
+    def _smart_replace(
+        text_value: str, quote_char: str, open_q: str, close_q: str
+    ) -> str:
+        # Preserve escaped quote sequences (e.g. \" or \\') by splitting on
+        # unescaped quote characters.
+        pattern = r"(?<!\\)" + re.escape(quote_char)
+        parts = re.split(pattern, text_value)
+        result = ""
+        for i, part in enumerate(parts):
+            result += part
+            if i < len(parts) - 1:
+                result += open_q if i % 2 == 0 else close_q
+        return result
+
+    # Convert quotes using a simple alternating rule as a best-effort repair.
+    text = _smart_replace(text, '"', double_open, double_close)
+    text = _smart_replace(text, "'", single_open, single_close)
+
+    return text
+
+
+def repair_json_quotes(json_str: str, language: str = "en") -> str:
     """
     Attempts to repair a JSON string where the LLM failed to escape double quotes
     or used unescaped quotes inside what should be a standard JSON string.
 
-    It converts unescaped inner double quotes into typographic quotes (“ ”)
-    to ensure the JSON remains valid while preserving the intended punctuation.
+    It converts unescaped inner quotes into typographic quotes to ensure the
+    JSON remains valid while preserving the intended punctuation.
     """
     if not json_str or not isinstance(json_str, str):
         return json_str
@@ -40,20 +99,13 @@ def repair_json_quotes(json_str: str) -> str:
         content = match.group(2)  # e.g., 'He said "Hello" to me'
         suffix = match.group(3)  # e.g., '"' or '",'
 
-        # Convert unescaped " to typographic quotes within the content.
-        # We alternate between opening and closing typographic quotes for a basic repair.
-        parts = re.split(r'(?<!\\)"', content)
-        new_content = ""
-        for i, part in enumerate(parts):
-            new_content += part
-            if i < len(parts) - 1:
-                # Open on even index, close on odd
-                new_content += "“" if i % 2 == 0 else "”"
+        # Convert quotes inside the value using the language-specific quote styles.
+        converted = _apply_typographic_quotes(content, language=language)
 
         # Escape newlines for valid JSON
-        new_content = new_content.replace("\n", "\\n").replace("\r", "\\r")
+        converted = converted.replace("\n", "\\n").replace("\r", "\\r")
 
-        return f"{prefix}{new_content}{suffix}"
+        return f"{prefix}{converted}{suffix}"
 
     # Pattern for typical tool arguments: "key": "value"
     # We use a greedy match on the content to find the LAST possible valid quote,
@@ -68,9 +120,11 @@ def repair_json_quotes(json_str: str) -> str:
     return repaired
 
 
-def try_parse_json_robust(json_str: str) -> Any:
+def try_parse_json_robust(json_str: str, language: str = "en") -> Any:
     """
     Tries to parse JSON, and if it fails, attempts to repair quote issues before trying again.
+
+    The repair step uses language-specific typographic quote characters where available.
     """
     if not json_str:
         return None
@@ -79,7 +133,7 @@ def try_parse_json_robust(json_str: str) -> Any:
         return _json.loads(json_str)
     except _json.JSONDecodeError:
         try:
-            repaired = repair_json_quotes(json_str)
+            repaired = repair_json_quotes(json_str, language=language)
             return _json.loads(repaired)
         except Exception:
             # Fallback to original error if repair fails or doesn't help
