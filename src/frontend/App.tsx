@@ -602,6 +602,7 @@ const App: React.FC = () => {
             currentChapter,
             editorRef,
             editorSettings,
+            setEditorSettings,
             viewMode,
             updateChapter,
             suggestionControls: {

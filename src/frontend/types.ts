@@ -125,6 +125,15 @@ export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
 export type AppTheme = 'light' | 'mixed' | 'dark';
 
+export interface SidebarSettings {
+  storyHeight?: number;
+  chaptersHeight?: number;
+  sourcebookHeight?: number;
+  isStoryCollapsed?: boolean;
+  isChaptersCollapsed?: boolean;
+  isSourcebookCollapsed?: boolean;
+}
+
 export interface EditorSettings {
   fontSize: number;
   maxWidth: number;
@@ -132,6 +141,7 @@ export interface EditorSettings {
   contrast: number; // 0.5 - 1.0
   theme: AppTheme;
   sidebarWidth: number;
+  sidebar?: SidebarSettings;
 }
 
 export interface LLMConfig {

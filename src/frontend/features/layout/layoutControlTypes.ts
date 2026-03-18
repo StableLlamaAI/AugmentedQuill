@@ -184,6 +184,7 @@ export type MainEditorControls = {
   currentChapter?: Chapter;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
+  setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   viewMode: ViewMode;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;

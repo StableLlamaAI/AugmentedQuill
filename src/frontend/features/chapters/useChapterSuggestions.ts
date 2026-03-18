@@ -46,7 +46,10 @@ export function useChapterSuggestions({
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
   const [isAutoSourcebookSelectionEnabled, setIsAutoSourcebookSelectionEnabled] =
-    useState(true);
+    useState(() => {
+      const saved = localStorage.getItem('aq_auto_sourcebook_selection');
+      return saved !== null ? saved === 'true' : true;
+    });
   const [isSourcebookSelectionRunning, setIsSourcebookSelectionRunning] =
     useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -60,6 +63,10 @@ export function useChapterSuggestions({
 
   useEffect(() => {
     autoSelectionEnabledRef.current = isAutoSourcebookSelectionEnabled;
+    localStorage.setItem(
+      'aq_auto_sourcebook_selection',
+      isAutoSourcebookSelectionEnabled.toString()
+    );
   }, [isAutoSourcebookSelectionEnabled]);
 
   const clampCursor = (cursor: number, content: string) => {

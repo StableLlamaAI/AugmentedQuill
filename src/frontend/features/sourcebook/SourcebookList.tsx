@@ -323,7 +323,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   return (
     <div
       id="sourcebook-list"
-      className={`flex flex-col border-t ${borderClass} mt-0 flex-1 min-h-[200px] bg-opacity-50`}
+      className={'flex flex-col mt-0 flex-1 min-h-0 bg-opacity-50'}
     >
       {/* Title Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
