@@ -29,6 +29,7 @@ import {
   HelpCircle,
   ImagePlus,
   Check,
+  LoaderCircle,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
@@ -76,15 +77,17 @@ const CATEGORY_DETAILS: Record<
 
 interface SourcebookEntryDialogProps {
   entry?: SourcebookEntry | null;
+  allEntries: SourcebookEntry[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (entry: SourcebookUpsertPayload) => void;
+  onSave: (entry: SourcebookUpsertPayload) => Promise<void>;
   onDelete?: (id: string) => void;
   theme?: AppTheme;
 }
 
 export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   entry,
+  allEntries,
   isOpen,
   onClose,
   onSave,
@@ -102,9 +105,15 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const [isRelationsExpanded, setIsRelationsExpanded] = useState(true);
   const [isRelationDialogVisible, setIsRelationDialogVisible] = useState(false);
   const [editingRelationIndex, setEditingRelationIndex] = useState<number | null>(null);
-  const [allEntriesMap, setAllEntriesMap] = useState<Record<string, string>>({});
-  const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
+  const relationNameMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    allEntries.forEach((e) => {
+      map[e.id] = e.name;
+    });
+    return map;
+  }, [allEntries]);
 
+  const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
 
   const isLight = theme === 'light';
@@ -115,18 +124,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
         .listImages()
         .then((data) => {
           setAvailableImages(data.images || []);
-        })
-        .catch(console.error);
-
-      // Load all sourcebook entries for relation mapping
-      api.sourcebook
-        .list()
-        .then((entries) => {
-          const map: Record<string, string> = {};
-          entries.forEach((e) => {
-            map[e.id] = e.name;
-          });
-          setAllEntriesMap(map);
         })
         .catch(console.error);
     }
@@ -158,19 +155,36 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
     setIsImagesExpanded(hasImages);
     setIsRelationsExpanded(hasRelations);
-  }, [entry, isOpen]);
+  }, [entry?.id, isOpen]);
 
-  const handleSave = () => {
-    onSave({
-      ...entry,
-      name,
-      description,
-      category,
-      synonyms,
-      images,
-      relations,
-    });
-    onClose();
+  // No automatic syncing; rely on parent to provide a fully-loaded entry.
+
+  // Ensure the relations panel is expanded whenever relations are present.
+  // This handles cases where relations arrive or update after the dialog opens.
+  useEffect(() => {
+    if (relations.length > 0) {
+      setIsRelationsExpanded(true);
+    }
+  }, [relations]);
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave({
+        ...entry,
+        name,
+        description,
+        category,
+        synonyms,
+        images,
+        relations,
+      });
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const addSynonym = () => {
@@ -433,6 +447,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
                   <span>Associated Images</span>
+                  {!isImagesExpanded && selectedImagesList.length > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      {selectedImagesList.length}
+                    </span>
+                  )}
                   <ChevronDown
                     size={14}
                     className={`transition-transform ${isImagesExpanded ? 'rotate-0' : '-rotate-90'}`}
@@ -505,6 +524,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
                   <span>Relations</span>
+                  {!isRelationsExpanded && relations.length > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      {relations.length}
+                    </span>
+                  )}
                   <ChevronDown
                     size={14}
                     className={`transition-transform ${isRelationsExpanded ? 'rotate-0' : '-rotate-90'}`}
@@ -538,7 +562,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                             <span className="truncate">
                               {rel.direction === 'reverse' ? (
                                 <>
-                                  {allEntriesMap[rel.target_id] || rel.target_id}{' '}
+                                  {relationNameMap[rel.target_id] || rel.target_id}{' '}
                                   <span className="opacity-70 font-normal">
                                     [{rel.relation}]
                                   </span>{' '}
@@ -549,7 +573,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                                   <span className="opacity-70 font-normal">
                                     [{rel.relation}]
                                   </span>{' '}
-                                  {allEntriesMap[rel.target_id] || rel.target_id}
+                                  {relationNameMap[rel.target_id] || rel.target_id}
                                 </>
                               )}
                             </span>
@@ -584,9 +608,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                             <Edit2 size={14} />
                           </button>
                           <button
-                            onClick={() =>
-                              setRelations(relations.filter((_, i) => i !== idx))
-                            }
+                            onClick={() => {
+                              setRelations(relations.filter((_, i) => i !== idx));
+                            }}
                             className={
                               'p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors'
                             }
@@ -712,10 +736,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               <Button
                 onClick={handleSave}
                 theme={theme}
-                disabled={!name.trim()}
-                icon={<Save size={16} />}
+                disabled={!name.trim() || isSaving}
+                icon={
+                  isSaving ? (
+                    <LoaderCircle className="animate-spin" size={16} />
+                  ) : (
+                    <Save size={16} />
+                  )
+                }
               >
-                Save Entry
+                {isSaving ? 'Saving…' : 'Save Entry'}
               </Button>
             </div>
           </div>

@@ -128,8 +128,10 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     resolveExternalSourcebookEntries(externalEntries, [])
   );
   const [search, setSearch] = useState('');
+  const externalEntriesRef = useRef<SourcebookEntry[] | undefined>(undefined);
   const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
 
   // Keep hover preview state local so list rendering stays stateless.
   const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
@@ -153,10 +155,11 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     // In embedded/external mode we still rely on backend search for non-empty
     // queries so filtering uses canonical sourcebook data (including generated keywords).
     if (Array.isArray(externalEntries) && !hasQuery) {
-      setEntries((prev) => {
-        const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
-        return filterSourcebookEntries(resolved, search);
-      });
+      const externalChanged = externalEntriesRef.current !== externalEntries;
+      if (externalChanged) {
+        externalEntriesRef.current = externalEntries;
+        setEntries(filterSourcebookEntries(externalEntries, search));
+      }
     } else {
       timeoutId = setTimeout(() => {
         loadEntries(search);
@@ -215,6 +218,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     await syncEntries((prev) =>
       prev.map((value) => (value.id === updated.id ? updated : value))
     );
+    if (selectedEntry?.id === updated.id) {
+      setSelectedEntry(updated);
+    }
     if (!previous) return;
 
     let activeId = updated.id;
@@ -383,7 +389,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-1 pb-2">
+      <div className="relative flex-1 overflow-y-auto px-1 pb-2">
+        {isLoadingEntry && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30">
+            <div className="flex flex-col items-center gap-2 rounded-lg bg-white/90 px-6 py-4 shadow-lg">
+              <LoaderCircle className="animate-spin" size={24} />
+              <span className="text-sm font-medium text-brand-gray-900">
+                Loading entry…
+              </span>
+            </div>
+          </div>
+        )}
         {entries.length === 0 && (
           <div className={`text-center py-4 text-xs ${subTextClass}`}>
             No entries yet.
@@ -399,13 +415,23 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
               return (
                 <div
                   key={e.id}
-                  onClick={() => {
-                    setSelectedEntry(e);
-                    setIsDialogOpen(true);
+                  onClick={async () => {
+                    setIsLoadingEntry(true);
+                    try {
+                      const all = await api.sourcebook.list();
+                      const full = all.find((x) => x.id === e.id) || e;
+                      setEntries(all);
+                      setSelectedEntry(full);
+                      setIsDialogOpen(true);
+                    } finally {
+                      setIsLoadingEntry(false);
+                    }
                   }}
                   onMouseEnter={(evt) => handleMouseEnter(evt, e)}
                   onMouseLeave={() => setHoveredEntry(null)}
-                  className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none`}
+                  className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${
+                    isLoadingEntry ? 'pointer-events-none opacity-70' : ''
+                  }`}
                 >
                   <CategoryIcon
                     size={14}
@@ -447,6 +473,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         entry={selectedEntry}
+        allEntries={entries}
         onSave={selectedEntry ? handleUpdate : handleCreate}
         onDelete={selectedEntry ? handleDelete : undefined}
         theme={theme}
