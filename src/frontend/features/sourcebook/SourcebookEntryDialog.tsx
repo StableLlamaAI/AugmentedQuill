@@ -611,6 +611,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass} ${descriptionPlaceholderClass}`}
                   placeholder="Detailed description, personality traits, history, rules, and constraints the AI should remember..."
                   markdownHighlight
+                  debounceMs={300}
                   style={{ minHeight: '220px' }}
                 />
               </div>

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
+import { PlainTextEditable } from '../editor/PlainTextEditable';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -495,11 +496,14 @@ export function MetadataEditorDialog({
                     Use notes for facts, intentions, foreshadowing, and constraints that
                     should inform CHAT, EDITING, and WRITING.
                   </div>
-                  <textarea
+                  <PlainTextEditable
                     value={data.notes || ''}
-                    onChange={(e) => setData({ ...data, notes: e.target.value })}
-                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
+                    onChange={(val) => setData({ ...data, notes: val })}
+                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
+                    markdownHighlight
+                    debounceMs={300}
+                    style={{ minHeight: '300px' }}
                   />
                 </div>
               )}
@@ -512,13 +516,14 @@ export function MetadataEditorDialog({
                     Keep private reminders, spoilers, and experiments here when they
                     should stay outside model context.
                   </div>
-                  <textarea
+                  <PlainTextEditable
                     value={data.private_notes || ''}
-                    onChange={(e) =>
-                      setData({ ...data, private_notes: e.target.value })
-                    }
-                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
+                    onChange={(val) => setData({ ...data, private_notes: val })}
+                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
+                    markdownHighlight
+                    debounceMs={300}
+                    style={{ minHeight: '300px' }}
                   />
                 </div>
               )}

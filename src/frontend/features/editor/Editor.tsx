@@ -1011,6 +1011,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               onChange={(val: string) => onChange(chapter.id, { title: val })}
               className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors block"
               placeholder="Chapter Title"
+              debounceMs={300}
               style={{
                 ...commonTextStyle,
                 fontSize: '1.8em',
@@ -1054,6 +1055,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     placeholder="Start writing your chapter here..."
                     showWhitespace={showWhitespace}
                     markdownHighlight={viewMode === 'markdown'}
+                    debounceMs={300}
                     style={{
                       ...commonTextStyle,
                       color: showWhitespace ? 'inherit' : 'inherit',

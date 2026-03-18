@@ -9,17 +9,19 @@
  * Defines plain text editable surface for the editor so content-editable behavior is isolated and reusable.
  */
 
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 // @ts-ignore
 import { marked } from 'marked';
 
 import { getRangeLength, resolveNodeAndOffset } from './domUtils';
+import { useDebounce } from '../../utils/hooks';
 
 export interface PlainTextEditableProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string;
   onChange: (value: string) => void;
   showWhitespace?: boolean;
   markdownHighlight?: boolean;
+  debounceMs?: number;
 }
 
 const escapeHtml = (text: string) =>
@@ -29,6 +31,11 @@ const escapeHtml = (text: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+const isIos = () =>
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 type Decoration = {
   start: number;
@@ -376,19 +383,43 @@ export const PlainTextEditable = React.forwardRef<
       style,
       showWhitespace = false,
       markdownHighlight = false,
+      debounceMs = 0,
       ...props
     },
     ref
   ) => {
     const elementRef = useRef<HTMLDivElement>(null);
+    const [localValue, setLocalValue] = useState(value);
+    const isInternalUpdate = useRef(false);
+
     useImperativeHandle(ref, () => elementRef.current as HTMLDivElement);
 
+    // Debounced onChange for external updates
+    const debouncedOnChange = useDebounce((val: string) => {
+      onChange(val);
+    }, debounceMs);
+
+    // Keep local value in sync with external value when it changes externally
     useEffect(() => {
+      if (value !== localValue) {
+        setLocalValue(value);
+      }
+    }, [value]);
+
+    useEffect(() => {
+      const root = elementRef.current;
+      if (!root) return;
+
+      const display = showWhitespace
+        ? (localValue || '')
+            .replace(/\t/g, '→\t')
+            .replace(/ /g, '·\u200b')
+            .replace(/\r?\n/g, '¶\n')
+        : localValue || '';
+
       if (markdownHighlight) {
-        const root = elementRef.current;
-        if (!root) return;
         const caret = document.activeElement === root ? getCaretOffset(root) : null;
-        const nextHtml = highlightMarkdownForEditable(value || '', showWhitespace);
+        const nextHtml = highlightMarkdownForEditable(localValue || '', showWhitespace);
 
         if (root.innerHTML !== nextHtml) {
           root.innerHTML = nextHtml;
@@ -397,31 +428,19 @@ export const PlainTextEditable = React.forwardRef<
         if (caret !== null) {
           setCaretOffset(root, caret);
         }
-        return;
-      }
-
-      const display = showWhitespace
-        ? (value || '')
-            .replace(/\t/g, '→\t')
-            .replace(/ /g, '·\u200b')
-            .replace(/\r?\n/g, '¶\n')
-        : value || '';
-      if (!elementRef.current) return;
-
-      // Always normalize back to plain text when markdown highlighting is off.
-      // This prevents leftover span markup from previous MD mode renders.
-      const hasRichMarkup = elementRef.current.childElementCount > 0;
-      if (hasRichMarkup || elementRef.current.innerText !== display) {
-        const caret =
-          document.activeElement === elementRef.current
-            ? getCaretOffset(elementRef.current)
-            : null;
-        elementRef.current.innerText = display;
-        if (caret !== null) {
-          setCaretOffset(elementRef.current, Math.min(caret, display.length));
+      } else {
+        // Always normalize back to plain text when markdown highlighting is off.
+        // This prevents leftover span markup from previous MD mode renders.
+        const hasRichMarkup = root.childElementCount > 0;
+        if (hasRichMarkup || root.innerText !== display) {
+          const caret = document.activeElement === root ? getCaretOffset(root) : null;
+          root.innerText = display;
+          if (caret !== null) {
+            setCaretOffset(root, Math.min(caret, display.length));
+          }
         }
       }
-    }, [value, showWhitespace, markdownHighlight]);
+    }, [localValue, showWhitespace, markdownHighlight]);
 
     const onPaste = (e: React.ClipboardEvent) => {
       e.preventDefault();
@@ -430,9 +449,23 @@ export const PlainTextEditable = React.forwardRef<
     };
 
     const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-      const displayed = e.currentTarget.innerText;
+      // In iOS, innerText can be unreliable in contenteditable, leading to duplicated characters.
+      // textContent is safer, but doesn't preserve line breaks from <br> effectively.
+      // We use innerText as default but might need a more complex normalization if iOS issues persist.
+      const displayed = isIos()
+        ? e.currentTarget.innerText.replace(/\r\n/g, '\n')
+        : e.currentTarget.innerText;
       const raw = showWhitespace ? fromWhitespaceDisplayText(displayed) : displayed;
-      onChange(raw);
+
+      // Update local state immediately for fast feedback
+      setLocalValue(raw);
+
+      // Debounce the external onChange to prevent lag in parent components
+      if (debounceMs > 0) {
+        debouncedOnChange(raw);
+      } else {
+        onChange(raw);
+      }
     };
 
     return (
