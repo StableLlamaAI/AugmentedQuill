@@ -288,6 +288,61 @@ def _parse_keywords_from_llm_content(content: str) -> list[str]:
     return _normalize_keywords(keywords)
 
 
+def _get_entry_relations(entry_id: str, story: dict) -> list[dict]:
+    global_rels = story.get("sourcebook_relations") or []
+    out = []
+    for r in global_rels:
+        if r.get("source_id") == entry_id:
+            rel = dict(r)
+            rel["target_id"] = rel.pop("target_id", "")
+            rel.pop("source_id", None)
+            rel["direction"] = "forward"
+            out.append(rel)
+        elif r.get("target_id") == entry_id:
+            rel = dict(r)
+            rel["target_id"] = rel.pop("source_id", "")
+            rel.pop("source_id", None)
+            rel["direction"] = "reverse"
+            out.append(rel)
+    return out
+
+
+def _update_global_relations(
+    entry_id: str, new_relations: list[dict] | None, story: dict
+):
+    if new_relations is None:
+        return
+
+    global_rels = story.get("sourcebook_relations") or []
+    # Remove all relations involving entry_id
+    filtered_rels = [
+        r
+        for r in global_rels
+        if r.get("source_id") != entry_id and r.get("target_id") != entry_id
+    ]
+
+    # Add new relations
+    for r in new_relations:
+        d = r.get("direction", "forward")
+        new_r = {
+            "relation": r.get("relation", ""),
+            "start_chapter": r.get("start_chapter"),
+            "end_chapter": r.get("end_chapter"),
+            "start_book": r.get("start_book"),
+            "end_book": r.get("end_book"),
+        }
+        if d == "reverse":
+            new_r["source_id"] = r.get("target_id", "")
+            new_r["target_id"] = entry_id
+        else:
+            new_r["source_id"] = entry_id
+            new_r["target_id"] = r.get("target_id", "")
+
+        filtered_rels.append({k: v for k, v in new_r.items() if v is not None})
+
+    story["sourcebook_relations"] = filtered_rels
+
+
 def _normalize_category_value(category: str | None) -> str | None:
     """Normalize category to a known canonical value, or None when unknown."""
     if not isinstance(category, str):
@@ -360,7 +415,11 @@ def sourcebook_list_entries() -> List[Dict]:
         e_data = sb_dict.get(name) or {}
         if not isinstance(e_data, dict):
             continue
-        results.append({"id": name, "name": name, **_normalize_entry_data(e_data)})
+        norm = _normalize_entry_data(e_data)
+        norm["id"] = name
+        norm["name"] = name
+        norm["relations"] = _get_entry_relations(name, story)
+        results.append(norm)
 
     return results
 
@@ -710,6 +769,7 @@ def sourcebook_update_entry(
     synonyms: List[str] = None,
     images: List[str] = None,
     keywords: List[str] = None,
+    relations: List[Dict] = None,
 ) -> Dict:
     """Sourcebook Update Entry."""
     if not name_or_id:
@@ -744,6 +804,15 @@ def sourcebook_update_entry(
         if new_name != found_key:
             if new_name in sb_dict:
                 return {"error": f"Entry '{new_name}' already exists."}
+
+            # fix external relations pointing to this entry
+            global_rels = story.get("sourcebook_relations") or []
+            for r in global_rels:
+                if r.get("source_id") == found_key:
+                    r["source_id"] = new_name
+                if r.get("target_id") == found_key:
+                    r["target_id"] = new_name
+
             del sb_dict[found_key]
             found_key = new_name
 
@@ -787,6 +856,19 @@ def sourcebook_update_entry(
             if cleaned_image and cleaned_image not in cleaned_images:
                 cleaned_images.append(cleaned_image)
         entry_data["images"] = cleaned_images
+
+    if relations is not None:
+        if not isinstance(relations, list):
+            return {"error": "Invalid relations: Relations must be a list of dicts."}
+        cleaned_relations: list[dict] = []
+        for relation in relations:
+            if not isinstance(relation, dict):
+                return {
+                    "error": "Invalid relations: Relations must be a list of dicts."
+                }
+            cleaned_relations.append(relation)
+
+        _update_global_relations(found_key, cleaned_relations, story)
 
     if keywords is not None:
         if not isinstance(keywords, list):

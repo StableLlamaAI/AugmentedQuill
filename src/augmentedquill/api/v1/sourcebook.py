@@ -28,7 +28,18 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 router = APIRouter(tags=["Sourcebook"])
 
 
+class SourcebookRelation(BaseModel):
+    target_id: str
+    relation: str
+    direction: Optional[str] = "forward"
+    start_chapter: Optional[str] = None
+    start_book: Optional[str] = None
+    end_chapter: Optional[str] = None
+    end_book: Optional[str] = None
+
+
 class SourcebookEntry(BaseModel):
+
     id: str
     name: str
     synonyms: List[str] = []
@@ -36,6 +47,7 @@ class SourcebookEntry(BaseModel):
     description: str
     images: List[str] = []
     keywords: List[str] = []
+    relations: List[SourcebookRelation] = []
 
 
 class SourcebookEntryCreate(BaseModel):
@@ -44,6 +56,7 @@ class SourcebookEntryCreate(BaseModel):
     category: Optional[str] = None
     description: str
     images: List[str] = []
+    relations: List[SourcebookRelation] = []
 
 
 class SourcebookEntryUpdate(BaseModel):
@@ -52,6 +65,7 @@ class SourcebookEntryUpdate(BaseModel):
     category: Optional[str] = None
     description: Optional[str] = None
     images: Optional[List[str]] = None
+    relations: Optional[List[SourcebookRelation]] = None
 
 
 class SourcebookKeywordsRequest(BaseModel):
@@ -121,6 +135,7 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
         description=entry.description,
         category=entry.category,
         synonyms=entry.synonyms,
+        relations=[r.model_dump() for r in entry.relations],
         images=entry.images,
     )
     if "error" in created:
@@ -147,6 +162,11 @@ async def update_sourcebook_entry(
         description=updates.description,
         category=updates.category,
         synonyms=updates.synonyms,
+        relations=(
+            [r.model_dump() for r in updates.relations]
+            if updates.relations is not None
+            else None
+        ),
         images=updates.images,
     )
     if "error" in result:

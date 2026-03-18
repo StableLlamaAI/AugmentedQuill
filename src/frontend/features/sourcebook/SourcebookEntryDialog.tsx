@@ -32,7 +32,9 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
-import { AppTheme, SourcebookEntry } from '../../types';
+import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
+import { SourcebookRelationDialog } from './SourcebookRelationDialog';
+import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for relations
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { PlainTextEditable } from '../editor/PlainTextEditable';
 
@@ -93,6 +95,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const [synonyms, setSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [relations, setRelations] = useState<SourcebookRelation[]>([]);
+  const [isRelationDialogVisible, setIsRelationDialogVisible] = useState(false);
+  const [editingRelationIndex, setEditingRelationIndex] = useState<number | null>(null);
+  const [allEntriesMap, setAllEntriesMap] = useState<Record<string, string>>({});
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
 
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
@@ -107,6 +113,18 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
           setAvailableImages(data.images || []);
         })
         .catch(console.error);
+
+      // Load all sourcebook entries for relation mapping
+      api.sourcebook
+        .list()
+        .then((entries) => {
+          const map: Record<string, string> = {};
+          entries.forEach((e) => {
+            map[e.id] = e.name;
+          });
+          setAllEntriesMap(map);
+        })
+        .catch(console.error);
     }
   }, [isOpen]);
 
@@ -117,6 +135,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setCategory(entry.category || Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms(entry.synonyms || []);
       setImages(entry.images || []);
+      setRelations(entry.relations || []);
       setNewSynonym('');
     } else {
       setName('');
@@ -124,6 +143,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setCategory(Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms([]);
       setImages([]);
+      setRelations([]);
       setNewSynonym('');
     }
   }, [entry, isOpen]);
@@ -136,6 +156,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       category,
       synonyms,
       images,
+      relations,
     });
     onClose();
   };
@@ -454,6 +475,110 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               </div>
             </div>
 
+            {/* Relations */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label
+                  className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+                >
+                  Relations
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingRelationIndex(null);
+                    setIsRelationDialogVisible(true);
+                  }}
+                  icon={<Plus size={14} />}
+                  theme={theme}
+                >
+                  Add Relation
+                </Button>
+              </div>
+
+              {relations.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {relations.map((rel, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between p-2 rounded-md border ${inputBorderClass} ${inputBgClass}`}
+                    >
+                      <div className="flex flex-col min-w-0 pr-4">
+                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                          <Link size={14} className="text-brand-500 flex-shrink-0" />
+                          <span className="truncate">
+                            {rel.direction === 'reverse' ? (
+                              <>
+                                {allEntriesMap[rel.target_id] || rel.target_id}{' '}
+                                <span className="opacity-70 font-normal">
+                                  [{rel.relation}]
+                                </span>{' '}
+                                this
+                              </>
+                            ) : (
+                              <>
+                                <span className="opacity-70 font-normal">
+                                  [{rel.relation}]
+                                </span>{' '}
+                                {allEntriesMap[rel.target_id] || rel.target_id}
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        {(rel.start_chapter ||
+                          rel.end_chapter ||
+                          rel.start_book ||
+                          rel.end_book) && (
+                          <div className="text-xs opacity-60 mt-1 truncate">
+                            {rel.start_chapter ? `Start: ${rel.start_chapter}` : ''}
+                            {rel.start_book ? ` (${rel.start_book})` : ''}
+                            {(rel.start_chapter || rel.start_book) &&
+                            (rel.end_chapter || rel.end_book)
+                              ? ' | '
+                              : ''}
+                            {rel.end_chapter ? `End: ${rel.end_chapter}` : ''}
+                            {rel.end_book ? ` (${rel.end_book})` : ''}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setEditingRelationIndex(idx);
+                            setIsRelationDialogVisible(true);
+                          }}
+                          className={
+                            'p-1 rounded-md hover:bg-brand-500/10 text-brand-500 transition-colors'
+                          }
+                          title="Edit relation"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setRelations(relations.filter((_, i) => i !== idx))
+                          }
+                          className={
+                            'p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors'
+                          }
+                          title="Remove relation"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className={`text-sm opacity-60 italic p-3 rounded-md border border-dashed ${inputBorderClass}`}
+                >
+                  No relations to other entries yet.
+                </div>
+              )}
+            </div>
+
             {/* Description */}
             <div className="space-y-2 flex-1 flex flex-col min-h-[320px]">
               <div className="flex items-start justify-between gap-4">
@@ -612,6 +737,26 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
           </div>
         </div>
       )}
+
+      <SourcebookRelationDialog
+        isOpen={isRelationDialogVisible}
+        onClose={() => setIsRelationDialogVisible(false)}
+        onSave={(rel) => {
+          if (editingRelationIndex !== null) {
+            const newRels = [...relations];
+            newRels[editingRelationIndex] = rel;
+            setRelations(newRels);
+          } else {
+            setRelations([...relations, rel]);
+          }
+        }}
+        currentEntryId={entry?.id}
+        currentEntryName={name}
+        theme={theme}
+        initialRelation={
+          editingRelationIndex !== null ? relations[editingRelationIndex] : undefined
+        }
+      />
     </>,
     document.body
   );

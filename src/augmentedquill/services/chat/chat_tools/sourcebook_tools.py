@@ -24,12 +24,51 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 )
 
 
+from augmentedquill.services.sourcebook.sourcebook_helpers import _get_story_data
+
+
 def _strip_internal_sourcebook_fields(entry: dict | None) -> dict | None:
     """Remove internal-only fields before returning data to tool callers."""
     if not isinstance(entry, dict):
         return entry
     sanitized = dict(entry)
     sanitized.pop("keywords", None)
+
+    if "relations" in sanitized:
+        formatted_rels = []
+        entry_id = sanitized.get("id", sanitized.get("name", ""))
+
+        story, _ = _get_story_data()
+        project_type = (story.get("project_type") or "novel") if story else "novel"
+
+        for r in sanitized.get("relations", []):
+            direction = r.get("direction", "forward")
+            target = r.get("target_id", "")
+            rel_type = r.get("relation", "")
+
+            if direction == "reverse":
+                rel_tuple = [target, rel_type, entry_id]
+            else:
+                rel_tuple = [entry_id, rel_type, target]
+
+            f_rel = {"relation": rel_tuple}
+
+            if project_type in ("novel", "series"):
+                if r.get("start_chapter"):
+                    f_rel["start_chapter"] = r.get("start_chapter")
+                if r.get("end_chapter"):
+                    f_rel["end_chapter"] = r.get("end_chapter")
+
+            if project_type == "series":
+                if r.get("start_book"):
+                    f_rel["start_book"] = r.get("start_book")
+                if r.get("end_book"):
+                    f_rel["end_book"] = r.get("end_book")
+
+            formatted_rels.append(f_rel)
+
+        sanitized["relations"] = formatted_rels
+
     return sanitized
 
 

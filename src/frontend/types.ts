@@ -36,6 +36,26 @@ export interface Book {
   private_notes?: string;
 }
 
+export interface SourcebookRelation {
+  target_id: string;
+  direction?: 'forward' | 'reverse';
+  relation: string;
+  start_chapter?: string;
+  start_book?: string;
+  end_chapter?: string;
+  end_book?: string;
+}
+
+export interface SourcebookRelation {
+  target_id: string;
+  direction?: 'forward' | 'reverse';
+  relation: string;
+  start_chapter?: string;
+  start_book?: string;
+  end_chapter?: string;
+  end_book?: string;
+}
+
 export interface SourcebookEntry {
   id: string;
   name: string;
@@ -44,6 +64,7 @@ export interface SourcebookEntry {
   description: string;
   images: string[];
   keywords?: string[];
+  relations?: SourcebookRelation[];
 }
 
 export interface Story {
