@@ -27,10 +27,12 @@ def test_tools_json_generator_matches_registry():
 
     expected = _sorted_tools(get_registered_tool_schemas(None))
 
+    import sys
+
     # Run the generator script and capture the path it wrote to.
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "tools/generate_tools_json.py",
         ],
         check=True,
