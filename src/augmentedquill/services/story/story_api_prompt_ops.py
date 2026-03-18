@@ -24,6 +24,15 @@ from augmentedquill.services.chat.chat_tool_decorator import (
 )
 
 
+def _ensure_tools_loaded():
+    """Force load tool modules to ensure they are registered without causing circular imports at module level."""
+    # We import here to avoid circular dependencies with story_generation_ops which imports us
+    import augmentedquill.services.chat.chat_tools.chapter_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.story_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.project_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.sourcebook_tools  # noqa: F401
+
+
 def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
     """Resolve runtime model credentials and prompt overrides for a request."""
     base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
@@ -59,7 +68,7 @@ def _build_messages(
     sys_msg = {
         "role": "system",
         "content": get_system_message(
-            system_message_key, model_overrides, language=language
+            system_message_key, model_overrides, language=language, **prompt_kwargs
         ),
     }
     user_prompt = get_user_prompt(
@@ -81,6 +90,7 @@ def build_chapter_summary_messages(
     language: str | None = None,
 ):
     """Build messages for creating or updating a chapter summary."""
+    _ensure_tools_loaded()
     sys_parts = [
         get_system_message("chapter_summarizer", model_overrides, language=language)
     ]
@@ -110,7 +120,7 @@ def build_chapter_summary_messages(
 
     sys_msg = {
         "role": "system",
-        "content": "\n\n".join(sys_parts),
+        "content": "\n\n".join(part for part in sys_parts if part),
     }
     if mode == "discard" or not current_summary:
         user_prompt = get_user_prompt(
@@ -257,7 +267,8 @@ def build_ai_action_messages(
     model_overrides: dict,
     language: str | None = None,
 ):
-    """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
+    """Build messages for generic AI Actions (Extend/Rewrite/Summary).."""
+    _ensure_tools_loaded()
     # Map target/action to prompt keys
     if target == "summary":
         sys_key = f"ai_action_summary_{action}"
@@ -288,6 +299,29 @@ def build_ai_action_messages(
         else:
             user_key = "chapter_summary_update"
 
+    # Additional placeholders for EDITING tasks
+    story_context = ""
+    tool_instructions = ""
+    if target in ("summary", "story_summary", "book_summary"):
+        if story_summary:
+            story_context = get_system_message(
+                "story_context_block",
+                model_overrides,
+                language=language,
+                story_summary=story_summary,
+            )
+
+        tools = get_tool_schemas(EDITING_ROLE)
+        if tools:
+            import json
+
+            tool_instructions = get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_json=json.dumps(tools, indent=2),
+            )
+
     return _build_messages(
         system_message_key=sys_key,
         user_prompt_key=user_key,
@@ -300,12 +334,13 @@ def build_ai_action_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
-        chapter_content=existing_content,
+        existing_content=existing_content,
         chapter_text=existing_content,
         existing_text=existing_content,
-        current_summary=chapter_summary,
         existing_summary=chapter_summary,
         chapter_summaries=chapter_summaries,
         style_tags=style_tags,
-        background="",  # Background is not used for AI actions for now
+        background="",
+        story_context=story_context,
+        tool_instructions=tool_instructions,
     )

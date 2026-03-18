@@ -182,14 +182,22 @@
     "en": [
       "You are an expert story editor.",
       "Read the chapter content and the current summary.",
-      "Update the summary to better reflect the content. Keep it concise."
+      "Update the summary to better reflect the content. Keep it concise.",
+      "",
+      "{{story_context}}",
+      "",
+      "{{tool_instructions}}"
     ]
   },
   "ai_action_summary_rewrite": {
     "_use": "EDITING",
     "en": [
       "You are an expert story editor.",
-      "Read the chapter content and generate a concise summary."
+      "Read the chapter content and generate a concise summary.",
+      "",
+      "{{story_context}}",
+      "",
+      "{{tool_instructions}}"
     ]
   },
   "ai_action_chapter_extend": {

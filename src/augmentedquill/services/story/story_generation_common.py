@@ -22,6 +22,10 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_write_chapter_messages,
     resolve_model_runtime,
 )
+from augmentedquill.services.chat.chat_tool_decorator import (
+    EDITING_ROLE,
+    get_tool_schemas,
+)
 from augmentedquill.services.story.story_api_state_ops import (
     collect_chapter_summaries,
     ensure_chapter_slot,
@@ -201,6 +205,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }
 
 
@@ -250,6 +255,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }
 
 
@@ -470,4 +476,5 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }

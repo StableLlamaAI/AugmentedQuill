@@ -24,6 +24,7 @@ async def stream_unified_chat_content(
     timeout_s: int,
     model_name: str | None = None,
     model_type: str | None = None,
+    tools: list[dict] | None = None,
 ) -> AsyncIterator[dict]:
     """Stream Unified Chat Content as event dictionaries (content, thinking, tool_calls)."""
     async for chunk_dict in llm.unified_chat_stream(
@@ -35,6 +36,7 @@ async def stream_unified_chat_content(
         timeout_s=timeout_s,
         model_name=model_name,
         model_type=model_type,
+        tools=tools,
     ):
         yield chunk_dict
 

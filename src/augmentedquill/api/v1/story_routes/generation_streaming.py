@@ -54,6 +54,7 @@ async def _create_gen_source_pure(prepared: dict):
         timeout_s=prepared["timeout_s"],
         model_name=prepared.get("model_name"),
         model_type=prepared.get("model_type"),
+        tools=prepared.get("tools"),
     ):
         yield chunk_dict
 
