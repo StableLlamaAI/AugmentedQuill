@@ -642,10 +642,12 @@ def sourcebook_get_entry(name_or_id: str) -> Optional[Dict]:
         if not isinstance(e_data, dict):
             continue
         normalized = _normalize_entry_data(e_data)
-        if name.lower() == target:
-            return {"id": name, "name": name, **normalized}
-        if any(target == s.lower() for s in normalized.get("synonyms", [])):
-            return {"id": name, "name": name, **normalized}
+        if name.lower() == target or any(
+            target == s.lower() for s in normalized.get("synonyms", [])
+        ):
+            entry = {"id": name, "name": name, **normalized}
+            entry["relations"] = _get_entry_relations(name, story)
+            return entry
 
     return None
 

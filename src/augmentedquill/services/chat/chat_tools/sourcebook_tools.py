@@ -7,6 +7,8 @@
 
 """Defines the sourcebook tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import List, Union
+
 from pydantic import BaseModel, Field
 
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -15,16 +17,15 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     chat_tool,
 )
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
+    _get_entry_relations,
     sourcebook_create_entry,
     sourcebook_delete_entry,
     sourcebook_get_entry,
     sourcebook_refresh_entry_keywords,
     sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
+    _get_story_data,
 )
-
-
-from augmentedquill.services.sourcebook.sourcebook_helpers import _get_story_data
 
 
 def _strip_internal_sourcebook_fields(entry: dict | None) -> dict | None:
@@ -34,11 +35,18 @@ def _strip_internal_sourcebook_fields(entry: dict | None) -> dict | None:
     sanitized = dict(entry)
     sanitized.pop("keywords", None)
 
+    # Ensure relations are always present for tool consumers, even if the source
+    # entry payload does not include them directly.
+    story, _ = _get_story_data()
+    if story:
+        entry_id = sanitized.get("id", sanitized.get("name", ""))
+        relations = _get_entry_relations(entry_id, story)
+        sanitized["relations"] = relations
+
     if "relations" in sanitized:
         formatted_rels = []
         entry_id = sanitized.get("id", sanitized.get("name", ""))
 
-        story, _ = _get_story_data()
         project_type = (story.get("project_type") or "novel") if story else "novel"
 
         for r in sanitized.get("relations", []):
@@ -100,11 +108,49 @@ class SearchSourcebookParams(BaseModel):
     )
 
 
-class GetSourcebookEntryParams(BaseModel):
-    """Parameters for retrieving a sourcebook entry."""
+class SourcebookRelation(BaseModel):
+    """Represents a relation between sourcebook entries.
 
-    name_or_id: str = Field(
-        ..., description="The name or ID of the sourcebook entry to retrieve"
+    The `relation` field is a 3-element tuple:
+      1) source entry id
+      2) relation descriptor (how source relates to target)
+      3) target entry id
+    """
+
+    relation: List[str] = Field(
+        ...,
+        description=(
+            "A 3-element list: [source_entry_id, relation_type, target_entry_id]. "
+            "Used to express how one entry relates to another."
+        ),
+    )
+    start_chapter: str | None = Field(
+        None,
+        description="Optional start chapter for the relation (novel/series projects).",
+    )
+    end_chapter: str | None = Field(
+        None,
+        description="Optional end chapter for the relation (novel/series projects).",
+    )
+    start_book: str | None = Field(
+        None,
+        description="Optional start book for the relation (series projects).",
+    )
+    end_book: str | None = Field(
+        None,
+        description="Optional end book for the relation (series projects).",
+    )
+
+
+class GetSourcebookEntryParams(BaseModel):
+    """Parameters for retrieving one or more sourcebook entries."""
+
+    name_or_id: Union[str, List[str]] = Field(
+        ...,
+        description=(
+            "The name or ID of the sourcebook entry to retrieve. "
+            "Can be either a single string or a list of strings."
+        ),
     )
 
 
@@ -152,7 +198,11 @@ class DeleteSourcebookEntryParams(BaseModel):
 
 
 @chat_tool(
-    description="Search the sourcebook for entries matching a query string.",
+    description=(
+        "Search the sourcebook for entries matching a query string. "
+        "Each returned entry includes its relations, where each relation is a 3-element list: "
+        "[source_id, relation_type, target_id]."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="sourcebook-read",
 )
@@ -187,11 +237,24 @@ async def search_sourcebook(
 async def get_sourcebook_entry(
     params: GetSourcebookEntryParams, payload: dict, mutations: dict
 ):
-    """Get Sourcebook Entry."""
-    entry = sourcebook_get_entry(params.name_or_id)
-    if not entry:
-        return {"error": "Not found"}
-    return _strip_internal_sourcebook_fields(entry)
+    """Get Sourcebook Entry.
+
+    Accepts either a single string (name/ID) or a list of strings.
+    """
+    ids = params.name_or_id
+
+    if isinstance(ids, str):
+        entry = sourcebook_get_entry(ids)
+        if not entry:
+            return {"error": "Not found"}
+        return _strip_internal_sourcebook_fields(entry)
+
+    results: list[dict] = []
+    for id_ in ids:
+        entry = sourcebook_get_entry(id_)
+        if entry:
+            results.append(_strip_internal_sourcebook_fields(entry))
+    return results
 
 
 @chat_tool(
