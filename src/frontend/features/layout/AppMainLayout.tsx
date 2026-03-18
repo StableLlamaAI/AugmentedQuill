@@ -54,28 +54,86 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   isLight,
 }) => {
   const [isResizing, setIsResizing] = useState(false);
+  const [minHeaderHeight, setMinHeaderHeight] = useState(50);
   const sectionRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const heightRef = useRef<number | undefined>(height);
+  const startTopRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const applyHeight = (value: number) => {
+    const clamped = Math.max(minHeaderHeight, value);
+    if (sectionRef.current) {
+      sectionRef.current.style.height = `${clamped}px`;
+    }
+  };
+
+  const updateMinHeight = useCallback(() => {
+    if (!headerRef.current) return;
+    const h = Math.round(headerRef.current.getBoundingClientRect().height);
+    setMinHeaderHeight(Math.max(50, h));
+  }, []);
+
+  useEffect(() => {
+    updateMinHeight();
+    window.addEventListener('resize', updateMinHeight);
+    return () => window.removeEventListener('resize', updateMinHeight);
+  }, [updateMinHeight]);
 
   const startResizing = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setIsResizing(true);
+    startTopRef.current = sectionRef.current?.getBoundingClientRect().top ?? null;
   };
 
   const stopResizing = useCallback(() => {
+    if (isResizing && onHeightChange && heightRef.current) {
+      onHeightChange(Math.max(minHeaderHeight, heightRef.current));
+    }
     setIsResizing(false);
-  }, []);
+    startTopRef.current = null;
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, [isResizing, minHeaderHeight, onHeightChange]);
 
   const resize = useCallback(
     (e: MouseEvent) => {
-      if (isResizing && sectionRef.current && onHeightChange) {
-        const rect = sectionRef.current.getBoundingClientRect();
-        const newHeight = Math.max(50, e.clientY - rect.top);
-        onHeightChange(newHeight);
-      }
+      if (!isResizing || !sectionRef.current || !onHeightChange) return;
+      const top = startTopRef.current ?? sectionRef.current.getBoundingClientRect().top;
+      const newHeight = Math.max(minHeaderHeight, e.clientY - top);
+      heightRef.current = newHeight;
+      if (rafRef.current !== null) return;
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        if (!isResizing) return;
+        applyHeight(newHeight);
+      });
     },
-    [isResizing, onHeightChange]
+    [isResizing, minHeaderHeight, onHeightChange]
   );
+
+  useEffect(() => {
+    if (!sectionRef.current) return;
+
+    // Keep min-height in sync with what the header actually renders as,
+    // so the section can never shrink below its header.
+    sectionRef.current.style.minHeight = `${minHeaderHeight}px`;
+
+    if (isCollapsed) {
+      // When collapsed, let the section shrink naturally (remove any manual height)
+      sectionRef.current.style.height = '';
+      return;
+    }
+
+    if (!isResizing && typeof height === 'number') {
+      // Keep the DOM height in sync with the last persisted height
+      applyHeight(height);
+      heightRef.current = height;
+    }
+  }, [height, isCollapsed, isResizing, minHeaderHeight]);
 
   useEffect(() => {
     if (isResizing) {
@@ -109,6 +167,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       style={!isLast && !isCollapsed && height ? { height: `${height}px` } : {}}
     >
       <div
+        ref={headerRef}
         className={`flex items-center justify-between px-4 py-2 cursor-pointer select-none shrink-0 ${headerBg}`}
         onClick={onToggle}
       >
