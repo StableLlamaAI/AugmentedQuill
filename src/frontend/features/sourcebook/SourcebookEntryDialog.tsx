@@ -137,6 +137,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setImages(entry.images || []);
       setRelations(entry.relations || []);
       setNewSynonym('');
+      setShowKeywordsPanel(false);
     } else {
       setName('');
       setDescription('');
@@ -145,6 +146,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setImages([]);
       setRelations([]);
       setNewSynonym('');
+      setShowKeywordsPanel(false);
     }
   }, [entry, isOpen]);
 
@@ -194,6 +196,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   const [keywords, setKeywords] = useState<string[]>(entry?.keywords || []);
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const [showKeywordsPanel, setShowKeywordsPanel] = useState(false);
   const keywordsTooltip = isGeneratingKeywords
     ? '...generating...'
     : keywords.length > 0
@@ -271,9 +274,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
         <div
-          className={`${bgClass} ${textClass} w-full max-w-6xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[94vh]`}
+          className={`${bgClass} ${textClass} w-full max-w-[90vw] rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[94vh]`}
         >
           {/* Header */}
           <div
@@ -594,11 +597,48 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     entries as read-only context.
                   </p>
                 </div>
-                <div
-                  className={`text-xs font-semibold tracking-wide cursor-help ${labelClass}`}
-                  title={keywordsTooltip}
-                >
-                  [KEYWORDS]
+                <div className="relative inline-block group">
+                  <div
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold tracking-wide cursor-pointer ${labelClass} ${borderClass}`}
+                    aria-label={keywordsTooltip}
+                    onClick={() => setShowKeywordsPanel((v) => !v)}
+                  >
+                    <Tag size={12} />
+                    Keywords
+                  </div>
+
+                  <div
+                    className={`absolute right-0 z-10 mt-2 min-w-[calc(100vw-2rem)] sm:min-w-[50vw] max-w-[90vw] rounded-lg border ${borderClass} ${
+                      isLight
+                        ? 'bg-white/95 text-brand-gray-900'
+                        : 'bg-brand-gray-950/95 text-brand-gray-100'
+                    } shadow-lg p-3 text-xs transition-opacity duration-150 ${
+                      showKeywordsPanel
+                        ? 'opacity-100 pointer-events-auto'
+                        : 'opacity-0 pointer-events-none'
+                    } group-hover:opacity-100 group-hover:pointer-events-auto`}
+                  >
+                    {isGeneratingKeywords ? (
+                      <div className="italic opacity-70">Generating…</div>
+                    ) : keywords.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {keywords.map((kw) => (
+                          <span
+                            key={kw}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              isLight
+                                ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-800'
+                                : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-200'
+                            }`}
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="italic opacity-60">No keywords yet.</div>
+                    )}
+                  </div>
                 </div>
               </div>
 
