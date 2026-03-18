@@ -379,7 +379,8 @@ export const streamAiAction = async (
   action: 'write' | 'update' | 'rewrite' | 'extend',
   chapId: string,
   currentText: string,
-  onUpdate?: (fullText: string) => void
+  onUpdate?: (fullText: string) => void,
+  onThinking?: (thinking: string) => void
 ): Promise<string> => {
   const res = await fetch('/api/v1/story/action/stream', {
     method: 'POST',
@@ -387,7 +388,7 @@ export const streamAiAction = async (
     body: JSON.stringify({
       target,
       action,
-      chap_id: action === 'extend' || action === 'rewrite' ? Number(chapId) : 0,
+      chap_id: Number(chapId),
       target_id: Number(chapId),
       current_text: currentText,
     }),
@@ -402,10 +403,19 @@ export const streamAiAction = async (
   if (!reader) return '';
 
   let accumulated = '';
-  const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
-    accumulated += delta;
-    onUpdate?.(applySmartQuotes(accumulated));
-  });
+  let thinking = '';
+  const finalResult = await readSSEStream(
+    reader,
+    undefined,
+    (t) => {
+      thinking += t;
+      onThinking?.(thinking);
+    },
+    (delta) => {
+      accumulated += delta;
+      onUpdate?.(applySmartQuotes(accumulated));
+    }
+  );
   return applySmartQuotes(finalResult);
 };
 

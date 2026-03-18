@@ -233,6 +233,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         current_summary=current_summary,
         chapter_text=chapter_text,
         model_overrides=model_overrides,
+        story_summary=story.get("story_summary"),
         language=story.get("language", "en"),
     )
 
@@ -374,31 +375,49 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     action = payload.get("action")  # 'update' | 'rewrite' | 'extend'
     chap_id = payload.get("chap_id")
 
-    if not chap_id:
-        raise BadRequestError("chap_id is required")
+    if target in ("summary", "chapter") and not chap_id:
+        raise BadRequestError("chap_id is required for chapter-level actions")
 
-    _, path, pos = get_chapter_locator(chap_id)
+    if chap_id:
+        _, path, pos = get_chapter_locator(chap_id)
+    else:
+        path, pos = None, None
+
     existing_content = payload.get("current_text")
     if not isinstance(existing_content, str):
-        existing_content = read_text_or_raise(path)
+        if path:
+            existing_content = read_text_or_raise(path)
+        else:
+            existing_content = ""
 
     _, story_path, story = get_active_story_or_raise()
     chapters_data = get_normalized_chapters(story)
-    ensure_chapter_slot(chapters_data, pos)
 
-    chapter_summary = chapters_data[pos].get("summary", "")
-    chapter_title = chapters_data[pos].get("title") or path.name
+    if pos is not None:
+        ensure_chapter_slot(chapters_data, pos)
+        chapter_summary = chapters_data[pos].get("summary", "")
+        chapter_title = chapters_data[pos].get("title") or path.name
+    else:
+        chapter_summary = ""
+        chapter_title = ""
+
+    chapter_summaries_list = collect_chapter_summaries(chapters_data)
+    chapter_summaries_text = "\n\n".join(chapter_summaries_list)
 
     context = gather_writing_context(
         story=story,
         chapters_data=chapters_data,
-        pos=pos,
+        pos=pos if pos is not None else 0,
         title=chapter_title,
         summary=chapter_summary,
         payload=payload,
     )
 
-    model_type = "EDITING" if target == "summary" else "WRITING"
+    model_type = (
+        "EDITING"
+        if target in ("summary", "story_summary", "book_summary")
+        else "WRITING"
+    )
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
@@ -418,6 +437,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         chapter_summary=chapter_summary,
         chapter_conflicts=context["chapter_conflicts"],
         existing_content=existing_content,
+        chapter_summaries=chapter_summaries_text,
         style_tags=context["story_tags"],
         model_overrides=model_overrides,
         language=story.get("language", "en"),
@@ -425,7 +445,13 @@ def prepare_ai_action_generation(payload: dict) -> dict:
 
     # Sanitize the last message content (the user prompt)
     if messages and len(messages) > 0:
+        # If the backend is streaming but no text reaches the frontend, it often
+        # means the prompt formatting failed or returned an empty string.
+        # We ensure it's sanitized but also present.
         messages[-1]["content"] = sanitize_prompt(messages[-1]["content"])
+
+    # For debugging: print the final user prompt to verify formatting
+    # print(f"DEBUG PROMPT: {messages[-1]['content']}")
 
     return {
         "target": target,

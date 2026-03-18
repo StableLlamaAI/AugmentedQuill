@@ -128,7 +128,9 @@ export type MainSidebarControls = {
     type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   isEditingAvailable: boolean;
   handleOpenImages: () => void;

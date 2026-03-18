@@ -41,7 +41,9 @@ interface ChapterListProps {
     type: 'chapter' | 'book',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   isAiAvailable?: boolean;
   theme?: AppTheme;
@@ -418,12 +420,14 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           }
           onAiGenerate={
             onAiAction && editingMetadata
-              ? (action, onProgress) =>
+              ? (action, onProgress, currentText, onThinking) =>
                   onAiAction(
                     editingMetadata.type,
                     editingMetadata.id,
                     action,
-                    onProgress
+                    onProgress,
+                    currentText,
+                    onThinking
                   )
               : undefined
           }

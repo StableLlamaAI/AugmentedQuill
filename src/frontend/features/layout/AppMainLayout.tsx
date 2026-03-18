@@ -397,8 +397,15 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             private_notes={story.private_notes}
             language={story.language}
             conflicts={story.conflicts}
-            onAiGenerateSummary={(action, onProgress) =>
-              handleSidebarAiAction('story', story.id, action, onProgress)
+            onAiGenerateSummary={(action, onProgress, currentText, onThinking) =>
+              handleSidebarAiAction(
+                'story',
+                story.id,
+                action,
+                onProgress,
+                currentText,
+                onThinking
+              )
             }
             summaryAiDisabledReason={
               !isEditingAvailable

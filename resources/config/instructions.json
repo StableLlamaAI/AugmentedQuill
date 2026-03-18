@@ -21,6 +21,19 @@
       "Refer to images using Markdown: ![Description](filename). Use `placeholder` as the filename if you need an image but don't have one yet."
     ]
   },
+  "tool_instruction_block": {
+    "_use": "SYSTEM",
+    "en": [
+      "You have access to the following tools:",
+      "{{tools_json}}",
+      "",
+      "To use a tool, return a tool_call. Do NOT write prose if you are updating metadata via a tool."
+    ]
+  },
+  "story_context_block": {
+    "_use": "SYSTEM",
+    "en": ["Story Overview for context:", "{{story_summary}}"]
+  },
   "chapter_summarizer": {
     "_use": "EDITING",
     "en": [

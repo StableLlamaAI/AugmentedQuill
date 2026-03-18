@@ -46,7 +46,7 @@ router = APIRouter(tags=["Story"])
 
 async def _create_gen_source_pure(prepared: dict):
     """Create a generator source for streaming."""
-    async for chunk in stream_unified_chat_content(
+    async for chunk_dict in stream_unified_chat_content(
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
@@ -55,14 +55,14 @@ async def _create_gen_source_pure(prepared: dict):
         model_name=prepared.get("model_name"),
         model_type=prepared.get("model_type"),
     ):
-        yield chunk
+        yield chunk_dict
 
 
 async def _create_gen_source(prepared: dict):
     """Create a generator source for streaming wrapped in SSE data events."""
     try:
-        async for chunk in _create_gen_source_pure(prepared):
-            yield f"data: {json.dumps({'content': chunk})}\n\n"
+        async for chunk_dict in _create_gen_source_pure(prepared):
+            yield f"data: {json.dumps(chunk_dict)}\n\n"
     except ServiceError as e:
         # Re-raise service errors as they are handled by the global exception handler for REST,
         # but for streaming we might need to yield an error event.

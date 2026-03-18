@@ -18,6 +18,10 @@ from augmentedquill.core.prompts import (
     get_user_prompt,
     load_model_prompt_overrides,
 )
+from augmentedquill.services.chat.chat_tool_decorator import (
+    EDITING_ROLE,
+    get_tool_schemas,
+)
 
 
 def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
@@ -73,14 +77,40 @@ def build_chapter_summary_messages(
     current_summary: str,
     chapter_text: str,
     model_overrides: dict,
+    story_summary: str | None = None,
     language: str | None = None,
 ):
     """Build messages for creating or updating a chapter summary."""
+    sys_parts = [
+        get_system_message("chapter_summarizer", model_overrides, language=language)
+    ]
+
+    if story_summary:
+        sys_parts.append(
+            get_system_message(
+                "story_context_block",
+                model_overrides,
+                language=language,
+                story_summary=story_summary,
+            )
+        )
+
+    tools = get_tool_schemas(EDITING_ROLE)
+    if tools:
+        import json
+
+        sys_parts.append(
+            get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_json=json.dumps(tools, indent=2),
+            )
+        )
+
     sys_msg = {
         "role": "system",
-        "content": get_system_message(
-            "chapter_summarizer", model_overrides, language=language
-        ),
+        "content": "\n\n".join(sys_parts),
     }
     if mode == "discard" or not current_summary:
         user_prompt = get_user_prompt(
@@ -109,11 +139,26 @@ def build_story_summary_messages(
     language: str | None = None,
 ):
     """Build messages for creating or updating a story-level summary."""
+    sys_parts = [
+        get_system_message("story_summarizer", model_overrides, language=language)
+    ]
+
+    tools = get_tool_schemas(EDITING_ROLE)
+    if tools:
+        import json
+
+        sys_parts.append(
+            get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_json=json.dumps(tools, indent=2),
+            )
+        )
+
     sys_msg = {
         "role": "system",
-        "content": get_system_message(
-            "story_summarizer", model_overrides, language=language
-        ),
+        "content": "\n\n".join(sys_parts),
     }
     if mode == "discard" or not current_story_summary:
         user_prompt = get_user_prompt(
@@ -207,7 +252,8 @@ def build_ai_action_messages(
     chapter_summary: str,
     chapter_conflicts: str,
     existing_content: str,
-    style_tags: str,
+    chapter_summaries: str = "",
+    style_tags: str = "",
     model_overrides: dict,
     language: str | None = None,
 ):
@@ -218,10 +264,14 @@ def build_ai_action_messages(
         user_key = f"ai_action_summary_{action}_user"
     elif target == "book_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = "ai_action_summary_rewrite_user"
+        user_key = (
+            "story_summary_new" if action == "rewrite" else "story_summary_update"
+        )
     elif target == "story_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = "ai_action_summary_rewrite_user"
+        user_key = (
+            "story_summary_new" if action == "rewrite" else "story_summary_update"
+        )
     else:
         sys_key = f"ai_action_chapter_{action}"
         user_key = f"ai_action_chapter_{action}_user"
@@ -255,6 +305,7 @@ def build_ai_action_messages(
         existing_text=existing_content,
         current_summary=chapter_summary,
         existing_summary=chapter_summary,
+        chapter_summaries=chapter_summaries,
         style_tags=style_tags,
         background="",  # Background is not used for AI actions for now
     )

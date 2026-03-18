@@ -41,7 +41,9 @@ interface StoryMetadataProps {
   ) => void;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
   theme?: AppTheme;

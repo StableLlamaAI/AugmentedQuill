@@ -120,6 +120,13 @@ async def unified_chat_stream(
         temperature, max_tokens, model_cfg
     )
 
+    # For EDITING tasks (like summarization), if we have a thinking model, we likely need more tokens.
+    # We boost max_tokens to 16k if it's below that, to allow for extensive reasoning.
+    if model_type == "EDITING" and (max_tokens is None or max_tokens < 16384):
+        # We check for known reasoning model patterns if possible, or just apply it for all editing tasks
+        # since summaries usually don't reach 16k anyway, so it's a safe upper bound.
+        max_tokens = 16384
+
     merged_extra_body = apply_native_tool_calling_mode(
         extra_body,
         supports_function_calling=supports_function_calling,
