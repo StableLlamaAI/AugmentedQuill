@@ -101,7 +101,6 @@ class ChatToolsTest(TestCase):
                                     {
                                         "chap_id": 1,
                                         "notes": "New note",
-                                        "private_notes": "Secret info",
                                         "conflicts": json.dumps(
                                             [{"id": "c1", "description": "Fight!"}]
                                         ),
@@ -122,7 +121,7 @@ class ChatToolsTest(TestCase):
             story = json.load(f)
         chap1 = story["chapters"][0]
         self.assertEqual(chap1.get("notes"), "New note")
-        self.assertEqual(chap1.get("private_notes"), "Secret info")
+        self.assertIsNone(chap1.get("private_notes"))
         self.assertEqual(len(chap1.get("conflicts", [])), 1)
 
         # 2. Test aliases for story summary
