@@ -29,6 +29,8 @@ import {
   HelpCircle,
   ImagePlus,
   Check,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
@@ -96,6 +98,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const [newSynonym, setNewSynonym] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [relations, setRelations] = useState<SourcebookRelation[]>([]);
+  const [isImagesExpanded, setIsImagesExpanded] = useState(true);
+  const [isRelationsExpanded, setIsRelationsExpanded] = useState(true);
   const [isRelationDialogVisible, setIsRelationDialogVisible] = useState(false);
   const [editingRelationIndex, setEditingRelationIndex] = useState<number | null>(null);
   const [allEntriesMap, setAllEntriesMap] = useState<Record<string, string>>({});
@@ -129,6 +133,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
+    const hasImages = (entry?.images?.length ?? 0) > 0;
+    const hasRelations = (entry?.relations?.length ?? 0) > 0;
+
     if (entry) {
       setName(entry.name || '');
       setDescription(entry.description || '');
@@ -148,6 +155,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setNewSynonym('');
       setShowKeywordsPanel(false);
     }
+
+    setIsImagesExpanded(hasImages);
+    setIsRelationsExpanded(hasRelations);
   }, [entry, isOpen]);
 
   const handleSave = () => {
@@ -417,11 +427,17 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             {/* Images Section */}
             <div className="space-y-2">
               <div className="flex justify-between items-end">
-                <label
-                  className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+                <button
+                  type="button"
+                  onClick={() => setIsImagesExpanded((v) => !v)}
+                  className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
-                  Associated Images
-                </label>
+                  <span>Associated Images</span>
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${isImagesExpanded ? 'rotate-0' : '-rotate-90'}`}
+                  />
+                </button>
                 <div className="flex gap-2">
                   <Button
                     onClick={() => setIsImagePickerOpen(true)}
@@ -435,57 +451,65 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 </div>
               </div>
 
-              <div
-                className={`p-3 rounded-md border min-h-[100px] ${inputBorderClass} ${inputBgClass}`}
-              >
-                {selectedImagesList.length === 0 ? (
-                  <div className="h-20 flex flex-col items-center justify-center text-gray-500 text-xs">
-                    <ImageIcon size={20} className="mb-1 opacity-50" />
-                    <span>No images associated</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-                    {selectedImagesList.map((img) => {
-                      const tooltip = `${img.title || img.filename}\n${img.description || ''}`;
-                      return (
-                        <div
-                          key={img.filename}
-                          className="relative aspect-square rounded overflow-hidden border border-brand-500/20 group bg-gray-100 dark:bg-gray-800"
-                          title={tooltip}
-                        >
-                          {img.is_placeholder ? (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <ImageIcon size={24} />
-                            </div>
-                          ) : (
-                            <img
-                              src={img.url}
-                              alt={img.filename}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                          <button
-                            onClick={() => toggleImage(img.filename)}
-                            className="absolute top-0 right-0 p-1 bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
+              {isImagesExpanded && (
+                <div
+                  className={`p-3 rounded-md border min-h-[100px] ${inputBorderClass} ${inputBgClass}`}
+                >
+                  {selectedImagesList.length === 0 ? (
+                    <div className="h-20 flex flex-col items-center justify-center text-gray-500 text-xs">
+                      <ImageIcon size={20} className="mb-1 opacity-50" />
+                      <span>No images associated</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                      {selectedImagesList.map((img) => {
+                        const tooltip = `${img.title || img.filename}\n${img.description || ''}`;
+                        return (
+                          <div
+                            key={img.filename}
+                            className="relative aspect-square rounded overflow-hidden border border-brand-500/20 group bg-gray-100 dark:bg-gray-800"
+                            title={tooltip}
                           >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                            {img.is_placeholder ? (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                <ImageIcon size={24} />
+                              </div>
+                            ) : (
+                              <img
+                                src={img.url}
+                                alt={img.filename}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                            <button
+                              onClick={() => toggleImage(img.filename)}
+                              className="absolute top-0 right-0 p-1 bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Relations */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label
-                  className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
+                <button
+                  type="button"
+                  onClick={() => setIsRelationsExpanded((v) => !v)}
+                  className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
-                  Relations
-                </label>
+                  <span>Relations</span>
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${isRelationsExpanded ? 'rotate-0' : '-rotate-90'}`}
+                  />
+                </button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -500,86 +524,87 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 </Button>
               </div>
 
-              {relations.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {relations.map((rel, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between p-2 rounded-md border ${inputBorderClass} ${inputBgClass}`}
-                    >
-                      <div className="flex flex-col min-w-0 pr-4">
-                        <div className="flex items-center gap-1.5 text-sm font-medium">
-                          <Link size={14} className="text-brand-500 flex-shrink-0" />
-                          <span className="truncate">
-                            {rel.direction === 'reverse' ? (
-                              <>
-                                {allEntriesMap[rel.target_id] || rel.target_id}{' '}
-                                <span className="opacity-70 font-normal">
-                                  [{rel.relation}]
-                                </span>{' '}
-                                this
-                              </>
-                            ) : (
-                              <>
-                                <span className="opacity-70 font-normal">
-                                  [{rel.relation}]
-                                </span>{' '}
-                                {allEntriesMap[rel.target_id] || rel.target_id}
-                              </>
-                            )}
-                          </span>
-                        </div>
-                        {(rel.start_chapter ||
-                          rel.end_chapter ||
-                          rel.start_book ||
-                          rel.end_book) && (
-                          <div className="text-xs opacity-60 mt-1 truncate">
-                            {rel.start_chapter ? `Start: ${rel.start_chapter}` : ''}
-                            {rel.start_book ? ` (${rel.start_book})` : ''}
-                            {(rel.start_chapter || rel.start_book) &&
-                            (rel.end_chapter || rel.end_book)
-                              ? ' | '
-                              : ''}
-                            {rel.end_chapter ? `End: ${rel.end_chapter}` : ''}
-                            {rel.end_book ? ` (${rel.end_book})` : ''}
+              {isRelationsExpanded &&
+                (relations.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {relations.map((rel, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between p-2 rounded-md border ${inputBorderClass} ${inputBgClass}`}
+                      >
+                        <div className="flex flex-col min-w-0 pr-4">
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            <Link size={14} className="text-brand-500 flex-shrink-0" />
+                            <span className="truncate">
+                              {rel.direction === 'reverse' ? (
+                                <>
+                                  {allEntriesMap[rel.target_id] || rel.target_id}{' '}
+                                  <span className="opacity-70 font-normal">
+                                    [{rel.relation}]
+                                  </span>{' '}
+                                  this
+                                </>
+                              ) : (
+                                <>
+                                  <span className="opacity-70 font-normal">
+                                    [{rel.relation}]
+                                  </span>{' '}
+                                  {allEntriesMap[rel.target_id] || rel.target_id}
+                                </>
+                              )}
+                            </span>
                           </div>
-                        )}
+                          {(rel.start_chapter ||
+                            rel.end_chapter ||
+                            rel.start_book ||
+                            rel.end_book) && (
+                            <div className="text-xs opacity-60 mt-1 truncate">
+                              {rel.start_chapter ? `Start: ${rel.start_chapter}` : ''}
+                              {rel.start_book ? ` (${rel.start_book})` : ''}
+                              {(rel.start_chapter || rel.start_book) &&
+                              (rel.end_chapter || rel.end_book)
+                                ? ' | '
+                                : ''}
+                              {rel.end_chapter ? `End: ${rel.end_chapter}` : ''}
+                              {rel.end_book ? ` (${rel.end_book})` : ''}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              setEditingRelationIndex(idx);
+                              setIsRelationDialogVisible(true);
+                            }}
+                            className={
+                              'p-1 rounded-md hover:bg-brand-500/10 text-brand-500 transition-colors'
+                            }
+                            title="Edit relation"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              setRelations(relations.filter((_, i) => i !== idx))
+                            }
+                            className={
+                              'p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors'
+                            }
+                            title="Remove relation"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditingRelationIndex(idx);
-                            setIsRelationDialogVisible(true);
-                          }}
-                          className={
-                            'p-1 rounded-md hover:bg-brand-500/10 text-brand-500 transition-colors'
-                          }
-                          title="Edit relation"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setRelations(relations.filter((_, i) => i !== idx))
-                          }
-                          className={
-                            'p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors'
-                          }
-                          title="Remove relation"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className={`text-sm opacity-60 italic p-3 rounded-md border border-dashed ${inputBorderClass}`}
-                >
-                  No relations to other entries yet.
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className={`text-sm opacity-60 italic p-3 rounded-md border border-dashed ${inputBorderClass}`}
+                  >
+                    No relations to other entries yet.
+                  </div>
+                ))}
             </div>
 
             {/* Description */}
@@ -699,7 +724,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
       {/* Image Picker Modal */}
       {isImagePickerOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div
             className={`${bgClass} ${textClass} w-full max-w-4xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[85vh]`}
           >
