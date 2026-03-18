@@ -28,10 +28,40 @@ type ToolCallChunk = {
   };
 };
 
+export const parseToolArguments = (args: string): Record<string, unknown> | string => {
+  try {
+    return JSON.parse(args);
+  } catch {
+    // Some tool argument payloads can contain unescaped newlines or other
+    // characters that make the JSON invalid when streamed from the backend.
+    // Try a best-effort repair so we don't lose tool call data.
+    const normalized = args
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
+      .replace(/\r\n/g, '\\n')
+      .replace(/\n/g, '\\n')
+      .replace(/\t/g, '\\t');
+
+    const firstBrace = normalized.indexOf('{');
+    const lastBrace = normalized.lastIndexOf('}');
+    const candidate =
+      firstBrace !== -1 && lastBrace > firstBrace
+        ? normalized.slice(firstBrace, lastBrace + 1)
+        : normalized;
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Fall back to the raw string so callers can still pass it through.
+      return args;
+    }
+  }
+};
+
 type ParsedFunctionCall = {
   id: string;
   name: string;
-  args: Record<string, unknown>;
+  args: Record<string, unknown> | string;
 };
 
 type ModelsResponse = {
@@ -281,19 +311,11 @@ export const createChatSession = (
 
         const functionCalls = toolCallsAccumulator
           .filter((c) => c && (c.name || c.args))
-          .map((c) => {
-            let parsedArgs = {};
-            try {
-              parsedArgs = c.args ? JSON.parse(c.args) : {};
-            } catch (e) {
-              console.error('Failed to parse tool arguments', c.args);
-            }
-            return {
-              id: c.id,
-              name: c.name,
-              args: parsedArgs,
-            };
-          });
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            args: c.args ? parseToolArguments(c.args) : {},
+          }));
 
         return {
           text: applySmartQuotes(text),

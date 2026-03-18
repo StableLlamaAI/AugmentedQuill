@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateContinuations } from './openaiService';
+import { generateContinuations, parseToolArguments } from './openaiService';
 import type { LLMConfig } from '../types';
 
 describe('openaiService', () => {
@@ -43,5 +43,11 @@ describe('openaiService', () => {
     const options = callArgs[1];
     const body = JSON.parse(options.body);
     expect(body.checked_sourcebook).toEqual(['A', 'B']);
+  });
+
+  it('repairs tool argument JSON with raw newlines', () => {
+    const raw = '{"chap_id":1,"notes":"line1\nline2"}';
+    const result = parseToolArguments(raw);
+    expect(result).toEqual({ chap_id: 1, notes: 'line1\nline2' });
   });
 });
