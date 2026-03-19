@@ -1176,10 +1176,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             </div>
           )}
         </div>
-
-        <div className="fixed bottom-4 right-4 text-xs opacity-30 pointer-events-none">
-          {/* Debug or Status info could go here */}
-        </div>
       </div>
     );
   }

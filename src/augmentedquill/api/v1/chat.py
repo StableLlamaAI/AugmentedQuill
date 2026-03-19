@@ -30,9 +30,11 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     execute_registered_tool,
     get_registered_tool_schemas,
 )
-from augmentedquill.services.chat.chat_api_helpers import inject_project_images
-from augmentedquill.services.chat.chat_api_stream_ops import (
+from augmentedquill.services.chat.chat_api_helpers import (
+    inject_project_images,
     normalize_chat_messages,
+)
+from augmentedquill.services.chat.chat_api_stream_ops import (
     resolve_stream_model_context,
     ensure_system_message_if_missing,
     resolve_story_llm_prefs,
@@ -55,22 +57,23 @@ from typing import Any, Dict
 from augmentedquill.models.chat import ChatInitialStateResponse
 from augmentedquill.utils.json_repair import try_parse_json_robust
 from augmentedquill.api.v1.request_body import parse_json_object_body
+from augmentedquill.utils.path_utils import safe_child_path
 
 router = APIRouter(tags=["Chat"])
 
 proxy_openai_models = _chat_api_proxy_ops.proxy_openai_models
 httpx = _chat_api_proxy_ops.httpx
 
+
 _CHAT_TOOL_BATCH_DIR = ".aq_history/chat_tool_batches"
 _BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
-    base_resolved = base_dir.resolve()
-    candidate = base_resolved.joinpath(*parts).resolve()
-    if not candidate.is_relative_to(base_resolved):
+    try:
+        return safe_child_path(base_dir, *parts)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid path component")
-    return candidate
 
 
 def _validated_batch_id(batch_id: str) -> str:

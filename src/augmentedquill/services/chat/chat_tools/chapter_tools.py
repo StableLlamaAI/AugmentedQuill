@@ -768,7 +768,9 @@ async def call_editing_assistant(
                 tool_role=EDITING_ROLE,
             )
             if "role" not in tool_res:
-                from augmentedquill.services.chat.chat_tools.common import tool_message
+                from augmentedquill.services.chat.chat_tool_decorator import (
+                    tool_message,
+                )
 
                 tool_res = tool_message(f_name, tcall_id, tool_res)
 

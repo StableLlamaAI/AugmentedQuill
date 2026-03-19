@@ -21,6 +21,7 @@ from augmentedquill.services.projects.project_snapshots import (
     snapshot_to_directory,
     restore_from_directory,
 )
+from augmentedquill.utils.path_utils import safe_child_path
 
 router = APIRouter(tags=["Checkpoints"])
 
@@ -62,13 +63,7 @@ def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
         raise ValueError("Invalid checkpoint name")
 
     checkpoints_dir = (project_dir / _CHECKPOINTS_DIR_NAME).resolve()
-    target_dir = (checkpoints_dir / name).resolve()
-
-    # Ensure the target stays inside the checkpoints directory (no path traversal)
-    if not target_dir.is_relative_to(checkpoints_dir):
-        raise ValueError("Invalid checkpoint name")
-
-    return target_dir
+    return safe_child_path(checkpoints_dir, name)
 
 
 @router.get("/checkpoints", response_model=CheckpointListResponse)

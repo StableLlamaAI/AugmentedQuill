@@ -41,6 +41,9 @@ def normalize_chat_messages(val: Any) -> list[dict]:
         tcs = m.get("tool_calls")
         if isinstance(tcs, list) and tcs:
             msg["tool_calls"] = tcs
+            # OpenAI requires content=null for assistant messages that have tool_calls
+            if role == "assistant":
+                msg["content"] = None
         out.append(msg)
     return out
 
