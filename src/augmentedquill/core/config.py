@@ -21,10 +21,13 @@ Only generic JSON dicts are returned to keep things simple in early stages.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
+
+import jsonschema
 
 from augmentedquill.services.story.config_story_ops import (
     normalize_validate_story_config,
@@ -34,6 +37,8 @@ from augmentedquill.services.story.config_story_ops import (
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 CONFIG_DIR = BASE_DIR / "resources" / "config"
 SCHEMAS_DIR = BASE_DIR / "resources" / "schemas"
+
+_logger = logging.getLogger(__name__)
 RESOURCES_DIR = BASE_DIR / "resources"
 _ENV_USER_DATA_DIR = os.getenv("AUGQ_USER_DATA_DIR")
 DATA_DIR = Path(_ENV_USER_DATA_DIR) if _ENV_USER_DATA_DIR else BASE_DIR / "data"
@@ -79,6 +84,41 @@ def _get_story_schema(version: int) -> Dict[str, Any]:
     schema_path = SCHEMAS_DIR / f"story-v{version}.schema.json"
     with open(schema_path, "r") as f:
         return json.load(f)
+
+
+def _validate_machine_config(config: Dict[str, Any], path_label: str) -> None:
+    """Validate machine config against the schema if openai key is present.
+
+    Emits a warning log on failure instead of raising, because machine.json
+    may legitimately be incomplete (e.g. on first startup before the user
+    has configured any models).
+    """
+    if "openai" not in config:
+        return
+    schema_path = SCHEMAS_DIR / "machine.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(config, schema)
+    except jsonschema.ValidationError as exc:
+        _logger.warning("machine config at %s is invalid: %s", path_label, exc.message)
+    except Exception as exc:  # noqa: BLE001 – schema file missing, etc.
+        _logger.warning("Could not validate machine config at %s: %s", path_label, exc)
+
+
+def _validate_projects_registry(data: Dict[str, Any], path_label: str) -> None:
+    """Validate projects registry against the schema.
+
+    Raises ValueError on schema violations so callers are forced to handle a
+    corrupt registry rather than silently operating on bad data.
+    """
+    schema_path = SCHEMAS_DIR / "projects.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(data, schema)
+    except jsonschema.ValidationError as exc:
+        raise ValueError(
+            f"Invalid projects registry at {path_label}: {exc.message}"
+        ) from exc
 
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
@@ -180,6 +220,7 @@ def load_machine_config(
     # Merge JSON over defaults, then env over that
     merged = _deep_merge(defaults, json_config)
     merged = _deep_merge(merged, _env_overrides_for_openai())
+    _validate_machine_config(merged, str(resolved_path))
     return merged
 
 

@@ -16,6 +16,26 @@ from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.chapters.chapter_helpers import _normalize_chapter_entry
 
 
+def _to_optional_float(value) -> float | None:
+    """Coerce *value* to float, returning None for empty/invalid input."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _to_optional_int(value) -> int | None:
+    """Coerce *value* to int, returning None for empty/invalid input."""
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
 def build_story_cfg_from_payload(story: dict) -> dict:
     """Build a normalized story configuration payload for persistence."""
     normalized_chapters = [
@@ -132,22 +152,6 @@ def clean_machine_openai_cfg_for_put(
             timeout_s_int = int(timeout_s)
         except Exception:
             timeout_s_int = 60
-
-        def _to_optional_float(value):
-            if value in (None, ""):
-                return None
-            try:
-                return float(value)
-            except Exception:
-                return None
-
-        def _to_optional_int(value):
-            if value in (None, ""):
-                return None
-            try:
-                return int(value)
-            except Exception:
-                return None
 
         stop_value = model.get("stop")
         if isinstance(stop_value, list):

@@ -69,6 +69,54 @@ _CHAT_TOOL_BATCH_DIR = ".aq_history/chat_tool_batches"
 _BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
+async def _run_tool_calls(
+    tool_calls: list,
+    payload: dict,
+    model_type: str,
+    active_dir: Path | None,
+) -> tuple[list[dict], dict, list[str]]:
+    """Execute raw tool_calls and return (appended_messages, mutations, tool_names)."""
+    appended: list[dict] = []
+    mutations: dict = {"story_changed": False}
+    tool_names: list[str] = []
+
+    # Determine project language for typographic quote handling in tool arguments.
+    project_language = "en"
+    if active_dir:
+        story_cfg = load_story_config(active_dir / "story.json") or {}
+        project_language = str(story_cfg.get("language", "en") or "en")
+
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        call_id = str(call.get("id") or "")
+        func = call.get("function") or {}
+        name = (func.get("name") if isinstance(func, dict) else None) or ""
+        args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
+        try:
+            args_obj = (
+                try_parse_json_robust(args_raw, language=project_language)
+                if isinstance(args_raw, str)
+                else (args_raw or {})
+            )
+        except (ValueError, TypeError):
+            args_obj = {}
+        if not name or not call_id:
+            continue
+        tool_names.append(name)
+        msg = await execute_registered_tool(
+            name,
+            args_obj,
+            call_id,
+            payload,
+            mutations,
+            tool_role=model_type,
+        )
+        appended.append(msg)
+
+    return appended, mutations, tool_names
+
+
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
     try:
         return safe_child_path(base_dir, *parts)
@@ -184,9 +232,6 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         if isinstance(t, list):
             tool_calls = t
 
-    appended: list[dict] = []
-    mutations = {"story_changed": False}
-    tool_names: list[str] = []
     active_project_dir = get_active_project_dir()
     before_snapshot: Dict[str, str] | None = None
     batch_id: str | None = None
@@ -195,40 +240,9 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
-    # Determine project language for typographic quote handling in tool arguments.
-    project_language = "en"
-    active = get_active_project_dir()
-    if active:
-        story_cfg = load_story_config(active / "story.json") or {}
-        project_language = str(story_cfg.get("language", "en") or "en")
-
-    for call in tool_calls:
-        if not isinstance(call, dict):
-            continue
-        call_id = str(call.get("id") or "")
-        func = call.get("function") or {}
-        name = (func.get("name") if isinstance(func, dict) else None) or ""
-        args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
-        try:
-            args_obj = (
-                try_parse_json_robust(args_raw, language=project_language)
-                if isinstance(args_raw, str)
-                else (args_raw or {})
-            )
-        except (ValueError, TypeError):
-            args_obj = {}
-        if not name or not call_id:
-            continue
-        tool_names.append(name)
-        msg = await execute_registered_tool(
-            name,
-            args_obj,
-            call_id,
-            payload,
-            mutations,
-            tool_role=model_type,
-        )
-        appended.append(msg)
+    appended, mutations, tool_names = await _run_tool_calls(
+        tool_calls, payload, model_type, active_project_dir
+    )
 
     if (
         active_project_dir

@@ -83,3 +83,24 @@ class ProjectRegistryOpsTest(TestCase):
         active = get_active_project_dir_from_registry({"current": "/tmp/abs"})
         self.assertIsNotNone(active)
         self.assertEqual(str(active), "/tmp/abs")
+
+
+class RegistrySchemaValidationTest(TestCase):
+    """Tests for schema-based validation in save_registry_to_path."""
+
+    def test_save_valid_registry_writes_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            registry_path = Path(td) / "projects.json"
+            save_registry_to_path(registry_path, current="/tmp/p1", recent=["/tmp/p2"])
+            payload = json.loads(registry_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["current"], "/tmp/p1")
+            self.assertIn("/tmp/p1", payload["recent"])
+
+    def test_save_empty_string_current_is_valid(self):
+        """An empty current string is schema-valid (no active project state)."""
+        with tempfile.TemporaryDirectory() as td:
+            registry_path = Path(td) / "projects.json"
+            save_registry_to_path(registry_path, current="", recent=[])
+            payload = json.loads(registry_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["current"], "")
+            self.assertEqual(payload["recent"], [])
