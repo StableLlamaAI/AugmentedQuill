@@ -15,6 +15,7 @@ import { X, Search, ArrowRightLeft } from 'lucide-react';
 import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { Button } from '../../components/ui/Button';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface SourcebookRelationDialogProps {
   isOpen: boolean;
@@ -50,13 +51,13 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   const [endBook, setEndBook] = useState('');
   const [direction, setDirection] = useState<'forward' | 'reverse'>('forward');
 
-  const isLight = theme === 'light';
-
-  const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
-  const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
-  const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const inputBgClass = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
-  const inputBorderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
+  const {
+    bg: bgClass,
+    text: textClass,
+    border: borderClass,
+    input: inputBgClass,
+  } = useThemeClasses();
+  const inputBorderClass = borderClass;
 
   useEffect(() => {
     if (isOpen) {

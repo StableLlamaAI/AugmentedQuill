@@ -98,3 +98,47 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 export function useTheme(): ThemeContextValue {
   return useContext(ThemeContext);
 }
+
+// ---------------------------------------------------------------------------
+// Dialog / panel class tokens
+// ---------------------------------------------------------------------------
+
+/** Standard class set for dialogs, modals, and forms. */
+export type ThemeClasses = {
+  isLight: boolean;
+  /** Modal / dialog background: bg-white (light) | bg-brand-gray-900 (dark). */
+  bg: string;
+  /** Primary body text: text-brand-gray-900 (light) | text-brand-gray-100 (dark). */
+  text: string;
+  /** Standard border colour: border-brand-gray-200 (light) | border-brand-gray-800 (dark). */
+  border: string;
+  /** Form input background: bg-white (light) | bg-brand-gray-950/50 (dark). */
+  input: string;
+  /** Card / list-item background: bg-brand-gray-50 (light) | bg-brand-gray-800 (dark). */
+  card: string;
+  /** Secondary panel surface: bg-brand-gray-50 (light) | bg-brand-gray-900 (dark). */
+  surface: string;
+  /** Muted label / helper text: text-brand-gray-600 (light) | text-brand-gray-400 (dark). */
+  muted: string;
+};
+
+/**
+ * Returns a standard set of Tailwind class strings for dialogs and forms.
+ * Complements the layout tokens in `useTheme()`.
+ */
+export function useThemeClasses(): ThemeClasses {
+  const { isLight } = useTheme();
+  return useMemo<ThemeClasses>(
+    () => ({
+      isLight,
+      bg: isLight ? 'bg-white' : 'bg-brand-gray-900',
+      text: isLight ? 'text-brand-gray-900' : 'text-brand-gray-100',
+      border: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
+      input: isLight ? 'bg-white' : 'bg-brand-gray-950/50',
+      card: isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800',
+      surface: isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900',
+      muted: isLight ? 'text-brand-gray-600' : 'text-brand-gray-400',
+    }),
+    [isLight]
+  );
+}
