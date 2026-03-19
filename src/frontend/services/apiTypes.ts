@@ -9,7 +9,7 @@
  * Defines the api types unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Book, Chapter, Conflict, SourcebookEntry } from '../types';
+import { Book, Chapter, Conflict, SourcebookEntry, SourcebookRelation } from '../types';
 
 export interface MachineModelConfig {
   name: string;
@@ -76,6 +76,8 @@ export interface ProjectListItem {
 export interface StoryApiPayload {
   project_title?: string;
   story_summary?: string;
+  notes?: string;
+  private_notes?: string;
   tags?: string[];
   image_style?: string;
   image_additional_info?: string;
@@ -211,6 +213,8 @@ export interface SourcebookUpsertPayload {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
+  relations?: SourcebookRelation[];
 }
 
 export interface DebugLogEntry {

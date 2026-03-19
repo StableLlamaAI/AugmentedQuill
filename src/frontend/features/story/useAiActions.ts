@@ -9,11 +9,12 @@
  * Defines the use ai actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 
 import { ChatMessage, Chapter, StoryState } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
+import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 
 type PromptsState = {
   system_messages: Record<string, string>;
@@ -26,6 +27,7 @@ type UseAiActionsParams = {
   prompts: PromptsState;
   isEditingAvailable: boolean;
   isWritingAvailable: boolean;
+  checkedSourcebookIds?: string[];
   updateChapter: (
     id: string,
     partial: Partial<Chapter>,
@@ -39,10 +41,26 @@ export function useAiActions({
   currentChapter,
   isEditingAvailable,
   isWritingAvailable,
+  checkedSourcebookIds,
   updateChapter,
   getErrorMessage,
 }: UseAiActionsParams) {
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
+  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const isMountedRef = useRef(true);
+
+  // Avoid updating state after the component has unmounted.
+  // This can happen if the user cancels a streaming action while the component is still tearing down.
+  useEffect(() => setupMountedRefLifecycle(isMountedRef), []);
+
+  const cancelAiAction = () => {
+    cancelSignalRef.current.cancelled = true;
+    cancelSignalRef.current.reader?.cancel();
+    cancelSignalRef.current.reader = undefined;
+    if (isMountedRef.current) {
+      setIsAiActionLoading(false);
+    }
+  };
 
   const handleAiAction = async (
     target: 'summary' | 'chapter',
@@ -53,6 +71,8 @@ export function useAiActions({
     if (target === 'chapter' && !isWritingAvailable) return;
 
     setIsAiActionLoading(true);
+
+    cancelSignalRef.current = { cancelled: false };
 
     try {
       const isChapterStreamingAction =
@@ -86,8 +106,19 @@ export function useAiActions({
         action,
         currentChapter.id,
         currentChapter.content,
-        pushProgress
+        pushProgress,
+        undefined,
+        undefined,
+        checkedSourcebookIds,
+        cancelSignalRef.current
       );
+
+      // If the user cancelled the action while it was streaming, avoid
+      // applying any final updates and exit quickly so the UI can return to
+      // an idle state.
+      if (cancelSignalRef.current.cancelled) {
+        return;
+      }
 
       if (target === 'summary') {
         await updateChapter(currentChapter.id, { summary: result });
@@ -102,7 +133,10 @@ export function useAiActions({
       console.error('AI Action Error:', error);
       notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
-      setIsAiActionLoading(false);
+      if (isMountedRef.current) {
+        setIsAiActionLoading(false);
+      }
+      cancelSignalRef.current.cancelled = true;
     }
   };
 
@@ -110,10 +144,15 @@ export function useAiActions({
     type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
   ): Promise<string | undefined> => {
     if (!isEditingAvailable) return undefined;
     setIsAiActionLoading(true);
+
+    cancelSignalRef.current = { cancelled: false };
 
     try {
       const cleanText = (text: string) => {
@@ -131,19 +170,27 @@ export function useAiActions({
         target,
         action,
         id,
-        '',
-        onProgress ? (partial) => onProgress(cleanText(partial)) : undefined
+        currentText ?? '',
+        onProgress ? (partial) => onProgress(cleanText(partial)) : undefined,
+        onThinking,
+        source,
+        undefined,
+        cancelSignalRef.current
       );
 
       return cleanText(result);
     } catch (error: unknown) {
+      console.error('AI Sidebar action error:', error);
       notifyError(
         `AI Action Failed: ${getErrorMessage(error, 'Unknown error')}`,
         error
       );
       return undefined;
     } finally {
-      setIsAiActionLoading(false);
+      if (isMountedRef.current) {
+        setIsAiActionLoading(false);
+      }
+      cancelSignalRef.current.cancelled = true;
     }
   };
 
@@ -151,5 +198,6 @@ export function useAiActions({
     isAiActionLoading,
     handleAiAction,
     handleSidebarAiAction,
+    cancelAiAction,
   };
 }

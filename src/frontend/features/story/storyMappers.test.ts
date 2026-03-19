@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { reanchorChapterSelection } from './storyMappers';
+import { mapSelectStoryToState, reanchorChapterSelection } from './storyMappers';
 import { Chapter } from '../../types';
 
 describe('storyMappers reanchorChapterSelection', () => {
@@ -61,5 +61,41 @@ describe('storyMappers reanchorChapterSelection', () => {
     ];
 
     expect(reanchorChapterSelection('1', chapters, nextChapters)).toBe(null);
+  });
+});
+
+describe('storyMappers mapSelectStoryToState', () => {
+  it('maps story-level notes and private notes from API payload', () => {
+    const mapped = mapSelectStoryToState(
+      'demo-project',
+      {
+        project_title: 'Demo',
+        story_summary: 'Summary',
+        notes: 'Visible notes',
+        private_notes: 'Hidden notes',
+      },
+      [],
+      null,
+      []
+    );
+
+    expect(mapped.notes).toBe('Visible notes');
+    expect(mapped.private_notes).toBe('Hidden notes');
+  });
+
+  it('defaults missing story-level notes/private notes to empty strings', () => {
+    const mapped = mapSelectStoryToState(
+      'demo-project',
+      {
+        project_title: 'Demo',
+        story_summary: 'Summary',
+      },
+      [],
+      null,
+      []
+    );
+
+    expect(mapped.notes).toBe('');
+    expect(mapped.private_notes).toBe('');
   });
 });

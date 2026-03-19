@@ -5,7 +5,8 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""Shared generation preparation helpers used by streaming and non-streaming story flows."""
+"""Shared generation preparation helpers used by streaming and non-streaming
+story flows."""
 
 from __future__ import annotations
 
@@ -20,7 +21,12 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_continue_chapter_messages,
     build_story_summary_messages,
     build_write_chapter_messages,
+    get_system_message,
     resolve_model_runtime,
+)
+from augmentedquill.services.chat.chat_tool_decorator import (
+    EDITING_ROLE,
+    get_tool_schemas,
 )
 from augmentedquill.services.story.story_api_state_ops import (
     collect_chapter_summaries,
@@ -40,7 +46,7 @@ def sanitize_prompt(prompt: str) -> str:
     for i, line in enumerate(lines):
         # drop any line that looks like a label with nothing after colon
         # UNLESS the next lines contain content for this label
-        if re.match(r"^[A-Za-z ]+:\s*$", line):
+        if re.match(r"^[A-Za-z'\- ]+:\s*$", line):
             has_content = False
             for next_line in lines[i + 1 :]:
                 next_line = next_line.strip()
@@ -48,7 +54,7 @@ def sanitize_prompt(prompt: str) -> str:
                     continue
                 if next_line == "---":
                     break
-                if re.match(r"^[A-Za-z ]+:\s*$", next_line):
+                if re.match(r"^[A-Za-z'\- ]+:\s*$", next_line):
                     break
                 has_content = True
                 break
@@ -109,6 +115,13 @@ def gather_writing_context(
                 conflict_lines.append(line)
     conflicts_text = "\n".join(conflict_lines)
 
+    # chapter notes
+    chapter_notes = ""
+    try:
+        chapter_notes = str(chapters_data[pos].get("notes", "") or "").strip()
+    except Exception:
+        chapter_notes = ""
+
     # background (sourcebook)
     background = ""
     try:
@@ -131,7 +144,7 @@ def gather_writing_context(
                     continue
                 seen.add(eid)
                 desc = entry.get("description", "")
-                lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+                lines.append(f"[{entry.get('name', eid)}]\n" f"{desc}\n")
 
         # include any explicitly checked entries passed by the client
         checked = (payload or {}).get("checked_sourcebook") or []
@@ -146,7 +159,7 @@ def gather_writing_context(
                     if eid and eid not in seen:
                         seen.add(eid)
                         desc = entry.get("description", "")
-                        lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+                        lines.append(f"[{entry.get('name', eid)}]\n" f"{desc}\n")
 
         background = "\n".join(lines)
     except Exception:
@@ -160,6 +173,7 @@ def gather_writing_context(
         "story_tags": story_tags,
         "background": background,
         "chapter_conflicts": conflicts_text,
+        "chapter_notes": chapter_notes,
     }
 
 
@@ -201,6 +215,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }
 
 
@@ -228,11 +243,19 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
             base_dir=BASE_DIR,
         )
     )
+    content_label = get_system_message(
+        "chapter_text_label",
+        model_overrides,
+        language=story.get("language", "en"),
+    )
+
     messages = build_chapter_summary_messages(
         mode=mode,
         current_summary=current_summary,
         chapter_text=chapter_text,
+        content_label=content_label,
         model_overrides=model_overrides,
+        story_summary=story.get("story_summary"),
         language=story.get("language", "en"),
     )
 
@@ -249,6 +272,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }
 
 
@@ -292,6 +316,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_title=title,
         chapter_summary=summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         model_overrides=model_overrides,
         language=story.get("language", "en"),
     )
@@ -350,6 +375,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_title=title,
         chapter_summary=summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         existing_text=existing,
         model_overrides=model_overrides,
         language=story.get("language", "en"),
@@ -374,31 +400,61 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     action = payload.get("action")  # 'update' | 'rewrite' | 'extend'
     chap_id = payload.get("chap_id")
 
-    if not chap_id:
-        raise BadRequestError("chap_id is required")
+    if target in ("summary", "chapter") and not chap_id:
+        raise BadRequestError("chap_id is required for chapter-level actions")
 
-    _, path, pos = get_chapter_locator(chap_id)
+    if chap_id:
+        _, path, pos = get_chapter_locator(chap_id)
+    else:
+        path, pos = None, None
+
+    # Read the current chapter text once (if we have a chapter path).
+    actual_chapter_text = read_text_or_raise(path) if path else None
+
     existing_content = payload.get("current_text")
     if not isinstance(existing_content, str):
-        existing_content = read_text_or_raise(path)
+        existing_content = actual_chapter_text or ""
+
+    # Decide whether the provided text should be treated as notes.
+    source_hint = payload.get("source")
+    is_notes_source = source_hint == "notes"
+    if (
+        not is_notes_source
+        and isinstance(existing_content, str)
+        and actual_chapter_text is not None
+        and existing_content.strip()
+        and existing_content.strip() != actual_chapter_text.strip()
+    ):
+        is_notes_source = True
 
     _, story_path, story = get_active_story_or_raise()
     chapters_data = get_normalized_chapters(story)
-    ensure_chapter_slot(chapters_data, pos)
 
-    chapter_summary = chapters_data[pos].get("summary", "")
-    chapter_title = chapters_data[pos].get("title") or path.name
+    if pos is not None:
+        ensure_chapter_slot(chapters_data, pos)
+        chapter_summary = chapters_data[pos].get("summary", "")
+        chapter_title = chapters_data[pos].get("title") or path.name
+    else:
+        chapter_summary = ""
+        chapter_title = ""
+
+    chapter_summaries_list = collect_chapter_summaries(chapters_data)
+    chapter_summaries_text = "\n\n".join(chapter_summaries_list)
 
     context = gather_writing_context(
         story=story,
         chapters_data=chapters_data,
-        pos=pos,
+        pos=pos if pos is not None else 0,
         title=chapter_title,
         summary=chapter_summary,
         payload=payload,
     )
 
-    model_type = "EDITING" if target == "summary" else "WRITING"
+    model_type = (
+        "EDITING"
+        if target in ("summary", "story_summary", "book_summary")
+        else "WRITING"
+    )
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
@@ -414,18 +470,32 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         story_title=context["story_title"],
         story_summary=context["story_summary"],
         story_tags=context["story_tags"],
+        background=context["background"],
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         existing_content=existing_content,
+        chapter_summaries=chapter_summaries_text,
         style_tags=context["story_tags"],
+        content_label=get_system_message(
+            "chapter_notes_label" if is_notes_source else "chapter_text_label",
+            {},
+            language=story.get("language", "en"),
+        ),
         model_overrides=model_overrides,
         language=story.get("language", "en"),
     )
 
     # Sanitize the last message content (the user prompt)
     if messages and len(messages) > 0:
+        # If the backend is streaming but no text reaches the frontend, it often
+        # means the prompt formatting failed or returned an empty string.
+        # We ensure it's sanitized but also present.
         messages[-1]["content"] = sanitize_prompt(messages[-1]["content"])
+
+    # For debugging: print the final user prompt to verify formatting
+    # print(f"DEBUG PROMPT: {messages[-1]['content']}")
 
     return {
         "target": target,
@@ -444,4 +514,5 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
     }

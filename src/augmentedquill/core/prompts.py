@@ -127,6 +127,7 @@ def get_system_message(
     message_type: str,
     model_overrides: Optional[Dict[str, Any]] = None,
     language: str | None = None,
+    **kwargs,
 ) -> str:
     """
     Get a system message, checking for model-specific overrides first and
@@ -150,13 +151,43 @@ def get_system_message(
     # both system and user prompts live in the same map; for system messages
     # we simply pull the raw template and ignore any kwargs.
     if model_overrides and message_type in model_overrides:
-        return ensure_string(model_overrides[message_type])
+        template = ensure_string(model_overrides[message_type])
+    else:
+        lang = (language or "en").lower()
+        entry = DEFAULT_PROMPTS.get(message_type, {})
+        if isinstance(entry, dict):
+            template = ensure_string(entry.get(lang) or entry.get("en") or "")
+        else:
+            template = ensure_string(entry)
 
-    lang = (language or "en").lower()
-    entry = DEFAULT_PROMPTS.get(message_type, {})
-    if isinstance(entry, dict):
-        return ensure_string(entry.get(lang) or entry.get("en") or "")
-    return ensure_string(entry)
+    if not template:
+        return ""
+
+    try:
+        format_kwargs = {
+            k: v for k, v in kwargs.items() if k != "user_prompt_overrides"
+        }
+        if not template:
+            return ""
+        # if no format_kwargs, just return template to avoid KeyError
+        if not format_kwargs:
+            return template
+
+        # Use double braces to prevent .format() from interpreting them
+        safe_template = template.replace("{{", "DOUBLE_OPEN_BRACE").replace(
+            "}}", "DOUBLE_CLOSE_BRACE"
+        )
+        formatted = safe_template.format(**format_kwargs)
+        return formatted.replace("DOUBLE_OPEN_BRACE", "{").replace(
+            "DOUBLE_CLOSE_BRACE", "}"
+        )
+    except KeyError:
+        # If a placeholder is missing, return the unformatted template.
+        # This prevents crashes when new placeholders are added to JSON but
+        # not yet passed by all callsites.
+        return template
+    except Exception:
+        return template
 
 
 def get_user_prompt(prompt_type: str, language: str | None = None, **kwargs) -> str:
@@ -194,19 +225,25 @@ def get_user_prompt(prompt_type: str, language: str | None = None, **kwargs) -> 
 
     try:
         # Strip control keys so only template variables reach format().
-        #
-        # SECURITY: CodeQL may warn about uncontrolled format strings; our
-        # templates are bundled with the application or supplied via trusted
-        # machine.json overrides, not by untrusted users.  We perform a
-        # simple key-stripping lookup and raise if a placeholder is missing,
-        # which prevents unexpected evaluation.  The callsites never expose
-        # the raw template to end users.
         format_kwargs = {
             k: v for k, v in kwargs.items() if k != "user_prompt_overrides"
         }
-        return template.format(**format_kwargs)
-    except KeyError as e:
-        raise ValueError(f"Missing required parameter for prompt {prompt_type}: {e}")
+        if not format_kwargs:
+            return template
+
+        # Use double braces to prevent .format() from interpreting them
+        safe_template = template.replace("{{", "DOUBLE_OPEN_BRACE").replace(
+            "}}", "DOUBLE_CLOSE_BRACE"
+        )
+        formatted = safe_template.format(**format_kwargs)
+        return formatted.replace("DOUBLE_OPEN_BRACE", "{").replace(
+            "DOUBLE_CLOSE_BRACE", "}"
+        )
+    except KeyError:
+        # If a placeholder is missing, return the unformatted template.
+        return template
+    except Exception:
+        return template
 
 
 def load_model_prompt_overrides(

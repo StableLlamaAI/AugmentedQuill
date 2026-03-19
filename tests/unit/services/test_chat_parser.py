@@ -72,6 +72,40 @@ class TestChatParser(unittest.TestCase):
         args = json.loads(calls[0]["function"]["arguments"])
         self.assertEqual(args["chap_id"], 1)
 
+    def test_parse_xml_style_tool_call_parameter_tags(self):
+        """Test parsing of XML-style tool calls that encode args as parameter tags."""
+        content = """
+        <tool_call>
+        <function=get_chapter_metadata>
+        <parameter=chap_id>
+        6
+        </parameter>
+        </function>
+        </tool_call>
+        """
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["function"]["name"], "get_chapter_metadata")
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["chap_id"], 6)
+
+    def test_parse_xml_style_tool_call_multiple_parameter_tags(self):
+        """Test parsing of XML-style tool calls with multiple typed parameters."""
+        content = """
+        <tool_call>
+        <function=update_chapter_metadata>
+        <parameter=chap_id>4</parameter>
+        <parameter=notes>"Updated notes"</parameter>
+        </function>
+        </tool_call>
+        """
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["chap_id"], 4)
+        self.assertEqual(args["notes"], "Updated notes")
+
     def test_parse_func_call_style(self):
         """Test parsing of function call style: Tool(Args)."""
         content = """

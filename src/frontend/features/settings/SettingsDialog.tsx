@@ -400,13 +400,25 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         providers.find((p) => p.id === localSettings.activeEditingProviderId) ||
         providers[0];
 
+      const cleanPromptOverrides = (prompts?: Record<string, string> | null) =>
+        Object.fromEntries(
+          Object.entries(prompts || {}).filter(
+            ([, value]) => String(value || '').trim() !== ''
+          )
+        );
+
+      const cleanedProviders = providers.map((p) => ({
+        ...p,
+        prompts: cleanPromptOverrides(p.prompts),
+      }));
+
       const machinePayload = {
         openai: {
           selected: activeChat?.name || '',
           selected_chat: activeChat?.name || '',
           selected_writing: activeWriting?.name || '',
           selected_editing: activeEditing?.name || '',
-          models: providers.map((p) => ({
+          models: cleanedProviders.map((p) => ({
             name: (p.name || '').trim(),
             base_url: (p.baseUrl || '').trim(),
             api_key: p.apiKey || '',
@@ -432,8 +444,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         },
       };
 
+      const cleanedSettings = { ...localSettings, providers: cleanedProviders };
+
       await api.machine.save(machinePayload);
-      onSaveSettings(localSettings);
+      onSaveSettings(cleanedSettings);
       onClose();
     } catch (e: unknown) {
       console.error('Failed to save machine settings', e);

@@ -16,6 +16,7 @@ import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../typ
 import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
 import { api } from '../../services/api';
+import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 
 type UseChapterSuggestionsParams = {
   currentChapter?: Chapter;
@@ -46,7 +47,10 @@ export function useChapterSuggestions({
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
   const [isAutoSourcebookSelectionEnabled, setIsAutoSourcebookSelectionEnabled] =
-    useState(true);
+    useState(() => {
+      const saved = localStorage.getItem('aq_auto_sourcebook_selection');
+      return saved !== null ? saved === 'true' : true;
+    });
   const [isSourcebookSelectionRunning, setIsSourcebookSelectionRunning] =
     useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -57,9 +61,16 @@ export function useChapterSuggestions({
   >([]);
   const autoSelectionEnabledRef = useRef(isAutoSourcebookSelectionEnabled);
   const relevanceInFlightRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => setupMountedRefLifecycle(isMountedRef), []);
 
   useEffect(() => {
     autoSelectionEnabledRef.current = isAutoSourcebookSelectionEnabled;
+    localStorage.setItem(
+      'aq_auto_sourcebook_selection',
+      isAutoSourcebookSelectionEnabled.toString()
+    );
   }, [isAutoSourcebookSelectionEnabled]);
 
   const clampCursor = (cursor: number, content: string) => {
@@ -110,6 +121,21 @@ export function useChapterSuggestions({
     return () => clearTimeout(timer);
   }, [currentChapter?.content, isAutoSourcebookSelectionEnabled]);
 
+  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+
+  const cancelSuggestions = () => {
+    cancelSignalRef.current.cancelled = true;
+    cancelSignalRef.current.reader?.cancel();
+    cancelSignalRef.current.reader = undefined;
+    if (!isMountedRef.current) return;
+    setIsSuggesting(false);
+    setIsSuggestionMode(false);
+    setContinuations([]);
+  };
+
+  const isAbortError = (error: unknown): boolean =>
+    error instanceof Error && error.name === 'AbortError';
+
   const handleTriggerSuggestions = async (
     cursor?: number,
     contentOverride?: string,
@@ -127,6 +153,9 @@ export function useChapterSuggestions({
 
     setIsSuggesting(true);
     setContinuations([]);
+
+    cancelSignalRef.current = { cancelled: false };
+
     try {
       const storyContext = `Title: ${story.title}\nSummary: ${story.summary}\nTags: ${story.styleTags.join(', ')}`;
       const options = await generateContinuations(
@@ -137,6 +166,7 @@ export function useChapterSuggestions({
         currentChapter.id,
         Array.from(checkedEntries),
         {
+          cancelSignal: cancelSignalRef.current,
           onSuggestionUpdate: (index, text) => {
             if (!text) return;
             setContinuations((previous) => {
@@ -158,7 +188,10 @@ export function useChapterSuggestions({
       };
       setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsSuggesting(false);
+      if (isMountedRef.current) {
+        setIsSuggesting(false);
+      }
+      cancelSignalRef.current.cancelled = true;
     }
   };
 
@@ -258,6 +291,7 @@ export function useChapterSuggestions({
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    cancelSuggestions,
     checkedEntries,
     handleToggleEntry,
     isAutoSourcebookSelectionEnabled,

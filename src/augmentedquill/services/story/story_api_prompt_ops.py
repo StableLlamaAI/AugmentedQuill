@@ -18,6 +18,19 @@ from augmentedquill.core.prompts import (
     get_user_prompt,
     load_model_prompt_overrides,
 )
+from augmentedquill.services.chat.chat_tool_decorator import (
+    EDITING_ROLE,
+    get_tool_schemas,
+)
+
+
+def _ensure_tools_loaded():
+    """Force load tool modules to ensure they are registered without causing circular imports at module level."""
+    # We import here to avoid circular dependencies with story_generation_ops which imports us
+    import augmentedquill.services.chat.chat_tools.chapter_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.story_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.project_tools  # noqa: F401
+    import augmentedquill.services.chat.chat_tools.sourcebook_tools  # noqa: F401
 
 
 def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
@@ -55,7 +68,7 @@ def _build_messages(
     sys_msg = {
         "role": "system",
         "content": get_system_message(
-            system_message_key, model_overrides, language=language
+            system_message_key, model_overrides, language=language, **prompt_kwargs
         ),
     }
     user_prompt = get_user_prompt(
@@ -72,20 +85,75 @@ def build_chapter_summary_messages(
     mode: str,
     current_summary: str,
     chapter_text: str,
+    content_label: str,
     model_overrides: dict,
+    story_summary: str | None = None,
+    story_tags: str = "",
     language: str | None = None,
 ):
     """Build messages for creating or updating a chapter summary."""
+    _ensure_tools_loaded()
+    sys_parts = [
+        get_system_message("chapter_summarizer", model_overrides, language=language)
+    ]
+
+    if story_summary:
+        sys_parts.append(
+            get_system_message(
+                "story_context_block",
+                model_overrides,
+                language=language,
+                story_summary=story_summary,
+                story_tags=story_tags,
+            )
+        )
+
+    tools = get_tool_schemas(EDITING_ROLE)
+    if tools:
+        # Only expose read-only tools that provide facts and story context.
+        relevant_names = {
+            "get_project_overview",
+            "get_story_metadata",
+            "get_story_summary",
+            "get_story_tags",
+            "get_chapter_metadata",
+            "get_chapter_content",
+            "get_chapter_summary",
+            "get_chapter_summaries",
+            "search_sourcebook",
+            "get_sourcebook_entry",
+        }
+
+        tool_lines: list[str] = []
+        for t in tools:
+            fn = t.get("function", {}).get("name")
+            if not fn or fn not in relevant_names:
+                continue
+            desc = t.get("function", {}).get("description", "")
+            if desc:
+                tool_lines.append(f"- {fn}: {desc}")
+            else:
+                tool_lines.append(f"- {fn}")
+        tools_list = "\n".join(tool_lines)
+
+        sys_parts.append(
+            get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_list=tools_list,
+            )
+        )
+
     sys_msg = {
         "role": "system",
-        "content": get_system_message(
-            "chapter_summarizer", model_overrides, language=language
-        ),
+        "content": "\n\n".join(part for part in sys_parts if part),
     }
     if mode == "discard" or not current_summary:
         user_prompt = get_user_prompt(
             "chapter_summary_new",
             language=language,
+            content_label=content_label,
             chapter_text=chapter_text,
             user_prompt_overrides=model_overrides,
         )
@@ -93,6 +161,7 @@ def build_chapter_summary_messages(
         user_prompt = get_user_prompt(
             "chapter_summary_update",
             language=language,
+            content_label=content_label,
             existing_summary=current_summary,
             chapter_text=chapter_text,
             user_prompt_overrides=model_overrides,
@@ -109,11 +178,49 @@ def build_story_summary_messages(
     language: str | None = None,
 ):
     """Build messages for creating or updating a story-level summary."""
+    sys_parts = [
+        get_system_message("story_summarizer", model_overrides, language=language)
+    ]
+
+    tools = get_tool_schemas(EDITING_ROLE)
+    if tools:
+        # Only expose read-only tools relevant for understanding the story state.
+        relevant_names = {
+            "get_project_overview",
+            "get_story_metadata",
+            "get_story_summary",
+            "get_story_tags",
+            "get_chapter_metadata",
+            "get_chapter_content",
+            "get_chapter_summary",
+            "get_chapter_summaries",
+            "search_sourcebook",
+            "get_sourcebook_entry",
+        }
+        tool_lines: list[str] = []
+        for t in tools:
+            fn = t.get("function", {}).get("name")
+            if not fn or fn not in relevant_names:
+                continue
+            desc = t.get("function", {}).get("description", "")
+            if desc:
+                tool_lines.append(f"- {fn}: {desc}")
+            else:
+                tool_lines.append(f"- {fn}")
+        tools_list = "\n".join(tool_lines)
+
+        sys_parts.append(
+            get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_list=tools_list,
+            )
+        )
+
     sys_msg = {
         "role": "system",
-        "content": get_system_message(
-            "story_summarizer", model_overrides, language=language
-        ),
+        "content": "\n\n".join(sys_parts),
     }
     if mode == "discard" or not current_story_summary:
         user_prompt = get_user_prompt(
@@ -143,6 +250,7 @@ def build_write_chapter_messages(
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str,
     model_overrides: dict,
     language: str | None = None,
 ):
@@ -160,6 +268,7 @@ def build_write_chapter_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
+        chapter_notes=chapter_notes,
     )
 
 
@@ -173,6 +282,7 @@ def build_continue_chapter_messages(
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str,
     existing_text: str,
     model_overrides: dict,
     language: str | None = None,
@@ -191,6 +301,7 @@ def build_continue_chapter_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
+        chapter_notes=chapter_notes,
         existing_text=existing_text,
     )
 
@@ -203,25 +314,40 @@ def build_ai_action_messages(
     story_title: str,
     story_summary: str,
     story_tags: str,
+    background: str = "",
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str = "",
     existing_content: str,
-    style_tags: str,
+    chapter_summaries: str = "",
+    style_tags: str = "",
+    content_label: str | None = None,
     model_overrides: dict,
     language: str | None = None,
 ):
     """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
+    _ensure_tools_loaded()
     # Map target/action to prompt keys
     if target == "summary":
-        sys_key = f"ai_action_summary_{action}"
-        user_key = f"ai_action_summary_{action}_user"
+        # 'write' is used for generating a new summary (empty or missing existing summary)
+        # 'rewrite' is used for rewriting an existing summary.
+        if action in ("write", "rewrite"):
+            sys_key = "ai_action_summary_rewrite"
+            user_key = "chapter_summary_new"
+        else:
+            sys_key = "ai_action_summary_update"
+            user_key = "chapter_summary_update"
     elif target == "book_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = "ai_action_summary_rewrite_user"
+        user_key = (
+            "story_summary_new" if action == "rewrite" else "story_summary_update"
+        )
     elif target == "story_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = "ai_action_summary_rewrite_user"
+        user_key = (
+            "story_summary_new" if action == "rewrite" else "story_summary_update"
+        )
     else:
         sys_key = f"ai_action_chapter_{action}"
         user_key = f"ai_action_chapter_{action}_user"
@@ -232,11 +358,63 @@ def build_ai_action_messages(
             user_key = "continue_chapter"
         elif action == "rewrite":
             user_key = "write_chapter"
-    elif user_key.startswith("ai_action_summary_"):
-        if action == "rewrite":
-            user_key = "chapter_summary_new"
-        else:
-            user_key = "chapter_summary_update"
+
+    # Additional placeholders for EDITING tasks
+    story_context = ""
+    tool_instructions = ""
+    if target in ("summary", "story_summary", "book_summary"):
+        if story_summary:
+            story_context = get_system_message(
+                "story_context_block",
+                model_overrides,
+                language=language,
+                story_summary=story_summary,
+                story_tags=story_tags,
+            )
+
+        tools = get_tool_schemas(EDITING_ROLE)
+        if tools:
+            # Only expose read-only tools that provide facts and story context.
+            relevant_names = {
+                "get_project_overview",
+                "get_story_metadata",
+                "get_story_summary",
+                "get_story_tags",
+                "get_chapter_metadata",
+                "get_chapter_content",
+                "get_chapter_summary",
+                "get_chapter_summaries",
+                "search_sourcebook",
+                "get_sourcebook_entry",
+            }
+
+            tool_lines: list[str] = []
+            for t in tools:
+                fn = t.get("function", {}).get("name")
+                if not fn or fn not in relevant_names:
+                    continue
+                desc = t.get("function", {}).get("description", "")
+                if desc:
+                    tool_lines.append(f"- {fn}: {desc}")
+                else:
+                    tool_lines.append(f"- {fn}")
+
+            tools_list = "\n".join(tool_lines)
+
+            tool_instructions = get_system_message(
+                "tool_instruction_block",
+                model_overrides,
+                language=language,
+                tools_list=tools_list,
+            )
+
+    # Prefer a localized label for the provided text when available.
+    if content_label is None:
+        content_label = get_system_message(
+            "chapter_text_label",
+            model_overrides,
+            language=language,
+        )
 
     return _build_messages(
         system_message_key=sys_key,
@@ -250,11 +428,15 @@ def build_ai_action_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
-        chapter_content=existing_content,
+        chapter_notes=chapter_notes,
+        existing_content=existing_content,
         chapter_text=existing_content,
         existing_text=existing_content,
-        current_summary=chapter_summary,
         existing_summary=chapter_summary,
+        chapter_summaries=chapter_summaries,
         style_tags=style_tags,
-        background="",  # Background is not used for AI actions for now
+        content_label=content_label,
+        background=background,
+        story_context=story_context,
+        tool_instructions=tool_instructions,
     )

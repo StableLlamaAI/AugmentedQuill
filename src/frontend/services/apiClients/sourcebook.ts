@@ -14,12 +14,20 @@ import { SourcebookUpsertPayload } from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const sourcebookApi = {
-  list: async () => {
-    return fetchJson<SourcebookEntry[]>(
-      '/sourcebook',
-      undefined,
-      'Failed to load sourcebook'
-    );
+  list: async (
+    query?: string,
+    matchMode: 'direct' | 'extensive' = 'extensive',
+    splitQueryFallback = false
+  ) => {
+    const params = new URLSearchParams();
+    if (query !== undefined) {
+      params.set('query', query);
+    }
+    params.set('match_mode', matchMode);
+    params.set('split_query_fallback', splitQueryFallback ? 'true' : 'false');
+    const qs = params.toString();
+    const url = qs ? `/sourcebook?${qs}` : '/sourcebook';
+    return fetchJson<SourcebookEntry[]>(url, undefined, 'Failed to load sourcebook');
   },
 
   create: async (entry: SourcebookUpsertPayload) => {
@@ -51,6 +59,22 @@ export const sourcebookApi = {
       `/sourcebook/${id}`,
       { method: 'DELETE' },
       'Failed to delete entry'
+    );
+  },
+
+  generateKeywords: async (payload: {
+    name: string;
+    description: string;
+    synonyms?: string[];
+  }) => {
+    return fetchJson<{ keywords: string[] }>(
+      '/sourcebook/keywords',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      'Failed to generate keywords'
     );
   },
 };

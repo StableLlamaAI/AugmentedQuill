@@ -21,6 +21,32 @@
       "Refer to images using Markdown: ![Description](filename). Use `placeholder` as the filename if you need an image but don't have one yet."
     ]
   },
+  "tool_instruction_block": {
+    "_use": "SYSTEM",
+    "en": [
+      "You have access to the following tools:",
+      "{tools_list}",
+      "",
+      "To use a tool, return a tool_call. Do NOT write prose if you are updating metadata via a tool."
+    ]
+  },
+  "story_context_block": {
+    "_use": "SYSTEM",
+    "en": [
+      "Story Overview for context:",
+      "{story_summary}",
+      "",
+      "Story tags: {story_tags}"
+    ]
+  },
+  "chapter_text_label": {
+    "_use": "SYSTEM",
+    "en": "Chapter text"
+  },
+  "chapter_notes_label": {
+    "_use": "SYSTEM",
+    "en": "Chapter notes"
+  },
   "chapter_summarizer": {
     "_use": "EDITING",
     "en": [
@@ -105,6 +131,7 @@
       "- sync_summary: Auto-generate a summary for a chapter from its content.",
       "- create_new_chapter / write_chapter_heading / reorder_chapters / reorder_books: Maintain story structure.",
       "- list_images / generate_image_description / create_image_placeholder / set_image_metadata: Manage project visuals.",
+      "- read_scratchpad / write_scratchpad: State management for your own internal planning or long-term memory across many turns.",
       "",
       "IDENTITY POLICY:",
       "- You MUST use the exact ID (numeric for chapters, UUID for books) provided by the tools.",
@@ -114,6 +141,7 @@
       "IMPORTANT:",
       "- Do NOT write story prose yourself in the chat response. Use call_writing_llm instead.",
       "- Do NOT perform prose editing yourself in the chat response. Use call_editing_assistant instead.",
+      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") to avoid breaking JSON formatting.",
       "- You may update metadata directly when appropriate because that is part of your role.",
       "- If call_editing_assistant returns recommended metadata updates, review them and apply the ones that fit.",
       "- Keep the story notes, summaries, chapter notes, conflicts, and sourcebook aligned with the evolving draft.",
@@ -145,22 +173,44 @@
       "RULES:",
       "- Never call metadata-writing or sourcebook-writing tools directly.",
       "- Never add new plot beats on your own. If new prose is needed, request it with call_writing_llm.",
+      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") to avoid breaking JSON formatting.",
       "- Always call a tool when you want to modify chapter prose or return structured metadata recommendations."
+    ]
+  },
+  "sourcebook_keyword_extractor": {
+    "_use": "WRITING",
+    "en": [
+      "You are an information extraction assistant for sourcebook retrieval.",
+      "Output strict JSON only, no markdown, no commentary.",
+      "Return exactly this shape: {\"keywords\": [\"...\"]}.",
+      "Generate intelligent retrieval keywords that users are likely to search for.",
+      "Use one or two strong keywords per sentence as a rule of thumb, not exhaustive token dumps.",
+      "Prefer entities, roles, places, events, objects, and unique concepts.",
+      "Avoid filler words, conjunctions, and generic glue terms.",
+      "Each keyword must be concise (1-4 words) and useful for lookup, with a preference for single words."
     ]
   },
   "ai_action_summary_update": {
     "_use": "EDITING",
     "en": [
       "You are an expert story editor.",
-      "Read the chapter content and the current summary.",
-      "Update the summary to better reflect the content. Keep it concise."
+      "Use the provided text to update the chapter summary.",
+      "Keep the summary concise and accurate.",
+      "",
+      "{story_context}",
+      "",
+      "{tool_instructions}"
     ]
   },
   "ai_action_summary_rewrite": {
     "_use": "EDITING",
     "en": [
       "You are an expert story editor.",
-      "Read the chapter content and generate a concise summary."
+      "Use the provided text to write a concise chapter summary.",
+      "",
+      "{story_context}",
+      "",
+      "{tool_instructions}"
     ]
   },
   "ai_action_chapter_extend": {
@@ -181,10 +231,26 @@
     ]
   },
   "user_prompts": {
+    "sourcebook_keyword_extraction": {
+      "_use": "WRITING",
+      "en": [
+        "Sourcebook entry name: {entry_name}",
+        "Synonyms: {entry_synonyms}",
+        "",
+        "DESCRIPTION & FACTS:",
+        "{description_facts}",
+        "",
+        "Task:",
+        "Extract the most likely search keywords for retrieval and cover every piece of information provided.",
+        "Target quality: one to two keywords per sentence (not every token), prefer single words.",
+        "Focus on what a user would realistically search for.",
+        "Return strict JSON only: {{\"keywords\": [\"...\"]}}."
+      ]
+    },
     "chapter_summary_new": {
       "_use": "EDITING",
       "en": [
-        "Chapter text:",
+        "{content_label}:",
         "",
         "{chapter_text}",
         "",
@@ -198,7 +264,7 @@
         "",
         "{existing_summary}",
         "",
-        "Chapter text:",
+        "{content_label}:",
         "",
         "{chapter_text}",
         "",
@@ -218,13 +284,15 @@
         "",
         "---",
         "",
+        "Author's notes about the chapter:\n{chapter_notes}",
+        "",
+        "Chapter conflicts:\n{chapter_conflicts}",
+        "",
         "Title: {chapter_title}",
         "",
         "Summary:",
         "",
         "{chapter_summary}",
-        "",
-        "Chapter conflicts:\n{chapter_conflicts}",
         "",
         "---",
         "",
@@ -244,12 +312,14 @@
         "",
         "---",
         "",
+        "Author's notes about the chapter:\n{chapter_notes}",
+        "",
+        "Chapter conflicts:\n{chapter_conflicts}",
+        "",
         "Title: {chapter_title}",
         "",
         "Summary:",
         "{chapter_summary}",
-        "",
-        "Chapter conflicts:\n{chapter_conflicts}",
         "",
         "---",
         "",
@@ -331,6 +401,34 @@
         "Entries:\n{entries}"
       ]
     }
+  },
+  "typographic_quotes_open": {
+    "_use": "SYSTEM",
+    "en": "“",
+    "de": "„",
+    "fr": "«",
+    "es": "«"
+  },
+  "typographic_quotes_close": {
+    "_use": "SYSTEM",
+    "en": "”",
+    "de": "“",
+    "fr": "»",
+    "es": "»"
+  },
+  "typographic_single_quotes_open": {
+    "_use": "SYSTEM",
+    "en": "‘",
+    "de": "‚",
+    "fr": "‹",
+    "es": "‘"
+  },
+  "typographic_single_quotes_close": {
+    "_use": "SYSTEM",
+    "en": "’",
+    "de": "‘",
+    "fr": "›",
+    "es": "’"
   },
   "entry_selector": {
     "_use": "WRITING",

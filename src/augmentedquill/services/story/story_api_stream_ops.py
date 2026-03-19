@@ -24,8 +24,9 @@ async def stream_unified_chat_content(
     timeout_s: int,
     model_name: str | None = None,
     model_type: str | None = None,
-) -> AsyncIterator[str]:
-    """Stream Unified Chat Content."""
+    tools: list[dict] | None = None,
+) -> AsyncIterator[dict]:
+    """Stream Unified Chat Content as event dictionaries (content, thinking, tool_calls)."""
     async for chunk_dict in llm.unified_chat_stream(
         caller_id="story_api_stream.stream_unified_chat_content",
         messages=messages,
@@ -35,26 +36,31 @@ async def stream_unified_chat_content(
         timeout_s=timeout_s,
         model_name=model_name,
         model_type=model_type,
+        tools=tools,
     ):
-        chunk = chunk_dict.get("content", "")
-        if chunk:
-            yield chunk
+        yield chunk_dict
 
 
 async def stream_collect_and_persist(
-    stream_factory: Callable[[], AsyncIterator[str]],
+    stream_factory: Callable[[], AsyncIterator[dict]],
     persist_on_complete: Callable[[str], None],
     chunk_transformer: Callable[[str], str] | None = None,
 ) -> AsyncIterator[str]:
-    """Stream Collect And Persist."""
+    """Stream Collect And Persist.
+
+    This helper consumes an upstream stream of dicts and yields only the
+    `content` fragments as plain strings. That makes it compatible with
+    Starlette StreamingResponse which expects byte/str chunks.
+    """
     buf: list[str] = []
     try:
-        async for chunk in stream_factory():
-            if chunk:
+        async for chunk_dict in stream_factory():
+            content = chunk_dict.get("content", "")
+            if content:
                 # Store transformed (raw) chunk for persistence
-                raw_chunk = chunk_transformer(chunk) if chunk_transformer else chunk
+                raw_chunk = chunk_transformer(content) if chunk_transformer else content
                 buf.append(raw_chunk)
-                yield chunk
+            yield content
     except asyncio.CancelledError:
         return
 

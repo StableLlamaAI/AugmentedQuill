@@ -47,6 +47,10 @@ def normalize_validate_story_config(
         else:
             merged["project_type"] = "novel"
 
+    # Ensure project_type is valid; fallback to novel for unknown values.
+    if merged.get("project_type") not in ("novel", "series", "short-story"):
+        merged["project_type"] = "novel"
+
     sourcebook = merged.get("sourcebook")
     if isinstance(sourcebook, list):
         sourcebook_dict: Dict[str, Any] = {}

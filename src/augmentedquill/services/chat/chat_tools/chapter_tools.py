@@ -67,9 +67,6 @@ class UpdateChapterMetadataParams(BaseModel):
     title: str | None = Field(None, description="The chapter title")
     summary: str | None = Field(None, description="The chapter summary")
     notes: str | None = Field(None, description="Public notes about the chapter")
-    private_notes: str | None = Field(
-        None, description="Private notes about the chapter"
-    )
     conflicts: list | str | None = Field(
         None, description="List of conflicts in the chapter (can be JSON string)"
     )
@@ -201,7 +198,7 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, private_notes, conflicts).",
+    description="Update metadata for a specific chapter (title, summary, notes, conflicts).",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
@@ -221,7 +218,6 @@ async def update_chapter_metadata(
         title=params.title,
         summary=params.summary,
         notes=params.notes,
-        private_notes=params.private_notes,
         conflicts=conflicts,
     )
     mutations["story_changed"] = True

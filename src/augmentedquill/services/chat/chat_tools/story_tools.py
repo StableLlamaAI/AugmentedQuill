@@ -27,6 +27,8 @@ from augmentedquill.services.projects.projects import (
     update_story_metadata as _update_story_metadata,
     write_book_content as _write_book_content,
     write_story_content as _write_story_content,
+    read_scratchpad as _read_scratchpad,
+    write_scratchpad as _write_scratchpad,
 )
 
 # Pydantic models for tool parameters
@@ -133,6 +135,21 @@ class WriteStorySummaryParams(BaseModel):
     """Parameters for directly setting story summary."""
 
     summary: str = Field(..., description="The new story summary text")
+
+
+class ReadScratchpadParams(BaseModel):
+    """Parameters for reading the scratchpad (no parameters needed)."""
+
+    pass
+
+
+class WriteScratchpadParams(BaseModel):
+    """Parameters for writing content to the scratchpad."""
+
+    content: str = Field(
+        ...,
+        description="The full new content for the scratchpad. This replaces current content.",
+    )
 
 
 # Tool implementations with co-located schemas
@@ -279,6 +296,29 @@ async def write_book_content(
 ):
     _write_book_content(params.book_id, params.content)
     mutations["story_changed"] = True
+    return {"ok": True}
+
+
+@chat_tool(
+    description="Read your internal scratchpad/TODO list. Use this to remember complex plans or summaries across long turns.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
+async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations: dict):
+    """Read Scratchpad."""
+    return {"content": _read_scratchpad()}
+
+
+@chat_tool(
+    description="Update your internal scratchpad/TODO list. Overwrites current content.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-write",
+)
+async def write_scratchpad(
+    params: WriteScratchpadParams, payload: dict, mutations: dict
+):
+    """Write Scratchpad."""
+    _write_scratchpad(params.content)
     return {"ok": True}
 
 

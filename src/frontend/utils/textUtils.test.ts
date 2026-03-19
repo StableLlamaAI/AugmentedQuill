@@ -9,8 +9,17 @@
  * Tests for text utilities.
  */
 
-import { describe, it, expect } from 'vitest';
-import { computeContentWithSeparator, applySmartQuotes } from './textUtils';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  computeContentWithSeparator,
+  applySmartQuotes,
+  resetSmartQuoteChars,
+  setSmartQuoteChars,
+} from './textUtils';
+
+afterEach(() => {
+  resetSmartQuoteChars();
+});
 
 describe('computeContentWithSeparator', () => {
   it('should handle empty prefix', () => {
@@ -124,6 +133,16 @@ describe('applySmartQuotes', () => {
   it('should handle mixed typography and punctuation', () => {
     expect(applySmartQuotes('He shouted—"Stop!"')).toBe('He shouted—“Stop!”');
     expect(applySmartQuotes('("Wait," he said)')).toBe('(“Wait,” he said)');
+  });
+
+  it('should allow overriding quote characters', () => {
+    setSmartQuoteChars({ doubleOpen: '«', doubleClose: '»' });
+    expect(applySmartQuotes('"Hello"')).toBe('«Hello»');
+  });
+
+  it('should allow overriding single quote characters', () => {
+    setSmartQuoteChars({ singleOpen: '‹', singleClose: '›' });
+    expect(applySmartQuotes("'Hello'")).toBe('‹Hello›');
   });
 
   it('should ignore empty strings without throwing', () => {

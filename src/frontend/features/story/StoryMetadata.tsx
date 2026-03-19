@@ -41,7 +41,9 @@ interface StoryMetadataProps {
   ) => void;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
   theme?: AppTheme;
@@ -103,7 +105,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   };
 
   return (
-    <div id="story-metadata" className={`p-6 border-b ${containerClass}`}>
+    <div
+      id="story-metadata"
+      className={`p-6 flex-1 overflow-y-auto custom-scrollbar ${containerClass}`}
+    >
       {metadataModalOpen && (
         <MetadataEditorDialog
           type="story"

@@ -14,6 +14,7 @@ import { applySmartQuotes } from '../utils/textUtils';
 import {
   ChatContextUsage,
   prepareChatContext,
+  ChatHistoryMessage,
 } from '../features/chat/chatContextBudget';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
@@ -28,10 +29,40 @@ type ToolCallChunk = {
   };
 };
 
+export const parseToolArguments = (args: string): Record<string, unknown> | string => {
+  try {
+    return JSON.parse(args);
+  } catch {
+    // Some tool argument payloads can contain unescaped newlines or other
+    // characters that make the JSON invalid when streamed from the backend.
+    // Try a best-effort repair so we don't lose tool call data.
+    const normalized = args
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
+      .replace(/\r\n/g, '\\n')
+      .replace(/\n/g, '\\n')
+      .replace(/\t/g, '\\t');
+
+    const firstBrace = normalized.indexOf('{');
+    const lastBrace = normalized.lastIndexOf('}');
+    const candidate =
+      firstBrace !== -1 && lastBrace > firstBrace
+        ? normalized.slice(firstBrace, lastBrace + 1)
+        : normalized;
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Fall back to the raw string so callers can still pass it through.
+      return args;
+    }
+  }
+};
+
 type ParsedFunctionCall = {
   id: string;
   name: string;
-  args: Record<string, unknown>;
+  args: Record<string, unknown> | string;
 };
 
 type ModelsResponse = {
@@ -124,17 +155,37 @@ export const getModels = async (config: LLMConfig): Promise<string[]> => {
   }
 };
 
+export type CancelSignal = {
+  cancelled: boolean;
+  reader?: ReadableStreamDefaultReader<Uint8Array>;
+};
+
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onToolCalls?: (toolCalls: ToolCallChunk[]) => void,
   onThinking?: (thinking: string) => void,
-  onContent?: (content: string) => void
+  onContent?: (content: string) => void,
+  cancelSignal?: CancelSignal
 ): Promise<string> {
   let text = '';
   let buffer = '';
   const decoder = new TextDecoder();
 
+  if (cancelSignal) {
+    cancelSignal.reader = reader;
+  }
+
   while (true) {
+    if (cancelSignal?.cancelled) {
+      // Stop reading further and close the stream.
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+      break;
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -199,7 +250,7 @@ async function readSSEStream(
 
 export const createChatSession = (
   systemInstruction: string,
-  history: HistoryMessage[],
+  history: ChatHistoryMessage[],
   config: LLMConfig,
   modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
   options?: {
@@ -281,19 +332,11 @@ export const createChatSession = (
 
         const functionCalls = toolCallsAccumulator
           .filter((c) => c && (c.name || c.args))
-          .map((c) => {
-            let parsedArgs = {};
-            try {
-              parsedArgs = c.args ? JSON.parse(c.args) : {};
-            } catch (e) {
-              console.error('Failed to parse tool arguments', c.args);
-            }
-            return {
-              id: c.id,
-              name: c.name,
-              args: parsedArgs,
-            };
-          });
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            args: c.args ? parseToolArguments(c.args) : {},
+          }));
 
         return {
           text: applySmartQuotes(text),
@@ -357,18 +400,28 @@ export const streamAiAction = async (
   action: 'write' | 'update' | 'rewrite' | 'extend',
   chapId: string,
   currentText: string,
-  onUpdate?: (fullText: string) => void
+  onUpdate?: (fullText: string) => void,
+  onThinking?: (thinking: string) => void,
+  source?: 'chapter' | 'notes',
+  checkedSourcebookIds?: string[],
+  cancelSignal?: CancelSignal
 ): Promise<string> => {
+  const body: any = {
+    target,
+    action,
+    chap_id: Number(chapId),
+    target_id: Number(chapId),
+    current_text: currentText,
+    source,
+  };
+  if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+    body.checked_sourcebook = checkedSourcebookIds;
+  }
+
   const res = await fetch('/api/v1/story/action/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      target,
-      action,
-      chap_id: action === 'extend' || action === 'rewrite' ? Number(chapId) : 0,
-      target_id: Number(chapId),
-      current_text: currentText,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -380,10 +433,25 @@ export const streamAiAction = async (
   if (!reader) return '';
 
   let accumulated = '';
-  const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
-    accumulated += delta;
-    onUpdate?.(applySmartQuotes(accumulated));
-  });
+  let thinking = '';
+  const finalResult = await readSSEStream(
+    reader,
+    undefined,
+    (t) => {
+      thinking += t;
+      onThinking?.(thinking);
+    },
+    (delta) => {
+      accumulated += delta;
+      onUpdate?.(applySmartQuotes(accumulated));
+    },
+    cancelSignal
+  );
+
+  if (cancelSignal?.cancelled) {
+    return accumulated;
+  }
+
   return applySmartQuotes(finalResult);
 };
 
@@ -396,6 +464,7 @@ export const generateContinuations = async (
   checkedSourcebookIds?: string[],
   options?: {
     onSuggestionUpdate?: (index: number, text: string) => void;
+    cancelSignal?: CancelSignal;
   }
 ): Promise<string[]> => {
   if (!chapterId) return [];
@@ -423,6 +492,15 @@ export const generateContinuations = async (
       if (reader) {
         const decoder = new TextDecoder();
         while (true) {
+          if (options?.cancelSignal?.cancelled) {
+            try {
+              await reader.cancel();
+            } catch {
+              // ignore
+            }
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
           text += decoder.decode(value, { stream: true });

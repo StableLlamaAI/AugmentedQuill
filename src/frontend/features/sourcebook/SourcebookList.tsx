@@ -68,6 +68,52 @@ export const resolveExternalSourcebookEntries = (
   return currentEntries;
 };
 
+export const filterSourcebookEntries = (
+  entries: SourcebookEntry[],
+  query: string
+): SourcebookEntry[] => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return entries;
+  }
+
+  return entries.filter((entry) => {
+    const description = (entry.description || '').toLowerCase();
+    if (entry.name.toLowerCase().includes(normalizedQuery)) {
+      return true;
+    }
+    if (
+      (entry.synonyms || []).some((syn) => syn.toLowerCase().includes(normalizedQuery))
+    ) {
+      return true;
+    }
+    if (
+      (entry.keywords || []).some((kw) => kw.toLowerCase().includes(normalizedQuery))
+    ) {
+      return true;
+    }
+    if (description.includes(normalizedQuery)) {
+      return true;
+    }
+
+    // Fallback for natural multi-word queries: require every token to appear
+    // in at least one searchable field.
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    if (!tokens.length) {
+      return false;
+    }
+
+    const fields = [
+      entry.name,
+      ...(entry.synonyms || []),
+      ...(entry.keywords || []),
+      entry.description || '',
+    ].map((value) => value.toLowerCase());
+
+    return tokens.every((token) => fields.some((field) => field.includes(token)));
+  });
+};
+
 export const SourcebookList: React.FC<SourcebookListProps> = ({
   theme = 'mixed',
   externalEntries,
@@ -82,8 +128,10 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     resolveExternalSourcebookEntries(externalEntries, [])
   );
   const [search, setSearch] = useState('');
+  const externalEntriesRef = useRef<SourcebookEntry[] | undefined>(undefined);
   const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
 
   // Keep hover preview state local so list rendering stays stateless.
   const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
@@ -91,9 +139,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
 
   const isLight = theme === 'light';
 
-  const loadEntries = async () => {
+  const loadEntries = async (query?: string) => {
     try {
-      const data = await api.sourcebook.list();
+      const data = await api.sourcebook.list(query, 'extensive', false);
       setEntries(data);
     } catch (e) {
       console.error('Failed to load sourcebook', e);
@@ -101,21 +149,45 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   };
 
   useEffect(() => {
-    if (Array.isArray(externalEntries)) {
-      setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const hasQuery = search.trim().length > 0;
+
+    // In embedded/external mode we still rely on backend search for non-empty
+    // queries so filtering uses canonical sourcebook data (including generated keywords).
+    if (Array.isArray(externalEntries) && !hasQuery) {
+      const externalChanged = externalEntriesRef.current !== externalEntries;
+      if (externalChanged) {
+        externalEntriesRef.current = externalEntries;
+        setEntries(filterSourcebookEntries(externalEntries, search));
+      }
     } else {
-      loadEntries();
+      timeoutId = setTimeout(() => {
+        loadEntries(search);
+      }, 300);
     }
-  }, [externalEntries]);
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [externalEntries, search]);
 
   const syncEntries = async (
     updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
   ) => {
     if (Array.isArray(externalEntries)) {
+      if (search.trim()) {
+        await loadEntries(search);
+        return;
+      }
       if (updater) {
-        setEntries((prev) => updater(prev));
+        setEntries((prev) => filterSourcebookEntries(updater(prev), search));
       } else {
-        setEntries((prev) => resolveExternalSourcebookEntries(externalEntries, prev));
+        setEntries((prev) => {
+          const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
+          return filterSourcebookEntries(resolved, search);
+        });
       }
       return;
     }
@@ -146,6 +218,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     await syncEntries((prev) =>
       prev.map((value) => (value.id === updated.id ? updated : value))
     );
+    if (selectedEntry?.id === updated.id) {
+      setSelectedEntry(updated);
+    }
     if (!previous) return;
 
     let activeId = updated.id;
@@ -213,14 +288,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     setHoveredEntry(entry);
   };
 
-  const filtered = entries.filter(
-    (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      (e.category && e.category.toLowerCase().includes(search.toLowerCase())) ||
-      (e.synonyms &&
-        e.synonyms.some((s: string) => s.toLowerCase().includes(search.toLowerCase())))
-  );
-
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
@@ -256,7 +323,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   return (
     <div
       id="sourcebook-list"
-      className={`flex flex-col border-t ${borderClass} mt-0 flex-1 min-h-[200px] bg-opacity-50`}
+      className={'flex flex-col mt-0 flex-1 min-h-0 bg-opacity-50'}
     >
       {/* Title Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
@@ -322,67 +389,91 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-1 pb-2">
-        {filtered.length === 0 && (
+      <div className="relative flex-1 overflow-y-auto px-1 pb-2">
+        {isLoadingEntry && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30">
+            <div className="flex flex-col items-center gap-2 rounded-lg bg-white/90 px-6 py-4 shadow-lg">
+              <LoaderCircle className="animate-spin" size={24} />
+              <span className="text-sm font-medium text-brand-gray-900">
+                Loading entry…
+              </span>
+            </div>
+          </div>
+        )}
+        {entries.length === 0 && (
           <div className={`text-center py-4 text-xs ${subTextClass}`}>
-            {entries.length === 0 ? 'No entries yet.' : 'No matches.'}
+            No entries yet.
           </div>
         )}
 
-        <div className="space-y-0.5">
-          {filtered.map((e) => {
-            const CategoryIcon = CATEGORY_DETAILS[e.category]?.icon || HelpCircle;
-            const isChecked = checkedIds.includes(e.id);
-            return (
-              <div
-                key={e.id}
-                onClick={() => {
-                  setSelectedEntry(e);
-                  setIsDialogOpen(true);
-                }}
-                onMouseEnter={(evt) => handleMouseEnter(evt, e)}
-                onMouseLeave={() => setHoveredEntry(null)}
-                className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none`}
-              >
-                <CategoryIcon
-                  size={14}
-                  className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-                />
-                <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
-                <button
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    if (isAutoSelectionEnabled) return;
-                    onToggle?.(e.id, !isChecked);
+        {entries.length > 0 && (
+          <div className="space-y-0.5">
+            {entries.map((e) => {
+              const CategoryIcon =
+                (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
+              const isChecked = checkedIds.includes(e.id);
+              return (
+                <div
+                  key={e.id}
+                  onClick={async () => {
+                    setIsLoadingEntry(true);
+                    try {
+                      const all = await api.sourcebook.list();
+                      const full = all.find((x) => x.id === e.id) || e;
+                      setEntries(all);
+                      setSelectedEntry(full);
+                      setIsDialogOpen(true);
+                    } finally {
+                      setIsLoadingEntry(false);
+                    }
                   }}
-                  disabled={isAutoSelectionEnabled}
-                  className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                    isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
-                  } ${
-                    isChecked
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                  onMouseEnter={(evt) => handleMouseEnter(evt, e)}
+                  onMouseLeave={() => setHoveredEntry(null)}
+                  className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${
+                    isLoadingEntry ? 'pointer-events-none opacity-70' : ''
                   }`}
-                  title={
-                    isAutoSelectionEnabled
-                      ? 'Automatic selection is enabled; disable Auto to change this manually'
-                      : isChecked
-                        ? 'Exclude from context'
-                        : 'Include in context'
-                  }
                 >
-                  {isChecked && <Check size={10} strokeWidth={4} />}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <CategoryIcon
+                    size={14}
+                    className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
+                  />
+                  <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                  <button
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (isAutoSelectionEnabled) return;
+                      onToggle?.(e.id, !isChecked);
+                    }}
+                    disabled={isAutoSelectionEnabled}
+                    className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                      isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
+                    } ${
+                      isChecked
+                        ? 'bg-brand-500 border-brand-500 text-white'
+                        : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                    }`}
+                    title={
+                      isAutoSelectionEnabled
+                        ? 'Automatic selection is enabled; disable Auto to change this manually'
+                        : isChecked
+                          ? 'Exclude from context'
+                          : 'Include in context'
+                    }
+                  >
+                    {isChecked && <Check size={10} strokeWidth={4} />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <SourcebookEntryDialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         entry={selectedEntry}
+        allEntries={entries}
         onSave={selectedEntry ? handleUpdate : handleCreate}
         onDelete={selectedEntry ? handleDelete : undefined}
         theme={theme}

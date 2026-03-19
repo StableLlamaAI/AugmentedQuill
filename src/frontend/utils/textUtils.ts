@@ -73,16 +73,57 @@ export function computeContentWithSeparator(
  * Automatically adjusts straight quotes to typographic quotation marks.
  * Handles both double (") and single (') quotes.
  */
-export function applySmartQuotes(text: string): string {
+type SmartQuoteChars = {
+  doubleOpen: string;
+  doubleClose: string;
+  singleOpen: string;
+  singleClose: string;
+};
+
+// Default to English quotation marks.
+let smartQuoteChars: SmartQuoteChars = {
+  doubleOpen: '“',
+  doubleClose: '”',
+  singleOpen: '‘',
+  singleClose: '’',
+};
+
+export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>) {
+  smartQuoteChars = {
+    doubleOpen: chars.doubleOpen ?? smartQuoteChars.doubleOpen,
+    doubleClose: chars.doubleClose ?? smartQuoteChars.doubleClose,
+    singleOpen: chars.singleOpen ?? smartQuoteChars.singleOpen,
+    singleClose: chars.singleClose ?? smartQuoteChars.singleClose,
+  };
+}
+
+export function resetSmartQuoteChars() {
+  smartQuoteChars = {
+    doubleOpen: '“',
+    doubleClose: '”',
+    singleOpen: '‘',
+    singleClose: '’',
+  };
+}
+
+export function applySmartQuotes(
+  text: string,
+  overrideChars?: Partial<SmartQuoteChars>
+): string {
   if (!text) return text;
 
+  const { doubleOpen, doubleClose, singleOpen, singleClose } = {
+    ...smartQuoteChars,
+    ...overrideChars,
+  };
+
   // Replace double quotes
-  let result = text.replace(/(^|[\s(\[{<—\-\*_])"/g, '$1“');
-  result = result.replace(/"/g, '”');
+  let result = text.replace(/(^|[\s(\[{<—\-\*_])"/g, `$1${doubleOpen}`);
+  result = result.replace(/"/g, doubleClose);
 
   // Replace single quotes
-  result = result.replace(/(^|[\s(\[{<—\-\*_])'/g, '$1‘');
-  result = result.replace(/'/g, '’');
+  result = result.replace(/(^|[\s(\[{<—\-\*_])'/g, `$1${singleOpen}`);
+  result = result.replace(/'/g, singleClose);
 
   return result;
 }

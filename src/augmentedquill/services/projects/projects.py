@@ -22,6 +22,8 @@ from augmentedquill.services.projects.project_story_ops import (
     update_story_metadata_in_project,
     read_story_content_in_project,
     write_story_content_in_project,
+    read_scratchpad_in_project,
+    write_scratchpad_in_project,
 )
 from augmentedquill.services.projects.project_structure_ops import (
     create_new_chapter_in_project,
@@ -375,6 +377,18 @@ def write_story_content(content: str) -> None:
     """Write the story-level content/introduction."""
     active = _require_active_project()
     write_story_content_in_project(active=active, content=content)
+
+
+def read_scratchpad() -> str:
+    """Read the project-level scratchpad/TODO list."""
+    active = _require_active_project()
+    return read_scratchpad_in_project(active=active)
+
+
+def write_scratchpad(content: str) -> None:
+    """Write the project-level scratchpad/TODO list."""
+    active = _require_active_project()
+    write_scratchpad_in_project(active=active, content=content)
 
 
 def change_project_type(new_type: str) -> Tuple[bool, str]:

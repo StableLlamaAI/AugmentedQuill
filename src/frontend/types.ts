@@ -36,6 +36,26 @@ export interface Book {
   private_notes?: string;
 }
 
+export interface SourcebookRelation {
+  target_id: string;
+  direction?: 'forward' | 'reverse';
+  relation: string;
+  start_chapter?: string;
+  start_book?: string;
+  end_chapter?: string;
+  end_book?: string;
+}
+
+export interface SourcebookRelation {
+  target_id: string;
+  direction?: 'forward' | 'reverse';
+  relation: string;
+  start_chapter?: string;
+  start_book?: string;
+  end_chapter?: string;
+  end_book?: string;
+}
+
 export interface SourcebookEntry {
   id: string;
   name: string;
@@ -43,6 +63,8 @@ export interface SourcebookEntry {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
+  relations?: SourcebookRelation[];
 }
 
 export interface Story {
@@ -103,6 +125,15 @@ export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
 export type AppTheme = 'light' | 'mixed' | 'dark';
 
+export interface SidebarSettings {
+  storyHeight?: number;
+  chaptersHeight?: number;
+  sourcebookHeight?: number;
+  isStoryCollapsed?: boolean;
+  isChaptersCollapsed?: boolean;
+  isSourcebookCollapsed?: boolean;
+}
+
 export interface EditorSettings {
   fontSize: number;
   maxWidth: number;
@@ -110,6 +141,7 @@ export interface EditorSettings {
   contrast: number; // 0.5 - 1.0
   theme: AppTheme;
   sidebarWidth: number;
+  sidebar?: SidebarSettings;
 }
 
 export interface LLMConfig {

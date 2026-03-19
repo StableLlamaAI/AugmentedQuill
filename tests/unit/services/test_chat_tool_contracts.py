@@ -542,6 +542,8 @@ class ChatToolContractsTest(TestCase):
             "generate_image_description",
             "create_image_placeholder",
             "set_image_metadata",
+            "read_scratchpad",
+            "write_scratchpad",
         }
 
         tool_names = set(self._tool_names())

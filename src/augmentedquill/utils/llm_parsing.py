@@ -15,6 +15,63 @@ from __future__ import annotations
 import json as _json
 import re
 from typing import Any
+from augmentedquill.utils.json_repair import try_parse_json_robust
+
+
+def _parse_tool_argument_value(raw_value: str) -> Any:
+    """Best-effort parse for tool argument values embedded in text formats."""
+    text = (raw_value or "").strip()
+    if not text:
+        return ""
+    try:
+        return try_parse_json_robust(text)
+    except Exception:
+        return text
+
+
+def _parse_xml_style_tool_call(content_inner: str) -> tuple[str, dict[str, Any]] | None:
+    """Parse legacy XML-like tool call bodies with optional parameter tags."""
+    xml_match = re.search(
+        r"<function=(\w+)>(.*?)</function>",
+        content_inner,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not xml_match:
+        return None
+
+    name = xml_match.group(1)
+    function_body = (xml_match.group(2) or "").strip()
+    param_matches = list(
+        re.finditer(
+            r"<parameter=([^>\s]+)>(.*?)</parameter>",
+            function_body,
+            re.IGNORECASE | re.DOTALL,
+        )
+    )
+    if param_matches:
+        args_obj: dict[str, Any] = {}
+        for param_match in param_matches:
+            param_name = str(param_match.group(1) or "").strip()
+            if not param_name:
+                continue
+            param_value = _parse_tool_argument_value(param_match.group(2) or "")
+            if param_name in args_obj:
+                existing = args_obj[param_name]
+                if isinstance(existing, list):
+                    existing.append(param_value)
+                else:
+                    args_obj[param_name] = [existing, param_value]
+            else:
+                args_obj[param_name] = param_value
+        return name, args_obj
+
+    try:
+        args_obj = try_parse_json_robust(function_body or "{}")
+        if not isinstance(args_obj, dict):
+            args_obj = {}
+    except Exception:
+        args_obj = {}
+    return name, args_obj
 
 
 def parse_tool_calls_from_content(content: str) -> list[dict] | None:
@@ -39,7 +96,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         # Try JSON format: {"name": "...", "arguments": ...}
         if content_inner.startswith("{"):
             try:
-                json_obj = _json.loads(content_inner)
+                json_obj = try_parse_json_robust(content_inner)
                 if isinstance(json_obj, dict) and "name" in json_obj:
                     name = json_obj["name"]
                     args_obj = json_obj.get("arguments", {})
@@ -64,18 +121,9 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
                 pass
 
         # Try XML-like format: <function=NAME>ARGS</function>
-        xml_match = re.search(
-            r"<function=(\w+)>(.*?)</function>",
-            content_inner,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if xml_match:
-            name = xml_match.group(1)
-            args_str = xml_match.group(2).strip() or "{}"
-            try:
-                args_obj = _json.loads(args_str)
-            except Exception:
-                args_obj = {}
+        xml_call = _parse_xml_style_tool_call(content_inner)
+        if xml_call:
+            name, args_obj = xml_call
 
             call_id = f"call_{name}"
             # Ensure unique ID if multiple calls to same tool
@@ -126,7 +174,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
             name = func_match.group(1)
             args_str = func_match.group(2).strip() if func_match.group(2) else "{}"
             try:
-                args_obj = _json.loads(args_str)
+                args_obj = try_parse_json_robust(args_str)
             except Exception:
                 args_obj = {}
 
@@ -151,7 +199,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         name = m.group(1)
         args_str = m.group(2).strip() if m.group(2) else "{}"
         try:
-            args_obj = _json.loads(args_str) if args_str != "{}" else {}
+            args_obj = try_parse_json_robust(args_str) if args_str != "{}" else {}
         except Exception:
             args_obj = {}
 
@@ -176,7 +224,7 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
         name = m.group(1)
         args_str = m.group(2).strip() or "{}"
         try:
-            args_obj = _json.loads(args_str)
+            args_obj = try_parse_json_robust(args_str)
         except Exception:
             args_obj = {}
 
@@ -260,12 +308,16 @@ def extract_thinking_from_content(content: str) -> str:
 def parse_complete_assistant_output(
     content: str,
     structured_tool_calls: list[dict] | None = None,
+    extra_tool_call_content: str = "",
 ) -> dict[str, Any]:
     """Parse complete assistant output into normalized content/tool_calls/thinking."""
     tool_calls = list(structured_tool_calls or [])
     parsed_calls = parse_tool_calls_from_content(content or "") or []
     if parsed_calls:
         tool_calls.extend(parsed_calls)
+    extra_calls = parse_tool_calls_from_content(extra_tool_call_content or "") or []
+    if extra_calls:
+        tool_calls.extend(extra_calls)
 
     thinking = extract_thinking_from_content(content or "")
     cleaned_content = strip_tool_call_tags(strip_thinking_tags(content or ""))

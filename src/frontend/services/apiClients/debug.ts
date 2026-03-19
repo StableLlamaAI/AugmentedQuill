@@ -15,7 +15,7 @@ import { fetchJson } from './shared';
 export const debugApi = {
   getLogs: async () => {
     return fetchJson<DebugLogEntry[]>(
-      '/debug/llm_logs',
+      '/debug/llm_logs?_t=' + Date.now(),
       undefined,
       'Failed to fetch debug logs'
     );
@@ -23,7 +23,7 @@ export const debugApi = {
 
   clearLogs: async () => {
     return fetchJson<{ status: string }>(
-      '/debug/llm_logs',
+      '/debug/llm_logs?_t=' + Date.now(),
       { method: 'DELETE' },
       'Failed to clear debug logs'
     );

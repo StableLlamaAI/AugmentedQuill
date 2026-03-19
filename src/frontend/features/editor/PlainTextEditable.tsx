@@ -9,17 +9,19 @@
  * Defines plain text editable surface for the editor so content-editable behavior is isolated and reusable.
  */
 
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 // @ts-ignore
 import { marked } from 'marked';
 
 import { getRangeLength, resolveNodeAndOffset } from './domUtils';
+import { useDebounce } from '../../utils/hooks';
 
 export interface PlainTextEditableProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string;
   onChange: (value: string) => void;
   showWhitespace?: boolean;
   markdownHighlight?: boolean;
+  debounceMs?: number;
 }
 
 const escapeHtml = (text: string) =>
@@ -289,11 +291,15 @@ const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): strin
       if (dec.className) active.add(dec.className);
     }
 
-    const escapedChar = text[i] === '\n' ? '<br/>' : escapeHtml(text[i]);
-    if (active.size === 0) {
-      html += escapedChar;
+    if (text[i] === '\n') {
+      html += '<br/>';
     } else {
-      html += `<span class="${Array.from(active).join(' ')}">${escapedChar}</span>`;
+      const escapedChar = escapeHtml(text[i]);
+      if (active.size === 0) {
+        html += escapedChar;
+      } else {
+        html += `<span class="${Array.from(active).join(' ')}">${escapedChar}</span>`;
+      }
     }
 
     const endDecs = ends.get(i + 1) || [];
@@ -313,6 +319,9 @@ const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): strin
     }
   }
 
+  if (text === '' || text.endsWith('\n')) {
+    html += '<br class="empty-line-hack" tabindex="-1" />';
+  }
   return html;
 };
 
@@ -361,6 +370,66 @@ const setCaretOffset = (root: HTMLElement, offset: number) => {
   selection.addRange(range);
 };
 
+const insertPlainTextAtCaret = (text: string) => {
+  if (document.execCommand('insertText', false, text)) {
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+
+  range.deleteContents();
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+
+  const nextRange = document.createRange();
+  nextRange.setStart(textNode, textNode.textContent?.length ?? 0);
+  nextRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+};
+
+const getEditablePlainText = (root: HTMLElement): string => {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node: Node) => {
+        if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          (node as HTMLElement).classList.contains('md-image-preview')
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          (node as HTMLElement).classList.contains('empty-line-hack')
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    }
+  );
+
+  let out = '';
+  let node = walker.nextNode();
+  while (node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent || '';
+    } else if (node.nodeName === 'BR') {
+      out += '\n';
+    }
+    node = walker.nextNode();
+  }
+  return out;
+};
+
+const supportsBeforeInputEvent = () => {
+  return typeof InputEvent !== 'undefined';
+};
+
 export const PlainTextEditable = React.forwardRef<
   HTMLDivElement,
   PlainTextEditableProps
@@ -371,24 +440,54 @@ export const PlainTextEditable = React.forwardRef<
       onChange,
       className,
       onKeyDown,
+      onFocus,
+      onBlur,
       onSelect,
       placeholder,
       style,
       showWhitespace = false,
       markdownHighlight = false,
+      debounceMs = 0,
       ...props
     },
     ref
   ) => {
     const elementRef = useRef<HTMLDivElement>(null);
+    const [localValue, setLocalValue] = useState(value);
+    const isUserEditingRef = useRef(false);
+    const pendingCaretRef = useRef<number | null>(null);
+
     useImperativeHandle(ref, () => elementRef.current as HTMLDivElement);
 
+    // Debounced onChange for external updates
+    const debouncedOnChange = useDebounce((val: string) => {
+      onChange(val);
+    }, debounceMs);
+
+    // Keep local value in sync with external value only when the user is not
+    // actively editing to prevent stale echo updates during debounced saves.
     useEffect(() => {
+      if (isUserEditingRef.current) return;
+      setLocalValue((prev) => (value === prev ? prev : value));
+    }, [value]);
+
+    useEffect(() => {
+      const root = elementRef.current;
+      if (!root) return;
+
+      const display = showWhitespace
+        ? (localValue || '')
+            .replace(/\t/g, '→\t')
+            .replace(/ /g, '·\u200b')
+            .replace(/\r?\n/g, '¶\n')
+        : localValue || '';
+
       if (markdownHighlight) {
-        const root = elementRef.current;
-        if (!root) return;
-        const caret = document.activeElement === root ? getCaretOffset(root) : null;
-        const nextHtml = highlightMarkdownForEditable(value || '', showWhitespace);
+        const caret =
+          document.activeElement === root
+            ? (pendingCaretRef.current ?? getCaretOffset(root))
+            : null;
+        const nextHtml = highlightMarkdownForEditable(localValue || '', showWhitespace);
 
         if (root.innerHTML !== nextHtml) {
           root.innerHTML = nextHtml;
@@ -397,52 +496,90 @@ export const PlainTextEditable = React.forwardRef<
         if (caret !== null) {
           setCaretOffset(root, caret);
         }
-        return;
-      }
-
-      const display = showWhitespace
-        ? (value || '')
-            .replace(/\t/g, '→\t')
-            .replace(/ /g, '·\u200b')
-            .replace(/\r?\n/g, '¶\n')
-        : value || '';
-      if (!elementRef.current) return;
-
-      // Always normalize back to plain text when markdown highlighting is off.
-      // This prevents leftover span markup from previous MD mode renders.
-      const hasRichMarkup = elementRef.current.childElementCount > 0;
-      if (hasRichMarkup || elementRef.current.innerText !== display) {
-        const caret =
-          document.activeElement === elementRef.current
-            ? getCaretOffset(elementRef.current)
-            : null;
-        elementRef.current.innerText = display;
-        if (caret !== null) {
-          setCaretOffset(elementRef.current, Math.min(caret, display.length));
+        pendingCaretRef.current = null;
+      } else {
+        // Always normalize back to plain text when markdown highlighting is off.
+        // This prevents leftover span markup from previous MD mode renders.
+        const hasRichMarkup = root.childElementCount > 0;
+        if (hasRichMarkup || root.innerText !== display) {
+          const caret = document.activeElement === root ? getCaretOffset(root) : null;
+          root.innerText = display;
+          if (caret !== null) {
+            setCaretOffset(root, Math.min(caret, display.length));
+          }
         }
+        pendingCaretRef.current = null;
       }
-    }, [value, showWhitespace, markdownHighlight]);
+    }, [localValue, showWhitespace, markdownHighlight]);
 
     const onPaste = (e: React.ClipboardEvent) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
+      insertPlainTextAtCaret(text);
+    };
+
+    const onBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
+      const nativeEvent = e.nativeEvent as InputEvent;
+      if (
+        nativeEvent.inputType === 'insertParagraph' ||
+        nativeEvent.inputType === 'insertLineBreak'
+      ) {
+        e.preventDefault();
+        insertPlainTextAtCaret('\n');
+      }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // Primary Enter handling is done in beforeinput to avoid contenteditable
+      // paragraph node insertion and keep caret mapping stable.
+      // Fallback to keydown only when beforeinput is not available.
+      if (e.key === 'Enter' && !supportsBeforeInputEvent()) {
+        e.preventDefault();
+        insertPlainTextAtCaret('\n');
+        if (elementRef.current) {
+          pendingCaretRef.current = getCaretOffset(elementRef.current);
+        }
+      }
+      onKeyDown?.(e);
     };
 
     const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-      const displayed = e.currentTarget.innerText;
+      pendingCaretRef.current = getCaretOffset(e.currentTarget);
+      const displayed = getEditablePlainText(e.currentTarget).replace(/\r\n/g, '\n');
       const raw = showWhitespace ? fromWhitespaceDisplayText(displayed) : displayed;
-      onChange(raw);
+
+      // Update local state immediately for fast feedback
+      setLocalValue(raw);
+
+      // Debounce the external onChange to prevent lag in parent components
+      if (debounceMs > 0) {
+        debouncedOnChange(raw);
+      } else {
+        onChange(raw);
+      }
+    };
+
+    const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+      isUserEditingRef.current = true;
+      onFocus?.(e);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+      isUserEditingRef.current = false;
+      onBlur?.(e);
     };
 
     return (
       <div
         ref={elementRef}
         contentEditable
-        className={`${className} empty:before:content-[attr(data-placeholder)] empty:before:text-inherit empty:before:opacity-40 outline-none`}
+        className={`whitespace-pre-wrap ${className} empty:before:content-[attr(data-placeholder)] empty:before:text-inherit empty:before:opacity-40 outline-none`}
         onInput={handleInput}
+        onBeforeInput={onBeforeInput}
         onPaste={onPaste}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         onSelect={onSelect}
         onMouseUp={onSelect}
         onKeyUp={onSelect}

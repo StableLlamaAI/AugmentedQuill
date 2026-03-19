@@ -12,6 +12,7 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -89,3 +90,160 @@ class SourcebookApiTest(TestCase):
         get_after_delete = self.client.get("/api/v1/sourcebook")
         self.assertEqual(get_after_delete.status_code, 200, get_after_delete.text)
         self.assertEqual(get_after_delete.json(), [])
+
+    def test_sourcebook_api_search(self):
+        self.client.post(
+            "/api/v1/sourcebook",
+            json={
+                "name": "Alaric",
+                "description": "A brave knight.",
+                "category": "Character",
+            },
+        )
+        self.client.post(
+            "/api/v1/sourcebook",
+            json={
+                "name": "Rose Castle",
+                "description": "Where Alaric lives.",
+                "category": "Location",
+            },
+        )
+
+        # Search for Alaric
+        res = self.client.get("/api/v1/sourcebook?query=Alaric")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        # Extensive mode matches name/synonyms/keywords (not raw description).
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["name"], "Alaric")
+
+        # Search for Rose
+        res = self.client.get("/api/v1/sourcebook?query=Rose")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["name"], "Rose Castle")
+
+        # No split fallback by default for user filter API
+        res = self.client.get("/api/v1/sourcebook?query=Alaric Castle")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data, [])
+
+        # Explicit split fallback for extensive multi-token lookup
+        res = self.client.get(
+            "/api/v1/sourcebook?query=Alaric Castle&split_query_fallback=true"
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(len(data), 2)
+        names = [e["name"] for e in data]
+        self.assertIn("Alaric", names)
+        self.assertIn("Rose Castle", names)
+
+        # Non-existent search
+        res = self.client.get("/api/v1/sourcebook?query=nonexistent")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), [])
+
+    def test_sourcebook_api_query_uses_keyword_refresh_search(self):
+        with patch(
+            "augmentedquill.api.v1.sourcebook.sourcebook_search_entries_with_keyword_refresh",
+            new=AsyncMock(return_value=[]),
+        ) as mocked_search:
+            res = self.client.get(
+                "/api/v1/sourcebook?query=rose&match_mode=extensive&split_query_fallback=true"
+            )
+            self.assertEqual(res.status_code, 200)
+            mocked_search.assert_awaited_once_with(
+                "rose",
+                match_mode="extensive",
+                split_query_fallback=True,
+                payload={},
+            )
+
+    def test_sourcebook_api_create_calls_keyword_refresh(self):
+        refreshed_entry = {
+            "id": "Aelith",
+            "name": "Aelith",
+            "description": "A traveling archivist",
+            "category": "Character",
+            "synonyms": ["Archivist"],
+            "images": ["aelith.png"],
+            "keywords": ["traveling archivist"],
+        }
+        with patch(
+            "augmentedquill.api.v1.sourcebook.sourcebook_refresh_entry_keywords",
+            new=AsyncMock(return_value=refreshed_entry),
+        ) as mocked_refresh:
+            create = self.client.post(
+                "/api/v1/sourcebook",
+                json={
+                    "name": "Aelith",
+                    "description": "A traveling archivist",
+                    "category": "character",
+                    "synonyms": ["Archivist"],
+                    "images": ["aelith.png"],
+                },
+            )
+            self.assertEqual(create.status_code, 200, create.text)
+            body = create.json()
+            self.assertEqual(body.get("keywords"), ["traveling archivist"])
+            mocked_refresh.assert_awaited_once_with("Aelith", payload={})
+
+    def test_sourcebook_api_update_calls_keyword_refresh(self):
+        self.client.post(
+            "/api/v1/sourcebook",
+            json={
+                "name": "Aelith",
+                "description": "A traveling archivist",
+                "category": "Character",
+            },
+        )
+
+        refreshed_entry = {
+            "id": "Aelith",
+            "name": "Aelith",
+            "description": "Renowned traveling archivist",
+            "category": "Character",
+            "synonyms": ["Archivist"],
+            "images": [],
+            "keywords": ["renowned archivist"],
+        }
+        with patch(
+            "augmentedquill.api.v1.sourcebook.sourcebook_refresh_entry_keywords",
+            new=AsyncMock(return_value=refreshed_entry),
+        ) as mocked_refresh:
+            update = self.client.put(
+                "/api/v1/sourcebook/Aelith",
+                json={
+                    "description": "Renowned traveling archivist",
+                    "synonyms": ["Archivist"],
+                },
+            )
+            self.assertEqual(update.status_code, 200, update.text)
+            body = update.json()
+            self.assertEqual(body.get("keywords"), ["renowned archivist"])
+            mocked_refresh.assert_awaited_once_with("Aelith", payload={})
+
+    def test_sourcebook_keywords_endpoint(self):
+        with patch(
+            "augmentedquill.api.v1.sourcebook.sourcebook_generate_keywords_with_editing_model",
+            new=AsyncMock(return_value=["alpha", "beta"]),
+        ) as mocked_gen:
+            res = self.client.post(
+                "/api/v1/sourcebook/keywords",
+                json={
+                    "name": "Aelith",
+                    "description": "A traveling archivist",
+                    "synonyms": ["Archivist"],
+                },
+            )
+            self.assertEqual(res.status_code, 200, res.text)
+            self.assertEqual(res.json(), {"keywords": ["alpha", "beta"]})
+            mocked_gen.assert_awaited_once_with(
+                name="Aelith",
+                description="A traveling archivist",
+                synonyms=["Archivist"],
+                payload={},
+            )

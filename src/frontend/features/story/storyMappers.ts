@@ -72,6 +72,8 @@ export const mapSelectStoryToState = (
     id: projectId,
     title: story.project_title || projectId,
     summary: story.story_summary || '',
+    notes: story.notes || '',
+    private_notes: story.private_notes || '',
     styleTags: story.tags || [],
     image_style: story.image_style || '',
     image_additional_info: story.image_additional_info || '',

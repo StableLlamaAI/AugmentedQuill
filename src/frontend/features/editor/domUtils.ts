@@ -18,7 +18,9 @@ export const getRangeLength = (range: Range): number => {
     if (node.nodeType === Node.TEXT_NODE) {
       len += node.textContent?.length || 0;
     } else if (node.nodeName === 'BR') {
-      len += 1;
+      if (!(node as HTMLElement).classList?.contains('empty-line-hack')) {
+        len += 1;
+      }
     }
     node = walker.nextNode();
   }
@@ -44,6 +46,10 @@ export const resolveNodeAndOffset = (
       }
       currentOffset += len;
     } else if (currentNode.nodeName === 'BR') {
+      if ((currentNode as HTMLElement).classList?.contains('empty-line-hack')) {
+        currentNode = walker.nextNode();
+        continue;
+      }
       const len = 1;
       if (currentOffset + len >= offset) {
         const parent = currentNode.parentNode;
@@ -57,5 +63,14 @@ export const resolveNodeAndOffset = (
     currentNode = walker.nextNode();
   }
 
-  return { node: root, nodeOffset: root.childNodes.length };
+  // If the last thing in the root is the empty line hack, place the caret *before* it,
+  // not after it, otherwise the visual cursor will wrap to the invisible hack line.
+  let finalNodeOffset = root.childNodes.length;
+  if (finalNodeOffset > 0) {
+    const lastChild = root.childNodes[finalNodeOffset - 1];
+    if ((lastChild as HTMLElement).classList?.contains('empty-line-hack')) {
+      finalNodeOffset -= 1;
+    }
+  }
+  return { node: root, nodeOffset: finalNodeOffset };
 };

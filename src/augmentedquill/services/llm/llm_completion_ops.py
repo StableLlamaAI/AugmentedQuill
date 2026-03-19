@@ -30,6 +30,7 @@ from augmentedquill.services.llm.llm_request_helpers import (
     get_story_llm_preferences,
     build_headers,
     build_timeout,
+    apply_native_tool_calling_mode,
 )
 
 
@@ -242,7 +243,12 @@ async def unified_chat_complete(
     skip_validation: bool = False,
 ) -> dict:
     """Execute a non-streaming chat completion and normalize tool/thinking output."""
-    merged_extra_body = dict(extra_body or {})
+    merged_extra_body = apply_native_tool_calling_mode(
+        extra_body,
+        supports_function_calling=supports_function_calling,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
     if supports_function_calling and tools and tool_choice != "none":
         merged_extra_body["tools"] = tools
         if tool_choice:
@@ -273,6 +279,9 @@ async def unified_chat_complete(
         parsed = parse_complete_assistant_output(
             message.get("content") or "",
             structured_tool_calls=message.get("tool_calls") or [],
+            extra_tool_call_content=(
+                message.get("reasoning_content") or message.get("reasoning") or ""
+            ),
         )
         content = parsed["content"]
         tool_calls = parsed["tool_calls"]

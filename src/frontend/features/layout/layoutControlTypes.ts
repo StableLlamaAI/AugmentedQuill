@@ -128,7 +128,9 @@ export type MainSidebarControls = {
     type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   isEditingAvailable: boolean;
   handleOpenImages: () => void;
@@ -163,6 +165,7 @@ export type MainEditorSuggestionControls = {
     contentOverride?: string,
     enableSuggestionMode?: boolean
   ) => Promise<void>;
+  handleCancelSuggestions?: () => void;
   handleAcceptContinuation: (text: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: (
@@ -178,12 +181,14 @@ export type MainEditorAiControls = {
   ) => Promise<void>;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
+  cancelAiAction?: () => void;
 };
 
 export type MainEditorControls = {
   currentChapter?: Chapter;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
+  setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   viewMode: ViewMode;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;

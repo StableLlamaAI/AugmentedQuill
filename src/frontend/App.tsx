@@ -372,17 +372,6 @@ const App: React.FC = () => {
   const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
     resolveActiveProviderConfigs(appSettings);
 
-  const { isAiActionLoading, handleAiAction, handleSidebarAiAction } = useAiActions({
-    currentChapter,
-    story,
-    prompts,
-    isEditingAvailable: roleAvailability.editing,
-    isWritingAvailable: roleAvailability.writing,
-    updateChapter,
-    setChatMessages,
-    getErrorMessage,
-  });
-
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
     setChatMessages,
   });
@@ -395,6 +384,7 @@ const App: React.FC = () => {
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    cancelSuggestions,
     checkedEntries,
     handleToggleEntry,
     isAutoSourcebookSelectionEnabled,
@@ -412,6 +402,19 @@ const App: React.FC = () => {
     setChatMessages,
     getErrorMessage,
   });
+
+  const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
+    useAiActions({
+      currentChapter,
+      story,
+      prompts,
+      isEditingAvailable: roleAvailability.editing,
+      isWritingAvailable: roleAvailability.writing,
+      checkedSourcebookIds: Array.from(checkedEntries),
+      updateChapter,
+      setChatMessages,
+      getErrorMessage,
+    });
 
   const {
     handleFormat,
@@ -602,18 +605,21 @@ const App: React.FC = () => {
             currentChapter,
             editorRef,
             editorSettings,
+            setEditorSettings,
             viewMode,
             updateChapter,
             suggestionControls: {
               continuations,
               isSuggesting,
               handleTriggerSuggestions,
+              cancelSuggestions,
               handleAcceptContinuation,
               isSuggestionMode,
               handleKeyboardSuggestionAction,
             },
             aiControls: {
               handleAiAction,
+              cancelAiAction,
               isAiActionLoading,
               isWritingAvailable: roleAvailability.writing,
             },

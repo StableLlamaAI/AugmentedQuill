@@ -69,6 +69,30 @@ def _tool_error(name: str, call_id: str, message: str) -> dict:
     return _tool_message(name, call_id, {"error": message})
 
 
+def _simplify_schema(schema: Any) -> Any:
+    """Recursively simplify JSON schemas for LLMs by flattening anyOf."""
+    if not isinstance(schema, dict):
+        return schema
+
+    result = {}
+    for key, value in schema.items():
+        if key == "anyOf" and isinstance(value, list):
+            non_null_types = [
+                t for t in value if isinstance(t, dict) and t.get("type", "") != "null"
+            ]
+            if non_null_types:
+                # Pick the first non-null type to avoid confusing models with unions
+                for k, v in _simplify_schema(non_null_types[0]).items():
+                    result[k] = v
+        elif isinstance(value, dict):
+            result[key] = _simplify_schema(value)
+        elif isinstance(value, list):
+            result[key] = [_simplify_schema(i) for i in value]
+        else:
+            result[key] = value
+    return result
+
+
 def chat_tool(
     description: str,
     name: str | None = None,
@@ -127,7 +151,7 @@ def chat_tool(
                 f"Tool function {tool_name} 'params' must be annotated with a Pydantic BaseModel"
             )
 
-        schema = params_type.model_json_schema()
+        schema = _simplify_schema(params_type.model_json_schema())
         tool_def = {
             "type": "function",
             "function": {

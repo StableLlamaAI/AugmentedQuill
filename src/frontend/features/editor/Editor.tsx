@@ -66,6 +66,7 @@ interface EditorProps {
     continuations: string[];
     isSuggesting: boolean;
     onTriggerSuggestions: () => void;
+    onCancelSuggestion?: () => void;
     onAcceptContinuation: (text: string) => void;
     isSuggestionMode: boolean;
     onKeyboardSuggestionAction: (
@@ -80,6 +81,7 @@ interface EditorProps {
     ) => void;
     isAiLoading: boolean;
     isWritingAvailable?: boolean;
+    onCancelAiAction?: () => void;
   };
   onContextChange?: (formats: string[]) => void;
 }
@@ -126,7 +128,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isSuggestionMode,
       onKeyboardSuggestionAction,
     } = suggestionControls;
-    const { onAiAction, isAiLoading, isWritingAvailable = true } = aiControls;
+    const {
+      onAiAction,
+      isAiLoading,
+      isWritingAvailable = true,
+      onCancelAiAction,
+    } = aiControls;
 
     // Detect if we are at the bottom of the scroll container
     const handleScroll = useCallback(() => {
@@ -145,6 +152,18 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     }, [chapter.content, isAiLoading]);
     const writingUnavailableReason =
       'This action is unavailable because no working WRITING model is configured.';
+
+    const handleSuggestionButtonClick = () => {
+      if (isSuggesting || isAiLoading) {
+        if (isSuggesting) {
+          suggestionControls.onCancelSuggestion?.();
+        } else if (isAiLoading) {
+          onCancelAiAction?.();
+        }
+        return;
+      }
+      onTriggerSuggestions();
+    };
 
     const [isDragging, setIsDragging] = useState(false);
 
@@ -1011,6 +1030,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               onChange={(val: string) => onChange(chapter.id, { title: val })}
               className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors block"
               placeholder="Chapter Title"
+              debounceMs={300}
               style={{
                 ...commonTextStyle,
                 fontSize: '1.8em',
@@ -1054,6 +1074,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     placeholder="Start writing your chapter here..."
                     showWhitespace={showWhitespace}
                     markdownHighlight={viewMode === 'markdown'}
+                    debounceMs={300}
                     style={{
                       ...commonTextStyle,
                       color: showWhitespace ? 'inherit' : 'inherit',
@@ -1121,8 +1142,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           ) : (
             <div className="p-3 flex justify-center items-center space-x-3">
               <button
-                onClick={onTriggerSuggestions}
-                disabled={isSuggesting || isAiLoading || !isWritingAvailable}
+                onClick={handleSuggestionButtonClick}
+                disabled={!isWritingAvailable}
                 className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.theme === 'light'
                     ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
@@ -1131,14 +1152,16 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 title={
                   !isWritingAvailable
                     ? writingUnavailableReason
-                    : 'Get AI Suggestions (WRITING model)'
+                    : isSuggesting || isAiLoading
+                      ? 'Stop current AI generation'
+                      : 'Get AI Suggestions (WRITING model)'
                 }
               >
                 {isSuggesting || isAiLoading ? (
                   <>
                     <Loader2 className="animate-spin text-violet-500" size={18} />
                     <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
-                      Working...
+                      Writing...
                     </span>
                   </>
                 ) : (

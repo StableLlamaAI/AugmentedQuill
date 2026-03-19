@@ -7,9 +7,22 @@
 
 """Defines the sourcebook helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
+import json
+import re
+import os
 from augmentedquill.services.projects.projects import get_active_project_dir
-from augmentedquill.core.config import load_story_config, save_story_config
+from augmentedquill.core.config import (
+    load_story_config,
+    save_story_config,
+    load_machine_config,
+    BASE_DIR,
+)
+from augmentedquill.core.prompts import (
+    get_system_message,
+    get_user_prompt,
+    load_model_prompt_overrides,
+)
 
 _UNSET = object()
 
@@ -26,6 +39,308 @@ KNOWN_SOURCEBOOK_CATEGORIES: tuple[str, ...] = (
 _CATEGORY_NORMALIZATION_MAP = {
     category.lower(): category for category in KNOWN_SOURCEBOOK_CATEGORIES
 }
+
+SOURCEBOOK_SEARCH_MODE = Literal["direct", "extensive"]
+
+_KEYWORD_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "can",
+    "could",
+    "be",
+    "been",
+    "being",
+    "both",
+    "but",
+    "by",
+    "do",
+    "does",
+    "did",
+    "had",
+    "has",
+    "have",
+    "he",
+    "her",
+    "hers",
+    "him",
+    "his",
+    "i",
+    "if",
+    "for",
+    "from",
+    "in",
+    "is",
+    "it",
+    "its",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "no",
+    "not",
+    "our",
+    "ours",
+    "of",
+    "only",
+    "out",
+    "own",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "than",
+    "on",
+    "their",
+    "theirs",
+    "them",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "too",
+    "or",
+    "that",
+    "the",
+    "to",
+    "very",
+    "was",
+    "we",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "will",
+    "would",
+    "were",
+    "with",
+    "you",
+    "your",
+    "yours",
+}
+
+
+def _estimate_sentence_count(text: str) -> int:
+    """Estimate sentence count to bound generated keyword volume."""
+    if not isinstance(text, str) or not text.strip():
+        return 1
+    parts = re.split(r"[.!?\n]+", text)
+    meaningful = [p for p in parts if re.search(r"[A-Za-z0-9]", p or "")]
+    return max(1, len(meaningful))
+
+
+def _keyword_budget(description: str) -> int:
+    """Compute max keyword count (roughly one to two per sentence, with safety cap)."""
+    sentence_count = _estimate_sentence_count(description)
+    return max(6, min(80, sentence_count * 2))
+
+
+def _normalize_keyword_value(value: str) -> str:
+    """Normalize a keyword to a stable lowercase representation."""
+    normalized = re.sub(r"\s+", " ", (value or "").strip().lower())
+    normalized = normalized.strip(".,;:!?()[]{}\"'`")
+    return normalized
+
+
+def _normalize_keywords(raw_keywords: list[str] | None) -> list[str]:
+    """Normalize, dedupe, and filter keyword candidates."""
+    if not isinstance(raw_keywords, list):
+        return []
+
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for keyword in raw_keywords:
+        if not isinstance(keyword, str):
+            continue
+        value = _normalize_keyword_value(keyword)
+        if not value:
+            continue
+        if len(value) < 3:
+            continue
+        if len(value.split()) > 5:
+            continue
+        if " " not in value and value in _KEYWORD_STOPWORDS:
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+    return cleaned
+
+
+def _rank_and_limit_keywords(
+    keywords: list[str],
+    *,
+    name: str,
+    description: str,
+    synonyms: list[str],
+) -> list[str]:
+    """Score keyword relevance and trim to an appropriate size budget."""
+    normalized = _normalize_keywords(keywords)
+    if not normalized:
+        return []
+
+    limit = _keyword_budget(description)
+    lowered_name = (name or "").lower()
+    lowered_synonyms = [s.lower() for s in (synonyms or []) if isinstance(s, str)]
+    lowered_description = (description or "").lower()
+
+    def _score(keyword: str) -> int:
+        score = 0
+        if keyword == lowered_name:
+            score += 200
+        elif keyword in lowered_name:
+            score += 90
+
+        if keyword in lowered_synonyms:
+            score += 140
+        elif any(keyword in s for s in lowered_synonyms):
+            score += 70
+
+        occurrences = lowered_description.count(keyword)
+        score += min(occurrences, 5) * 8
+
+        if " " in keyword:
+            score += 10
+        score += min(len(keyword), 24) // 4
+        return score
+
+    ordered = sorted(enumerate(normalized), key=lambda x: (-_score(x[1]), x[0]))
+    return [kw for _, kw in ordered[:limit]]
+
+
+def _fallback_keywords(name: str, description: str, synonyms: list[str]) -> list[str]:
+    """Build deterministic fallback keywords when LLM keyword extraction is unavailable."""
+    text = "\n".join([name or "", description or "", " ".join(synonyms or [])]).lower()
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9'_-]*", text)
+
+    unigram_freq: dict[str, int] = {}
+    for token in tokens:
+        if len(token) < 3 or token in _KEYWORD_STOPWORDS:
+            continue
+        unigram_freq[token] = unigram_freq.get(token, 0) + 1
+
+    bigram_freq: dict[str, int] = {}
+    for idx in range(len(tokens) - 1):
+        a = tokens[idx]
+        b = tokens[idx + 1]
+        if (
+            len(a) < 3
+            or len(b) < 3
+            or a in _KEYWORD_STOPWORDS
+            or b in _KEYWORD_STOPWORDS
+        ):
+            continue
+        phrase = f"{a} {b}"
+        bigram_freq[phrase] = bigram_freq.get(phrase, 0) + 1
+
+    candidates: list[str] = []
+    if name:
+        candidates.append(name)
+    candidates.extend(synonyms or [])
+
+    for phrase, freq in sorted(bigram_freq.items(), key=lambda x: x[1], reverse=True):
+        if freq >= 2:
+            candidates.append(phrase)
+
+    for token, _ in sorted(unigram_freq.items(), key=lambda x: x[1], reverse=True):
+        candidates.append(token)
+
+    return _rank_and_limit_keywords(
+        candidates,
+        name=name,
+        description=description,
+        synonyms=synonyms,
+    )
+
+
+def _parse_keywords_from_llm_content(content: str) -> list[str]:
+    """Parse keyword list from LLM output with a strict JSON-first strategy."""
+    raw = (content or "").strip()
+    if not raw:
+        return []
+
+    try:
+        data = json.loads(raw)
+    except Exception:
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if not match:
+            return []
+        try:
+            data = json.loads(match.group(0))
+        except Exception:
+            return []
+
+    if not isinstance(data, dict):
+        return []
+    keywords = data.get("keywords")
+    if not isinstance(keywords, list):
+        return []
+    return _normalize_keywords(keywords)
+
+
+def _get_entry_relations(entry_id: str, story: dict) -> list[dict]:
+    global_rels = story.get("sourcebook_relations") or []
+    out = []
+    for r in global_rels:
+        if r.get("source_id") == entry_id:
+            rel = dict(r)
+            rel["target_id"] = rel.pop("target_id", "")
+            rel.pop("source_id", None)
+            rel["direction"] = "forward"
+            out.append(rel)
+        elif r.get("target_id") == entry_id:
+            rel = dict(r)
+            rel["target_id"] = rel.pop("source_id", "")
+            rel.pop("source_id", None)
+            rel["direction"] = "reverse"
+            out.append(rel)
+    return out
+
+
+def _update_global_relations(
+    entry_id: str, new_relations: list[dict] | None, story: dict
+):
+    if new_relations is None:
+        return
+
+    global_rels = story.get("sourcebook_relations") or []
+    # Remove all relations involving entry_id
+    filtered_rels = [
+        r
+        for r in global_rels
+        if r.get("source_id") != entry_id and r.get("target_id") != entry_id
+    ]
+
+    # Add new relations
+    for r in new_relations:
+        d = r.get("direction", "forward")
+        new_r = {
+            "relation": r.get("relation", ""),
+            "start_chapter": r.get("start_chapter"),
+            "end_chapter": r.get("end_chapter"),
+            "start_book": r.get("start_book"),
+            "end_book": r.get("end_book"),
+        }
+        if d == "reverse":
+            new_r["source_id"] = r.get("target_id", "")
+            new_r["target_id"] = entry_id
+        else:
+            new_r["source_id"] = entry_id
+            new_r["target_id"] = r.get("target_id", "")
+
+        filtered_rels.append({k: v for k, v in new_r.items() if v is not None})
+
+    story["sourcebook_relations"] = filtered_rels
 
 
 def _normalize_category_value(category: str | None) -> str | None:
@@ -63,11 +378,15 @@ def _normalize_entry_data(e_data: dict) -> dict:
                 if cleaned:
                     images.append(cleaned)
 
+    keywords = _normalize_keywords(e_data.get("keywords") or [])
+    keywords = keywords[: _keyword_budget(description)]
+
     return {
         "description": description,
         "category": category,
         "synonyms": synonyms,
         "images": images,
+        "keywords": keywords,
     }
 
 
@@ -96,41 +415,215 @@ def sourcebook_list_entries() -> List[Dict]:
         e_data = sb_dict.get(name) or {}
         if not isinstance(e_data, dict):
             continue
-        results.append({"id": name, "name": name, **_normalize_entry_data(e_data)})
+        norm = _normalize_entry_data(e_data)
+        norm["id"] = name
+        norm["name"] = name
+        norm["relations"] = _get_entry_relations(name, story)
+        results.append(norm)
 
     return results
 
 
-def sourcebook_search_entries(query: str) -> List[Dict]:
-    """Sourcebook Search Entries."""
+def _matches_extensive_query(entry: dict, normalized_query: str) -> bool:
+    """Return whether entry matches extensive query against name/synonyms/keywords."""
+    if normalized_query in entry["name"].lower():
+        return True
+    if any(normalized_query in s.lower() for s in entry.get("synonyms", [])):
+        return True
+    if any(normalized_query in k.lower() for k in entry.get("keywords", [])):
+        return True
+    return False
+
+
+def _split_query_tokens(query: str) -> list[str]:
+    """Split query into meaningful tokens for fallback matching."""
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9'_-]*", query.lower())
+    return _normalize_keywords(tokens)
+
+
+def sourcebook_search_entries(
+    query: str,
+    match_mode: SOURCEBOOK_SEARCH_MODE = "extensive",
+    split_query_fallback: bool = False,
+) -> List[Dict]:
+    """Search sourcebook entries with direct/extensive matching and optional split fallback."""
     story, _ = _get_story_data()
     if not story:
         return []
-    sb_dict = story.get("sourcebook", {})
 
-    query = query.lower()
-    results = []
+    normalized_query = _normalize_keyword_value(query)
+    if not normalized_query:
+        return sourcebook_list_entries()
+
+    sb_dict = story.get("sourcebook", {})
+    all_entries: list[dict] = []
 
     for name, e_data in sb_dict.items():
         if not isinstance(e_data, dict):
             continue
-        e = {"id": name, "name": name, **_normalize_entry_data(e_data)}
-        # Search in name
-        if query in name.lower():
-            results.append(e)
+        all_entries.append({"id": name, "name": name, **_normalize_entry_data(e_data)})
+
+    if match_mode == "direct":
+        for entry in all_entries:
+            if entry["name"].lower() == normalized_query:
+                return [entry]
+            if any(s.lower() == normalized_query for s in entry.get("synonyms", [])):
+                return [entry]
+        return []
+
+    results = [
+        entry
+        for entry in all_entries
+        if _matches_extensive_query(entry, normalized_query)
+    ]
+    if results or not split_query_fallback:
+        return results
+
+    fallback_tokens = _split_query_tokens(normalized_query)
+    if not fallback_tokens:
+        return []
+
+    seen_ids: set[str] = set()
+    fallback_results: list[dict] = []
+    for token in fallback_tokens:
+        token_matches = [
+            entry for entry in all_entries if _matches_extensive_query(entry, token)
+        ]
+        for entry in token_matches:
+            entry_id = str(entry.get("id"))
+            if entry_id in seen_ids:
+                continue
+            seen_ids.add(entry_id)
+            fallback_results.append(entry)
+    return fallback_results
+
+
+async def sourcebook_generate_keywords_with_editing_model(
+    *,
+    name: str,
+    description: str,
+    synonyms: list[str],
+    payload: dict | None = None,
+) -> list[str]:
+    """Use WRITING model to extract keyword list from sourcebook description/facts."""
+    from augmentedquill.services.llm import llm
+
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload or {}, model_type="WRITING"
+    )
+
+    # Keep tests deterministic and avoid external network dependency.
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return []
+
+    # Skip remote call when model target is not configured.
+    if not model_id or not base_url:
+        return []
+
+    # Keyword extraction often runs on long sourcebook descriptions and local models,
+    # so we allow a relaxed timeout window instead of a tight cap.
+    configured_timeout = int(timeout_s or 60)
+    effective_timeout = max(90, min(configured_timeout, 300))
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    system_prompt = get_system_message(
+        "sourcebook_keyword_extractor",
+        model_overrides,
+        language="en",
+    )
+    prompt_text = get_user_prompt(
+        "sourcebook_keyword_extraction",
+        language="en",
+        entry_name=name,
+        entry_synonyms=", ".join(synonyms or []),
+        description_facts=description,
+    )
+
+    if not prompt_text:
+        return []
+
+    response = await llm.unified_chat_complete(
+        caller_id="sourcebook.keyword_generation",
+        model_type="WRITING",
+        messages=[
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {"role": "user", "content": prompt_text},
+        ],
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=effective_timeout,
+        model_name=model_name,
+        max_tokens=256,
+        temperature=0.2,
+    )
+    return _rank_and_limit_keywords(
+        _parse_keywords_from_llm_content(response.get("content", "")),
+        name=name,
+        description=description,
+        synonyms=synonyms,
+    )
+
+
+async def sourcebook_refresh_entry_keywords(
+    name_or_id: str, payload: dict | None = None
+) -> dict | None:
+    """Regenerate and persist keywords for an existing entry with best-effort LLM extraction."""
+    entry = sourcebook_get_entry(name_or_id)
+    if not entry:
+        return None
+
+    keywords: list[str] = []
+    try:
+        keywords = await sourcebook_generate_keywords_with_editing_model(
+            name=entry.get("name", ""),
+            description=entry.get("description", ""),
+            synonyms=entry.get("synonyms", []),
+            payload=payload,
+        )
+    except Exception:
+        keywords = []
+
+    updated = sourcebook_update_entry(name_or_id=entry["id"], keywords=keywords)
+    if "error" in updated:
+        return None
+    return updated
+
+
+async def sourcebook_generate_missing_keywords(payload: dict | None = None) -> None:
+    """Generate keywords for entries that currently have no keywords.
+
+    This function is intentionally best-effort; failures are ignored so search remains responsive.
+    """
+    for entry in sourcebook_list_entries():
+        existing = entry.get("keywords")
+        if isinstance(existing, list) and len(existing) > 0:
+            continue
+        try:
+            await sourcebook_refresh_entry_keywords(entry["id"], payload=payload)
+        except Exception:
             continue
 
-        # Search in synonyms
-        if any(query in s.lower() for s in e.get("synonyms", [])):
-            results.append(e)
-            continue
 
-        # Search in description
-        if query in e.get("description", "").lower():
-            results.append(e)
-            continue
+async def sourcebook_search_entries_with_keyword_refresh(
+    query: str,
+    match_mode: SOURCEBOOK_SEARCH_MODE = "extensive",
+    split_query_fallback: bool = False,
+    payload: dict | None = None,
+) -> List[Dict]:
+    """Shared search path for chat tool and UI filter.
 
-    return results
+    Missing keywords are generated first so extensive search can leverage them.
+    """
+    await sourcebook_generate_missing_keywords(payload=payload)
+    return sourcebook_search_entries(
+        query,
+        match_mode=match_mode,
+        split_query_fallback=split_query_fallback,
+    )
 
 
 def sourcebook_get_entry(name_or_id: str) -> Optional[Dict]:
@@ -149,10 +642,12 @@ def sourcebook_get_entry(name_or_id: str) -> Optional[Dict]:
         if not isinstance(e_data, dict):
             continue
         normalized = _normalize_entry_data(e_data)
-        if name.lower() == target:
-            return {"id": name, "name": name, **normalized}
-        if any(target == s.lower() for s in normalized.get("synonyms", [])):
-            return {"id": name, "name": name, **normalized}
+        if name.lower() == target or any(
+            target == s.lower() for s in normalized.get("synonyms", [])
+        ):
+            entry = {"id": name, "name": name, **normalized}
+            entry["relations"] = _get_entry_relations(name, story)
+            return entry
 
     return None
 
@@ -163,6 +658,8 @@ def sourcebook_create_entry(
     category: str = None,
     synonyms: List[str] | object = _UNSET,
     images: List[str] | object = _UNSET,
+    keywords: List[str] | object = _UNSET,
+    relations: List[dict] | object = _UNSET,
 ) -> Dict:
     """Create a sourcebook entry for the active project."""
     if not name or not isinstance(name, str) or not name.strip():
@@ -205,6 +702,32 @@ def sourcebook_create_entry(
         if cleaned_image and cleaned_image not in cleaned_images:
             cleaned_images.append(cleaned_image)
 
+    if keywords is _UNSET:
+        cleaned_keywords = []
+    elif keywords is None or not isinstance(keywords, list):
+        return {"error": "Invalid keywords: Keywords must be a list of strings."}
+    else:
+        cleaned_keywords = _rank_and_limit_keywords(
+            keywords,
+            name=name,
+            description=description,
+            synonyms=cleaned_synonyms,
+        )
+
+    # Relations are optional and currently stored as-is for later use.
+    cleaned_relations: list[dict] = []
+    if relations is _UNSET or relations is None:
+        cleaned_relations = []
+    elif not isinstance(relations, list):
+        return {"error": "Invalid relations: Relations must be a list of objects."}
+    else:
+        for rel in relations:
+            if not isinstance(rel, dict):
+                return {
+                    "error": "Invalid relations: Relations must be a list of objects."
+                }
+            cleaned_relations.append(rel)
+
     story, story_path = _get_story_data()
     if not story:
         return {"error": "No active project"}
@@ -219,6 +742,8 @@ def sourcebook_create_entry(
         "category": normalized_category,
         "synonyms": cleaned_synonyms,
         "images": cleaned_images,
+        "keywords": cleaned_keywords,
+        "relations": cleaned_relations,
     }
 
     sb_dict[name] = new_entry_data
@@ -261,6 +786,8 @@ def sourcebook_update_entry(
     category: str = None,
     synonyms: List[str] = None,
     images: List[str] = None,
+    keywords: List[str] = None,
+    relations: List[Dict] = None,
 ) -> Dict:
     """Sourcebook Update Entry."""
     if not name_or_id:
@@ -284,6 +811,8 @@ def sourcebook_update_entry(
 
     entry_data = sb_dict[found_key]
 
+    original_name = found_key
+
     # Handle rename
     new_name = name
     if new_name is not None:
@@ -293,6 +822,15 @@ def sourcebook_update_entry(
         if new_name != found_key:
             if new_name in sb_dict:
                 return {"error": f"Entry '{new_name}' already exists."}
+
+            # fix external relations pointing to this entry
+            global_rels = story.get("sourcebook_relations") or []
+            for r in global_rels:
+                if r.get("source_id") == found_key:
+                    r["source_id"] = new_name
+                if r.get("target_id") == found_key:
+                    r["target_id"] = new_name
+
             del sb_dict[found_key]
             found_key = new_name
 
@@ -336,6 +874,41 @@ def sourcebook_update_entry(
             if cleaned_image and cleaned_image not in cleaned_images:
                 cleaned_images.append(cleaned_image)
         entry_data["images"] = cleaned_images
+
+    if relations is not None:
+        if not isinstance(relations, list):
+            return {"error": "Invalid relations: Relations must be a list of dicts."}
+        cleaned_relations: list[dict] = []
+        for relation in relations:
+            if not isinstance(relation, dict):
+                return {
+                    "error": "Invalid relations: Relations must be a list of dicts."
+                }
+            cleaned_relations.append(relation)
+
+        _update_global_relations(found_key, cleaned_relations, story)
+
+    if keywords is not None:
+        if not isinstance(keywords, list):
+            return {"error": "Invalid keywords: Keywords must be a list of strings."}
+        effective_name = found_key if found_key else original_name
+        effective_description = str(entry_data.get("description") or "")
+        effective_synonyms = entry_data.get("synonyms")
+        if not isinstance(effective_synonyms, list):
+            effective_synonyms = []
+        entry_data["keywords"] = _rank_and_limit_keywords(
+            keywords,
+            name=effective_name,
+            description=effective_description,
+            synonyms=effective_synonyms,
+        )
+
+    # Keep keywords updated even before async EDITING-model refresh.
+    fields_affecting_keywords_changed = (
+        name is not None or description is not None or synonyms is not None
+    )
+    if keywords is None and fields_affecting_keywords_changed:
+        entry_data["keywords"] = []
 
     sb_dict[found_key] = entry_data
     story["sourcebook"] = sb_dict

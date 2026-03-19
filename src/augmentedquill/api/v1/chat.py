@@ -53,6 +53,7 @@ import augmentedquill.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
 from augmentedquill.models.chat import ChatInitialStateResponse
+from augmentedquill.utils.json_repair import try_parse_json_robust
 
 router = APIRouter(tags=["Chat"])
 
@@ -193,6 +194,13 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
+    # Determine project language for typographic quote handling in tool arguments.
+    project_language = "en"
+    active = get_active_project_dir()
+    if active:
+        story_cfg = load_story_config(active / "story.json") or {}
+        project_language = str(story_cfg.get("language", "en") or "en")
+
     for call in tool_calls:
         if not isinstance(call, dict):
             continue
@@ -202,7 +210,9 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
         try:
             args_obj = (
-                _json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+                try_parse_json_robust(args_raw, language=project_language)
+                if isinstance(args_raw, str)
+                else (args_raw or {})
             )
         except Exception:
             args_obj = {}

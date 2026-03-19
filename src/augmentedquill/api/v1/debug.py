@@ -8,16 +8,17 @@
 """Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from fastapi import APIRouter
-from augmentedquill.services.llm.llm import llm_logs
+from augmentedquill.services.llm import llm_logging
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
-
-router.add_api_route("/llm_logs", endpoint=lambda: llm_logs, methods=["GET"])
+router.add_api_route(
+    "/llm_logs", endpoint=lambda: llm_logging.llm_logs, methods=["GET"]
+)
 
 
 @router.delete("/llm_logs")
 async def clear_llm_logs():
     """Clear the LLM communication logs."""
-    llm_logs.clear()
+    llm_logging.llm_logs.clear()
     return {"status": "ok"}
