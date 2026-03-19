@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { computeSyncUpdates, MetadataParams } from './metadataSync';
+import { MetadataParams } from './metadataSync';
 import { createPortal } from 'react-dom';
 import {
   Maximize2,
@@ -75,6 +75,7 @@ export function MetadataEditorDialog({
   // Store the latest callback reference so debounced saves use current props.
   const onSaveRef = useRef(onSave);
   const isFirstRun = useRef(true);
+  const lastSavedDataRef = useRef<MetadataParams>(initialData);
 
   const normalizeConflict = (value: any): Conflict => {
     return {
@@ -87,59 +88,6 @@ export function MetadataEditorDialog({
   const [conflicts, setConflicts] = useState<Conflict[]>(
     (initialData.conflicts || []).map((c) => normalizeConflict(c))
   );
-
-  // Reconcile external updates (for example, AI writes) without clobbering
-  // in-flight autosave operations.  We only want to pull changes from
-  // `initialData` if the corresponding field has not been edited locally
-  // since the last time we synchronized.  Otherwise a race between the
-  // autosave round-trip and user typing can cause keystrokes to be lost.
-  const prevInitialRef = useRef<MetadataParams>(initialData);
-
-  useEffect(() => {
-    const prevInitial = prevInitialRef.current;
-    prevInitialRef.current = initialData;
-
-    const normalizedPropConflicts = (initialData.conflicts || []).map((c) => ({
-      description: c.description || '',
-      resolution: c.resolution || 'TBD',
-    }));
-    const normalizedLocalConflicts = conflicts.map((c) => ({
-      description: c.description,
-      resolution: c.resolution,
-    }));
-
-    const prevNormalizedConflicts = (prevInitial.conflicts || []).map((c) => ({
-      description: c.description || '',
-      resolution: c.resolution || 'TBD',
-    }));
-
-    const hasConflictsChanged =
-      JSON.stringify(normalizedPropConflicts) !==
-      JSON.stringify(prevNormalizedConflicts);
-
-    const conflictsDirty =
-      JSON.stringify(normalizedLocalConflicts) !==
-      JSON.stringify(prevNormalizedConflicts);
-
-    if (hasConflictsChanged && !conflictsDirty && saveStatus !== 'saving') {
-      setConflicts((initialData.conflicts || []).map((c) => normalizeConflict(c)));
-    }
-
-    // when initialData changes we compute a diff using a helper so the
-    // logic can be unit tested and kept simpler here.  tag handling remains
-    // inline since it has a slightly different rule (fall back only if the
-    // local copy is empty).
-    if (saveStatus !== 'saving') {
-      const updates = computeSyncUpdates(prevInitial, initialData, data);
-      if (Object.keys(updates).length > 0) {
-        setData((prev) => ({
-          ...prev,
-          ...updates,
-          tags: prev.tags && prev.tags.length > 0 ? prev.tags : initialData.tags || [],
-        }));
-      }
-    }
-  }, [initialData]);
 
   useEffect(() => {
     onSaveRef.current = onSave;
@@ -158,19 +106,23 @@ export function MetadataEditorDialog({
 
     setSaveStatus('saving');
     const timer = setTimeout(async () => {
-      const isTitleSame = (data.title || '') === (initialData.title || '');
-      const isSummarySame = (data.summary || '') === (initialData.summary || '');
-      const isNotesSame = (data.notes || '') === (initialData.notes || '');
+      const lastSaved = lastSavedDataRef.current;
+      const isTitleSame = (data.title || '') === (lastSaved.title || '');
+      const isSummarySame = (data.summary || '') === (lastSaved.summary || '');
+      const isNotesSame = (data.notes || '') === (lastSaved.notes || '');
       const isPrivateNotesSame =
-        (data.private_notes || '') === (initialData.private_notes || '');
+        (data.private_notes || '') === (lastSaved.private_notes || '');
+      const isTagsSame =
+        JSON.stringify(data.tags || []) === JSON.stringify(lastSaved.tags || []);
       const isConflictsSame =
         JSON.stringify(data.conflicts || []) ===
-        JSON.stringify(initialData.conflicts || []);
+        JSON.stringify(lastSaved.conflicts || []);
 
       if (
         isTitleSame &&
         isSummarySame &&
         isNotesSame &&
+        isTagsSame &&
         isPrivateNotesSame &&
         isConflictsSame
       ) {
@@ -180,6 +132,7 @@ export function MetadataEditorDialog({
 
       try {
         await onSaveRef.current(data);
+        lastSavedDataRef.current = data;
         setSaveStatus('saved');
       } catch (e) {
         console.error(e);

@@ -12,6 +12,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { StoryState, Chapter, Book } from '../../types';
 import { api } from '../../services/api';
+import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
 import { notifyError } from '../../services/errorNotifier';
 
@@ -71,6 +72,30 @@ export const resolveExternalHistorySourceState = (
   if (explicitState) return explicitState;
   return latestState || fallbackState;
 };
+
+export const buildInitialStoryState = (
+  projectId: string,
+  story: StoryApiPayload,
+  chapters: Chapter[]
+): StoryState => ({
+  id: projectId,
+  title: story.project_title || projectId,
+  summary: story.story_summary || '',
+  notes: story.notes || '',
+  private_notes: story.private_notes || '',
+  styleTags: story.tags || [],
+  image_style: story.image_style || '',
+  image_additional_info: story.image_additional_info || '',
+  chapters,
+  projectType: story.project_type || 'novel',
+  language: story.language || 'en',
+  books: story.books || [],
+  sourcebook: story.sourcebook || [],
+  conflicts: story.conflicts || [],
+  llm_prefs: story.llm_prefs,
+  currentChapterId: chapters.length > 0 ? chapters[0].id : null,
+  lastUpdated: Date.now(),
+});
 
 const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
   id: `history-${Date.now()}`,
@@ -309,21 +334,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           const chaptersRes = await api.chapters.list();
           const chapters = mapApiChapters(chaptersRes.chapters);
 
-          const newStory: StoryState = {
-            id: projects.current,
-            title: res.story.project_title || projects.current,
-            summary: res.story.story_summary || '',
-            styleTags: res.story.tags || [],
-            image_style: res.story.image_style || '',
-            image_additional_info: res.story.image_additional_info || '',
-            chapters: chapters,
-            projectType: res.story.project_type || 'novel',
-            books: res.story.books || [],
-            sourcebook: res.story.sourcebook || [],
-            conflicts: res.story.conflicts || [],
-            currentChapterId: chapters.length > 0 ? chapters[0].id : null,
-            lastUpdated: Date.now(),
-          };
+          const newStory = buildInitialStoryState(
+            projects.current,
+            res.story,
+            chapters
+          );
 
           setStory(newStory);
           latestStoryRef.current = newStory;

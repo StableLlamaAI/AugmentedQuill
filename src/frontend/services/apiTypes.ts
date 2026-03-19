@@ -76,6 +76,8 @@ export interface ProjectListItem {
 export interface StoryApiPayload {
   project_title?: string;
   story_summary?: string;
+  notes?: string;
+  private_notes?: string;
   tags?: string[];
   image_style?: string;
   image_additional_info?: string;

@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { StoryState } from '../../types';
-import { resolveExternalHistorySourceState } from './useStory';
+import { buildInitialStoryState, resolveExternalHistorySourceState } from './useStory';
 
 const buildStory = (summary: string): StoryState => ({
   id: 'demo',
@@ -56,5 +56,37 @@ describe('resolveExternalHistorySourceState', () => {
     );
 
     expect(selected.summary).toBe('explicit summary snapshot');
+  });
+});
+
+describe('buildInitialStoryState', () => {
+  it('hydrates story-level notes fields from selected project payload', () => {
+    const state = buildInitialStoryState(
+      'demo',
+      {
+        project_title: 'Demo',
+        story_summary: 'Summary',
+        notes: 'Story notes',
+        private_notes: 'Private story notes',
+      },
+      []
+    );
+
+    expect(state.notes).toBe('Story notes');
+    expect(state.private_notes).toBe('Private story notes');
+  });
+
+  it('defaults missing story-level notes fields to empty strings', () => {
+    const state = buildInitialStoryState(
+      'demo',
+      {
+        project_title: 'Demo',
+        story_summary: 'Summary',
+      },
+      []
+    );
+
+    expect(state.notes).toBe('');
+    expect(state.private_notes).toBe('');
   });
 });

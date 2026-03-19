@@ -32,11 +32,6 @@ const escapeHtml = (text: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-const isIos = () =>
-  typeof navigator !== 'undefined' &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-
 type Decoration = {
   start: number;
   end: number;
@@ -296,11 +291,15 @@ const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): strin
       if (dec.className) active.add(dec.className);
     }
 
-    const escapedChar = text[i] === '\n' ? '<br/>' : escapeHtml(text[i]);
-    if (active.size === 0) {
-      html += escapedChar;
+    if (text[i] === '\n') {
+      html += '<br/>';
     } else {
-      html += `<span class="${Array.from(active).join(' ')}">${escapedChar}</span>`;
+      const escapedChar = escapeHtml(text[i]);
+      if (active.size === 0) {
+        html += escapedChar;
+      } else {
+        html += `<span class="${Array.from(active).join(' ')}">${escapedChar}</span>`;
+      }
     }
 
     const endDecs = ends.get(i + 1) || [];
@@ -320,6 +319,9 @@ const renderDecoratedMarkdown = (text: string, decorations: Decoration[]): strin
     }
   }
 
+  if (text === '' || text.endsWith('\n')) {
+    html += '<br class="empty-line-hack" tabindex="-1" />';
+  }
   return html;
 };
 
@@ -368,6 +370,66 @@ const setCaretOffset = (root: HTMLElement, offset: number) => {
   selection.addRange(range);
 };
 
+const insertPlainTextAtCaret = (text: string) => {
+  if (document.execCommand('insertText', false, text)) {
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+
+  range.deleteContents();
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+
+  const nextRange = document.createRange();
+  nextRange.setStart(textNode, textNode.textContent?.length ?? 0);
+  nextRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+};
+
+const getEditablePlainText = (root: HTMLElement): string => {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node: Node) => {
+        if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          (node as HTMLElement).classList.contains('md-image-preview')
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          (node as HTMLElement).classList.contains('empty-line-hack')
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    }
+  );
+
+  let out = '';
+  let node = walker.nextNode();
+  while (node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent || '';
+    } else if (node.nodeName === 'BR') {
+      out += '\n';
+    }
+    node = walker.nextNode();
+  }
+  return out;
+};
+
+const supportsBeforeInputEvent = () => {
+  return typeof InputEvent !== 'undefined';
+};
+
 export const PlainTextEditable = React.forwardRef<
   HTMLDivElement,
   PlainTextEditableProps
@@ -378,6 +440,8 @@ export const PlainTextEditable = React.forwardRef<
       onChange,
       className,
       onKeyDown,
+      onFocus,
+      onBlur,
       onSelect,
       placeholder,
       style,
@@ -390,7 +454,8 @@ export const PlainTextEditable = React.forwardRef<
   ) => {
     const elementRef = useRef<HTMLDivElement>(null);
     const [localValue, setLocalValue] = useState(value);
-    const isInternalUpdate = useRef(false);
+    const isUserEditingRef = useRef(false);
+    const pendingCaretRef = useRef<number | null>(null);
 
     useImperativeHandle(ref, () => elementRef.current as HTMLDivElement);
 
@@ -399,11 +464,11 @@ export const PlainTextEditable = React.forwardRef<
       onChange(val);
     }, debounceMs);
 
-    // Keep local value in sync with external value when it changes externally
+    // Keep local value in sync with external value only when the user is not
+    // actively editing to prevent stale echo updates during debounced saves.
     useEffect(() => {
-      if (value !== localValue) {
-        setLocalValue(value);
-      }
+      if (isUserEditingRef.current) return;
+      setLocalValue((prev) => (value === prev ? prev : value));
     }, [value]);
 
     useEffect(() => {
@@ -418,7 +483,10 @@ export const PlainTextEditable = React.forwardRef<
         : localValue || '';
 
       if (markdownHighlight) {
-        const caret = document.activeElement === root ? getCaretOffset(root) : null;
+        const caret =
+          document.activeElement === root
+            ? (pendingCaretRef.current ?? getCaretOffset(root))
+            : null;
         const nextHtml = highlightMarkdownForEditable(localValue || '', showWhitespace);
 
         if (root.innerHTML !== nextHtml) {
@@ -428,6 +496,7 @@ export const PlainTextEditable = React.forwardRef<
         if (caret !== null) {
           setCaretOffset(root, caret);
         }
+        pendingCaretRef.current = null;
       } else {
         // Always normalize back to plain text when markdown highlighting is off.
         // This prevents leftover span markup from previous MD mode renders.
@@ -439,22 +508,44 @@ export const PlainTextEditable = React.forwardRef<
             setCaretOffset(root, Math.min(caret, display.length));
           }
         }
+        pendingCaretRef.current = null;
       }
     }, [localValue, showWhitespace, markdownHighlight]);
 
     const onPaste = (e: React.ClipboardEvent) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
+      insertPlainTextAtCaret(text);
+    };
+
+    const onBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
+      const nativeEvent = e.nativeEvent as InputEvent;
+      if (
+        nativeEvent.inputType === 'insertParagraph' ||
+        nativeEvent.inputType === 'insertLineBreak'
+      ) {
+        e.preventDefault();
+        insertPlainTextAtCaret('\n');
+      }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // Primary Enter handling is done in beforeinput to avoid contenteditable
+      // paragraph node insertion and keep caret mapping stable.
+      // Fallback to keydown only when beforeinput is not available.
+      if (e.key === 'Enter' && !supportsBeforeInputEvent()) {
+        e.preventDefault();
+        insertPlainTextAtCaret('\n');
+        if (elementRef.current) {
+          pendingCaretRef.current = getCaretOffset(elementRef.current);
+        }
+      }
+      onKeyDown?.(e);
     };
 
     const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-      // In iOS, innerText can be unreliable in contenteditable, leading to duplicated characters.
-      // textContent is safer, but doesn't preserve line breaks from <br> effectively.
-      // We use innerText as default but might need a more complex normalization if iOS issues persist.
-      const displayed = isIos()
-        ? e.currentTarget.innerText.replace(/\r\n/g, '\n')
-        : e.currentTarget.innerText;
+      pendingCaretRef.current = getCaretOffset(e.currentTarget);
+      const displayed = getEditablePlainText(e.currentTarget).replace(/\r\n/g, '\n');
       const raw = showWhitespace ? fromWhitespaceDisplayText(displayed) : displayed;
 
       // Update local state immediately for fast feedback
@@ -468,14 +559,27 @@ export const PlainTextEditable = React.forwardRef<
       }
     };
 
+    const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+      isUserEditingRef.current = true;
+      onFocus?.(e);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+      isUserEditingRef.current = false;
+      onBlur?.(e);
+    };
+
     return (
       <div
         ref={elementRef}
         contentEditable
-        className={`${className} empty:before:content-[attr(data-placeholder)] empty:before:text-inherit empty:before:opacity-40 outline-none`}
+        className={`whitespace-pre-wrap ${className} empty:before:content-[attr(data-placeholder)] empty:before:text-inherit empty:before:opacity-40 outline-none`}
         onInput={handleInput}
+        onBeforeInput={onBeforeInput}
         onPaste={onPaste}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         onSelect={onSelect}
         onMouseUp={onSelect}
         onKeyUp={onSelect}
