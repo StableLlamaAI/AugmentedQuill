@@ -218,7 +218,13 @@ AugmentedQuill has 22 built-in prompts, split into two groups:
 | AI Action: Extend Chapter User      | WRITING |
 | AI Action: Rewrite Chapter User     | WRITING |
 
-Each textarea shows the built-in default as its placeholder text. Type into any textarea to override only that prompt for this provider. Clear the field to revert to the default. Role badges (violet for WRITING, fuchsia for EDITING, blue for CHAT) beside each label remind you which model role will use that prompt.
+Each textarea shows the built-in default as its placeholder text. Type into any textarea to override only that prompt for this provider.
+
+To keep the override list manageable, you can choose which prompt you want to override from a dropdown menu and then click **Add**. Once added, the override appears in the list as an editable textarea.
+
+If you clear a prompt override (leaving it empty) and click **Save & Close**, that override is removed entirely and the system defaults are used again.
+
+Role badges (violet for WRITING, fuchsia for EDITING, blue for CHAT) beside each label remind you which model role will use that prompt.
 
 #### Deleting a Provider
 
