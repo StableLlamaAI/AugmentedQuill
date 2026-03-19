@@ -28,7 +28,7 @@ async def parse_json_object_body(
     """
     try:
         payload = await request.json()
-    except Exception as exc:
+    except (TypeError, ValueError) as exc:
         if error_factory is not None:
             raise error_factory(exc) from exc
         raise HTTPException(status_code=400, detail="Invalid JSON body") from exc

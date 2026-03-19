@@ -127,7 +127,7 @@ async def api_load_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONResponse
     try:
         restore_from_directory(project_dir, target_dir)
         return ok_json(ok=True)
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         return error_json(f"Failed to load checkpoint: {str(e)}", status_code=500)
 
 

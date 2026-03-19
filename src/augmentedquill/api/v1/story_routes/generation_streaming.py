@@ -132,7 +132,7 @@ async def api_story_sourcebook_relevance(request: Request):
             )
 
             all_entries = sourcebook_list_entries()
-        except Exception:
+        except (ImportError, OSError, TypeError, ValueError, RuntimeError):
             # if sourcebook is unavailable, just return empty list
             return {"relevant": []}
 
@@ -217,7 +217,7 @@ async def api_story_sourcebook_relevance(request: Request):
                         break
 
             return {"relevant": relevant_ids}
-        except Exception as e:
+        except (OSError, TypeError, ValueError, RuntimeError) as e:
             # log the failure for debugging then return an empty list; the
             # front end already ignores errors, but returning a 200 with no
             # entries keeps the UI quiet and avoids repeated exception noise.
@@ -237,7 +237,7 @@ async def api_story_sourcebook_relevance(request: Request):
             status_code=e.status_code,
             detail=e.detail,
         )
-    except Exception as e:
+    except (OSError, TypeError, ValueError, RuntimeError) as e:
         raise HTTPException(
             status_code=500, detail=f"An internal story relevance error occurred: {e}"
         )
@@ -334,7 +334,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
                     yield lines[0]
                     if len(lines) > 1:
                         break
-            except Exception:
+            except (OSError, TypeError, ValueError, RuntimeError, AssertionError):
                 # Mask internal errors
                 yield "\n[Error occurred during suggestion]"
 
@@ -345,7 +345,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             status_code=e.status_code,
             detail=e.detail,
         )
-    except Exception as e:
+    except (OSError, TypeError, ValueError, RuntimeError) as e:
         raise HTTPException(
             status_code=500, detail=f"An internal story suggestion error occurred: {e}"
         )
