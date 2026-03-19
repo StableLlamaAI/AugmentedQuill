@@ -45,6 +45,39 @@ describe('openaiService', () => {
     expect(body.checked_sourcebook).toEqual(['A', 'B']);
   });
 
+  it('includes checkedSourcebookIds in streamAiAction request body when provided', async () => {
+    const fakeReader = {
+      read: vi.fn().mockResolvedValue({ done: true, value: new Uint8Array() }),
+    };
+    const fakeBody = {
+      getReader: () => fakeReader,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
+
+    const cfg: LLMConfig = { id: 'x', name: 'x', baseUrl: '', apiKey: '', timeout: 5 };
+
+    // This call is intended to exercise streamAiAction; we only care about the request payload.
+    await (
+      await import('./openaiService')
+    ).streamAiAction(
+      'chapter',
+      'extend',
+      '1',
+      'text',
+      undefined,
+      undefined,
+      undefined,
+      ['A', 'B']
+    );
+
+    expect(global.fetch).toHaveBeenCalled();
+    const callArgs = (global.fetch as vi.Mock).mock.calls[0];
+    const options = callArgs[1];
+    const body = JSON.parse(options.body);
+    expect(body.checked_sourcebook).toEqual(['A', 'B']);
+  });
+
   it('repairs tool argument JSON with raw newlines', () => {
     const raw = '{"chap_id":1,"notes":"line1\nline2"}';
     const result = parseToolArguments(raw);

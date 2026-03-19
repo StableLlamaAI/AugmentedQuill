@@ -250,6 +250,7 @@ def build_write_chapter_messages(
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str,
     model_overrides: dict,
     language: str | None = None,
 ):
@@ -267,6 +268,7 @@ def build_write_chapter_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
+        chapter_notes=chapter_notes,
     )
 
 
@@ -280,6 +282,7 @@ def build_continue_chapter_messages(
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str,
     existing_text: str,
     model_overrides: dict,
     language: str | None = None,
@@ -298,6 +301,7 @@ def build_continue_chapter_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
+        chapter_notes=chapter_notes,
         existing_text=existing_text,
     )
 
@@ -310,9 +314,11 @@ def build_ai_action_messages(
     story_title: str,
     story_summary: str,
     story_tags: str,
+    background: str = "",
     chapter_title: str,
     chapter_summary: str,
     chapter_conflicts: str,
+    chapter_notes: str = "",
     existing_content: str,
     chapter_summaries: str = "",
     style_tags: str = "",
@@ -422,6 +428,7 @@ def build_ai_action_messages(
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=chapter_conflicts,
+        chapter_notes=chapter_notes,
         existing_content=existing_content,
         chapter_text=existing_content,
         existing_text=existing_content,
@@ -429,7 +436,7 @@ def build_ai_action_messages(
         chapter_summaries=chapter_summaries,
         style_tags=style_tags,
         content_label=content_label,
-        background="",
+        background=background,
         story_context=story_context,
         tool_instructions=tool_instructions,
     )

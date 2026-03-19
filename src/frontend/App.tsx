@@ -372,17 +372,6 @@ const App: React.FC = () => {
   const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
     resolveActiveProviderConfigs(appSettings);
 
-  const { isAiActionLoading, handleAiAction, handleSidebarAiAction } = useAiActions({
-    currentChapter,
-    story,
-    prompts,
-    isEditingAvailable: roleAvailability.editing,
-    isWritingAvailable: roleAvailability.writing,
-    updateChapter,
-    setChatMessages,
-    getErrorMessage,
-  });
-
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
     setChatMessages,
   });
@@ -409,6 +398,18 @@ const App: React.FC = () => {
     isWritingAvailable: roleAvailability.writing,
     updateChapter,
     viewMode,
+    setChatMessages,
+    getErrorMessage,
+  });
+
+  const { isAiActionLoading, handleAiAction, handleSidebarAiAction } = useAiActions({
+    currentChapter,
+    story,
+    prompts,
+    isEditingAvailable: roleAvailability.editing,
+    isWritingAvailable: roleAvailability.writing,
+    checkedSourcebookIds: Array.from(checkedEntries),
+    updateChapter,
     setChatMessages,
     getErrorMessage,
   });

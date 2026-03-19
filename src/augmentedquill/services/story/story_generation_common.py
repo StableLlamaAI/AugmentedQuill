@@ -5,7 +5,8 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""Shared generation preparation helpers used by streaming and non-streaming story flows."""
+"""Shared generation preparation helpers used by streaming and non-streaming
+story flows."""
 
 from __future__ import annotations
 
@@ -45,7 +46,7 @@ def sanitize_prompt(prompt: str) -> str:
     for i, line in enumerate(lines):
         # drop any line that looks like a label with nothing after colon
         # UNLESS the next lines contain content for this label
-        if re.match(r"^[A-Za-z ]+:\s*$", line):
+        if re.match(r"^[A-Za-z'\- ]+:\s*$", line):
             has_content = False
             for next_line in lines[i + 1 :]:
                 next_line = next_line.strip()
@@ -53,7 +54,7 @@ def sanitize_prompt(prompt: str) -> str:
                     continue
                 if next_line == "---":
                     break
-                if re.match(r"^[A-Za-z ]+:\s*$", next_line):
+                if re.match(r"^[A-Za-z'\- ]+:\s*$", next_line):
                     break
                 has_content = True
                 break
@@ -114,6 +115,13 @@ def gather_writing_context(
                 conflict_lines.append(line)
     conflicts_text = "\n".join(conflict_lines)
 
+    # chapter notes
+    chapter_notes = ""
+    try:
+        chapter_notes = str(chapters_data[pos].get("notes", "") or "").strip()
+    except Exception:
+        chapter_notes = ""
+
     # background (sourcebook)
     background = ""
     try:
@@ -136,7 +144,7 @@ def gather_writing_context(
                     continue
                 seen.add(eid)
                 desc = entry.get("description", "")
-                lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+                lines.append(f"[{entry.get('name', eid)}]\n" f"{desc}\n")
 
         # include any explicitly checked entries passed by the client
         checked = (payload or {}).get("checked_sourcebook") or []
@@ -151,7 +159,7 @@ def gather_writing_context(
                     if eid and eid not in seen:
                         seen.add(eid)
                         desc = entry.get("description", "")
-                        lines.append(f"[{entry.get('name', eid)}]\n{desc}\n")
+                        lines.append(f"[{entry.get('name', eid)}]\n" f"{desc}\n")
 
         background = "\n".join(lines)
     except Exception:
@@ -165,6 +173,7 @@ def gather_writing_context(
         "story_tags": story_tags,
         "background": background,
         "chapter_conflicts": conflicts_text,
+        "chapter_notes": chapter_notes,
     }
 
 
@@ -307,6 +316,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_title=title,
         chapter_summary=summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         model_overrides=model_overrides,
         language=story.get("language", "en"),
     )
@@ -365,6 +375,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
         chapter_title=title,
         chapter_summary=summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         existing_text=existing,
         model_overrides=model_overrides,
         language=story.get("language", "en"),
@@ -459,9 +470,11 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         story_title=context["story_title"],
         story_summary=context["story_summary"],
         story_tags=context["story_tags"],
+        background=context["background"],
         chapter_title=chapter_title,
         chapter_summary=chapter_summary,
         chapter_conflicts=context["chapter_conflicts"],
+        chapter_notes=context["chapter_notes"],
         existing_content=existing_content,
         chapter_summaries=chapter_summaries_text,
         style_tags=context["story_tags"],

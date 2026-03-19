@@ -381,19 +381,25 @@ export const streamAiAction = async (
   currentText: string,
   onUpdate?: (fullText: string) => void,
   onThinking?: (thinking: string) => void,
-  source?: 'chapter' | 'notes'
+  source?: 'chapter' | 'notes',
+  checkedSourcebookIds?: string[]
 ): Promise<string> => {
+  const body: any = {
+    target,
+    action,
+    chap_id: Number(chapId),
+    target_id: Number(chapId),
+    current_text: currentText,
+    source,
+  };
+  if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+    body.checked_sourcebook = checkedSourcebookIds;
+  }
+
   const res = await fetch('/api/v1/story/action/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      target,
-      action,
-      chap_id: Number(chapId),
-      target_id: Number(chapId),
-      current_text: currentText,
-      source,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

@@ -26,6 +26,7 @@ type UseAiActionsParams = {
   prompts: PromptsState;
   isEditingAvailable: boolean;
   isWritingAvailable: boolean;
+  checkedSourcebookIds?: string[];
   updateChapter: (
     id: string,
     partial: Partial<Chapter>,
@@ -39,6 +40,7 @@ export function useAiActions({
   currentChapter,
   isEditingAvailable,
   isWritingAvailable,
+  checkedSourcebookIds,
   updateChapter,
   getErrorMessage,
 }: UseAiActionsParams) {
@@ -86,7 +88,10 @@ export function useAiActions({
         action,
         currentChapter.id,
         currentChapter.content,
-        pushProgress
+        pushProgress,
+        undefined,
+        undefined,
+        checkedSourcebookIds
       );
 
       if (target === 'summary') {
