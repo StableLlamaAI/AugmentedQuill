@@ -19,11 +19,13 @@ If you just want to double-click an app and start writing in your own web browse
 
 ## 2. Standalone Desktop App (Electron)
 
+> **Note:** The Electron desktop wrapper is currently **experimental / work in progress**. No official installer is published yet. See `docs/ARCHITECTURE.md` § 8 for development notes.
+
 If you prefer a complete, isolated desktop application experience rather than using your web browser, you can use the Electron version.
 
 **How it works:** This bundles the PyInstaller backend with an Electron frontend, giving you a native-feeling windowed application.
 
-**Installation:**
+**Installation (once an official release is available):**
 
 1. Go to the [Releases](../../releases) page on GitHub.
 2. Download the installer for your operating system (e.g., `AugmentedQuill-Setup.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux).

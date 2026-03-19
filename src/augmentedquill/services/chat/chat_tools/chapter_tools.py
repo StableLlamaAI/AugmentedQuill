@@ -40,6 +40,8 @@ from augmentedquill.services.projects.projects import (
     write_chapter_title,
 )
 
+_MAX_CHAPTER_CHARS = 8000
+
 
 def _overview_chapters():
     """Overview Chapters."""
@@ -82,7 +84,10 @@ class GetChapterContentParams(BaseModel):
         description="The chapter ID to get content for. If not provided, uses active chapter.",
     )
     start: int = Field(0, description="The starting character position")
-    max_chars: int = Field(8000, description="Maximum characters to return (1-8000)")
+    max_chars: int = Field(
+        _MAX_CHAPTER_CHARS,
+        description=f"Maximum characters to return (1-{_MAX_CHAPTER_CHARS})",
+    )
 
 
 class WriteChapterContentParams(BaseModel):
@@ -273,7 +278,7 @@ async def get_chapter_content(
         return {"error": "chap_id is required"}
 
     start = max(0, params.start)
-    max_chars = max(1, min(8000, params.max_chars))
+    max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
     data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
     return data
 
