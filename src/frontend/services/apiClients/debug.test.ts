@@ -29,7 +29,7 @@ describe('debugApi', () => {
     await debugApi.getLogs();
 
     expect(fetchJson).toHaveBeenCalledWith(
-      '/debug/llm_logs',
+      expect.stringMatching(/^\/debug\/llm_logs(\?_t=\d+)?$/),
       undefined,
       'Failed to fetch debug logs'
     );
@@ -41,7 +41,7 @@ describe('debugApi', () => {
     await debugApi.clearLogs();
 
     expect(fetchJson).toHaveBeenCalledWith(
-      '/debug/llm_logs',
+      expect.stringMatching(/^\/debug\/llm_logs(\?_t=\d+)?$/),
       { method: 'DELETE' },
       'Failed to clear debug logs'
     );
