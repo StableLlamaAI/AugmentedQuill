@@ -30,6 +30,7 @@ import { Button } from '../../components/ui/Button';
 import { SourcebookEntryDialog } from './SourcebookEntryDialog';
 import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 
 const CATEGORY_DETAILS: Record<string, { icon: React.ElementType }> = {
@@ -137,7 +138,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const loadEntries = async (query?: string) => {
     try {

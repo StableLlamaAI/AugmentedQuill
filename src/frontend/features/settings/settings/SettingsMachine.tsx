@@ -25,6 +25,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { AppTheme, AppSettings, LLMConfig } from '../../../types';
+import { useThemeClasses } from '../../layout/ThemeContext';
 import { ModelPresetEntry } from '../../../services/apiTypes';
 import { Button } from '../../../components/ui/Button';
 import { SettingsPrompts } from './SettingsPrompts';
@@ -75,7 +76,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
     Record<string, string | null>
   >({});
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const renderCapabilitySelect = (
     label: string,

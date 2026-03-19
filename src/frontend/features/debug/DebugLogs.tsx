@@ -21,6 +21,7 @@ import {
   List,
 } from 'lucide-react';
 import { AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { api } from '../../services/api';
 import { DebugLogEntry } from '../../services/apiTypes';
 
@@ -43,7 +44,7 @@ const JsonView: React.FC<{
     return false;
   });
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const textMuted = 'text-brand-gray-500';
 
@@ -118,7 +119,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   const [streamMode, setStreamMode] = useState<'chunks' | 'aggregated'>('aggregated');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgMain = isLight ? 'bg-white' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
