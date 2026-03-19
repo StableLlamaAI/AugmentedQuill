@@ -212,7 +212,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
                 if isinstance(args_raw, str)
                 else (args_raw or {})
             )
-        except Exception:
+        except (ValueError, TypeError):
             args_obj = {}
         if not name or not call_id:
             continue
@@ -352,7 +352,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 or {}
             )
             project_lang = str(story.get("language", "en") or "en")
-        except Exception:
+        except (OSError, ValueError, TypeError):
             project_lang = "en"
         inject_chat_user_context(req_messages, payload, language=project_lang)
 
@@ -371,7 +371,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             if value is None or value == "":
                 return None
             return float(value)
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     def _to_int(value):
@@ -379,7 +379,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             if value is None or value == "":
                 return None
             return int(value)
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     model_temperature = _to_float((chosen or {}).get("temperature"))
@@ -413,7 +413,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             parsed_extra = _json.loads(raw_extra_body)
             if isinstance(parsed_extra, dict):
                 extra_body.update(parsed_extra)
-        except Exception:
+        except (_json.JSONDecodeError, TypeError):
             # Invalid JSON is ignored by design so users can save drafts safely.
             pass
 

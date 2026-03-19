@@ -36,14 +36,22 @@ from augmentedquill.services.projects.projects import (
 router = APIRouter(tags=["Chapters"])
 
 
+def _require_active_project_dir():
+    """Return active project path or a standard error response."""
+    active = get_active_project_dir()
+    if not active:
+        return None, error_json("No active project", status_code=400)
+    return active, None
+
+
 @router.put("/chapters/{chap_id}/metadata")
 async def api_update_chapter_metadata(
     body: ChapterMetadataUpdate, chap_id: int = FastAPIPath(..., ge=0)
 ):
     """Api Update Chapter Metadata."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    _, err = _require_active_project_dir()
+    if err:
+        return err
 
     try:
         update_chapter_metadata(
@@ -67,9 +75,9 @@ async def api_update_chapter_title(
     body: ChapterTitleUpdate, chap_id: int = FastAPIPath(..., ge=0)
 ):
     """Api Update Chapter Title."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    _, err = _require_active_project_dir()
+    if err:
+        return err
 
     new_title_str = body.title.strip()
     if new_title_str.lower() == "[object object]":
@@ -96,9 +104,9 @@ async def api_update_chapter_title(
 @router.post("/chapters")
 async def api_create_chapter(body: ChapterCreate):
     """Api Create Chapter."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    _, err = _require_active_project_dir()
+    if err:
+        return err
 
     title = body.title.strip()
 
@@ -145,9 +153,9 @@ async def api_update_chapter_summary(
     body: ChapterSummaryUpdate, chap_id: int = FastAPIPath(..., ge=0)
 ):
     """Api Update Chapter Summary."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    _, err = _require_active_project_dir()
+    if err:
+        return err
 
     try:
         from augmentedquill.services.projects.projects import write_chapter_summary
@@ -184,9 +192,9 @@ async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)):
 @router.post("/chapters/reorder")
 async def api_reorder_chapters(body: ChaptersReorderRequest):
     """Api Reorder Chapters."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    active, err = _require_active_project_dir()
+    if err:
+        return err
 
     try:
         reorder_chapters_in_project(active, body.model_dump())
@@ -206,9 +214,9 @@ async def api_reorder_chapters(body: ChaptersReorderRequest):
 @router.post("/books/reorder")
 async def api_reorder_books(body: BooksReorderRequest):
     """Api Reorder Books."""
-    active = get_active_project_dir()
-    if not active:
-        return error_json("No active project", status_code=400)
+    active, err = _require_active_project_dir()
+    if err:
+        return err
 
     try:
         reorder_books_in_project(active, body.model_dump())

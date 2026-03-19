@@ -44,6 +44,32 @@ from augmentedquill.api.v1.story_routes.common import parse_json_body
 router = APIRouter(tags=["Story"])
 
 
+async def _with_parsed_payload(
+    request: Request,
+    handler,
+    *,
+    internal_error_prefix: str,
+    include_exception_text: bool = True,
+    use_raw_exception_detail: bool = False,
+):
+    """Parse JSON body and normalize ServiceError/500 handling."""
+    try:
+        payload = await parse_json_body(request)
+        return await handler(payload)
+    except ServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+    except Exception as e:
+        if use_raw_exception_detail:
+            detail = str(e)
+        else:
+            detail = (
+                f"{internal_error_prefix}: {e}"
+                if include_exception_text
+                else internal_error_prefix
+            )
+        raise HTTPException(status_code=500, detail=detail) from e
+
+
 async def _create_gen_source_pure(prepared: dict):
     """Create a generator source for streaming."""
     async for chunk_dict in stream_unified_chat_content(
@@ -328,8 +354,8 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
 @router.post("/story/summary/stream")
 async def api_story_summary_stream(request: Request):
     """Api Story Summary Stream."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         prepared = prepare_chapter_summary_generation(
             payload,
             payload.get("chap_id"),
@@ -348,22 +374,19 @@ async def api_story_summary_stream(request: Request):
             ),
             media_type="text/event-stream",
         )
-    except ServiceError as e:
-        raise HTTPException(
-            status_code=e.status_code,
-            detail=e.detail,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"An internal story summary error occurred: {e}"
-        )
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="An internal story summary error occurred",
+    )
 
 
 @router.post("/story/write/stream")
 async def api_story_write_stream(request: Request):
     """Api Story Write Stream."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
 
         return StreamingResponse(
@@ -375,22 +398,19 @@ async def api_story_write_stream(request: Request):
             ),
             media_type="text/event-stream",
         )
-    except ServiceError as e:
-        raise HTTPException(
-            status_code=e.status_code,
-            detail=e.detail,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"An internal story write error occurred: {e}"
-        )
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="An internal story write error occurred",
+    )
 
 
 @router.post("/story/continue/stream")
 async def api_story_continue_stream(request: Request):
     """Api Story Continue Stream."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
 
         return _as_streaming_response(
@@ -401,46 +421,43 @@ async def api_story_continue_stream(request: Request):
                 ),
             )
         )
-    except ServiceError as e:
-        raise HTTPException(
-            status_code=e.status_code,
-            detail=e.detail,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"An internal story continue error occurred: {e}"
-        )
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="An internal story continue error occurred",
+    )
 
 
 @router.post("/story/story-summary/stream")
 async def api_story_story_summary_stream(request: Request):
     """Api Story Story Summary Stream."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         prepared = prepare_story_summary_generation(payload, payload.get("mode") or "")
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
-    except ServiceError as e:
-        raise HTTPException(
-            status_code=e.status_code,
-            detail=e.detail,
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An internal story-wide summary error occurred: {e}",
-        )
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="An internal story-wide summary error occurred",
+    )
 
 
 @router.post("/story/action/stream")
 async def api_story_action_stream(request: Request):
     """Stream generic AI Actions (Extend/Rewrite/Summary update)."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         prepared = prepare_ai_action_generation(payload)
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
-    except ServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return await _with_parsed_payload(
+        request,
+        _handler,
+        internal_error_prefix="",
+        include_exception_text=False,
+        use_raw_exception_detail=True,
+    )

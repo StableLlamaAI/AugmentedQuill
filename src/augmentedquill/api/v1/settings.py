@@ -10,9 +10,11 @@
 API endpoints for application and machine settings management.
 """
 
+import json as _json
+from pathlib import Path
+
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
-import json as _json
 
 from augmentedquill.core.config import (
     load_machine_config,
@@ -48,6 +50,12 @@ from augmentedquill.api.v1.request_body import parse_json_object_body
 router = APIRouter(tags=["Settings"])
 
 
+def _resolve_story_path() -> Path:
+    """Return active project's story config path or the default path."""
+    active = get_active_project_dir()
+    return (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+
+
 @router.post("/settings")
 async def api_settings_post(request: Request) -> JSONResponse:
     """Accept JSON body with {story: {...}, machine: {...}} and persist to config/.
@@ -75,14 +83,13 @@ async def api_settings_post(request: Request) -> JSONResponse:
     machine_cfg = {"openai": openai_cfg}
 
     try:
-        active = get_active_project_dir()
-        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+        story_path = _resolve_story_path()
         machine_path = DEFAULT_MACHINE_CONFIG_PATH
         story_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
-    except Exception as e:
+    except (OSError, TypeError, ValueError) as e:
         return error_json(f"Failed to write configs: {e}", status_code=500)
 
     return JSONResponse(content={"ok": True})
@@ -270,7 +277,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
         machine_path = DEFAULT_MACHINE_CONFIG_PATH
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
-    except Exception as e:
+    except (OSError, TypeError, ValueError) as e:
         return JSONResponse(
             status_code=500,
             content={"ok": False, "detail": f"Failed to write machine config: {e}"},
@@ -286,10 +293,9 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
 
     summary = payload.get("summary", "")
     try:
-        active = get_active_project_dir()
-        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+        story_path = _resolve_story_path()
         update_story_field(story_path, "story_summary", summary)
-    except Exception as e:
+    except (OSError, TypeError, ValueError) as e:
         return JSONResponse(
             status_code=500,
             content={"ok": False, "detail": f"Failed to update story summary: {e}"},
@@ -308,10 +314,9 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
         return error_json("tags must be an array", status_code=400)
 
     try:
-        active = get_active_project_dir()
-        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+        story_path = _resolve_story_path()
         update_story_field(story_path, "tags", tags)
-    except Exception as e:
+    except (OSError, TypeError, ValueError) as e:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
 
     return JSONResponse(content={"ok": True, "tags": tags})
