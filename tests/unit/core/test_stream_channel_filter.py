@@ -66,6 +66,23 @@ class TestChannelFilter(unittest.TestCase):
         cf.feed("_call>")
         self.assertEqual(cf.current_channel, "final")
 
+    def test_flush_returns_buffered_content(self):
+        cf = ChannelFilter()
+        cf.feed("<tool")
+        flushed = cf.flush()
+        self.assertEqual(flushed, [{"channel": "final", "content": "<tool"}])
+        self.assertEqual(cf.flush(), [])
+
+    def test_pathological_buffer_degrades_to_progress(self):
+        cf = ChannelFilter()
+        # Starts with an unmatched tag-like prefix that should trigger fallback
+        # progress logic once the internal buffer grows beyond the guard threshold.
+        chunk = "<" + ("x" * 180)
+        out = cf.feed(chunk)
+        self.assertGreaterEqual(len(out), 1)
+        self.assertEqual(out[0]["channel"], "final")
+        self.assertEqual(out[0]["content"], "<")
+
 
 if __name__ == "__main__":
     unittest.main()

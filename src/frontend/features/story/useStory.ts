@@ -200,59 +200,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         if (!currentProject) return;
 
         const res = await api.projects.select(currentProject);
-        if (res.error === 'version_outdated') {
-          // Block normal loading so schema transitions are explicit and recoverable.
-          const shouldUpdate = await dialogsRef.current.confirm(
-            `The story config is outdated (version ${res.current_version}). Current version is ${res.required_version}. Do you want to update it?`
-          );
-          if (shouldUpdate) {
-            try {
-              const updateRes = await api.projects.updateConfig();
-              if (updateRes.ok) {
-                // Reload immediately to ensure local state reflects migrated structure.
-                const res2 = await api.projects.select(currentProject);
-                if (res2.ok && res2.story) {
-                  const chaptersRes = await api.chapters.list();
-                  const chapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
-
-                  const newStory: StoryState = mapSelectStoryToState(
-                    currentProject,
-                    res2.story,
-                    chapters,
-                    currentChapterId,
-                    story.chapters
-                  );
-
-                  lastLoadedChapterId.current = null;
-                  if (historyLabel) {
-                    pushState(newStory, historyLabel);
-                  } else {
-                    setStory(newStory);
-                    latestStoryRef.current = newStory;
-                  }
-                  setCurrentChapterId(newStory.currentChapterId);
-                } else if (res2.error) {
-                  if (res2.error === 'invalid_config') {
-                    dialogsRef.current.alert(
-                      `Invalid story config: ${res2.error_message}`
-                    );
-                  } else {
-                    dialogsRef.current.alert(
-                      `Failed to load story after update: ${res2.error}`
-                    );
-                  }
-                }
-              } else {
-                dialogsRef.current.alert(
-                  `Failed to update config: ${updateRes.detail}`
-                );
-              }
-            } catch (e) {
-              dialogsRef.current.alert(`Failed to update config: ${e}`);
-            }
-          }
-          return;
-        } else if (res.error === 'invalid_config') {
+        if (res.error === 'invalid_config') {
           dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
           return;
         } else if (res.ok && res.story) {

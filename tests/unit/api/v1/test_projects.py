@@ -8,10 +8,8 @@
 """Defines the test projects unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
-import os
-import tempfile
 from pathlib import Path
-from unittest import TestCase
+import tempfile
 
 from augmentedquill.services.projects.projects import (
     validate_project_dir,
@@ -21,25 +19,15 @@ from augmentedquill.services.projects.projects import (
     write_chapter_content,
     write_chapter_summary,
 )
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class ProjectsTest(TestCase):
+class ProjectsTest(ApiTestCase):
     def setUp(self):
-        # Point registry and projects root to temp locations
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.projects_root = Path(self.td.name) / "projects"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        self.projects_root.mkdir(parents=True, exist_ok=True)
+        super().setUp()
         # Ensure clean
         if self.registry_path.exists():
             self.registry_path.unlink()
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
 
     def test_validate_empty_then_initialize(self):
         with tempfile.TemporaryDirectory() as pd:

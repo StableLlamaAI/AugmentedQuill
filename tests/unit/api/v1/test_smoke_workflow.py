@@ -8,32 +8,10 @@
 """Defines the smoke workflow unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest import TestCase
-
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class SmokeWorkflowTest(TestCase):
-    def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-
-        self.client = TestClient(app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+class SmokeWorkflowTest(ApiTestCase):
 
     def test_smoke_project_chapter_chat_checkpoint_workflow(self):
         # 1) Create and select a project.

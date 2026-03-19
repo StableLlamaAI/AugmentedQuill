@@ -18,8 +18,6 @@ from augmentedquill.core.config import (
     load_machine_config,
     load_model_presets_config,
     save_story_config,
-    CURRENT_SCHEMA_VERSION,
-    BASE_DIR,
     DEFAULT_MACHINE_CONFIG_PATH,
     DEFAULT_STORY_CONFIG_PATH,
     DEFAULT_MODEL_PRESETS_PATH,
@@ -43,9 +41,9 @@ from augmentedquill.services.settings.settings_machine_ops import (
     list_remote_models,
     remote_model_exists,
 )
-from augmentedquill.services.settings.settings_update_ops import run_story_config_update
 from augmentedquill.utils.llm_utils import verify_model_capabilities
 from augmentedquill.api.v1.http_responses import error_json
+from augmentedquill.api.v1.request_body import parse_json_object_body
 
 router = APIRouter(tags=["Settings"])
 
@@ -56,10 +54,7 @@ async def api_settings_post(request: Request) -> JSONResponse:
 
     Returns {ok: true} on success or {ok:false, detail: str} on error.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     story = (payload or {}).get("story") or {}
     machine = (payload or {}).get("machine") or {}
@@ -157,10 +152,7 @@ async def api_machine_test(request: Request) -> JSONResponse:
     Body: { base_url: str, api_key?: str, timeout_s?: int }
     Returns: { ok: bool, models: str[], detail?: str }
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     base_url, api_key, timeout_s = parse_connection_payload(payload)
 
@@ -198,10 +190,7 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
     Body: { base_url: str, api_key?: str, timeout_s?: int, model_id: str }
     Returns: { ok: bool, model_ok: bool, models: str[], detail?: str }
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     base_url, api_key, timeout_s = parse_connection_payload(payload)
     model_id = (payload or {}).get("model_id") or ""
@@ -267,10 +256,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
     Returns: { ok: bool, detail?: str }
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     machine = payload or {}
     openai_cfg = (machine.get("openai") or {}) if isinstance(machine, dict) else {}
@@ -296,10 +282,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
 @router.put("/story/summary")
 async def api_story_summary_put(request: Request) -> JSONResponse:
     """Update story summary in story.json."""
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     summary = payload.get("summary", "")
     try:
@@ -318,10 +301,7 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
 @router.put("/story/tags")
 async def api_story_tags_put(request: Request) -> JSONResponse:
     """Update story tags in story.json."""
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     tags = payload.get("tags")
     if not isinstance(tags, list):
@@ -335,27 +315,3 @@ async def api_story_tags_put(request: Request) -> JSONResponse:
         return error_json(f"Failed to update story tags: {e}", status_code=500)
 
     return JSONResponse(content={"ok": True, "tags": tags})
-
-
-@router.post("/settings/update_story_config")
-async def update_story_config(request: Request):
-    """Update the story config to the latest version."""
-    try:
-        active = get_active_project_dir()
-        story_path = (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
-        ok, message = run_story_config_update(
-            base_dir=BASE_DIR,
-            config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
-            story_path=story_path,
-            current_schema_version=CURRENT_SCHEMA_VERSION,
-        )
-        if ok:
-            return JSONResponse(
-                status_code=200, content={"ok": True, "message": message}
-            )
-        return JSONResponse(status_code=500, content={"ok": False, "detail": message})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to update story config: {e}"},
-        )

@@ -65,11 +65,6 @@ type ParsedFunctionCall = {
   args: Record<string, unknown> | string;
 };
 
-type ModelsResponse = {
-  data?: Array<{ id?: string }>;
-  models?: Array<string | { id?: string }>;
-};
-
 export class ChatError extends Error {
   traceback?: string;
   status?: number;
@@ -102,58 +97,6 @@ export interface UnifiedChat {
     traceback?: string;
   }>;
 }
-
-export const testConnection = async (config: LLMConfig): Promise<boolean> => {
-  try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.modelId,
-        messages: [{ role: 'user', content: 'Test' }],
-        max_tokens: 5,
-      }),
-    });
-    return response.ok;
-  } catch (e) {
-    console.error('Connection test failed', e);
-    return false;
-  }
-};
-
-export const getModels = async (config: LLMConfig): Promise<string[]> => {
-  try {
-    const res = await fetch(`${config.baseUrl}/models`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-    });
-
-    if (!res.ok) return [];
-    const data = (await res.json()) as ModelsResponse;
-
-    // OpenAI returns { data: [{ id: 'gpt-4' }, ...] }
-    if (Array.isArray(data?.data)) {
-      return data.data.map((m) => m.id).filter((id): id is string => Boolean(id));
-    }
-
-    // Some compatible endpoints may return { models: [...] }
-    if (Array.isArray(data?.models)) {
-      return data.models
-        .map((m) => (typeof m === 'string' ? m : m.id))
-        .filter((id): id is string => Boolean(id));
-    }
-
-    return [];
-  } catch (e) {
-    console.error('Failed to list models', e);
-    return [];
-  }
-};
 
 export type CancelSignal = {
   cancelled: boolean;

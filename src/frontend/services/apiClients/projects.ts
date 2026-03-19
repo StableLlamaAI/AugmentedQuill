@@ -71,14 +71,6 @@ export const projectsApi = {
     return fetchBlob(path, undefined, 'Failed to export project as EPUB');
   },
 
-  updateConfig: async () => {
-    return fetchJson<{ ok?: boolean; detail?: string }>(
-      '/settings/update_story_config',
-      { method: 'POST' },
-      'Failed to update story config'
-    );
-  },
-
   import: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

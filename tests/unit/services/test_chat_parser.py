@@ -14,8 +14,11 @@ from augmentedquill.services.llm.llm import (
     parse_tool_calls_from_content as _parse_tool_calls_from_content,
 )
 from augmentedquill.utils.llm_parsing import (
+    extract_thinking_from_content,
     parse_complete_assistant_output,
     parse_stream_channel_fragments,
+    strip_thinking_tags,
+    strip_tool_call_tags,
 )
 
 
@@ -188,6 +191,28 @@ class TestChatParser(unittest.TestCase):
         ]
         events = parse_stream_channel_fragments(fragments, seen)
         self.assertEqual(events, [])
+
+    def test_strip_thinking_tags_prefers_final_channel_output(self):
+        content = (
+            "<|channel|>analysis<|message|>Hidden reasoning<|end|>"
+            "<|start|>assistant<|channel|>final<|message|>Visible answer"
+        )
+        self.assertEqual(strip_thinking_tags(content), "Visible answer")
+
+    def test_strip_thinking_tags_removes_inline_thinking_blocks(self):
+        content = "Before <thinking>hidden</thinking> After"
+        self.assertEqual(strip_thinking_tags(content), "Before  After")
+
+    def test_strip_tool_call_tags_removes_tool_markup(self):
+        content = (
+            'Intro <tool_call>{"name":"x"}</tool_call> '
+            "[TOOL_CALL]do_stuff[/TOOL_CALL] Outro"
+        )
+        self.assertEqual(strip_tool_call_tags(content), "Intro   Outro")
+
+    def test_extract_thinking_from_content_returns_first_block(self):
+        content = "<thought>internal note</thought> final"
+        self.assertEqual(extract_thinking_from_content(content), "internal note")
 
 
 if __name__ == "__main__":

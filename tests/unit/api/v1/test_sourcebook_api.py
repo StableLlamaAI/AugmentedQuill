@@ -8,28 +8,15 @@
 """Defines the test sourcebook api unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest import TestCase
 from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
-
-import augmentedquill.main as main
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class SourcebookApiTest(TestCase):
+class SourcebookApiTest(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
+        super().setUp()
 
         ok, msg = select_project("sourcebook_api_proj")
         self.assertTrue(ok, msg)
@@ -43,12 +30,6 @@ class SourcebookApiTest(TestCase):
             "sourcebook": {},
         }
         (pdir / "story.json").write_text(json.dumps(story), encoding="utf-8")
-
-        self.client = TestClient(main.app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
     def test_sourcebook_api_crud(self):
         create = self.client.post(

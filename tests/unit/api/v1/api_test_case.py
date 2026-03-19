@@ -21,14 +21,17 @@ class ApiTestCase(TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
         self.addCleanup(self.td.cleanup)
+        self.user_data_root = Path(self.td.name)
         self.projects_root = Path(self.td.name) / "projects"
         self.projects_root.mkdir(parents=True, exist_ok=True)
         self.registry_path = Path(self.td.name) / "projects.json"
 
+        os.environ["AUGQ_USER_DATA_DIR"] = str(self.user_data_root)
         os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
         os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
         self.client = TestClient(app)
 
     def tearDown(self):
+        os.environ.pop("AUGQ_USER_DATA_DIR", None)
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)

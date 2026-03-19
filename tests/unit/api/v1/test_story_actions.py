@@ -7,32 +7,18 @@
 
 """Defines tests for the unified story action streaming endpoint."""
 
-import os
-import tempfile
 import json
-from pathlib import Path
-from unittest import TestCase, mock
-from fastapi.testclient import TestClient
+from unittest import mock
 
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class StoryActionsTest(TestCase):
+class StoryActionsTest(ApiTestCase):
     captured_messages = None
 
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.user_data_root = Path(self.td.name)
-        self.projects_root = self.user_data_root / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = self.user_data_root / "projects.json"
-
-        # Isolation env vars
-        os.environ["AUGQ_USER_DATA_DIR"] = str(self.user_data_root)
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
+        super().setUp()
 
         # Minimal mock of user settings
         self.config_dir = self.user_data_root / "config"
@@ -59,13 +45,10 @@ class StoryActionsTest(TestCase):
             )
         )
 
-        self.client = TestClient(app)
         self._patch_llm()
 
     def tearDown(self):
-        os.environ.pop("AUGQ_USER_DATA_DIR", None)
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+        super().tearDown()
         mock.patch.stopall()
 
     def _patch_llm(self):

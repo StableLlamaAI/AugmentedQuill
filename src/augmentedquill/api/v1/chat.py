@@ -54,6 +54,7 @@ import json as _json
 from typing import Any, Dict
 from augmentedquill.models.chat import ChatInitialStateResponse
 from augmentedquill.utils.json_repair import try_parse_json_robust
+from augmentedquill.api.v1.request_body import parse_json_object_body
 
 router = APIRouter(tags=["Chat"])
 
@@ -166,10 +167,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         "active_chapter_id"?: int
       }
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     messages = payload.get("messages") or []
     model_type = str((payload or {}).get("model_type") or "CHAT").upper()
@@ -313,10 +311,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     Returns: Streaming text response with the assistant's message.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     req_messages = normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
@@ -488,10 +483,7 @@ async def api_load_chat(chat_id: str):
 @router.post("/chats/{chat_id}")
 async def api_save_chat(chat_id: str, request: Request):
     """Api Save Chat."""
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
+    data = await parse_json_object_body(request)
     save_active_chat(chat_id, data)
     return {"ok": True}
 
@@ -517,8 +509,5 @@ async def proxy_list_models(request: Request) -> JSONResponse:
 
     Returns the JSON payload from the upstream (expected to include a `data` array).
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
     return await proxy_openai_models(payload)
