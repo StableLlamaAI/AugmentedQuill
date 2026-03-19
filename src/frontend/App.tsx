@@ -384,6 +384,7 @@ const App: React.FC = () => {
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    cancelSuggestions,
     checkedEntries,
     handleToggleEntry,
     isAutoSourcebookSelectionEnabled,
@@ -402,17 +403,18 @@ const App: React.FC = () => {
     getErrorMessage,
   });
 
-  const { isAiActionLoading, handleAiAction, handleSidebarAiAction } = useAiActions({
-    currentChapter,
-    story,
-    prompts,
-    isEditingAvailable: roleAvailability.editing,
-    isWritingAvailable: roleAvailability.writing,
-    checkedSourcebookIds: Array.from(checkedEntries),
-    updateChapter,
-    setChatMessages,
-    getErrorMessage,
-  });
+  const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
+    useAiActions({
+      currentChapter,
+      story,
+      prompts,
+      isEditingAvailable: roleAvailability.editing,
+      isWritingAvailable: roleAvailability.writing,
+      checkedSourcebookIds: Array.from(checkedEntries),
+      updateChapter,
+      setChatMessages,
+      getErrorMessage,
+    });
 
   const {
     handleFormat,
@@ -610,12 +612,14 @@ const App: React.FC = () => {
               continuations,
               isSuggesting,
               handleTriggerSuggestions,
+              cancelSuggestions,
               handleAcceptContinuation,
               isSuggestionMode,
               handleKeyboardSuggestionAction,
             },
             aiControls: {
               handleAiAction,
+              cancelAiAction,
               isAiActionLoading,
               isWritingAvailable: roleAvailability.writing,
             },

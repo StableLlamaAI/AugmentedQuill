@@ -165,6 +165,7 @@ export type MainEditorSuggestionControls = {
     contentOverride?: string,
     enableSuggestionMode?: boolean
   ) => Promise<void>;
+  handleCancelSuggestions?: () => void;
   handleAcceptContinuation: (text: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: (
@@ -180,6 +181,7 @@ export type MainEditorAiControls = {
   ) => Promise<void>;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
+  cancelAiAction?: () => void;
 };
 
 export type MainEditorControls = {

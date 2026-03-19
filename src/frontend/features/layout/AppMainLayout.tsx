@@ -483,6 +483,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
                 continuations: suggestionControls.continuations,
                 isSuggesting: suggestionControls.isSuggesting,
                 onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
+                onCancelSuggestion: suggestionControls.cancelSuggestions,
                 onAcceptContinuation: suggestionControls.handleAcceptContinuation,
                 isSuggestionMode: suggestionControls.isSuggestionMode,
                 onKeyboardSuggestionAction:
@@ -492,6 +493,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
                 onAiAction: aiControls.handleAiAction,
                 isAiLoading: aiControls.isAiActionLoading,
                 isWritingAvailable: aiControls.isWritingAvailable,
+                onCancelAiAction: aiControls.cancelAiAction,
               }}
               onContextChange={setActiveFormats}
               showWhitespace={showWhitespace}

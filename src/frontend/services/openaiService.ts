@@ -14,6 +14,7 @@ import { applySmartQuotes } from '../utils/textUtils';
 import {
   ChatContextUsage,
   prepareChatContext,
+  ChatHistoryMessage,
 } from '../features/chat/chatContextBudget';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
@@ -154,17 +155,37 @@ export const getModels = async (config: LLMConfig): Promise<string[]> => {
   }
 };
 
+export type CancelSignal = {
+  cancelled: boolean;
+  reader?: ReadableStreamDefaultReader<Uint8Array>;
+};
+
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onToolCalls?: (toolCalls: ToolCallChunk[]) => void,
   onThinking?: (thinking: string) => void,
-  onContent?: (content: string) => void
+  onContent?: (content: string) => void,
+  cancelSignal?: CancelSignal
 ): Promise<string> {
   let text = '';
   let buffer = '';
   const decoder = new TextDecoder();
 
+  if (cancelSignal) {
+    cancelSignal.reader = reader;
+  }
+
   while (true) {
+    if (cancelSignal?.cancelled) {
+      // Stop reading further and close the stream.
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+      break;
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -229,7 +250,7 @@ async function readSSEStream(
 
 export const createChatSession = (
   systemInstruction: string,
-  history: HistoryMessage[],
+  history: ChatHistoryMessage[],
   config: LLMConfig,
   modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
   options?: {
@@ -382,7 +403,8 @@ export const streamAiAction = async (
   onUpdate?: (fullText: string) => void,
   onThinking?: (thinking: string) => void,
   source?: 'chapter' | 'notes',
-  checkedSourcebookIds?: string[]
+  checkedSourcebookIds?: string[],
+  cancelSignal?: CancelSignal
 ): Promise<string> => {
   const body: any = {
     target,
@@ -422,8 +444,14 @@ export const streamAiAction = async (
     (delta) => {
       accumulated += delta;
       onUpdate?.(applySmartQuotes(accumulated));
-    }
+    },
+    cancelSignal
   );
+
+  if (cancelSignal?.cancelled) {
+    return accumulated;
+  }
+
   return applySmartQuotes(finalResult);
 };
 
@@ -436,6 +464,7 @@ export const generateContinuations = async (
   checkedSourcebookIds?: string[],
   options?: {
     onSuggestionUpdate?: (index: number, text: string) => void;
+    cancelSignal?: CancelSignal;
   }
 ): Promise<string[]> => {
   if (!chapterId) return [];
@@ -463,6 +492,15 @@ export const generateContinuations = async (
       if (reader) {
         const decoder = new TextDecoder();
         while (true) {
+          if (options?.cancelSignal?.cancelled) {
+            try {
+              await reader.cancel();
+            } catch {
+              // ignore
+            }
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
           text += decoder.decode(value, { stream: true });
