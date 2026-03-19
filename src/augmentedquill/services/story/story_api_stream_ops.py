@@ -45,8 +45,13 @@ async def stream_collect_and_persist(
     stream_factory: Callable[[], AsyncIterator[dict]],
     persist_on_complete: Callable[[str], None],
     chunk_transformer: Callable[[str], str] | None = None,
-) -> AsyncIterator[dict]:
-    """Stream Collect And Persist. Expects and yields dicts (content, thinking, tool_calls)."""
+) -> AsyncIterator[str]:
+    """Stream Collect And Persist.
+
+    This helper consumes an upstream stream of dicts and yields only the
+    `content` fragments as plain strings. That makes it compatible with
+    Starlette StreamingResponse which expects byte/str chunks.
+    """
     buf: list[str] = []
     try:
         async for chunk_dict in stream_factory():
@@ -55,7 +60,7 @@ async def stream_collect_and_persist(
                 # Store transformed (raw) chunk for persistence
                 raw_chunk = chunk_transformer(content) if chunk_transformer else content
                 buf.append(raw_chunk)
-            yield chunk_dict
+            yield content
     except asyncio.CancelledError:
         return
 

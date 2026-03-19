@@ -538,8 +538,64 @@ class TestChatStreamCoverage(TestCase):
         _, call_kwargs = mock_client_instance.stream.call_args
         upstream_body = call_kwargs["json"]
         self.assertIn("tools", upstream_body)
+        # When the model does not specify chat_template_kwargs, we should not
+        # inject any defaults; the provider gets to decide.
+        self.assertNotIn("chat_template_kwargs", upstream_body)
+
+    @patch("augmentedquill.api.v1.chat.load_machine_config")
+    @patch("augmentedquill.api.v1.chat.httpx.AsyncClient")
+    def test_editing_stream_preserves_provider_chat_template_kwargs(
+        self, MockClientClass, mock_load_config
+    ):
+        """Ensure editing model provider chat_template_kwargs are preserved."""
+        mock_load_config.return_value = {
+            "openai": {
+                "models": [
+                    {
+                        "name": "edit-model",
+                        "base_url": "http://fake",
+                        "api_key": "k",
+                        "model": "gpt-fake",
+                        "extra_body": '{"chat_template_kwargs": {"enable_thinking": true, "foo": "bar"}}',
+                    }
+                ],
+                "selected_editing": "edit-model",
+            }
+        }
+
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Edit something"}],
+            "model_type": "EDITING",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        _, call_kwargs = mock_client_instance.stream.call_args
+        upstream_body = call_kwargs["json"]
         self.assertIn("chat_template_kwargs", upstream_body)
-        self.assertFalse(upstream_body["chat_template_kwargs"]["enable_thinking"])
+        self.assertTrue(upstream_body["chat_template_kwargs"]["enable_thinking"])
+        self.assertEqual(upstream_body["chat_template_kwargs"]["foo"], "bar")
 
     @patch("augmentedquill.api.v1.chat.httpx.AsyncClient")
     def test_stream_commentary_tool_call_suppresses_json(self, MockClientClass):

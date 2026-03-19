@@ -112,7 +112,8 @@ export function useAiActions({
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
     currentText?: string,
-    onThinking?: (thinking: string) => void
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
   ): Promise<string | undefined> => {
     if (!isEditingAvailable) return undefined;
     setIsAiActionLoading(true);
@@ -135,7 +136,8 @@ export function useAiActions({
         id,
         currentText ?? '',
         onProgress ? (partial) => onProgress(cleanText(partial)) : undefined,
-        onThinking
+        onThinking,
+        source
       );
 
       return cleanText(result);

@@ -79,11 +79,10 @@ def apply_native_tool_calling_mode(
     if not (supports_function_calling and tools and tool_choice != "none"):
         return merged
 
+    # Preserve any chat template kwargs provided by the model configuration.
+    # We should not override the model's own choice about whether thinking templates
+    # are enabled or disabled.
     chat_template_kwargs = merged.get("chat_template_kwargs")
     if isinstance(chat_template_kwargs, dict):
-        chat_template_kwargs = dict(chat_template_kwargs)
-    else:
-        chat_template_kwargs = {}
-    chat_template_kwargs["enable_thinking"] = False
-    merged["chat_template_kwargs"] = chat_template_kwargs
+        merged["chat_template_kwargs"] = dict(chat_template_kwargs)
     return merged

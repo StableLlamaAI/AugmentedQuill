@@ -20,6 +20,7 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_continue_chapter_messages,
     build_story_summary_messages,
     build_write_chapter_messages,
+    get_system_message,
     resolve_model_runtime,
 )
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -233,10 +234,17 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
             base_dir=BASE_DIR,
         )
     )
+    content_label = get_system_message(
+        "chapter_text_label",
+        model_overrides,
+        language=story.get("language", "en"),
+    )
+
     messages = build_chapter_summary_messages(
         mode=mode,
         current_summary=current_summary,
         chapter_text=chapter_text,
+        content_label=content_label,
         model_overrides=model_overrides,
         story_summary=story.get("story_summary"),
         language=story.get("language", "en"),
@@ -389,12 +397,24 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     else:
         path, pos = None, None
 
+    # Read the current chapter text once (if we have a chapter path).
+    actual_chapter_text = read_text_or_raise(path) if path else None
+
     existing_content = payload.get("current_text")
     if not isinstance(existing_content, str):
-        if path:
-            existing_content = read_text_or_raise(path)
-        else:
-            existing_content = ""
+        existing_content = actual_chapter_text or ""
+
+    # Decide whether the provided text should be treated as notes.
+    source_hint = payload.get("source")
+    is_notes_source = source_hint == "notes"
+    if (
+        not is_notes_source
+        and isinstance(existing_content, str)
+        and actual_chapter_text is not None
+        and existing_content.strip()
+        and existing_content.strip() != actual_chapter_text.strip()
+    ):
+        is_notes_source = True
 
     _, story_path, story = get_active_story_or_raise()
     chapters_data = get_normalized_chapters(story)
@@ -445,6 +465,11 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         existing_content=existing_content,
         chapter_summaries=chapter_summaries_text,
         style_tags=context["story_tags"],
+        content_label=get_system_message(
+            "chapter_notes_label" if is_notes_source else "chapter_text_label",
+            {},
+            language=story.get("language", "en"),
+        ),
         model_overrides=model_overrides,
         language=story.get("language", "en"),
     )

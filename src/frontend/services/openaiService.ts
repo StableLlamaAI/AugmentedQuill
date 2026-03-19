@@ -380,7 +380,8 @@ export const streamAiAction = async (
   chapId: string,
   currentText: string,
   onUpdate?: (fullText: string) => void,
-  onThinking?: (thinking: string) => void
+  onThinking?: (thinking: string) => void,
+  source?: 'chapter' | 'notes'
 ): Promise<string> => {
   const res = await fetch('/api/v1/story/action/stream', {
     method: 'POST',
@@ -391,6 +392,7 @@ export const streamAiAction = async (
       chap_id: Number(chapId),
       target_id: Number(chapId),
       current_text: currentText,
+      source,
     }),
   });
 

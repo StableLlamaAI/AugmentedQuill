@@ -659,6 +659,7 @@ def sourcebook_create_entry(
     synonyms: List[str] | object = _UNSET,
     images: List[str] | object = _UNSET,
     keywords: List[str] | object = _UNSET,
+    relations: List[dict] | object = _UNSET,
 ) -> Dict:
     """Create a sourcebook entry for the active project."""
     if not name or not isinstance(name, str) or not name.strip():
@@ -713,6 +714,20 @@ def sourcebook_create_entry(
             synonyms=cleaned_synonyms,
         )
 
+    # Relations are optional and currently stored as-is for later use.
+    cleaned_relations: list[dict] = []
+    if relations is _UNSET or relations is None:
+        cleaned_relations = []
+    elif not isinstance(relations, list):
+        return {"error": "Invalid relations: Relations must be a list of objects."}
+    else:
+        for rel in relations:
+            if not isinstance(rel, dict):
+                return {
+                    "error": "Invalid relations: Relations must be a list of objects."
+                }
+            cleaned_relations.append(rel)
+
     story, story_path = _get_story_data()
     if not story:
         return {"error": "No active project"}
@@ -728,6 +743,7 @@ def sourcebook_create_entry(
         "synonyms": cleaned_synonyms,
         "images": cleaned_images,
         "keywords": cleaned_keywords,
+        "relations": cleaned_relations,
     }
 
     sb_dict[name] = new_entry_data
