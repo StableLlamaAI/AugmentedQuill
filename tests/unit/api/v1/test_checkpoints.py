@@ -7,30 +7,16 @@
 
 """Defines the test checkpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-import os
-import tempfile
-from pathlib import Path
-from unittest import TestCase
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import (
     initialize_project_dir,
     select_project,
 )
+from .api_test_case import ApiTestCase
 
 
-class CheckpointsTest(TestCase):
+class CheckpointsTest(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.projects_root = Path(self.td.name) / "projects"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-
-        self.client = TestClient(app)
+        super().setUp()
 
         # Setup an active project
         self.project_name = "test_project"
@@ -89,3 +75,37 @@ class CheckpointsTest(TestCase):
         assert resp.status_code == 200
         assert len(resp.json()["checkpoints"]) == 0
         assert not (project_dir / "checkpoints" / timestamp).exists()
+
+    def test_checkpoints_endpoints_require_active_project(self):
+        # Force no active project by clearing the registry current value.
+        self.registry_path.write_text('{"current": "", "recent": []}', encoding="utf-8")
+
+        resp_create = self.client.post("/api/v1/checkpoints/create")
+        self.assertEqual(resp_create.status_code, 400)
+
+        resp_load = self.client.post(
+            "/api/v1/checkpoints/load", json={"timestamp": "2026-01-01T00-00-00"}
+        )
+        self.assertEqual(resp_load.status_code, 400)
+
+        resp_delete = self.client.post(
+            "/api/v1/checkpoints/delete", json={"timestamp": "2026-01-01T00-00-00"}
+        )
+        self.assertEqual(resp_delete.status_code, 400)
+
+    def test_load_checkpoint_rejects_invalid_or_missing_timestamp(self):
+        resp_invalid = self.client.post(
+            "/api/v1/checkpoints/load", json={"timestamp": "../escape"}
+        )
+        self.assertEqual(resp_invalid.status_code, 404)
+
+        resp_missing = self.client.post(
+            "/api/v1/checkpoints/load", json={"timestamp": "missing-checkpoint"}
+        )
+        self.assertEqual(resp_missing.status_code, 404)
+
+    def test_delete_checkpoint_invalid_name_returns_404(self):
+        resp_invalid = self.client.post(
+            "/api/v1/checkpoints/delete", json={"timestamp": "bad/name"}
+        )
+        self.assertEqual(resp_invalid.status_code, 404)
