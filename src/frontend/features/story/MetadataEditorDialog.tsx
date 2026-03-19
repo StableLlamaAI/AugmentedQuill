@@ -509,34 +509,26 @@ export function MetadataEditorDialog({
                                     : 'bg-brand-gray-700'
                                 }`}
                               />
-                              <Button
-                                theme={theme}
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setAiWriteSource('chapter');
-                                  void handleAiGenerate('write', 'chapter');
-                                }}
-                                disabled={isAiGenerating || !!aiDisabledReason}
-                                className="text-xs h-6"
-                                icon={<Wand2 size={12} />}
+                              <span
+                                className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
+                                  aiWriteSource === 'chapter'
+                                    ? 'bg-primary/20 text-primary'
+                                    : 'text-brand-gray-500'
+                                }`}
                               >
-                                from Chapter
-                              </Button>
-                              <Button
-                                theme={theme}
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setAiWriteSource('notes');
-                                  void handleAiGenerate('write', 'notes');
-                                }}
-                                disabled={isAiGenerating || !!aiDisabledReason}
-                                className="text-xs h-6"
-                                icon={<StickyNote size={12} />}
+                                <Wand2 size={12} className="mr-2" />
+                                from Chapters
+                              </span>
+                              <span
+                                className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
+                                  aiWriteSource === 'notes'
+                                    ? 'bg-primary/20 text-primary'
+                                    : 'text-brand-gray-500'
+                                }`}
                               >
+                                <StickyNote size={12} className="mr-2" />
                                 from Notes
-                              </Button>
+                              </span>
                             </div>
                           ) : (
                             <>
@@ -548,25 +540,17 @@ export function MetadataEditorDialog({
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
                               >
-                                <Button
-                                  theme={theme}
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setAiWriteSource('chapter');
-                                    void handleAiGenerate('write', 'chapter');
-                                  }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
-                                  className={`text-xs h-6 font-bold uppercase ${
+                                <span
+                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
                                     aiWriteSource === 'chapter'
-                                      ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                                      ? 'bg-primary/20 text-primary'
                                       : 'text-brand-gray-500'
                                   }`}
-                                  icon={<Wand2 size={12} />}
-                                  title="Regenerate summary from Chapter"
+                                  title="Regenerate summary from Chapters"
                                 >
-                                  from Chapter
-                                </Button>
+                                  <Wand2 size={12} className="mr-2" />
+                                  from Chapters
+                                </span>
                                 <div
                                   className={`w-px h-4 ${
                                     theme === 'light'
@@ -585,7 +569,7 @@ export function MetadataEditorDialog({
                                   }}
                                   disabled={isAiGenerating || !!aiDisabledReason}
                                   className="text-xs h-6"
-                                  title="Update existing summary with facts from Chapter"
+                                  title="Update existing summary with facts from Chapters"
                                 >
                                   Update
                                 </Button>
@@ -614,25 +598,17 @@ export function MetadataEditorDialog({
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
                               >
-                                <Button
-                                  theme={theme}
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setAiWriteSource('notes');
-                                    void handleAiGenerate('write', 'notes');
-                                  }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
-                                  className={`text-xs h-6 font-bold uppercase ${
+                                <span
+                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
                                     aiWriteSource === 'notes'
-                                      ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                                      ? 'bg-primary/20 text-primary'
                                       : 'text-brand-gray-500'
                                   }`}
-                                  icon={<StickyNote size={12} />}
                                   title="Regenerate summary from Notes"
                                 >
+                                  <StickyNote size={12} className="mr-2" />
                                   from Notes
-                                </Button>
+                                </span>
                                 <div
                                   className={`w-px h-4 ${
                                     theme === 'light'
