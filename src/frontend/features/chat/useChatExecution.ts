@@ -211,6 +211,12 @@ export function useChatExecution({
         text: userText,
       });
 
+      const accumulatedToolBatches: Array<{
+        batch_id: string;
+        label: string;
+        operation_count?: number;
+      }> = [];
+
       while (result.functionCalls && result.functionCalls.length > 0) {
         if (stopSignalRef.current) break;
 
@@ -273,18 +279,10 @@ export function useChatExecution({
 
         const toolBatch = toolResponse.mutations?.tool_batch;
         if (toolBatch?.batch_id) {
-          pushExternalHistoryEntry?.({
+          accumulatedToolBatches.push({
+            batch_id: toolBatch.batch_id,
             label: toolBatch.label || `AI tools (${toolBatch.operation_count})`,
-            onUndo: async () => {
-              await api.chat.undoToolBatch(toolBatch.batch_id);
-              await refreshProjects();
-              await refreshStory();
-            },
-            onRedo: async () => {
-              await api.chat.redoToolBatch(toolBatch.batch_id);
-              await refreshProjects();
-              await refreshStory();
-            },
+            operation_count: toolBatch.operation_count,
           });
         }
 
@@ -304,6 +302,33 @@ export function useChatExecution({
         result = await nextSession.sendMessage({ message: '' }, (update) =>
           updateMessage(currentMsgId, update)
         );
+      }
+
+      if (accumulatedToolBatches.length > 0 && pushExternalHistoryEntry) {
+        const entryLabel =
+          accumulatedToolBatches.length === 1
+            ? accumulatedToolBatches[0].label
+            : `AI tools: ${accumulatedToolBatches
+                .map((batch) => batch.label)
+                .join(', ')}`;
+
+        pushExternalHistoryEntry({
+          label: entryLabel,
+          onUndo: async () => {
+            for (const batch of [...accumulatedToolBatches].reverse()) {
+              await api.chat.undoToolBatch(batch.batch_id);
+            }
+            await refreshProjects();
+            await refreshStory();
+          },
+          onRedo: async () => {
+            for (const batch of accumulatedToolBatches) {
+              await api.chat.redoToolBatch(batch.batch_id);
+            }
+            await refreshProjects();
+            await refreshStory();
+          },
+        });
       }
 
       if (!stopSignalRef.current) {
