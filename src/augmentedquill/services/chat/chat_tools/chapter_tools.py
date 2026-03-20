@@ -859,7 +859,7 @@ class CallEditingAssistantParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a complex story editing, text revision, or structural task to the EDITING LLM. Use this whenever the user asks for direct editing, fixing, rewriting or evaluating.",
+    description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual chapter text.",
     allowed_roles=(CHAT_ROLE,),
     capability="delegation",
 )
