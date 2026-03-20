@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { prepareChatContext } from './chatContextBudget';
+import { prepareChatContext, estimateChatContextUsage } from './chatContextBudget';
 import { LLMConfig } from '../../types';
 
 const config: LLMConfig = {
@@ -38,6 +38,19 @@ describe('prepareChatContext', () => {
     expect(prepared.usage.compactionApplied).toBe(false);
     expect(prepared.usage.enabled).toBe(true);
     expect(prepared.messages.at(-1)?.content).toBe('What now?');
+  });
+
+  it('estimateChatContextUsage uses fast-path for normal-sized history and avoids heavy compaction', () => {
+    const usage = estimateChatContextUsage({
+      systemInstruction: 'You are helpful.',
+      messages: [{ role: 'user', text: 'Hello there.' }],
+      config,
+    });
+
+    expect(usage.enabled).toBe(true);
+    expect(usage.estimatedTokens).toBeGreaterThan(0);
+    expect(usage.usageRatio).toBeLessThan(0.25);
+    expect(usage.compactionApplied).toBe(false);
   });
 
   it('does not compact or report usage when context window is unset', () => {
