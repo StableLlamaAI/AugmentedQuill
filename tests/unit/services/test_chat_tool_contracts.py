@@ -40,6 +40,7 @@ class ChatToolContractsTest(TestCase):
         "get_chapter_metadata",
         "get_chapter_summaries",
         "get_chapter_summary",
+        "get_current_chapter_id",
         "get_project_overview",
         "get_sourcebook_entry",
         "get_story_metadata",

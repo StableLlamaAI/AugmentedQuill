@@ -394,6 +394,14 @@ function getRecentIndexes(messages: MutablePreparedMessage[]): {
   return { recentNonSystem, recentUsers };
 }
 
+function isCriticalToolMessage(message: MutablePreparedMessage): boolean {
+  return (
+    message.role === 'tool' &&
+    typeof message.name === 'string' &&
+    message.name === 'get_current_chapter_id'
+  );
+}
+
 function compactPreparedMessages(
   originalMessages: MutablePreparedMessage[],
   promptBudgetTokens: number
@@ -420,7 +428,12 @@ function compactPreparedMessages(
     index++
   ) {
     const message = messages[index];
-    if (message.role !== 'tool' || recentNonSystem.has(index)) continue;
+    if (
+      message.role !== 'tool' ||
+      recentNonSystem.has(index) ||
+      isCriticalToolMessage(message)
+    )
+      continue;
     const summarized = summarizeToolContent(message.name, message.content);
     if (summarized && summarized !== message.content) {
       message.content = summarized;
@@ -523,7 +536,12 @@ function compactPreparedMessages(
     index++
   ) {
     const message = messages[index];
-    if (message.role !== 'tool' || recentNonSystem.has(index)) continue;
+    if (
+      message.role !== 'tool' ||
+      recentNonSystem.has(index) ||
+      isCriticalToolMessage(message)
+    )
+      continue;
     const fallback = message.name
       ? `[Earlier tool result omitted to stay within context budget: ${message.name}]`
       : '[Earlier tool result omitted to stay within context budget]';

@@ -189,6 +189,52 @@ describe('prepareChatContext', () => {
     ).toBe(1);
   });
 
+  it('preserves get_current_chapter_id tool message during compaction', () => {
+    const prepared = prepareChatContext({
+      systemInstruction: 'You are helpful.',
+      history: [
+        { role: 'user', text: 'Start chat.' },
+        {
+          role: 'tool',
+          name: 'get_current_chapter_id',
+          tool_call_id: 'call_current_chapter',
+          text: JSON.stringify({
+            chapter_id: 123,
+            chapter_title: 'Current Scene',
+            book_id: 'book-1',
+          }),
+        },
+        {
+          role: 'tool',
+          name: 'get_project_overview',
+          tool_call_id: 'call_project_overview',
+          text: JSON.stringify({
+            project_title: 'Huge Project',
+            chapters: Array.from({ length: 50 }, (_, index) => ({
+              id: index + 1,
+              title: `Chapter ${index + 1}`,
+              summary: 'Very long summary '.repeat(40),
+            })),
+          }),
+        },
+      ],
+      config: { ...config, contextWindowTokens: 4096, modelId: 'demo-4k' },
+      userMessageText: 'Continue.',
+    });
+
+    const currentChapterMessage = prepared.messages.find(
+      (m) => m.role === 'tool' && m.name === 'get_current_chapter_id'
+    );
+    expect(currentChapterMessage).toBeDefined();
+    expect(currentChapterMessage?.content).toContain('"chapter_id":123');
+    expect(currentChapterMessage?.content).toContain('"chapter_title":"Current Scene"');
+
+    const otherToolMessage = prepared.messages.find(
+      (m) => m.role === 'tool' && m.name === 'get_project_overview'
+    );
+    expect(otherToolMessage?.content).toContain('Earlier tool result');
+  });
+
   it('respects explicit context window overrides', () => {
     const prepared = prepareChatContext({
       systemInstruction: 'You are helpful.',

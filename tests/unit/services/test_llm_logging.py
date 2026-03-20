@@ -85,11 +85,12 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
                     timeout=httpx.Timeout(1.0),
                 )
 
-        # we expect two calls: one at start, one during finalize (but the second may
-        # skip append because the same object is already in logs).  check the first
-        # recorded call had response == None
-        self.assertGreaterEqual(len(seen), 1)
+        # two add_llm_log calls are expected (start + finalize), but same ID
+        # should be replaced by add_llm_log logic in llm_logging.
+        self.assertGreaterEqual(len(seen), 2)
+        self.assertEqual(seen[0]["id"], seen[1]["id"])
         self.assertIsNone(seen[0].get("response"))
+        self.assertIsNotNone(seen[1].get("response"))
 
     async def test_logged_request_exception_includes_traceback(self):
         """When the HTTP client throws, we log the full traceback in error_detail."""

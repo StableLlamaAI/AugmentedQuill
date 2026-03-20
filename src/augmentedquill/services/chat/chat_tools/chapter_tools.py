@@ -55,13 +55,101 @@ def _overview_chapters():
     return ov, chapters
 
 
+def _find_chapter(ov: dict, chap_id: int | None = None, book_id: str | None = None):
+    """Find a chapter record by ID and optional book_id."""
+    if chap_id is None:
+        return None, None
+
+    p_type = ov.get("project_type", "novel")
+    if p_type == "series":
+        for book in ov.get("books", []):
+            if book_id is not None and str(book.get("id")) != str(book_id):
+                continue
+            for chap in book.get("chapters", []):
+                if isinstance(chap, dict) and chap.get("id") == chap_id:
+                    return chap, book
+        return None, None
+
+    for chap in ov.get("chapters", []):
+        if isinstance(chap, dict) and chap.get("id") == chap_id:
+            return chap, None
+    return None, None
+
+
+def compose_current_chapter_state(payload: dict) -> dict | None:
+    """Compose centralized current-chapter state payload for tool injection and explicit call.
+
+    Returns only the minimal required fields:
+      - chapter_id
+      - chapter_title
+      - book_id (series only)
+
+    This ensures LLM tool is minimal and explicit additional data must be requested.
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    # Resolve IDs from explicit fields or current_chapter helper object
+    chap_id = payload.get("active_chapter_id")
+    book_id = payload.get("active_book_id")
+    if not isinstance(chap_id, int):
+        cc = payload.get("current_chapter")
+        if isinstance(cc, dict):
+            chap_id = cc.get("id")
+            if not isinstance(chap_id, int):
+                try:
+                    chap_id = int(chap_id)
+                except Exception:
+                    chap_id = None
+            if book_id is None:
+                book_id = cc.get("book_id")
+
+    if not isinstance(chap_id, int):
+        return None
+
+    ov, _ = _overview_chapters()
+    chap, book = _find_chapter(ov, chap_id=chap_id, book_id=book_id)
+    if not chap:
+        # fall back to minimal current_chapter object to avoid hidden context failure
+        cc = payload.get("current_chapter")
+        if isinstance(cc, dict) and cc.get("id") == chap_id:
+            fallback = {
+                "chapter_id": chap_id,
+                "chapter_title": cc.get("title"),
+            }
+            if "book_id" in cc:
+                fallback["book_id"] = cc.get("book_id")
+            return fallback
+        return None
+
+    state = {
+        "chapter_id": chap.get("id"),
+        "chapter_title": chap.get("title"),
+    }
+    if book:
+        state["book_id"] = book.get("id")
+
+    return state
+
+
 # ============================================================================
 # Tool Parameter Models
 # ============================================================================
 
 
 class GetChapterMetadataParams(BaseModel):
-    chap_id: int = Field(..., description="The chapter ID to get metadata for")
+    chap_id: int | None = Field(
+        None,
+        description="The chapter ID to get metadata for. If omitted and current is true, the active chapter is used.",
+    )
+    book_id: str | None = Field(
+        None,
+        description="Optional book id for series projects to narrow the chapter lookup.",
+    )
+    current: bool = Field(
+        False,
+        description="If true, return metadata for the current active chapter from payload rather than the explicit chap_id.",
+    )
 
 
 class UpdateChapterMetadataParams(BaseModel):
@@ -88,6 +176,12 @@ class GetChapterContentParams(BaseModel):
         _MAX_CHAPTER_CHARS,
         description=f"Maximum characters to return (1-{_MAX_CHAPTER_CHARS})",
     )
+
+
+class GetCurrentChapterParams(BaseModel):
+    """No parameters required, active chapter is inferred from context."""
+
+    pass
 
 
 class WriteChapterContentParams(BaseModel):
@@ -182,7 +276,7 @@ class RecommendMetadataUpdatesParams(BaseModel):
 
 
 @chat_tool(
-    description="Get metadata for a specific chapter including title, summary, notes, and conflicts.",
+    description="Get metadata for a specific chapter including title, summary, notes, and conflicts. Supports explicit chapter or current chapter lookup.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
 )
@@ -190,16 +284,46 @@ async def get_chapter_metadata(
     params: GetChapterMetadataParams, payload: dict, mutations: dict
 ):
     """Get Chapter Metadata."""
+    ov, _ = _overview_chapters()
+
+    if params.current:
+        chap_id = payload.get("active_chapter_id")
+        book_id = payload.get("active_book_id")
+    else:
+        chap_id = params.chap_id
+        book_id = params.book_id
+
+    if not isinstance(chap_id, int):
+        return {"error": "chap_id is required unless current=true is set"}
+
+    chap, book = _find_chapter(ov, chap_id=chap_id, book_id=book_id)
+    if not chap:
+        return {"error": f"Chapter {chap_id} not found"}
+
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
-    _, path, _ = _chapter_by_id_or_404(params.chap_id)
-    meta = _get_chapter_metadata_entry(story, params.chap_id, path) or {}
-    return {
-        "title": meta.get("title", "") or path.name,
-        "summary": meta.get("summary", ""),
-        "notes": meta.get("notes", ""),
-        "conflicts": meta.get("conflicts") or [],
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    meta = _get_chapter_metadata_entry(story, chap_id, path) or {}
+
+    result = {
+        "chapter": {
+            "id": chap.get("id"),
+            "title": chap.get("title"),
+            "summary": chap.get("summary"),
+            "filename": chap.get("filename"),
+            "notes": meta.get("notes", ""),
+            "conflicts": meta.get("conflicts") or [],
+        },
+        "project_type": ov.get("project_type"),
     }
+
+    if book:
+        result["current_book"] = {
+            "id": book.get("id"),
+            "title": book.get("title"),
+        }
+
+    return result
 
 
 @chat_tool(
@@ -281,6 +405,22 @@ async def get_chapter_content(
     max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
     data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
     return data
+
+
+@chat_tool(
+    name="get_current_chapter_id",
+    description="Get current application chapter identifier (active chapter id/title + optional book id).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
+async def get_current_chapter_id(
+    params: GetCurrentChapterParams, payload: dict, mutations: dict
+):
+    """Get Current Chapter ID state."""
+    state = compose_current_chapter_state(payload)
+    if not state:
+        return {"error": "active_chapter_id (or current_chapter object) is required"}
+    return state
 
 
 @chat_tool(

@@ -207,8 +207,8 @@ class ToolParityTest(TestCase):
     def test_chapter_metadata_tools(self):
         # get_chapter_metadata
         res = self._call_tool("get_chapter_metadata", {"chap_id": 1})
-        self.assertEqual(res["title"], "Chapter 1")
-        self.assertEqual(res["summary"], "Initial chapter summary")
+        self.assertEqual(res["chapter"]["title"], "Chapter 1")
+        self.assertEqual(res["chapter"]["summary"], "Initial chapter summary")
 
         # update_chapter_metadata
         res = self._call_tool(
@@ -223,8 +223,8 @@ class ToolParityTest(TestCase):
 
         # Verify
         res = self._call_tool("get_chapter_metadata", {"chap_id": 1})
-        self.assertEqual(res["title"], "New Chapter Title")
-        self.assertEqual(res["summary"], "New Chapter Summary")
+        self.assertEqual(res["chapter"]["title"], "New Chapter Title")
+        self.assertEqual(res["chapter"]["summary"], "New Chapter Summary")
 
         # Negative: invalid chap_id
         res = self._call_tool("get_chapter_metadata", {"chap_id": 999})

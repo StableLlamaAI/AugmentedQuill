@@ -229,6 +229,106 @@ class ChatToolsTest(TestCase):
         story = json.loads(story_file.read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "Updated summary")
 
+    def test_get_current_chapter_tool(self):
+        self._bootstrap_project()
+
+        # Call as a tool execution request with active_chapter_id set.
+        body = {
+            "model_type": "CHAT",
+            "active_chapter_id": 1,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_get_current_chapter",
+                            "type": "function",
+                            "function": {
+                                "name": "get_current_chapter_id",
+                                "arguments": "{}",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        response = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+
+        self.assertIn("appended_messages", result)
+        appended = result.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        tool_msg = appended[0]
+        self.assertEqual(tool_msg.get("role"), "tool")
+        self.assertEqual(tool_msg.get("name"), "get_current_chapter_id")
+
+        payload = json.loads(tool_msg.get("content", "{}"))
+        self.assertIn("chapter_id", payload)
+        self.assertIn("chapter_title", payload)
+        self.assertEqual(payload["chapter_title"], "Intro")
+        self.assertNotIn("project_type", payload)
+        self.assertNotIn("current_book", payload)
+
+    def test_get_chapter_metadata_by_concrete_or_current(self):
+        self._bootstrap_project()
+
+        # Explicit chapter query
+        body = {
+            "model_type": "CHAT",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_get_chapter_metadata",
+                            "type": "function",
+                            "function": {
+                                "name": "get_chapter_metadata",
+                                "arguments": '{"chap_id": 1}',
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.json()["appended_messages"][0]["content"])
+        self.assertEqual(payload["chapter"]["title"], "Intro")
+
+        # Current chapter query
+        body_current = {
+            "model_type": "CHAT",
+            "active_chapter_id": 1,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_get_chapter_metadata_current",
+                            "type": "function",
+                            "function": {
+                                "name": "get_chapter_metadata",
+                                "arguments": '{"current": true}',
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        response_current = self.client.post("/api/v1/chat/tools", json=body_current)
+        self.assertEqual(response_current.status_code, 200)
+        payload_current = json.loads(
+            response_current.json()["appended_messages"][0]["content"]
+        )
+        self.assertEqual(payload_current["chapter"]["title"], "Intro")
+
     def test_chat_tool_batch_can_undo_and_redo(self):
         """Tool-call batches should expose batch_id and support undo/redo endpoints."""
         self._bootstrap_project()

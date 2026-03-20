@@ -178,10 +178,12 @@ class TestChatToolsSymmetry(TestCase):
         data = r.json()
         content = json.loads(data["appended_messages"][0]["content"])
 
-        self.assertEqual(content["title"], "New Chapter Title")
-        self.assertEqual(content["summary"], "New Chapter Summary")
-        self.assertEqual(content["notes"], "New Chapter Notes")
-        self.assertEqual(content["conflicts"][0]["description"], "Conflict 1")
+        self.assertEqual(content["chapter"]["title"], "New Chapter Title")
+        self.assertEqual(content["chapter"]["summary"], "New Chapter Summary")
+        self.assertEqual(content["chapter"]["notes"], "New Chapter Notes")
+        self.assertEqual(
+            content["chapter"]["conflicts"][0]["description"], "Conflict 1"
+        )
 
     def test_chapter_metadata_persistence(self):
         self._bootstrap_project()

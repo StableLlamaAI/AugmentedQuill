@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime
 import uuid
 import os
@@ -23,11 +24,28 @@ def add_llm_log(log_entry: Dict[str, Any]):
     """Add a log entry to the global list, keeping only the last 100 entries.
 
     If AUGQ_LLM_DUMP is set, also append the raw log to a file.
+
+    This function stores a deep copy so future in-place modifications to the
+    original log entry do not mutate the logged history shown in the debug UI.
+
+    For entries with existing IDs, replace the old entry so the same request
+    doesn't appear twice (start+finalize logging uses the same id).
     """
-    if log_entry not in llm_logs:
-        llm_logs.append(log_entry)
-        if len(llm_logs) > 100:
-            llm_logs.pop(0)
+    entry_copy = copy.deepcopy(log_entry)
+    entry_id = entry_copy.get("id")
+
+    if entry_id:
+        for idx, existing in enumerate(llm_logs):
+            if existing.get("id") == entry_id:
+                llm_logs[idx] = entry_copy
+                break
+        else:
+            llm_logs.append(entry_copy)
+    else:
+        llm_logs.append(entry_copy)
+
+    if len(llm_logs) > 100:
+        llm_logs.pop(0)
 
     # Raw logging to file if enabled
     if os.getenv("AUGQ_LLM_DUMP") == "1":
@@ -101,7 +119,7 @@ def create_log_entry(
 
     safe_body = body
     if isinstance(body, dict):
-        safe_body = body.copy()
+        safe_body = copy.deepcopy(body)
         for key in ["api_key", "secret", "password"]:
             if key in safe_body:
                 safe_body[key] = "REDACTED"

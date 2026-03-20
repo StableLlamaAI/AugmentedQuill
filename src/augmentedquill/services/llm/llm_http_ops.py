@@ -56,7 +56,9 @@ def _safe_log_headers(headers: dict[str, str] | None) -> dict[str, str]:
 def _safe_log_body(body: Any) -> Any:
     if not isinstance(body, dict):
         return body
-    safe_body = body.copy()
+    import copy
+
+    safe_body = copy.deepcopy(body)
     for key in ("api_key", "secret", "password"):
         if key in safe_body:
             safe_body[key] = "REDACTED"
