@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "AugmentedQuill - Your Words, Amplified",
   "main": "main.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",

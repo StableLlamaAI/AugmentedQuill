@@ -18,6 +18,7 @@ import {
   SummaryWarning,
 } from '../editor/MarkdownView';
 import { AppTheme, Story, Conflict } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 import { api } from '../../services/api';
 import { notifyError } from '../../services/errorNotifier';
@@ -65,7 +66,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const containerClass = isLight
     ? 'bg-brand-gray-50 text-brand-gray-800 border-brand-gray-200'
     : 'bg-brand-gray-900 text-brand-gray-300 border-brand-gray-800';

@@ -30,9 +30,11 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     execute_registered_tool,
     get_registered_tool_schemas,
 )
-from augmentedquill.services.chat.chat_api_helpers import inject_project_images
-from augmentedquill.services.chat.chat_api_stream_ops import (
+from augmentedquill.services.chat.chat_api_helpers import (
+    inject_project_images,
     normalize_chat_messages,
+)
+from augmentedquill.services.chat.chat_api_stream_ops import (
     resolve_stream_model_context,
     ensure_system_message_if_missing,
     resolve_story_llm_prefs,
@@ -54,22 +56,72 @@ import json as _json
 from typing import Any, Dict
 from augmentedquill.models.chat import ChatInitialStateResponse
 from augmentedquill.utils.json_repair import try_parse_json_robust
+from augmentedquill.api.v1.request_body import parse_json_object_body
+from augmentedquill.utils.path_utils import safe_child_path
 
 router = APIRouter(tags=["Chat"])
 
 proxy_openai_models = _chat_api_proxy_ops.proxy_openai_models
 httpx = _chat_api_proxy_ops.httpx
 
+
 _CHAT_TOOL_BATCH_DIR = ".aq_history/chat_tool_batches"
 _BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
+async def _run_tool_calls(
+    tool_calls: list,
+    payload: dict,
+    model_type: str,
+    active_dir: Path | None,
+) -> tuple[list[dict], dict, list[str]]:
+    """Execute raw tool_calls and return (appended_messages, mutations, tool_names)."""
+    appended: list[dict] = []
+    mutations: dict = {"story_changed": False}
+    tool_names: list[str] = []
+
+    # Determine project language for typographic quote handling in tool arguments.
+    project_language = "en"
+    if active_dir:
+        story_cfg = load_story_config(active_dir / "story.json") or {}
+        project_language = str(story_cfg.get("language", "en") or "en")
+
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        call_id = str(call.get("id") or "")
+        func = call.get("function") or {}
+        name = (func.get("name") if isinstance(func, dict) else None) or ""
+        args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
+        try:
+            args_obj = (
+                try_parse_json_robust(args_raw, language=project_language)
+                if isinstance(args_raw, str)
+                else (args_raw or {})
+            )
+        except (ValueError, TypeError):
+            args_obj = {}
+        if not name or not call_id:
+            continue
+        tool_names.append(name)
+        msg = await execute_registered_tool(
+            name,
+            args_obj,
+            call_id,
+            payload,
+            mutations,
+            tool_role=model_type,
+        )
+        appended.append(msg)
+
+    return appended, mutations, tool_names
+
+
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
-    base_resolved = base_dir.resolve()
-    candidate = base_resolved.joinpath(*parts).resolve()
-    if not candidate.is_relative_to(base_resolved):
+    try:
+        return safe_child_path(base_dir, *parts)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid path component")
-    return candidate
 
 
 def _validated_batch_id(batch_id: str) -> str:
@@ -166,10 +218,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         "active_chapter_id"?: int
       }
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     messages = payload.get("messages") or []
     model_type = str((payload or {}).get("model_type") or "CHAT").upper()
@@ -183,9 +232,6 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         if isinstance(t, list):
             tool_calls = t
 
-    appended: list[dict] = []
-    mutations = {"story_changed": False}
-    tool_names: list[str] = []
     active_project_dir = get_active_project_dir()
     before_snapshot: Dict[str, str] | None = None
     batch_id: str | None = None
@@ -194,40 +240,9 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
-    # Determine project language for typographic quote handling in tool arguments.
-    project_language = "en"
-    active = get_active_project_dir()
-    if active:
-        story_cfg = load_story_config(active / "story.json") or {}
-        project_language = str(story_cfg.get("language", "en") or "en")
-
-    for call in tool_calls:
-        if not isinstance(call, dict):
-            continue
-        call_id = str(call.get("id") or "")
-        func = call.get("function") or {}
-        name = (func.get("name") if isinstance(func, dict) else None) or ""
-        args_raw = (func.get("arguments") if isinstance(func, dict) else None) or "{}"
-        try:
-            args_obj = (
-                try_parse_json_robust(args_raw, language=project_language)
-                if isinstance(args_raw, str)
-                else (args_raw or {})
-            )
-        except Exception:
-            args_obj = {}
-        if not name or not call_id:
-            continue
-        tool_names.append(name)
-        msg = await execute_registered_tool(
-            name,
-            args_obj,
-            call_id,
-            payload,
-            mutations,
-            tool_role=model_type,
-        )
-        appended.append(msg)
+    appended, mutations, tool_names = await _run_tool_calls(
+        tool_calls, payload, model_type, active_project_dir
+    )
 
     if (
         active_project_dir
@@ -313,10 +328,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     Returns: Streaming text response with the assistant's message.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
 
     req_messages = normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
@@ -357,7 +369,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 or {}
             )
             project_lang = str(story.get("language", "en") or "en")
-        except Exception:
+        except (OSError, ValueError, TypeError):
             project_lang = "en"
         inject_chat_user_context(req_messages, payload, language=project_lang)
 
@@ -376,7 +388,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             if value is None or value == "":
                 return None
             return float(value)
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     def _to_int(value):
@@ -384,7 +396,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             if value is None or value == "":
                 return None
             return int(value)
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     model_temperature = _to_float((chosen or {}).get("temperature"))
@@ -418,7 +430,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             parsed_extra = _json.loads(raw_extra_body)
             if isinstance(parsed_extra, dict):
                 extra_body.update(parsed_extra)
-        except Exception:
+        except (_json.JSONDecodeError, TypeError):
             # Invalid JSON is ignored by design so users can save drafts safely.
             pass
 
@@ -488,10 +500,7 @@ async def api_load_chat(chat_id: str):
 @router.post("/chats/{chat_id}")
 async def api_save_chat(chat_id: str, request: Request):
     """Api Save Chat."""
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
+    data = await parse_json_object_body(request)
     save_active_chat(chat_id, data)
     return {"ok": True}
 
@@ -517,8 +526,5 @@ async def proxy_list_models(request: Request) -> JSONResponse:
 
     Returns the JSON payload from the upstream (expected to include a `data` array).
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    payload = await parse_json_object_body(request)
     return await proxy_openai_models(payload)

@@ -9,18 +9,16 @@
  * Defines debug API client tests so frontend/backend endpoint contracts stay explicit and verifiable.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { debugApi } from './debug';
 import { fetchJson } from './shared';
+import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
 }));
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+registerSharedApiMockCleanup();
 
 describe('debugApi', () => {
   it('calls GET /debug/llm_logs', async () => {

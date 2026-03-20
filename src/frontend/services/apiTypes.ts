@@ -76,6 +76,7 @@ export interface ProjectListItem {
 export interface StoryApiPayload {
   project_title?: string;
   story_summary?: string;
+  language?: string;
   notes?: string;
   private_notes?: string;
   tags?: string[];
@@ -112,10 +113,8 @@ export interface ProjectSelectResponse {
   ok?: boolean;
   message?: string;
   story?: StoryApiPayload | null;
-  error?: 'version_outdated' | 'invalid_config' | string;
+  error?: 'invalid_config' | string;
   error_message?: string;
-  current_version?: number;
-  required_version?: number;
 }
 
 export interface ProjectMutationResponse {

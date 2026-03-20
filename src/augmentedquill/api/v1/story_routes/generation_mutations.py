@@ -25,52 +25,58 @@ from augmentedquill.services.story.story_generation_ops import (
 router = APIRouter(tags=["Story"])
 
 
-@router.post("/story/story-summary")
-async def api_story_story_summary(request: Request) -> JSONResponse:
-    """Api Story Story Summary."""
+async def _dispatch_generation(request: Request, handler):
+    """Parse body, call generation handler, and map domain exceptions."""
     try:
         payload = await parse_json_body(request)
-        mode = (payload.get("mode") or "").lower()
-        data = await generate_story_summary(mode=mode, payload=payload)
+        data = await handler(payload)
         return ok_json(**data)
     except Exception as exc:
         return map_story_exception(exc)
+
+
+@router.post("/story/story-summary")
+async def api_story_story_summary(request: Request) -> JSONResponse:
+    """Api Story Story Summary."""
+
+    async def _handler(payload: dict):
+        mode = (payload.get("mode") or "").lower()
+        return await generate_story_summary(mode=mode, payload=payload)
+
+    return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/summary")
 async def api_story_summary(request: Request) -> JSONResponse:
     """Api Story Summary."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         chap_id = payload.get("chap_id")
         mode = (payload.get("mode") or "").lower()
-        data = await generate_chapter_summary(
+        return await generate_chapter_summary(
             chap_id=chap_id, mode=mode, payload=payload
         )
-        return ok_json(**data)
-    except Exception as exc:
-        return map_story_exception(exc)
+
+    return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/write")
 async def api_story_write(request: Request) -> JSONResponse:
     """Api Story Write."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         chap_id = payload.get("chap_id")
-        data = await write_chapter_from_summary(chap_id=chap_id, payload=payload)
-        return ok_json(**data)
-    except Exception as exc:
-        return map_story_exception(exc)
+        return await write_chapter_from_summary(chap_id=chap_id, payload=payload)
+
+    return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/continue")
 async def api_story_continue(request: Request) -> JSONResponse:
     """Api Story Continue."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict):
         chap_id = payload.get("chap_id")
-        data = await continue_chapter_from_summary(chap_id=chap_id, payload=payload)
-        return ok_json(**data)
-    except Exception as exc:
-        return map_story_exception(exc)
+        return await continue_chapter_from_summary(chap_id=chap_id, payload=payload)
+
+    return await _dispatch_generation(request, _handler)

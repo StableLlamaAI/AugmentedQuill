@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { AppTheme, ProjectMetadata } from '../../../types';
+import { useThemeClasses } from '../../layout/ThemeContext';
 import { Button } from '../../../components/ui/Button';
 import { api } from '../../../services/api';
 import { notifyError } from '../../../services/errorNotifier';
@@ -70,7 +71,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   const [tempLang, setTempLang] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const canConvertTo = (target: string) => {
     if (!activeProjectType) return false;

@@ -31,6 +31,7 @@ import { MachineModelConfig, ModelPresetEntry } from '../../services/apiTypes';
 import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
 import { SettingsMachine } from './settings/SettingsMachine';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   // Reinitialize dialog state on open to avoid stale provider/test cache leakage.
   useEffect(() => {

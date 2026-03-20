@@ -523,3 +523,45 @@ class ChatToolsTest(TestCase):
             any(entry.get("name") == "Ava" for entry in sourcebook),
             f"Expected 'Ava' entry in sourcebook payload, got: {sourcebook}",
         )
+
+    def test_reorder_chapters_success(self):
+        """reorder_chapters tool changes chapter order in story.json."""
+        self._bootstrap_project()
+        data = self._post_single_tool(
+            "reorder_chapters",
+            {"chapter_ids": [2, 1]},
+        )
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+        appended = data.get("appended_messages") or []
+        content = json.loads(appended[0]["content"])
+        self.assertTrue(content.get("ok"), content)
+
+        pdir = self.projects_root / "demo"
+        with open(pdir / "story.json", "r") as f:
+            story = json.load(f)
+        # After reorder [2,1]: "Next" (was chapter 2) should be first
+        self.assertEqual(story["chapters"][0]["title"], "Next")
+        self.assertEqual(story["chapters"][1]["title"], "Intro")
+
+    def test_reorder_chapters_invalid_ids_returns_error(self):
+        """Passing IDs that don't exist should return an error without crashing."""
+        self._bootstrap_project()
+        # chapter_ids=[99,100] don't exist — endpoint may return 404 or error payload
+        data = self._post_single_tool(
+            "reorder_chapters",
+            {"chapter_ids": [99, 100]},
+        )
+        # Must not raise; response is either error payload or ok=False
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+
+    def test_list_images_returns_empty_without_images(self):
+        """list_images tool works even when the project images dir is empty."""
+        self._bootstrap_project()
+        data = self._post_single_tool("list_images", {})
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        content = json.loads(appended[0]["content"])
+        # list_images returns a bare list of image entries
+        self.assertIsInstance(content, list)

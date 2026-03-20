@@ -124,3 +124,19 @@ The architecture treats `resources/` as reference/config contracts and `data/` a
 - Use typed API contracts to avoid shape drift between frontend and backend.
 - Enforce code hygiene headers with:
   - `python tools/enforce_code_hygiene.py .`
+
+## 8) Electron Desktop Wrapper (Experimental)
+
+The `electron/` directory contains an **experimental** desktop wrapper that embeds the PyInstaller backend and the built frontend into a native windowed application using [Electron](https://www.electronjs.org/).
+
+**Current status**: Work in progress. There is no CI pipeline, no automated tests, and no official release artifact produced from this wrapper yet.
+
+**Requirements**: Node.js ≥ 24 (enforced via `electron/package.json` `engines` field).
+
+**How it works**:
+
+1. The Python backend is packaged with PyInstaller into `dist/run_app`.
+2. Electron starts that binary as a child process and opens a `BrowserWindow` pointed at the local FastAPI server.
+3. Building a distributable: `cd electron && npm install && npm run dist`
+
+Do not rely on the Electron build in production workflows until CI coverage and release automation are in place.

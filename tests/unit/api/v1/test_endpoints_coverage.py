@@ -7,28 +7,16 @@
 
 """Defines the test endpoints coverage unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-import os
-import tempfile
 import json
-from pathlib import Path
-from unittest import TestCase
-
-from fastapi.testclient import TestClient
-
 from augmentedquill.main import app
 import augmentedquill.services.llm.llm as llm
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class EndpointsCoverageTest(TestCase):
+class EndpointsCoverageTest(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
+        super().setUp()
 
         # create a simple project with two chapters to satisfy chapter endpoints
         ok, msg = select_project("coverage_proj")
@@ -82,8 +70,6 @@ class EndpointsCoverageTest(TestCase):
         llm.openai_completions_stream = fake_completions_stream  # type: ignore
 
         self.addCleanup(self._undo_patches)
-
-        self.client = TestClient(app)
 
     def _undo_patches(self):
         llm.resolve_openai_credentials = self._orig_resolve  # type: ignore

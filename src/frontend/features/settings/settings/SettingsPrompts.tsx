@@ -12,6 +12,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Edit2, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import { AppTheme, LLMConfig } from '../../../types';
+import { useThemeClasses } from '../../layout/ThemeContext';
 import { PROMPT_GROUPS } from './constants';
 
 interface SettingsPromptsProps {
@@ -30,7 +31,7 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
   onUpdateProvider,
   theme,
 }) => {
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const promptMetaById = React.useMemo(() => {
     const map: Record<string, { label: string; type: 'CHAT' | 'WRITING' | 'EDITING' }> =

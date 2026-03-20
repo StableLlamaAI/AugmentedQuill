@@ -112,24 +112,7 @@ def select_project_response(name: str) -> JSONResponse:
         story = load_story_config((active / "story.json") if active else None)
     except ValueError as e:
         error_msg = str(e)
-        if "outdated version" in error_msg:
-            match = re.search(r"version (\d+).*Current version is (\d+)", error_msg)
-            if match:
-                current_version = int(match.group(1))
-                required_version = int(match.group(2))
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "ok": True,
-                        "message": msg,
-                        "registry": normalized_reg,
-                        "story": None,
-                        "error": "version_outdated",
-                        "current_version": current_version,
-                        "required_version": required_version,
-                    },
-                )
-        elif "Invalid story config" in error_msg or "unknown version" in error_msg:
+        if "Invalid story config" in error_msg or "unknown version" in error_msg:
             return JSONResponse(
                 status_code=200,
                 content={

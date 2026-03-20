@@ -22,33 +22,6 @@ from augmentedquill.core.prompts import (
 from augmentedquill.services.llm.llm_request_helpers import find_model_in_list
 
 
-def normalize_chat_messages(value: Any) -> list[dict]:
-    """Preserve OpenAI message fields including tool calls."""
-    arr = value if isinstance(value, list) else []
-    out: list[dict] = []
-    for message in arr:
-        if not isinstance(message, dict):
-            continue
-        role = str(message.get("role", "")).strip().lower() or "user"
-        normalized: dict = {"role": role}
-        if "content" in message:
-            content = message.get("content")
-            normalized["content"] = None if content is None else str(content)
-        name = message.get("name")
-        if isinstance(name, str) and name:
-            normalized["name"] = name
-        tool_call_id = message.get("tool_call_id")
-        if isinstance(tool_call_id, str) and tool_call_id:
-            normalized["tool_call_id"] = tool_call_id
-        tool_calls = message.get("tool_calls")
-        if isinstance(tool_calls, list) and tool_calls:
-            normalized["tool_calls"] = tool_calls
-            if role == "assistant":
-                normalized["content"] = None
-        out.append(normalized)
-    return out
-
-
 def resolve_stream_model_context(payload: dict, machine: dict) -> dict:
     """Resolve Stream Model Context."""
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}

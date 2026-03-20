@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import {
   Loader2,
   Bot,
@@ -119,7 +120,7 @@ export const Chat: React.FC<ChatProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-400';

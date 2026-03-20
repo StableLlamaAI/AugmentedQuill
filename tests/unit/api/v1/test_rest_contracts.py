@@ -9,25 +9,19 @@
 
 import io
 import json
-import os
-import tempfile
 from pathlib import Path
-from unittest import TestCase
 from unittest.mock import patch
 
 from fastapi.responses import JSONResponse
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class RestContractsTest(TestCase):
+class RestContractsTest(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
+        super().setUp()
 
-        self.config_root = Path(self.td.name) / "config"
+        self.config_root = Path(self.user_data_root) / "config"
         self.config_root.mkdir(parents=True, exist_ok=True)
         self.machine_cfg_path = self.config_root / "machine.json"
         self.story_cfg_path = self.config_root / "story.json"
@@ -45,12 +39,6 @@ class RestContractsTest(TestCase):
         for patcher in self._settings_cfg_patchers:
             patcher.start()
             self.addCleanup(patcher.stop)
-
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
 
         ok, msg = select_project("rest_contracts")
         self.assertTrue(ok, msg)
@@ -74,11 +62,7 @@ class RestContractsTest(TestCase):
             encoding="utf-8",
         )
 
-        self.client = TestClient(app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+        # client is provided by ApiTestCase
 
     def test_core_and_debug_endpoints_success_and_invalid(self):
         r_health = self.client.get("/api/v1/health")
@@ -198,24 +182,6 @@ class RestContractsTest(TestCase):
         )
         self.assertEqual(r_machine_put_invalid.status_code, 200)
         self.assertTrue(r_machine_put_invalid.json().get("ok"))
-
-        with patch(
-            "augmentedquill.api.v1.settings.run_story_config_update",
-            return_value=(True, "Updated"),
-        ):
-            r_update = self.client.post("/api/v1/settings/update_story_config", json={})
-            self.assertEqual(r_update.status_code, 200)
-            self.assertTrue(r_update.json().get("ok"))
-
-        with patch(
-            "augmentedquill.api.v1.settings.run_story_config_update",
-            return_value=(False, "Failed to update"),
-        ):
-            r_update_bad = self.client.post(
-                "/api/v1/settings/update_story_config", json={}
-            )
-            self.assertEqual(r_update_bad.status_code, 500)
-            self.assertFalse(r_update_bad.json().get("ok"))
 
     def test_prompts_endpoint_excludes_prompt_types(self):
         # independent of settings payload, /prompts should not include any

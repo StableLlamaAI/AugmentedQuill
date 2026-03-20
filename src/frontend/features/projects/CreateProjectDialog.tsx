@@ -13,6 +13,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface CreateProjectDialogProps {
   isOpen: boolean;
@@ -35,10 +36,10 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   const [language, setLanguage] = useState(() =>
     languages && languages.length ? languages[0] : 'en'
   );
+  const { isLight } = useThemeClasses();
 
   if (!isOpen) return null;
 
-  const isLight = theme === 'light';
   const bgClass = isLight
     ? 'bg-white text-gray-900'
     : 'bg-brand-gray-900 text-gray-100 border border-brand-gray-800';

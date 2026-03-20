@@ -31,37 +31,47 @@ from augmentedquill.api.v1.story_routes.common import (
 router = APIRouter(tags=["Story"])
 
 
+def _require_active_story_context() -> tuple[str, object, dict]:
+    """Return active project context or raise a uniform bad-request error."""
+    try:
+        return get_active_story_or_raise()
+    except ServiceError:
+        raise StoryBadRequestError("No active project")
+
+
+async def _dispatch_metadata_request(request: Request, handler) -> JSONResponse:
+    """Parse body, execute handler, and map story exceptions."""
+    try:
+        payload = await parse_json_body(request)
+        return await handler(payload)
+    except Exception as exc:
+        return map_story_exception(exc)
+
+
 @router.post("/story/title")
 async def api_story_title(request: Request) -> JSONResponse:
     """Api Story Title."""
-    try:
-        payload = await parse_json_body(request)
+
+    async def _handler(payload: dict) -> JSONResponse:
         title = str(payload.get("title", "")).strip()
         if not title:
             raise StoryBadRequestError("Title cannot be empty")
 
-        try:
-            _, story_path, story = get_active_story_or_raise()
-        except ServiceError:
-            raise StoryBadRequestError("No active project")
+        _, story_path, story = _require_active_story_context()
 
         story["project_title"] = title
         save_story_config(story_path, story)
         return JSONResponse(content={"ok": True})
-    except Exception as exc:
-        return map_story_exception(exc)
+
+    return await _dispatch_metadata_request(request, _handler)
 
 
 @router.post("/story/settings")
 async def api_story_settings(request: Request) -> JSONResponse:
     """Api Story Settings."""
-    try:
-        payload = await parse_json_body(request)
 
-        try:
-            _, story_path, story = get_active_story_or_raise()
-        except ServiceError:
-            raise StoryBadRequestError("No active project")
+    async def _handler(payload: dict) -> JSONResponse:
+        _, story_path, story = _require_active_story_context()
 
         if "image_style" in payload:
             story["image_style"] = str(payload["image_style"])
@@ -74,20 +84,16 @@ async def api_story_settings(request: Request) -> JSONResponse:
             status_code=200,
             content={"ok": True, "story": normalize_story_for_frontend(story)},
         )
-    except Exception as exc:
-        return map_story_exception(exc)
+
+    return await _dispatch_metadata_request(request, _handler)
 
 
 @router.post("/story/metadata")
 async def api_story_metadata(request: Request) -> JSONResponse:
     """Api Story Metadata."""
-    try:
-        payload = await parse_json_body(request)
 
-        try:
-            get_active_story_or_raise()
-        except ServiceError:
-            raise StoryBadRequestError("No active project")
+    async def _handler(payload: dict) -> JSONResponse:
+        _require_active_story_context()
 
         title = payload.get("title")
         summary = payload.get("summary")
@@ -110,8 +116,8 @@ async def api_story_metadata(request: Request) -> JSONResponse:
                 status_code=400, content={"ok": False, "detail": str(exc)}
             )
         return JSONResponse(content={"ok": True})
-    except Exception as exc:
-        return map_story_exception(exc)
+
+    return await _dispatch_metadata_request(request, _handler)
 
 
 @router.post("/books/{book_id}/metadata")
@@ -119,13 +125,9 @@ async def api_book_metadata(
     request: Request, book_id: str = FastAPIPath(...)
 ) -> JSONResponse:
     """Api Book Metadata."""
-    try:
-        payload = await parse_json_body(request)
 
-        try:
-            get_active_story_or_raise()
-        except ServiceError:
-            raise StoryBadRequestError("No active project")
+    async def _handler(payload: dict) -> JSONResponse:
+        _require_active_story_context()
 
         title = payload.get("title")
         summary = payload.get("summary")
@@ -146,5 +148,5 @@ async def api_book_metadata(
             )
 
         return JSONResponse(content={"ok": True})
-    except Exception as exc:
-        return map_story_exception(exc)
+
+    return await _dispatch_metadata_request(request, _handler)

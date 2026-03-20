@@ -13,6 +13,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from augmentedquill.api.v1.http_responses import error_json
+from augmentedquill.api.v1.request_body import parse_json_object_body
 from augmentedquill.services.exceptions import ServiceError
 
 
@@ -39,11 +40,10 @@ class StoryPersistenceError(StoryApiError):
 
 
 async def parse_json_body(request: Request) -> dict:
-    try:
-        payload = await request.json()
-    except Exception as exc:
-        raise StoryBadRequestError("Invalid JSON body") from exc
-    return payload if isinstance(payload, dict) else {}
+    return await parse_json_object_body(
+        request,
+        error_factory=lambda _exc: StoryBadRequestError("Invalid JSON body"),
+    )
 
 
 def map_story_exception(exc: Exception) -> JSONResponse:

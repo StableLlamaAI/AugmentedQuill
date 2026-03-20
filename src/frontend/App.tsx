@@ -9,7 +9,7 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -34,9 +34,13 @@ import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { AppSettings, ChatMessage, ViewMode } from './types';
+import { ChatMessage } from './types';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
-import { api } from './services/api';
+import { useBrowserHistory } from './features/app/useBrowserHistory';
+import { useEditorUIState } from './features/app/useEditorUIState';
+import { useSettingsPersistence } from './features/app/useSettingsPersistence';
+import { useToolCallGate } from './features/app/useToolCallGate';
+import { useUIPanels } from './features/app/useUIPanels';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -74,89 +78,15 @@ const App: React.FC = () => {
     canRedo,
   } = useStory({ confirm, alert: window.alert });
 
-  const historyIndexRef = useRef(historyIndex);
-  const canUndoRef = useRef(canUndo);
-  const canRedoRef = useRef(canRedo);
-  const isPopStateUndoRedoRef = useRef(false);
-
-  useEffect(() => {
-    historyIndexRef.current = historyIndex;
-    canUndoRef.current = canUndo;
-    canRedoRef.current = canRedo;
-  }, [historyIndex, canUndo, canRedo]);
-
-  useEffect(() => {
-    const existing = window.history.state || {};
-    if (existing.aqUndoIndex !== historyIndex) {
-      window.history.replaceState({ ...existing, aqUndoIndex: historyIndex }, '');
-    }
-  }, [historyIndex]);
-
-  useEffect(() => {
-    if (isPopStateUndoRedoRef.current) {
-      isPopStateUndoRedoRef.current = false;
-      return;
-    }
-
-    const currentState = window.history.state || {};
-    if (currentState.aqUndoIndex === historyIndex) return;
-    window.history.pushState({ ...currentState, aqUndoIndex: historyIndex }, '');
-  }, [historyIndex]);
-
-  useEffect(() => {
-    const onPopState = (event: PopStateEvent) => {
-      const targetIndex =
-        typeof event.state?.aqUndoIndex === 'number' ? event.state.aqUndoIndex : null;
-      if (targetIndex === null) return;
-
-      const current = historyIndexRef.current;
-      const delta = targetIndex - current;
-      if (delta === 0) return;
-
-      if (delta < 0 && canUndoRef.current) {
-        isPopStateUndoRedoRef.current = true;
-        undoSteps(Math.abs(delta));
-        return;
-      }
-
-      if (delta > 0 && canRedoRef.current) {
-        isPopStateUndoRedoRef.current = true;
-        redoSteps(delta);
-      }
-    };
-
-    window.addEventListener('popstate', onPopState);
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-    };
-  }, [undoSteps, redoSteps]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const isCmdOrCtrl = event.metaKey || event.ctrlKey;
-      if (!isCmdOrCtrl || event.altKey) return;
-
-      const key = event.key.toLowerCase();
-      const isRedoKey = key === 'y' || (key === 'z' && event.shiftKey);
-      const isUndoKey = key === 'z' && !event.shiftKey;
-
-      if (isUndoKey && canUndoRef.current) {
-        event.preventDefault();
-        undo();
-        return;
-      }
-
-      if (isRedoKey && canRedoRef.current) {
-        event.preventDefault();
-        redo();
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [undo, redo]);
+  useBrowserHistory({
+    historyIndex,
+    canUndo,
+    canRedo,
+    undoSteps,
+    redoSteps,
+    undo,
+    redo,
+  });
 
   const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
   const currentChapterContext = currentChapter
@@ -167,54 +97,8 @@ const App: React.FC = () => {
       }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
-  const appearanceRef = useRef<HTMLDivElement>(null);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
-
-  const buildMachinePayloadFromSettings = useCallback((settings: AppSettings) => {
-    const providers = settings.providers || [];
-    const activeChat =
-      providers.find((provider) => provider.id === settings.activeChatProviderId) ||
-      providers[0];
-    const activeWriting =
-      providers.find((provider) => provider.id === settings.activeWritingProviderId) ||
-      providers[0];
-    const activeEditing =
-      providers.find((provider) => provider.id === settings.activeEditingProviderId) ||
-      providers[0];
-
-    return {
-      openai: {
-        selected: activeChat?.name || '',
-        selected_chat: activeChat?.name || '',
-        selected_writing: activeWriting?.name || '',
-        selected_editing: activeEditing?.name || '',
-        models: providers.map((provider) => ({
-          name: (provider.name || '').trim(),
-          base_url: (provider.baseUrl || '').trim(),
-          api_key: provider.apiKey || '',
-          timeout_s: Math.max(1, Math.round((provider.timeout || 10000) / 1000)),
-          model: (provider.modelId || '').trim(),
-          context_window_tokens: provider.contextWindowTokens,
-          temperature: provider.temperature,
-          top_p: provider.topP,
-          max_tokens: provider.maxTokens,
-          presence_penalty: provider.presencePenalty,
-          frequency_penalty: provider.frequencyPenalty,
-          stop: provider.stop || [],
-          seed: provider.seed,
-          top_k: provider.topK,
-          min_p: provider.minP,
-          extra_body: provider.extraBody || '',
-          preset_id: provider.presetId || null,
-          writing_warning: provider.writingWarning || null,
-          is_multimodal: provider.isMultimodal,
-          supports_function_calling: provider.supportsFunctionCalling,
-          prompt_overrides: provider.prompts || {},
-        })),
-      },
-    };
-  }, []);
 
   const prompts = usePrompts(story.id);
 
@@ -225,38 +109,12 @@ const App: React.FC = () => {
     recheckUnavailableProviderIfStale,
   } = useProviderHealth(appSettings);
 
-  const handleSaveSettings = useCallback(
-    (nextSettings: AppSettings) => {
-      const previousSettings = structuredClone(appSettings);
-      const nextSettingsSnapshot = structuredClone(nextSettings);
-      const previousPayload = buildMachinePayloadFromSettings(previousSettings);
-      const nextPayload = buildMachinePayloadFromSettings(nextSettingsSnapshot);
-
-      setAppSettings(nextSettingsSnapshot);
-      refreshHealth();
-
-      pushExternalHistoryEntry({
-        label: 'Update machine settings',
-        onUndo: async () => {
-          await api.machine.save(previousPayload);
-          setAppSettings(previousSettings);
-          refreshHealth();
-        },
-        onRedo: async () => {
-          await api.machine.save(nextPayload);
-          setAppSettings(nextSettingsSnapshot);
-          refreshHealth();
-        },
-      });
-    },
-    [
-      appSettings,
-      buildMachinePayloadFromSettings,
-      pushExternalHistoryEntry,
-      setAppSettings,
-      refreshHealth,
-    ]
-  );
+  const { handleSaveSettings } = useSettingsPersistence({
+    appSettings,
+    setAppSettings,
+    pushExternalHistoryEntry,
+    refreshHealth,
+  });
 
   const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
   const imageActionsAvailable = supportsImageActions(
@@ -265,55 +123,45 @@ const App: React.FC = () => {
     modelConnectionStatus
   );
 
-  const [toolCallLoopDialog, setToolCallLoopDialog] = useState<{
-    count: number;
-    resolver: (choice: 'stop' | 'continue' | 'unlimited') => void;
-  } | null>(null);
+  const { toolCallLoopDialog, requestToolCallLoopAccess } = useToolCallGate();
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        appearanceRef.current &&
-        !appearanceRef.current.contains(event.target as Node)
-      ) {
-        setIsAppearanceOpen(false);
-      }
-    }
+  const {
+    isChatOpen,
+    setIsChatOpen,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    isAppearanceOpen,
+    setIsAppearanceOpen,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isImagesOpen,
+    setIsImagesOpen,
+    isDebugLogsOpen,
+    setIsDebugLogsOpen,
+    appearanceRef,
+  } = useUIPanels();
 
-    if (isAppearanceOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isAppearanceOpen]);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isImagesOpen, setIsImagesOpen] = useState(false);
-  const [isDebugLogsOpen, setIsDebugLogsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('raw');
-  const [showWhitespace, setShowWhitespace] = useState<boolean>(false);
-  const [activeFormats, setActiveFormats] = useState<string[]>([]);
-
-  // UI State for Header Dropdowns
-  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-  const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
-  const [isMobileFormatMenuOpen, setIsMobileFormatMenuOpen] = useState(false);
+  const {
+    viewMode,
+    setViewMode,
+    showWhitespace,
+    setShowWhitespace,
+    activeFormats,
+    setActiveFormats,
+    isViewMenuOpen,
+    setIsViewMenuOpen,
+    isFormatMenuOpen,
+    setIsFormatMenuOpen,
+    isMobileFormatMenuOpen,
+    setIsMobileFormatMenuOpen,
+  } = useEditorUIState();
 
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
-  const buttonActive = isLight
-    ? 'bg-brand-100 text-brand-700'
-    : 'bg-brand-900/40 text-brand-300 border border-brand-800/50';
-
-  // Project Management Functions
   const getSystemPrompt = useCallback(() => {
     return prompts.system_messages.chat_llm || '';
   }, [prompts]);
@@ -441,20 +289,6 @@ const App: React.FC = () => {
     getErrorMessage,
     recordHistoryEntry: pushExternalHistoryEntry,
   });
-
-  const requestToolCallLoopAccess = (
-    count: number
-  ): Promise<'stop' | 'continue' | 'unlimited'> => {
-    return new Promise((resolve) => {
-      setToolCallLoopDialog({
-        count,
-        resolver: (choice) => {
-          setToolCallLoopDialog(null);
-          resolve(choice);
-        },
-      });
-    });
-  };
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     systemPrompt,

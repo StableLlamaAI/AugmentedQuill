@@ -46,16 +46,6 @@ export interface SourcebookRelation {
   end_book?: string;
 }
 
-export interface SourcebookRelation {
-  target_id: string;
-  direction?: 'forward' | 'reverse';
-  relation: string;
-  start_chapter?: string;
-  start_book?: string;
-  end_chapter?: string;
-  end_book?: string;
-}
-
 export interface SourcebookEntry {
   id: string;
   name: string;

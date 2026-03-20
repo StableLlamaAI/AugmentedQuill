@@ -7,32 +7,14 @@
 
 """Defines the test story endpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-import os
-import tempfile
 from pathlib import Path
-from unittest import TestCase
 
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 import augmentedquill.services.llm.llm as llm
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class StoryEndpointsTest(TestCase):
-    def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.client = TestClient(app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+class StoryEndpointsTest(ApiTestCase):
 
     def _make_project(
         self,

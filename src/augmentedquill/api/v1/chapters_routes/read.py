@@ -37,7 +37,7 @@ async def api_chapter_content(
 
     try:
         content = path.read_text(encoding="utf-8")
-    except Exception as exc:
+    except OSError as exc:
         raise HTTPException(
             status_code=500, detail=f"Failed to read chapter: {exc}"
         ) from exc

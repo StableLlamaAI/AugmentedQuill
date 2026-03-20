@@ -69,6 +69,11 @@ def _tool_error(name: str, call_id: str, message: str) -> dict:
     return _tool_message(name, call_id, {"error": message})
 
 
+# Public aliases for use by tool implementations
+tool_message = _tool_message
+tool_error = _tool_error
+
+
 def _simplify_schema(schema: Any) -> Any:
     """Recursively simplify JSON schemas for LLMs by flattening anyOf."""
     if not isinstance(schema, dict):

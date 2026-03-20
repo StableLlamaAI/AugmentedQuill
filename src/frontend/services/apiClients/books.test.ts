@@ -9,19 +9,17 @@
  * Defines books API client tests so frontend/backend endpoint contracts stay explicit and verifiable.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { booksApi } from './books';
 import { postJson } from './shared';
+import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
   postJson: vi.fn(),
 }));
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+registerSharedApiMockCleanup();
 
 describe('booksApi', () => {
   it('calls POST /books/create', async () => {

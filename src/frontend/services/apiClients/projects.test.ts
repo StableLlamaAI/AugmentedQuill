@@ -9,20 +9,18 @@
  * Defines projects API client tests so frontend/backend endpoint contracts stay explicit and verifiable.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { projectsApi } from './projects';
 import { fetchBlob, fetchJson, postJson } from './shared';
+import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
   postJson: vi.fn(),
   fetchBlob: vi.fn(),
 }));
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+registerSharedApiMockCleanup();
 
 describe('projectsApi', () => {
   it('calls GET /projects', async () => {
@@ -107,18 +105,6 @@ describe('projectsApi', () => {
       '/projects/export/epub?name=My%20Project',
       undefined,
       'Failed to export project as EPUB'
-    );
-  });
-
-  it('calls POST /settings/update_story_config', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
-
-    await projectsApi.updateConfig();
-
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/settings/update_story_config',
-      { method: 'POST' },
-      'Failed to update story config'
     );
   });
 

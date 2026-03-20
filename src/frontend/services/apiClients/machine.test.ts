@@ -9,18 +9,16 @@
  * Defines machine API client tests so frontend/backend endpoint contracts stay explicit and verifiable.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { machineApi } from './machine';
 import { fetchJson } from './shared';
+import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
 }));
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+registerSharedApiMockCleanup();
 
 describe('machineApi', () => {
   it('calls GET /machine for machine config', async () => {

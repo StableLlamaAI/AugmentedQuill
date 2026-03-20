@@ -12,6 +12,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
 import { LLMConfig, AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface ModelSelectorProps {
   value: string;
@@ -41,7 +42,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const selectedOption = options.find((o) => o.id === value);
 

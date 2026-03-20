@@ -7,36 +7,19 @@
 
 """Defines the test metadata endpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-import os
-import tempfile
 import json
-from pathlib import Path
-from unittest import TestCase
-
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import (
     select_project,
     create_new_book,
     create_project,
     create_new_chapter,
 )
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class MetadataEndpointsTest(TestCase):
+class MetadataEndpointsTest(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-
-        # Mock config paths
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-
-        self.client = TestClient(app)
+        super().setUp()
 
         # Create a default project
         create_project("test_proj")

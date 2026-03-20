@@ -9,18 +9,16 @@
  * Defines sourcebook API client tests so frontend/backend endpoint contracts stay explicit and verifiable.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { sourcebookApi } from './sourcebook';
 import { fetchJson } from './shared';
+import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
 }));
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+registerSharedApiMockCleanup();
 
 describe('sourcebookApi', () => {
   it('calls GET /sourcebook', async () => {

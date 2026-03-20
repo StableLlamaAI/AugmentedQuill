@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from augmentedquill.main import create_app
 from augmentedquill.services.projects.projects import select_project, create_project
 from augmentedquill.utils.image_helpers import (
+    delete_image_metadata,
     load_image_metadata,
     get_project_images,
     update_image_metadata,
@@ -107,6 +108,25 @@ class ImageFeaturesTest(TestCase):
         self.assertEqual(ph["description"], "Just a dream")
         self.assertEqual(ph["title"], "Dreamy")
         self.assertIsNone(ph["url"])
+
+    def test_load_image_metadata_invalid_json_returns_empty(self):
+        """Corrupt metadata should fail closed to an empty mapping."""
+        (self.images_dir / "metadata.json").write_text(
+            "{not-valid-json", encoding="utf-8"
+        )
+        self.assertEqual(load_image_metadata(), {})
+
+    def test_delete_image_metadata_removes_only_target(self):
+        """Deleting one image metadata entry must keep unrelated entries intact."""
+        update_image_metadata("a.png", description="A", title="Title A")
+        update_image_metadata("b.png", description="B", title="Title B")
+
+        delete_image_metadata("a.png")
+        remaining = load_image_metadata()
+
+        self.assertNotIn("a.png", remaining)
+        self.assertIn("b.png", remaining)
+        self.assertEqual(remaining["b.png"].get("description"), "B")
 
     def test_endpoints_crud(self):
         """Test the REST API endpoints for images."""

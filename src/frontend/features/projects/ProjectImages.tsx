@@ -31,6 +31,7 @@ import {
 import { api } from '../../services/api';
 import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 
 interface ImageEntry {
@@ -95,7 +96,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const [copied, setCopied] = useState(false);
   const [showImageSettings, setShowImageSettings] = useState(false);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-700';

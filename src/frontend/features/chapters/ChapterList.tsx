@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
 import { api } from '../../services/api';
 import {
@@ -71,7 +72,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onOpenImages,
   languages = [],
 }) => {
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
   const [newBookTitle, setNewBookTitle] = useState('');
   const [isCreatingBook, setIsCreatingBook] = useState(false);

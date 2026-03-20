@@ -494,9 +494,6 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         # We ensure it's sanitized but also present.
         messages[-1]["content"] = sanitize_prompt(messages[-1]["content"])
 
-    # For debugging: print the final user prompt to verify formatting
-    # print(f"DEBUG PROMPT: {messages[-1]['content']}")
-
     return {
         "target": target,
         "action": action,

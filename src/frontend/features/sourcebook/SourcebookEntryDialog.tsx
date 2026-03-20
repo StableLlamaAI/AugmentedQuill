@@ -40,6 +40,7 @@ import { SourcebookRelationDialog } from './SourcebookRelationDialog';
 import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for relations
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { PlainTextEditable } from '../editor/PlainTextEditable';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -115,8 +116,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
-
-  const isLight = theme === 'light';
 
   useEffect(() => {
     if (isOpen) {
@@ -206,13 +205,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     }
   };
 
-  const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
-  const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
-  const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const inputBgClass = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
-  const inputBorderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const labelClass = isLight ? 'text-brand-gray-600' : 'text-brand-gray-400';
-  const descriptionSurfaceClass = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
+  const {
+    isLight,
+    bg: bgClass,
+    text: textClass,
+    border: borderClass,
+    input: inputBgClass,
+    muted: labelClass,
+    surface: descriptionSurfaceClass,
+  } = useThemeClasses();
+  const inputBorderClass = borderClass;
   const descriptionTextClass = isLight ? 'text-brand-gray-700' : 'text-brand-gray-300';
   const descriptionPlaceholderClass = isLight
     ? 'placeholder-brand-gray-400'

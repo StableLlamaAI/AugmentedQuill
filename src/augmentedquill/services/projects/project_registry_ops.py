@@ -13,6 +13,25 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+import jsonschema
+
+from augmentedquill.core.config import SCHEMAS_DIR
+
+
+def _validate_registry(data: Dict, path_label: str) -> None:
+    """Validate registry data against projects.schema.json.
+
+    Raises ValueError so callers are forced to handle a corrupt registry.
+    """
+    schema_path = SCHEMAS_DIR / "projects.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(data, schema)
+    except jsonschema.ValidationError as exc:
+        raise ValueError(
+            f"Invalid projects registry at {path_label}: {exc.message}"
+        ) from exc
+
 
 def load_registry_from_path(registry_path: Path) -> Dict:
     """Load Registry From Path."""
@@ -45,6 +64,7 @@ def save_registry_to_path(registry_path: Path, current: str, recent: List[str]) 
             deduped.append(path_str)
     final_list = deduped[:5]
     payload = {"current": current, "recent": final_list}
+    _validate_registry(payload, str(registry_path))
     registry_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
