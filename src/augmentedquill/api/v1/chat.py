@@ -434,9 +434,21 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             # Invalid JSON is ignored by design so users can save drafts safely.
             pass
 
+    # Resolve active project type for tool schema filtering
+    _active_project_type: str | None = None
+    try:
+        _active_dir = get_active_project_dir()
+        if _active_dir:
+            _active_story = load_story_config(_active_dir / "story.json") or {}
+            _active_project_type = _active_story.get("project_type") or None
+    except Exception:
+        pass
+
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
-    story_tools = get_registered_tool_schemas(model_type=model_type)
+    story_tools = get_registered_tool_schemas(
+        model_type=model_type, project_type=_active_project_type
+    )
     if supports_function_calling:
         tool_choice = (payload or {}).get("tool_choice")
         # If the client explicitly requests "none", do not send tools.

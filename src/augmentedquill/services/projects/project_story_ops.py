@@ -156,3 +156,17 @@ def write_scratchpad_in_project(active: Path, content: str) -> None:
     """Write Scratchpad In Project."""
     scratchpad_path = active / "scratchpad.txt"
     scratchpad_path.write_text(content, encoding="utf-8")
+
+
+def read_editing_scratchpad_in_project(active: Path) -> str:
+    """Read the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
+    scratchpad_path = active / "editing_scratchpad.txt"
+    if not scratchpad_path.exists():
+        return ""
+    return scratchpad_path.read_text(encoding="utf-8")
+
+
+def write_editing_scratchpad_in_project(active: Path, content: str) -> None:
+    """Write the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
+    scratchpad_path = active / "editing_scratchpad.txt"
+    scratchpad_path.write_text(content, encoding="utf-8")

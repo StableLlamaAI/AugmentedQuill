@@ -103,6 +103,7 @@ def chat_tool(
     name: str | None = None,
     allowed_roles: tuple[str, ...] | list[str] | None = None,
     capability: str | None = None,
+    project_types: tuple[str, ...] | list[str] | None = None,
 ) -> Callable:
     """
     Decorator for chat tools with automatic schema generation from Pydantic models.
@@ -112,6 +113,8 @@ def chat_tool(
         name: Optional explicit tool name (defaults to function name)
         allowed_roles: Model roles allowed to see and execute this tool
         capability: Optional internal capability label used for tests and routing
+        project_types: If set, only expose this tool for the listed project types
+            (e.g. ``("series",)``).  None means available for all project types.
 
     The decorated function should have signature:
         async def tool_fn(params: ParamsModel, payload: dict, mutations: dict) -> dict
@@ -264,6 +267,7 @@ def chat_tool(
             "params_model": params_type,
             "allowed_roles": normalized_roles,
             "capability": capability,
+            "project_types": tuple(project_types) if project_types else None,
         }
 
         return wrapper
@@ -271,8 +275,11 @@ def chat_tool(
     return decorator
 
 
-def get_tool_schemas(model_type: str | None = None) -> list[dict]:
-    """Return registered tool schemas, optionally filtered by model role."""
+def get_tool_schemas(
+    model_type: str | None = None,
+    project_type: str | None = None,
+) -> list[dict]:
+    """Return registered tool schemas, optionally filtered by model role and project type."""
     normalized_role = normalize_model_role(model_type) if model_type else None
     schemas: list[dict] = []
     for info in _TOOL_REGISTRY.values():
@@ -280,6 +287,10 @@ def get_tool_schemas(model_type: str | None = None) -> list[dict]:
             "allowed_roles", MODEL_ROLES
         ):
             continue
+        allowed_project_types = info.get("project_types")
+        if project_type and allowed_project_types is not None:
+            if project_type not in allowed_project_types:
+                continue
         schemas.append(deepcopy(info["schema"]))
     return schemas
 
@@ -304,10 +315,13 @@ def get_registered_tool_allowed_roles(name: str) -> tuple[str, ...] | None:
     return tuple(info.get("allowed_roles") or MODEL_ROLES)
 
 
-def get_registered_tool_schemas(model_type: str | None = None) -> list[dict]:
+def get_registered_tool_schemas(
+    model_type: str | None = None,
+    project_type: str | None = None,
+) -> list[dict]:
     """Get OpenAI tool schemas from the canonical decorator registry."""
     ensure_tool_registry_loaded()
-    return get_tool_schemas(model_type=model_type)
+    return get_tool_schemas(model_type=model_type, project_type=project_type)
 
 
 def write_tools_json_tempfile() -> str:

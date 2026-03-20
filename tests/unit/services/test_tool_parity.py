@@ -145,7 +145,9 @@ class ToolParityTest(TestCase):
 
         # write_story_content
         res = self._call_tool(
-            "write_story_content", {"content": "Updated story intro content."}
+            "write_story_content",
+            {"content": "Updated story intro content."},
+            model_type="EDITING",
         )
         self.assertTrue(res.get("ok"))
 
@@ -197,6 +199,7 @@ class ToolParityTest(TestCase):
         res = self._call_tool(
             "write_book_content",
             {"book_id": self.book_id, "content": "Updated book intro content."},
+            model_type="EDITING",
         )
         self.assertTrue(res.get("ok"))
 
@@ -231,17 +234,17 @@ class ToolParityTest(TestCase):
         self.assertTrue("error" in res)
 
     def test_story_tags_tools(self):
-        # get_story_tags
-        res = self._call_tool("get_story_tags", {})
-        self.assertEqual(res["tags"], ["fantasy", "epic"])
+        # get and set tags via get_story_metadata / update_story_metadata
+        res = self._call_tool("get_story_metadata", {})
+        self.assertEqual(res.get("tags"), ["fantasy", "epic"])
 
-        # set_story_tags
-        res = self._call_tool("set_story_tags", {"tags": ["sci-fi", "noir"]})
-        self.assertEqual(res["tags"], ["sci-fi", "noir"])
+        # update tags via update_story_metadata
+        res = self._call_tool("update_story_metadata", {"tags": ["sci-fi", "noir"]})
+        self.assertTrue(res.get("ok"))
 
-        # Verify
-        res = self._call_tool("get_story_tags", {})
-        self.assertEqual(res["tags"], ["sci-fi", "noir"])
+        # Verify updated
+        res = self._call_tool("get_story_metadata", {})
+        self.assertEqual(res.get("tags"), ["sci-fi", "noir"])
 
     def test_get_chapter_summaries(self):
         # A chapter should always be listed, even if it has an empty summary.
@@ -409,16 +412,26 @@ class ToolParityTest(TestCase):
         self.assertTrue(res.get("ok"))
 
     def test_reorder_tools(self):
-        # reorder_chapters needs a list of IDs.
-        # Currently we have one chapter with ID 1 in Book 1.
+        # reorder_chapters and reorder_books are no longer LLM tools; verify they
+        # are not in the schema and that calling them via the tool endpoint returns
+        # an "Unknown tool" error rather than a hard crash.
+        from augmentedquill.services.chat.chat_tool_decorator import (
+            ensure_tool_registry_loaded,
+            get_registered_tool_schemas,
+        )
+
+        ensure_tool_registry_loaded()
+        names = {s["function"]["name"] for s in get_registered_tool_schemas()}
+        self.assertNotIn("reorder_chapters", names)
+        self.assertNotIn("reorder_books", names)
+
         res = self._call_tool(
             "reorder_chapters", {"chapter_ids": [1], "book_id": self.book_id}
         )
-        self.assertTrue(res.get("ok"))
+        self.assertIn("error", res)
 
-        # reorder_books
         res = self._call_tool("reorder_books", {"book_ids": [self.book_id]})
-        self.assertTrue(res.get("ok"))
+        self.assertIn("error", res)
 
     def test_insert_text_at_marker_tool(self):
         # Insert a marker into the chapter, then replace it.

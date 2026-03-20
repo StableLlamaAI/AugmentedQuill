@@ -156,6 +156,7 @@ async def delete_project_tool(
     description="Delete a book from a series project. Requires confirmation with confirm=true.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
+    project_types=("series",),
 )
 async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
     """Delete Book."""
@@ -189,6 +190,7 @@ async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
     description="Create a new book in a series project.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
+    project_types=("series",),
 )
 async def create_new_book(params: CreateNewBookParams, payload: dict, mutations: dict):
     """Create New Book."""

@@ -18,10 +18,13 @@ from augmentedquill.services.chat.chat_tool_decorator import (
 )
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     _get_entry_relations,
+    sourcebook_add_relation,
     sourcebook_create_entry,
     sourcebook_delete_entry,
     sourcebook_get_entry,
+    sourcebook_list_entries,
     sourcebook_refresh_entry_keywords,
+    sourcebook_remove_relation,
     sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
     _get_story_data,
@@ -320,3 +323,126 @@ async def delete_sourcebook_entry(
         mutations["story_changed"] = True
         return {"ok": True}
     return {"error": "Not found"}
+
+
+# ---------------------------------------------------------------------------
+# List / browse
+# ---------------------------------------------------------------------------
+
+
+class ListSourcebookEntriesParams(BaseModel):
+    """Parameters for listing sourcebook entries."""
+
+    category: str | None = Field(
+        None,
+        description=(
+            "Optional category filter. Allowed values: "
+            "Character, Location, Organization, Item, Event, Lore, Other."
+        ),
+    )
+
+
+@chat_tool(
+    description=(
+        "List all sourcebook entries, optionally filtered by category. "
+        "Returns id, name, category, description, synonyms, images, and relations for each entry."
+    ),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="sourcebook-read",
+)
+async def list_sourcebook_entries(
+    params: ListSourcebookEntriesParams, payload: dict, mutations: dict
+):
+    """List all sourcebook entries with optional category filter."""
+    entries = sourcebook_list_entries()
+    if params.category:
+        needle = params.category.strip().lower()
+        entries = [e for e in entries if (e.get("category") or "").lower() == needle]
+    return _strip_internal_sourcebook_fields_list(entries)
+
+
+# ---------------------------------------------------------------------------
+# Atomic relation management
+# ---------------------------------------------------------------------------
+
+
+class AddSourcebookRelationParams(BaseModel):
+    """Parameters for adding a single sourcebook relation."""
+
+    source_id: str = Field(..., description="The name/ID of the source entry.")
+    relation_type: str = Field(
+        ...,
+        description="A short phrase describing how the source relates to the target (e.g. 'is ally of', 'owns').",
+    )
+    target_id: str = Field(..., description="The name/ID of the target entry.")
+    start_chapter: str | None = Field(
+        None, description="Optional chapter where the relation begins."
+    )
+    end_chapter: str | None = Field(
+        None, description="Optional chapter where the relation ends."
+    )
+    start_book: str | None = Field(
+        None, description="Optional book where the relation begins (series only)."
+    )
+    end_book: str | None = Field(
+        None, description="Optional book where the relation ends (series only)."
+    )
+
+
+class RemoveSourcebookRelationParams(BaseModel):
+    """Parameters for removing a single sourcebook relation."""
+
+    source_id: str = Field(..., description="The name/ID of the source entry.")
+    relation_type: str = Field(
+        ..., description="The relation descriptor used when the relation was created."
+    )
+    target_id: str = Field(..., description="The name/ID of the target entry.")
+
+
+@chat_tool(
+    description=(
+        "Add a single directed relation between two sourcebook entries. "
+        "Use this instead of update_sourcebook_entry when you only want to add one relation "
+        "without touching the entry's other data."
+    ),
+    allowed_roles=(CHAT_ROLE,),
+    capability="sourcebook-write",
+)
+async def add_sourcebook_relation(
+    params: AddSourcebookRelationParams, payload: dict, mutations: dict
+):
+    """Add Sourcebook Relation."""
+    result = sourcebook_add_relation(
+        source_id=params.source_id,
+        relation_type=params.relation_type,
+        target_id=params.target_id,
+        start_chapter=params.start_chapter,
+        end_chapter=params.end_chapter,
+        start_book=params.start_book,
+        end_book=params.end_book,
+    )
+    if "error" not in result:
+        mutations["story_changed"] = True
+    return result
+
+
+@chat_tool(
+    description=(
+        "Remove a single directed relation between two sourcebook entries. "
+        "Provide the exact source_id, relation_type, and target_id that were used when the relation was created."
+    ),
+    allowed_roles=(CHAT_ROLE,),
+    capability="sourcebook-write",
+)
+async def remove_sourcebook_relation(
+    params: RemoveSourcebookRelationParams, payload: dict, mutations: dict
+):
+    """Remove Sourcebook Relation."""
+    result = sourcebook_remove_relation(
+        source_id=params.source_id,
+        relation_type=params.relation_type,
+        target_id=params.target_id,
+    )
+    if "error" not in result:
+        mutations["story_changed"] = True
+    return result

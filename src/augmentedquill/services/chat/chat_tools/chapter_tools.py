@@ -317,6 +317,19 @@ async def get_chapter_metadata(
         "project_type": ov.get("project_type"),
     }
 
+    # Add lightweight size hints so callers can budget read calls
+    _, chap_path, _ = _chapter_by_id_or_404(chap_id)
+    try:
+        raw = chap_path.read_bytes()
+        char_count = len(raw.decode("utf-8", errors="replace"))
+        word_count = len(
+            chap_path.read_text(encoding="utf-8", errors="replace").split()
+        )
+        result["char_count"] = char_count
+        result["word_count"] = word_count
+    except OSError:
+        pass
+
     if book:
         result["current_book"] = {
             "id": book.get("id"),
@@ -424,7 +437,11 @@ async def get_current_chapter_id(
 
 
 @chat_tool(
-    description="Write content to a specific chapter.",
+    description=(
+        "Overwrite the ENTIRE content of a chapter. "
+        "WARNING: replaces all existing text – only use for short chapters or complete rewrites. "
+        "For targeted edits prefer replace_text_in_chapter or apply_chapter_replacements."
+    ),
     allowed_roles=(EDITING_ROLE,),
     capability="prose-write",
 )
@@ -641,15 +658,10 @@ async def create_new_chapter(
     }
 
 
-@chat_tool(
-    description="Get the heading (title) of a specific chapter.",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="metadata-read",
-)
 async def get_chapter_heading(
     params: GetChapterHeadingParams, payload: dict, mutations: dict
 ):
-    """Get Chapter Heading."""
+    """Get Chapter Heading — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -675,15 +687,10 @@ async def write_chapter_heading(
     }
 
 
-@chat_tool(
-    description="Get the summary of a specific chapter.",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="metadata-read",
-)
 async def get_chapter_summary(
     params: GetChapterSummaryParams, payload: dict, mutations: dict
 ):
-    """Get Chapter Summary."""
+    """Get Chapter Summary — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -705,25 +712,64 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
         }
 
     active = get_active_project_dir()
-    files = _scan_chapter_files()
-    match = next(((idx, p) for (idx, p) in files if idx == params.chap_id), None)
-    if not match:
-        return {"error": "Chapter not found"}
+    chap_id, path, _pos = _chapter_by_id_or_404(params.chap_id)
 
-    _, path = match
     if path.exists():
         path.unlink()
 
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
-    chapters = story.get("chapters", [])
-    if params.chap_id < len(chapters):
-        idx_to_remove = params.chap_id - 1
-        if 0 <= idx_to_remove < len(chapters):
-            chapters.pop(idx_to_remove)
-            story["chapters"] = chapters
-            with open(story_path, "w", encoding="utf-8") as f:
-                _json.dump(story, f, indent=2, ensure_ascii=False)
+    p_type = story.get("project_type", "novel")
+    chap_filename = path.name
+
+    if p_type == "short-story":
+        # Short-story has a single content file; refuse structural deletion.
+        mutations["story_changed"] = True
+        return {"ok": True, "message": "Content file removed (short-story project)."}
+
+    if p_type == "series":
+        # path layout: <active>/books/<book_id>/chapters/<filename>
+        book_id_str = path.parent.parent.name
+        books = story.get("books", [])
+        target_book = next((b for b in books if b.get("id") == book_id_str), None)
+        if target_book is not None:
+            chapters_list = target_book.setdefault("chapters", [])
+            # Prefer filename match; fall back to local position within the book
+            c_idx = next(
+                (
+                    i
+                    for i, c in enumerate(chapters_list)
+                    if isinstance(c, dict) and c.get("filename") == chap_filename
+                ),
+                None,
+            )
+            if c_idx is None:
+                book_files = [
+                    p
+                    for _, p in _scan_chapter_files()
+                    if p.parent.parent.name == book_id_str
+                ]
+                c_idx = next((li for li, p in enumerate(book_files) if p == path), None)
+            if c_idx is not None and c_idx < len(chapters_list):
+                chapters_list.pop(c_idx)
+    else:
+        chapters_list = story.get("chapters", [])
+        c_idx = next(
+            (
+                i
+                for i, c in enumerate(chapters_list)
+                if isinstance(c, dict) and c.get("filename") == chap_filename
+            ),
+            None,
+        )
+        if c_idx is None and _pos < len(chapters_list):
+            c_idx = _pos
+        if c_idx is not None:
+            chapters_list.pop(c_idx)
+        story["chapters"] = chapters_list
+
+    with open(story_path, "w", encoding="utf-8") as f:
+        _json.dump(story, f, indent=2, ensure_ascii=False)
 
     mutations["story_changed"] = True
     return {"ok": True, "message": "Chapter deleted"}
@@ -800,6 +846,14 @@ class CallEditingAssistantParams(BaseModel):
         ...,
         description="The task the user wants the editor to perform (e.g., 'Fix the grammar in Chapter 1', 'Rewrite paragraph 2 to be more descriptive').",
     )
+    chapter_id: int | None = Field(
+        None,
+        description="Optional chapter ID to set as the active chapter for the EDITING session. Provide this when the task targets a specific chapter so the EDITING LLM has it in context from the start.",
+    )
+    book_id: str | None = Field(
+        None,
+        description="Optional book ID (series only). Used together with chapter_id to disambiguate the active chapter.",
+    )
 
 
 @chat_tool(
@@ -831,6 +885,12 @@ async def call_editing_assistant(
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
     sys_msg = get_system_message("editing_llm", model_overrides, language="en")
 
+    ctx_note = ""
+    if params.chapter_id is not None:
+        ctx_note = f"\nActive chapter ID for this task: {params.chapter_id}"
+        if params.book_id:
+            ctx_note += f", book ID: {params.book_id}"
+
     messages = [
         {"role": "system", "content": sys_msg},
         {
@@ -839,11 +899,30 @@ async def call_editing_assistant(
                 "Editing task for this request:\n"
                 f"{params.task}\n\n"
                 "Read any additional story, chapter, or sourcebook context you need with tools before editing."
+                + ctx_note
             ),
         },
     ]
 
-    tools = get_registered_tool_schemas(model_type=EDITING_ROLE)
+    # Build base payload so EDITING tools can resolve the active chapter automatically
+    base_nested_payload = dict(payload or {})
+    if params.chapter_id is not None:
+        base_nested_payload["active_chapter_id"] = params.chapter_id
+    if params.book_id is not None:
+        base_nested_payload["active_book_id"] = params.book_id
+
+    active = get_active_project_dir()
+    _editing_project_type: str | None = None
+    try:
+        if active:
+            _story_cfg = load_story_config(active / "story.json") or {}
+            _editing_project_type = _story_cfg.get("project_type") or None
+    except Exception:
+        pass
+
+    tools = get_registered_tool_schemas(
+        model_type=EDITING_ROLE, project_type=_editing_project_type
+    )
 
     final_output = ""
     recommended_updates: list[dict] = []
@@ -901,7 +980,7 @@ async def call_editing_assistant(
 
             tcall_id = tcall.get("id")
 
-            nested_payload = dict(payload or {})
+            nested_payload = dict(base_nested_payload)
             nested_payload["_tool_role"] = EDITING_ROLE
 
             tool_res = await execute_registered_tool(
@@ -939,7 +1018,12 @@ async def call_editing_assistant(
 
 
 @chat_tool(
-    description="Return structured metadata or sourcebook updates that CHAT should review and apply after an editing task. This tool does not modify project files.",
+    description=(
+        "Return structured metadata or sourcebook updates that CHAT should review and apply after an editing task. "
+        "This tool does not modify project files. "
+        "If story content directly contradicts sourcebook or character data in a way you cannot resolve via prose edits alone, "
+        "describe the discrepancy in `rationale` so the user can be informed and decide how to proceed."
+    ),
     allowed_roles=(EDITING_ROLE,),
     capability="metadata-recommendation",
 )

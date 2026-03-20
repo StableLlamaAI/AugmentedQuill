@@ -36,19 +36,17 @@ class ChatToolContractsTest(TestCase):
         "call_writing_llm",
         "get_book_metadata",
         "get_chapter_content",
-        "get_chapter_heading",
         "get_chapter_metadata",
         "get_chapter_summaries",
-        "get_chapter_summary",
         "get_current_chapter_id",
         "get_project_overview",
         "get_sourcebook_entry",
         "get_story_metadata",
-        "get_story_summary",
-        "get_story_tags",
         "list_images",
         "list_projects",
+        "list_sourcebook_entries",
         "read_book_content",
+        "read_editing_scratchpad",
         "read_story_content",
         "recommend_metadata_updates",
         "search_sourcebook",
@@ -58,8 +56,13 @@ class ChatToolContractsTest(TestCase):
         "replace_text_in_chapter",
         "apply_chapter_replacements",
         "insert_text_at_marker",
+        "insert_image_in_chapter",
+        "read_editing_scratchpad",
+        "write_editing_scratchpad",
         "recommend_metadata_updates",
         "write_chapter_content",
+        "write_story_content",
+        "write_book_content",
     }
 
     def setUp(self):
@@ -517,9 +520,7 @@ class ChatToolContractsTest(TestCase):
             "write_story_content",
             "update_book_metadata",
             "write_book_content",
-            "set_story_tags",
             "sync_story_summary",
-            "write_story_summary",
             "update_chapter_metadata",
             "write_chapter_content",
             "replace_text_in_chapter",
@@ -532,19 +533,21 @@ class ChatToolContractsTest(TestCase):
             "create_new_chapter",
             "write_chapter_heading",
             "delete_chapter",
-            "reorder_chapters",
-            "reorder_books",
             "delete_book",
             "create_new_book",
             "change_project_type",
             "create_sourcebook_entry",
             "update_sourcebook_entry",
             "delete_sourcebook_entry",
+            "add_sourcebook_relation",
+            "remove_sourcebook_relation",
             "generate_image_description",
             "create_image_placeholder",
             "set_image_metadata",
+            "insert_image_in_chapter",
             "read_scratchpad",
             "write_scratchpad",
+            "write_editing_scratchpad",
         }
 
         tool_names = set(self._tool_names())
@@ -593,9 +596,7 @@ class ChatToolContractsTest(TestCase):
                 "write_book_content",
                 {"book_id": self.book_id, "content": "Mutated book content"},
             ),
-            ("set_story_tags", {"tags": ["mutated", "tag"]}),
             ("sync_story_summary", {"mode": "update"}),
-            ("write_story_summary", {"summary": "Mutated story summary"}),
             (
                 "update_chapter_metadata",
                 {"chap_id": 1, "title": "Mutated Chapter Title"},
@@ -619,7 +620,6 @@ class ChatToolContractsTest(TestCase):
                 {"chap_id": 1, "heading": "Mutated Heading"},
             ),
             ("delete_chapter", {"chap_id": 2, "confirm": True}),
-            ("reorder_chapters", {"chapter_ids": [1], "book_id": self.book_id}),
             (
                 "create_sourcebook_entry",
                 {
@@ -637,6 +637,22 @@ class ChatToolContractsTest(TestCase):
             ),
             ("delete_sourcebook_entry", {"name_or_id": "Mutation Entry"}),
             (
+                "add_sourcebook_relation",
+                {
+                    "source_id": "Hero Entry",
+                    "relation_type": "ally",
+                    "target_id": "Hero Entry",
+                },
+            ),
+            (
+                "remove_sourcebook_relation",
+                {
+                    "source_id": "Hero Entry",
+                    "relation_type": "ally",
+                    "target_id": "Hero Entry",
+                },
+            ),
+            (
                 "create_image_placeholder",
                 {"description": "placeholder mutation", "title": "ph"},
             ),
@@ -649,6 +665,10 @@ class ChatToolContractsTest(TestCase):
                 },
             ),
             ("generate_image_description", {"filename": "sample.png"}),
+            (
+                "insert_image_in_chapter",
+                {"chap_id": 1, "filename": "sample.png", "position": "end"},
+            ),
             ("delete_project", {"name": "chat_tools_mutation_tmp", "confirm": True}),
         ]
 
@@ -701,15 +721,6 @@ class ChatToolContractsTest(TestCase):
             )
             created_book_id = create_book_content.get("book_id")
             self.assertTrue(created_book_id)
-
-            reorder_payload, _ = self._call_tool_with_payload(
-                "reorder_books",
-                {"book_ids": [created_book_id, self.book_id]},
-                model_type="CHAT",
-            )
-            self.assertTrue(
-                (reorder_payload.get("mutations") or {}).get("story_changed")
-            )
 
             delete_payload, _ = self._call_tool_with_payload(
                 "delete_book",

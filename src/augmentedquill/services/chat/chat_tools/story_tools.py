@@ -29,6 +29,8 @@ from augmentedquill.services.projects.projects import (
     write_story_content as _write_story_content,
     read_scratchpad as _read_scratchpad,
     write_scratchpad as _write_scratchpad,
+    read_editing_scratchpad as _read_editing_scratchpad,
+    write_editing_scratchpad as _write_editing_scratchpad,
 )
 
 # Pydantic models for tool parameters
@@ -152,6 +154,21 @@ class WriteScratchpadParams(BaseModel):
     )
 
 
+class ReadEditingScratchpadParams(BaseModel):
+    """Parameters for reading the EDITING scratchpad (no parameters needed)."""
+
+    pass
+
+
+class WriteEditingScratchpadParams(BaseModel):
+    """Parameters for writing to the EDITING scratchpad."""
+
+    content: str = Field(
+        ...,
+        description="The full new content for the EDITING scratchpad. This replaces current content.",
+    )
+
+
 # Tool implementations with co-located schemas
 
 
@@ -212,9 +229,13 @@ async def read_story_content(
 
 
 @chat_tool(
-    description="Update the story-level introduction or content file.",
-    allowed_roles=(CHAT_ROLE,),
-    capability="metadata-write",
+    description=(
+        "Overwrite the ENTIRE story-level content file. "
+        "WARNING: replaces all existing text — only use for short stories or complete rewrites. "
+        "For targeted edits prefer replace_text_in_chapter."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
 )
 async def write_story_content(
     params: WriteStoryContentParams, payload: dict, mutations: dict
@@ -228,6 +249,7 @@ async def write_story_content(
     description="Get the title, summary, and notes of a specific book (only for series projects).",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
+    project_types=("series",),
 )
 async def get_book_metadata(
     params: GetBookMetadataParams, payload: dict, mutations: dict
@@ -254,6 +276,7 @@ async def get_book_metadata(
     description="Update the title, summary, or notes of a specific book. Provide only the fields you want to change.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
+    project_types=("series",),
 )
 async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
@@ -270,6 +293,7 @@ async def update_book_metadata(
     description="Read the content file for a specific book.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
+    project_types=("series",),
 )
 async def read_book_content(
     params: ReadBookContentParams, payload: dict, mutations: dict
@@ -287,9 +311,14 @@ async def read_book_content(
 
 
 @chat_tool(
-    description="Update the content file for a specific book.",
-    allowed_roles=(CHAT_ROLE,),
-    capability="metadata-write",
+    description=(
+        "Overwrite the ENTIRE content file for a specific book. "
+        "WARNING: replaces all existing text — only use for short books or complete rewrites. "
+        "For targeted edits prefer replace_text_in_chapter."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+    project_types=("series",),
 )
 async def write_book_content(
     params: WriteBookContentParams, payload: dict, mutations: dict
@@ -301,7 +330,7 @@ async def write_book_content(
 
 @chat_tool(
     description="Read your internal scratchpad/TODO list. Use this to remember complex plans or summaries across long turns.",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    allowed_roles=(CHAT_ROLE,),
     capability="metadata-read",
 )
 async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations: dict):
@@ -311,7 +340,7 @@ async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations
 
 @chat_tool(
     description="Update your internal scratchpad/TODO list. Overwrites current content.",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
 async def write_scratchpad(
@@ -322,41 +351,26 @@ async def write_scratchpad(
     return {"ok": True}
 
 
-@chat_tool(
-    name="get_story_summary",
-    description="Get only the story summary (shortcut for get_story_metadata).",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="metadata-read",
-)
 async def get_story_summary_tool(
     params: GetStorySummaryParams, payload: dict, mutations: dict
 ):
-    """Get Story Summary Tool."""
+    """Deprecated: use get_story_metadata instead."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     summary = story.get("story_summary", "")
     return {"story_summary": summary}
 
 
-@chat_tool(
-    description="Get the list of tags for the story.",
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="metadata-read",
-)
 async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: dict):
+    """Deprecated: use get_story_metadata instead."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     tags = story.get("tags", [])
     return {"tags": tags}
 
 
-@chat_tool(
-    description="Set the tags for the story. Replaces all existing tags.",
-    allowed_roles=(CHAT_ROLE,),
-    capability="metadata-write",
-)
 async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: dict):
-    """Set Story Tags."""
+    """Deprecated: use update_story_metadata instead."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}
@@ -373,8 +387,11 @@ async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: d
 
 
 @chat_tool(
-    description="Auto-generate a story summary from chapter content. Uses the EDIT LLM.",
-    allowed_roles=(CHAT_ROLE,),
+    description=(
+        "Auto-generate a story summary from chapter content using AI. "
+        "Use mode='discard' to write from scratch or mode='update' (default) to refine the existing one."
+    ),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
 async def sync_story_summary(
@@ -390,15 +407,10 @@ async def sync_story_summary(
     return data
 
 
-@chat_tool(
-    description="Directly set the story summary without LLM generation.",
-    allowed_roles=(CHAT_ROLE,),
-    capability="metadata-write",
-)
 async def write_story_summary(
     params: WriteStorySummaryParams, payload: dict, mutations: dict
 ):
-    """Write Story Summary."""
+    """Deprecated: use update_story_metadata with summary= instead."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}
@@ -412,3 +424,39 @@ async def write_story_summary(
 
     mutations["story_changed"] = True
     return {"summary": params.summary, "message": "Story summary updated successfully"}
+
+
+# ---------------------------------------------------------------------------
+# EDITING scratchpad (separate from the CHAT scratchpad)
+# ---------------------------------------------------------------------------
+
+
+@chat_tool(
+    description=(
+        "Read the EDITING model's private scratchpad. "
+        "Use it to track your editing plan, open issues, and progress notes across turns."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="metadata-read",
+)
+async def read_editing_scratchpad(
+    params: ReadEditingScratchpadParams, payload: dict, mutations: dict
+):
+    """Read Editing Scratchpad."""
+    return {"content": _read_editing_scratchpad()}
+
+
+@chat_tool(
+    description=(
+        "Update the EDITING model's private scratchpad. Overwrites current content. "
+        "Use it to track your editing plan, open issues, and progress notes across turns."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="metadata-write",
+)
+async def write_editing_scratchpad(
+    params: WriteEditingScratchpadParams, payload: dict, mutations: dict
+):
+    """Write Editing Scratchpad."""
+    _write_editing_scratchpad(params.content)
+    return {"ok": True}

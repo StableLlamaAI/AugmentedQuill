@@ -343,6 +343,85 @@ def _update_global_relations(
     story["sourcebook_relations"] = filtered_rels
 
 
+def sourcebook_add_relation(
+    source_id: str,
+    relation_type: str,
+    target_id: str,
+    start_chapter: str | None = None,
+    end_chapter: str | None = None,
+    start_book: str | None = None,
+    end_book: str | None = None,
+) -> dict:
+    """Add a single directed relation between two sourcebook entries atomically."""
+    story, story_path = _get_story_data()
+    if not story:
+        return {"error": "No active project"}
+
+    sb_dict = story.get("sourcebook", {})
+    known_ids = {k.lower() for k in sb_dict}
+    if source_id.lower() not in known_ids:
+        return {"error": f"Source entry '{source_id}' not found"}
+    if target_id.lower() not in known_ids:
+        return {"error": f"Target entry '{target_id}' not found"}
+
+    global_rels = story.get("sourcebook_relations") or []
+    for r in global_rels:
+        if (
+            r.get("source_id") == source_id
+            and r.get("target_id") == target_id
+            and r.get("relation") == relation_type
+        ):
+            return {"error": "Relation already exists"}
+
+    new_rel: dict = {
+        "source_id": source_id,
+        "relation": relation_type,
+        "target_id": target_id,
+    }
+    if start_chapter:
+        new_rel["start_chapter"] = start_chapter
+    if end_chapter:
+        new_rel["end_chapter"] = end_chapter
+    if start_book:
+        new_rel["start_book"] = start_book
+    if end_book:
+        new_rel["end_book"] = end_book
+
+    global_rels.append(new_rel)
+    story["sourcebook_relations"] = global_rels
+    save_story_config(story_path, story)
+    return {"ok": True, "relation": new_rel}
+
+
+def sourcebook_remove_relation(
+    source_id: str,
+    relation_type: str,
+    target_id: str,
+) -> dict:
+    """Remove a single directed relation between two sourcebook entries atomically."""
+    story, story_path = _get_story_data()
+    if not story:
+        return {"error": "No active project"}
+
+    global_rels = story.get("sourcebook_relations") or []
+    original_len = len(global_rels)
+    new_rels = [
+        r
+        for r in global_rels
+        if not (
+            r.get("source_id") == source_id
+            and r.get("relation") == relation_type
+            and r.get("target_id") == target_id
+        )
+    ]
+    if len(new_rels) == original_len:
+        return {"error": "Relation not found"}
+
+    story["sourcebook_relations"] = new_rels
+    save_story_config(story_path, story)
+    return {"ok": True, "removed": original_len - len(new_rels)}
+
+
 def _normalize_category_value(category: str | None) -> str | None:
     """Normalize category to a known canonical value, or None when unknown."""
     if not isinstance(category, str):
