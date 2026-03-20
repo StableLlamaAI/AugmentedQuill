@@ -9,7 +9,7 @@
  * Defines chat composer UI so input handling is separated from message rendering.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Send } from 'lucide-react';
 
 type ChatComposerProps = {
@@ -36,14 +36,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       'Chat is unavailable because no working CHAT model is configured.'
     : 'Send Message (CHAT model)';
 
-  useEffect(() => {
-    if (!textareaRef.current) return;
-    textareaRef.current.style.height = 'auto';
-    const maxHeight = window.innerHeight * 0.5;
-    const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
-    textareaRef.current.style.height = `${newHeight}px`;
-  }, [input, textareaRef]);
-
+  // Keep the composer at consistent height by resetting to auto on submit.
+  // Do not auto-expand to viewport fractions, as that can break right-pane layout.
   const submitCurrentInput = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || isDisabled) return;
