@@ -503,3 +503,286 @@ class ToolParityTest(TestCase):
         res = self._call_tool("list_images", {})
         found = any(i["filename"] == "test.jpg" for i in res)
         self.assertTrue(found)
+
+    def test_get_chapter_metadata_word_count(self):
+        # Chapter 1 was created with "Book 1 Chapter 1 content." in setUp
+        res = self._call_tool("get_chapter_metadata", {"chap_id": 1})
+        self.assertIn("word_count", res)
+        self.assertIn("char_count", res)
+        self.assertGreater(res["word_count"], 0)
+        self.assertGreater(res["char_count"], 0)
+
+        # Nonexistent chapter must return an error
+        res2 = self._call_tool("get_chapter_metadata", {"chap_id": 9999})
+        self.assertIn("error", res2)
+
+    def test_sourcebook_list_and_relations(self):
+        # Bootstrap: create two entries
+        self._call_tool(
+            "create_sourcebook_entry",
+            {"name": "Hero", "description": "The hero", "category": "character"},
+        )
+        self._call_tool(
+            "create_sourcebook_entry",
+            {"name": "Castle", "description": "A big castle", "category": "location"},
+        )
+
+        # list_sourcebook_entries — no filter
+        res = self._call_tool("list_sourcebook_entries", {})
+        names = [e["name"] for e in res]
+        self.assertIn("Hero", names)
+        self.assertIn("Castle", names)
+
+        # list_sourcebook_entries — filtered by category
+        res = self._call_tool("list_sourcebook_entries", {"category": "character"})
+        names = [e["name"] for e in res]
+        self.assertIn("Hero", names)
+        self.assertNotIn("Castle", names)
+
+        # list_sourcebook_entries — category that matches nothing returns empty list
+        res = self._call_tool("list_sourcebook_entries", {"category": "vehicle"})
+        self.assertEqual(res, [])
+
+        # add_sourcebook_relation — success
+        res = self._call_tool(
+            "add_sourcebook_relation",
+            {"source_id": "Hero", "relation_type": "lives_in", "target_id": "Castle"},
+        )
+        self.assertTrue(res.get("ok"))
+
+        # add_sourcebook_relation — duplicate must be an error
+        res = self._call_tool(
+            "add_sourcebook_relation",
+            {"source_id": "Hero", "relation_type": "lives_in", "target_id": "Castle"},
+        )
+        self.assertIn("error", res)
+
+        # add_sourcebook_relation — nonexistent source must be an error
+        res = self._call_tool(
+            "add_sourcebook_relation",
+            {"source_id": "Nobody", "relation_type": "ally", "target_id": "Hero"},
+        )
+        self.assertIn("error", res)
+
+        # remove_sourcebook_relation — success
+        res = self._call_tool(
+            "remove_sourcebook_relation",
+            {"source_id": "Hero", "relation_type": "lives_in", "target_id": "Castle"},
+        )
+        self.assertTrue(res.get("ok"))
+
+        # remove_sourcebook_relation — removing again must be an error
+        res = self._call_tool(
+            "remove_sourcebook_relation",
+            {"source_id": "Hero", "relation_type": "lives_in", "target_id": "Castle"},
+        )
+        self.assertIn("error", res)
+
+    def test_insert_image_in_chapter(self):
+        # Set up content with distinct paragraphs / a marker
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "Para one.\n\nPara two.\n\nPara three."},
+            model_type="EDITING",
+        )
+
+        # position=end
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "hero.png", "position": "end"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+        content = self._call_tool("get_chapter_content", {"chap_id": 1})["content"]
+        self.assertIn("![hero.png](hero.png)", content)
+
+        # position=after_paragraph:1 with optional caption
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "Para one.\n\nPara two.\n\nPara three."},
+            model_type="EDITING",
+        )
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {
+                "chap_id": 1,
+                "filename": "castle.jpg",
+                "position": "after_paragraph:1",
+                "caption": "The castle",
+            },
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+        content = self._call_tool("get_chapter_content", {"chap_id": 1})["content"]
+        self.assertIn("![The castle](castle.jpg)", content)
+
+        # position=marker — marker present, should be replaced
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "Before ~~~ After"},
+            model_type="EDITING",
+        )
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "marker.png", "position": "marker"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+        content = self._call_tool("get_chapter_content", {"chap_id": 1})["content"]
+        self.assertNotIn("~~~", content)
+        self.assertIn("marker.png", content)
+
+        # position=marker — no marker present must return an error
+        self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "No marker here"},
+            model_type="EDITING",
+        )
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "x.png", "position": "marker"},
+            model_type="EDITING",
+        )
+        self.assertIn("error", res)
+
+        # position=after_paragraph out-of-range must return an error
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "x.png", "position": "after_paragraph:999"},
+            model_type="EDITING",
+        )
+        self.assertIn("error", res)
+
+        # unknown position string must return an error
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "x.png", "position": "middle"},
+            model_type="EDITING",
+        )
+        self.assertIn("error", res)
+
+    def test_editing_scratchpad(self):
+        # Read before any write → empty content
+        res = self._call_tool("read_editing_scratchpad", {}, model_type="EDITING")
+        self.assertEqual(res.get("content"), "")
+
+        # Write then read back
+        res = self._call_tool(
+            "write_editing_scratchpad",
+            {"content": "My editing plan"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+        res = self._call_tool("read_editing_scratchpad", {}, model_type="EDITING")
+        self.assertEqual(res.get("content"), "My editing plan")
+
+        # Overwrite with new content
+        self._call_tool(
+            "write_editing_scratchpad",
+            {"content": "Updated plan"},
+            model_type="EDITING",
+        )
+        res = self._call_tool("read_editing_scratchpad", {}, model_type="EDITING")
+        self.assertEqual(res.get("content"), "Updated plan")
+
+        # CHAT role may not call write_editing_scratchpad
+        res_chat = self._call_tool(
+            "write_editing_scratchpad",
+            {"content": "Not allowed"},
+            model_type="CHAT",
+        )
+        self.assertIn("error", res_chat)
+
+        # CHAT role may not call read_editing_scratchpad either
+        res_chat = self._call_tool("read_editing_scratchpad", {}, model_type="CHAT")
+        self.assertIn("error", res_chat)
+
+    def test_role_enforcement_prose_tools(self):
+        # CHAT role must not be able to call write_story_content
+        res = self._call_tool(
+            "write_story_content", {"content": "CHAT attempt"}, model_type="CHAT"
+        )
+        self.assertIn("error", res)
+
+        # EDITING role should succeed
+        res = self._call_tool(
+            "write_story_content",
+            {"content": "EDITING update"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+
+        # Verify the write took effect
+        res = self._call_tool("read_story_content", {})
+        self.assertEqual(res.get("content"), "EDITING update")
+
+        # CHAT role must not be able to call write_book_content
+        res = self._call_tool(
+            "write_book_content",
+            {"book_id": self.book_id, "content": "CHAT attempt"},
+            model_type="CHAT",
+        )
+        self.assertIn("error", res)
+
+        # EDITING role should succeed
+        res = self._call_tool(
+            "write_book_content",
+            {"book_id": self.book_id, "content": "EDITING update"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"))
+
+    def test_project_types_filter(self):
+        from augmentedquill.services.chat.chat_tool_decorator import (
+            ensure_tool_registry_loaded,
+            get_registered_tool_schemas,
+        )
+
+        ensure_tool_registry_loaded()
+
+        series_names = {
+            s["function"]["name"]
+            for s in get_registered_tool_schemas(
+                model_type="CHAT", project_type="series"
+            )
+        }
+        novel_names = {
+            s["function"]["name"]
+            for s in get_registered_tool_schemas(
+                model_type="CHAT", project_type="novel"
+            )
+        }
+
+        # These tools are series-only and must vanish for novel projects
+        series_only = {
+            "create_new_book",
+            "delete_book",
+            "get_book_metadata",
+            "update_book_metadata",
+            "read_book_content",
+        }
+        for tool in series_only:
+            self.assertIn(tool, series_names, f"{tool} missing for series")
+            self.assertNotIn(tool, novel_names, f"{tool} should be hidden for novel")
+
+    def test_delete_chapter_series(self):
+        # Verify correct chapter count before deletion
+        overview = self._call_tool("get_project_overview", {})
+        total_chapters = sum(len(b.get("chapters", [])) for b in overview["books"])
+        self.assertEqual(total_chapters, 1)
+
+        # Without confirm → confirmation_required
+        res = self._call_tool("delete_chapter", {"chap_id": 1})
+        self.assertEqual(res.get("status"), "confirmation_required")
+
+        # With confirm=True → deleted
+        res = self._call_tool("delete_chapter", {"chap_id": 1, "confirm": True})
+        self.assertTrue(res.get("ok"))
+
+        # story.json should now have 0 chapters in the book
+        import json as _json
+
+        pdir = self.projects_root / self.project_name
+        story = _json.loads((pdir / "story.json").read_text())
+        book = next(b for b in story["books"] if b["id"] == self.book_id)
+        self.assertEqual(len(book.get("chapters", [])), 0)

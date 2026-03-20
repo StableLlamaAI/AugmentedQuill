@@ -714,18 +714,16 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
     active = get_active_project_dir()
     chap_id, path, _pos = _chapter_by_id_or_404(params.chap_id)
 
-    if path.exists():
-        path.unlink()
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     p_type = story.get("project_type", "novel")
     chap_filename = path.name
 
     if p_type == "short-story":
-        # Short-story has a single content file; refuse structural deletion.
+        if path.exists():
+            path.unlink()
         mutations["story_changed"] = True
-        return {"ok": True, "message": "Content file removed (short-story project)."}
+        return {"ok": True, "message": "Content file removed (short-story project.)"}
 
     if p_type == "series":
         # path layout: <active>/books/<book_id>/chapters/<filename>
@@ -734,7 +732,8 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
         target_book = next((b for b in books if b.get("id") == book_id_str), None)
         if target_book is not None:
             chapters_list = target_book.setdefault("chapters", [])
-            # Prefer filename match; fall back to local position within the book
+            # Prefer filename match; fall back to linear scan.
+            # Resolve BEFORE deleting the file so glob-based scan still works.
             c_idx = next(
                 (
                     i
@@ -767,6 +766,9 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
         if c_idx is not None:
             chapters_list.pop(c_idx)
         story["chapters"] = chapters_list
+
+    if path.exists():
+        path.unlink()
 
     with open(story_path, "w", encoding="utf-8") as f:
         _json.dump(story, f, indent=2, ensure_ascii=False)
