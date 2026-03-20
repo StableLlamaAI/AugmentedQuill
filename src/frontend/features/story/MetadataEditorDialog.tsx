@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MetadataParams } from './metadataSync';
+import { MetadataParams, computeSyncUpdates } from './metadataSync';
 import { createPortal } from 'react-dom';
 import {
   Maximize2,
@@ -92,6 +92,21 @@ export function MetadataEditorDialog({
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
+
+  const prevInitialRef = useRef<MetadataParams>(initialData);
+
+  useEffect(() => {
+    const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
+    prevInitialRef.current = initialData;
+
+    if (Object.keys(updates).length > 0) {
+      setData((prev) => ({ ...prev, ...updates }));
+      lastSavedDataRef.current = {
+        ...lastSavedDataRef.current,
+        ...updates,
+      };
+    }
+  }, [initialData]);
 
   useEffect(() => {
     setData((prev) => ({ ...prev, conflicts }));

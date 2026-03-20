@@ -31,7 +31,12 @@ interface ChapterListProps {
   currentChapterId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdateChapter?: (id: string, updates: Partial<Chapter>) => void;
+  onUpdateChapter?: (
+    id: string,
+    updates: Partial<Chapter>,
+    sync?: boolean,
+    pushHistory?: boolean
+  ) => void;
   onUpdateBook?: (id: string, updates: Partial<Book>) => void;
   onCreate: (bookId?: string) => void;
   onBookCreate?: (title: string) => void;
@@ -271,6 +276,16 @@ export const ChapterList: React.FC<ChapterListProps> = ({
     type: 'chapter' | 'book';
     id: string;
   } | null>(null);
+  const [pendingMetadataUpdate, setPendingMetadataUpdate] = useState<{
+    id: string;
+    data: {
+      title?: string;
+      summary?: string;
+      notes?: string;
+      private_notes?: string;
+      conflicts?: Chapter['conflicts'];
+    };
+  } | null>(null);
 
   const activeEditingData = useMemo(() => {
     if (!editingMetadata) return null;
@@ -310,7 +325,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
         });
 
         if (onUpdateChapter) {
-          onUpdateChapter(editingMetadata.id, data);
+          onUpdateChapter(editingMetadata.id, data, false, false);
+          setPendingMetadataUpdate({ id: editingMetadata.id, data });
         } else {
           if (data.title !== activeEditingData.title) {
             await api.chapters.updateTitle(id, data.title || '');
@@ -412,7 +428,36 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           }: ${activeEditingData.title}`}
           initialData={activeEditingData}
           onSave={saveMetadata}
-          onClose={() => setEditingMetadata(null)}
+          onClose={() => {
+            if (
+              pendingMetadataUpdate &&
+              pendingMetadataUpdate.id === editingMetadata.id
+            ) {
+              const currentChapter = displayChapters.find(
+                (c) => c.id === pendingMetadataUpdate.id
+              );
+              const isDifferent =
+                currentChapter &&
+                Object.entries(pendingMetadataUpdate.data).some(([key, value]) => {
+                  if (value === undefined) return false;
+                  return (
+                    JSON.stringify(value) !==
+                    JSON.stringify((currentChapter as any)[key])
+                  );
+                });
+
+              if (isDifferent) {
+                onUpdateChapter?.(
+                  pendingMetadataUpdate.id,
+                  pendingMetadataUpdate.data,
+                  false,
+                  true
+                );
+              }
+            }
+            setPendingMetadataUpdate(null);
+            setEditingMetadata(null);
+          }}
           theme={theme}
           aiDisabledReason={
             !isAiAvailable

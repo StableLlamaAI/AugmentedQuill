@@ -50,6 +50,16 @@ const INITIAL_STORY: StoryState = {
   lastUpdated: Date.now(),
 };
 
+const areStoriesEqual = (a: StoryState, b: StoryState): boolean => {
+  try {
+    const aCopy = { ...a, lastUpdated: 0 };
+    const bCopy = { ...b, lastUpdated: 0 };
+    return JSON.stringify(aCopy) === JSON.stringify(bCopy);
+  } catch {
+    return false;
+  }
+};
+
 export interface StoryHistoryOption {
   id: string;
   label: string;
@@ -149,6 +159,14 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const pushState = useCallback(
     (newState: StoryState, label: string) => {
       const updatedState = { ...newState, lastUpdated: Date.now() };
+      const currentEntry = history[currentIndex];
+      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+        // Avoid no-op history entries that cause apparent "double undo".
+        setStory(updatedState);
+        latestStoryRef.current = updatedState;
+        return;
+      }
+
       const trimmed = history.slice(0, currentIndex + 1);
       trimmed.push(createHistoryEntry(updatedState, label));
       const bounded = trimmed.slice(-MAX_HISTORY);
@@ -173,6 +191,31 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         story
       );
       const updatedState = { ...sourceState, lastUpdated: Date.now() };
+
+      const currentEntry = history[currentIndex];
+      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+        // Update the existing entry with the undo/redo handlers if they are missing
+        const updatedOnUndo = params.onUndo ?? currentEntry.onUndo;
+        const updatedOnRedo = params.onRedo ?? currentEntry.onRedo;
+
+        if (
+          updatedOnUndo !== currentEntry.onUndo ||
+          updatedOnRedo !== currentEntry.onRedo
+        ) {
+          const updatedHistory = [...history];
+          updatedHistory[currentIndex] = {
+            ...currentEntry,
+            label: params.label,
+            onUndo: updatedOnUndo,
+            onRedo: updatedOnRedo,
+          };
+          setHistory(updatedHistory);
+        }
+        setStory(updatedState);
+        latestStoryRef.current = updatedState;
+        return;
+      }
+
       const trimmed = history.slice(0, currentIndex + 1);
       trimmed.push(
         createHistoryEntry(updatedState, params.label, {
@@ -358,16 +401,33 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const updateChapter = async (
     id: string,
     partial: Partial<Chapter>,
-    sync: boolean = true
+    sync: boolean = true,
+    pushHistory: boolean = true
   ) => {
     const chapter = story.chapters.find((ch) => ch.id === id);
+    if (!chapter) return;
+
+    const isDifferent = Object.entries(partial).some(([key, value]) => {
+      if (value === undefined) return false;
+      const old = (chapter as any)[key];
+      return value !== old;
+    });
+
     const newChapters = story.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
     const newState = { ...story, chapters: newChapters };
-    pushState(newState, buildChapterUpdateLabel(chapter, partial));
+
+    if (pushHistory) {
+      pushState(newState, buildChapterUpdateLabel(chapter, partial));
+    } else {
+      setStory(newState);
+      latestStoryRef.current = newState;
+    }
 
     if (!sync) return;
+
+    if (!isDifferent) return;
 
     try {
       const numId = Number(id);
