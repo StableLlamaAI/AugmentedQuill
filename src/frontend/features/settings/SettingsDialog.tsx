@@ -526,7 +526,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   const renderTab = (
-    id: 'projects' | 'machine',
+    id: 'projects' | 'machine' | 'about',
     icon: React.ReactNode,
     label: string
   ) => (
