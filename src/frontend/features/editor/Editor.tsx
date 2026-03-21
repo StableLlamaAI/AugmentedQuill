@@ -828,18 +828,30 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             break;
           case 'link': {
             const url = prompt('Enter URL:');
-            if (url !== null)
-              withRestoredWysiwygSelection(() =>
-                document.execCommand('createLink', false, url)
-              );
+            if (url !== null) {
+              // Reject javascript:/vbscript: pseudo-protocols to prevent XSS.
+              const safe =
+                /^(https?|mailto|ftp):\/\//i.test(url) || url.startsWith('/');
+              if (safe)
+                withRestoredWysiwygSelection(() =>
+                  document.execCommand('createLink', false, url)
+                );
+            }
             break;
           }
           case 'image': {
             const src = prompt('Enter Image URL:');
-            if (src !== null)
-              withRestoredWysiwygSelection(() =>
-                document.execCommand('insertImage', false, src)
-              );
+            if (src !== null) {
+              // Only allow http/https/relative paths — block javascript: etc.
+              const safe =
+                /^https?:\/\//i.test(src) ||
+                src.startsWith('/') ||
+                src.startsWith('./');
+              if (safe)
+                withRestoredWysiwygSelection(() =>
+                  document.execCommand('insertImage', false, src)
+                );
+            }
             break;
           }
         }
