@@ -16,6 +16,7 @@ import React, {
   useCallback,
   useState,
 } from 'react';
+import { EditorView } from '@codemirror/view';
 import { Chapter, EditorSettings, ViewMode } from '../../types';
 import {
   Sparkles,
@@ -38,15 +39,12 @@ import { notifyError } from '../../services/errorNotifier';
 import { marked } from 'marked';
 // @ts-ignore
 import TurndownService from 'turndown';
-import { PlainTextEditable, fromWhitespaceDisplayText } from './PlainTextEditable';
-import { getRangeLength, resolveNodeAndOffset } from './domUtils';
+import { CodeMirrorEditor } from './CodeMirrorEditor';
 import {
   applyInlineFormatAtSelection,
-  displayedOffsetToRawOffset,
   getBlockType,
   getLineAtOffset,
   isInlineFormatActiveAtSelection,
-  rawOffsetToDisplayedOffset,
   resolveInlineSelection,
   toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
@@ -97,6 +95,55 @@ export interface EditorHandle {
   openImageManager?: () => void;
 }
 
+// Inject visible whitespace markers into the WYSIWYG contentEditable DOM.
+// Replaces space characters in text nodes (skipping code/pre blocks and
+// existing marker spans) with a visible middle-dot span.  The injected
+// element carries data-ws-marker so turndown can strip it back to a space.
+const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node: Node): number {
+      const parent = (node as Text).parentElement;
+      // Skip nodes inside existing WS marker spans
+      if (parent?.dataset.wsMarker) return NodeFilter.FILTER_SKIP;
+      // Skip text inside <code> or <pre>
+      let el: Element | null = parent;
+      while (el && el !== root) {
+        if (el.tagName === 'CODE' || el.tagName === 'PRE')
+          return NodeFilter.FILTER_SKIP;
+        el = el.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  let n: Node | null;
+  while ((n = walker.nextNode())) textNodes.push(n as Text);
+
+  for (const textNode of textNodes) {
+    const text = textNode.textContent ?? '';
+    if (!text.includes(' ')) continue;
+    const frag = document.createDocumentFragment();
+    let i = 0;
+    for (let j = 0; j <= text.length; j++) {
+      if (j === text.length || text[j] === ' ') {
+        if (j > i) frag.appendChild(document.createTextNode(text.slice(i, j)));
+        if (j < text.length) {
+          const span = document.createElement('span');
+          span.dataset.wsMarker = '1';
+          span.setAttribute('aria-hidden', 'true');
+          span.textContent = '\u00b7'; // MIDDLE DOT
+          span.style.opacity = '0.5';
+          span.style.pointerEvents = 'none';
+          span.style.userSelect = 'none';
+          frag.appendChild(span);
+        }
+        i = j + 1;
+      }
+    }
+    textNode.parentNode?.replaceChild(frag, textNode);
+  }
+};
+
 export const Editor = React.forwardRef<EditorHandle, EditorProps>(
   (
     {
@@ -112,13 +159,45 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     },
     ref
   ) => {
-    const textareaRef = useRef<HTMLDivElement>(null);
+    // CodeMirror EditorView for Raw / Markdown modes
+    const editorViewRef = useRef<EditorView | null>(null);
     const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
     const lastWysiwygSelectionRef = useRef<Range | null>(null);
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const isAtBottomRef = useRef<boolean>(true);
+    // Debounce timers for API-level persistence so every keystroke does not
+    // trigger a network request.  Display updates remain synchronous.
+    const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const DEBOUNCE_MS = 300;
+
+    // Local content/title state so the editor div always gets the latest
+    // typed value immediately, while the parent onChange (API call) is debounced.
+    const [localContent, setLocalContent] = useState(chapter.content);
+    const [localTitle, setLocalTitle] = useState(chapter.title);
+
+    // Keep local state in sync when the chapter changes externally (chapter
+    // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
+    // for chapter switches; also watch chapter.content so AI insertions and
+    // undo/redo (which can change content without changing id) are reflected.
+    const lastChapterIdRef = useRef(chapter.id);
+    useEffect(() => {
+      const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
+      lastChapterIdRef.current = chapter.id;
+      // On chapter switch always reset.  For in-place content changes (AI,
+      // undo/redo) only sync when the editor is not focused — when it IS
+      // focused CodeMirror already has the correct document state.
+      const editorFocused = editorViewRef.current?.hasFocus ?? false;
+      if (isChapterSwitch || !editorFocused) {
+        setLocalContent(chapter.content);
+      }
+    }, [chapter.id, chapter.content]);
+
+    useEffect(() => {
+      setLocalTitle(chapter.title);
+    }, [chapter.id, chapter.title]);
 
     const {
       continuations,
@@ -196,16 +275,17 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           onChange(chapter.id, { content: chapter.content + markdown });
         }
       } else {
-        const markdown = `![${alt}](${url})`;
-        if (document.activeElement === textareaRef.current) {
-          document.execCommand('insertText', false, markdown);
-        } else if (lastRawSelectionRef.current) {
-          const { start, end } = lastRawSelectionRef.current;
-          const newContent =
-            chapter.content.slice(0, start) + markdown + chapter.content.slice(end);
-          onChange(chapter.id, { content: newContent });
+        const md = `![${alt}](${url})`;
+        const view = editorViewRef.current;
+        if (view) {
+          const { from, to } = view.state.selection.main;
+          view.dispatch({
+            changes: { from, to, insert: md },
+            selection: { anchor: from + md.length },
+          });
+          view.focus();
         } else {
-          onChange(chapter.id, { content: chapter.content + '\n' + markdown });
+          onChange(chapter.id, { content: chapter.content + '\n' + md });
         }
       }
     };
@@ -233,21 +313,45 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     const turndownService = useRef<TurndownServiceLike | null>(null);
     if (!turndownService.current) {
-      turndownService.current = new TurndownService({
+      const td = new TurndownService({
         headingStyle: 'atx',
         codeBlockStyle: 'fenced',
         emDelimiter: '*',
       });
+      // Preserve soft line-breaks: a bare <br> (not inside a pre block)
+      // round-trips as '\n' so that switching modes does not collapse newlines
+      // into nothing.  With marked `breaks: true` both bare '\n' and '  \n'
+      // render as <br> in WYSIWYG, so the visual result is always lossless.
+      td.addRule('softBreak', {
+        filter: (node: any) =>
+          node.nodeName === 'BR' && node.parentNode?.nodeName !== 'PRE',
+        replacement: () => '\n',
+      });
+      // Strip WS marker spans back to a plain space during roundtrip
+      td.addRule('wsMarker', {
+        filter: (node: any) =>
+          node.nodeName === 'SPAN' && node.getAttribute('data-ws-marker') === '1',
+        replacement: () => ' ',
+      });
+      turndownService.current = td;
     }
 
     // Keep WYSIWYG DOM synchronized when content changes externally.
+    // Use `breaks: true` so single newlines in the markdown source are
+    // rendered as <br> rather than being collapsed — this makes the
+    // marked → turndown round-trip lossless for soft line-breaks.
     useEffect(() => {
       if (viewMode === 'wysiwyg' && wysiwygRef.current) {
         if (document.activeElement !== wysiwygRef.current) {
-          wysiwygRef.current.innerHTML = marked.parse(chapter.content) as string;
+          wysiwygRef.current.innerHTML = marked.parse(chapter.content, {
+            breaks: true,
+          }) as string;
+          if (showWhitespace) {
+            injectWsMarkersWysiwyg(wysiwygRef.current);
+          }
         }
       }
-    }, [chapter.content, viewMode, chapter.id]);
+    }, [chapter.content, viewMode, chapter.id, showWhitespace]);
 
     const handleWysiwygInput = () => {
       if (wysiwygRef.current) {
@@ -260,13 +364,25 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       }
     };
 
+    // Re-inject WS markers after the user finishes editing.
+    // While the element is focused, markers are absent so typing isn't
+    // disrupted; on blur we re-render and re-inject for a clean view.
+    const handleWysiwygBlur = () => {
+      if (!showWhitespace || !wysiwygRef.current) return;
+      const currentMd =
+        turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
+      wysiwygRef.current.innerHTML = marked.parse(currentMd, {
+        breaks: true,
+      }) as string;
+      injectWsMarkersWysiwyg(wysiwygRef.current);
+    };
+
     // Update active formatting state for toolbar affordances.
     const checkContext = () => {
       if (!onContextChange) return;
 
       const formats: string[] = [];
       const isWysiwyg = viewMode === 'wysiwyg';
-      const el = isWysiwyg ? null : textareaRef.current;
 
       if (isWysiwyg) {
         if (document.queryCommandState('bold')) formats.push('bold');
@@ -278,182 +394,50 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         if (formatBlock === 'h2') formats.push('h2');
         if (formatBlock === 'h3') formats.push('h3');
         if (formatBlock === 'blockquote') formats.push('quote');
-      } else if (el) {
-        const selection = window.getSelection();
-        if (
-          selection &&
-          selection.rangeCount > 0 &&
-          el.contains(selection.anchorNode)
-        ) {
-          const displayedText = el.innerText;
-          const rawText = showWhitespace
-            ? fromWhitespaceDisplayText(displayedText)
-            : displayedText;
-          const displayedCaret = getCaretOffset(el);
-          const rawCaret =
-            displayedCaret === null
-              ? null
-              : showWhitespace
-                ? displayedOffsetToRawOffset(displayedText, displayedCaret)
-                : displayedCaret;
+      } else {
+        const view = editorViewRef.current;
+        if (view) {
+          const rawText = view.state.doc.toString();
+          const { anchor, head } = view.state.selection.main;
+          const rawCaret = head;
+          const rawStart = Math.min(anchor, head);
+          const rawEnd = Math.max(anchor, head);
 
-          if (rawCaret !== null) {
-            const line = getLineAtOffset(rawText, rawCaret);
-            const blockType = getBlockType(line);
-            if (blockType) formats.push(blockType);
+          const line = getLineAtOffset(rawText, rawCaret);
+          const blockType = getBlockType(line);
+          if (blockType) formats.push(blockType);
 
-            const rawSelection = getSelectionOffsets(el);
-            const rawStart = rawSelection
-              ? showWhitespace
-                ? displayedOffsetToRawOffset(displayedText, rawSelection.start)
-                : rawSelection.start
-              : rawCaret;
-            const rawEnd = rawSelection
-              ? showWhitespace
-                ? displayedOffsetToRawOffset(displayedText, rawSelection.end)
-                : rawSelection.end
-              : rawCaret;
+          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold'))
+            formats.push('bold');
+          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
+            formats.push('italic');
 
-            lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
-
-            if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold')) {
-              formats.push('bold');
-            }
-            if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic')) {
-              formats.push('italic');
-            }
-
-            syncLastRawSelectionFromEditor();
-          }
+          lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
         }
       }
       onContextChange(formats);
     };
 
     const toggleBlockAtCaret = (type: MarkdownBlockType) => {
-      const el = textareaRef.current;
-      if (!el) return;
-
-      const displayedText = el.innerText;
-      const rawText = showWhitespace
-        ? fromWhitespaceDisplayText(displayedText)
-        : displayedText;
-      const displayedCaret = getCaretOffset(el);
-      const rawCaret =
-        displayedCaret === null
-          ? rawText.length
-          : showWhitespace
-            ? displayedOffsetToRawOffset(displayedText, displayedCaret)
-            : displayedCaret;
+      const view = editorViewRef.current;
+      if (!view) return;
+      const rawText = view.state.doc.toString();
+      const rawCaret = view.state.selection.main.head;
       const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
         rawText,
         rawCaret,
         type
       );
-
-      onChange(chapter.id, { content: nextRawText });
-      window.requestAnimationFrame(() => {
-        const root = textareaRef.current;
-        if (!root) return;
-        const displayedCaretOffset = rawOffsetToDisplayedOffset(
-          nextRawText,
-          nextRawCaret,
-          !!showWhitespace
-        );
-        root.focus();
-        setSelectionOffsets(root, displayedCaretOffset, displayedCaretOffset);
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+        selection: { anchor: nextRawCaret },
       });
-    };
-
-    const getCaretOffset = (root: HTMLElement | null): number | null => {
-      if (!root) return null;
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return null;
-      const range = selection.getRangeAt(0);
-      if (!root.contains(range.startContainer)) return null;
-      const preRange = range.cloneRange();
-      preRange.selectNodeContents(root);
-      preRange.setEnd(range.startContainer, range.startOffset);
-      return getRangeLength(preRange);
-    };
-
-    const getSelectionOffsets = (
-      root: HTMLElement | null
-    ): { start: number; end: number } | null => {
-      if (!root) return null;
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return null;
-      const range = selection.getRangeAt(0);
-      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
-        return null;
-      }
-
-      const startRange = range.cloneRange();
-      startRange.selectNodeContents(root);
-      startRange.setEnd(range.startContainer, range.startOffset);
-
-      const endRange = range.cloneRange();
-      endRange.selectNodeContents(root);
-      endRange.setEnd(range.endContainer, range.endOffset);
-
-      return {
-        start: getRangeLength(startRange),
-        end: getRangeLength(endRange),
-      };
-    };
-
-    const getCurrentRawSelectionFromEditor = (
-      root: HTMLElement | null
-    ): TextSelectionRange | null => {
-      if (!root) return null;
-      const displayedText = root.innerText;
-      const selectionOffsets = getSelectionOffsets(root);
-      if (!selectionOffsets) return null;
-
-      return {
-        start: showWhitespace
-          ? displayedOffsetToRawOffset(displayedText, selectionOffsets.start)
-          : selectionOffsets.start,
-        end: showWhitespace
-          ? displayedOffsetToRawOffset(displayedText, selectionOffsets.end)
-          : selectionOffsets.end,
-      };
-    };
-
-    const syncLastRawSelectionFromEditor = () => {
-      const root = textareaRef.current;
-      if (!root) return;
-
-      const selection = getCurrentRawSelectionFromEditor(root);
-      if (!selection) return;
-
-      const displayedText = root.innerText;
-      const rawText = showWhitespace
-        ? fromWhitespaceDisplayText(displayedText)
-        : displayedText;
-
-      lastRawSelectionRef.current = {
-        start: Math.max(0, Math.min(selection.start, rawText.length)),
-        end: Math.max(0, Math.min(selection.end, rawText.length)),
-      };
-    };
-
-    const setSelectionOffsets = (root: HTMLElement, start: number, end: number) => {
-      const selection = window.getSelection();
-      if (!selection) return;
-
-      const startPoint = resolveNodeAndOffset(root, Math.max(0, start));
-      const endPoint = resolveNodeAndOffset(root, Math.max(0, end));
-      const range = document.createRange();
-      range.setStart(startPoint.node, startPoint.nodeOffset);
-      range.setEnd(endPoint.node, endPoint.nodeOffset);
-      selection.removeAllRanges();
-      selection.addRange(range);
+      view.focus();
     };
 
     const getEditorCaretOffset = useCallback((): number | null => {
       if (viewMode === 'raw' || viewMode === 'markdown') {
-        return getCaretOffset(textareaRef.current);
+        return editorViewRef.current?.state.selection.main.head ?? null;
       }
       if (viewMode === 'wysiwyg') {
         // DOM-to-markdown offset mapping is ambiguous in WYSIWYG mode;
@@ -545,10 +529,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     }, [maybeHandleSuggestionHotkey]);
 
     useEffect(() => {
+      if (viewMode !== 'wysiwyg') return;
       const onSelectionChange = () => {
-        if (viewMode === 'raw' || viewMode === 'markdown') {
-          syncLastRawSelectionFromEditor();
-        } else if (viewMode === 'wysiwyg' && wysiwygRef.current) {
+        if (wysiwygRef.current) {
           const selection = window.getSelection();
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
@@ -558,21 +541,30 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           }
         }
       };
-
       document.addEventListener('selectionchange', onSelectionChange);
       return () => document.removeEventListener('selectionchange', onSelectionChange);
-    }, [viewMode, showWhitespace]);
+    }, [viewMode]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (maybeHandleSuggestionHotkey(e)) return;
 
-      // Basic Enter handling to prevent div insertion, ensuring clean newlines
-      if (e.key === 'Enter') {
-        // Keep native behavior in raw mode; newline normalization happens
-        // during content extraction.
-      }
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         setTimeout(checkContext, 0);
+      }
+
+      // Visual mode: intercept Enter to implement the soft-break / paragraph
+      // semantics that match MD mode:
+      //  • Plain Enter  → soft line-break (inserts <br>, stored as '\n')
+      //  • Shift+Enter  → new paragraph   (stored as '\n\n')
+      // We leave the browser default Enter-in-paragraph behaviour alone;
+      // instead we always insert a <br> and let turndown (with its softBreak
+      // rule) convert it back to a single '\n'.  A second Enter therefore
+      // inserts another <br> which becomes a second '\n' — markdown '\n\n' —
+      // which is a paragraph in readback.
+      if (viewMode === 'wysiwyg' && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        document.execCommand('insertLineBreak');
+        handleWysiwygInput();
       }
     };
 
@@ -704,9 +696,14 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         handleWysiwygInput();
         checkContext();
       } else {
-        // Raw mode formatting insertion
-        if (!textareaRef.current) return;
-        const el = textareaRef.current;
+        // Raw / Markdown mode formatting via CodeMirror dispatch
+        const view = editorViewRef.current;
+        if (!view) return;
+
+        const rawText = view.state.doc.toString();
+        const { anchor, head } = view.state.selection.main;
+        const rawStart = Math.min(anchor, head);
+        const rawEnd = Math.max(anchor, head);
 
         if (
           type === 'h1' ||
@@ -716,104 +713,38 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           type === 'ul' ||
           type === 'ol'
         ) {
-          toggleBlockAtCaret(type);
+          toggleBlockAtCaret(type as MarkdownBlockType);
           checkContext();
           return;
         }
 
         if (type === 'bold' || type === 'italic') {
-          const displayedText = el.innerText;
-          const rawText = showWhitespace
-            ? fromWhitespaceDisplayText(displayedText)
-            : displayedText;
-          const currentRawSelection = getCurrentRawSelectionFromEditor(el);
-
-          const { start: rawStart, end: rawEnd } = resolveInlineSelection(
-            currentRawSelection,
-            lastRawSelectionRef.current,
-            rawText.length
-          );
-
           const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
             rawText,
             rawStart,
             rawEnd,
             type as InlineFormatType
           );
-
-          lastRawSelectionRef.current = { start: nextStart, end: nextEnd };
-
-          onChange(chapter.id, { content: nextRawText });
-
-          window.requestAnimationFrame(() => {
-            const root = textareaRef.current;
-            if (!root) return;
-            root.focus();
-            const displayedStart = rawOffsetToDisplayedOffset(
-              nextRawText,
-              nextStart,
-              !!showWhitespace
-            );
-            const displayedEnd = rawOffsetToDisplayedOffset(
-              nextRawText,
-              nextEnd,
-              !!showWhitespace
-            );
-            setSelectionOffsets(root, displayedStart, displayedEnd);
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextStart, head: nextEnd },
           });
-
+          view.focus();
           checkContext();
           return;
         }
 
-        el.focus();
-
-        let prefix = '';
-        let suffix = '';
-
-        const displayedText = el.innerText;
-        const rawText = showWhitespace
-          ? fromWhitespaceDisplayText(displayedText)
-          : displayedText;
-        const currentRawSelection = getCurrentRawSelectionFromEditor(el);
-        const { start: rawStart, end: rawEnd } = resolveInlineSelection(
-          currentRawSelection,
-          lastRawSelectionRef.current,
-          rawText.length
-        );
-        const selectedText = rawText.slice(rawStart, rawEnd);
-
-        switch (type) {
-          case 'link':
-            prefix = '[';
-            suffix = `](${selectedText ? '' : 'url'})`;
-            break;
-          case 'image':
-            prefix = '![';
-            suffix = `](${selectedText ? '' : 'url'})`;
-            break;
+        if (type === 'link' || type === 'image') {
+          const selectedText = rawText.slice(rawStart, rawEnd);
+          const prefix = type === 'image' ? '![' : '[';
+          const suffix = `](${selectedText ? '' : 'url'})`;
+          const insert = prefix + selectedText + suffix;
+          view.dispatch({
+            changes: { from: rawStart, to: rawEnd, insert },
+            selection: { anchor: rawStart + insert.length },
+          });
+          view.focus();
         }
-
-        // We re-focus to ensure execCommand targets the right place,
-        // and we select the exact rawStart/rawEnd just like the bold/italic formatting does
-        // to handle focus loss correctly before insertText.
-        const displayedStart = rawOffsetToDisplayedOffset(
-          rawText,
-          rawStart,
-          !!showWhitespace
-        );
-        const displayedEnd = rawOffsetToDisplayedOffset(
-          rawText,
-          rawEnd,
-          !!showWhitespace
-        );
-        setSelectionOffsets(el, displayedStart, displayedEnd);
-
-        document.execCommand('insertText', false, prefix + selectedText + suffix);
-        const nextContent = showWhitespace
-          ? fromWhitespaceDisplayText(el.innerText)
-          : el.innerText;
-        onChange(chapter.id, { content: nextContent });
       }
     };
 
@@ -822,7 +753,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         insertImageMarkdown(filename, url, altText),
       focus: () => {
         if (viewMode === 'wysiwyg') wysiwygRef.current?.focus();
-        else textareaRef.current?.focus();
+        else editorViewRef.current?.focus();
       },
       format: (type: string) => format(type),
     }));
@@ -853,7 +784,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const commonTextStyle: React.CSSProperties = {
       fontFamily: 'inherit',
       fontSize: 'inherit',
-      lineHeight: '1.6',
+      lineHeight: '1.75',
       padding: '0px',
       margin: '0',
       border: 'none',
@@ -1025,12 +956,20 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           >
             {/* Toolbar - Removed Image Icon here */}
             {/* Title Input */}
-            <PlainTextEditable
-              value={chapter.title}
-              onChange={(val: string) => onChange(chapter.id, { title: val })}
-              className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors block"
+            <textarea
+              value={localTitle}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\n/g, '');
+                setLocalTitle(val);
+                if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+                titleDebounceRef.current = setTimeout(() => {
+                  onChange(chapter.id, { title: val });
+                }, DEBOUNCE_MS);
+              }}
+              rows={1}
+              className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
               placeholder="Chapter Title"
-              debounceMs={300}
+              spellCheck={false}
               style={{
                 ...commonTextStyle,
                 fontSize: '1.8em',
@@ -1047,6 +986,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 ref={wysiwygRef}
                 contentEditable
                 onInput={handleWysiwygInput}
+                onBlur={handleWysiwygBlur}
                 onMouseUp={checkContext}
                 onKeyDown={handleKeyDown}
                 onKeyUp={(e) => {
@@ -1054,30 +994,33 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 }}
                 className={`prose-editor outline-none w-full ${
                   viewMode === 'wysiwyg' ? 'block' : 'hidden'
-                }`}
-                style={{ ...commonTextStyle }}
+                }${showWhitespace ? ' prose-editor-ws' : ''}`}
+                style={{ ...commonTextStyle, whiteSpace: 'normal' }}
               />
 
               {/* Raw / Markdown View */}
               {(viewMode === 'raw' || viewMode === 'markdown') && (
                 <div id="raw-markdown-editor" className="relative w-full flex flex-col">
-                  <PlainTextEditable
-                    ref={textareaRef}
-                    value={chapter.content}
+                  <CodeMirrorEditor
+                    ref={editorViewRef}
+                    value={localContent}
                     onChange={(val: string) => {
-                      onChange(chapter.id, { content: val });
+                      setLocalContent(val);
                       checkContext();
+                      if (contentDebounceRef.current)
+                        clearTimeout(contentDebounceRef.current);
+                      contentDebounceRef.current = setTimeout(() => {
+                        onChange(chapter.id, { content: val });
+                      }, DEBOUNCE_MS);
                     }}
-                    onSelect={checkContext}
-                    onKeyDown={handleKeyDown}
-                    className="w-full bg-transparent text-inherit outline-none"
-                    placeholder="Start writing your chapter here..."
+                    onSelectionChange={checkContext}
+                    mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
-                    markdownHighlight={viewMode === 'markdown'}
-                    debounceMs={300}
+                    enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
+                    placeholder="Start writing your chapter here..."
+                    className="w-full"
                     style={{
                       ...commonTextStyle,
-                      color: showWhitespace ? 'inherit' : 'inherit',
                       caretColor: textColor,
                     }}
                   />

@@ -39,7 +39,7 @@ import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { SourcebookRelationDialog } from './SourcebookRelationDialog';
 import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for relations
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
-import { PlainTextEditable } from '../editor/PlainTextEditable';
+import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { useThemeClasses } from '../layout/ThemeContext';
 
 const CATEGORY_DETAILS: Record<
@@ -696,13 +696,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               <div
                 className={`rounded-md border ${inputBorderClass} ${descriptionSurfaceClass} ${descriptionTextClass} flex-1 min-h-[220px] overflow-y-auto`}
               >
-                <PlainTextEditable
+                <CodeMirrorEditor
                   value={description}
                   onChange={setDescription}
-                  className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass} ${descriptionPlaceholderClass}`}
+                  mode="markdown"
+                  className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass}`}
                   placeholder="Detailed description, personality traits, history, rules, and constraints the AI should remember..."
-                  markdownHighlight
-                  debounceMs={300}
                   style={{ minHeight: '220px' }}
                 />
               </div>

@@ -100,6 +100,10 @@
       }
 
       /* Editor Styles for WYSIWYG */
+      .prose-editor {
+        line-height: 1.75;
+      }
+
       .prose-editor:focus {
         outline: none;
       }
@@ -113,7 +117,7 @@
       }
 
       .prose-editor p {
-        margin: 0.5em 0;
+        margin: 1em 0;
       }
 
       .prose-editor blockquote {
@@ -196,6 +200,19 @@
 
       .prose-editor tr:nth-child(even) {
         background-color: rgba(0, 0, 0, 0.1);
+      }
+
+      /* WS mode: show pilcrow (¶) at the end of each paragraph and heading */
+      .prose-editor-ws p::after,
+      .prose-editor-ws h1::after,
+      .prose-editor-ws h2::after,
+      .prose-editor-ws h3::after {
+        content: ' ¶';
+        opacity: 0.35;
+        font-style: normal;
+        font-weight: normal;
+        pointer-events: none;
+        user-select: none;
       }
     </style>
   </head>

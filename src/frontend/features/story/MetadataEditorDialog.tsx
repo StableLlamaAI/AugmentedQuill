@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
-import { PlainTextEditable } from '../editor/PlainTextEditable';
+import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -650,13 +650,12 @@ export function MetadataEditorDialog({
                     Use notes for facts, intentions, foreshadowing, and constraints that
                     should inform CHAT, EDITING, and WRITING.
                   </div>
-                  <PlainTextEditable
+                  <CodeMirrorEditor
                     value={data.notes || ''}
                     onChange={(val) => setData({ ...data, notes: val })}
-                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
+                    mode="markdown"
+                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
-                    markdownHighlight
-                    debounceMs={300}
                     style={{ minHeight: '300px' }}
                   />
                 </div>
@@ -670,13 +669,12 @@ export function MetadataEditorDialog({
                     Keep private reminders, spoilers, and experiments here when they
                     should stay outside model context.
                   </div>
-                  <PlainTextEditable
+                  <CodeMirrorEditor
                     value={data.private_notes || ''}
                     onChange={(val) => setData({ ...data, private_notes: val })}
-                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
+                    mode="markdown"
+                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
-                    markdownHighlight
-                    debounceMs={300}
                     style={{ minHeight: '300px' }}
                   />
                 </div>

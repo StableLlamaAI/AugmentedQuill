@@ -13,46 +13,6 @@ export type MarkdownBlockType = 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol';
 export type InlineFormatType = 'bold' | 'italic';
 export type TextSelectionRange = { start: number; end: number };
 
-export const displayedOffsetToRawOffset = (
-  displayed: string,
-  displayedOffset: number
-): number => {
-  let d = 0;
-  let r = 0;
-
-  while (d < displayed.length && d < displayedOffset) {
-    const nextTwo = displayed.slice(d, d + 2);
-    if (nextTwo === '·\u200b' || nextTwo === '→\t' || nextTwo === '¶\n') {
-      d += 2;
-      r += 1;
-      continue;
-    }
-    d += 1;
-    r += 1;
-  }
-
-  return r;
-};
-
-export const rawOffsetToDisplayedOffset = (
-  raw: string,
-  rawOffset: number,
-  showWhitespace: boolean
-): number => {
-  if (!showWhitespace) return rawOffset;
-
-  let displayedOffset = 0;
-  for (let i = 0; i < Math.min(raw.length, rawOffset); i += 1) {
-    const ch = raw[i];
-    if (ch === ' ' || ch === '\t' || ch === '\n') {
-      displayedOffset += 2;
-    } else {
-      displayedOffset += 1;
-    }
-  }
-  return displayedOffset;
-};
-
 export const getLineAtOffset = (text: string, offset: number): string => {
   const safeOffset = Math.max(0, Math.min(offset, text.length));
   const lineStart = text.lastIndexOf('\n', Math.max(0, safeOffset - 1)) + 1;

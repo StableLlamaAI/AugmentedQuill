@@ -13,11 +13,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyInlineFormatAtSelection,
-  displayedOffsetToRawOffset,
   getBlockType,
   getLineAtOffset,
   isInlineFormatActiveAtSelection,
-  rawOffsetToDisplayedOffset,
   resolveInlineSelection,
   toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
@@ -60,24 +58,6 @@ describe('markdownToolbarUtils', () => {
     const caret = 5;
     const { nextRawText } = toggleBlockAtOffset(raw, caret, 'h2');
     expect(nextRawText).toBe('## quoted text');
-  });
-
-  it('maps raw offsets to displayed offsets when WS is active', () => {
-    const raw = 'a b\tc\n';
-    expect(rawOffsetToDisplayedOffset(raw, 0, true)).toBe(0);
-    expect(rawOffsetToDisplayedOffset(raw, 1, true)).toBe(1);
-    expect(rawOffsetToDisplayedOffset(raw, 2, true)).toBe(3);
-    expect(rawOffsetToDisplayedOffset(raw, 4, true)).toBe(6);
-    expect(rawOffsetToDisplayedOffset(raw, raw.length, true)).toBe(9);
-  });
-
-  it('maps displayed offsets back to raw offsets for WS markers', () => {
-    const display = 'a·\u200bb→\tc¶\n';
-    expect(displayedOffsetToRawOffset(display, 0)).toBe(0);
-    expect(displayedOffsetToRawOffset(display, 1)).toBe(1);
-    expect(displayedOffsetToRawOffset(display, 3)).toBe(2);
-    expect(displayedOffsetToRawOffset(display, 6)).toBe(4);
-    expect(displayedOffsetToRawOffset(display, display.length)).toBe(6);
   });
 
   it('wraps selected text for bold formatting', () => {
