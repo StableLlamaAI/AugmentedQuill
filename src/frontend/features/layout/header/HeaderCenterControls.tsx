@@ -14,15 +14,21 @@ import {
   Bold,
   ChevronDown,
   Code,
+  Code2,
   Eye,
   FileEdit,
   FileText,
+  Hash,
+  Image as ImageIcon,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
   Pilcrow,
   Quote,
+  Strikethrough,
+  Subscript,
+  Superscript,
   Type,
   Wand2,
 } from 'lucide-react';
@@ -67,6 +73,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     setIsFormatMenuOpen,
     isMobileFormatMenuOpen,
     setIsMobileFormatMenuOpen,
+    onOpenImages,
   } = formatControls;
   const { handleAiAction, isAiActionLoading, isWritingAvailable } = aiControls;
   const writingUnavailableReason =
@@ -285,11 +292,53 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           <Italic size={16} />
         </button>
         <button
+          onClick={() => handleFormat('strikethrough')}
+          className={getFormatButtonClass('strikethrough')}
+          title="Strikethrough"
+        >
+          <Strikethrough size={16} />
+        </button>
+        <button
+          onClick={() => handleFormat('subscript')}
+          className={getFormatButtonClass('subscript')}
+          title="Subscript"
+        >
+          <Subscript size={16} />
+        </button>
+        <button
+          onClick={() => handleFormat('superscript')}
+          className={getFormatButtonClass('superscript')}
+          title="Superscript"
+        >
+          <Superscript size={16} />
+        </button>
+        <button
           onClick={() => handleFormat('link')}
           className={getFormatButtonClass('link')}
           title="Link"
         >
           <LinkIcon size={16} />
+        </button>
+        <button
+          onClick={onOpenImages}
+          className={getFormatButtonClass('image')}
+          title="Insert Image"
+        >
+          <ImageIcon size={16} />
+        </button>
+        <button
+          onClick={() => handleFormat('footnote')}
+          className={getFormatButtonClass('footnote')}
+          title="Footnote"
+        >
+          <Hash size={14} />
+        </button>
+        <button
+          onClick={() => handleFormat('codeblock')}
+          className={getFormatButtonClass('codeblock')}
+          title="Fenced Code Block"
+        >
+          <Code2 size={16} />
         </button>
 
         <div className={`w-px h-4 mx-1 ${dividerColor}`}></div>
@@ -368,7 +417,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
                   Style
                 </div>
-                <div className="flex gap-1 justify-between">
+                <div className="flex gap-1 justify-between flex-wrap">
                   <button
                     onClick={() => handleFormat('bold')}
                     className={`flex-1 flex justify-center ${getFormatButtonClass('bold')}`}
@@ -382,10 +431,52 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                     <Italic size={16} />
                   </button>
                   <button
+                    onClick={() => handleFormat('strikethrough')}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('strikethrough')}`}
+                    title="Strikethrough"
+                  >
+                    <Strikethrough size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleFormat('subscript')}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('subscript')}`}
+                    title="Subscript"
+                  >
+                    <Subscript size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleFormat('superscript')}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('superscript')}`}
+                    title="Superscript"
+                  >
+                    <Superscript size={16} />
+                  </button>
+                  <button
                     onClick={() => handleFormat('link')}
                     className={`flex-1 flex justify-center ${getFormatButtonClass('link')}`}
                   >
                     <LinkIcon size={16} />
+                  </button>
+                  <button
+                    onClick={onOpenImages}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('image')}`}
+                    title="Insert Image"
+                  >
+                    <ImageIcon size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleFormat('footnote')}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('footnote')}`}
+                    title="Footnote"
+                  >
+                    <Hash size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleFormat('codeblock')}
+                    className={`flex-1 flex justify-center ${getFormatButtonClass('codeblock')}`}
+                    title="Code Block"
+                  >
+                    <Code2 size={16} />
                   </button>
                 </div>
               </div>

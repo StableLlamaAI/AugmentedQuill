@@ -385,6 +385,7 @@ const App: React.FC = () => {
             setIsFormatMenuOpen,
             isMobileFormatMenuOpen,
             setIsMobileFormatMenuOpen,
+            onOpenImages: () => setIsImagesOpen(true),
           }}
           aiControls={{
             handleAiAction,

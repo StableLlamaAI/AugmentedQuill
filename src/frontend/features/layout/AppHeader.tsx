@@ -13,7 +13,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeContext';
 import {
   ChevronDown,
-  Image as ImageIcon,
   Menu,
   PanelRightClose,
   PanelRightOpen,
@@ -298,16 +297,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       />
 
       <div className="flex items-center space-x-2 shrink-0">
-        <Button
-          theme={currentTheme}
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsImagesOpen(true)}
-          title="Images"
-          className="hidden sm:inline-flex mr-1"
-        >
-          <ImageIcon size={18} />
-        </Button>
         <Button
           theme={currentTheme}
           variant="ghost"

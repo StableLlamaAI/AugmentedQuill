@@ -39,10 +39,13 @@ import { notifyError } from '../../services/errorNotifier';
 import { marked } from 'marked';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { createEditorTurndownService } from './turndown';
+import { configureMarked } from './configureMarked';
 import {
   applyInlineFormatAtSelection,
   getBlockType,
   getLineAtOffset,
+  insertFencedCodeBlock,
+  insertFootnote,
   isInlineFormatActiveAtSelection,
   resolveInlineSelection,
   toggleBlockAtOffset,
@@ -51,6 +54,9 @@ import {
   MarkdownBlockType,
   TextSelectionRange,
 } from './markdownToolbarUtils';
+
+// Configure marked extensions once (subscript, superscript, footnotes).
+configureMarked();
 
 interface EditorProps {
   chapter: Chapter;
@@ -381,8 +387,46 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       const isWysiwyg = viewMode === 'wysiwyg';
 
       if (isWysiwyg) {
+        // Walk the DOM from the selection anchor to detect formatting applied
+        // either via execCommand or via markdown→HTML rendering.  queryCommandState
+        // is unreliable for elements that were not inserted by execCommand itself
+        // (e.g. <sub>/<sup>/<del> coming from marked).
+        const selAnchor = window.getSelection()?.anchorNode ?? null;
+        const isInsideTag = (tags: string[]): boolean => {
+          let node: Node | null = selAnchor;
+          while (node && node !== wysiwygRef.current) {
+            if (
+              node.nodeType === Node.ELEMENT_NODE &&
+              tags.includes((node as Element).tagName)
+            )
+              return true;
+            node = node.parentNode;
+          }
+          return false;
+        };
+
         if (document.queryCommandState('bold')) formats.push('bold');
         if (document.queryCommandState('italic')) formats.push('italic');
+        // strikeThrough: prefer DOM walk so <del> from markdown is detected.
+        if (isInsideTag(['DEL', 'S', 'STRIKE'])) formats.push('strikethrough');
+        // subscript/superscript: queryCommandState is unreliable for <sub>/<sup>
+        // rendered from markdown; always use DOM walk.
+        if (isInsideTag(['SUB'])) formats.push('subscript');
+        // Superscript: exclude footnote-ref <sup> (class="footnote-ref")
+        const insideNonFootnoteSup = (() => {
+          let node: Node | null = selAnchor;
+          while (node && node !== wysiwygRef.current) {
+            if (
+              node.nodeType === Node.ELEMENT_NODE &&
+              (node as Element).tagName === 'SUP'
+            ) {
+              return !(node as Element).classList.contains('footnote-ref');
+            }
+            node = node.parentNode;
+          }
+          return false;
+        })();
+        if (insideNonFootnoteSup) formats.push('superscript');
         if (document.queryCommandState('insertUnorderedList')) formats.push('ul');
         if (document.queryCommandState('insertOrderedList')) formats.push('ol');
         const formatBlock = document.queryCommandValue('formatBlock');
@@ -407,6 +451,14 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             formats.push('bold');
           if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
             formats.push('italic');
+          if (
+            isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'strikethrough')
+          )
+            formats.push('strikethrough');
+          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'subscript'))
+            formats.push('subscript');
+          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'superscript'))
+            formats.push('superscript');
 
           lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
         }
@@ -647,6 +699,25 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     const format = (type: string) => {
       if (viewMode === 'wysiwyg') {
+        // DOM helpers for sub/sup toggle and mutual-exclusion unwrapping.
+        const findWysiwygAncestor = (tags: string[]): Element | null => {
+          let node: Node | null = window.getSelection()?.anchorNode ?? null;
+          while (node && node !== wysiwygRef.current) {
+            if (
+              node.nodeType === Node.ELEMENT_NODE &&
+              tags.includes((node as Element).tagName)
+            )
+              return node as Element;
+            node = node.parentNode;
+          }
+          return null;
+        };
+        const unwrapWysiwygEl = (el: Element): void => {
+          const p = el.parentNode!;
+          while (el.firstChild) p.insertBefore(el.firstChild, el);
+          p.removeChild(el);
+        };
+
         switch (type) {
           case 'bold':
             applyInlineWysiwygFormat('bold');
@@ -654,6 +725,77 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           case 'italic':
             applyInlineWysiwygFormat('italic');
             break;
+          case 'strikethrough':
+            withRestoredWysiwygSelection(() => document.execCommand('strikeThrough'));
+            break;
+          case 'subscript': {
+            withRestoredWysiwygSelection(() => {
+              const subEl = findWysiwygAncestor(['SUB']);
+              if (subEl) {
+                // Already subscript — toggle off by unwrapping.
+                unwrapWysiwygEl(subEl);
+              } else {
+                // Remove any enclosing superscript first (mutual exclusion).
+                const supEl = findWysiwygAncestor(['SUP']);
+                if (supEl && !supEl.classList.contains('footnote-ref'))
+                  unwrapWysiwygEl(supEl);
+                document.execCommand('subscript');
+              }
+            });
+            break;
+          }
+          case 'superscript': {
+            withRestoredWysiwygSelection(() => {
+              const supEl = findWysiwygAncestor(['SUP']);
+              if (supEl && !supEl.classList.contains('footnote-ref')) {
+                // Already superscript — toggle off by unwrapping.
+                unwrapWysiwygEl(supEl);
+              } else {
+                // Remove any enclosing subscript first (mutual exclusion).
+                const subEl = findWysiwygAncestor(['SUB']);
+                if (subEl) unwrapWysiwygEl(subEl);
+                document.execCommand('superscript');
+              }
+            });
+            break;
+          }
+          case 'codeblock': {
+            withRestoredWysiwygSelection(() => {
+              const sel = window.getSelection();
+              if (sel && sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                const selectedText = range.toString();
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                code.textContent = selectedText || '';
+                pre.appendChild(code);
+                range.deleteContents();
+                range.insertNode(pre);
+              }
+            });
+            break;
+          }
+          case 'footnote': {
+            // Determine next footnote number from current content.
+            const currentMd =
+              turndownService.current?.turndown(wysiwygRef.current?.innerHTML ?? '') ??
+              '';
+            const existing = currentMd.match(/\[\^(\d+)\]/g) ?? [];
+            const maxNum = existing.reduce((max, m) => {
+              const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
+              return n > max ? n : max;
+            }, 0);
+            const fn = maxNum + 1;
+            withRestoredWysiwygSelection(() => {
+              const refHtml = `<sup class="footnote-ref" id="fnref-${fn}"><a href="#fn-${fn}">[${fn}]</a></sup>`;
+              document.execCommand('insertHTML', false, refHtml);
+            });
+            if (wysiwygRef.current) {
+              const defHtml = `<p class="footnote-def" id="fn-${fn}"><sup>[${fn}]</sup>\u00a0(footnote text) <a href="#fnref-${fn}" class="footnote-backref">\u21a9</a></p>`;
+              wysiwygRef.current.insertAdjacentHTML('beforeend', defHtml);
+            }
+            break;
+          }
           case 'h1':
             withRestoredWysiwygSelection(() =>
               document.execCommand('formatBlock', false, 'H1')
@@ -726,7 +868,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           return;
         }
 
-        if (type === 'bold' || type === 'italic') {
+        if (
+          type === 'bold' ||
+          type === 'italic' ||
+          type === 'strikethrough' ||
+          type === 'subscript' ||
+          type === 'superscript'
+        ) {
           const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
             rawText,
             rawStart,
@@ -752,6 +900,31 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             selection: { anchor: rawStart + insert.length },
           });
           view.focus();
+          return;
+        }
+
+        if (type === 'codeblock') {
+          const { nextRawText, nextStart, nextEnd } = insertFencedCodeBlock(
+            rawText,
+            rawStart,
+            rawEnd
+          );
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextStart, head: nextEnd },
+          });
+          view.focus();
+          return;
+        }
+
+        if (type === 'footnote') {
+          const { nextRawText, nextCaret } = insertFootnote(rawText, rawStart);
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextCaret },
+          });
+          view.focus();
+          return;
         }
       }
     };
