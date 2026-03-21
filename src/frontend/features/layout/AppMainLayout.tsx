@@ -160,6 +160,17 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const headerBg = isLight ? 'bg-brand-gray-100/50' : 'bg-brand-gray-800/30';
   const textColor = isLight ? 'text-brand-gray-600' : 'text-brand-gray-400';
 
+  // Make the track less visible while keeping the handle itself accentuated.
+  const resizerBase = isLight ? 'bg-brand-gray-200/18' : 'bg-brand-gray-800/20';
+  const resizerHover = isLight
+    ? 'hover:bg-brand-gray-300/30'
+    : 'hover:bg-brand-gray-700/30';
+  const resizerActive = isLight ? 'bg-brand-gray-300/38' : 'bg-brand-gray-700/38';
+
+  // Chapter-selection style (yellow/red) for the handle icon.
+  const gripDefault = isLight ? 'text-amber-500' : 'text-rose-400';
+  const gripActive = isLight ? 'text-amber-600' : 'text-rose-300';
+
   return (
     <div
       ref={sectionRef}
@@ -189,12 +200,14 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       )}
       {!isLast && !isCollapsed && (
         <div
-          className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center hover:bg-brand-500/20 transition-colors shrink-0 group ${isResizing ? 'bg-brand-500/30' : ''}`}
+          className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
           onMouseDown={startResizing}
+          aria-label={`Resize ${title} section`}
+          role="separator"
         >
           <GripHorizontal
             size={12}
-            className={`text-brand-gray-500 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100' : ''}`}
+            className={`${isResizing ? gripActive : gripDefault} opacity-70 group-hover:opacity-100 transition-opacity`}
           />
         </div>
       )}
