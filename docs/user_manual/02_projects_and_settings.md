@@ -1,6 +1,21 @@
 # Projects and Settings
 
-To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has two main tabs: **Projects** and **Machine Settings**.
+To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has three main tabs: **Projects**, **Machine Settings**, and **About**.
+
+## The About Tab
+
+The About tab provides version and runtime information about AugmentedQuill and the environment it is running in:
+
+- **Version** (from `src/frontend/package.json`)
+- **Git revision** (short commit hash)
+- **Built** timestamp
+- **Python version** (build environment)
+- **Node version** (build environment)
+- **Browser user agent** (runtime client browser)
+- **License** and **copyright** notice
+- **GitHub project** link
+
+This tab is useful for troubleshooting, bug reports, and confirming exactly which code and dependencies are in use.
 
 ## The Projects Tab
 
