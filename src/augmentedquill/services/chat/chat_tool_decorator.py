@@ -104,6 +104,7 @@ def chat_tool(
     allowed_roles: tuple[str, ...] | list[str] | None = None,
     capability: str | None = None,
     project_types: tuple[str, ...] | list[str] | None = None,
+    opt_in: bool = False,
 ) -> Callable:
     """
     Decorator for chat tools with automatic schema generation from Pydantic models.
@@ -115,6 +116,9 @@ def chat_tool(
         capability: Optional internal capability label used for tests and routing
         project_types: If set, only expose this tool for the listed project types
             (e.g. ``("series",)``).  None means available for all project types.
+        opt_in: If True, this tool is never included in the default schema.  It
+            must be requested explicitly (e.g. via get_opt_in_tool_schemas) and
+            is still executable when called.
 
     The decorated function should have signature:
         async def tool_fn(params: ParamsModel, payload: dict, mutations: dict) -> dict
@@ -268,6 +272,7 @@ def chat_tool(
             "allowed_roles": normalized_roles,
             "capability": capability,
             "project_types": tuple(project_types) if project_types else None,
+            "opt_in": opt_in,
         }
 
         return wrapper
@@ -283,6 +288,8 @@ def get_tool_schemas(
     normalized_role = normalize_model_role(model_type) if model_type else None
     schemas: list[dict] = []
     for info in _TOOL_REGISTRY.values():
+        if info.get("opt_in"):
+            continue
         if normalized_role and normalized_role not in info.get(
             "allowed_roles", MODEL_ROLES
         ):
@@ -293,6 +300,16 @@ def get_tool_schemas(
                 continue
         schemas.append(deepcopy(info["schema"]))
     return schemas
+
+
+def get_opt_in_tool_schemas(capability: str) -> list[dict]:
+    """Return schemas for opt-in tools matching a specific capability label."""
+    ensure_tool_registry_loaded()
+    return [
+        deepcopy(info["schema"])
+        for info in _TOOL_REGISTRY.values()
+        if info.get("opt_in") and info.get("capability") == capability
+    ]
 
 
 def get_tool_function(name: str) -> Callable | None:
