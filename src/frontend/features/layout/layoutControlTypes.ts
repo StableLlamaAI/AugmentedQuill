@@ -65,6 +65,7 @@ export type HeaderFormatControls = {
   setIsFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
   isMobileFormatMenuOpen: boolean;
   setIsMobileFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  onOpenImages: () => void;
 };
 
 export type HeaderAiControls = {

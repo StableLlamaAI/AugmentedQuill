@@ -16,6 +16,7 @@ import {
   Monitor,
   Moon,
   Palette,
+  SlidersHorizontal,
   SplitSquareHorizontal,
   Sun,
   Type,
@@ -90,12 +91,10 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         variant={isAppearanceOpen ? 'secondary' : 'ghost'}
         size="sm"
         onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-        icon={<Type size={16} />}
+        icon={<SlidersHorizontal size={16} />}
         title="Page Appearance"
         className="hidden sm:inline-flex"
-      >
-        Appearance
-      </Button>
+      />
 
       {isAppearanceOpen && (
         <div

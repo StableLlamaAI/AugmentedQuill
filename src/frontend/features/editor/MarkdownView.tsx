@@ -14,6 +14,10 @@ import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { configureMarked } from './configureMarked';
+
+// Configure marked extensions (subscript, superscript, footnotes) once.
+configureMarked();
 
 interface MarkdownViewProps {
   content?: string | null;
@@ -53,8 +57,8 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
 
     const rawHtml = marked.parse(safeContent) as string;
     return DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['img'],
-      ADD_ATTR: ['src', 'alt', 'title', 'class'],
+      ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code'],
+      ADD_ATTR: ['src', 'alt', 'title', 'class', 'id', 'href'],
     });
   }, [safeContent, simple]);
 

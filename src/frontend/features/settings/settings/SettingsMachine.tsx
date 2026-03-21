@@ -119,33 +119,46 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
 
   const renderSlider = (
     label: string,
-    field: 'temperature' | 'topP',
+    field: 'temperature' | 'topP' | 'minP',
     min: number,
     max: number,
-    step: number
+    step: number,
+    tooltip?: string
   ) => {
     if (!activeProvider) return null;
+    const disabled = !!activeProvider.presetId;
     return (
-      <div className="space-y-2">
+      <div className={`space-y-2 ${disabled ? 'opacity-60' : ''}`}>
         <div
           className={`flex justify-between text-xs ${
             isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
           }`}
         >
-          <span>{label}</span> <span>{activeProvider[field]}</span>
+          <span
+            title={tooltip}
+            className={
+              tooltip
+                ? 'cursor-help underline decoration-dotted underline-offset-2'
+                : ''
+            }
+          >
+            {label}
+          </span>
+          <span>{activeProvider[field] ?? 0}</span>
         </div>
         <input
           type="range"
           min={min}
           max={max}
           step={step}
-          value={activeProvider[field]}
+          value={activeProvider[field] ?? 0}
+          disabled={disabled}
           onChange={(e) =>
             onUpdateProvider(activeProvider.id, {
               [field]: Number(e.target.value),
             })
           }
-          className="w-full accent-brand-500"
+          className={`w-full accent-brand-500 ${disabled ? 'cursor-not-allowed' : ''}`}
         />
       </div>
     );
@@ -215,15 +228,25 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
       | 'presencePenalty'
       | 'frequencyPenalty'
       | 'seed'
-      | 'topK'
-      | 'minP',
-    placeholder = ''
+      | 'topK',
+    placeholder = '',
+    tooltip?: string
   ) => {
     if (!activeProvider) return null;
+    const disabled = !!activeProvider.presetId;
     return (
-      <div className="space-y-1">
+      <div className={`space-y-1 ${disabled ? 'opacity-60' : ''}`}>
         <label className="text-xs font-medium text-brand-gray-500 uppercase">
-          {label}
+          <span
+            title={tooltip}
+            className={
+              tooltip
+                ? 'cursor-help underline decoration-dotted underline-offset-2'
+                : ''
+            }
+          >
+            {label}
+          </span>
         </label>
         <input
           type="number"
@@ -237,6 +260,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
           }
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
+          disabled={disabled}
           onChange={(e) => {
             const raw = e.target.value;
             onUpdateProvider(activeProvider.id, {
@@ -244,9 +268,13 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
             });
           }}
           className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-            isLight
-              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+            disabled
+              ? isLight
+                ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
+                : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
+              : isLight
+                ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
           }`}
         />
       </div>
@@ -621,203 +649,179 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                 </div>
               </div>
 
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between">
+                  <span>Model ID</span>
+                  <span className="text-xs text-brand-gray-400">
+                    You can type a custom model id
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    data-no-smart-quotes="true"
+                    value={activeProvider.modelId}
+                    onFocus={() => setModelPickerOpenFor(activeProvider.id)}
+                    onBlur={() => {
+                      // allow click selection to run first
+                      setTimeout(() => setModelPickerOpenFor(null), 120);
+                    }}
+                    onChange={(e) => {
+                      const nextModelId = e.target.value;
+                      onUpdateProvider(activeProvider.id, {
+                        modelId: nextModelId,
+                      });
+                      const suggested = suggestPresetForModelId(nextModelId);
+                      setSuggestedPresetByProvider((previous) => ({
+                        ...previous,
+                        [activeProvider.id]: suggested?.id || null,
+                      }));
+                    }}
+                    placeholder="Select or type a model id"
+                    className={`w-full border rounded p-2 pr-9 text-sm focus:border-brand-500 focus:outline-none ${
+                      isLight
+                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const models = modelLists[activeProvider.id] || [];
+                      if (models.length === 0) return;
+                      setModelPickerOpenFor((cur) =>
+                        cur === activeProvider.id ? null : activeProvider.id
+                      );
+                    }}
+                    disabled={(modelLists[activeProvider.id] || []).length === 0}
+                    className={`absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded border text-xs transition-colors disabled:opacity-50 ${
+                      isLight
+                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-500 hover:bg-brand-gray-50'
+                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-400 hover:bg-brand-gray-900'
+                    }`}
+                    title={
+                      (modelLists[activeProvider.id] || []).length === 0
+                        ? 'No models loaded'
+                        : 'Show available models'
+                    }
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+
+                  {modelPickerOpenFor === activeProvider.id &&
+                    (modelLists[activeProvider.id] || []).length > 0 && (
+                      <div
+                        className={`absolute z-20 mt-1 w-full max-h-80 overflow-auto rounded border shadow-lg ${
+                          isLight
+                            ? 'bg-brand-gray-50 border-brand-gray-200'
+                            : 'bg-brand-gray-950 border-brand-gray-800'
+                        }`}
+                      >
+                        {(modelLists[activeProvider.id] || []).map((m: string) => {
+                          const isSelected = m === activeProvider.modelId;
+                          return (
+                            <button
+                              type="button"
+                              key={m}
+                              title={m}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                onUpdateProvider(activeProvider.id, {
+                                  modelId: m,
+                                });
+                                setModelPickerOpenFor(null);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm transition-colors truncate ${
+                                isSelected
+                                  ? isLight
+                                    ? 'bg-brand-50 text-brand-gray-900'
+                                    : 'bg-brand-gray-900 text-brand-gray-300'
+                                  : isLight
+                                    ? 'text-brand-gray-800 hover:bg-brand-gray-50'
+                                    : 'text-brand-gray-300 hover:bg-brand-gray-900'
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                </div>
+                {suggestedPresetByProvider[activeProvider.id] && (
+                  <div className="mt-1 flex items-center justify-between gap-2 text-xs rounded border border-amber-500/40 bg-amber-100/50 dark:bg-amber-900/20 p-2">
+                    <span className="text-amber-700 dark:text-amber-300">
+                      Suggested preset:{' '}
+                      {
+                        getPresetById(suggestedPresetByProvider[activeProvider.id])
+                          ?.name
+                      }
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyPreset(
+                          activeProvider.id,
+                          getPresetById(suggestedPresetByProvider[activeProvider.id])
+                        )
+                      }
+                      className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+                {/* Model availability indicator */}
+                <div className="mt-1 flex items-center gap-2 text-xs">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      modelStatus[activeProvider.id] === 'success'
+                        ? 'bg-emerald-500'
+                        : modelStatus[activeProvider.id] === 'error'
+                          ? 'bg-red-500'
+                          : modelStatus[activeProvider.id] === 'loading'
+                            ? 'bg-brand-500'
+                            : isLight
+                              ? 'bg-brand-gray-300'
+                              : 'bg-brand-gray-600'
+                    }`}
+                  />
+                  {modelStatus[activeProvider.id] === 'success' && (
+                    <span className="text-emerald-600">Model OK</span>
+                  )}
+                  {modelStatus[activeProvider.id] === 'error' && (
+                    <span className="text-red-500">Model unavailable</span>
+                  )}
+                  {modelStatus[activeProvider.id] === 'loading' && (
+                    <span className="text-brand-600">Checking…</span>
+                  )}
+                  {(!modelStatus[activeProvider.id] ||
+                    modelStatus[activeProvider.id] === 'idle') && (
+                    <span className="text-brand-gray-500">Idle</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {renderCapabilitySelect('Multimodal', 'isMultimodal', 'is_multimodal')}
+
+                {renderCapabilitySelect(
+                  'Function Calling',
+                  'supportsFunctionCalling',
+                  'supports_function_calling'
+                )}
+              </div>
+
+              {/* Timeout + Max Tokens: not controlled by preset */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Preset
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={activeProvider.presetId || ''}
-                      onChange={(e) => {
-                        const preset = getPresetById(e.target.value || null);
-                        if (!preset) {
-                          onUpdateProvider(activeProvider.id, {
-                            presetId: null,
-                            writingWarning: null,
-                          });
-                          return;
-                        }
-                        applyPreset(activeProvider.id, preset);
-                      }}
-                      className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                        isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                      }`}
-                      title={
-                        getPresetById(activeProvider.presetId)?.description ||
-                        'Choose a preset'
-                      }
-                    >
-                      <option value="">No preset</option>
-                      {modelPresets.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {getPresetById(activeProvider.presetId)?.description && (
-                    <p className="text-[11px] text-brand-gray-500">
-                      {getPresetById(activeProvider.presetId)?.description}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center justify-between">
-                    <span>Model ID</span>
-                    <span className="text-xs text-brand-gray-400">
-                      You can type a custom model id
-                    </span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      data-no-smart-quotes="true"
-                      value={activeProvider.modelId}
-                      onFocus={() => setModelPickerOpenFor(activeProvider.id)}
-                      onBlur={() => {
-                        // allow click selection to run first
-                        setTimeout(() => setModelPickerOpenFor(null), 120);
-                      }}
-                      onChange={(e) => {
-                        const nextModelId = e.target.value;
-                        onUpdateProvider(activeProvider.id, {
-                          modelId: nextModelId,
-                        });
-                        const suggested = suggestPresetForModelId(nextModelId);
-                        setSuggestedPresetByProvider((previous) => ({
-                          ...previous,
-                          [activeProvider.id]: suggested?.id || null,
-                        }));
-                      }}
-                      placeholder="Select or type a model id"
-                      className={`w-full border rounded p-2 pr-9 text-sm focus:border-brand-500 focus:outline-none ${
-                        isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-                      }`}
-                    />
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        const models = modelLists[activeProvider.id] || [];
-                        if (models.length === 0) return;
-                        setModelPickerOpenFor((cur) =>
-                          cur === activeProvider.id ? null : activeProvider.id
-                        );
-                      }}
-                      disabled={(modelLists[activeProvider.id] || []).length === 0}
-                      className={`absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded border text-xs transition-colors disabled:opacity-50 ${
-                        isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-500 hover:bg-brand-gray-50'
-                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-400 hover:bg-brand-gray-900'
-                      }`}
-                      title={
-                        (modelLists[activeProvider.id] || []).length === 0
-                          ? 'No models loaded'
-                          : 'Show available models'
-                      }
-                    >
-                      <ChevronDown size={14} />
-                    </button>
-
-                    {modelPickerOpenFor === activeProvider.id &&
-                      (modelLists[activeProvider.id] || []).length > 0 && (
-                        <div
-                          className={`absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded border shadow-lg ${
-                            isLight
-                              ? 'bg-brand-gray-50 border-brand-gray-200'
-                              : 'bg-brand-gray-950 border-brand-gray-800'
-                          }`}
-                        >
-                          {(modelLists[activeProvider.id] || []).map((m: string) => {
-                            const isSelected = m === activeProvider.modelId;
-                            return (
-                              <button
-                                type="button"
-                                key={m}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  onUpdateProvider(activeProvider.id, {
-                                    modelId: m,
-                                  });
-                                  setModelPickerOpenFor(null);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                                  isSelected
-                                    ? isLight
-                                      ? 'bg-brand-50 text-brand-gray-900'
-                                      : 'bg-brand-gray-900 text-brand-gray-300'
-                                    : isLight
-                                      ? 'text-brand-gray-800 hover:bg-brand-gray-50'
-                                      : 'text-brand-gray-300 hover:bg-brand-gray-900'
-                                }`}
-                              >
-                                {m}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                  </div>
-                  {suggestedPresetByProvider[activeProvider.id] && (
-                    <div className="mt-1 flex items-center justify-between gap-2 text-xs rounded border border-amber-500/40 bg-amber-100/50 dark:bg-amber-900/20 p-2">
-                      <span className="text-amber-700 dark:text-amber-300">
-                        Suggested preset:{' '}
-                        {
-                          getPresetById(suggestedPresetByProvider[activeProvider.id])
-                            ?.name
-                        }
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          applyPreset(
-                            activeProvider.id,
-                            getPresetById(suggestedPresetByProvider[activeProvider.id])
-                          )
-                        }
-                        className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
-                  {/* Model availability indicator */}
-                  <div className="mt-1 flex items-center gap-2 text-xs">
                     <span
-                      className={`h-2 w-2 rounded-full ${
-                        modelStatus[activeProvider.id] === 'success'
-                          ? 'bg-emerald-500'
-                          : modelStatus[activeProvider.id] === 'error'
-                            ? 'bg-red-500'
-                            : modelStatus[activeProvider.id] === 'loading'
-                              ? 'bg-brand-500'
-                              : isLight
-                                ? 'bg-brand-gray-300'
-                                : 'bg-brand-gray-600'
-                      }`}
-                    />
-                    {modelStatus[activeProvider.id] === 'success' && (
-                      <span className="text-emerald-600">Model OK</span>
-                    )}
-                    {modelStatus[activeProvider.id] === 'error' && (
-                      <span className="text-red-500">Model unavailable</span>
-                    )}
-                    {modelStatus[activeProvider.id] === 'loading' && (
-                      <span className="text-brand-600">Checking…</span>
-                    )}
-                    {(!modelStatus[activeProvider.id] ||
-                      modelStatus[activeProvider.id] === 'idle') && (
-                      <span className="text-brand-gray-500">Idle</span>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                    Timeout (ms)
+                      title="Maximum time in milliseconds to wait for a response from the model API before timing out."
+                      className="cursor-help underline decoration-dotted underline-offset-2"
+                    >
+                      Timeout (ms)
+                    </span>
                   </label>
                   <input
                     type="number"
@@ -834,15 +838,79 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                     }`}
                   />
                 </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                    <span
+                      title="Maximum number of tokens the model will generate in a single response."
+                      className="cursor-help underline decoration-dotted underline-offset-2"
+                    >
+                      Max Tokens
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    step={1}
+                    value={activeProvider.maxTokens ?? ''}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      onUpdateProvider(activeProvider.id, {
+                        maxTokens: raw === '' ? undefined : Number(raw),
+                      });
+                    }}
+                    className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                      isLight
+                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                    }`}
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {renderCapabilitySelect('Multimodal', 'isMultimodal', 'is_multimodal')}
-
-                {renderCapabilitySelect(
-                  'Function Calling',
-                  'supportsFunctionCalling',
-                  'supports_function_calling'
+              {/* Preset — controls which named parameter configuration is active */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                  Preset
+                </label>
+                <select
+                  value={activeProvider.presetId || ''}
+                  onChange={(e) => {
+                    const preset = getPresetById(e.target.value || null);
+                    if (!preset) {
+                      onUpdateProvider(activeProvider.id, {
+                        presetId: null,
+                        writingWarning: null,
+                      });
+                      return;
+                    }
+                    applyPreset(activeProvider.id, preset);
+                  }}
+                  className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                  title={
+                    getPresetById(activeProvider.presetId)?.description ||
+                    'Choose a preset to apply a named parameter configuration'
+                  }
+                >
+                  <option value="">No preset — edit parameters manually</option>
+                  {modelPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                {getPresetById(activeProvider.presetId)?.description && (
+                  <p className="text-[11px] text-brand-gray-500">
+                    {getPresetById(activeProvider.presetId)?.description}
+                  </p>
+                )}
+                {activeProvider.presetId && (
+                  <p className="text-[11px] text-brand-gray-400 italic">
+                    Parameters below are locked by this preset. Select “No preset” to
+                    edit them manually.
+                  </p>
                 )}
               </div>
 
@@ -859,25 +927,78 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   Parameters
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
-                  {renderSlider('Temperature', 'temperature', 0, 2, 0.1)}
-                  {renderSlider('Top P', 'topP', 0, 1, 0.05)}
-                  {renderNumberInput('Context Window', 'contextWindowTokens')}
-                  {renderNumberInput('Max Tokens', 'maxTokens')}
-                  {renderNumberInput('Seed', 'seed')}
-                  {renderNumberInput('Presence Penalty', 'presencePenalty')}
-                  {renderNumberInput('Frequency Penalty', 'frequencyPenalty')}
-                  {renderNumberInput('Top K', 'topK')}
-                  {renderNumberInput('Min P', 'minP')}
+                  {renderSlider(
+                    'Temperature',
+                    'temperature',
+                    0,
+                    2,
+                    0.1,
+                    'Controls randomness. Higher values (e.g. 1.5) produce more creative, varied output; lower values (e.g. 0.2) make output more focused and deterministic.'
+                  )}
+                  {renderSlider(
+                    'Top P',
+                    'topP',
+                    0,
+                    1,
+                    0.05,
+                    'Nucleus sampling: only tokens within the top-P cumulative probability mass are considered. Lower values restrict vocabulary; 1.0 disables this filter.'
+                  )}
+                  {renderSlider(
+                    'Min P',
+                    'minP',
+                    0,
+                    1,
+                    0.01,
+                    'Minimum token probability relative to the top token. Tokens below this threshold are excluded. Typical range: 0.01–0.1; 0 disables.'
+                  )}
+                  {renderNumberInput(
+                    'Top K',
+                    'topK',
+                    '',
+                    'Restricts sampling to the K most likely tokens at each step. Lower values make output more predictable; 0 disables this filter.'
+                  )}
+                  {renderNumberInput(
+                    'Context Window',
+                    'contextWindowTokens',
+                    '',
+                    'Maximum number of tokens in the combined prompt + response. Overrides the model default if set.'
+                  )}
+                  {renderNumberInput(
+                    'Seed',
+                    'seed',
+                    '',
+                    'Random seed for reproducible outputs. Set a fixed integer to get deterministic results; leave empty for random.'
+                  )}
+                  {renderNumberInput(
+                    'Presence Penalty',
+                    'presencePenalty',
+                    '',
+                    'Penalizes tokens that have already appeared, encouraging the model to explore new topics. Range: −2.0 to 2.0.'
+                  )}
+                  {renderNumberInput(
+                    'Frequency Penalty',
+                    'frequencyPenalty',
+                    '',
+                    'Reduces repetition by penalizing tokens in proportion to how often they have already been used. Range: −2.0 to 2.0.'
+                  )}
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-4">
-                  <div className="space-y-1">
+                  <div
+                    className={`space-y-1 ${activeProvider.presetId ? 'opacity-60' : ''}`}
+                  >
                     <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                      Stop Sequences (one per line)
+                      <span
+                        title="Sequences that cause the model to stop generating immediately when encountered."
+                        className="cursor-help underline decoration-dotted underline-offset-2"
+                      >
+                        Stop Sequences (one per line)
+                      </span>
                     </label>
                     <textarea
                       data-no-smart-quotes="true"
                       rows={3}
                       value={(activeProvider.stop || []).join('\n')}
+                      disabled={!!activeProvider.presetId}
                       onChange={(e) =>
                         onUpdateProvider(activeProvider.id, {
                           stop: e.target.value
@@ -887,20 +1008,32 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                         })
                       }
                       className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                        isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                        activeProvider.presetId
+                          ? isLight
+                            ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
+                            : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
+                          : isLight
+                            ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                            : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                       }`}
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div
+                    className={`space-y-1 ${activeProvider.presetId ? 'opacity-60' : ''}`}
+                  >
                     <label className="text-xs font-medium text-brand-gray-500 uppercase">
-                      Extra Body (JSON)
+                      <span
+                        title="Additional JSON fields merged into the API request body. Use for provider-specific options not exposed above."
+                        className="cursor-help underline decoration-dotted underline-offset-2"
+                      >
+                        Extra Body (JSON)
+                      </span>
                     </label>
                     <textarea
                       data-no-smart-quotes="true"
                       rows={4}
                       value={activeProvider.extraBody || ''}
+                      disabled={!!activeProvider.presetId}
                       onChange={(e) =>
                         onUpdateProvider(activeProvider.id, {
                           extraBody: e.target.value,
@@ -908,9 +1041,13 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                       }
                       placeholder='{"reasoning": {"enabled": false}}'
                       className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none font-mono ${
-                        isLight
-                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                          : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                        activeProvider.presetId
+                          ? isLight
+                            ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
+                            : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
+                          : isLight
+                            ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                            : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                       }`}
                     />
                     {activeProvider.writingWarning && (

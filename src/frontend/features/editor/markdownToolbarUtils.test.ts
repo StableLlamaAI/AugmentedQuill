@@ -13,11 +13,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyInlineFormatAtSelection,
-  displayedOffsetToRawOffset,
+  getBlockPrefix,
   getBlockType,
+  getLineBoundsAtOffset,
   getLineAtOffset,
   isInlineFormatActiveAtSelection,
-  rawOffsetToDisplayedOffset,
   resolveInlineSelection,
   toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
@@ -60,24 +60,6 @@ describe('markdownToolbarUtils', () => {
     const caret = 5;
     const { nextRawText } = toggleBlockAtOffset(raw, caret, 'h2');
     expect(nextRawText).toBe('## quoted text');
-  });
-
-  it('maps raw offsets to displayed offsets when WS is active', () => {
-    const raw = 'a b\tc\n';
-    expect(rawOffsetToDisplayedOffset(raw, 0, true)).toBe(0);
-    expect(rawOffsetToDisplayedOffset(raw, 1, true)).toBe(1);
-    expect(rawOffsetToDisplayedOffset(raw, 2, true)).toBe(3);
-    expect(rawOffsetToDisplayedOffset(raw, 4, true)).toBe(6);
-    expect(rawOffsetToDisplayedOffset(raw, raw.length, true)).toBe(9);
-  });
-
-  it('maps displayed offsets back to raw offsets for WS markers', () => {
-    const display = 'a·\u200bb→\tc¶\n';
-    expect(displayedOffsetToRawOffset(display, 0)).toBe(0);
-    expect(displayedOffsetToRawOffset(display, 1)).toBe(1);
-    expect(displayedOffsetToRawOffset(display, 3)).toBe(2);
-    expect(displayedOffsetToRawOffset(display, 6)).toBe(4);
-    expect(displayedOffsetToRawOffset(display, display.length)).toBe(6);
   });
 
   it('wraps selected text for bold formatting', () => {
@@ -224,5 +206,137 @@ describe('markdownToolbarUtils', () => {
       'bold'
     );
     expect(nextRawText).toBe('my **boots** on');
+  });
+
+  // ── getLineBoundsAtOffset ──────────────────────────────────────────────────
+
+  it('getLineBoundsAtOffset returns correct bounds for the first line', () => {
+    const text = 'alpha\nbeta\ngamma';
+    expect(getLineBoundsAtOffset(text, 2)).toEqual({ lineStart: 0, lineEnd: 5 });
+  });
+
+  it('getLineBoundsAtOffset returns correct bounds for a middle line', () => {
+    const text = 'alpha\nbeta\ngamma';
+    expect(getLineBoundsAtOffset(text, 7)).toEqual({ lineStart: 6, lineEnd: 10 });
+  });
+
+  it('getLineBoundsAtOffset returns correct bounds for the last line', () => {
+    const text = 'alpha\nbeta\ngamma';
+    expect(getLineBoundsAtOffset(text, text.length)).toEqual({
+      lineStart: 11,
+      lineEnd: text.length,
+    });
+  });
+
+  it('getLineBoundsAtOffset handles a single-line document', () => {
+    const text = 'only line';
+    expect(getLineBoundsAtOffset(text, 4)).toEqual({ lineStart: 0, lineEnd: 9 });
+  });
+
+  // ── getBlockPrefix ─────────────────────────────────────────────────────────
+
+  it('getBlockPrefix returns correct prefix for all six block types', () => {
+    expect(getBlockPrefix('h1')).toBe('# ');
+    expect(getBlockPrefix('h2')).toBe('## ');
+    expect(getBlockPrefix('h3')).toBe('### ');
+    expect(getBlockPrefix('quote')).toBe('> ');
+    expect(getBlockPrefix('ul')).toBe('- ');
+    expect(getBlockPrefix('ol')).toBe('1. ');
+  });
+
+  // ── toggleBlockAtOffset: additional block types ────────────────────────────
+
+  it('toggleBlockAtOffset adds ul prefix', () => {
+    const { nextRawText } = toggleBlockAtOffset('list item', 4, 'ul');
+    expect(nextRawText).toBe('- list item');
+  });
+
+  it('toggleBlockAtOffset removes ul prefix when toggled again', () => {
+    const { nextRawText } = toggleBlockAtOffset('- list item', 5, 'ul');
+    expect(nextRawText).toBe('list item');
+  });
+
+  it('toggleBlockAtOffset adds ol prefix', () => {
+    const { nextRawText } = toggleBlockAtOffset('numbered item', 4, 'ol');
+    expect(nextRawText).toBe('1. numbered item');
+  });
+
+  it('toggleBlockAtOffset removes ol prefix when toggled again', () => {
+    const { nextRawText } = toggleBlockAtOffset('1. numbered item', 5, 'ol');
+    expect(nextRawText).toBe('numbered item');
+  });
+
+  it('toggleBlockAtOffset adds h3 prefix', () => {
+    const { nextRawText } = toggleBlockAtOffset('sub heading', 4, 'h3');
+    expect(nextRawText).toBe('### sub heading');
+  });
+
+  it('toggleBlockAtOffset removes h3 prefix when toggled again', () => {
+    const { nextRawText } = toggleBlockAtOffset('### sub heading', 8, 'h3');
+    expect(nextRawText).toBe('sub heading');
+  });
+
+  // ── toggleBlockAtOffset: nextRawCaret positioning ─────────────────────────
+
+  it('toggleBlockAtOffset caret advances by prefix length when block is added', () => {
+    const raw = 'plain text';
+    const caret = 3;
+    const { nextRawCaret } = toggleBlockAtOffset(raw, caret, 'h1');
+    // '# ' is 2 chars; caret 3 + 2 = 5
+    expect(nextRawCaret).toBe(5);
+  });
+
+  it('toggleBlockAtOffset caret retreats by prefix length when block is removed', () => {
+    const raw = '# plain text';
+    const caret = 5; // inside '# plain text' after the '# '
+    const { nextRawCaret } = toggleBlockAtOffset(raw, caret, 'h1');
+    // removing '# ' (2 chars): 5 - 2 = 3
+    expect(nextRawCaret).toBe(3);
+  });
+
+  it('toggleBlockAtOffset caret is never placed before the line start', () => {
+    const raw = '# x';
+    // Caret at 1 — inside the prefix itself; after removal lineStart = 0, delta = -2 → clamp to 0
+    const { nextRawCaret } = toggleBlockAtOffset(raw, 1, 'h1');
+    expect(nextRawCaret).toBe(0);
+  });
+
+  // ── isInlineFormatActiveAtSelection: alternate markers ────────────────────
+
+  it('detects bold active when wrapped with double-underscore markers', () => {
+    const raw = 'alpha __beta__ gamma';
+    const caret = raw.indexOf('beta') + 1;
+    expect(isInlineFormatActiveAtSelection(raw, caret, caret, 'bold')).toBe(true);
+  });
+
+  it('detects italic active when wrapped with star markers', () => {
+    const raw = 'alpha *beta* gamma';
+    const start = raw.indexOf('beta');
+    const end = start + 4;
+    expect(isInlineFormatActiveAtSelection(raw, start, end, 'italic')).toBe(true);
+  });
+
+  // ── toggleInlineFormatAtSelection: remove alternate markers ───────────────
+
+  it('removes double-underscore bold markers when toggled off', () => {
+    const raw = 'alpha __beta__ gamma';
+    const caret = raw.indexOf('beta') + 1;
+    const { nextRawText } = toggleInlineFormatAtSelection(raw, caret, caret, 'bold');
+    expect(nextRawText).toBe('alpha beta gamma');
+  });
+
+  it('removes star italic markers when toggled off', () => {
+    const raw = 'alpha *beta* gamma';
+    const start = raw.indexOf('beta');
+    const end = start + 4;
+    const { nextRawText } = toggleInlineFormatAtSelection(raw, start, end, 'italic');
+    expect(nextRawText).toBe('alpha beta gamma');
+  });
+
+  // ── resolveInlineSelection: both arguments null ────────────────────────────
+
+  it('resolveInlineSelection returns caret-at-end when both args are null', () => {
+    const resolved = resolveInlineSelection(null, null, 15);
+    expect(resolved).toEqual({ start: 15, end: 15 });
   });
 });

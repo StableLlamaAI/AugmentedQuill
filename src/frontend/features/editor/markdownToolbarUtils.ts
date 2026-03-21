@@ -10,48 +10,13 @@
  */
 
 export type MarkdownBlockType = 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol';
-export type InlineFormatType = 'bold' | 'italic';
+export type InlineFormatType =
+  | 'bold'
+  | 'italic'
+  | 'strikethrough'
+  | 'subscript'
+  | 'superscript';
 export type TextSelectionRange = { start: number; end: number };
-
-export const displayedOffsetToRawOffset = (
-  displayed: string,
-  displayedOffset: number
-): number => {
-  let d = 0;
-  let r = 0;
-
-  while (d < displayed.length && d < displayedOffset) {
-    const nextTwo = displayed.slice(d, d + 2);
-    if (nextTwo === '·\u200b' || nextTwo === '→\t' || nextTwo === '¶\n') {
-      d += 2;
-      r += 1;
-      continue;
-    }
-    d += 1;
-    r += 1;
-  }
-
-  return r;
-};
-
-export const rawOffsetToDisplayedOffset = (
-  raw: string,
-  rawOffset: number,
-  showWhitespace: boolean
-): number => {
-  if (!showWhitespace) return rawOffset;
-
-  let displayedOffset = 0;
-  for (let i = 0; i < Math.min(raw.length, rawOffset); i += 1) {
-    const ch = raw[i];
-    if (ch === ' ' || ch === '\t' || ch === '\n') {
-      displayedOffset += 2;
-    } else {
-      displayedOffset += 1;
-    }
-  }
-  return displayedOffset;
-};
 
 export const getLineAtOffset = (text: string, offset: number): string => {
   const safeOffset = Math.max(0, Math.min(offset, text.length));
@@ -126,21 +91,24 @@ const isWordChar = (ch: string | undefined): boolean =>
   !!ch && /[\p{L}\p{N}]/u.test(ch);
 
 const getInlineMarkers = (type: InlineFormatType): { open: string; close: string } => {
-  if (type === 'bold') {
-    return { open: '**', close: '**' };
-  }
+  if (type === 'bold') return { open: '**', close: '**' };
+  if (type === 'strikethrough') return { open: '~~', close: '~~' };
+  if (type === 'subscript') return { open: '~', close: '~' };
+  if (type === 'superscript') return { open: '^', close: '^' };
   return { open: '_', close: '_' };
 };
 
 const getCandidateInlineMarkers = (
   type: InlineFormatType
 ): Array<{ open: string; close: string }> => {
-  if (type === 'bold') {
+  if (type === 'bold')
     return [
       { open: '**', close: '**' },
       { open: '__', close: '__' },
     ];
-  }
+  if (type === 'strikethrough') return [{ open: '~~', close: '~~' }];
+  if (type === 'subscript') return [{ open: '~', close: '~' }];
+  if (type === 'superscript') return [{ open: '^', close: '^' }];
   return [
     { open: '_', close: '_' },
     { open: '*', close: '*' },
@@ -211,6 +179,19 @@ const replaceFirst = (str: string, find: string) => {
   return str.slice(0, idx) + str.slice(idx + find.length);
 };
 
+// Check whether the resolved target is wrapped in exactly the given open/close markers.
+const isWrappedInSimpleMarkers = (
+  rawText: string,
+  start: number,
+  end: number,
+  open: string,
+  close: string
+): boolean => {
+  const before = rawText.slice(Math.max(0, start - open.length), start);
+  const after = rawText.slice(end, Math.min(rawText.length, end + close.length));
+  return before === open && after === close;
+};
+
 export const isInlineFormatActiveAtSelection = (
   rawText: string,
   selectionStart: number,
@@ -220,6 +201,22 @@ export const isInlineFormatActiveAtSelection = (
   const target = resolveInlineTarget(rawText, selectionStart, selectionEnd);
   if (target.start === target.end) return false;
 
+  // Simple single-pair marker types use a direct prefix/suffix check.
+  if (type === 'strikethrough') {
+    return isWrappedInSimpleMarkers(rawText, target.start, target.end, '~~', '~~');
+  }
+  if (type === 'subscript') {
+    // Single ~ — must not be inside ~~ (strikethrough)
+    if (!isWrappedInSimpleMarkers(rawText, target.start, target.end, '~', '~'))
+      return false;
+    const before2 = rawText.slice(Math.max(0, target.start - 2), target.start);
+    return before2 !== '~~';
+  }
+  if (type === 'superscript') {
+    return isWrappedInSimpleMarkers(rawText, target.start, target.end, '^', '^');
+  }
+
+  // Bold / italic use the existing character-count approach.
   const left = getLeftFormat(rawText, target.start);
   const right = getRightFormat(rawText, target.end);
 
@@ -275,12 +272,86 @@ export const applyInlineFormatAtSelection = (
   return { nextRawText, nextStart: caret, nextEnd: caret };
 };
 
+// Toggle a simple open/close marker pair on/off around the resolved selection.
+const toggleSimpleInlineFormat = (
+  rawText: string,
+  selectionStart: number,
+  selectionEnd: number,
+  open: string,
+  close: string
+): { nextRawText: string; nextStart: number; nextEnd: number } => {
+  const target = resolveInlineTarget(rawText, selectionStart, selectionEnd);
+  const { start, end } = target;
+
+  if (start === end) {
+    // No selection — insert markers and place caret between them.
+    const nextRawText = rawText.slice(0, start) + open + close + rawText.slice(start);
+    const caret = start + open.length;
+    return { nextRawText, nextStart: caret, nextEnd: caret };
+  }
+
+  const active = isWrappedInSimpleMarkers(rawText, start, end, open, close);
+  if (active) {
+    const openStart = start - open.length;
+    const closeEnd = end + close.length;
+    const nextRawText =
+      rawText.slice(0, openStart) + rawText.slice(start, end) + rawText.slice(closeEnd);
+    return {
+      nextRawText,
+      nextStart: openStart,
+      nextEnd: openStart + (end - start),
+    };
+  }
+
+  const selected = rawText.slice(start, end);
+  const nextRawText =
+    rawText.slice(0, start) + open + selected + close + rawText.slice(end);
+  return {
+    nextRawText,
+    nextStart: start + open.length,
+    nextEnd: end + open.length,
+  };
+};
+
 export const toggleInlineFormatAtSelection = (
   rawText: string,
   selectionStart: number,
   selectionEnd: number,
   type: InlineFormatType
 ): { nextRawText: string; nextStart: number; nextEnd: number } => {
+  // Simple marker types bypass the bold/italic complexity entirely.
+  if (type === 'strikethrough' || type === 'subscript' || type === 'superscript') {
+    const { open, close } = getInlineMarkers(type);
+
+    // subscript (~) and superscript (^) are mutually exclusive: if the
+    // opposite marker is currently active at the same target, strip it first.
+    if (type === 'subscript' || type === 'superscript') {
+      const opposite = type === 'subscript' ? 'superscript' : 'subscript';
+      const { open: oppOpen, close: oppClose } = getInlineMarkers(opposite);
+      const target = resolveInlineTarget(rawText, selectionStart, selectionEnd);
+      if (
+        target.start !== target.end &&
+        isWrappedInSimpleMarkers(rawText, target.start, target.end, oppOpen, oppClose)
+      ) {
+        const openStart = target.start - oppOpen.length;
+        const closeEnd = target.end + oppClose.length;
+        const stripped =
+          rawText.slice(0, openStart) +
+          rawText.slice(target.start, target.end) +
+          rawText.slice(closeEnd);
+        return toggleSimpleInlineFormat(
+          stripped,
+          openStart,
+          openStart + (target.end - target.start),
+          open,
+          close
+        );
+      }
+    }
+
+    return toggleSimpleInlineFormat(rawText, selectionStart, selectionEnd, open, close);
+  }
+
   const target = resolveInlineTarget(rawText, selectionStart, selectionEnd);
 
   if (target.start === target.end) {
@@ -333,6 +404,55 @@ export const toggleInlineFormatAtSelection = (
 
   return applyInlineFormatAtSelection(rawText, selectionStart, selectionEnd, type);
 };
+// ─── Fenced Code Block ───────────────────────────────────────────────────────
+
+export const insertFencedCodeBlock = (
+  rawText: string,
+  selectionStart: number,
+  selectionEnd: number
+): { nextRawText: string; nextStart: number; nextEnd: number } => {
+  const start = Math.min(selectionStart, selectionEnd);
+  const end = Math.max(selectionStart, selectionEnd);
+  const selected = rawText.slice(start, end);
+  const open = '```\n';
+  const close = '\n```';
+  const insert = open + selected + close;
+  const nextRawText = rawText.slice(0, start) + insert + rawText.slice(end);
+  return {
+    nextRawText,
+    nextStart: start + open.length,
+    nextEnd: start + open.length + selected.length,
+  };
+};
+
+// ─── Footnote ────────────────────────────────────────────────────────────────
+
+export const insertFootnote = (
+  rawText: string,
+  selectionStart: number
+): { nextRawText: string; nextCaret: number } => {
+  // Find the next available footnote number.
+  const existing = rawText.match(/\[\^(\d+)\]/g) ?? [];
+  const maxNum = existing.reduce((max, m) => {
+    const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
+    return n > max ? n : max;
+  }, 0);
+  const n = maxNum + 1;
+  const ref = `[^${n}]`;
+  const withRef =
+    rawText.slice(0, selectionStart) + ref + rawText.slice(selectionStart);
+  // Append the definition at the very end (after a separator if needed).
+  const trailingNl = withRef.endsWith('\n\n')
+    ? ''
+    : withRef.endsWith('\n')
+      ? '\n'
+      : '\n\n';
+  const nextRawText = withRef + trailingNl + `[^${n}]: `;
+  return { nextRawText, nextCaret: selectionStart + ref.length };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const resolveInlineSelection = (
   currentSelection: TextSelectionRange | null,
   lastSelection: TextSelectionRange | null,

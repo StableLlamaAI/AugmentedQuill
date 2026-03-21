@@ -36,7 +36,7 @@ Five range sliders below the Design Mode toggle let you tune the reading and wri
 
 ### Closing the Popup
 
-Click the **✕** button in the top-right corner of the popup, or click anywhere outside it, to close the Appearance panel. All changes are preserved automatically.
+Click the **✕** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />) button in the top-right corner of the popup, or click anywhere outside it, to close the Appearance panel. All changes are preserved automatically.
 
 ---
 
@@ -63,7 +63,7 @@ The toolbar at the top of the dialog offers two ways to inspect logs:
 | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | **Refresh** (<img src="assets/edit-2.svg" alt="Refresh icon" width="16" height="16" style="vertical-align:text-bottom;" />) | Re-fetches the log data from the server. Use this if you have been running requests in another browser tab. |
 | **Clear** (<img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />)    | Deletes all stored log entries after confirmation.                                                          |
-| **Close** (✕)                                                                                                               | Closes the dialog.                                                                                          |
+| **Close** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />)          | Closes the dialog.                                                                                          |
 
 ### Log Entries
 

@@ -13,7 +13,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeContext';
 import {
   ChevronDown,
-  Image as ImageIcon,
   Menu,
   PanelRightClose,
   PanelRightOpen,
@@ -135,9 +134,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   return (
     <header
       id="aq-header"
-      className={`h-14 border-b flex items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
+      className={`sm:h-14 py-1.5 sm:py-0 border-b flex flex-wrap sm:flex-nowrap items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
     >
-      <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
+      <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
@@ -164,17 +163,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </div>
           <div className="flex flex-col">
             <span
-              className={`font-bold tracking-tight leading-none hidden sm:inline ${textMain}`}
+              className={`font-bold tracking-tight leading-none hidden lg:inline ${textMain}`}
             >
               AugmentedQuill
             </span>
-            <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden sm:inline">
+            <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden lg:inline">
               {storyTitle}
             </span>
           </div>
         </div>
 
-        <div className={`h-6 w-px hidden sm:block ${dividerColor}`}></div>
+        <div className={`h-6 w-px hidden lg:block ${dividerColor}`}></div>
 
         <div className="flex space-x-1">
           <div className="relative flex" ref={undoMenuRef}>
@@ -297,17 +296,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         }}
       />
 
-      <div className="flex items-center space-x-2 shrink-0">
-        <Button
-          theme={currentTheme}
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsImagesOpen(true)}
-          title="Images"
-          className="hidden sm:inline-flex mr-1"
-        >
-          <ImageIcon size={18} />
-        </Button>
+      <div className="h-11 sm:h-auto order-2 sm:order-3 flex items-center space-x-2 shrink-0">
         <Button
           theme={currentTheme}
           variant="ghost"

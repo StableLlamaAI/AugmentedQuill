@@ -355,9 +355,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           });
           if (cancelled) return;
           prevModelIdRef.current[providerId] = modelId;
-          if (Array.isArray(res?.models)) {
-            setModelLists((prev) => ({ ...prev, [providerId]: res.models }));
-          }
+          // Do NOT overwrite modelLists here — test_model only returns the
+          // single tested model; the full list comes from the connection test.
           if (res?.capabilities) {
             setDetectedCapabilities((prev) => ({
               ...prev,
