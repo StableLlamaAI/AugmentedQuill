@@ -15,6 +15,7 @@ import {
   X,
   HardDrive,
   Cpu,
+  Info,
   CheckCircle2,
   AlertCircle,
   Save,
@@ -80,7 +81,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   defaultPrompts = { system_messages: {}, user_prompts: {} },
   projectLanguages,
 }) => {
-  const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'machine' | 'about'>(
+    'projects'
+  );
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{
@@ -101,6 +104,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
   const { isLight } = useThemeClasses();
+  const currentYear = new Date().getFullYear();
+  const browserVersion =
+    typeof navigator !== 'undefined' ? `${navigator.userAgent}` : 'unknown';
 
   // Reinitialize dialog state on open to avoid stale provider/test cache leakage.
   useEffect(() => {
@@ -604,6 +610,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           >
             {renderTab('projects', <HardDrive size={18} />, 'Projects')}
             {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
+            {renderTab('about', <Info size={18} />, 'About')}
           </div>
 
           {/* Tab Content */}
@@ -649,6 +656,61 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 onUpdateProvider={updateProvider}
                 onRemoveProvider={removeProvider}
               />
+            )}
+
+            {activeTab === 'about' && (
+              <div>
+                <h3
+                  className={`text-xl font-semibold mb-4 ${
+                    isLight ? 'text-brand-gray-900' : 'text-brand-gray-100'
+                  }`}
+                >
+                  About AugmentedQuill
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <strong>Version:</strong> {process.env.APP_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Git revision:</strong>{' '}
+                    {process.env.GIT_REVISION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Built:</strong> {new Date().toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>License:</strong> GNU General Public License v3+
+                  </div>
+                  <div>
+                    <strong>Copyright:</strong> © 2025
+                    {currentYear > 2025 ? `-${currentYear}` : ''} StableLlama and
+                    contributors
+                  </div>
+                  <div>
+                    <strong>Python:</strong> {process.env.PYTHON_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Node:</strong> {process.env.NODE_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Browser:</strong> {browserVersion}
+                  </div>
+                  <div>
+                    <strong>Project:</strong>{' '}
+                    <a
+                      href={process.env.GITHUB_PROJECT_URL}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-brand-blue-600 underline"
+                    >
+                      {process.env.GITHUB_PROJECT_URL}
+                    </a>
+                  </div>
+                  <div className="text-xs text-brand-gray-500 pt-1">
+                    App platform: React + Vite, Backend: FastAPI
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>

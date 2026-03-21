@@ -10,8 +10,45 @@
  */
 
 import path from 'path';
+import fs from 'fs';
+import child_process from 'child_process';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const frontendPackagePath = path.resolve(__dirname, 'package.json');
+let appVersion = 'unknown';
+try {
+  const pkgJson = JSON.parse(fs.readFileSync(frontendPackagePath, 'utf-8'));
+  appVersion = String(pkgJson.version || 'unknown');
+} catch (e) {
+  console.warn('Unable to resolve frontend version from package.json', e);
+}
+
+let gitRevision = 'unknown';
+try {
+  gitRevision = child_process
+    .execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
+    .trim();
+} catch (e) {
+  console.warn('Unable to resolve git revision at build time', e);
+}
+
+let pythonVersion = 'unknown';
+try {
+  pythonVersion = child_process
+    .execSync('python --version', { encoding: 'utf-8' })
+    .trim();
+} catch (e) {
+  try {
+    pythonVersion = child_process
+      .execSync('python3 --version', { encoding: 'utf-8' })
+      .trim();
+  } catch (inner) {
+    console.warn('Unable to resolve python version at build time', inner);
+  }
+}
+
+const nodeVersion = process.versions?.node ? `v${process.versions.node}` : 'unknown';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -47,6 +84,13 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.API_KEY': JSON.stringify(env.OPENAI_API_KEY),
       'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY),
+      'process.env.APP_VERSION': JSON.stringify(appVersion),
+      'process.env.GIT_REVISION': JSON.stringify(gitRevision),
+      'process.env.PYTHON_VERSION': JSON.stringify(pythonVersion),
+      'process.env.NODE_VERSION': JSON.stringify(nodeVersion),
+      'process.env.GITHUB_PROJECT_URL': JSON.stringify(
+        'https://github.com/StableLlamaAI/AugmentedQuill'
+      ),
     },
     resolve: {
       alias: {
