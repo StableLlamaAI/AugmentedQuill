@@ -204,6 +204,20 @@ describe('CodeMirrorEditor', () => {
     expect(ref.current?.state.doc.toString()).toBe('a b');
   });
 
+  it('renders whitespace space markers at 1ch width', async () => {
+    const { container } = render(
+      <CodeMirrorEditor value="a b" onChange={vi.fn()} showWhitespace={true} />
+    );
+    await act(async () => {});
+
+    const marker = Array.from(container.querySelectorAll('.cm-ws-marker')).find(
+      (el) => el.textContent === '·'
+    ) as HTMLElement | undefined;
+    expect(marker).toBeDefined();
+    expect(marker?.style.minWidth).toBe('1ch');
+    expect(marker?.style.width).toBe('1ch');
+  });
+
   // ── Placeholder ────────────────────────────────────────────────────────────
 
   it('renders a placeholder element when the document is empty', async () => {

@@ -133,8 +133,10 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
           span.className = 'cm-ws-marker';
           span.textContent = '\u00b7'; // MIDDLE DOT
           span.style.display = 'inline-block';
-          span.style.minWidth = '0.25em';
-          span.style.width = '0.25em';
+          // Use 1ch so the visible marker takes up a single monospace char width
+          // and matches the expected Raw mode layout.
+          span.style.minWidth = '1ch';
+          span.style.width = '1ch';
           span.style.textAlign = 'center';
           span.style.verticalAlign = 'baseline';
           span.style.opacity = '0.5';
