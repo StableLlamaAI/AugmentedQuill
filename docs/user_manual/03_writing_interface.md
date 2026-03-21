@@ -66,6 +66,42 @@ Next along the bar are the text-formatting shortcuts:
 
 Buttons are ordered by frequency of use. On narrower screens the less common ones (Strikethrough, Superscript, Subscript, Code Block, Footnote, Link, Quote, then List buttons) progressively collapse into the **Format** dropdown (<img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon + dropdown). On mobile all formatting controls move into the mobile Format menu. A button highlights when its style is currently active at the cursor, providing instant feedback.
 
+### Icon Reference
+
+The application UI uses the following core icons. This reference is kept aligned with the live interface; add entries here whenever new icons are introduced.
+
+| Icon                                                                                                                             | Name             | Meaning                                       |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------- |
+| <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" />               | book-open        | WRITING model / prose actions                 |
+| <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" />                           | pen              | EDITING model / summary actions               |
+| <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" />     | message-square   | CHAT model                                    |
+| <img src="assets/eye.svg" alt="Eye icon" width="16" height="16" style="vertical-align:text-bottom;" />                           | eye              | Images / Vision capability                    |
+| <img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" />                         | type             | Format menu toggle                            |
+| <img src="assets/wand.svg" alt="Wand icon" width="16" height="16" style="vertical-align:text-bottom;" />                         | wand             | Chapter AI action (extend/rewrite)            |
+| <img src="assets/wand-2.svg" alt="Wand2 icon" width="16" height="16" style="vertical-align:text-bottom;" />                      | wand-2           | Model capability indicator (function calling) |
+| <img src="assets/swatches/violet.svg" alt="Violet mark" width="16" height="16" style="vertical-align:text-bottom;" />            | swatch-violet    | WRITING role color                            |
+| <img src="assets/swatches/fuchsia.svg" alt="Fuchsia mark" width="16" height="16" style="vertical-align:text-bottom;" />          | swatch-fuchsia   | EDITING role color                            |
+| <img src="assets/swatches/blue.svg" alt="Blue mark" width="16" height="16" style="vertical-align:text-bottom;" />                | swatch-blue      | CHAT role color                               |
+| <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />                         | plus             | Add / new item                                |
+| <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" />                       | edit-2           | Edit item                                     |
+| <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />                     | trash-2          | Delete item                                   |
+| <img src="assets/settings.svg" alt="Settings icon" width="16" height="16" style="vertical-align:text-bottom;" />                 | settings         | Main settings                                 |
+| <img src="assets/settings-2.svg" alt="Settings2 icon" width="16" height="16" style="vertical-align:text-bottom;" />              | settings-2       | Chat settings                                 |
+| <img src="assets/globe.svg" alt="Globe icon" width="16" height="16" style="vertical-align:text-bottom;" />                       | globe            | Web search                                    |
+| <img src="assets/ghost.svg" alt="Ghost icon" width="16" height="16" style="vertical-align:text-bottom;" />                       | ghost            | Incognito chat                                |
+| <img src="assets/history.svg" alt="History icon" width="16" height="16" style="vertical-align:text-bottom;" />                   | history          | Chat history                                  |
+| <img src="assets/save.svg" alt="Save icon" width="16" height="16" style="vertical-align:text-bottom;" />                         | save             | Save/checkpoint                               |
+| <img src="assets/search.svg" alt="Search icon" width="16" height="16" style="vertical-align:text-bottom;" />                     | search           | Search                                        |
+| <img src="assets/link.svg" alt="Link icon" width="16" height="16" style="vertical-align:text-bottom;" />                         | link             | Insert link                                   |
+| <img src="assets/download.svg" alt="Download icon" width="16" height="16" style="vertical-align:text-bottom;" />                 | download         | Export ZIP                                    |
+| <img src="assets/chevron-down.svg" alt="Chevron Down icon" width="16" height="16" style="vertical-align:text-bottom;" />         | chevron-down     | Dropdown indicator                            |
+| <img src="assets/chevron-right.svg" alt="Chevron Right icon" width="16" height="16" style="vertical-align:text-bottom;" />       | chevron-right    | Collapsible sections                          |
+| <img src="assets/refresh-cw.svg" alt="Refresh icon" width="16" height="16" style="vertical-align:text-bottom;" />                | refresh-cw       | Regenerate / refresh                          |
+| <img src="assets/x.svg" alt="X icon" width="16" height="16" style="vertical-align:text-bottom;" />                               | x                | Close/cancel                                  |
+| <img src="assets/arrow-right.svg" alt="Arrow Right icon" width="16" height="16" style="vertical-align:text-bottom;" />           | arrow-right      | Navigate / accept                             |
+| <img src="assets/arrow-right-left.svg" alt="Arrow Right Left icon" width="16" height="16" style="vertical-align:text-bottom;" /> | arrow-right-left | Switch context                                |
+| <img src="assets/alert-triangle.svg" alt="Alert Triangle icon" width="16" height="16" style="vertical-align:text-bottom;" />     | alert-triangle   | Warning / invalid input                       |
+
 ### Supported Markdown Elements
 
 All chapter content is stored as CommonMark-compatible markdown with GFM extensions and a few custom inline extensions. The complete set of elements rendered in Visual mode and previewed in MD mode is shown below. Elements marked **toolbar** have a dedicated button; the rest can be typed directly in Raw or MD mode.
