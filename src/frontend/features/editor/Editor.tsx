@@ -37,9 +37,8 @@ import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 // @ts-ignore
 import { marked } from 'marked';
-// @ts-ignore
-import TurndownService from 'turndown';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
+import { createEditorTurndownService } from './turndown';
 import {
   applyInlineFormatAtSelection,
   getBlockType,
@@ -319,27 +318,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     const turndownService = useRef<TurndownServiceLike | null>(null);
     if (!turndownService.current) {
-      const td = new TurndownService({
-        headingStyle: 'atx',
-        codeBlockStyle: 'fenced',
-        emDelimiter: '*',
-      });
-      // Preserve soft line-breaks: a bare <br> (not inside a pre block)
-      // round-trips as '\n' so that switching modes does not collapse newlines
-      // into nothing.  With marked `breaks: true` both bare '\n' and '  \n'
-      // render as <br> in WYSIWYG, so the visual result is always lossless.
-      td.addRule('softBreak', {
-        filter: (node: any) =>
-          node.nodeName === 'BR' && node.parentNode?.nodeName !== 'PRE',
-        replacement: () => '\n',
-      });
-      // Strip WS marker spans back to a plain space during roundtrip
-      td.addRule('wsMarker', {
-        filter: (node: any) =>
-          node.nodeName === 'SPAN' && node.getAttribute('data-ws-marker') === '1',
-        replacement: () => ' ',
-      });
-      turndownService.current = td;
+      turndownService.current = createEditorTurndownService();
     }
 
     // Keep WYSIWYG DOM synchronized when content changes externally.
@@ -359,7 +338,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       }
     }, [chapter.content, viewMode, chapter.id, showWhitespace]);
 
-    const handleWysiwygInput = () => {
+    const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
+      if (e && !e.nativeEvent.isTrusted) return;
       if (wysiwygRef.current) {
         const html = wysiwygRef.current.innerHTML;
         const md = turndownService.current.turndown(html);
@@ -374,9 +354,17 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // While the element is focused, markers are absent so typing isn't
     // disrupted; on blur we re-render and re-inject for a clean view.
     const handleWysiwygBlur = () => {
-      if (!showWhitespace || !wysiwygRef.current) return;
+      if (!wysiwygRef.current) return;
+
       const currentMd =
         turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
+
+      if (currentMd !== chapter.content) {
+        onChange(chapter.id, { content: currentMd });
+      }
+
+      if (!showWhitespace) return;
+
       wysiwygRef.current.innerHTML = marked.parse(currentMd, {
         breaks: true,
       }) as string;
@@ -535,7 +523,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     }, [maybeHandleSuggestionHotkey]);
 
     useEffect(() => {
-      if (viewMode !== 'wysiwyg') return;
+      if (viewMode !== 'wysiwyg') return () => {};
       const onSelectionChange = () => {
         if (wysiwygRef.current) {
           const selection = window.getSelection();
@@ -550,6 +538,18 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       document.addEventListener('selectionchange', onSelectionChange);
       return () => document.removeEventListener('selectionchange', onSelectionChange);
     }, [viewMode]);
+
+    useEffect(() => {
+      if (viewMode !== 'wysiwyg' || !wysiwygRef.current) return () => {};
+      // Always preserve the latest WYSIWYG state when leaving visual mode.
+      return () => {
+        const currentMd =
+          turndownService.current?.turndown(wysiwygRef.current!.innerHTML) ?? '';
+        if (currentMd !== chapter.content) {
+          onChange(chapter.id, { content: currentMd });
+        }
+      };
+    }, [viewMode, chapter.content, chapter.id, onChange]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (maybeHandleSuggestionHotkey(e)) return;
