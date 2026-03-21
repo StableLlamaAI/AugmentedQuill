@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { isSafeImageUrl, isSafeLinkUrl } from './Editor';
+import { escapeHtmlAttribute, isSafeImageUrl, isSafeLinkUrl } from './Editor';
 
 describe('isSafeLinkUrl', () => {
   it('allows safe HTTP, HTTPS, FTP, mailto and relative paths', () => {
@@ -61,5 +61,11 @@ describe('isSafeImageUrl', () => {
     expect(isSafeImageUrl('ftp://example.com/foo.png')).toBe(false);
     expect(isSafeImageUrl('//example.com/foo.png')).toBe(false);
     expect(isSafeImageUrl('')).toBe(false);
+  });
+});
+
+describe('escapeHtmlAttribute', () => {
+  it('escapes HTML entities in attribute values', () => {
+    expect(escapeHtmlAttribute('a&b"c\'<d>')).toBe('a&amp;b&quot;c&#39;&lt;d&gt;');
   });
 });

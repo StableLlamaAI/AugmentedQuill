@@ -105,6 +105,14 @@ export const isSafeImageUrl = (src: string): boolean => {
   );
 };
 
+export const escapeHtmlAttribute = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
 // Configure marked extensions once (subscript, superscript, footnotes).
 configureMarked();
 
@@ -323,7 +331,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
       const alt = altText || filename;
       if (viewMode === 'wysiwyg') {
-        const html = `<img src="${url}" alt="${alt}" />`;
+        if (!isSafeImageUrl(url)) {
+          // Avoid inserting malicious URI contents into execCommand.
+          return;
+        }
+
+        const safeUrl = escapeHtmlAttribute(url);
+        const safeAlt = escapeHtmlAttribute(alt);
+        const html = `<img src="${safeUrl}" alt="${safeAlt}" />`;
+
         if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
           document.execCommand('insertHTML', false, html);
           wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
