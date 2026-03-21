@@ -218,6 +218,34 @@ describe('CodeMirrorEditor', () => {
     expect(marker?.style.width).toBe('1ch');
   });
 
+  it('places cursor before end-of-line ws marker', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const { container } = render(
+      <CodeMirrorEditor
+        ref={ref}
+        value="abc\n"
+        onChange={vi.fn()}
+        showWhitespace={true}
+      />
+    );
+
+    await act(async () => {
+      ref.current?.dispatch({ selection: { anchor: 3, head: 3 } });
+    });
+
+    const line = container.querySelector('.cm-line');
+    expect(line).not.toBeNull();
+    if (!line) return;
+
+    const lineHtml = line.innerHTML;
+    expect(lineHtml).toContain('abc');
+    expect(lineHtml).toContain('<span aria-hidden="true" class="cm-ws-marker"');
+    // In Raw mode with WS markers, EOL marker should appear after the line text
+    expect(lineHtml.indexOf('abc')).toBeLessThan(
+      lineHtml.indexOf('class="cm-ws-marker"')
+    );
+  });
+
   // ── Placeholder ────────────────────────────────────────────────────────────
 
   it('renders a placeholder element when the document is empty', async () => {

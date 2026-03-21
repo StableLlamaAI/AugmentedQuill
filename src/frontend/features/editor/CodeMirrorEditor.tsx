@@ -124,9 +124,9 @@ const buildWhitespacePlugin = () =>
         const lastLine = doc.lineAt(Math.min(vpTo, doc.length)).number;
         for (let n = firstLine; n <= lastLine; n++) {
           const line = doc.line(n);
-          // side: -1 places the widget before the position (at the line end,
-          // before any following newline character)
-          decs.push(Decoration.widget({ widget: wsNlWidget, side: -1 }).range(line.to));
+          // side: 1 places the widget after the position (at the line end,
+          // after the logical caret slot), so the cursor appears before the mark.
+          decs.push(Decoration.widget({ widget: wsNlWidget, side: 1 }).range(line.to));
         }
 
         // Space / tab replacements within the visible range
