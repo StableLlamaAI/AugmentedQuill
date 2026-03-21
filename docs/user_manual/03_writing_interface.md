@@ -46,19 +46,58 @@ From left to right, you can pick between `Raw` (<img src="assets/file-text.svg" 
 
 Next along the bar are the text-formatting shortcuts:
 
-| Button            | Effect                                                              |
-| ----------------- | ------------------------------------------------------------------- |
-| **B** Bold        | Wraps the selection in `**...**` or bold-formats it in Visual mode. |
-| **I** Italic      | Wraps the selection in `_..._` or italic-formats it.                |
-| **Link**          | Inserts a `[text](url)` link template at the cursor.                |
-| **H1**            | Applies a top-level heading (`# `) to the selected line.            |
-| **H2**            | Applies a second-level heading (`## `).                             |
-| **H3**            | Applies a third-level heading (`### `).                             |
-| **Quote**         | Prepends `> ` to turn the line into a blockquote.                   |
-| **List**          | Starts an unordered list with `- `.                                 |
-| **Numbered List** | Starts an ordered list with `1. `.                                  |
+| Button            | Effect                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **B** Bold        | Wraps the selection in `**...**` or bold-formats it in Visual mode.                                                                    |
+| **I** Italic      | Wraps the selection in `_..._` or italic-formats it.                                                                                   |
+| **Image**         | Opens the project image picker; inserts an `![alt](url)` image tag at the cursor.                                                      |
+| **H1**            | Applies a top-level heading (`# `) to the selected line.                                                                               |
+| **H2**            | Applies a second-level heading (`## `).                                                                                                |
+| **H3**            | Applies a third-level heading (`### `).                                                                                                |
+| **List**          | Starts an unordered list with `- `.                                                                                                    |
+| **Numbered List** | Starts an ordered list with `1. `.                                                                                                     |
+| **Quote**         | Prepends `> ` to turn the line into a blockquote.                                                                                      |
+| **Link**          | Inserts a `[text](url)` hyperlink at the cursor.                                                                                       |
+| **Footnote**      | Inserts a numbered footnote reference `[^n]` at the cursor and appends a matching `[^n]: (footnote text)` definition block at the end. |
+| **Code Block**    | Wraps the selection (or inserts an empty block) in a fenced code block ` ``` … ``` ` for multi-line preformatted text.                 |
+| **Subscript**     | Wraps the selection in `~…~` (e.g., `H~2~O` → H₂O). Mutually exclusive with superscript at the same position.                          |
+| **Superscript**   | Wraps the selection in `^…^` (e.g., `E=mc^2^` → E=mc²). Mutually exclusive with subscript at the same position.                        |
+| **Strikethrough** | Wraps the selection in `~~…~~` for struck-through text.                                                                                |
 
-Bold, Italic, and Link are always visible. Heading, Blockquote, and List helpers show up on larger breakpoints and inside the mobile Format menu (<img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon + dropdown). A button highlights when its style is currently active at the cursor, providing instant feedback.
+Buttons are ordered by frequency of use. On narrower screens the less common ones (Strikethrough, Superscript, Subscript, Code Block, Footnote, Link, Quote, then List buttons) progressively collapse into the **Format** dropdown (<img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon + dropdown). On mobile all formatting controls move into the mobile Format menu. A button highlights when its style is currently active at the cursor, providing instant feedback.
+
+### Supported Markdown Elements
+
+All chapter content is stored as CommonMark-compatible markdown with GFM extensions and a few custom inline extensions. The complete set of elements rendered in Visual mode and previewed in MD mode is shown below. Elements marked **toolbar** have a dedicated button; the rest can be typed directly in Raw or MD mode.
+
+#### Inline elements
+
+| Syntax                                  | Result                           | Toolbar |
+| --------------------------------------- | -------------------------------- | ------- |
+| `**bold**` or `__bold__`                | **bold**                         | ✓       |
+| `_italic_` or `*italic*`                | _italic_                         | ✓       |
+| `~~strikethrough~~`                     | ~~strikethrough~~                | ✓       |
+| `~subscript~`                           | H₂O                              | ✓       |
+| `^superscript^`                         | E=mc²                            | ✓       |
+| `` `inline code` ``                     | `inline code`                    | —       |
+| `[link text](https://example.com)`      | [link text](https://example.com) | ✓       |
+| `![alt text](image-url)`                | (rendered image)                 | ✓       |
+| `[^1]` (reference) + `[^1]: text` (def) | Footnote¹                        | ✓       |
+
+#### Block elements
+
+| Syntax                             | Result                  | Toolbar |
+| ---------------------------------- | ----------------------- | ------- |
+| `# Heading 1`                      | Large heading           | ✓       |
+| `## Heading 2`                     | Medium heading          | ✓       |
+| `### Heading 3`                    | Small heading           | ✓       |
+| `> blockquote`                     | Indented quote block    | ✓       |
+| `- item` or `* item`               | Unordered (bullet) list | ✓       |
+| `1. item`                          | Ordered (numbered) list | ✓       |
+| ` ``` ` … ` ``` `                  | Fenced code block       | ✓       |
+| `\| col \| col \|` + separator row | Table (GFM)             | —       |
+
+Tables follow standard GFM format: a header row, a separator row (`| --- | --- |`), and one or more data rows. Column alignment markers (`:---`, `:---:`, `---:`) are also supported.
 
 ### Chapter AI (AI Actions)
 

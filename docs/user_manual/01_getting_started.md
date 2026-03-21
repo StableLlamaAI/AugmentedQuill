@@ -61,13 +61,18 @@ On mobile a single **View** dropdown (showing the current mode and a chevron) co
 
 - **B** (Bold): Wraps the selected text in `**bold**` markers.
 - **I** (Italic): Wraps the selection in `_italic_` markers.
-- **Link** (<img src="assets/edit-2.svg" alt="Link icon" width="16" height="16" style="vertical-align:text-bottom;" />): Inserts a `[text](url)` link skeleton.
+- **Image**: Opens the project image picker and inserts an `![alt](url)` tag at the cursor.
 - **H1**, **H2**, **H3**: Prepend the appropriate heading level to the selected line.
 - **Quote** (blockquote icon): Inserts a `> ` blockquote prefix.
 - **List** (bullet list icon): Starts an unordered `- ` list.
 - **Numbered List** (numbered list icon): Starts an ordered `1. ` list.
+- **Link** (<img src="assets/edit-2.svg" alt="Link icon" width="16" height="16" style="vertical-align:text-bottom;" />): Inserts a `[text](url)` link skeleton.
+- **Footnote** (hash icon): Inserts a numbered footnote reference and a matching definition block.
+- **Code Block** (code icon): Wraps the selection in a fenced code block ` ``` … ``` `.
+- **Subscript** / **Superscript**: Wraps the selection in `~…~` or `^…^`.
+- **Strikethrough**: Wraps the selection in `~~…~~`.
 
-On medium screens the heading and list buttons collapse into a **Format** dropdown (the <img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon with chevron).
+On medium screens the less common buttons collapse into a **Format** dropdown (the <img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon with chevron). See [The Writing Interface](03_writing_interface.md#supported-markdown-elements) for the full list of all supported markdown elements, including tables and inline code.
 
 **Chapter AI** — Two quick actions that call the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> [WRITING model](02_projects_and_settings.md#the-three-ai-models) on the current chapter:
 
