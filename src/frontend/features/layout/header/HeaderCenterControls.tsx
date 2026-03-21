@@ -9,12 +9,13 @@
  * Defines center controls in app header to keep top-level header composition concise.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Bold,
   ChevronDown,
   Code,
   Code2,
+  Cpu,
   Eye,
   FileEdit,
   FileText,
@@ -88,52 +89,150 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
     themeTokens;
 
-  const renderHeadingButtons = (withWidthName = '') => (
-    <>
-      {['h1', 'h2', 'h3'].map((h) => (
-        <button
-          key={h}
-          onClick={() => handleFormat(h)}
-          className={`${getFormatButtonClass(h)} font-serif font-bold text-xs ${withWidthName}`}
-          title={withWidthName ? `Heading ${h.charAt(1)}` : undefined}
-        >
-          {h.toUpperCase()}
-        </button>
-      ))}
-    </>
-  );
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement | null>(null);
+  const formatMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const renderBlockButtons = (withTitle = false, additionalClass = '') => (
-    <>
-      <button
-        onClick={() => handleFormat('quote')}
-        className={`${getFormatButtonClass('quote')} ${additionalClass}`.trim()}
-        title={withTitle ? 'Blockquote' : undefined}
-      >
-        <Quote size={16} />
-      </button>
-      <button
-        onClick={() => handleFormat('ul')}
-        className={`${getFormatButtonClass('ul')} ${additionalClass}`.trim()}
-        title={withTitle ? 'List' : undefined}
-      >
-        <List size={16} />
-      </button>
-      <button
-        onClick={() => handleFormat('ol')}
-        className={`${getFormatButtonClass('ol')} ${additionalClass}`.trim()}
-        title={withTitle ? 'Numbered List' : undefined}
-      >
-        <ListOrdered size={16} />
-      </button>
-    </>
-  );
+  // Track window width to compute which format buttons collapse into the dropdown.
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+      if (formatMenuRef.current && !formatMenuRef.current.contains(e.target as Node)) {
+        setIsFormatMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [setIsFormatMenuOpen]);
+
+  // Format buttons ordered from MOST important (index 0) to LEAST important (last).
+  // The least-important ones collapse into the Formatting dropdown first.
+  const allFormatButtons: Array<{
+    key: string;
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    extraClass?: string;
+  }> = [
+    {
+      key: 'bold',
+      icon: <Bold size={16} />,
+      label: 'Bold',
+      onClick: () => handleFormat('bold'),
+    },
+    {
+      key: 'italic',
+      icon: <Italic size={16} />,
+      label: 'Italic',
+      onClick: () => handleFormat('italic'),
+    },
+    {
+      key: 'image',
+      icon: <ImageIcon size={16} />,
+      label: 'Insert Image',
+      onClick: onOpenImages,
+    },
+    {
+      key: 'h1',
+      icon: <span className="font-serif font-bold text-xs">H1</span>,
+      label: 'Heading 1',
+      onClick: () => handleFormat('h1'),
+    },
+    {
+      key: 'h2',
+      icon: <span className="font-serif font-bold text-xs">H2</span>,
+      label: 'Heading 2',
+      onClick: () => handleFormat('h2'),
+    },
+    {
+      key: 'h3',
+      icon: <span className="font-serif font-bold text-xs">H3</span>,
+      label: 'Heading 3',
+      onClick: () => handleFormat('h3'),
+    },
+    {
+      key: 'ul',
+      icon: <List size={16} />,
+      label: 'List',
+      onClick: () => handleFormat('ul'),
+    },
+    {
+      key: 'ol',
+      icon: <ListOrdered size={16} />,
+      label: 'Numbered List',
+      onClick: () => handleFormat('ol'),
+    },
+    {
+      key: 'quote',
+      icon: <Quote size={16} />,
+      label: 'Blockquote',
+      onClick: () => handleFormat('quote'),
+    },
+    {
+      key: 'link',
+      icon: <LinkIcon size={16} />,
+      label: 'Link',
+      onClick: () => handleFormat('link'),
+    },
+    {
+      key: 'footnote',
+      icon: <Hash size={14} />,
+      label: 'Footnote',
+      onClick: () => handleFormat('footnote'),
+    },
+    {
+      key: 'codeblock',
+      icon: <Code2 size={16} />,
+      label: 'Fenced Code Block',
+      onClick: () => handleFormat('codeblock'),
+    },
+    {
+      key: 'subscript',
+      icon: <Subscript size={16} />,
+      label: 'Subscript',
+      onClick: () => handleFormat('subscript'),
+    },
+    {
+      key: 'superscript',
+      icon: <Superscript size={16} />,
+      label: 'Superscript',
+      onClick: () => handleFormat('superscript'),
+    },
+    {
+      key: 'strikethrough',
+      icon: <Strikethrough size={16} />,
+      label: 'Strikethrough',
+      onClick: () => handleFormat('strikethrough'),
+    },
+  ];
+
+  // How many buttons are shown inline at current width (rest go to dropdown).
+  // Thresholds chosen so the toolbar never overflows before the next step kicks in.
+  const inlineCount = (() => {
+    if (windowWidth >= 1920) return allFormatButtons.length; // all inline
+    if (windowWidth >= 1700) return 14; // hide strikethrough
+    if (windowWidth >= 1536) return 13; // hide strikethrough + superscript
+    if (windowWidth >= 1400) return 12; // hide + subscript
+    if (windowWidth >= 1280) return 10; // hide + codeblock + footnote
+    if (windowWidth >= 1180) return 8; // hide + link + quote
+    if (windowWidth >= 1024) return 6; // hide + ol + ul
+    return 0; // all in mobile menu
+  })();
 
   return (
-    <div className="flex-1 flex justify-center items-center min-w-0 px-2 space-x-2 md:space-x-4">
+    <div className="basis-full sm:basis-auto order-3 sm:order-2 flex-1 flex justify-center items-center min-w-0 px-2 space-x-2 xl:space-x-4 py-1 sm:py-0">
       <div className="relative">
         <div
-          className={`hidden lg:flex items-center p-1 rounded-lg border ${
+          className={`hidden 2xl:flex items-center p-1 rounded-lg border ${
             isLight
               ? 'bg-brand-gray-100 border-brand-gray-200'
               : 'bg-brand-gray-800 border-brand-gray-700'
@@ -183,7 +282,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           </button>
         </div>
 
-        <div className="lg:hidden relative">
+        <div className="2xl:hidden relative">
           <button
             onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium border ${
@@ -274,118 +373,75 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         </div>
       </div>
 
-      <div className="hidden md:flex items-center space-x-0.5">
-        <div className={`w-px h-4 mx-2 ${dividerColor}`}></div>
+      {/* Desktop format toolbar: inline buttons + single Formatting dropdown for overflow */}
+      {inlineCount > 0 && (
+        <div className="hidden lg:flex items-center space-x-0.5">
+          <div className={`w-px h-4 mx-2 ${dividerColor}`}></div>
 
-        <button
-          onClick={() => handleFormat('bold')}
-          className={getFormatButtonClass('bold')}
-          title="Bold"
-        >
-          <Bold size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('italic')}
-          className={getFormatButtonClass('italic')}
-          title="Italic"
-        >
-          <Italic size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('strikethrough')}
-          className={getFormatButtonClass('strikethrough')}
-          title="Strikethrough"
-        >
-          <Strikethrough size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('subscript')}
-          className={getFormatButtonClass('subscript')}
-          title="Subscript"
-        >
-          <Subscript size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('superscript')}
-          className={getFormatButtonClass('superscript')}
-          title="Superscript"
-        >
-          <Superscript size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('link')}
-          className={getFormatButtonClass('link')}
-          title="Link"
-        >
-          <LinkIcon size={16} />
-        </button>
-        <button
-          onClick={onOpenImages}
-          className={getFormatButtonClass('image')}
-          title="Insert Image"
-        >
-          <ImageIcon size={16} />
-        </button>
-        <button
-          onClick={() => handleFormat('footnote')}
-          className={getFormatButtonClass('footnote')}
-          title="Footnote"
-        >
-          <Hash size={14} />
-        </button>
-        <button
-          onClick={() => handleFormat('codeblock')}
-          className={getFormatButtonClass('codeblock')}
-          title="Fenced Code Block"
-        >
-          <Code2 size={16} />
-        </button>
+          {allFormatButtons.slice(0, inlineCount).map((btn) => (
+            <button
+              key={btn.key}
+              onClick={btn.onClick}
+              className={getFormatButtonClass(btn.key)}
+              title={btn.label}
+            >
+              {btn.icon}
+            </button>
+          ))}
 
-        <div className={`w-px h-4 mx-1 ${dividerColor}`}></div>
-
-        <div className="hidden xl:flex items-center space-x-0.5">
-          {renderHeadingButtons('w-8')}
-          <div className={`w-px h-4 mx-1 ${dividerColor}`}></div>
-          {renderBlockButtons(true)}
-        </div>
-
-        <div className="xl:hidden relative">
-          <button
-            onClick={() => setIsFormatMenuOpen(!isFormatMenuOpen)}
-            className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
-              isFormatMenuOpen
-                ? buttonActive
-                : isLight
-                  ? 'text-brand-gray-500 hover:bg-brand-gray-100'
-                  : 'text-brand-gray-400 hover:bg-brand-gray-800'
-            }`}
-            title="Formatting"
-          >
-            <Type size={16} />
-            <ChevronDown size={10} />
-          </button>
-          {isFormatMenuOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setIsFormatMenuOpen(false)}
-              ></div>
-              <div
-                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 rounded-lg shadow-xl border p-2 z-20 grid grid-cols-3 gap-1 ${
-                  isLight
-                    ? 'bg-brand-gray-50 border-brand-gray-200'
-                    : 'bg-brand-gray-800 border-brand-gray-700'
+          {/* Formatting dropdown: collects buttons that don't fit inline */}
+          {inlineCount < allFormatButtons.length && (
+            <div className="relative" ref={formatMenuRef}>
+              <button
+                onClick={() => setIsFormatMenuOpen(!isFormatMenuOpen)}
+                className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
+                  isFormatMenuOpen
+                    ? buttonActive
+                    : isLight
+                      ? 'text-brand-gray-500 hover:bg-brand-gray-100'
+                      : 'text-brand-gray-400 hover:bg-brand-gray-800'
                 }`}
+                title="Formatting"
               >
-                {renderHeadingButtons()}
-                {renderBlockButtons()}
-              </div>
-            </>
+                <Type size={16} />
+                <ChevronDown size={10} />
+              </button>
+              {isFormatMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setIsFormatMenuOpen(false)}
+                  ></div>
+                  <div
+                    className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl border p-2 z-20 flex gap-1 flex-wrap max-w-48 ${
+                      isLight
+                        ? 'bg-brand-gray-50 border-brand-gray-200'
+                        : 'bg-brand-gray-800 border-brand-gray-700'
+                    }`}
+                  >
+                    {allFormatButtons.slice(inlineCount).map((btn) => (
+                      <button
+                        key={btn.key}
+                        onClick={() => {
+                          btn.onClick();
+                          setIsFormatMenuOpen(false);
+                        }}
+                        className={getFormatButtonClass(btn.key)}
+                        title={btn.label}
+                      >
+                        {btn.icon}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="md:hidden relative">
+      {/* Mobile format button: all buttons in one menu */}
+      <div className="lg:hidden relative">
         <button
           onClick={() => setIsMobileFormatMenuOpen(!isMobileFormatMenuOpen)}
           className={`p-2 rounded-md border flex items-center gap-2 text-xs font-medium ${
@@ -407,141 +463,31 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               onClick={() => setIsMobileFormatMenuOpen(false)}
             ></div>
             <div
-              className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 rounded-xl shadow-2xl border p-3 z-50 flex flex-col gap-3 ${
+              className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-xl shadow-2xl border p-3 z-50 flex flex-wrap gap-1 ${
                 isLight
                   ? 'bg-brand-gray-50 border-brand-gray-200'
                   : 'bg-brand-gray-900 border-brand-gray-700'
               }`}
             >
-              <div>
-                <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
-                  Style
-                </div>
-                <div className="flex gap-1 justify-between flex-wrap">
-                  <button
-                    onClick={() => handleFormat('bold')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('bold')}`}
-                  >
-                    <Bold size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('italic')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('italic')}`}
-                  >
-                    <Italic size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('strikethrough')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('strikethrough')}`}
-                    title="Strikethrough"
-                  >
-                    <Strikethrough size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('subscript')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('subscript')}`}
-                    title="Subscript"
-                  >
-                    <Subscript size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('superscript')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('superscript')}`}
-                    title="Superscript"
-                  >
-                    <Superscript size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('link')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('link')}`}
-                  >
-                    <LinkIcon size={16} />
-                  </button>
-                  <button
-                    onClick={onOpenImages}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('image')}`}
-                    title="Insert Image"
-                  >
-                    <ImageIcon size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('footnote')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('footnote')}`}
-                    title="Footnote"
-                  >
-                    <Hash size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('codeblock')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('codeblock')}`}
-                    title="Code Block"
-                  >
-                    <Code2 size={16} />
-                  </button>
-                </div>
-              </div>
-              <div
-                className={`h-px w-full ${isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-800'}`}
-              ></div>
-              <div>
-                <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
-                  Paragraph
-                </div>
-                <div className="grid grid-cols-4 gap-1">
-                  <button
-                    onClick={() => handleFormat('h1')}
-                    className={`${getFormatButtonClass('h1')} font-serif font-bold text-xs`}
-                  >
-                    H1
-                  </button>
-                  <button
-                    onClick={() => handleFormat('h2')}
-                    className={`${getFormatButtonClass('h2')} font-serif font-bold text-xs`}
-                  >
-                    H2
-                  </button>
-                  <button
-                    onClick={() => handleFormat('h3')}
-                    className={`${getFormatButtonClass('h3')} font-serif font-bold text-xs`}
-                  >
-                    H3
-                  </button>
-                  <button
-                    onClick={() => handleFormat('quote')}
-                    className={`flex justify-center ${getFormatButtonClass('quote')}`}
-                  >
-                    <Quote size={16} />
-                  </button>
-                </div>
-              </div>
-              <div
-                className={`h-px w-full ${isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-800'}`}
-              ></div>
-              <div>
-                <div className="text-[10px] font-bold uppercase text-brand-gray-500 mb-1">
-                  Lists
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleFormat('ul')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('ul')}`}
-                  >
-                    <List size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleFormat('ol')}
-                    className={`flex-1 flex justify-center ${getFormatButtonClass('ol')}`}
-                  >
-                    <ListOrdered size={16} />
-                  </button>
-                </div>
-              </div>
+              {allFormatButtons.map((btn) => (
+                <button
+                  key={btn.key}
+                  onClick={() => {
+                    btn.onClick();
+                    setIsMobileFormatMenuOpen(false);
+                  }}
+                  className={`flex-1 min-w-[2.5rem] flex justify-center ${getFormatButtonClass(btn.key)}`}
+                  title={btn.label}
+                >
+                  {btn.icon}
+                </button>
+              ))}
             </div>
           </>
         )}
       </div>
 
-      <div className="hidden md:flex items-center space-x-1">
+      <div className="hidden lg:flex items-center space-x-1">
         <div className={`w-px h-4 mx-2 ${dividerColor}`}></div>
         <div
           className={`flex items-center rounded-md p-1 space-x-1 border ${
@@ -570,7 +516,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 : 'Extend Chapter (WRITING model)'
             }
           >
-            <span className="hidden xl:inline">Extend</span>
+            <span className="hidden 2xl:inline">Extend</span>
           </Button>
           <Button
             theme={currentTheme}
@@ -586,70 +532,171 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 : 'Rewrite Chapter (WRITING model)'
             }
           >
-            <span className="hidden xl:inline">Rewrite</span>
+            <span className="hidden 2xl:inline">Rewrite</span>
           </Button>
         </div>
       </div>
 
+      {/* Model selectors: dropdown button at 2xl, fully inline at 2xl+ */}
       <div
-        className={`hidden 2xl:flex items-center space-x-3 ml-2 pl-2 border-l h-8 ${
+        className={`hidden 2xl:flex items-center ml-2 pl-2 border-l h-8 ${
           isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
         }`}
       >
-        <ModelSelector
-          label="Writing"
-          value={appSettings.activeWritingProviderId}
-          onSelectorClick={() => {
-            void recheckUnavailableProviderIfStale(appSettings.activeWritingProviderId);
-          }}
-          onChange={(value) =>
-            setAppSettings((previous) => ({
-              ...previous,
-              activeWritingProviderId: value,
-            }))
-          }
-          options={appSettings.providers}
-          theme={currentTheme}
-          connectionStatus={modelConnectionStatus}
-          detectedCapabilities={detectedCapabilities}
-          labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
-        />
-        <ModelSelector
-          label="Editing"
-          value={appSettings.activeEditingProviderId}
-          onSelectorClick={() => {
-            void recheckUnavailableProviderIfStale(appSettings.activeEditingProviderId);
-          }}
-          onChange={(value) =>
-            setAppSettings((previous) => ({
-              ...previous,
-              activeEditingProviderId: value,
-            }))
-          }
-          options={appSettings.providers}
-          theme={currentTheme}
-          connectionStatus={modelConnectionStatus}
-          detectedCapabilities={detectedCapabilities}
-          labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
-        />
-        <ModelSelector
-          label="Chat"
-          value={appSettings.activeChatProviderId}
-          onSelectorClick={() => {
-            void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
-          }}
-          onChange={(value) =>
-            setAppSettings((previous) => ({
-              ...previous,
-              activeChatProviderId: value,
-            }))
-          }
-          options={appSettings.providers}
-          theme={currentTheme}
-          connectionStatus={modelConnectionStatus}
-          detectedCapabilities={detectedCapabilities}
-          labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
-        />
+        {/* Compact dropdown for xl–2xl */}
+        <div className="2xl:hidden relative" ref={modelMenuRef}>
+          <button
+            onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+              isLight
+                ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700 hover:bg-brand-gray-100'
+                : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-300 hover:bg-brand-gray-700'
+            }`}
+            title="Model settings"
+          >
+            <Cpu size={13} />
+            <span>Models</span>
+            <ChevronDown size={10} className="opacity-60" />
+          </button>
+          {isModelMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setIsModelMenuOpen(false)}
+              ></div>
+              <div
+                className={`absolute top-full right-0 mt-2 w-72 rounded-lg shadow-xl border p-3 z-20 flex flex-col gap-3 ${
+                  isLight
+                    ? 'bg-brand-gray-50 border-brand-gray-200'
+                    : 'bg-brand-gray-900 border-brand-gray-700'
+                }`}
+              >
+                <ModelSelector
+                  label="Writing"
+                  value={appSettings.activeWritingProviderId}
+                  onSelectorClick={() => {
+                    void recheckUnavailableProviderIfStale(
+                      appSettings.activeWritingProviderId
+                    );
+                  }}
+                  onChange={(value) =>
+                    setAppSettings((previous) => ({
+                      ...previous,
+                      activeWritingProviderId: value,
+                    }))
+                  }
+                  options={appSettings.providers}
+                  theme={currentTheme}
+                  connectionStatus={modelConnectionStatus}
+                  detectedCapabilities={detectedCapabilities}
+                  labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+                />
+                <ModelSelector
+                  label="Editing"
+                  value={appSettings.activeEditingProviderId}
+                  onSelectorClick={() => {
+                    void recheckUnavailableProviderIfStale(
+                      appSettings.activeEditingProviderId
+                    );
+                  }}
+                  onChange={(value) =>
+                    setAppSettings((previous) => ({
+                      ...previous,
+                      activeEditingProviderId: value,
+                    }))
+                  }
+                  options={appSettings.providers}
+                  theme={currentTheme}
+                  connectionStatus={modelConnectionStatus}
+                  detectedCapabilities={detectedCapabilities}
+                  labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
+                />
+                <ModelSelector
+                  label="Chat"
+                  value={appSettings.activeChatProviderId}
+                  onSelectorClick={() => {
+                    void recheckUnavailableProviderIfStale(
+                      appSettings.activeChatProviderId
+                    );
+                  }}
+                  onChange={(value) =>
+                    setAppSettings((previous) => ({
+                      ...previous,
+                      activeChatProviderId: value,
+                    }))
+                  }
+                  options={appSettings.providers}
+                  theme={currentTheme}
+                  connectionStatus={modelConnectionStatus}
+                  detectedCapabilities={detectedCapabilities}
+                  labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Fully inline at 2xl+ */}
+        <div className="hidden 2xl:flex items-center space-x-3">
+          <ModelSelector
+            label="Writing"
+            value={appSettings.activeWritingProviderId}
+            onSelectorClick={() => {
+              void recheckUnavailableProviderIfStale(
+                appSettings.activeWritingProviderId
+              );
+            }}
+            onChange={(value) =>
+              setAppSettings((previous) => ({
+                ...previous,
+                activeWritingProviderId: value,
+              }))
+            }
+            options={appSettings.providers}
+            theme={currentTheme}
+            connectionStatus={modelConnectionStatus}
+            detectedCapabilities={detectedCapabilities}
+            labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+          />
+          <ModelSelector
+            label="Editing"
+            value={appSettings.activeEditingProviderId}
+            onSelectorClick={() => {
+              void recheckUnavailableProviderIfStale(
+                appSettings.activeEditingProviderId
+              );
+            }}
+            onChange={(value) =>
+              setAppSettings((previous) => ({
+                ...previous,
+                activeEditingProviderId: value,
+              }))
+            }
+            options={appSettings.providers}
+            theme={currentTheme}
+            connectionStatus={modelConnectionStatus}
+            detectedCapabilities={detectedCapabilities}
+            labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
+          />
+          <ModelSelector
+            label="Chat"
+            value={appSettings.activeChatProviderId}
+            onSelectorClick={() => {
+              void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
+            }}
+            onChange={(value) =>
+              setAppSettings((previous) => ({
+                ...previous,
+                activeChatProviderId: value,
+              }))
+            }
+            options={appSettings.providers}
+            theme={currentTheme}
+            connectionStatus={modelConnectionStatus}
+            detectedCapabilities={detectedCapabilities}
+            labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
+          />
+        </div>
       </div>
     </div>
   );
