@@ -359,6 +359,30 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         selected_name=selected_name,
     )
 
+    # If web search is enabled, append the RESEARCH PROTOCOL to the system message
+    # and track the flag for tool injection below.
+    _allow_web_search: bool = bool((payload or {}).get("allow_web_search"))
+    if _allow_web_search:
+        for _msg in req_messages:
+            if _msg.get("role") == "system":
+                _content = _msg.get("content") or ""
+                if "web_search" not in _content:
+                    _msg["content"] = (
+                        _content
+                        + "\n\nWEB SEARCH ENABLED: You have access to 'web_search', "
+                        "'wikipedia_search', and 'visit_page'.\n"
+                        "RESEARCH PROTOCOL:\n"
+                        "1. Start with 'wikipedia_search' for entities/facts, or "
+                        "'web_search' for news/general info.\n"
+                        "2. IMPORTANT: Do NOT rely solely on snippets. You MUST use "
+                        "'visit_page' to read the full content of the top 1-3 most "
+                        "relevant URLs found in the search results before formulating "
+                        "your final response.\n"
+                        "3. This multi-step process is required so the user can see "
+                        "your research path and the actual data you are using."
+                    )
+                break
+
     # If it's a chat, inject current chapter context into the latest user message
     if model_type == "CHAT":
         try:
@@ -434,9 +458,27 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
             # Invalid JSON is ignored by design so users can save drafts safely.
             pass
 
+    # Resolve active project type for tool schema filtering
+    _active_project_type: str | None = None
+    try:
+        _active_dir = get_active_project_dir()
+        if _active_dir:
+            _active_story = load_story_config(_active_dir / "story.json") or {}
+            _active_project_type = _active_story.get("project_type") or None
+    except Exception:
+        pass
+
     # Pass through OpenAI tool-calling fields if provided
     tool_choice = None
-    story_tools = get_registered_tool_schemas(model_type=model_type)
+    story_tools = get_registered_tool_schemas(
+        model_type=model_type, project_type=_active_project_type
+    )
+    if _allow_web_search and model_type == "CHAT":
+        from augmentedquill.services.chat.chat_tool_decorator import (
+            get_opt_in_tool_schemas,
+        )
+
+        story_tools = (story_tools or []) + get_opt_in_tool_schemas("web-search")
     if supports_function_calling:
         tool_choice = (payload or {}).get("tool_choice")
         # If the client explicitly requests "none", do not send tools.

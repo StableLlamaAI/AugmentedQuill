@@ -37,7 +37,7 @@ class StoryApiPromptOpsTest(TestCase):
         self.assertNotIn("{tool_instructions}", system_msg["content"])
 
         # Regression guard: ensure at least one tool is listed in the system prompt.
-        self.assertIn("get_story_summary", system_msg["content"])
+        self.assertIn("get_story_metadata", system_msg["content"])
 
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         self.assertIsNotNone(user_msg)

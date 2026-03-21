@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { prepareChatContext } from './chatContextBudget';
+import { prepareChatContext, estimateChatContextUsage } from './chatContextBudget';
 import { LLMConfig } from '../../types';
 
 const config: LLMConfig = {
@@ -38,6 +38,19 @@ describe('prepareChatContext', () => {
     expect(prepared.usage.compactionApplied).toBe(false);
     expect(prepared.usage.enabled).toBe(true);
     expect(prepared.messages.at(-1)?.content).toBe('What now?');
+  });
+
+  it('estimateChatContextUsage uses fast-path for normal-sized history and avoids heavy compaction', () => {
+    const usage = estimateChatContextUsage({
+      systemInstruction: 'You are helpful.',
+      messages: [{ role: 'user', text: 'Hello there.' }],
+      config,
+    });
+
+    expect(usage.enabled).toBe(true);
+    expect(usage.estimatedTokens).toBeGreaterThan(0);
+    expect(usage.usageRatio).toBeLessThan(0.25);
+    expect(usage.compactionApplied).toBe(false);
   });
 
   it('does not compact or report usage when context window is unset', () => {
@@ -174,6 +187,52 @@ describe('prepareChatContext', () => {
     expect(
       toolMessage.match(/\[Earlier tool result: get_project_overview\]/g)?.length
     ).toBe(1);
+  });
+
+  it('preserves get_current_chapter_id tool message during compaction', () => {
+    const prepared = prepareChatContext({
+      systemInstruction: 'You are helpful.',
+      history: [
+        { role: 'user', text: 'Start chat.' },
+        {
+          role: 'tool',
+          name: 'get_current_chapter_id',
+          tool_call_id: 'call_current_chapter',
+          text: JSON.stringify({
+            chapter_id: 123,
+            chapter_title: 'Current Scene',
+            book_id: 'book-1',
+          }),
+        },
+        {
+          role: 'tool',
+          name: 'get_project_overview',
+          tool_call_id: 'call_project_overview',
+          text: JSON.stringify({
+            project_title: 'Huge Project',
+            chapters: Array.from({ length: 50 }, (_, index) => ({
+              id: index + 1,
+              title: `Chapter ${index + 1}`,
+              summary: 'Very long summary '.repeat(40),
+            })),
+          }),
+        },
+      ],
+      config: { ...config, contextWindowTokens: 4096, modelId: 'demo-4k' },
+      userMessageText: 'Continue.',
+    });
+
+    const currentChapterMessage = prepared.messages.find(
+      (m) => m.role === 'tool' && m.name === 'get_current_chapter_id'
+    );
+    expect(currentChapterMessage).toBeDefined();
+    expect(currentChapterMessage?.content).toContain('"chapter_id":123');
+    expect(currentChapterMessage?.content).toContain('"chapter_title":"Current Scene"');
+
+    const otherToolMessage = prepared.messages.find(
+      (m) => m.role === 'tool' && m.name === 'get_project_overview'
+    );
+    expect(otherToolMessage?.content).toContain('Earlier tool result');
   });
 
   it('respects explicit context window overrides', () => {

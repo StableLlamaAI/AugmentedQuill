@@ -263,7 +263,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
           ) : (
             logs.map((log, idx) => (
               <div
-                key={log.id ?? idx}
+                key={`${log.id ?? 'log'}-${idx}`}
                 className={`border rounded-lg overflow-hidden ${borderMain} ${
                   expandedLogs[log.id] ? 'ring-1 ring-blue-500/30' : ''
                 }`}

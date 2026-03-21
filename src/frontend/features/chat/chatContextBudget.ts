@@ -394,6 +394,14 @@ function getRecentIndexes(messages: MutablePreparedMessage[]): {
   return { recentNonSystem, recentUsers };
 }
 
+function isCriticalToolMessage(message: MutablePreparedMessage): boolean {
+  return (
+    message.role === 'tool' &&
+    typeof message.name === 'string' &&
+    message.name === 'get_current_chapter_id'
+  );
+}
+
 function compactPreparedMessages(
   originalMessages: MutablePreparedMessage[],
   promptBudgetTokens: number
@@ -420,7 +428,12 @@ function compactPreparedMessages(
     index++
   ) {
     const message = messages[index];
-    if (message.role !== 'tool' || recentNonSystem.has(index)) continue;
+    if (
+      message.role !== 'tool' ||
+      recentNonSystem.has(index) ||
+      isCriticalToolMessage(message)
+    )
+      continue;
     const summarized = summarizeToolContent(message.name, message.content);
     if (summarized && summarized !== message.content) {
       message.content = summarized;
@@ -523,7 +536,12 @@ function compactPreparedMessages(
     index++
   ) {
     const message = messages[index];
-    if (message.role !== 'tool' || recentNonSystem.has(index)) continue;
+    if (
+      message.role !== 'tool' ||
+      recentNonSystem.has(index) ||
+      isCriticalToolMessage(message)
+    )
+      continue;
     const fallback = message.name
       ? `[Earlier tool result omitted to stay within context budget: ${message.name}]`
       : '[Earlier tool result omitted to stay within context budget]';
@@ -596,14 +614,61 @@ export function prepareChatContext(params: {
   };
 }
 
+const FAST_CONTEXT_ESTIMATE_MESSAGE_LIMIT = 128;
+
 export function estimateChatContextUsage(params: {
   systemInstruction: string;
   messages: ChatMessage[];
   config: LLMConfig;
 }): ChatContextUsage {
-  return prepareChatContext({
-    systemInstruction: params.systemInstruction,
-    history: params.messages,
-    config: params.config,
-  }).usage;
+  const { systemInstruction, messages, config } = params;
+  const contextWindowTokens = resolveContextWindowTokens(config);
+
+  if (!contextWindowTokens) {
+    return {
+      enabled: false,
+      estimatedTokens: 0,
+      contextWindowTokens: 0,
+      promptBudgetTokens: 0,
+      usageRatio: 0,
+      withinBudget: true,
+      compactionApplied: false,
+      compactedMessages: 0,
+    };
+  }
+
+  const promptBudgetTokens = buildPromptBudget(config, contextWindowTokens);
+
+  const history =
+    messages.length > FAST_CONTEXT_ESTIMATE_MESSAGE_LIMIT
+      ? messages.slice(-FAST_CONTEXT_ESTIMATE_MESSAGE_LIMIT)
+      : messages;
+
+  const preparedMessages = buildPreparedMessages(systemInstruction, history);
+  const estimatedTokens = estimatePromptTokens(preparedMessages);
+  let usageRatio = clamp(estimatedTokens / Math.max(1, contextWindowTokens), 0, 1.5);
+  let withinBudget = estimatedTokens <= promptBudgetTokens;
+  let compactionApplied = false;
+  let compactedMessages = 0;
+
+  if (!withinBudget || usageRatio > CONTEXT_FULL_WARNING_THRESHOLD) {
+    const compacted = compactPreparedMessages(preparedMessages, promptBudgetTokens);
+    const compactedTokens = estimatePromptTokens(compacted.messages);
+
+    usageRatio = clamp(compactedTokens / Math.max(1, contextWindowTokens), 0, 1.5);
+    withinBudget = compactedTokens <= promptBudgetTokens;
+    compactionApplied = compacted.compactedMessages > 0;
+    compactedMessages = compacted.compactedMessages;
+  }
+
+  return {
+    enabled: true,
+    estimatedTokens,
+    contextWindowTokens,
+    promptBudgetTokens,
+    usageRatio,
+    withinBudget,
+    compactionApplied,
+    compactedMessages,
+  };
 }

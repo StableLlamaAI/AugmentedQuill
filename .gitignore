@@ -221,3 +221,4 @@ data/
 # Build artifacts
 static/dist/
 
+tools.json

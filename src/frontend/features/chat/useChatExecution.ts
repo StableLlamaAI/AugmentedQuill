@@ -71,6 +71,16 @@ export function useChatExecution({
   const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
   const updateFlushFrameRef = useRef<number | null>(null);
 
+  const ensureUniqueMessages = (messages: ChatMessage[]): ChatMessage[] => {
+    const seen = new Set<string>();
+    return messages.filter((message) => {
+      if (!message.id) return true;
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return true;
+    });
+  };
+
   const upsertChatMessage = (msgId: string, messageUpdate: Partial<ChatMessage>) => {
     setChatMessages((prev) => {
       const messageIndex = prev.findIndex((item) => item.id === msgId);
@@ -83,9 +93,9 @@ export function useChatExecution({
           thinking: messageUpdate.thinking ?? next[messageIndex].thinking,
           traceback: messageUpdate.traceback ?? next[messageIndex].traceback,
         } as ChatMessage;
-        return next;
+        return ensureUniqueMessages(next);
       }
-      return [
+      return ensureUniqueMessages([
         ...prev,
         {
           id: msgId,
@@ -95,7 +105,7 @@ export function useChatExecution({
           traceback: messageUpdate.traceback ?? '',
           ...messageUpdate,
         } as ChatMessage,
-      ];
+      ]);
     });
   };
 
@@ -205,11 +215,14 @@ export function useChatExecution({
         updateMessage(currentMsgId, update)
       );
 
-      currentHistory.push({
-        id: userMsgId || uuidv4(),
-        role: 'user',
-        text: userText,
-      });
+      const effectiveUserMsgId = userMsgId || uuidv4();
+      if (!currentHistory.some((msg) => msg.id === effectiveUserMsgId)) {
+        currentHistory.push({
+          id: effectiveUserMsgId,
+          role: 'user',
+          text: userText,
+        });
+      }
 
       const accumulatedToolBatches: Array<{
         batch_id: string;
@@ -270,7 +283,7 @@ export function useChatExecution({
             tool_call_id: message.tool_call_id,
           });
         }
-        setChatMessages([...currentHistory]);
+        setChatMessages(ensureUniqueMessages([...currentHistory]));
 
         if (toolResponse.mutations?.story_changed) {
           await refreshProjects();
@@ -368,13 +381,60 @@ export function useChatExecution({
     }
   };
 
+  const buildChapterContextMessage = (
+    history: ChatMessage[],
+    chapter?: { id: string; title: string } | null
+  ): ChatMessage | null => {
+    if (!chapter?.id) return null;
+    const chapterId = parseInt(chapter.id, 10);
+    if (!Number.isFinite(chapterId)) return null;
+
+    // Find the last get_current_chapter_id context message in history.
+    for (let i = history.length - 1; i >= 0; i--) {
+      const msg = history[i];
+      if (msg.role === 'tool' && msg.name === 'get_current_chapter_id') {
+        try {
+          const parsed = JSON.parse(msg.text || '');
+          if (parsed.chapter_id === chapterId) return null; // same chapter, no injection needed
+        } catch {
+          // malformed content – fall through to inject
+        }
+        break; // found a context message but for a different chapter
+      }
+    }
+
+    return {
+      id: uuidv4(),
+      role: 'tool',
+      text: JSON.stringify({
+        chapter_id: chapterId,
+        chapter_title: chapter.title ?? '',
+      }),
+      name: 'get_current_chapter_id',
+      tool_call_id: 'current_context',
+    };
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
-    const newMessage: ChatMessage = { id: userMsgId, role: 'user', text };
     const historyBefore = [...chatMessages];
-    setChatMessages((prev) => [...prev, newMessage]);
-    await executeChatRequest(text, historyBefore, userMsgId);
+
+    // Inject a get_current_chapter_id context message when the chapter has changed
+    // (or when starting a fresh chat). This is stored in chatMessages so that
+    // subsequent requests carry the full accurate chapter-context history.
+    const contextMsg = buildChapterContextMessage(historyBefore, currentChapter);
+
+    const historyWithContext = contextMsg
+      ? [...historyBefore, contextMsg]
+      : historyBefore;
+
+    setChatMessages((prev) => [
+      ...prev,
+      ...(contextMsg ? [contextMsg] : []),
+      { id: userMsgId, role: 'user', text },
+    ]);
+    await executeChatRequest(text, historyWithContext, userMsgId);
   };
 
   const handleStopChat = () => {

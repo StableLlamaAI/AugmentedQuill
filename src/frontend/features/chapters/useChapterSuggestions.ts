@@ -9,7 +9,14 @@
  * Defines the use chapter suggestions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useState, useEffect, useRef } from 'react';
+import {
+  Dispatch,
+  SetStateAction,
+  useState,
+  useEffect,
+  useRef,
+  startTransition,
+} from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../types';
@@ -122,11 +129,50 @@ export function useChapterSuggestions({
   }, [currentChapter?.content, isAutoSourcebookSelectionEnabled]);
 
   const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
+  const suggestionUpdateTimerRef = useRef<number | null>(null);
+
+  const flushSuggestionUpdates = () => {
+    const queued = suggestionUpdateQueueRef.current;
+    if (Object.keys(queued).length === 0) {
+      suggestionUpdateTimerRef.current = null;
+      return;
+    }
+
+    const updates = { ...queued };
+    suggestionUpdateQueueRef.current = {};
+    suggestionUpdateTimerRef.current = null;
+
+    startTransition(() => {
+      setContinuations((previous) => {
+        const next = [...previous];
+        for (const [idxStr, text] of Object.entries(updates)) {
+          const index = Number(idxStr);
+          if (next[index] !== text) {
+            next[index] = text;
+          }
+        }
+        return next;
+      });
+    });
+  };
+
+  const scheduleSuggestionUpdate = (index: number, text: string) => {
+    suggestionUpdateQueueRef.current[index] = text;
+    if (suggestionUpdateTimerRef.current === null) {
+      suggestionUpdateTimerRef.current = window.setTimeout(flushSuggestionUpdates, 100);
+    }
+  };
 
   const cancelSuggestions = () => {
     cancelSignalRef.current.cancelled = true;
     cancelSignalRef.current.reader?.cancel();
     cancelSignalRef.current.reader = undefined;
+    if (suggestionUpdateTimerRef.current !== null) {
+      window.clearTimeout(suggestionUpdateTimerRef.current);
+      suggestionUpdateTimerRef.current = null;
+      suggestionUpdateQueueRef.current = {};
+    }
     if (!isMountedRef.current) return;
     setIsSuggesting(false);
     setIsSuggestionMode(false);
@@ -169,15 +215,15 @@ export function useChapterSuggestions({
           cancelSignal: cancelSignalRef.current,
           onSuggestionUpdate: (index, text) => {
             if (!text) return;
-            setContinuations((previous) => {
-              const next = [...previous];
-              if (next[index] === text) return previous;
-              next[index] = text;
-              return next;
-            });
+            scheduleSuggestionUpdate(index, text);
           },
         }
       );
+      if (suggestionUpdateTimerRef.current !== null) {
+        window.clearTimeout(suggestionUpdateTimerRef.current);
+        suggestionUpdateTimerRef.current = null;
+      }
+      flushSuggestionUpdates();
       setContinuations(options);
     } catch (error: unknown) {
       const errorMessage: ChatMessage = {

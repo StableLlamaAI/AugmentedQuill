@@ -13,7 +13,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from augmentedquill.services.chat.chat_tool_decorator import CHAT_ROLE, chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 
 # Pydantic models for tool parameters
 
@@ -134,7 +138,7 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
 
 @chat_tool(
     description="List all images in the project with their filenames, descriptions, titles, and placeholder status.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="image-admin",
 )
 async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
@@ -170,7 +174,7 @@ async def generate_image_description(
 
 @chat_tool(
     description="Create a new image placeholder with a description. Useful for noting images to be created later.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="image-admin",
 )
 async def create_image_placeholder(
@@ -206,3 +210,89 @@ async def set_image_metadata(
     )
     mutations["story_changed"] = True
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# EDITING: insert an image reference into chapter text
+# ---------------------------------------------------------------------------
+
+
+class InsertImageInChapterParams(BaseModel):
+    """Parameters for inserting an image reference into a chapter."""
+
+    chap_id: int = Field(..., description="The numeric ID of the chapter.")
+    filename: str = Field(
+        ...,
+        description="The image filename (from list_images or create_image_placeholder).",
+    )
+    position: str = Field(
+        "end",
+        description=(
+            "Where to insert the image reference: 'end' appends at the very end, "
+            "'marker' replaces the ~~~ marker if present, "
+            "or 'after_paragraph:N' inserts after the Nth paragraph (1-based)."
+        ),
+    )
+    caption: str | None = Field(
+        None, description="Optional caption text for the image reference."
+    )
+
+
+@chat_tool(
+    description=(
+        "Insert an image reference (Markdown image tag) at a chosen location inside a chapter. "
+        "Use list_images or create_image_placeholder to obtain a valid filename first."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def insert_image_in_chapter(
+    params: InsertImageInChapterParams, payload: dict, mutations: dict
+):
+    """Insert Image In Chapter."""
+    from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
+    from augmentedquill.services.projects.projects import write_chapter_content
+
+    # Security: sanitize filename (no path traversal)
+    filename = Path(params.filename).name
+
+    _chap_id, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    caption_text = params.caption or filename
+    image_md = f"\n\n![{caption_text}]({filename})\n"
+
+    position = (params.position or "end").strip().lower()
+
+    if position == "end":
+        new_text = text.rstrip() + image_md
+    elif position == "marker":
+        MARKER = "~~~"
+        idx = text.find(MARKER)
+        if idx < 0:
+            return {
+                "error": f"Marker '{MARKER}' not found in chapter. Use position='end' instead."
+            }
+        new_text = text[:idx] + image_md.strip() + text[idx + len(MARKER) :]
+    elif position.startswith("after_paragraph:"):
+        try:
+            para_n = int(position.split(":", 1)[1])
+        except (IndexError, ValueError):
+            return {
+                "error": f"Invalid position '{params.position}'. Expected 'after_paragraph:N'."
+            }
+        paragraphs = text.split("\n\n")
+        if para_n < 1 or para_n > len(paragraphs):
+            return {
+                "error": f"Paragraph index {para_n} out of range (1–{len(paragraphs)})."
+            }
+        paragraphs.insert(para_n, image_md.strip())
+        new_text = "\n\n".join(paragraphs)
+    else:
+        return {
+            "error": f"Unknown position '{params.position}'. Use 'end', 'marker', or 'after_paragraph:N'."
+        }
+
+    write_chapter_content(params.chap_id, new_text)
+    mutations["story_changed"] = True
+    return {"ok": True, "filename": filename, "chap_id": params.chap_id}

@@ -340,7 +340,7 @@ export const Chat: React.FC<ChatProps> = ({
 
         {messages.map((msg, i) => (
           <div
-            key={msg.id}
+            key={`${msg.id || 'msg'}-${i}`}
             className={`group flex items-start space-x-3 ${
               msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
             }`}

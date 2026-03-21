@@ -10,14 +10,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from typing import Any, Dict
 
 from augmentedquill.core.config import load_story_config
 from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.services.chat.chat_tools.chapter_tools import (
+    compose_current_chapter_state,
+)
 from augmentedquill.core.prompts import (
     get_system_message,
     load_model_prompt_overrides,
-    get_user_prompt,
 )
 from augmentedquill.services.llm.llm_request_helpers import find_model_in_list
 
@@ -108,49 +111,126 @@ def ensure_system_message_if_missing(
 def inject_chat_user_context(
     req_messages: list[dict], payload: dict, language: str = "en"
 ) -> None:
-    """Inject current chapter context into the beginning of the latest user message if available."""
-    current_chapter = payload.get("current_chapter")
-    if not current_chapter or not isinstance(current_chapter, dict):
+    """Inject current chapter context as a virtual tool message with canonical state."""
+    import copy
+
+    state = compose_current_chapter_state(payload)
+    if not state:
+        # Still return deep copies to prevent side effects
+        req_messages[:] = [copy.deepcopy(m) for m in req_messages]
         return
 
-    chapter_id = current_chapter.get("id", "Unknown")
-    chapter_title = current_chapter.get("title", "")
-    is_empty = current_chapter.get("is_empty", False)
+    target_content = json.dumps(state, ensure_ascii=False)
 
-    # Build the context header
-    # [Current Chapter Context: ID=1, Title="Content"]
-    # or [Current Chapter Context: ID=1]
-    # or [Current Chapter Context: ID=1 (Empty)]
-    parts = [f"ID={chapter_id}"]
-    if chapter_title and chapter_title != "Content":
-        parts.append(f'Title="{chapter_title}"')
-    if is_empty:
-        parts.append("(Empty)")
+    # We rebuild the history from scratch, ensuring all messages are NEW objects.
+    new_history = []
 
-    header = f"[Current Chapter Context: {', '.join(parts)}]"
+    current_seq_context: str | None = None
 
-    # Find the last user message to inject context into
-    last_user_idx = -1
-    for i in range(len(req_messages) - 1, -1, -1):
-        if req_messages[i].get("role") == "user":
-            last_user_idx = i
-            break
+    # Pre-calculate to know when we are at the last user message
+    user_idxs = [idx for idx, m in enumerate(req_messages) if m.get("role") == "user"]
+    last_user_idx = user_idxs[-1] if user_idxs else -1
+    has_any_assistant = any(m.get("role") == "assistant" for m in req_messages)
 
-    if last_user_idx == -1:
-        return
+    for i, msg in enumerate(req_messages):
+        # Always create a deep copy of the original message first
+        msg_copy = copy.deepcopy(msg)
 
-    user_text = req_messages[last_user_idx].get("content") or ""
+        # Handle context tool messages (existing ones)
+        if (
+            msg_copy.get("role") == "tool"
+            and msg_copy.get("name") == "get_current_chapter_id"
+        ):
+            msg_content = msg_copy.get("content")
 
-    # Use the template from instructions.json
-    context_msg = get_user_prompt(
-        "chat_user_context",
-        language=language,
-        header=header,
-        user_text=user_text,
-    )
+            # Is this the start-of-chat context tool?
+            is_start_tool = True
+            for prev_msg in new_history:
+                if prev_msg.get("role") == "user":
+                    is_start_tool = False
+                    break
 
-    if context_msg:
-        req_messages[last_user_idx]["content"] = context_msg
+            # If it's a stale start tool with no assistant yet, update it and continue.
+            # CRITICAL: We only do this "silent update" if the tool DOES NOT have
+            # our internal 'tool_call_id'. If it has 'current_context', it was
+            # explicitly injected by us to mark a turn boundary.
+            if (
+                is_start_tool
+                and not has_any_assistant
+                and msg_copy.get("tool_call_id") != "current_context"
+            ):
+                try:
+                    if json.loads(msg_content) != json.loads(target_content):
+                        msg_copy["content"] = target_content
+                        # tracker matches WHAT WAS THERE ORIGINALLY (the stale value)
+                        # so that is_redundant will be False for the current turn,
+                        # triggering a NEW injection for the correct context.
+                        current_seq_context = msg_content
+                        new_history.append(msg_copy)
+                        continue
+                except Exception:
+                    pass
+
+            # Otherwise, track it as the last seen context
+            current_seq_context = msg_content
+            new_history.append(msg_copy)
+            continue
+
+        # Handle user messages: maybe inject before user
+        if msg_copy.get("role") == "user":
+            is_last_user = i == last_user_idx
+            is_redundant = False
+
+            if current_seq_context:
+                try:
+                    if json.loads(current_seq_context) == json.loads(target_content):
+                        is_redundant = True
+                except Exception:
+                    if current_seq_context == target_content:
+                        is_redundant = True
+
+            # Check if this turn ALREADY has this content (to avoid double-injection within one turn)
+            is_turn_redundant = False
+            for prev in reversed(new_history):
+                if prev.get("role") in ["user", "assistant"]:
+                    break
+                if (
+                    prev.get("role") == "tool"
+                    and prev.get("name") == "get_current_chapter_id"
+                ):
+                    try:
+                        if json.loads(prev.get("content")) == json.loads(
+                            target_content
+                        ):
+                            is_turn_redundant = True
+                        break
+                    except Exception:
+                        pass
+
+            # THE FINAL LOGIC:
+            # Only inject before the LAST user message.
+            # Injecting before historical user messages would put the CURRENT chapter
+            # context at the wrong position and with the wrong (now-active) chapter.
+            # Historical turns already had their context handled in prior LLM calls.
+            should_inject = False
+            if is_last_user and (current_seq_context is None or not is_redundant):
+                should_inject = True
+
+            if should_inject and not is_turn_redundant:
+                new_history.append(
+                    {
+                        "role": "tool",
+                        "name": "get_current_chapter_id",
+                        "content": target_content,
+                        "tool_call_id": "current_context",
+                    }
+                )
+                current_seq_context = target_content
+
+        new_history.append(msg_copy)
+
+    # 3. Swap list contents
+    req_messages[:] = new_history
 
 
 def resolve_story_llm_prefs(
