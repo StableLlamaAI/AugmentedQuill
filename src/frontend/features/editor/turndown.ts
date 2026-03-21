@@ -12,10 +12,13 @@
 
 import TurndownService from 'turndown';
 
-const escapePipe = (text: string): string => text.replace(/\|/g, '\\|');
+const escapeTableCell = (text: string): string =>
+  text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
 const renderTableRow = (cells: Element[]): string => {
-  const cellTexts = cells.map((cell) => escapePipe((cell.textContent || '').trim()));
+  const cellTexts = cells.map((cell) =>
+    escapeTableCell((cell.textContent || '').trim())
+  );
   return `| ${cellTexts.join(' | ')} |`;
 };
 

@@ -32,6 +32,18 @@ describe('createEditorTurndownService', () => {
     expect(output).not.toContain('A\n\nB');
   });
 
+  it('escapes backslashes and pipes in table cells to prevent markdown injection', () => {
+    const html =
+      '<table><thead><tr><th>h\\\\</th><th>a|b</th></tr></thead><tbody><tr><td>c\\\\</td><td>d|e</td></tr></tbody></table>';
+    const td = createEditorTurndownService();
+    const output = td.turndown(html).trim();
+
+    expect(output).toContain('h\\\\');
+    expect(output).toContain('a\\|b');
+    expect(output).toContain('c\\\\');
+    expect(output).toContain('d\\|e');
+  });
+
   it('keeps table structure when a cell is edited in HTML before conversion', () => {
     const rawMd = '| A | B |\n|---|---|\n| 1 | 2 |';
     const html = marked.parse(rawMd, { breaks: true }) as string;
