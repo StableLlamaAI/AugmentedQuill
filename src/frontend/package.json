@@ -19,7 +19,7 @@
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "codemirror": "^6.0.2",
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.3.3",
     "lucide-react": "^0.577.0",
     "marked": "17.0.4",
     "react": "^19.2.3",
