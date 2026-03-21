@@ -55,6 +55,56 @@ import {
   TextSelectionRange,
 } from './markdownToolbarUtils';
 
+// URL sanitizer helpers for createLink/insertImage to avoid passing
+// unsafe protocols directly into document.execCommand.
+export const isSafeLinkUrl = (url: string): boolean => {
+  const value = url?.trim();
+  if (!value) return false;
+
+  // Block known dangerous protocols early.
+  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
+
+  // Allow http(s), ftp, mailto, and path-based links.
+  if (/^(?:https?:\/\/|ftp:\/\/|mailto:)/i.test(value)) {
+    if (/^(?:https?:\/\/|ftp:\/\/)/i.test(value)) {
+      try {
+        new URL(value);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return (
+    (value.startsWith('/') && !value.startsWith('//')) ||
+    value.startsWith('./') ||
+    value.startsWith('../')
+  );
+};
+
+export const isSafeImageUrl = (src: string): boolean => {
+  const value = src?.trim();
+  if (!value) return false;
+
+  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
+
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      new URL(value);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  return (
+    (value.startsWith('/') && !value.startsWith('//')) ||
+    value.startsWith('./') ||
+    value.startsWith('../')
+  );
+};
+
 // Configure marked extensions once (subscript, superscript, footnotes).
 configureMarked();
 
@@ -829,9 +879,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           case 'link': {
             const url = prompt('Enter URL:');
             if (url !== null) {
-              // Reject javascript:/vbscript: pseudo-protocols to prevent XSS.
-              const safe =
-                /^(https?|mailto|ftp):\/\//i.test(url) || url.startsWith('/');
+              const safe = isSafeLinkUrl(url);
               if (safe)
                 withRestoredWysiwygSelection(() =>
                   document.execCommand('createLink', false, url)
@@ -842,11 +890,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           case 'image': {
             const src = prompt('Enter Image URL:');
             if (src !== null) {
-              // Only allow http/https/relative paths — block javascript: etc.
-              const safe =
-                /^https?:\/\//i.test(src) ||
-                src.startsWith('/') ||
-                src.startsWith('./');
+              const safe = isSafeImageUrl(src);
               if (safe)
                 withRestoredWysiwygSelection(() =>
                   document.execCommand('insertImage', false, src)
