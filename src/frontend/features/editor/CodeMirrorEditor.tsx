@@ -41,11 +41,11 @@ class WsSpaceWidget extends WidgetType {
     el.setAttribute('aria-hidden', 'true');
     el.className = 'cm-ws-marker';
     el.textContent = '·';
-    // Use inline-block with a minimum width that matches the typical word-space
-    // in a proportional serif font (~0.28em), so replacing a space with this
-    // widget does not compress the surrounding text.
+    // Use inline-block with a width equal to a typical space, so visible whitespace
+    // mode does not significantly change layout.  Keep consistent with WYSIWYG.
     el.style.display = 'inline-block';
-    el.style.minWidth = '0.28em';
+    el.style.minWidth = '0.25em';
+    el.style.width = '0.25em';
     el.style.textAlign = 'center';
     el.style.verticalAlign = 'baseline';
     el.style.opacity = '0.5';

@@ -131,7 +131,13 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
           const span = document.createElement('span');
           span.dataset.wsMarker = '1';
           span.setAttribute('aria-hidden', 'true');
+          span.className = 'cm-ws-marker';
           span.textContent = '\u00b7'; // MIDDLE DOT
+          span.style.display = 'inline-block';
+          span.style.minWidth = '0.25em';
+          span.style.width = '0.25em';
+          span.style.textAlign = 'center';
+          span.style.verticalAlign = 'baseline';
           span.style.opacity = '0.5';
           span.style.pointerEvents = 'none';
           span.style.userSelect = 'none';
