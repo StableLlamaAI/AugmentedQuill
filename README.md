@@ -18,6 +18,17 @@ It is designed for writers who want to maintain creative control while using AI 
   - **Raw**: Distraction-free text editing.
   - **Visual**: Markdown-rendered reading view.
 - **AI Writing Partner**: A dedicated chat interface ("Writing Partner") to brainstorm, ask questions about your story, or get feedback.
+
+## Important Non-Production Warning
+
+AugmentedQuill is intended for local use only. It does not provide user authentication, multi-user access control, or network-facing security controls. Do not expose this app to the public internet without placing it behind a secure proxy and proper access control.
+
+## Known Limitations
+
+- Accessibility features (screen-reader mode, WCAG-focused keyboard navigation, high contrast indicators, etc.) are not yet implemented.
+- External editor synchronization (VS Code/live-sync or Git hooks) and real-time multi-user collaboration are not supported.
+- Keyboard shortcut support goes only as far as editor/cursor basic actions; advanced global shortcut presets are not provided in this version.
+
 - **Smart Editing Tools**:
   - **Text Generation**: Continue writing from where you left off.
   - **Prompt Overrides**: Customize system prompts for different AI personas (Editor, Writer, Chat).
@@ -133,6 +144,15 @@ Notes:
 This project is licensed under the GNU General Public License v3.0 (GPLv3). See the [LICENSE](LICENSE) file for details.
 
 Copyright (C) 2026 StableLlama
+
+## Security, Privacy, and Usage Scope
+
+AugmentedQuill is designed for local use and assumes a trusted local environment. It does not provide built-in access control for the web server, project data, or user sessions. Do not expose the app publicly without a secure proxy/VPN and additional authentication layers.
+
+- No internal user authentication or per-project permissions.
+- No “sync with external editors” feature currently; project files are stored locally under `data/projects/`.
+- No accessibility compliance features are currently implemented (keyboard shortcuts, screen reader support, or ARIA optimizations).
+- When using third-party LLM endpoints, protect your API keys and understand that model requests are sent from the client browser.
 
 ## Project Image Settings
 

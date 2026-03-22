@@ -2,6 +2,13 @@
 
 AugmentedQuill is designed to be a seamless extension of your creative process. It combines a traditional writing environment with powerful AI tools that understand your story's context.
 
+## Important Limits (As of 2026)
+
+- AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.
+- No built-in user authentication or per-project access control exists. Treat the running instance as trusted local software.
+- No external editor sync is provided; project data is kept in local folders (e.g., `data/projects/`).
+- Accessibility support is currently not implemented (no dedicated keyboard shortcuts, ARIA, screen-reader enhancements).
+
 ## Core Concepts
 
 Before diving in, it's helpful to understand how AugmentedQuill organizes your work:

@@ -187,6 +187,8 @@ Apply the useful feedback and tighten the manuscript. Revision is where a good s
 
 The story is solid; now make it clean and presentable.
 
+> Note: At the time of writing, AugmentedQuill does not have a comprehensive keyboard shortcut guide and relies primarily on UI interactions.
+
 ### 16. Copyediting & Proofreading
 
 Hunt down typos, grammar issues, and formatting problems. This is tedious, but it makes a big difference.
