@@ -27,11 +27,6 @@
     "directories": {
       "output": "dist"
     },
-    "mac": {
-      "category": "public.app-category.productivity",
-      "gatekeeperAssess": false,
-      "hardenedRuntime": false
-    },
     "win": {
       "target": "nsis"
     },
