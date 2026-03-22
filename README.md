@@ -47,17 +47,17 @@
 
 The complete user guide is in `docs/user_manual/`:
 
-- `docs/user_manual/01_getting_started.md`
-- `docs/user_manual/02_projects_and_settings.md`
-- `docs/user_manual/03_writing_interface.md`
-- `docs/user_manual/04_chapters_and_books.md`
-- `docs/user_manual/05_sourcebook.md`
-- `docs/user_manual/06_project_images.md`
-- `docs/user_manual/07_ai_chat_assistant.md`
-- `docs/user_manual/08_appearance_and_display.md`
-- `docs/user_manual/09_tutorial_first_story.md`
-- `docs/user_manual/10_writing_a_story.md`
-- `docs/user_manual/11_troubleshooting.md`
+- [Getting started](docs/user_manual/01_getting_started.md)
+- [Projects and settings](docs/user_manual/02_projects_and_settings.md)
+- [Writing interface](docs/user_manual/03_writing_interface.md)
+- [Chapters and books](docs/user_manual/04_chapters_and_books.md)
+- [Sourcebook](docs/user_manual/05_sourcebook.md)
+- [Project images](docs/user_manual/06_project_images.md)
+- [AI chat assistant](docs/user_manual/07_ai_chat_assistant.md)
+- [Appearance and display](docs/user_manual/08_appearance_and_display.md)
+- [First story tutorial](docs/user_manual/09_tutorial_first_story.md)
+- [Writing a story](docs/user_manual/10_writing_a_story.md)
+- [Troubleshooting](docs/user_manual/11_troubleshooting.md)
 
 > Tip: Start with `01_getting_started.md`, then `03_writing_interface.md`.
 
