@@ -283,7 +283,7 @@ def ensure_runtime_user_config_files() -> None:
             "chapters": [],
             "format": "markdown",
             "metadata": {"version": CURRENT_SCHEMA_VERSION},
-            "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+            "llm_prefs": {"temperature": 0.7, "max_tokens": 16384},
             "sourcebook": {},
             "story_summary": "",
             "tags": [],

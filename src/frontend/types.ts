@@ -173,7 +173,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   modelId: 'gpt-4o',
   temperature: 0.7,
   topP: 0.95,
-  maxTokens: 2048,
+  maxTokens: 16384,
   presencePenalty: 0,
   frequencyPenalty: 0,
   stop: [],
