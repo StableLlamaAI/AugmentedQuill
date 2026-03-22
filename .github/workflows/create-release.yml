@@ -91,9 +91,10 @@ jobs:
           path: dist/run_app
       - name: Set version in electron/package.json
         run: |
-          VERSION=${{ env.RELEASE_VERSION }}
-          VERSION_CLEAN=${VERSION#v}
-          sed -i 's/"version": ".*"/"version": "'$VERSION_CLEAN'"/' electron/package.json
+          VERSION="${{ env.RELEASE_VERSION }}"
+          VERSION_CLEAN="${VERSION#v}"
+          # Use python for cross-platform JSON editing to avoid sed incompatibilities
+          python3 -c "import json; p='electron/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
         shell: bash
       - name: Build Electron App
         run: |
