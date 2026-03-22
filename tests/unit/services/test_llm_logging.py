@@ -208,8 +208,14 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
 
             self.assertIn('"chunk_count": 2', blob)
             self.assertNotIn('"chunks"', blob)
-            self.assertIn('"full_content_summary"', blob)
-            self.assertNotIn('"body"', blob)
+            self.assertIn('"full_content": "hello world"', blob)
+            self.assertNotIn('"full_content_summary"', blob)
+            self.assertIn(
+                '"messages"', blob
+            )  # request body (communication content) preserved
+            self.assertNotIn(
+                '"body": "raw"', blob
+            )  # response HTTP body stripped in compact mode
 
     async def test_add_llm_log_normal_streaming_entry_includes_chunk_preview(self):
         entry = {
@@ -265,11 +271,13 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             with open(log_path, "r", encoding="utf-8") as f:
                 blob = f.read()
 
-            self.assertIn('"chunks"', blob)
+            self.assertNotIn('"chunks"', blob)
             self.assertIn('"chunk_count": 3', blob)
+            self.assertIn('"chunk_text_preview"', blob)
+            self.assertNotIn('"full_content"', blob)
             self.assertIn('"hello"', blob)
-            self.assertIn('"world"', blob)
-            self.assertIn('"foo"', blob)
+            self.assertIn('" world"', blob)  # leading space preserved (no strip)
+            self.assertIn('" foo"', blob)  # leading space preserved (no strip)
             self.assertIn('"body"', blob)
 
     async def test_add_llm_log_normal_streaming_entry_fallbacks_to_full_content_chunks(
@@ -313,9 +321,13 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             with open(log_path, "r", encoding="utf-8") as f:
                 blob = f.read()
 
-            self.assertIn('"chunks"', blob)
+            self.assertNotIn('"chunks"', blob)
             self.assertIn('"chunk_count": 104', blob)
-            self.assertIn('"Tell me a joke"', blob)
+            self.assertIn('"chunk_text_preview"', blob)
+            self.assertNotIn('"full_content"', blob)
+            self.assertIn(
+                "Tell me a joke", blob
+            )  # content present (full_content as single line entry)
 
     async def test_add_llm_log_debug_streaming_entry_keeps_chunks(self):
         entry = {
@@ -356,5 +368,6 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
                 blob = f.read()
 
             self.assertIn('"chunks"', blob)
+            self.assertNotIn('"chunk_text_preview"', blob)
             self.assertIn('"full_content": "hello world"', blob)
             self.assertIn('"body": "raw"', blob)

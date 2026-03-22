@@ -15,7 +15,6 @@ import datetime
 import uuid
 import os
 import json
-import re
 from typing import Any, Dict, List
 
 # Global list to store LLM communication logs for the current session
@@ -108,88 +107,46 @@ def _prepare_dump_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     prepared = copy.deepcopy(entry)
 
     if "request" in prepared and isinstance(prepared["request"], dict):
-        # keep only essentials in compact mode
-        if verbosity == "compact":
-            prepared["request"] = {
-                "url": prepared["request"].get("url"),
-                "method": prepared["request"].get("method"),
-            }
-        else:
-            prepared["request"].pop("headers", None)
+        # Strip headers in all modes (already redacted but cleaner to remove entirely)
+        prepared["request"].pop("headers", None)
 
     response = prepared.get("response")
     if isinstance(response, dict):
         if response.get("streaming"):
-            # Convert streaming chunk body into compact metadata
-            if isinstance(response.get("chunks"), list):
-                if response["chunks"]:
-                    response["chunk_count"] = len(response["chunks"])
-                else:
-                    response["chunk_count"] = response.get("chunk_count", 0)
-                if verbosity == "compact":
-                    response.pop("chunks", None)
-                elif verbosity == "normal":
-                    # keep a short preview of the chunk text values (max 20)
-                    full_chunks = response["chunks"]
-                    preview = []
-                    for chunk in full_chunks[:20]:
-                        chunk_text = _extract_chunk_text(chunk)
-                        if chunk_text is None:
-                            continue
-                        chunk_text = chunk_text.strip()
-                        if not chunk_text:
-                            continue
-                        if len(chunk_text) > 120:
-                            chunk_text = chunk_text[:120] + "..."
-                        preview.append(chunk_text)
-                    response["chunks"] = preview
-                    if len(full_chunks) > 20:
-                        response["chunks_truncated"] = True
-
-                    # if chunk preview is empty but we know there was streaming,
-                    # fall back to splitting full_content for visibility.
-                    if not response["chunks"] and response.get("chunk_count", 0) > 0:
-                        fallback_text = response.get("full_content", "") or ""
-                        fallback_chunks = [
-                            c.strip()
-                            for c in re.split(r"\n+|[.!?]+", fallback_text)
-                            if c.strip()
-                        ]
-                        response["chunks"] = fallback_chunks[:20]
-                        if len(fallback_chunks) > 20:
-                            response["chunks_truncated"] = True
-
-            # keep only length/summary in compact and normal to reduce size
-            full_content = response.get("full_content")
-            if isinstance(full_content, str):
-                if verbosity == "compact":
-                    response["full_content"] = None
-                    response["full_content_summary"] = (
-                        full_content[:120] + "..."
-                        if len(full_content) > 120
-                        else full_content
-                    )
-                elif verbosity == "normal":
-                    response["full_content"] = (
-                        full_content[:400] + "..."
-                        if len(full_content) > 400
-                        else full_content
-                    )
+            chunks = response.get("chunks") or []
+            # Always record how many raw chunks were received
+            if chunks:
+                response["chunk_count"] = len(chunks)
+            elif "chunk_count" not in response:
+                response["chunk_count"] = 0
 
             if verbosity == "compact":
+                # compact: chunk_count + full_content (assembled text), no raw chunks, no HTTP-level meta
+                response.pop("chunks", None)
                 response.pop("body", None)
                 response.pop("error_detail", None)
+                # full_content stays intact (complete assembled text)
 
-        elif verbosity == "compact":
-            # non-streaming mode still truncates large content for compact dumps
-            if isinstance(response.get("full_content"), str):
-                full = response["full_content"]
-                response["full_content"] = (
-                    full[:400] + "..." if len(full) > 400 else full
-                )
-            if isinstance(response.get("body"), str):
-                body = response["body"]
-                response["body"] = body[:400] + "..." if len(body) > 400 else body
+            elif verbosity == "normal":
+                # normal: text-token list only — no raw chunk objects, no full_content
+                preview = []
+                for chunk in chunks:
+                    chunk_text = _extract_chunk_text(chunk)
+                    if chunk_text is not None:
+                        # preserve as-is: keep newlines and whitespace, no truncation
+                        preview.append(chunk_text)
+
+                # Fallback: if chunks were not stored but full_content was, split by lines
+                if not chunks and response.get("full_content"):
+                    preview = response["full_content"].splitlines(keepends=True)
+
+                response["chunk_text_preview"] = preview
+                response.pop("chunks", None)
+                response.pop("full_content", None)
+
+            # debug: keep everything (raw chunks, full_content, body, error_detail) — no preview added
+
+        # non-streaming: communication content (body, full_content) preserved in all modes
 
     prepared["response"] = response
     return prepared
