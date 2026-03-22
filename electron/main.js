@@ -10,15 +10,15 @@
  */
 
 const { app, BrowserWindow } = require('electron');
-const path = require('path');
-const { spawn } = require('child_process');
-const http = require('http');
 
 // Fix SUID sandbox issues in AppImage environments
-if (process.env.APPIMAGE) {
+// This must be called at the very top level before any other app logic
+if (process.env.APPIMAGE || process.env.CHROME_DEVEL_SANDBOX || !process.env.DISPLAY) {
   app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-setuid-sandbox');
 }
 
+const path = require('path');
 let mainWindow;
 let backendProcess;
 
