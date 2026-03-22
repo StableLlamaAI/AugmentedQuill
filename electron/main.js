@@ -9,16 +9,32 @@
  * Defines the main unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
+const { spawn } = require('child_process');
 const { app, BrowserWindow } = require('electron');
+const http = require('http');
+const path = require('path');
 
-// Fix SUID sandbox issues in AppImage environments
-// This must be called at the very top level before any other app logic
-if (process.env.APPIMAGE || process.env.CHROME_DEVEL_SANDBOX || !process.env.DISPLAY) {
-  app.commandLine.appendSwitch('no-sandbox');
-  app.commandLine.appendSwitch('disable-setuid-sandbox');
+function configureLinuxRuntime() {
+  const isLinux = process.platform === 'linux';
+  const isAppImage = Boolean(process.env.APPIMAGE);
+  const isHeadlessSession = !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
+
+  if (!isLinux) {
+    return;
+  }
+
+  // AppImage mounts chrome-sandbox without the root ownership required by Chromium.
+  // Force the safer non-SUID path so packaged builds start reliably for end users.
+  if (isAppImage || process.env.CHROME_DEVEL_SANDBOX || isHeadlessSession) {
+    process.env.ELECTRON_DISABLE_SANDBOX = '1';
+    app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-setuid-sandbox');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+  }
 }
 
-const path = require('path');
+configureLinuxRuntime();
+
 let mainWindow;
 let backendProcess;
 

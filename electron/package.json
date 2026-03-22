@@ -31,7 +31,19 @@
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "category": "Office",
+      "desktop": {
+        "entry": {
+          "Terminal": "false",
+          "StartupNotify": "true"
+        }
+      },
+      "executableArgs": [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu-sandbox"
+      ]
     },
     "asar": true,
     "asarUnpack": "backend/run_app/**",

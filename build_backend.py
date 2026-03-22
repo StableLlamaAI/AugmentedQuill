@@ -20,6 +20,7 @@ def main():
     name = "AugmentedQuill"
     if len(sys.argv) > 1 and sys.argv[1] == "onedir":
         mode = "--onedir"
+        name = "run_app"
         # We need an entry point that calls main()
         # In the original it was run_app.py, but we can use a wrapper or -m
         # Let's create a minimal run_app.py as well or use --entry-point if pyinstaller supports it via hook
