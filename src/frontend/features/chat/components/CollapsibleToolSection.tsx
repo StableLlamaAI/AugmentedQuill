@@ -16,25 +16,42 @@ export const CollapsibleToolSection: React.FC<{
   title: string;
   children: React.ReactNode;
   defaultExpanded?: boolean;
-}> = ({ title, children, defaultExpanded = false }) => {
+  isExpanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+}> = ({
+  title,
+  children,
+  defaultExpanded = false,
+  isExpanded: isExpandedProp,
+  onExpandedChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const isControlled = isExpandedProp !== undefined;
+  const expanded = isControlled ? isExpandedProp : isExpanded;
 
-  useEffect(() => {
-    setIsExpanded(defaultExpanded);
-  }, [defaultExpanded]);
+  // Explicit user toggles should persist (for uncontrolled mode) and not be overwritten by re-renders.
+  // Controlled mode state is managed externally by onExpandedChange + isExpanded prop.
+
+  const toggleExpanded = () => {
+    const next = !expanded;
+    if (onExpandedChange) onExpandedChange(next);
+    if (!isControlled) {
+      setIsExpanded(next);
+    }
+  };
 
   return (
     <div className="mt-2 border border-black/10 dark:border-white/10 rounded overflow-hidden">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={toggleExpanded}
         className="w-full flex items-center justify-between px-2 py-1 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:hover:bg-black/30 transition-colors text-[10px] font-mono text-brand-gray-500"
       >
         <span className="flex items-center gap-1">
-          {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           {title}
         </span>
       </button>
-      {isExpanded && <div className="p-2 bg-transparent">{children}</div>}
+      {expanded && <div className="p-2 bg-transparent">{children}</div>}
     </div>
   );
 };
