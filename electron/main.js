@@ -14,6 +14,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
 
+// Fix SUID sandbox issues in AppImage environments
+if (process.env.APPIMAGE) {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 let mainWindow;
 let backendProcess;
 
