@@ -9,6 +9,8 @@
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
+import os
+import tempfile
 
 import httpx
 
@@ -134,3 +136,34 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
         self.assertIsInstance(err, str)
         self.assertIn("RuntimeError", err)
         self.assertIn("boom", err)
+
+    async def test_add_llm_log_adds_caller_origin_and_raw_log(self):
+        entry = {
+            "id": "fixed-id",
+            "caller_id": "api.chat.stream",
+            "timestamp_start": "2026-01-01T00:00:00",
+            "timestamp_end": None,
+            "request": {
+                "url": "https://example.com",
+                "method": "GET",
+                "headers": {},
+                "body": None,
+            },
+            "response": {"status_code": 200, "body": None},
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "llm_raw.log")
+            with patch.dict(
+                os.environ,
+                {"AUGQ_LLM_DUMP": "1", "AUGQ_LLM_DUMP_PATH": log_path},
+                clear=False,
+            ):
+                llm_logging.add_llm_log(entry)
+
+            self.assertEqual(len(llm_logging.llm_logs), 1)
+            self.assertEqual(llm_logging.llm_logs[0]["caller_origin"], "User request")
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                blob = f.read()
+            self.assertIn('"caller_origin": "User request"', blob)

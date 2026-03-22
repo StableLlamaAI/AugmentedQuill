@@ -20,6 +20,26 @@ from typing import Any, Dict, List
 llm_logs: List[Dict[str, Any]] = []
 
 
+def get_caller_origin(caller_id: str | None) -> str:
+    """Derive a human-friendly source label from caller_id for diagnostics."""
+    if not caller_id:
+        return "Unknown"
+    if caller_id.startswith("api."):
+        return "User request"
+    internal_patterns = [
+        "story_generation",
+        "sourcebook.",
+        "chat_tools.",
+        "llm_utils.",
+        "settings_machine.",
+        "story_api_stream.",
+        "chat_api_proxy.",
+    ]
+    if any(caller_id.startswith(p) for p in internal_patterns):
+        return "Internal workflow"
+    return "Internal"
+
+
 def add_llm_log(log_entry: Dict[str, Any]):
     """Add a log entry to the global list, keeping only the last 100 entries.
 
@@ -32,6 +52,9 @@ def add_llm_log(log_entry: Dict[str, Any]):
     doesn't appear twice (start+finalize logging uses the same id).
     """
     entry_copy = copy.deepcopy(log_entry)
+    caller_id = entry_copy.get("caller_id")
+    if caller_id and not entry_copy.get("caller_origin"):
+        entry_copy["caller_origin"] = get_caller_origin(caller_id)
     entry_id = entry_copy.get("id")
 
     if entry_id:
@@ -54,7 +77,15 @@ def add_llm_log(log_entry: Dict[str, Any]):
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
             # Custom formatting: collapse tool definitions to one line each for readability
-            processed_entry = json.loads(json.dumps(log_entry, default=str))
+            processed_entry = json.loads(json.dumps(entry_copy, default=str))
+            if (
+                isinstance(processed_entry, dict)
+                and "caller_id" in processed_entry
+                and "caller_origin" not in processed_entry
+            ):
+                processed_entry["caller_origin"] = get_caller_origin(
+                    processed_entry.get("caller_id")
+                )
 
             # If there are tools in the request body, collapse them
             collapsed_tools = []

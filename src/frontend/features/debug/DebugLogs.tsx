@@ -112,6 +112,23 @@ const JsonView: React.FC<{
   );
 };
 
+const getCallerOrigin = (caller_id?: string) => {
+  if (!caller_id) return 'Unknown';
+  if (caller_id.startsWith('api.')) return 'User request';
+  if (
+    caller_id.startsWith('story_generation') ||
+    caller_id.startsWith('sourcebook.') ||
+    caller_id.startsWith('chat_tools.') ||
+    caller_id.startsWith('llm_utils.') ||
+    caller_id.startsWith('settings_machine.') ||
+    caller_id.startsWith('story_api_stream.') ||
+    caller_id.startsWith('chat_api_proxy.')
+  ) {
+    return 'Internal workflow';
+  }
+  return 'Internal';
+};
+
 export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
@@ -274,14 +291,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                   }`}
                   onClick={() => toggleExpand(log.id)}
                 >
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                    {expandedLogs[log.id] ? (
-                      <ChevronDown size={16} />
-                    ) : (
-                      <ChevronRight size={16} />
-                    )}
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
+                    <div className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[62%]">
+                      {expandedLogs[log.id] ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                         {log.request && (
                           <span
                             className={`text-xs font-mono px-1.5 py-0.5 rounded ${
@@ -322,21 +339,21 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        {log.caller_id && (
-                          <span className="text-[10px] text-brand-gray-500 font-mono">
-                            Caller: {log.caller_id}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-brand-gray-500 font-mono">
-                          Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                    </div>
+                    <div className="w-full sm:w-[36%] text-right flex flex-wrap items-center justify-end gap-3 text-[10px] text-brand-gray-500 font-mono">
+                      {log.caller_id && (
+                        <span className="truncate">
+                          Caller: {log.caller_id} ({getCallerOrigin(log.caller_id)})
                         </span>
-                        {log.timestamp_end && (
-                          <span className="text-[10px] text-brand-gray-500 font-mono">
-                            End: {new Date(log.timestamp_end).toLocaleTimeString()}
-                          </span>
-                        )}
-                      </div>
+                      )}
+                      <span className="truncate">
+                        Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                      </span>
+                      {log.timestamp_end && (
+                        <span className="truncate">
+                          End: {new Date(log.timestamp_end).toLocaleTimeString()}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -355,7 +372,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                             isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900'
                           }`}
                         >
-                          <span className="text-blue-400">{log.caller_id}</span>
+                          <div className="text-blue-400">
+                            {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                          </div>
                         </div>
                       </div>
                     )}
