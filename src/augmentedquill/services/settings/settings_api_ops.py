@@ -52,7 +52,7 @@ def build_story_cfg_from_payload(story: dict) -> dict:
         "chapters": normalized_chapters,
         "llm_prefs": {
             "temperature": float(story.get("llm_prefs", {}).get("temperature", 0.7)),
-            "max_tokens": int(story.get("llm_prefs", {}).get("max_tokens", 2048)),
+            "max_tokens": int(story.get("llm_prefs", {}).get("max_tokens", 16384)),
         },
     }
 

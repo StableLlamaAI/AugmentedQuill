@@ -115,6 +115,10 @@ export const Chat: React.FC<ChatProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
 
+  const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
+    Record<string, boolean>
+  >({});
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -470,7 +474,17 @@ export const Chat: React.FC<ChatProps> = ({
                       {msg.thinking && (
                         <CollapsibleToolSection
                           title="Thinking Process"
-                          defaultExpanded={isLoading && i === messages.length - 1}
+                          isExpanded={
+                            thinkingProcessExpanded[msg.id] !== undefined
+                              ? thinkingProcessExpanded[msg.id]
+                              : isLoading && i === messages.length - 1
+                          }
+                          onExpandedChange={(next) =>
+                            setThinkingProcessExpanded((prev) => ({
+                              ...prev,
+                              [msg.id]: next,
+                            }))
+                          }
                         >
                           <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
                             {msg.thinking}

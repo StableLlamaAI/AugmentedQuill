@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import ast
 import copy
 import datetime
 import uuid
@@ -18,6 +19,137 @@ from typing import Any, Dict, List
 
 # Global list to store LLM communication logs for the current session
 llm_logs: List[Dict[str, Any]] = []
+
+
+def get_caller_origin(caller_id: str | None) -> str:
+    """Derive a human-friendly source label from caller_id for diagnostics."""
+    if not caller_id:
+        return "Unknown"
+    if caller_id.startswith("api."):
+        return "User request"
+    internal_patterns = [
+        "story_generation",
+        "sourcebook.",
+        "chat_tools.",
+        "llm_utils.",
+        "settings_machine.",
+        "story_api_stream.",
+        "chat_api_proxy.",
+    ]
+    if any(caller_id.startswith(p) for p in internal_patterns):
+        return "Internal workflow"
+    return "Internal"
+
+
+def get_llm_dump_level() -> str:
+    """Get LLM dump verbosity level."""
+    level = os.getenv("AUGQ_LLM_DUMP_LEVEL", "compact").strip().lower()
+    if level not in {"compact", "normal", "debug"}:
+        return "compact"
+    return level
+
+
+def _extract_chunk_text(chunk: Any) -> str:
+    """Extract human-friendly text from a streaming chunk payload."""
+    if isinstance(chunk, dict):
+        if "content" in chunk and isinstance(chunk["content"], str):
+            return chunk["content"]
+        if "text" in chunk and isinstance(chunk["text"], str):
+            return chunk["text"]
+        if "delta" in chunk and isinstance(chunk["delta"], dict):
+            delta = chunk["delta"]
+            if "content" in delta and isinstance(delta["content"], str):
+                return delta["content"]
+            if "text" in delta and isinstance(delta["text"], str):
+                return delta["text"]
+
+        if "choices" in chunk and isinstance(chunk["choices"], list):
+            parts = []
+            for choice in chunk["choices"]:
+                if isinstance(choice, dict):
+                    delta = choice.get("delta")
+                    if isinstance(delta, dict):
+                        if "content" in delta and isinstance(delta["content"], str):
+                            parts.append(delta["content"])
+                        elif "text" in delta and isinstance(delta["text"], str):
+                            parts.append(delta["text"])
+            if parts:
+                return "".join(parts)
+
+        # No meaningful text content for this chunk; skip it from normal previews.
+        return None
+
+    if isinstance(chunk, str):
+        chunk = chunk.strip()
+        if not chunk:
+            return None
+        if chunk.startswith("id=") and "object=" in chunk:
+            # this is metadata-only, not actual content.
+            return None
+        # try to parse as JSON/py dict to extract content
+        try:
+            obj = json.loads(chunk)
+            return _extract_chunk_text(obj)
+        except Exception:
+            try:
+                obj = ast.literal_eval(chunk)
+                if isinstance(obj, dict):
+                    return _extract_chunk_text(obj)
+            except Exception:
+                pass
+        return chunk
+    return None
+
+
+def _prepare_dump_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare an entry for file dump based on verbosity level."""
+    verbosity = get_llm_dump_level()
+    prepared = copy.deepcopy(entry)
+
+    if "request" in prepared and isinstance(prepared["request"], dict):
+        # Strip headers in all modes (already redacted but cleaner to remove entirely)
+        prepared["request"].pop("headers", None)
+
+    response = prepared.get("response")
+    if isinstance(response, dict):
+        if response.get("streaming"):
+            chunks = response.get("chunks") or []
+            # Always record how many raw chunks were received
+            if chunks:
+                response["chunk_count"] = len(chunks)
+            elif "chunk_count" not in response:
+                response["chunk_count"] = 0
+
+            if verbosity == "compact":
+                # compact: chunk_count + full_content (assembled text), no raw chunks, no HTTP-level meta
+                response.pop("chunks", None)
+                response.pop("body", None)
+                response.pop("error_detail", None)
+                # full_content stays intact (complete assembled text)
+
+            elif verbosity == "normal":
+                # normal: text-token list only — no raw chunk objects, no full_content
+                preview = []
+                for chunk in chunks:
+                    chunk_text = _extract_chunk_text(chunk)
+                    if chunk_text is not None:
+                        # preserve as-is: keep newlines and whitespace, no truncation
+                        preview.append(chunk_text)
+
+                # Fallback: if chunks were not stored but full_content was, split by lines
+                if not chunks and response.get("full_content"):
+                    preview = response["full_content"].splitlines(keepends=True)
+
+                response["chunk_text_preview"] = preview
+                response.pop("chunks", None)
+                response.pop("full_content", None)
+
+            # debug: keep everything (raw chunks, full_content, body, error_detail) — no preview added
+
+        # non-streaming: communication content (body, full_content) preserved in all modes
+
+    prepared["response"] = response
+    return prepared
 
 
 def add_llm_log(log_entry: Dict[str, Any]):
@@ -32,6 +164,9 @@ def add_llm_log(log_entry: Dict[str, Any]):
     doesn't appear twice (start+finalize logging uses the same id).
     """
     entry_copy = copy.deepcopy(log_entry)
+    caller_id = entry_copy.get("caller_id")
+    if caller_id and not entry_copy.get("caller_origin"):
+        entry_copy["caller_origin"] = get_caller_origin(caller_id)
     entry_id = entry_copy.get("id")
 
     if entry_id:
@@ -53,8 +188,17 @@ def add_llm_log(log_entry: Dict[str, Any]):
         log_path = os.getenv("AUGQ_LLM_DUMP_PATH") or default_path
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
-            # Custom formatting: collapse tool definitions to one line each for readability
-            processed_entry = json.loads(json.dumps(log_entry, default=str))
+            # Apply level-dependent compression before dump
+            processed_entry = _prepare_dump_entry(entry_copy)
+            processed_entry = json.loads(json.dumps(processed_entry, default=str))
+            if (
+                isinstance(processed_entry, dict)
+                and "caller_id" in processed_entry
+                and "caller_origin" not in processed_entry
+            ):
+                processed_entry["caller_origin"] = get_caller_origin(
+                    processed_entry.get("caller_id")
+                )
 
             # If there are tools in the request body, collapse them
             collapsed_tools = []

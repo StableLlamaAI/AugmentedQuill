@@ -165,6 +165,8 @@ async def unified_chat_stream(
         sent_tool_call_ids = set()
         full_content = ""
         full_reasoning = ""
+        # Accumulate native streaming tool call fragments keyed by delta index
+        _tc_acc: dict[int, dict] = {}
 
         current_body = body.copy()
         if is_fallback:
@@ -318,6 +320,26 @@ async def unified_chat_stream(
                                             if isinstance(call_id, str):
                                                 sent_tool_call_ids.add(call_id)
                                         yield {"tool_calls": new_calls}
+                                        if request_log_entry:
+                                            request_log_entry["response"][
+                                                "tool_calls"
+                                            ] = (
+                                                request_log_entry["response"].get(
+                                                    "tool_calls"
+                                                )
+                                                or []
+                                            ) + new_calls
+
+                            # Store assembled native tool calls in the log entry
+                            if _tc_acc and request_log_entry:
+                                assembled = list(_tc_acc.values())
+                                existing = (
+                                    request_log_entry["response"].get("tool_calls")
+                                    or []
+                                )
+                                request_log_entry["response"]["tool_calls"] = (
+                                    existing + assembled
+                                )
 
                             events = parse_stream_channel_fragments(
                                 channel_filter.flush(), sent_tool_call_ids
@@ -383,6 +405,25 @@ async def unified_chat_stream(
 
                             tc = delta.get("tool_calls")
                             if tc:
+                                for tc_delta in tc:
+                                    idx = tc_delta.get("index") or 0
+                                    if idx not in _tc_acc:
+                                        _tc_acc[idx] = {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    if tc_delta.get("id"):
+                                        _tc_acc[idx]["id"] = tc_delta["id"]
+                                    if tc_delta.get("type"):
+                                        _tc_acc[idx]["type"] = tc_delta["type"]
+                                    fn = tc_delta.get("function") or {}
+                                    if fn.get("name"):
+                                        _tc_acc[idx]["function"]["name"] += fn["name"]
+                                    if fn.get("arguments"):
+                                        _tc_acc[idx]["function"]["arguments"] += fn[
+                                            "arguments"
+                                        ]
                                 yield {"tool_calls": tc}
 
                         except Exception:

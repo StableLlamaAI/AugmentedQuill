@@ -66,16 +66,22 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // Frontend dev server (Vite). Backend runs separately (default :8000).
-      port: 28001,
+      // Override via VITE_BACKEND_URL (e.g. http://127.0.0.1:28000) or
+      // VITE_BACKEND_HOST/VITE_BACKEND_PORT.
+      port: 5173,
       strictPort: true,
       host: '127.0.0.1',
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:28000',
+          target:
+            env.VITE_BACKEND_URL ||
+            `http://${env.VITE_BACKEND_HOST || '127.0.0.1'}:${env.VITE_BACKEND_PORT || '8000'}`,
           changeOrigin: true,
         },
         '/static': {
-          target: 'http://127.0.0.1:28000',
+          target:
+            env.VITE_BACKEND_URL ||
+            `http://${env.VITE_BACKEND_HOST || '127.0.0.1'}:${env.VITE_BACKEND_PORT || '8000'}`,
           changeOrigin: true,
         },
       },
