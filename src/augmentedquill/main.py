@@ -18,7 +18,7 @@ from typing import Optional
 import os
 
 from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -104,6 +104,11 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_v1_router)
+
+    # Redirect root to the SPA entrypoint so `http://localhost:8000/` works.
+    @app.get("/")
+    async def _root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/static/dist/index.html")
 
     # --------------- global exception handler ---------------
     @app.exception_handler(ServiceError)

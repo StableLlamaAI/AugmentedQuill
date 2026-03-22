@@ -43,12 +43,26 @@ If you run a home server, NAS, or just prefer keeping your applications containe
 
 **Installation:**
 
-1. Download the `docker-compose.yml` file from this repository.
+1. Download the `docker-compose.yml` file from this repository (or create your own using the example below).
 2. Open a terminal in the directory containing the file and run:
+
    ```bash
    docker compose up -d
    ```
-3. Open your browser and navigate to `http://localhost:8000`.
+
+   This uses image `ghcr.io/stablellamaai/augmentedquill:latest` and maps host port `8000` to container port `8000`.
+
+   If you don’t want to use Docker Compose, you can run directly with Docker:
+
+   ```bash
+   docker run -d --name augmentedquill \
+     -p 8000:8000 \
+     -v "$PWD/data:/app/data" \
+     -v "$PWD/resources/config:/app/resources/config" \
+     ghcr.io/stablellamaai/augmentedquill:latest
+   ```
+
+3. Open your browser and point to `http://localhost:8000/` (or `http://<server-ip>:8000/` when running on a remote machine).
 
 _Note: Your stories and configuration will be saved in the `./data` and `./resources/config` directories next to your `docker-compose.yml` file._
 

@@ -32,7 +32,8 @@
     - Override with environment variable (if you use a different backend port):
       - `VITE_BACKEND_URL=http://127.0.0.1:<your-port> npm run dev`
 6.  Open
-    - `http://127.0.0.1:5173` (vite dev) or `http://127.0.0.1:8000` (production mode)
+    - `http://127.0.0.1:5173` (vite dev)
+    - `http://127.0.0.1:8000/` (production mode)
 
 ### ✅ First actions in the app
 
