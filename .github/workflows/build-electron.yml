@@ -78,17 +78,19 @@ jobs:
           exit 0
         fi
 
-        release_upload_url=${release_upload_url/%\{*}
+        # Strip the template suffix path `{/name,label}` from upload_url.
+        release_upload_url="${release_upload_url%\{*}"
 
         for file in electron/dist/*; do
           [ -f "$file" ] || continue
           filename=$(basename "$file")
+          filename_url=$(python -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$filename")
           echo "Uploading $filename to release..."
           curl -sSL -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/octet-stream" \
             --data-binary "@$file" \
-            "$release_upload_url?name=$filename"
+            "${release_upload_url}?name=${filename_url}"
         done
 
     - name: Upload Artifact (Windows)
