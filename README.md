@@ -36,11 +36,12 @@
 
 ### ✅ First actions in the app
 
-- Create a project
-- Add chapters / short story content
-- Open Writing Partner (AI chat)
-- Add sourcebook entries
-- Open Images panel and use prompt generator
+- Ensure your OpenAI-compatible API provider endpoint is running and reachable (local `llama.cpp`/Ollama endpoint or cloud OpenAI-compatible endpoint), and enter the key/URL in Settings before creating your first project.
+- Talk to Writing Partner (AI chat)
+- Create a project - or let the Writing Partner do it for you
+- Add sourcebook entries - or let the Writing Partner do it for you
+- Add chapters / short story content - or let the Writing Partner do it for you
+- (Optional) Open Images panel and use prompt generator to create images in external tools
 
 ---
 
