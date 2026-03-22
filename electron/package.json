@@ -28,7 +28,9 @@
       "output": "dist"
     },
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "gatekeeperAssess": false,
+      "hardenedRuntime": false
     },
     "win": {
       "target": "nsis"
@@ -36,7 +38,8 @@
     "linux": {
       "target": "AppImage"
     },
-    "asar": false,
+    "asar": true,
+    "asarUnpack": "backend/run_app/**",
     "extraResources": [
       {
         "from": "../dist/run_app",
