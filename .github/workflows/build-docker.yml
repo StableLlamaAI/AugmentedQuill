@@ -2,8 +2,8 @@ name: Build Docker Image
 
 on:
   release:
-    # Run this workflow only when a release is published
-    types: [published]
+    # Run this workflow when a release or pre-release is published
+    types: [published, released, prereleased]
 
 env:
   REGISTRY: ghcr.io
