@@ -143,7 +143,7 @@
       "- Do NOT write story prose yourself in the chat response. Use call_writing_llm instead.",
       "- Do NOT perform prose editing yourself in the chat response. Use call_editing_assistant instead.",
       "- The call_editing_assistant is a prose editor ONLY. It operates exclusively on existing chapter text. NEVER use it for character analysis, psychological insights, world-building advice, brainstorming, answering questions, or any task that does not directly edit a specific chapter. Answer those requests yourself.",
-      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") to avoid breaking JSON formatting.",
+      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") for string content to avoid breaking JSON formatting.",
       "- You may update metadata directly when appropriate because that is part of your role.",
       "- If call_editing_assistant returns recommended metadata updates, review them and apply the ones that fit.",
       "- Keep the story notes, summaries, chapter notes, conflicts, and sourcebook aligned with the evolving draft.",
@@ -178,7 +178,7 @@
       "RULES:",
       "- Never call metadata-writing or sourcebook-writing tools directly. Exception: sync_story_summary (AI generation trigger) is permitted.",
       "- Never add new plot beats on your own. If new prose is needed, request it with call_writing_llm.",
-      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") to avoid breaking JSON formatting.",
+      "- When returning text that may be used as tool arguments (e.g. JSON parameter values), use typographic quotation marks (“ ”) instead of straight double quotes (\") for string content to avoid breaking JSON formatting.",
       "- Always call a tool when you want to modify chapter prose or return structured metadata recommendations."
     ]
   },
