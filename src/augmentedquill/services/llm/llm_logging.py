@@ -9,11 +9,13 @@
 
 from __future__ import annotations
 
+import ast
 import copy
 import datetime
 import uuid
 import os
 import json
+import re
 from typing import Any, Dict, List
 
 # Global list to store LLM communication logs for the current session
@@ -38,6 +40,159 @@ def get_caller_origin(caller_id: str | None) -> str:
     if any(caller_id.startswith(p) for p in internal_patterns):
         return "Internal workflow"
     return "Internal"
+
+
+def get_llm_dump_level() -> str:
+    """Get LLM dump verbosity level."""
+    level = os.getenv("AUGQ_LLM_DUMP_LEVEL", "compact").strip().lower()
+    if level not in {"compact", "normal", "debug"}:
+        return "compact"
+    return level
+
+
+def _extract_chunk_text(chunk: Any) -> str:
+    """Extract human-friendly text from a streaming chunk payload."""
+    if isinstance(chunk, dict):
+        if "content" in chunk and isinstance(chunk["content"], str):
+            return chunk["content"]
+        if "text" in chunk and isinstance(chunk["text"], str):
+            return chunk["text"]
+        if "delta" in chunk and isinstance(chunk["delta"], dict):
+            delta = chunk["delta"]
+            if "content" in delta and isinstance(delta["content"], str):
+                return delta["content"]
+            if "text" in delta and isinstance(delta["text"], str):
+                return delta["text"]
+
+        if "choices" in chunk and isinstance(chunk["choices"], list):
+            parts = []
+            for choice in chunk["choices"]:
+                if isinstance(choice, dict):
+                    delta = choice.get("delta")
+                    if isinstance(delta, dict):
+                        if "content" in delta and isinstance(delta["content"], str):
+                            parts.append(delta["content"])
+                        elif "text" in delta and isinstance(delta["text"], str):
+                            parts.append(delta["text"])
+            if parts:
+                return "".join(parts)
+
+        # No meaningful text content for this chunk; skip it from normal previews.
+        return None
+
+    if isinstance(chunk, str):
+        chunk = chunk.strip()
+        if not chunk:
+            return None
+        if chunk.startswith("id=") and "object=" in chunk:
+            # this is metadata-only, not actual content.
+            return None
+        # try to parse as JSON/py dict to extract content
+        try:
+            obj = json.loads(chunk)
+            return _extract_chunk_text(obj)
+        except Exception:
+            try:
+                obj = ast.literal_eval(chunk)
+                if isinstance(obj, dict):
+                    return _extract_chunk_text(obj)
+            except Exception:
+                pass
+        return chunk
+    return None
+
+
+def _prepare_dump_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare an entry for file dump based on verbosity level."""
+    verbosity = get_llm_dump_level()
+    prepared = copy.deepcopy(entry)
+
+    if "request" in prepared and isinstance(prepared["request"], dict):
+        # keep only essentials in compact mode
+        if verbosity == "compact":
+            prepared["request"] = {
+                "url": prepared["request"].get("url"),
+                "method": prepared["request"].get("method"),
+            }
+        else:
+            prepared["request"].pop("headers", None)
+
+    response = prepared.get("response")
+    if isinstance(response, dict):
+        if response.get("streaming"):
+            # Convert streaming chunk body into compact metadata
+            if isinstance(response.get("chunks"), list):
+                if response["chunks"]:
+                    response["chunk_count"] = len(response["chunks"])
+                else:
+                    response["chunk_count"] = response.get("chunk_count", 0)
+                if verbosity == "compact":
+                    response.pop("chunks", None)
+                elif verbosity == "normal":
+                    # keep a short preview of the chunk text values (max 20)
+                    full_chunks = response["chunks"]
+                    preview = []
+                    for chunk in full_chunks[:20]:
+                        chunk_text = _extract_chunk_text(chunk)
+                        if chunk_text is None:
+                            continue
+                        chunk_text = chunk_text.strip()
+                        if not chunk_text:
+                            continue
+                        if len(chunk_text) > 120:
+                            chunk_text = chunk_text[:120] + "..."
+                        preview.append(chunk_text)
+                    response["chunks"] = preview
+                    if len(full_chunks) > 20:
+                        response["chunks_truncated"] = True
+
+                    # if chunk preview is empty but we know there was streaming,
+                    # fall back to splitting full_content for visibility.
+                    if not response["chunks"] and response.get("chunk_count", 0) > 0:
+                        fallback_text = response.get("full_content", "") or ""
+                        fallback_chunks = [
+                            c.strip()
+                            for c in re.split(r"\n+|[.!?]+", fallback_text)
+                            if c.strip()
+                        ]
+                        response["chunks"] = fallback_chunks[:20]
+                        if len(fallback_chunks) > 20:
+                            response["chunks_truncated"] = True
+
+            # keep only length/summary in compact and normal to reduce size
+            full_content = response.get("full_content")
+            if isinstance(full_content, str):
+                if verbosity == "compact":
+                    response["full_content"] = None
+                    response["full_content_summary"] = (
+                        full_content[:120] + "..."
+                        if len(full_content) > 120
+                        else full_content
+                    )
+                elif verbosity == "normal":
+                    response["full_content"] = (
+                        full_content[:400] + "..."
+                        if len(full_content) > 400
+                        else full_content
+                    )
+
+            if verbosity == "compact":
+                response.pop("body", None)
+                response.pop("error_detail", None)
+
+        elif verbosity == "compact":
+            # non-streaming mode still truncates large content for compact dumps
+            if isinstance(response.get("full_content"), str):
+                full = response["full_content"]
+                response["full_content"] = (
+                    full[:400] + "..." if len(full) > 400 else full
+                )
+            if isinstance(response.get("body"), str):
+                body = response["body"]
+                response["body"] = body[:400] + "..." if len(body) > 400 else body
+
+    prepared["response"] = response
+    return prepared
 
 
 def add_llm_log(log_entry: Dict[str, Any]):
@@ -76,8 +231,9 @@ def add_llm_log(log_entry: Dict[str, Any]):
         log_path = os.getenv("AUGQ_LLM_DUMP_PATH") or default_path
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
-            # Custom formatting: collapse tool definitions to one line each for readability
-            processed_entry = json.loads(json.dumps(entry_copy, default=str))
+            # Apply level-dependent compression before dump
+            processed_entry = _prepare_dump_entry(entry_copy)
+            processed_entry = json.loads(json.dumps(processed_entry, default=str))
             if (
                 isinstance(processed_entry, dict)
                 and "caller_id" in processed_entry

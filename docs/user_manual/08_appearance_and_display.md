@@ -65,6 +65,16 @@ The toolbar at the top of the dialog offers two ways to inspect logs:
 | **Clear** (<img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />)    | Deletes all stored log entries after confirmation.                                                          |
 | **Close** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />)          | Closes the dialog.                                                                                          |
 
+### LLM Raw Log Verbosity
+
+The backend writes raw LLM interaction data to `data/logs/llm_raw.log` when `AUGQ_LLM_DUMP=1` is set in your environment. You can adjust the verbosity using `AUGQ_LLM_DUMP_LEVEL`:
+
+- `compact` (default): writes one entry per communication with minimal request/response payload, streaming data is summarized into `chunk_count` and `full_content_summary` with truncated chunks.
+- `normal`: writes one entry per communication with reduced payload, includes streaming chunk previews (up to 20 truncated items) and non-streaming response text up to 400 characters.
+- `debug`: includes full request/response objects and full streaming chunks, useful only for deep network and protocol debugging.
+
+The compact mode is recommended for normal use because it keeps log files readable while preserving every communication event.
+
 ### Log Entries
 
 Each entry in the log list is a collapsible row. The collapsed row shows:

@@ -167,3 +167,194 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             with open(log_path, "r", encoding="utf-8") as f:
                 blob = f.read()
             self.assertIn('"caller_origin": "User request"', blob)
+
+    async def test_add_llm_log_compact_streaming_entry_is_lean(self):
+        entry = {
+            "id": "stream-id",
+            "caller_id": "chat_tools.call_writing_llm",
+            "timestamp_start": "2026-01-01T00:00:00",
+            "timestamp_end": None,
+            "request": {
+                "url": "https://example.com",
+                "method": "POST",
+                "headers": {"Authorization": "token"},
+                "body": {"messages": ["a"], "tools": []},
+            },
+            "response": {
+                "status_code": 200,
+                "streaming": True,
+                "chunks": ["hello", "world"],
+                "full_content": "hello world",
+                "body": "raw",
+                "error_detail": "trace",
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "llm_raw.log")
+            with patch.dict(
+                os.environ,
+                {
+                    "AUGQ_LLM_DUMP": "1",
+                    "AUGQ_LLM_DUMP_PATH": log_path,
+                    "AUGQ_LLM_DUMP_LEVEL": "compact",
+                },
+                clear=False,
+            ):
+                llm_logging.add_llm_log(entry)
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                blob = f.read()
+
+            self.assertIn('"chunk_count": 2', blob)
+            self.assertNotIn('"chunks"', blob)
+            self.assertIn('"full_content_summary"', blob)
+            self.assertNotIn('"body"', blob)
+
+    async def test_add_llm_log_normal_streaming_entry_includes_chunk_preview(self):
+        entry = {
+            "id": "stream-id-3",
+            "caller_id": "chat_tools.call_writing_llm",
+            "timestamp_start": "2026-01-01T00:00:00",
+            "timestamp_end": None,
+            "request": {
+                "url": "https://example.com",
+                "method": "POST",
+                "headers": {"Authorization": "token"},
+                "body": {"messages": ["a"], "tools": []},
+            },
+            "response": {
+                "status_code": 200,
+                "streaming": True,
+                "chunks": [
+                    {
+                        "id": "1",
+                        "object": "chat.completion.chunk",
+                        "delta": {"content": "hello"},
+                    },
+                    {
+                        "id": "2",
+                        "object": "chat.completion.chunk",
+                        "delta": {"content": " world"},
+                    },
+                    {
+                        "id": "3",
+                        "object": "chat.completion.chunk",
+                        "delta": {"content": " foo"},
+                    },
+                ],
+                "full_content": "hello world foo",
+                "body": "raw",
+                "error_detail": "trace",
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "llm_raw.log")
+            with patch.dict(
+                os.environ,
+                {
+                    "AUGQ_LLM_DUMP": "1",
+                    "AUGQ_LLM_DUMP_PATH": log_path,
+                    "AUGQ_LLM_DUMP_LEVEL": "normal",
+                },
+                clear=False,
+            ):
+                llm_logging.add_llm_log(entry)
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                blob = f.read()
+
+            self.assertIn('"chunks"', blob)
+            self.assertIn('"chunk_count": 3', blob)
+            self.assertIn('"hello"', blob)
+            self.assertIn('"world"', blob)
+            self.assertIn('"foo"', blob)
+            self.assertIn('"body"', blob)
+
+    async def test_add_llm_log_normal_streaming_entry_fallbacks_to_full_content_chunks(
+        self,
+    ):
+        entry = {
+            "id": "stream-id-4",
+            "caller_id": "api.chat.stream",
+            "timestamp_start": "2026-01-01T00:00:00",
+            "timestamp_end": None,
+            "request": {
+                "url": "https://example.com",
+                "method": "POST",
+                "headers": {"Authorization": "token"},
+                "body": {"messages": ["a"], "tools": []},
+            },
+            "response": {
+                "status_code": 200,
+                "streaming": True,
+                "chunks": [],
+                "full_content": "Tell me a joke. Sure! Why did the chicken cross the road?",
+                "body": None,
+                "error_detail": None,
+                "chunk_count": 104,
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "llm_raw.log")
+            with patch.dict(
+                os.environ,
+                {
+                    "AUGQ_LLM_DUMP": "1",
+                    "AUGQ_LLM_DUMP_PATH": log_path,
+                    "AUGQ_LLM_DUMP_LEVEL": "normal",
+                },
+                clear=False,
+            ):
+                llm_logging.add_llm_log(entry)
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                blob = f.read()
+
+            self.assertIn('"chunks"', blob)
+            self.assertIn('"chunk_count": 104', blob)
+            self.assertIn('"Tell me a joke"', blob)
+
+    async def test_add_llm_log_debug_streaming_entry_keeps_chunks(self):
+        entry = {
+            "id": "stream-id-2",
+            "caller_id": "chat_tools.call_writing_llm",
+            "timestamp_start": "2026-01-01T00:00:00",
+            "timestamp_end": None,
+            "request": {
+                "url": "https://example.com",
+                "method": "POST",
+                "headers": {"Authorization": "token"},
+                "body": {"messages": ["a"], "tools": []},
+            },
+            "response": {
+                "status_code": 200,
+                "streaming": True,
+                "chunks": ["hello", "world"],
+                "full_content": "hello world",
+                "body": "raw",
+                "error_detail": "trace",
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "llm_raw.log")
+            with patch.dict(
+                os.environ,
+                {
+                    "AUGQ_LLM_DUMP": "1",
+                    "AUGQ_LLM_DUMP_PATH": log_path,
+                    "AUGQ_LLM_DUMP_LEVEL": "debug",
+                },
+                clear=False,
+            ):
+                llm_logging.add_llm_log(entry)
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                blob = f.read()
+
+            self.assertIn('"chunks"', blob)
+            self.assertIn('"full_content": "hello world"', blob)
+            self.assertIn('"body": "raw"', blob)
