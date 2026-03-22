@@ -2,6 +2,8 @@
 
 AugmentedQuill is designed to be a seamless extension of your creative process. It combines a traditional writing environment with powerful AI tools that understand your story's context.
 
+> Your story belongs to you. AugmentedQuill keeps you in the driver seat: every beat, character voice, and plot decision is always yours. AI is here as a collaborator—to brainstorm, refine, and ghostwrite in ways that match your intent, not replace it.
+
 ## Important Limits (As of 2026)
 
 - AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.

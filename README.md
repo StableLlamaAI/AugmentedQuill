@@ -7,6 +7,7 @@
 
 **Local-first AI writing assistant with story structure + chatbot + image prompt support.**
 
+- You are the author in the driver seat: your story is your story, and the AI is a creative partner (from brainstorm buddy to ghostwriter-style assistant) that supports your voice and choices.
 - Join the community: [r/AugmentedQuill](https://www.reddit.com/r/AugmentedQuill/)
 
 > **Screenshot placeholder:** Insert your app screenshot here (e.g., `docs/assets/screenshot.png`).
