@@ -2,7 +2,6 @@ name: Create Release (manual)
 
 on:
   workflow_dispatch:
-    branches: [ "main" ]
     inputs:
       version:
         description: 'New release version (tag), e.g. v1.2.3'
@@ -19,24 +18,27 @@ permissions:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Ensure workflow is running on `main`
+      - name: Ensure workflow is running on allowed branches
         run: |
-          if [ "${GITHUB_REF#refs/heads/}" != "main" ]; then
-            echo "This workflow can only be run on the main branch.";
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          if [ "${BRANCH_NAME}" != "main" ] && [ "${BRANCH_NAME}" != "develop" ]; then
+            echo "This workflow can only be run on main or develop.";
+            echo "Current branch: ${BRANCH_NAME}";
             exit 1;
           fi
 
       - name: Ensure RELEASE_TOKEN secret is provided
+        if: ${{ secrets.RELEASE_TOKEN == '' }}
         run: |
-          if [ -z "${{ secrets.RELEASE_TOKEN }}" ]; then
-            echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN.";
-            echo "Create a PAT with 'repo' scope and add it at Settings → Secrets → Actions → New repository secret.";
-            exit 1;
-          fi
+          echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN.";
+          echo "Create a PAT with 'repo' scope and add it at Settings → Secrets → Actions → New repository secret.";
+          exit 1;
 
       - name: Create GitHub Release (action)
         uses: ncipollo/release-action@v1
@@ -45,6 +47,6 @@ jobs:
           name: ${{ github.event.inputs.version }}
           body: ${{ github.event.inputs.body }}
           draft: false
-          prerelease: false
-          commit: main
+          prerelease: ${{ contains(github.event.inputs.version, '-') }}
+          commit: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_TOKEN }}
