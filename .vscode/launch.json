@@ -16,8 +16,11 @@
       "type": "node-terminal",
       "request": "launch",
       "preLaunchTask": "frontend: install",
-      "command": "npm run dev -- --host 127.0.0.1 --port 28001 --strictPort",
-      "cwd": "${workspaceFolder}/src/frontend"
+      "command": "npm run dev -- --port 28001 --strictPort",
+      "cwd": "${workspaceFolder}/src/frontend",
+      "env": {
+        "VITE_BACKEND_PORT": "28000"
+      }
     }
   ],
   "compounds": [

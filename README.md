@@ -24,9 +24,14 @@
 3.  Build frontend
     - `cd src/frontend && npm install && npm run build`
 4.  Run backend
-    - `augmentedquill --reload --host 127.0.0.1 --port 28000`
-5.  Open
-    - `http://127.0.0.1:28001` (vite dev) or `http://127.0.0.1:8000` (production mode)
+    - Default: `augmentedquill --reload --host 127.0.0.1 --port 8000`
+5.  Run frontend dev server
+    - `cd src/frontend && npm run dev`
+    - Default proxy target: backend on 8000
+    - Override with environment variable (if you use a different backend port):
+      - `VITE_BACKEND_URL=http://127.0.0.1:<your-port> npm run dev`
+6.  Open
+    - `http://127.0.0.1:5173` (vite dev) or `http://127.0.0.1:8000` (production mode)
 
 ### ✅ First actions in the app
 
