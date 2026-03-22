@@ -2,8 +2,11 @@ name: Build Portable Executable (PyInstaller)
 
 on:
   release:
-    # Run this workflow only when a release is published
-    types: [published]
+    # Run this workflow when a release or pre-release is published
+    types: [published, released, prereleased]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -24,7 +27,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '24'
 
     - name: Install Python dependencies
       run: |
