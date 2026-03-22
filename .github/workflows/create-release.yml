@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -37,11 +38,11 @@ jobs:
           fi
 
       - name: Ensure RELEASE_TOKEN secret is provided
-        if: ${{ secrets.RELEASE_TOKEN == '' }}
+        if: env.RELEASE_TOKEN == ''
         run: |
-          echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN.";
-          echo "Create a PAT with 'repo' scope and add it at Settings → Secrets → Actions → New repository secret.";
-          exit 1;
+          echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN."
+          echo "Create a PAT with 'repo' scope and add it at Settings -> Secrets -> Actions -> New repository secret."
+          exit 1
 
       - name: Create GitHub Release (action)
         uses: ncipollo/release-action@v1
@@ -52,4 +53,4 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.event.inputs.version, '-') }}
           commit: ${{ github.ref_name }}
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ env.RELEASE_TOKEN }}
