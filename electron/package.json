@@ -36,6 +36,7 @@
     "linux": {
       "target": "AppImage"
     },
+    "asar": false,
     "extraResources": [
       {
         "from": "../dist/run_app",
