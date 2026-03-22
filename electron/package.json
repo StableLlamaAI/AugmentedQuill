@@ -24,6 +24,7 @@
   "build": {
     "appId": "com.stablellamaai.augmentedquill",
     "productName": "AugmentedQuill",
+    "afterPack": "./afterPack.js",
     "directories": {
       "output": "dist"
     },
@@ -38,12 +39,7 @@
           "Terminal": "false",
           "StartupNotify": "true"
         }
-      },
-      "executableArgs": [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-gpu-sandbox"
-      ]
+      }
     },
     "asar": true,
     "asarUnpack": "backend/run_app/**",
