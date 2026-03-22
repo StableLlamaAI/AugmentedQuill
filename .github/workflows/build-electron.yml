@@ -68,6 +68,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload Electron artifacts to GitHub Release
+      shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -76,6 +77,8 @@ jobs:
           echo "No release upload URL found, skipping release asset upload"
           exit 0
         fi
+
+        release_upload_url=${release_upload_url/%\{*}
 
         for file in electron/dist/*; do
           [ -f "$file" ] || continue
