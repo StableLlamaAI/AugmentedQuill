@@ -108,6 +108,45 @@ def ensure_system_message_if_missing(
     req_messages.insert(0, {"role": "system", "content": system_content})
 
 
+def _build_current_chapter_tool_call() -> dict:
+    """Build the assistant tool_call message for current chapter context."""
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "current_context",
+                "type": "function",
+                "function": {
+                    "name": "get_current_chapter_id",
+                    "arguments": "{}",
+                },
+            }
+        ],
+    }
+
+
+def _ensure_current_chapter_tool_call(new_history: list[dict], tool_msg: dict) -> None:
+    """Ensure there is an assistant tool_call immediately before a tool response."""
+    if not tool_msg or tool_msg.get("name") != "get_current_chapter_id":
+        return
+
+    current_call_id = tool_msg.get("tool_call_id") or "current_context"
+
+    if new_history:
+        prev = new_history[-1]
+        if prev.get("role") == "assistant" and isinstance(prev.get("tool_calls"), list):
+            for c in prev.get("tool_calls", []):
+                if (
+                    isinstance(c, dict)
+                    and c.get("id") == current_call_id
+                    and c.get("function", {}).get("name") == "get_current_chapter_id"
+                ):
+                    return
+
+    new_history.append(_build_current_chapter_tool_call())
+
+
 def inject_chat_user_context(
     req_messages: list[dict], payload: dict, language: str = "en"
 ) -> None:
@@ -166,6 +205,7 @@ def inject_chat_user_context(
                         # so that is_redundant will be False for the current turn,
                         # triggering a NEW injection for the correct context.
                         current_seq_context = msg_content
+                        _ensure_current_chapter_tool_call(new_history, msg_copy)
                         new_history.append(msg_copy)
                         continue
                 except Exception:
@@ -173,6 +213,7 @@ def inject_chat_user_context(
 
             # Otherwise, track it as the last seen context
             current_seq_context = msg_content
+            _ensure_current_chapter_tool_call(new_history, msg_copy)
             new_history.append(msg_copy)
             continue
 
@@ -217,6 +258,7 @@ def inject_chat_user_context(
                 should_inject = True
 
             if should_inject and not is_turn_redundant:
+                new_history.append(_build_current_chapter_tool_call())
                 new_history.append(
                     {
                         "role": "tool",
