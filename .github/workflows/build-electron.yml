@@ -67,6 +67,27 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Upload Electron artifacts to GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        release_upload_url=$(jq -r .release.upload_url < "$GITHUB_EVENT_PATH")
+        if [ -z "$release_upload_url" ] || [ "$release_upload_url" = "null" ]; then
+          echo "No release upload URL found, skipping release asset upload"
+          exit 0
+        fi
+
+        for file in electron/dist/*; do
+          [ -f "$file" ] || continue
+          filename=$(basename "$file")
+          echo "Uploading $filename to release..."
+          curl -sSL -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$file" \
+            "$release_upload_url?name=$filename"
+        done
+
     - name: Upload Artifact (Windows)
       if: runner.os == 'Windows'
       uses: actions/upload-artifact@v4
