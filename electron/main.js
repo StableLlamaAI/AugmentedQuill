@@ -77,7 +77,11 @@ function createWindow() {
   const checkBackend = setInterval(() => {
     http
       .get('http://127.0.0.1:8000', (res) => {
-        if (res.statusCode === 200) {
+        if (
+          res.statusCode === 200 ||
+          res.statusCode === 307 ||
+          res.statusCode === 308
+        ) {
           clearInterval(checkBackend);
           mainWindow.loadURL('http://127.0.0.1:8000');
         }
