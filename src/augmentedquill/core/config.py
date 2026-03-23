@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -34,7 +35,12 @@ from augmentedquill.services.story.config_story_ops import (
     clean_story_config_for_disk,
 )
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    # When running as a PyInstaller bundle, sys._MEIPASS is the temp folder for bundled data
+    BASE_DIR = Path(sys._MEIPASS).resolve()
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+
 CONFIG_DIR = BASE_DIR / "resources" / "config"
 SCHEMAS_DIR = BASE_DIR / "resources" / "schemas"
 
