@@ -108,6 +108,7 @@ function startBackend() {
 
   backendProcess = spawn(backendPath, ['--no-chdir', '--no-browser'], {
     cwd: app.getPath('userData'), // Run in user data dir so data/ is saved there
+    env: { ...process.env, AUGQ_USER_DATA_DIR: app.getPath('userData') },
   });
 
   backendProcess.on('error', (error) => {
