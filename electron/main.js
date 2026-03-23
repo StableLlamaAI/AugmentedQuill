@@ -10,7 +10,8 @@
  */
 
 const { spawn } = require('child_process');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
+const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
@@ -37,6 +38,29 @@ configureLinuxRuntime();
 
 let mainWindow;
 let backendProcess;
+
+function isExecutableFile(filePath) {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function resolveBackendPath(executableName) {
+  const developmentPath = path.join(__dirname, '..', 'dist', 'run_app', executableName);
+
+  if (!app.isPackaged) {
+    return developmentPath;
+  }
+
+  const packagedCandidates = [
+    path.join(process.resourcesPath, 'backend', 'run_app', executableName),
+    path.join(process.resourcesPath, 'backend', executableName),
+  ];
+
+  return packagedCandidates.find(isExecutableFile) || packagedCandidates[0];
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -72,14 +96,25 @@ function startBackend() {
   const isWin = process.platform === 'win32';
   const executableName = isWin ? 'run_app.exe' : 'run_app';
 
-  // In production, the backend is bundled in resources/backend
-  // In development, we assume it's built in ../dist/run_app
-  const backendPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'backend', executableName)
-    : path.join(__dirname, '..', 'dist', 'run_app', executableName);
+  const backendPath = resolveBackendPath(executableName);
+
+  if (!isExecutableFile(backendPath)) {
+    const message = `Bundled backend executable not found: ${backendPath}`;
+    console.error(message);
+    dialog.showErrorBox('Backend startup failed', message);
+    app.quit();
+    return;
+  }
 
   backendProcess = spawn(backendPath, ['--no-chdir', '--no-browser'], {
     cwd: app.getPath('userData'), // Run in user data dir so data/ is saved there
+  });
+
+  backendProcess.on('error', (error) => {
+    const message = `Failed to start bundled backend at ${backendPath}: ${error.message}`;
+    console.error(message);
+    dialog.showErrorBox('Backend startup failed', message);
+    app.quit();
   });
 
   backendProcess.stdout.on('data', (data) => {

@@ -48,4 +48,21 @@ exec "$(dirname "$0")/${executableName}-bin" --no-sandbox --disable-setuid-sandb
 
   await fs.writeFile(executablePath, wrapperScript, { mode: 0o755 });
   await fs.chmod(executablePath, 0o755);
+
+  // Restore execution permissions for the PyInstaller backend binary (can be lost when passing through zip/artifacts)
+  const backendPath = path.join(
+    appOutDir,
+    'resources',
+    'backend',
+    'run_app',
+    'run_app'
+  );
+  try {
+    const stat = await fs.stat(backendPath);
+    if (stat.isFile()) {
+      await fs.chmod(backendPath, 0o755);
+    }
+  } catch {
+    // Ignored if missing during specific build steps
+  }
 };
