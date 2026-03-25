@@ -45,11 +45,12 @@ class ScratchpadTest(TestCase):
     def test_scratchpad_cycle(self):
         """Test writing to and reading from the scratchpad via API."""
 
-        # 1. Initially scratchpad should be empty
+        # 1. Initially scratchpad should be empty for the specific chat
         response = self.client.post(
             "/api/v1/chat/tools",
             json={
                 "model_type": "CHAT",
+                "chat_id": "chat-1",
                 "messages": [
                     {
                         "role": "assistant",
@@ -60,7 +61,7 @@ class ScratchpadTest(TestCase):
                                 "type": "function",
                                 "function": {
                                     "name": "read_scratchpad",
-                                    "arguments": "{}",
+                                    "arguments": '{"chat_id": "chat-1"}',
                                 },
                             }
                         ],
@@ -74,12 +75,13 @@ class ScratchpadTest(TestCase):
             data["appended_messages"][0]["content"], json.dumps({"content": ""})
         )
 
-        # 2. Write to scratchpad
+        # 2. Write to scratchpad for chat-1
         test_content = "This is a test plan.\n- Step 1\n- Step 2"
         response = self.client.post(
             "/api/v1/chat/tools",
             json={
                 "model_type": "CHAT",
+                "chat_id": "chat-1",
                 "messages": [
                     {
                         "role": "assistant",
@@ -90,7 +92,9 @@ class ScratchpadTest(TestCase):
                                 "type": "function",
                                 "function": {
                                     "name": "write_scratchpad",
-                                    "arguments": json.dumps({"content": test_content}),
+                                    "arguments": json.dumps(
+                                        {"content": test_content, "chat_id": "chat-1"}
+                                    ),
                                 },
                             }
                         ],
@@ -100,16 +104,23 @@ class ScratchpadTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # 3. Verify file exists on disk
-        scratchpad_file = self.project_dir / "scratchpad.txt"
-        self.assertTrue(scratchpad_file.exists())
-        self.assertEqual(scratchpad_file.read_text(encoding="utf-8"), test_content)
+        # 3. Verify per-chat file exists on disk and project-wide scratchpad is untouched
+        chat_json_file = self.project_dir / "chats" / "chat-1.json"
+        self.assertTrue(chat_json_file.exists())
+        self.assertIn(
+            "scratchpad", json.loads(chat_json_file.read_text(encoding="utf-8"))
+        )
+        self.assertEqual(
+            json.loads(chat_json_file.read_text(encoding="utf-8"))["scratchpad"],
+            test_content,
+        )
 
-        # 4. Read back via API
+        # 4. Read back via API for the same chat
         response = self.client.post(
             "/api/v1/chat/tools",
             json={
                 "model_type": "CHAT",
+                "chat_id": "chat-1",
                 "messages": [
                     {
                         "role": "assistant",
@@ -120,7 +131,7 @@ class ScratchpadTest(TestCase):
                                 "type": "function",
                                 "function": {
                                     "name": "read_scratchpad",
-                                    "arguments": "{}",
+                                    "arguments": '{"chat_id": "chat-1"}',
                                 },
                             }
                         ],
@@ -134,6 +145,67 @@ class ScratchpadTest(TestCase):
             data["appended_messages"][0]["content"],
             json.dumps({"content": test_content}),
         )
+
+    def test_scratchpad_isolation_per_chat(self):
+        """Each chat must have its own scratchpad state."""
+        for chat_id, content in [("chat-a", "A"), ("chat-b", "B")]:
+            response = self.client.post(
+                "/api/v1/chat/tools",
+                json={
+                    "model_type": "CHAT",
+                    "chat_id": chat_id,
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "write",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "write_scratchpad",
+                                        "arguments": json.dumps(
+                                            {"content": content, "chat_id": chat_id}
+                                        ),
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+
+        for chat_id, expected in [("chat-a", "A"), ("chat-b", "B")]:
+            response = self.client.post(
+                "/api/v1/chat/tools",
+                json={
+                    "model_type": "CHAT",
+                    "chat_id": chat_id,
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "read",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "read_scratchpad",
+                                        "arguments": json.dumps({"chat_id": chat_id}),
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(
+                data["appended_messages"][0]["content"],
+                json.dumps({"content": expected}),
+            )
 
     def test_scratchpad_overwrite(self):
         """Test that writing to scratchpad overwrites previous content."""
