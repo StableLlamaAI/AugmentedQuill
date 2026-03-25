@@ -295,6 +295,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             story_summary=context["story_summary"],
             story_tags=context["story_tags"],
             background=context["background"],
+            chapter_notes=context["chapter_notes"],
             chapter_title=title or "",
             chapter_summary=summary or "",
             chapter_conflicts=context["chapter_conflicts"],

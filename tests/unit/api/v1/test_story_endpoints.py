@@ -174,7 +174,7 @@ class StoryEndpointsTest(ApiTestCase):
 
     def test_suggest_endpoint_streams_paragraph(self):
         """Ensure `/api/v1/story/suggest` is registered and returns streaming text."""
-        self._make_project()
+        pdir = self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
         # Patch the completions stream used by the suggest endpoint
@@ -192,6 +192,8 @@ class StoryEndpointsTest(ApiTestCase):
             # chapter fields stay present
             self.assertIn("Chapter title: T1", prompt)
             self.assertIn("Chapter description: S1", prompt)
+            self.assertIn("Author's notes about the chapter:", prompt)
+            self.assertIn("Use quote from sage", prompt)
             # ensure extra_body was not provided (configured model should win)
             self.assertTrue(
                 "extra_body" not in kwargs or kwargs.get("extra_body") is None
@@ -230,6 +232,13 @@ class StoryEndpointsTest(ApiTestCase):
             llm.resolve_openai_credentials = orig_resolve  # type: ignore
 
         self.addCleanup(_undo)
+
+        # make sure chapter notes are included in prompt
+        import json
+
+        story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
+        story["chapters"][0]["notes"] = "Use quote from sage"
+        (pdir / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
         # Call the suggest endpoint
         r = self.client.post(
