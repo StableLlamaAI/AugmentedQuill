@@ -192,7 +192,9 @@ export function useChapterSuggestions({
     if (isSuggesting) return;
 
     const baseContent = contentOverride ?? currentChapter.content;
-    const c = clampCursor(cursor ?? baseContent.length, baseContent);
+
+    // Suggestion is always appended (next-paragraph style), not inline rewrite.
+    const c = baseContent.length;
 
     if (enableSuggestionMode) setIsSuggestionMode(true);
     setSuggestCursor(c);
@@ -241,10 +243,11 @@ export function useChapterSuggestions({
     }
   };
 
-  const handleAcceptContinuation = async (text: string) => {
+  const handleAcceptContinuation = async (text: string, contentOverride?: string) => {
     if (!currentChapterId || !currentChapter) return;
 
     if (!text) {
+      // Dismiss: keep current content unchanged, clear suggestion state
       setContinuations([]);
       setIsSuggestionMode(false);
       setSuggestCursor(null);
@@ -252,10 +255,14 @@ export function useChapterSuggestions({
       return;
     }
 
-    const currentContent = currentChapter.content;
-    const c = clampCursor(suggestCursor ?? currentContent.length, currentContent);
-    const prefix = currentContent.slice(0, c);
-    const suffix = currentContent.slice(c);
+    const currentContent = contentOverride ?? currentChapter.content;
+
+    // Always append suggestions to the end of the rendered text.
+    // The model's predictions are next-paragraph continuation, not in-place
+    // replacement of a mid-text cursor position.
+    const c = currentContent.length;
+    const prefix = currentContent;
+    const suffix = '';
 
     const { newContent, separator } = computeContentWithSeparator(
       prefix,
@@ -279,16 +286,14 @@ export function useChapterSuggestions({
 
   const handleKeyboardSuggestionAction = async (
     action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
-    cursor?: number
+    cursor?: number,
+    contentOverride?: string
   ) => {
     if (!currentChapterId || !currentChapter) return;
     if (isSuggesting && action !== 'exit') return;
 
     if (action === 'exit') {
-      setContinuations([]);
-      setIsSuggestionMode(false);
-      setSuggestCursor(null);
-      setSuggestUndoStack([]);
+      await cancelSuggestions();
       return;
     }
 
@@ -298,21 +303,24 @@ export function useChapterSuggestions({
     }
 
     if (action === 'chooseLeft') {
-      if (continuations[0]) await handleAcceptContinuation(continuations[0]);
+      if (continuations[0])
+        await handleAcceptContinuation(continuations[0], contentOverride);
       return;
     }
 
     if (action === 'chooseRight') {
-      if (continuations[1]) await handleAcceptContinuation(continuations[1]);
+      if (continuations[1])
+        await handleAcceptContinuation(continuations[1], contentOverride);
       return;
     }
 
     if (action === 'regenerate') {
+      const baseContent = contentOverride ?? currentChapter.content;
       const clampedCursor = clampCursor(
-        suggestCursor ?? cursor ?? currentChapter.content.length,
-        currentChapter.content
+        suggestCursor ?? cursor ?? baseContent.length,
+        baseContent
       );
-      await handleTriggerSuggestions(clampedCursor, undefined, true);
+      await handleTriggerSuggestions(clampedCursor, baseContent, true);
       return;
     }
 
