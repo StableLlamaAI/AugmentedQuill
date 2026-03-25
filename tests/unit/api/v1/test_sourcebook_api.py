@@ -72,6 +72,31 @@ class SourcebookApiTest(ApiTestCase):
         self.assertEqual(get_after_delete.status_code, 200, get_after_delete.text)
         self.assertEqual(get_after_delete.json(), [])
 
+    def test_sourcebook_api_crud_with_slash_in_name(self):
+        create = self.client.post(
+            "/api/v1/sourcebook",
+            json={
+                "name": "Dennis/Denise",
+                "description": "A dual identity character",
+                "category": "character",
+            },
+        )
+        self.assertEqual(create.status_code, 200, create.text)
+
+        update = self.client.put(
+            "/api/v1/sourcebook/Dennis/Denise",
+            json={
+                "description": "A dual identity character updated",
+            },
+        )
+        self.assertEqual(update.status_code, 200, update.text)
+        updated = update.json()
+        self.assertEqual(updated["description"], "A dual identity character updated")
+
+        delete = self.client.delete("/api/v1/sourcebook/Dennis/Denise")
+        self.assertEqual(delete.status_code, 200, delete.text)
+        self.assertTrue(delete.json().get("ok"))
+
     def test_sourcebook_api_search(self):
         self.client.post(
             "/api/v1/sourcebook",

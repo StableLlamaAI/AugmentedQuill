@@ -147,7 +147,7 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
     return SourcebookEntry(**created)
 
 
-@router.put("/sourcebook/{entry_name}")
+@router.put("/sourcebook/{entry_name:path}")
 async def update_sourcebook_entry(
     entry_name: str, updates: SourcebookEntryUpdate
 ) -> SourcebookEntry:
@@ -179,7 +179,7 @@ async def update_sourcebook_entry(
     return SourcebookEntry(**result)
 
 
-@router.delete("/sourcebook/{entry_name}")
+@router.delete("/sourcebook/{entry_name:path}")
 async def delete_sourcebook_entry(entry_name: str):
     """Delete Sourcebook Entry."""
     active = get_active_project_dir()
