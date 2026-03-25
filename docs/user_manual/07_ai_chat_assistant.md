@@ -131,6 +131,15 @@ To prevent runaway AI automation, AugmentedQuill monitors how many consecutive t
 
 You can talk to the AI just like you would a human collaborator. Because it can read your [Story Metadata](04_chapters_and_books.md#story-metadata-panel), [Chapters](04_chapters_and_books.md), and [Sourcebook](05_sourcebook.md) through tools, it can rebuild the context it needs inside the current session.
 
+### Conflict-first workflow
+
+The AI can read and update chapter conflicts through tools (chapter metadata includes conflict descriptions and resolution plans). A good prompt is:
+
+- "Review Chapter 2 conflicts and suggest one scene where the main unresolved conflict is raised in stakes."
+- "Based on the current chapter conflicts, rewrite the next paragraph so the threat is more clear and the resolution path is foreshadowed."
+
+Use the existing conflict list to keep the model focused on forward momentum and to avoid accidentally solving everything too early.
+
 ### Brainstorming
 
 Stuck on a plot point? Ask the AI for ideas.
@@ -182,6 +191,8 @@ The AI isn't just a chatbot — it can take actions within your project. You can
 - "Generate an image of the Crystal Castle based on my Sourcebook description."
 - "Create a new chapter called 'The Betrayal' after Chapter 3."
 - "Add a conflict to Chapter 2: Elena knows about the letter but hasn't told anyone."
+- "Review current chapter conflicts and propose one unresolved conflict for the next chapter that fits story goals."
+- "Use the conflict list to craft the next scene so the main problem stays unsolved but escalates stakes."
 
 When those actions involve prose, CHAT should orchestrate them instead of writing the text itself.
 

@@ -158,7 +158,11 @@ class UpdateChapterMetadataParams(BaseModel):
     summary: str | None = Field(None, description="The chapter summary")
     notes: str | None = Field(None, description="Public notes about the chapter")
     conflicts: list | str | None = Field(
-        None, description="List of conflicts in the chapter (can be JSON string)"
+        None,
+        description=(
+            "List of conflicts in the chapter (can be JSON string). "
+            "Each conflict should include description, resolution, and optional resolved status."
+        ),
     )
 
 
@@ -276,7 +280,10 @@ class RecommendMetadataUpdatesParams(BaseModel):
 
 
 @chat_tool(
-    description="Get metadata for a specific chapter including title, summary, notes, and conflicts. Supports explicit chapter or current chapter lookup.",
+    description=(
+        "Get metadata for a specific chapter including title, summary, notes, and conflicts. "
+        "Conflicts are treated as current unresolved story threads that the assistant should prioritize when generating text."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
 )
@@ -340,7 +347,10 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, conflicts).",
+    description=(
+        "Update metadata for a specific chapter (title, summary, notes, conflicts). "
+        "Chapter conflicts are treated as active story arcs; include any resolved status changes."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
