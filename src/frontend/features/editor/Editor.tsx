@@ -294,12 +294,30 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isAtBottomRef.current = atBottom;
     }, []);
 
-    // Effect to scroll to bottom if we were at the bottom when content changed or AI is loading
+    // Effect to scroll to bottom under scenarios where bottom content should remain visible
+    // while the continuation area / AI streaming can change layout.
     useEffect(() => {
-      if (isAiLoading && isAtBottomRef.current && scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }, [chapter.content, isAiLoading]);
+      const hasContinuationOptionsLocal = continuations.some(
+        (option) => option && option.trim().length > 0
+      );
+
+      const shouldScroll =
+        isAiLoading ||
+        isSuggesting ||
+        (isAtBottomRef.current && hasContinuationOptionsLocal);
+
+      if (!shouldScroll || !scrollContainerRef.current) return;
+
+      const raf = window.requestAnimationFrame(() => {
+        scrollContainerRef.current!.scrollTop =
+          scrollContainerRef.current!.scrollHeight;
+      });
+
+      return () => {
+        window.cancelAnimationFrame(raf);
+      };
+    }, [chapter.content, continuations, isAiLoading, isSuggesting]);
+
     const writingUnavailableReason =
       'This action is unavailable because no working WRITING model is configured.';
 
