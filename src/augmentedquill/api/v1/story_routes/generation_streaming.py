@@ -312,8 +312,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         async def generate_suggestion():
             """Generate Suggestion."""
             try:
-                startFound = False
-                isNewParagraph = False
+                start_found = False
                 async for chunk in llm.openai_completions_stream(
                     caller_id="api.story.suggest",
                     prompt=prompt,
@@ -323,18 +322,45 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
                     timeout_s=timeout_s,
                     model_name=model_name,
                 ):
-                    while chunk.lstrip(" \t").startswith("\n") and not startFound:
-                        chunk = chunk.lstrip(" \t")[1:]
-                        if not isNewParagraph:
-                            yield "\n"
-                        isNewParagraph = True
+                    if not chunk:
+                        continue
+
+                    # Remove any leading spaces/tabs that are purely formatting noise,
+                    # but retain all newline characters to preserve paragraph boundaries.
+                    if not start_found:
+                        while chunk.startswith(" ") or chunk.startswith("\t"):
+                            chunk = chunk[1:]
+                        if chunk == "":
+                            continue
+
+                    # If this chunk starts with newlines and no non-newline content yet,
+                    # emit them in full and keep waiting for actual prose.
+                    while not start_found and chunk.startswith("\n"):
+                        newline_run = 0
+                        while newline_run < len(chunk) and chunk[newline_run] == "\n":
+                            newline_run += 1
+                        yield chunk[:newline_run]
+                        chunk = chunk[newline_run:]
+                        if chunk == "":
+                            break
+
                     if chunk == "":
                         continue
-                    startFound = True
-                    lines = chunk.splitlines()
-                    yield lines[0]
-                    if len(lines) > 1:
-                        break
+
+                    start_found = True
+
+                    # Preserve model-provided paragraph breaks (including trailing newlines)
+                    first_newline = chunk.find("\n")
+                    if first_newline == -1:
+                        yield chunk
+                        continue
+
+                    # Keep all consecutive newline characters starting at first newline.
+                    end_idx = first_newline + 1
+                    while end_idx < len(chunk) and chunk[end_idx] == "\n":
+                        end_idx += 1
+                    yield chunk[:end_idx]
+                    break
             except (OSError, TypeError, ValueError, RuntimeError, AssertionError):
                 # Mask internal errors
                 yield "\n[Error occurred during suggestion]"

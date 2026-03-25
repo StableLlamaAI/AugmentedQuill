@@ -242,13 +242,23 @@ class StoryEndpointsTest(ApiTestCase):
 
         # Call the suggest endpoint
         r = self.client.post(
-            "/api/v1/story/suggest", json={"chap_id": 1, "current_text": "Hello"}
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Hello",
+                "checked_sourcebook": ["EntryOne"],
+            },
         )
         self.assertEqual(r.status_code, 200, r.text)
         # Response should be plain text and return non-empty content
         self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))
         text = r.text or ""
         self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")
+        self.assertEqual(
+            text,
+            "First chunk of suggestion and the rest of the paragraph.\n",
+            f"Unexpected response body: {repr(text)}",
+        )
 
     def test_suggest_filters_empty_sections(self):
         """Prompt should omit lines for empty story metadata or background."""
