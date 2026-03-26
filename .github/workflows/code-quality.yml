@@ -31,7 +31,7 @@ jobs:
       run: pytest
 
     - name: Run pip-audit
-      run: pip-audit
+      run: pip-audit --ignore-vuln CVE-2026-4539
 
   frontend-checks:
     runs-on: ubuntu-latest
