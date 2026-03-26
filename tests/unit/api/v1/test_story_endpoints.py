@@ -174,7 +174,7 @@ class StoryEndpointsTest(ApiTestCase):
 
     def test_suggest_endpoint_streams_paragraph(self):
         """Ensure `/api/v1/story/suggest` is registered and returns streaming text."""
-        self._make_project()
+        pdir = self._make_project()
 
         # Patch the completions stream used by the suggest endpoint
         # Patch the completions stream used by the suggest endpoint
@@ -192,6 +192,8 @@ class StoryEndpointsTest(ApiTestCase):
             # chapter fields stay present
             self.assertIn("Chapter title: T1", prompt)
             self.assertIn("Chapter description: S1", prompt)
+            self.assertIn("Author's notes about the chapter:", prompt)
+            self.assertIn("Use quote from sage", prompt)
             # ensure extra_body was not provided (configured model should win)
             self.assertTrue(
                 "extra_body" not in kwargs or kwargs.get("extra_body") is None
@@ -231,15 +233,32 @@ class StoryEndpointsTest(ApiTestCase):
 
         self.addCleanup(_undo)
 
+        # make sure chapter notes are included in prompt
+        import json
+
+        story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
+        story["chapters"][0]["notes"] = "Use quote from sage"
+        (pdir / "story.json").write_text(json.dumps(story), encoding="utf-8")
+
         # Call the suggest endpoint
         r = self.client.post(
-            "/api/v1/story/suggest", json={"chap_id": 1, "current_text": "Hello"}
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Hello",
+                "checked_sourcebook": ["EntryOne"],
+            },
         )
         self.assertEqual(r.status_code, 200, r.text)
         # Response should be plain text and return non-empty content
         self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))
         text = r.text or ""
         self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")
+        self.assertEqual(
+            text,
+            "First chunk of suggestion and the rest of the paragraph.\n",
+            f"Unexpected response body: {repr(text)}",
+        )
 
     def test_suggest_filters_empty_sections(self):
         """Prompt should omit lines for empty story metadata or background."""

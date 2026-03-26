@@ -109,6 +109,8 @@ export interface ChatSession {
   systemPrompt?: string;
   isIncognito?: boolean;
   allowWebSearch?: boolean;
+  scratchpad?: string;
+  editing_scratchpad?: string;
 }
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';

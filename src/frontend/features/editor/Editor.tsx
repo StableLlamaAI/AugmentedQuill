@@ -126,13 +126,14 @@ interface EditorProps {
   suggestionControls: {
     continuations: string[];
     isSuggesting: boolean;
-    onTriggerSuggestions: () => void;
+    onTriggerSuggestions: (cursor?: number, contentOverride?: string) => void;
     onCancelSuggestion?: () => void;
-    onAcceptContinuation: (text: string) => void;
+    onAcceptContinuation: (text: string, contentOverride?: string) => void;
     isSuggestionMode: boolean;
     onKeyboardSuggestionAction: (
       action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
-      cursor?: number
+      cursor?: number,
+      contentOverride?: string
     ) => void;
   };
   aiControls: {
@@ -294,12 +295,30 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isAtBottomRef.current = atBottom;
     }, []);
 
-    // Effect to scroll to bottom if we were at the bottom when content changed or AI is loading
+    // Effect to scroll to bottom under scenarios where bottom content should remain visible
+    // while the continuation area / AI streaming can change layout.
     useEffect(() => {
-      if (isAiLoading && isAtBottomRef.current && scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }, [chapter.content, isAiLoading]);
+      const hasContinuationOptionsLocal = continuations.some(
+        (option) => option && option.trim().length > 0
+      );
+
+      const shouldScroll =
+        isAiLoading ||
+        isSuggesting ||
+        (isAtBottomRef.current && hasContinuationOptionsLocal);
+
+      if (!shouldScroll || !scrollContainerRef.current) return;
+
+      const raf = window.requestAnimationFrame(() => {
+        scrollContainerRef.current!.scrollTop =
+          scrollContainerRef.current!.scrollHeight;
+      });
+
+      return () => {
+        window.cancelAnimationFrame(raf);
+      };
+    }, [chapter.content, continuations, isAiLoading, isSuggesting]);
+
     const writingUnavailableReason =
       'This action is unavailable because no working WRITING model is configured.';
 
@@ -312,7 +331,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         }
         return;
       }
-      onTriggerSuggestions();
+      const cursor = getEditorCaretOffset() ?? localContent.length;
+      onTriggerSuggestions(cursor, localContent);
     };
 
     const [isDragging, setIsDragging] = useState(false);
@@ -565,6 +585,20 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       return null;
     }, [viewMode, chapter.content.length]);
 
+    const isEditorFocused = useCallback(() => {
+      if (viewMode === 'raw' || viewMode === 'markdown') {
+        return editorViewRef.current?.hasFocus ?? false;
+      }
+      if (viewMode === 'wysiwyg') {
+        return (
+          !!wysiwygRef.current &&
+          document.activeElement &&
+          wysiwygRef.current.contains(document.activeElement)
+        );
+      }
+      return false;
+    }, [viewMode]);
+
     const maybeHandleSuggestionHotkey = useCallback(
       (e: KeyboardEvent | React.KeyboardEvent) => {
         const key = 'key' in e ? e.key : '';
@@ -574,13 +608,22 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         const suggestionActive =
           isSuggestionMode || continuations.length > 0 || isSuggesting;
 
+        const editingFocus = isEditorFocused();
+        const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
+          key
+        );
+
+        if (isArrow && editingFocus) {
+          return false;
+        }
+
         // Trigger: Ctrl+Enter / Cmd+Enter
         if (key === 'Enter' && (ctrlKey || metaKey)) {
           const cursor = getEditorCaretOffset() ?? chapter.content.length;
           e.preventDefault();
           // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
           e.stopPropagation?.();
-          onKeyboardSuggestionAction('trigger', cursor);
+          onKeyboardSuggestionAction('trigger', cursor, localContent);
           return true;
         }
 
@@ -590,21 +633,22 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           e.preventDefault();
           // @ts-ignore
           e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseLeft');
+          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
           return true;
         }
         if (key === 'ArrowRight') {
           e.preventDefault();
           // @ts-ignore
           e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseRight');
+          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
           return true;
         }
         if (key === 'ArrowDown') {
           e.preventDefault();
           // @ts-ignore
           e.stopPropagation?.();
-          onKeyboardSuggestionAction('regenerate');
+          const cursor = getEditorCaretOffset() ?? localContent.length;
+          onKeyboardSuggestionAction('regenerate', cursor, localContent);
           return true;
         }
         if (key === 'ArrowUp') {
@@ -615,10 +659,45 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           return true;
         }
         if (key === 'Escape') {
+          if (suggestionActive) {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('exit', undefined, localContent);
+            return true;
+          }
+          return false;
+        }
+
+        if (!suggestionActive) return false;
+
+        if (key === 'ArrowLeft') {
           e.preventDefault();
           // @ts-ignore
           e.stopPropagation?.();
-          onKeyboardSuggestionAction('exit');
+          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
+          return true;
+        }
+        if (key === 'ArrowRight') {
+          e.preventDefault();
+          // @ts-ignore
+          e.stopPropagation?.();
+          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
+          return true;
+        }
+        if (key === 'ArrowDown') {
+          e.preventDefault();
+          // @ts-ignore
+          e.stopPropagation?.();
+          const cursor = getEditorCaretOffset() ?? localContent.length;
+          onKeyboardSuggestionAction('regenerate', cursor, localContent);
+          return true;
+        }
+        if (key === 'ArrowUp') {
+          e.preventDefault();
+          // @ts-ignore
+          e.stopPropagation?.();
+          onKeyboardSuggestionAction('undo');
           return true;
         }
         return false;
@@ -629,6 +708,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         isSuggesting,
         onKeyboardSuggestionAction,
         getEditorCaretOffset,
+        isEditorFocused,
+        localContent,
       ]
     );
 
@@ -1299,7 +1380,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   </span>
                 </div>
                 <button
-                  onClick={() => onAcceptContinuation('')}
+                  onClick={() => onAcceptContinuation('', localContent)}
                   className={`${textMuted} hover:text-brand-gray-800 text-xs`}
                 >
                   Dismiss
@@ -1314,7 +1395,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   return (
                     <div
                       key={idx}
-                      onClick={() => onAcceptContinuation(option)}
+                      onClick={() => onAcceptContinuation(option, localContent)}
                       className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
                         settings.theme === 'light'
                           ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'

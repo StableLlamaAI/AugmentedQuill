@@ -106,6 +106,7 @@ describe('useChatExecution', () => {
         isChatAvailable: true,
         allowWebSearch: false,
         currentChapterId: '1',
+        currentChatId: 'chat-1',
         currentChapter: { id: '1', title: 'Intro' },
         chatMessages: [],
         setChatMessages,

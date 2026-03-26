@@ -7,13 +7,13 @@
 
 """Defines the story tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-import os
-
 import json as _json
+import os
 
 from pydantic import BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
+from augmentedquill.services.chat.chat_session_helpers import load_chat, save_chat
 from augmentedquill.services.chat.chat_tool_decorator import (
     CHAT_ROLE,
     EDITING_ROLE,
@@ -140,9 +140,12 @@ class WriteStorySummaryParams(BaseModel):
 
 
 class ReadScratchpadParams(BaseModel):
-    """Parameters for reading the scratchpad (no parameters needed)."""
+    """Parameters for reading the scratchpad."""
 
-    pass
+    chat_id: str | None = Field(
+        None,
+        description="Chat ID to read scratchpad for (per-chat). If absent, falls back to project-wide scratchpad.",
+    )
 
 
 class WriteScratchpadParams(BaseModel):
@@ -151,6 +154,10 @@ class WriteScratchpadParams(BaseModel):
     content: str = Field(
         ...,
         description="The full new content for the scratchpad. This replaces current content.",
+    )
+    chat_id: str | None = Field(
+        None,
+        description="Chat ID to write scratchpad for (per-chat). If absent, falls back to project-wide scratchpad.",
     )
 
 
@@ -328,18 +335,68 @@ async def write_book_content(
     return {"ok": True}
 
 
+def _normalize_chat_id(chat_id: str | None) -> str | None:
+    if not chat_id or not isinstance(chat_id, str):
+        return None
+    normalized = os.path.basename(chat_id.strip())
+    return normalized if normalized else None
+
+
+def _read_scratchpad_from_chat(chat_id: str | None) -> str:
+    safe_id = _normalize_chat_id(chat_id)
+    if not safe_id:
+        return ""
+
+    chat_data = load_chat(get_active_project_dir(), safe_id)
+    if not chat_data:
+        return ""
+
+    return str(chat_data.get("scratchpad", ""))
+
+
+def _write_scratchpad_to_chat(chat_id: str | None, content: str) -> None:
+    safe_id = _normalize_chat_id(chat_id)
+    if not safe_id:
+        raise ValueError("Invalid chat_id")
+
+    project_dir = get_active_project_dir()
+    if not project_dir:
+        raise ValueError("No active project")
+
+    chat_data = load_chat(project_dir, safe_id) or {
+        "id": safe_id,
+        "name": f"Chat {safe_id}",
+        "messages": [],
+        "systemPrompt": "",
+        "allowWebSearch": False,
+    }
+    chat_data["scratchpad"] = content
+    save_chat(project_dir, safe_id, chat_data)
+
+
 @chat_tool(
-    description="Read your internal scratchpad/TODO list. Use this to remember complex plans or summaries across long turns.",
+    description=(
+        "Read your per-chat internal scratchpad/TODO list. "
+        "Scratchpad is temporary and chat-specific; it should be used for ephemeral planning only. "
+        "Persist important information in story notes or sourcebook entries."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-read",
 )
 async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations: dict):
     """Read Scratchpad."""
+    chat_id = params.chat_id or (payload or {}).get("chat_id")
+    if chat_id:
+        return {"content": _read_scratchpad_from_chat(chat_id)}
     return {"content": _read_scratchpad()}
 
 
 @chat_tool(
-    description="Update your internal scratchpad/TODO list. Overwrites current content.",
+    description=(
+        "Write your per-chat internal scratchpad/TODO list. "
+        "Scratchpad is temporary and chat-specific; updates are not shared across chats. "
+        "Persist important information in story notes or sourcebook entries."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
@@ -347,7 +404,11 @@ async def write_scratchpad(
     params: WriteScratchpadParams, payload: dict, mutations: dict
 ):
     """Write Scratchpad."""
-    _write_scratchpad(params.content)
+    chat_id = params.chat_id or (payload or {}).get("chat_id")
+    if chat_id:
+        _write_scratchpad_to_chat(chat_id, params.content)
+    else:
+        _write_scratchpad(params.content)
     return {"ok": True}
 
 
@@ -433,8 +494,8 @@ async def write_story_summary(
 
 @chat_tool(
     description=(
-        "Read the EDITING model's private scratchpad. "
-        "Use it to track your editing plan, open issues, and progress notes across turns."
+        "Read the per-chat EDITING scratchpad. "
+        "Editing scratchpad is temporary and chat-specific; important decisions belong in notes or sourcebook."
     ),
     allowed_roles=(EDITING_ROLE,),
     capability="metadata-read",
@@ -443,13 +504,23 @@ async def read_editing_scratchpad(
     params: ReadEditingScratchpadParams, payload: dict, mutations: dict
 ):
     """Read Editing Scratchpad."""
+    chat_id = (payload or {}).get("chat_id")
+    if chat_id:
+        safe_id = _normalize_chat_id(chat_id)
+        if safe_id:
+            chat_data = load_chat(get_active_project_dir(), safe_id)
+            return {
+                "content": (
+                    str(chat_data.get("editing_scratchpad", "")) if chat_data else ""
+                )
+            }
     return {"content": _read_editing_scratchpad()}
 
 
 @chat_tool(
     description=(
-        "Update the EDITING model's private scratchpad. Overwrites current content. "
-        "Use it to track your editing plan, open issues, and progress notes across turns."
+        "Write the per-chat EDITING scratchpad. "
+        "Editing scratchpad is temporary and chat-specific; important decisions belong in notes or sourcebook."
     ),
     allowed_roles=(EDITING_ROLE,),
     capability="metadata-write",
@@ -458,5 +529,22 @@ async def write_editing_scratchpad(
     params: WriteEditingScratchpadParams, payload: dict, mutations: dict
 ):
     """Write Editing Scratchpad."""
+    chat_id = (payload or {}).get("chat_id")
+    if chat_id:
+        safe_id = _normalize_chat_id(chat_id)
+        if safe_id:
+            project_dir = get_active_project_dir()
+            if not project_dir:
+                raise ValueError("No active project")
+            chat_data = load_chat(project_dir, safe_id) or {
+                "id": safe_id,
+                "name": f"Chat {safe_id}",
+                "messages": [],
+                "systemPrompt": "",
+                "allowWebSearch": False,
+            }
+            chat_data["editing_scratchpad"] = params.content
+            save_chat(project_dir, safe_id, chat_data)
+            return {"ok": True}
     _write_editing_scratchpad(params.content)
     return {"ok": True}

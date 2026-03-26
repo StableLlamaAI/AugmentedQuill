@@ -43,8 +43,9 @@ export const sourcebookApi = {
   },
 
   update: async (id: string, updates: Partial<SourcebookUpsertPayload>) => {
+    const escapedId = encodeURIComponent(id);
     return fetchJson<SourcebookEntry>(
-      `/sourcebook/${id}`,
+      `/sourcebook/${escapedId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -55,8 +56,9 @@ export const sourcebookApi = {
   },
 
   delete: async (id: string) => {
+    const escapedId = encodeURIComponent(id);
     return fetchJson<{ ok: boolean }>(
-      `/sourcebook/${id}`,
+      `/sourcebook/${escapedId}`,
       { method: 'DELETE' },
       'Failed to delete entry'
     );

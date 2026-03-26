@@ -5,6 +5,8 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+// @vitest-environment jsdom
+
 /**
  * Tests for text utilities.
  */
@@ -15,6 +17,9 @@ import {
   applySmartQuotes,
   resetSmartQuoteChars,
   setSmartQuoteChars,
+  setupSmartQuotesProxy,
+  convertContentEditableQuotes,
+  maybeReplaceInsertedQuoteInContentEditable,
 } from './textUtils';
 
 afterEach(() => {
@@ -147,5 +152,59 @@ describe('applySmartQuotes', () => {
 
   it('should ignore empty strings without throwing', () => {
     expect(applySmartQuotes('')).toBe('');
+  });
+
+  it('should convert quotes inside contenteditable elements automatically', () => {
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.textContent = 'She said "Hello".';
+    document.body.appendChild(editable);
+
+    convertContentEditableQuotes(editable);
+
+    expect(editable.textContent).toBe('She said “Hello”.');
+
+    document.body.removeChild(editable);
+  });
+
+  it('should replace typed double quote in contenteditable without moving caret', () => {
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.textContent = 'She said ';
+    document.body.appendChild(editable);
+
+    const range = document.createRange();
+    const textNode = editable.firstChild as Text;
+    range.setStart(textNode, textNode.length);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    // Simulate that the browser already inserted the straight quote before the event fires.
+    editable.textContent = 'She said "';
+
+    const textNode2 = editable.firstChild as Text;
+    const range2 = document.createRange();
+    range2.setStart(textNode2, textNode2.length);
+    range2.collapse(true);
+    const selection2 = window.getSelection();
+    selection2?.removeAllRanges();
+    selection2?.addRange(range2);
+
+    const inputEvent = new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertText',
+      data: '"',
+    });
+
+    const replaced = maybeReplaceInsertedQuoteInContentEditable(inputEvent, editable);
+    expect(replaced).toBe(true);
+
+    expect(editable.textContent).toBe('She said “');
+    expect(window.getSelection()?.anchorOffset).toBe('She said “'.length);
+
+    document.body.removeChild(editable);
   });
 });

@@ -65,6 +65,7 @@ export const chatApi = {
     messages: ChatApiMessage[];
     active_chapter_id?: number;
     model_name?: string;
+    chat_id?: string;
   }) => {
     return fetchJson<ChatToolExecutionResponse>(
       '/chat/tools',

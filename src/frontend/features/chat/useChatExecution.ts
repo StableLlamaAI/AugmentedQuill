@@ -36,6 +36,7 @@ type UseChatExecutionParams = {
   isChatAvailable: boolean;
   allowWebSearch: boolean;
   currentChapterId: string | null;
+  currentChatId: string | null;
   currentChapter?: { id: string; title: string } | null;
   chatMessages: ChatMessage[];
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
@@ -57,6 +58,7 @@ export function useChatExecution({
   isChatAvailable,
   allowWebSearch,
   currentChapterId,
+  currentChatId,
   currentChapter,
   chatMessages,
   setChatMessages,
@@ -268,6 +270,7 @@ export function useChatExecution({
             })),
           })),
           active_chapter_id: currentChapterId ? Number(currentChapterId) : undefined,
+          chat_id: currentChatId || undefined,
         });
 
         if (stopSignalRef.current) break;

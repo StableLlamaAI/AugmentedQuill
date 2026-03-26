@@ -128,24 +128,172 @@ export function applySmartQuotes(
   return result;
 }
 
+export function convertContentEditableQuotes(root: HTMLElement) {
+  const selection = window.getSelection();
+  const savedRange =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const value = node.nodeValue || '';
+      return /["']/.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  } as unknown as NodeFilter);
+
+  let textNode = walker.nextNode() as Text | null;
+  while (textNode) {
+    const oldVal = textNode.nodeValue || '';
+    const newVal = applySmartQuotes(oldVal);
+    if (newVal !== oldVal) {
+      textNode.nodeValue = newVal;
+    }
+    textNode = walker.nextNode() as Text | null;
+  }
+
+  if (savedRange && selection) {
+    selection.removeAllRanges();
+    selection.addRange(savedRange);
+  }
+}
+
 /**
  * Installs a global capture-phase event listener to auto-convert
  * straight quotes into typographic quotation marks across all
- * textinputs and textareas.
+ * textinputs, textareas and contenteditable roots.
  */
+function findContentEditableRoot(node: Node | null): HTMLElement | null {
+  let cur = node;
+  while (cur) {
+    if (cur instanceof HTMLElement && cur.isContentEditable) {
+      return cur;
+    }
+    cur = cur.parentNode;
+  }
+  return null;
+}
+
+function getTextOffset(root: Node, target: Node, offset: number): number | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let current = walker.nextNode() as Text | null;
+  let runningOffset = 0;
+
+  while (current) {
+    if (current === target) {
+      return runningOffset + offset;
+    }
+    runningOffset += current.nodeValue?.length ?? 0;
+    current = walker.nextNode() as Text | null;
+  }
+
+  return null;
+}
+
+function isOpeningDoubleQuoteContext(prevChar: string | undefined): boolean {
+  return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
+}
+
+function isOpeningSingleQuoteContext(
+  prevChar: string | undefined,
+  nextChar: string | undefined
+): boolean {
+  const isBeforeWord = !!prevChar && /[A-Za-z0-9]/.test(prevChar);
+  const isAfterWord = !!nextChar && /[A-Za-z0-9]/.test(nextChar);
+  if (isBeforeWord && isAfterWord) {
+    return false; // contraction/apostrophe closing by default
+  }
+
+  return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
+}
+
+function getSmartQuoteForInsertion(
+  quote: '"' | "'",
+  leftText: string,
+  rightText: string
+): string {
+  const prevChar = leftText.slice(-1);
+  const nextChar = rightText[0];
+
+  if (quote === '"') {
+    return isOpeningDoubleQuoteContext(prevChar)
+      ? smartQuoteChars.doubleOpen
+      : smartQuoteChars.doubleClose;
+  }
+
+  return isOpeningSingleQuoteContext(prevChar, nextChar)
+    ? smartQuoteChars.singleOpen
+    : smartQuoteChars.singleClose;
+}
+
+export function maybeReplaceInsertedQuoteInContentEditable(
+  e: InputEvent,
+  root: HTMLElement
+): boolean {
+  const quoteChar = e.data;
+  if (quoteChar !== '"' && quoteChar !== "'") return false;
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) return false;
+
+  // At this point the inserted quote is already in the DOM and the caret is after it.
+  const anchorNode = range.startContainer;
+  const anchorOffset = range.startOffset;
+
+  const absoluteCursorOffset = getTextOffset(root, anchorNode, anchorOffset);
+  if (absoluteCursorOffset === null || absoluteCursorOffset < 1) return false;
+
+  const fullText = root.textContent ?? '';
+  const left = fullText.slice(0, absoluteCursorOffset - 1);
+  const right = fullText.slice(absoluteCursorOffset);
+  const replacement = getSmartQuoteForInsertion(quoteChar, left, right);
+
+  if (!(anchorNode instanceof Text)) {
+    return false;
+  }
+
+  const textValue = anchorNode.nodeValue ?? '';
+  const relativeIndex = anchorOffset - 1;
+
+  if (relativeIndex < 0 || relativeIndex >= textValue.length) {
+    return false;
+  }
+
+  if (textValue.charAt(relativeIndex) !== quoteChar) {
+    return false;
+  }
+
+  anchorNode.nodeValue =
+    textValue.slice(0, relativeIndex) +
+    replacement +
+    textValue.slice(relativeIndex + 1);
+
+  // Reposition caret after inserted smart quote
+  const caretRange = document.createRange();
+  caretRange.setStart(anchorNode, anchorOffset);
+  caretRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(caretRange);
+
+  return true;
+}
+
 export function setupSmartQuotesProxy() {
   if (typeof window === 'undefined') return;
   document.addEventListener(
     'input',
     (e) => {
-      const target = e.target as HTMLElement;
+      const targetNode = e.target as Node | null;
+      if (!targetNode) return;
+
       if (
-        (target.tagName === 'TEXTAREA' ||
-          (target.tagName === 'INPUT' &&
-            (target as HTMLInputElement).type === 'text')) &&
-        target.dataset.noSmartQuotes !== 'true'
+        targetNode instanceof HTMLTextAreaElement ||
+        (targetNode instanceof HTMLInputElement && targetNode.type === 'text')
       ) {
-        const input = target as HTMLInputElement | HTMLTextAreaElement;
+        const input = targetNode as HTMLInputElement | HTMLTextAreaElement;
+        if (input.dataset.noSmartQuotes === 'true') return;
+
         const oldVal = input.value;
         const newVal = applySmartQuotes(oldVal);
         if (newVal !== oldVal) {
@@ -163,9 +311,9 @@ export function setupSmartQuotesProxy() {
             'value'
           )?.set;
 
-          if (target.tagName === 'TEXTAREA' && nativeTextareaValueSetter) {
+          if (input instanceof HTMLTextAreaElement && nativeTextareaValueSetter) {
             nativeTextareaValueSetter.call(input, newVal);
-          } else if (target.tagName === 'INPUT' && nativeInputValueSetter) {
+          } else if (input instanceof HTMLInputElement && nativeInputValueSetter) {
             nativeInputValueSetter.call(input, newVal);
           } else {
             input.value = newVal;
@@ -179,7 +327,23 @@ export function setupSmartQuotesProxy() {
           // though `input` is not cancelable, React handles subsequent event.
           input.dispatchEvent(new Event('input', { bubbles: true }));
         }
+
+        return;
       }
+
+      const editableRoot = findContentEditableRoot(targetNode);
+      if (!editableRoot || editableRoot.dataset.noSmartQuotes === 'true') return;
+
+      const inputEvent = e as InputEvent;
+      if (inputEvent.inputType === 'insertText' && inputEvent.data) {
+        const replaced = maybeReplaceInsertedQuoteInContentEditable(
+          inputEvent,
+          editableRoot
+        );
+        if (replaced) return;
+      }
+
+      convertContentEditableQuotes(editableRoot);
     },
     { capture: true }
   );

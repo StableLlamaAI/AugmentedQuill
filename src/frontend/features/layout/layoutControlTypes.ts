@@ -167,11 +167,12 @@ export type MainEditorSuggestionControls = {
     enableSuggestionMode?: boolean
   ) => Promise<void>;
   handleCancelSuggestions?: () => void;
-  handleAcceptContinuation: (text: string) => Promise<void>;
+  handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: (
     action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
-    cursor?: number
+    cursor?: number,
+    contentOverride?: string
   ) => Promise<void>;
 };
 

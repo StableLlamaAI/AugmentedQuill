@@ -296,6 +296,7 @@ const App: React.FC = () => {
     isChatAvailable: roleAvailability.chat,
     allowWebSearch,
     currentChapterId,
+    currentChatId,
     currentChapter: currentChapterContext,
     chatMessages,
     setChatMessages,

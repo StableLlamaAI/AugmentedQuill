@@ -74,6 +74,26 @@ describe('sourcebookApi', () => {
     );
   });
 
+  it('encodes slashes on PUT /sourcebook/{id}', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({
+      id: 'Dennis/Denise',
+      name: 'Dennis/Denise',
+    });
+
+    const updates = { description: 'Updated' };
+    await sourcebookApi.update('Dennis/Denise', updates);
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      '/sourcebook/Dennis%2FDenise',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      },
+      'Failed to update entry'
+    );
+  });
+
   it('calls DELETE /sourcebook/{id}', async () => {
     vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
 
@@ -81,6 +101,18 @@ describe('sourcebookApi', () => {
 
     expect(fetchJson).toHaveBeenCalledWith(
       '/sourcebook/entry-id',
+      { method: 'DELETE' },
+      'Failed to delete entry'
+    );
+  });
+
+  it('encodes slashes on DELETE /sourcebook/{id}', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+
+    await sourcebookApi.delete('Dennis/Denise');
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      '/sourcebook/Dennis%2FDenise',
       { method: 'DELETE' },
       'Failed to delete entry'
     );
