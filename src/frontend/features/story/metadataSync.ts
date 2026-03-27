@@ -39,9 +39,14 @@ export function computeSyncUpdates(
   const updates: Partial<MetadataParams> = {};
 
   const fieldDirty = (field: keyof MetadataParams): boolean => {
-    const prevVal = (prevInitial[field] || '') as string;
-    const curVal = (local[field] || '') as string;
-    return prevVal !== curVal;
+    const prevVal = prevInitial[field];
+    const curVal = local[field];
+
+    if (field === 'tags' || field === 'conflicts') {
+      return JSON.stringify(prevVal || []) !== JSON.stringify(curVal || []);
+    }
+
+    return (prevVal || '') !== (curVal || '');
   };
 
   if (newInitial.title !== prevInitial.title && !fieldDirty('title')) {
@@ -58,6 +63,13 @@ export function computeSyncUpdates(
     !fieldDirty('private_notes')
   ) {
     updates.private_notes = newInitial.private_notes || '';
+  }
+  if (
+    JSON.stringify(newInitial.conflicts || []) !==
+      JSON.stringify(prevInitial.conflicts || []) &&
+    !fieldDirty('conflicts')
+  ) {
+    updates.conflicts = newInitial.conflicts || [];
   }
 
   return updates;

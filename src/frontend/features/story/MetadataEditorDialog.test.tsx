@@ -63,4 +63,27 @@ describe('MetadataEditorDialog', () => {
       'Updated summary from function call'
     );
   });
+
+  it('shows story-draft labels and conflicts tab for short-story metadata editing', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="story"
+        title="Edit Story Metadata"
+        initialData={{ ...baseData, conflicts: [] }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={vi.fn(async () => undefined)}
+        allowConflicts
+        primarySourceLabel="Story Draft"
+      />
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Conflicts' }).length).toBeGreaterThan(
+      0
+    );
+    expect(screen.getByText('from Story Draft')).toBeTruthy();
+  });
 });

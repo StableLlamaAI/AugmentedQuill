@@ -49,6 +49,10 @@ class UpdateStoryMetadataParams(BaseModel):
     summary: str | None = Field(None, description="The new story summary")
     notes: str | None = Field(None, description="General notes for the story")
     tags: list[str] | None = Field(None, description="List of tags for the story")
+    conflicts: list[dict] | None = Field(
+        None,
+        description="List of active story conflicts with description and optional resolution.",
+    )
 
 
 class ReadStoryContentParams(BaseModel):
@@ -195,6 +199,7 @@ async def get_story_metadata(
         "summary": story.get("story_summary", ""),
         "notes": story.get("notes", ""),
         "tags": story.get("tags", []),
+        "conflicts": story.get("conflicts", []),
         "project_type": story.get("project_type", "novel"),
     }
 
@@ -209,7 +214,11 @@ async def update_story_metadata(
 ):
     """Update Story Metadata."""
     _update_story_metadata(
-        title=params.title, summary=params.summary, notes=params.notes, tags=params.tags
+        title=params.title,
+        summary=params.summary,
+        notes=params.notes,
+        tags=params.tags,
+        conflicts=params.conflicts,
     )
     mutations["story_changed"] = True
     return {"ok": True}

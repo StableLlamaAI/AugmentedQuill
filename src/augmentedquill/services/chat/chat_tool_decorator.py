@@ -273,6 +273,7 @@ def chat_tool(
             "capability": capability,
             "project_types": tuple(project_types) if project_types else None,
             "opt_in": opt_in,
+            "module": func.__module__,
         }
 
         return wrapper
@@ -292,6 +293,10 @@ def get_tool_schemas(
             continue
         if normalized_role and normalized_role not in info.get(
             "allowed_roles", MODEL_ROLES
+        ):
+            continue
+        if project_type == "short-story" and str(info.get("module", "")).endswith(
+            ".chapter_tools"
         ):
             continue
         allowed_project_types = info.get("project_types")

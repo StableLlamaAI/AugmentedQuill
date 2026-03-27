@@ -17,7 +17,7 @@ import React, {
   useState,
 } from 'react';
 import { EditorView } from '@codemirror/view';
-import { Chapter, EditorSettings, ViewMode } from '../../types';
+import { EditorSettings, ViewMode, WritingUnit } from '../../types';
 import {
   Sparkles,
   Loader2,
@@ -117,12 +117,12 @@ export const escapeHtmlAttribute = (value: string): string =>
 configureMarked();
 
 interface EditorProps {
-  chapter: Chapter;
+  chapter: WritingUnit;
   settings: EditorSettings;
   viewMode: ViewMode;
   showWhitespace?: boolean;
   onToggleShowWhitespace?: () => void;
-  onChange: (id: string, updates: Partial<Chapter>) => void;
+  onChange: (id: string, updates: Partial<WritingUnit>) => void;
   suggestionControls: {
     continuations: string[];
     isSuggesting: boolean;
@@ -238,6 +238,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const showInlineTitle = chapter.scope !== 'story';
     const isAtBottomRef = useRef<boolean>(true);
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
@@ -307,7 +308,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         isSuggesting ||
         (isAtBottomRef.current && hasContinuationOptionsLocal);
 
-      if (!shouldScroll || !scrollContainerRef.current) return;
+      if (!shouldScroll || !scrollContainerRef.current) {
+        return undefined;
+      }
 
       const raf = window.requestAnimationFrame(() => {
         scrollContainerRef.current!.scrollTop =
@@ -1211,7 +1214,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 }`}
               >
                 <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
-                  Chapter AI
+                  {chapter.scope === 'story' ? 'Story AI' : 'Chapter AI'}
                 </span>
                 <div
                   className={`w-px h-4 ${
@@ -1231,7 +1234,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   title={
                     !isWritingAvailable
                       ? writingUnavailableReason
-                      : 'Extend Chapter (WRITING model)'
+                      : chapter.scope === 'story'
+                        ? 'Extend Story Draft (WRITING model)'
+                        : 'Extend Chapter (WRITING model)'
                   }
                 >
                   Extend
@@ -1247,7 +1252,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   title={
                     !isWritingAvailable
                       ? writingUnavailableReason
-                      : 'Rewrite Chapter (WRITING model)'
+                      : chapter.scope === 'story'
+                        ? 'Rewrite Story Draft (WRITING model)'
+                        : 'Rewrite Chapter (WRITING model)'
                   }
                 >
                   Rewrite
@@ -1289,28 +1296,29 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             }}
           >
             {/* Toolbar - Removed Image Icon here */}
-            {/* Title Input */}
-            <textarea
-              value={localTitle}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\n/g, '');
-                setLocalTitle(val);
-                if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-                titleDebounceRef.current = setTimeout(() => {
-                  onChange(chapter.id, { title: val });
-                }, DEBOUNCE_MS);
-              }}
-              rows={1}
-              className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
-              placeholder="Chapter Title"
-              spellCheck={false}
-              style={{
-                ...commonTextStyle,
-                fontSize: '1.8em',
-                lineHeight: '1.3',
-                fontFamily: titleFontFamily,
-              }}
-            />
+            {showInlineTitle && (
+              <textarea
+                value={localTitle}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\n/g, '');
+                  setLocalTitle(val);
+                  if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+                  titleDebounceRef.current = setTimeout(() => {
+                    onChange(chapter.id, { title: val });
+                  }, DEBOUNCE_MS);
+                }}
+                rows={1}
+                className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
+                placeholder="Chapter Title"
+                spellCheck={false}
+                style={{
+                  ...commonTextStyle,
+                  fontSize: '1.8em',
+                  lineHeight: '1.3',
+                  fontFamily: titleFontFamily,
+                }}
+              />
+            )}
 
             {/* Editor Area */}
             <div id="editor-area" className="flex flex-col relative w-full">
@@ -1351,7 +1359,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
-                    placeholder="Start writing your chapter here..."
+                    placeholder={
+                      chapter.scope === 'story'
+                        ? 'Start writing your story here...'
+                        : 'Start writing your chapter here...'
+                    }
                     className="w-full"
                     style={{
                       ...commonTextStyle,

@@ -9,19 +9,16 @@
  * Defines the story metadata unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect } from 'react';
-import { Tag, Edit, Save, X } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
+import React, { useState } from 'react';
+import { Edit } from 'lucide-react';
 import {
   MarkdownView,
   hasUnsupportedSummaryMarkdown,
   SummaryWarning,
 } from '../editor/MarkdownView';
-import { AppTheme, Story, Conflict } from '../../types';
+import { AppTheme, Conflict } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
-import { api } from '../../services/api';
-import { notifyError } from '../../services/errorNotifier';
 
 interface StoryMetadataProps {
   title: string;
@@ -29,7 +26,9 @@ interface StoryMetadataProps {
   tags: string[];
   notes?: string;
   private_notes?: string;
+  conflicts?: Conflict[];
   language?: string;
+  projectType?: 'short-story' | 'novel' | 'series';
   /** available instruction languages, used by the metadata dialog */
   languages?: string[];
   onUpdate: (
@@ -38,8 +37,9 @@ interface StoryMetadataProps {
     tags: string[],
     notes?: string,
     private_notes?: string,
+    conflicts?: Conflict[],
     language?: string
-  ) => void;
+  ) => Promise<void>;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -56,7 +56,9 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   tags,
   notes,
   private_notes,
+  conflicts,
   language,
+  projectType = 'novel',
   languages,
   onUpdate,
   onAiGenerateSummary,
@@ -73,6 +75,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   const tagClass = isLight
     ? 'bg-brand-gray-50 text-brand-gray-600 border-brand-gray-200'
     : 'bg-brand-gray-800 text-brand-gray-400 border-brand-gray-700';
+  const usesStoryDraftSource = projectType === 'short-story';
 
   const handleMetadataSave = async (data: {
     title: string;
@@ -80,29 +83,18 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     tags: string[];
     notes?: string;
     private_notes?: string;
+    conflicts?: Conflict[];
     language?: string;
   }) => {
-    try {
-      await api.story.updateMetadata({
-        title: data.title,
-        summary: data.summary,
-        tags: data.tags,
-        notes: data.notes,
-        private_notes: data.private_notes,
-        language: data.language,
-      });
-      onUpdate(
-        data.title,
-        data.summary,
-        data.tags || [],
-        data.notes,
-        data.private_notes,
-        data.language
-      );
-      // Keep dialog open because saves are triggered by autosave while editing.
-    } catch (e) {
-      notifyError('Failed to update story metadata', e);
-    }
+    await onUpdate(
+      data.title,
+      data.summary,
+      data.tags || [],
+      data.notes,
+      data.private_notes,
+      data.conflicts,
+      data.language
+    );
   };
 
   return (
@@ -120,11 +112,14 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             tags,
             notes,
             private_notes,
+            conflicts,
             language,
           }}
           languages={languages}
           onSave={handleMetadataSave}
           onClose={() => setMetadataModalOpen(false)}
+          allowConflicts={usesStoryDraftSource}
+          primarySourceLabel={usesStoryDraftSource ? 'Story Draft' : 'Chapters'}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
           theme={theme}

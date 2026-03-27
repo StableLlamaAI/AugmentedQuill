@@ -88,12 +88,18 @@ const App: React.FC = () => {
     redo,
   });
 
-  const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
-  const currentChapterContext = currentChapter
+  const activeChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const currentChapter =
+    story.projectType === 'short-story'
+      ? story.draft
+      : activeChapter
+        ? { ...activeChapter, scope: 'chapter' as const }
+        : null;
+  const currentChapterContext = activeChapter
     ? {
-        id: currentChapter.id,
-        title: currentChapter.title,
-        is_empty: !currentChapter.content || currentChapter.content.trim() === '',
+        id: activeChapter.id,
+        title: activeChapter.title,
+        is_empty: !activeChapter.content || activeChapter.content.trim() === '',
       }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
@@ -239,8 +245,7 @@ const App: React.FC = () => {
     setIsAutoSourcebookSelectionEnabled,
     isSourcebookSelectionRunning,
   } = useChapterSuggestions({
-    currentChapter,
-    currentChapterId,
+    currentUnit: currentChapter || undefined,
     story,
     systemPrompt,
     activeWritingConfig,
@@ -253,7 +258,7 @@ const App: React.FC = () => {
 
   const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
     useAiActions({
-      currentChapter,
+      currentUnit: currentChapter || undefined,
       story,
       prompts,
       isEditingAvailable: roleAvailability.editing,

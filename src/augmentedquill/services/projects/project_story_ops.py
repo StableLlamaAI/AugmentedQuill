@@ -92,6 +92,7 @@ def update_story_metadata_in_project(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    conflicts: list | None = None,
     language: str = None,
 ) -> None:
     """Update Story Metadata In Project."""
@@ -108,6 +109,8 @@ def update_story_metadata_in_project(
         story["notes"] = notes
     if private_notes is not None:
         story["private_notes"] = private_notes
+    if conflicts is not None:
+        story["conflicts"] = conflicts
     if language is not None:
         story["language"] = language
 

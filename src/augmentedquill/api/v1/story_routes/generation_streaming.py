@@ -25,6 +25,7 @@ from augmentedquill.services.story.story_api_state_ops import (
     get_normalized_chapters,
     read_text_or_raise,
 )
+from augmentedquill.services.projects.projects import read_story_content
 from augmentedquill.services.story.story_generation_common import (
     gather_writing_context,
     prepare_ai_action_generation,
@@ -114,17 +115,28 @@ async def api_story_sourcebook_relevance(request: Request):
     """
     try:
         payload = await parse_json_body(request)
-        chap_id = (payload or {}).get("chap_id")
-        if not isinstance(chap_id, int):
-            raise ServiceError("chap_id is required", status_code=400)
+        _, _, story = get_active_story_or_raise()
+        scope = str(
+            (payload or {}).get("scope")
+            or ("story" if story.get("project_type") == "short-story" else "chapter")
+        ).lower()
 
-        _, path, pos = get_chapter_locator(chap_id)
+        if scope == "story":
+            path = None
+            pos = None
+        else:
+            chap_id = (payload or {}).get("chap_id")
+            if not isinstance(chap_id, int):
+                raise ServiceError("chap_id is required", status_code=400)
+
+            _, path, pos = get_chapter_locator(chap_id)
         current_text = (payload or {}).get("current_text")
         if not isinstance(current_text, str):
-            current_text = read_text_or_raise(path)
+            current_text = (
+                read_story_content() if scope == "story" else read_text_or_raise(path)
+            )
 
         # gather story and entries
-        _, _, story = get_active_story_or_raise()
         all_entries = []
         try:
             from augmentedquill.services.sourcebook.sourcebook_helpers import (
@@ -248,21 +260,35 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
     """Api Story Suggest."""
     try:
         payload = await parse_json_body(request)
-
-        chap_id = (payload or {}).get("chap_id")
-        if not isinstance(chap_id, int):
-            raise ServiceError("chap_id is required", status_code=400)
-
-        _, path, pos = get_chapter_locator(chap_id)
-        current_text = (payload or {}).get("current_text")
-        if not isinstance(current_text, str):
-            current_text = read_text_or_raise(path)
-
         _, _, story = get_active_story_or_raise()
-        chapters_data = get_normalized_chapters(story)
-        ensure_chapter_slot(chapters_data, pos)
-        summary = chapters_data[pos].get("summary", "")
-        title = chapters_data[pos].get("title") or path.name
+        scope = str(
+            (payload or {}).get("scope")
+            or ("story" if story.get("project_type") == "short-story" else "chapter")
+        ).lower()
+
+        if scope == "story":
+            path = None
+            pos = None
+            current_text = (payload or {}).get("current_text")
+            if not isinstance(current_text, str):
+                current_text = read_story_content()
+            chapters_data = []
+            summary = story.get("story_summary", "")
+            title = story.get("project_title") or ""
+        else:
+            chap_id = (payload or {}).get("chap_id")
+            if not isinstance(chap_id, int):
+                raise ServiceError("chap_id is required", status_code=400)
+
+            _, path, pos = get_chapter_locator(chap_id)
+            current_text = (payload or {}).get("current_text")
+            if not isinstance(current_text, str):
+                current_text = read_text_or_raise(path)
+
+            chapters_data = get_normalized_chapters(story)
+            ensure_chapter_slot(chapters_data, pos)
+            summary = chapters_data[pos].get("summary", "")
+            title = chapters_data[pos].get("title") or path.name
 
         (
             base_url,

@@ -205,42 +205,33 @@ class ProjectFeaturesTest(TestCase):
         self.assertIn("multiple chapters", msg.lower())
 
     def test_short_story_project_overview_with_metadata(self):
-        """Test the regression fix: Short Story project using story.json metadata for title/summary."""
+        """Short-story overview exposes the canonical single draft metadata."""
         create_project("test_sm_meta", project_type="short-story")
         select_project("test_sm_meta")
         active = get_active_project_dir()
 
-        # Simulate LLM adding a summary to story.json
         story = load_story_config(active / "story.json")
-        story["chapters"] = [
-            {
-                "title": "The Beginning",
-                "summary": "A great start",
-                "conflicts": [{"description": "Should stay in chapter details"}],
-            }
-        ]
+        story["project_title"] = "The Beginning"
+        story["story_summary"] = "A great start"
         (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
-        # Check overview
         overview = _project_overview()
-
-        chapters = overview["chapters"]
-        self.assertEqual(len(chapters), 1)
-        self.assertEqual(chapters[0]["title"], "The Beginning")
-        self.assertEqual(chapters[0]["summary"], "A great start")
-        self.assertEqual(chapters[0]["filename"], "content.md")
-        self.assertNotIn("conflicts", chapters[0])
+        draft = overview["draft"]
+        self.assertEqual(draft["title"], "The Beginning")
+        self.assertEqual(draft["summary"], "A great start")
+        self.assertEqual(draft["filename"], "content.md")
+        self.assertNotIn("chapters", overview)
 
     def test_short_story_project_overview_defaults(self):
-        """Test fallback when no metadata exists."""
+        """Short-story overview falls back to project-level draft metadata."""
         create_project("test_sm_def", project_type="short-story")
         select_project("test_sm_def")
 
         overview = _project_overview()
-        chapters = overview["chapters"]
-        self.assertEqual(len(chapters), 1)
-        self.assertEqual(chapters[0]["title"], "Story Content")
-        self.assertEqual(chapters[0]["summary"], "Full content of the story")
+        draft = overview["draft"]
+        self.assertEqual(draft["title"], "test_sm_def")
+        self.assertEqual(draft["summary"], "")
+        self.assertEqual(draft["filename"], "content.md")
 
     def test_project_overview_include_notes_for_short_story(self):
         create_project("test_sm_notes", project_type="short-story")
@@ -248,17 +239,13 @@ class ProjectFeaturesTest(TestCase):
         active = get_active_project_dir()
 
         story = load_story_config(active / "story.json")
-        story["chapters"] = [
-            {
-                "title": "Short Note Story",
-                "summary": "Summary with notes",
-                "notes": "Short story note",
-            }
-        ]
+        story["project_title"] = "Short Note Story"
+        story["story_summary"] = "Summary with notes"
+        story["notes"] = "Short story note"
         (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
         overview = _project_overview(include_notes=True)
-        self.assertEqual(overview["chapters"][0]["notes"], "Short story note")
+        self.assertEqual(overview["draft"]["notes"], "Short story note")
 
     def test_project_overview_include_notes_for_novel(self):
         create_project("test_novel_notes", project_type="novel")

@@ -9,6 +9,7 @@
  * Defines the story unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
+import { StoryContentResponse } from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const storyApi = {
@@ -69,6 +70,7 @@ export const storyApi = {
     tags?: string[];
     notes?: string;
     private_notes?: string;
+    conflicts?: Array<{ id?: string; description?: string; resolution?: string }>;
     language?: string;
   }) => {
     return fetchJson<{ ok: boolean; detail?: string }>(
@@ -82,13 +84,37 @@ export const storyApi = {
     );
   },
 
+  getContent: async () => {
+    return fetchJson<StoryContentResponse>(
+      '/story/content',
+      undefined,
+      'Failed to get story content'
+    );
+  },
+
+  updateContent: async (content: string) => {
+    return fetchJson<{ ok: boolean }>(
+      '/story/content',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      },
+      'Failed to update story content'
+    );
+  },
+
   computeSourcebookRelevance: async (chapId: string, currentText: string) => {
     return fetchJson<{ relevant: string[] }>(
       '/story/sourcebook/relevance',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap_id: Number(chapId), current_text: currentText }),
+        body: JSON.stringify({
+          scope: chapId === 'story' ? 'story' : 'chapter',
+          chap_id: chapId === 'story' ? undefined : Number(chapId),
+          current_text: currentText,
+        }),
       },
       'Failed to compute sourcebook relevance'
     );

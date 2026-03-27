@@ -125,6 +125,11 @@ export interface ProjectMutationResponse {
   story?: StoryApiPayload;
 }
 
+export interface StoryContentResponse {
+  ok: boolean;
+  content: string;
+}
+
 export interface ChapterListItem {
   id: number;
   title: string;

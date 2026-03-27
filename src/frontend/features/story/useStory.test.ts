@@ -32,6 +32,11 @@ vi.mock('../../services/api', () => ({
       list: vi.fn(),
       get: vi.fn(),
     },
+    story: {
+      updateMetadata: vi.fn(),
+      updateContent: vi.fn(),
+      getContent: vi.fn(),
+    },
   },
 }));
 
@@ -334,5 +339,61 @@ describe('buildInitialStoryState', () => {
     // Since we merged onUndo2 into history[1], it should be called.
     expect(onUndo2).toHaveBeenCalledTimes(1);
     expect(result.current.historyIndex).toBe(0);
+  });
+
+  it('persists short-story conflicts through story metadata updates', async () => {
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({ ok: true } as any);
+
+    const { result } = renderHook(() =>
+      useStory({
+        confirm: async () => true,
+        alert: () => {},
+      })
+    );
+
+    act(() => {
+      result.current.loadStory({
+        ...buildStory('Short summary'),
+        id: 'shorty',
+        title: 'Shorty',
+        projectType: 'short-story',
+        notes: 'Draft notes',
+        private_notes: 'Private draft notes',
+        conflicts: [],
+        draft: {
+          id: 'story',
+          scope: 'story',
+          title: 'Shorty',
+          summary: 'Short summary',
+          content: 'Draft body',
+          notes: 'Draft notes',
+          private_notes: 'Private draft notes',
+          conflicts: [],
+          filename: 'content.md',
+        },
+      });
+    });
+
+    const conflicts = [
+      { id: 'conf-1', description: 'Storm hits the village', resolution: 'TBD' },
+    ];
+
+    await act(async () => {
+      await result.current.updateStoryMetadata(
+        'Shorty',
+        'Short summary',
+        [],
+        'Draft notes',
+        'Private draft notes',
+        conflicts,
+        'en'
+      );
+    });
+
+    expect(result.current.story.conflicts).toEqual(conflicts);
+    expect(result.current.story.draft?.conflicts).toEqual(conflicts);
+    expect(api.story.updateMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ conflicts })
+    );
   });
 });

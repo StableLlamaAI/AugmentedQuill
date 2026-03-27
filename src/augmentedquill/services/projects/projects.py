@@ -354,6 +354,7 @@ def update_story_metadata(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    conflicts: list | None = None,
     language: str = None,
 ) -> None:
     """Update general story metadata."""
@@ -365,6 +366,7 @@ def update_story_metadata(
         tags=tags,
         notes=notes,
         private_notes=private_notes,
+        conflicts=conflicts,
         language=language,
     )
 

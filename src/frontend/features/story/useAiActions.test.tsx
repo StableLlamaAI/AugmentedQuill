@@ -69,8 +69,9 @@ describe('useAiActions', () => {
     const { result } = renderHook(
       () =>
         useAiActions({
-          currentChapter: {
+          currentUnit: {
             id: '1',
+            scope: 'chapter',
             title: 'Chapter 1',
             summary: '',
             content: 'Existing content',
@@ -83,6 +84,7 @@ describe('useAiActions', () => {
             image_style: '',
             image_additional_info: '',
             chapters: [],
+            draft: null,
             projectType: 'novel',
             books: [],
             sourcebook: [],

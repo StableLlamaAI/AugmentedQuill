@@ -28,6 +28,7 @@ type UseProjectManagementParams = {
     tags: string[],
     notes?: string,
     private_notes?: string,
+    conflicts?: StoryState['conflicts'],
     language?: string
   ) => Promise<void>;
   handleSelectChat: (id: string) => Promise<void>;
@@ -258,16 +259,19 @@ export function useProjectManagement({
             []
           );
 
-          if (type === 'short-story' && mappedStory.chapters.length === 0) {
-            mappedStory.chapters = [
-              {
-                id: '1',
-                title: mappedStory.title,
-                summary: '',
-                content: '',
-              },
-            ];
-            mappedStory.currentChapterId = '1';
+          if (type === 'short-story') {
+            mappedStory.draft = {
+              id: 'story',
+              scope: 'story',
+              title: mappedStory.title,
+              summary: mappedStory.summary,
+              content: '',
+              notes: mappedStory.notes,
+              private_notes: mappedStory.private_notes,
+              conflicts: mappedStory.conflicts,
+              filename: 'content.md',
+            };
+            mappedStory.currentChapterId = null;
           }
 
           loadStory(mappedStory);
@@ -373,6 +377,7 @@ export function useProjectManagement({
           story.styleTags,
           undefined,
           undefined,
+          story.conflicts,
           newLang
         );
         return;
