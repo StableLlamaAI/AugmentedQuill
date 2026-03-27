@@ -238,7 +238,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const showInlineTitle = chapter.scope !== 'story';
+    const showInlineTitle = true;
+    const conflictCount = chapter.conflicts?.length ?? 0;
     const isAtBottomRef = useRef<boolean>(true);
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
@@ -1297,27 +1298,41 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           >
             {/* Toolbar - Removed Image Icon here */}
             {showInlineTitle && (
-              <textarea
-                value={localTitle}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\n/g, '');
-                  setLocalTitle(val);
-                  if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-                  titleDebounceRef.current = setTimeout(() => {
-                    onChange(chapter.id, { title: val });
-                  }, DEBOUNCE_MS);
-                }}
-                rows={1}
-                className="w-full bg-transparent font-serif font-bold mb-8 border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
-                placeholder="Chapter Title"
-                spellCheck={false}
-                style={{
-                  ...commonTextStyle,
-                  fontSize: '1.8em',
-                  lineHeight: '1.3',
-                  fontFamily: titleFontFamily,
-                }}
-              />
+              <div className="flex items-start gap-3 mb-8">
+                <textarea
+                  value={localTitle}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\n/g, '');
+                    setLocalTitle(val);
+                    if (titleDebounceRef.current)
+                      clearTimeout(titleDebounceRef.current);
+                    titleDebounceRef.current = setTimeout(() => {
+                      onChange(chapter.id, { title: val });
+                    }, DEBOUNCE_MS);
+                  }}
+                  rows={1}
+                  className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
+                  placeholder={
+                    chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
+                  }
+                  spellCheck={false}
+                  style={{
+                    ...commonTextStyle,
+                    fontSize: '1.8em',
+                    lineHeight: '1.3',
+                    fontFamily: titleFontFamily,
+                  }}
+                />
+                {conflictCount > 0 && (
+                  <span
+                    className="mt-1 flex items-center gap-0.5 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold"
+                    aria-label={`${conflictCount} active conflicts`}
+                    title={`${conflictCount} active conflicts`}
+                  >
+                    {conflictCount}
+                  </span>
+                )}
+              </div>
             )}
 
             {/* Editor Area */}

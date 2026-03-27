@@ -44,3 +44,24 @@ class StoryApiPromptOpsTest(TestCase):
 
         expected_label = get_system_message("chapter_text_label", {}, language="en")
         self.assertIn(expected_label, user_msg["content"])
+
+    def test_short_story_ai_action_messages_use_current_draft_wording(self):
+        messages = build_ai_action_messages(
+            target="chapter",
+            action="rewrite",
+            project_type_label="Short Story",
+            story_title="My Story",
+            story_summary="Some story summary",
+            story_tags="tag1, tag2",
+            chapter_title="My Story",
+            chapter_summary="Some summary",
+            chapter_conflicts="- Storm approaches",
+            existing_content="Existing text",
+            model_overrides={},
+            language="en",
+            project_type="short-story",
+        )
+
+        user_msg = next((m for m in messages if m["role"] == "user"), None)
+        self.assertIsNotNone(user_msg)
+        self.assertIn("current draft", user_msg["content"].lower())

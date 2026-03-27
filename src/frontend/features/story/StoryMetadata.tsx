@@ -65,7 +65,6 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   summaryAiDisabledReason,
   theme = 'mixed',
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
 
   const { isLight } = useThemeClasses();
@@ -126,14 +125,25 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         />
       )}
       <div className="flex justify-between items-start mb-3">
-        <h1 className="text-xl font-bold font-serif tracking-wide">
-          {title}
-          {language && (
-            <span className="ml-2 text-sm text-brand-gray-500">
-              ({language.toUpperCase()})
+        <div className="flex items-start gap-2">
+          <h1 className="text-xl font-bold font-serif tracking-wide">
+            {title}
+            {language && (
+              <span className="ml-2 text-sm text-brand-gray-500">
+                ({language.toUpperCase()})
+              </span>
+            )}
+          </h1>
+          {!!conflicts?.length && (
+            <span
+              className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold"
+              aria-label={`${conflicts.length} active conflicts`}
+              title={`${conflicts.length} active conflicts`}
+            >
+              {conflicts.length}
             </span>
           )}
-        </h1>
+        </div>
         <button
           onClick={() => setMetadataModalOpen(true)}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"
