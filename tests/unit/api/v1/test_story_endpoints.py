@@ -96,9 +96,9 @@ class StoryEndpointsTest(ApiTestCase):
             # Return a minimal response
             content = kwargs.get("messages", [{}])[-1].get("content", "")
             # If asked to write chapter, return a known text
-            if "Task: Write the full chapter" in content:
+            if "Task: Write the full current draft" in content:
                 txt = "AI chapter body"
-            elif "Task: Continue the chapter" in content:
+            elif "Task: Continue the current draft" in content:
                 txt = "AI continuation"
             else:
                 txt = "AI summary"
@@ -190,9 +190,9 @@ class StoryEndpointsTest(ApiTestCase):
             # background entry should appear by name or description
             self.assertIn("EntryOne", prompt)
             # chapter fields stay present
-            self.assertIn("Chapter title: T1", prompt)
-            self.assertIn("Chapter description: S1", prompt)
-            self.assertIn("Author's notes about the chapter:", prompt)
+            self.assertIn("Current draft title: T1", prompt)
+            self.assertIn("Current draft summary: S1", prompt)
+            self.assertIn("Author's notes about the current draft:", prompt)
             self.assertIn("Use quote from sage", prompt)
             # ensure extra_body was not provided (configured model should win)
             self.assertTrue(
