@@ -66,11 +66,17 @@ jobs:
           npm run build
       - name: Build Backend (onedir)
         run: python build_backend.py onedir
+
+      - name: Package Backend OneDir
+        run: |
+          mkdir -p dist/release
+          tar -czf dist/release/backend-onedir-${{ runner.os }}.tar.gz -C dist run_app
+
       - name: Upload Backend Artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-onedir-${{ runner.os }}
-          path: dist/run_app/
+          path: dist/release/backend-onedir-${{ runner.os }}.tar.gz
 
   build-electron:
     needs: build-backend-onedir
@@ -107,7 +113,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-assets-${{ runner.os }}
-          path: electron/dist/*
+          path: |
+            electron/dist/*.exe
+            electron/dist/*.dmg
+            electron/dist/*.AppImage
+            electron/dist/*.zip
+            electron/dist/*.tar.gz
+          if-no-files-found: ignore
 
   build-backend-onefile:
     needs: pre-check
@@ -163,7 +175,7 @@ jobs:
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
           commit: ${{ github.ref_name }}
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-          artifacts: "all-assets/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "all-assets/**/*.{tar.gz,exe,dmg,AppImage,zip}"
           allowUpdates: true
           replacesArtifacts: true
