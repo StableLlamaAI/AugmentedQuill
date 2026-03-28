@@ -19,11 +19,13 @@ If you just want to double-click an app and start writing in your own web browse
 
 ## 2. Standalone Desktop App (Electron)
 
+> **Note:** The Electron desktop wrapper is currently **experimental / work in progress**. No official installer is published yet. See `docs/ARCHITECTURE.md` § 8 for development notes.
+
 If you prefer a complete, isolated desktop application experience rather than using your web browser, you can use the Electron version.
 
 **How it works:** This bundles the PyInstaller backend with an Electron frontend, giving you a native-feeling windowed application.
 
-**Installation:**
+**Installation (once an official release is available):**
 
 1. Go to the [Releases](../../releases) page on GitHub.
 2. Download the installer for your operating system (e.g., `AugmentedQuill-Setup.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux).
@@ -41,12 +43,26 @@ If you run a home server, NAS, or just prefer keeping your applications containe
 
 **Installation:**
 
-1. Download the `docker-compose.yml` file from this repository.
+1. Download the `docker-compose.yml` file from this repository (or create your own using the example below).
 2. Open a terminal in the directory containing the file and run:
+
    ```bash
    docker compose up -d
    ```
-3. Open your browser and navigate to `http://localhost:8000`.
+
+   This uses image `ghcr.io/stablellamaai/augmentedquill:latest` and maps host port `8000` to container port `8000`.
+
+   If you don’t want to use Docker Compose, you can run directly with Docker:
+
+   ```bash
+   docker run -d --name augmentedquill \
+     -p 8000:8000 \
+     -v "$PWD/data:/app/data" \
+     -v "$PWD/resources/config:/app/resources/config" \
+     ghcr.io/stablellamaai/augmentedquill:latest
+   ```
+
+3. Open your browser and point to `http://localhost:8000/` (or `http://<server-ip>:8000/` when running on a remote machine).
 
 _Note: Your stories and configuration will be saved in the `./data` and `./resources/config` directories next to your `docker-compose.yml` file._
 
@@ -58,8 +74,8 @@ If you want to modify the code, contribute to the project, or just prefer runnin
 
 **Prerequisites:**
 
-- Python 3.11+
-- Node.js 18+
+- Python 3.12+
+- Node.js 24+
 - Git
 
 **Installation:**

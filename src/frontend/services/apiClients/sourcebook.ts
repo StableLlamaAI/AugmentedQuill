@@ -4,19 +4,30 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the sourcebook unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the sourcebook unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { SourcebookEntry } from '../../types';
 import { SourcebookUpsertPayload } from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const sourcebookApi = {
-  list: async () => {
-    return fetchJson<SourcebookEntry[]>(
-      '/sourcebook',
-      undefined,
-      'Failed to load sourcebook'
-    );
+  list: async (
+    query?: string,
+    matchMode: 'direct' | 'extensive' = 'extensive',
+    splitQueryFallback = false
+  ) => {
+    const params = new URLSearchParams();
+    if (query !== undefined) {
+      params.set('query', query);
+    }
+    params.set('match_mode', matchMode);
+    params.set('split_query_fallback', splitQueryFallback ? 'true' : 'false');
+    const qs = params.toString();
+    const url = qs ? `/sourcebook?${qs}` : '/sourcebook';
+    return fetchJson<SourcebookEntry[]>(url, undefined, 'Failed to load sourcebook');
   },
 
   create: async (entry: SourcebookUpsertPayload) => {
@@ -32,8 +43,9 @@ export const sourcebookApi = {
   },
 
   update: async (id: string, updates: Partial<SourcebookUpsertPayload>) => {
+    const escapedId = encodeURIComponent(id);
     return fetchJson<SourcebookEntry>(
-      `/sourcebook/${id}`,
+      `/sourcebook/${escapedId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -44,10 +56,27 @@ export const sourcebookApi = {
   },
 
   delete: async (id: string) => {
+    const escapedId = encodeURIComponent(id);
     return fetchJson<{ ok: boolean }>(
-      `/sourcebook/${id}`,
+      `/sourcebook/${escapedId}`,
       { method: 'DELETE' },
       'Failed to delete entry'
+    );
+  },
+
+  generateKeywords: async (payload: {
+    name: string;
+    description: string;
+    synonyms?: string[];
+  }) => {
+    return fetchJson<{ keywords: string[] }>(
+      '/sourcebook/keywords',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      'Failed to generate keywords'
     );
   },
 };

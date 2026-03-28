@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Decorator for defining chat tools with automatic schema generation from Pydantic models.
 
-"""
+"""Decorator for defining chat tools with automatic schema generation from Pydantic models.
+
 Decorator system for chat tools that maintains co-location of schemas and implementations.
 
 This module provides a decorator that:
@@ -14,17 +14,7 @@ This module provides a decorator that:
 2. Auto-registers tools in a global registry
 3. Generates OpenAI function calling schemas
 4. Validates tool call arguments at runtime
-
-Usage:
-    from pydantic import BaseModel, Field
-
-    class MyToolParams(BaseModel):
-        name: str = Field(..., description="The name parameter")
-        count: int | None = Field(None, description="Optional count")
-
-    @chat_tool(description="Does something useful")
-    async def my_tool(params: MyToolParams, payload: dict, mutations: dict):
-        return {"result": params.name}
+5. Scopes tools to model roles so WRITING, EDITING, and CHAT can be isolated
 """
 
 from __future__ import annotations
@@ -32,12 +22,36 @@ from __future__ import annotations
 import inspect
 import json as _json
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
-# Global registry of all chat tools
+from augmentedquill.services.exceptions import ServiceError
+
+CHAT_ROLE = "CHAT"
+EDITING_ROLE = "EDITING"
+WRITING_ROLE = "WRITING"
+MODEL_ROLES = (CHAT_ROLE, EDITING_ROLE, WRITING_ROLE)
+
 _TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
+
+
+def normalize_model_role(role: str | None, default: str = CHAT_ROLE) -> str:
+    """Normalize a model role to a supported uppercase value."""
+    candidate = str(role or default).strip().upper()
+    return candidate if candidate in MODEL_ROLES else default
+
+
+def resolve_tool_role(payload: dict | None = None, tool_role: str | None = None) -> str:
+    """Resolve the role under which a tool should be validated."""
+    if tool_role:
+        return normalize_model_role(tool_role)
+    if isinstance(payload, dict):
+        return normalize_model_role(
+            payload.get("_tool_role") or payload.get("model_type")
+        )
+    return CHAT_ROLE
 
 
 def _tool_message(name: str, call_id: str, content) -> dict:
@@ -51,13 +65,46 @@ def _tool_message(name: str, call_id: str, content) -> dict:
 
 
 def _tool_error(name: str, call_id: str, message: str) -> dict:
-    """Format a tool error message."""
+    """Format a tool error response message."""
     return _tool_message(name, call_id, {"error": message})
+
+
+# Public aliases for use by tool implementations
+tool_message = _tool_message
+tool_error = _tool_error
+
+
+def _simplify_schema(schema: Any) -> Any:
+    """Recursively simplify JSON schemas for LLMs by flattening anyOf."""
+    if not isinstance(schema, dict):
+        return schema
+
+    result = {}
+    for key, value in schema.items():
+        if key == "anyOf" and isinstance(value, list):
+            non_null_types = [
+                t for t in value if isinstance(t, dict) and t.get("type", "") != "null"
+            ]
+            if non_null_types:
+                # Pick the first non-null type to avoid confusing models with unions
+                for k, v in _simplify_schema(non_null_types[0]).items():
+                    result[k] = v
+        elif isinstance(value, dict):
+            result[key] = _simplify_schema(value)
+        elif isinstance(value, list):
+            result[key] = [_simplify_schema(i) for i in value]
+        else:
+            result[key] = value
+    return result
 
 
 def chat_tool(
     description: str,
     name: str | None = None,
+    allowed_roles: tuple[str, ...] | list[str] | None = None,
+    capability: str | None = None,
+    project_types: tuple[str, ...] | list[str] | None = None,
+    opt_in: bool = False,
 ) -> Callable:
     """
     Decorator for chat tools with automatic schema generation from Pydantic models.
@@ -65,6 +112,13 @@ def chat_tool(
     Args:
         description: Description of what the tool does (shown to LLM)
         name: Optional explicit tool name (defaults to function name)
+        allowed_roles: Model roles allowed to see and execute this tool
+        capability: Optional internal capability label used for tests and routing
+        project_types: If set, only expose this tool for the listed project types
+            (e.g. ``("series",)``).  None means available for all project types.
+        opt_in: If True, this tool is never included in the default schema.  It
+            must be requested explicitly (e.g. via get_opt_in_tool_schemas) and
+            is still executable when called.
 
     The decorated function should have signature:
         async def tool_fn(params: ParamsModel, payload: dict, mutations: dict) -> dict
@@ -73,30 +127,32 @@ def chat_tool(
     """
 
     def decorator(func: Callable) -> Callable:
+        """Decorator."""
         tool_name = name or func.__name__
+        normalized_roles = tuple(
+            dict.fromkeys(
+                normalize_model_role(role) for role in (allowed_roles or MODEL_ROLES)
+            )
+        )
+        if not normalized_roles:
+            raise ValueError(f"Tool function {tool_name} must allow at least one role")
 
-        # Extract parameter schema from function signature
         sig = inspect.signature(func)
         params_annotation = sig.parameters.get("params")
-
         if params_annotation is None:
             raise ValueError(
                 f"Tool function {tool_name} must have a 'params' parameter"
             )
 
         params_type = params_annotation.annotation
-
-        # Check if it's a Pydantic model
         if params_type is inspect.Parameter.empty:
             raise ValueError(
                 f"Tool function {tool_name} 'params' parameter must have a type annotation"
             )
 
-        # Handle Optional[ParamsModel] or ParamsModel | None
         origin = get_origin(params_type)
         if origin is not None:
             args = get_args(params_type)
-            # Find the BaseModel in the union
             for arg in args:
                 if isinstance(arg, type) and issubclass(arg, BaseModel):
                     params_type = arg
@@ -107,10 +163,7 @@ def chat_tool(
                 f"Tool function {tool_name} 'params' must be annotated with a Pydantic BaseModel"
             )
 
-        # Generate OpenAI function calling schema from Pydantic model
-        schema = params_type.model_json_schema()
-
-        # Build the OpenAI tool definition
+        schema = _simplify_schema(params_type.model_json_schema())
         tool_def = {
             "type": "function",
             "function": {
@@ -120,41 +173,107 @@ def chat_tool(
                     "type": "object",
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
+                    "additionalProperties": False,
                 },
             },
         }
 
-        # Create wrapper that validates and calls the original function
+        allowed_params = set((schema.get("properties") or {}).keys())
+        required_params = set(schema.get("required") or [])
+
         async def wrapper(
             args_obj: dict, call_id: str, payload: dict, mutations: dict
         ) -> dict:
-            try:
-                # Validate and parse arguments using Pydantic
-                params = params_type.model_validate(args_obj)
-            except ValidationError as e:
-                # Return validation error to LLM
-                error_details = e.errors()
-                return _tool_error(
+            """Validate arguments and execute the tool implementation."""
+            if not isinstance(args_obj, dict):
+                return _tool_message(
                     tool_name,
                     call_id,
-                    f"Invalid parameters: {error_details}",
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "type_error.dict",
+                                "loc": ["arguments"],
+                                "msg": "Tool arguments must be a JSON object",
+                                "input": args_obj,
+                            }
+                        ],
+                    },
                 )
-            except Exception as e:
-                return _tool_error(tool_name, call_id, f"Validation error: {str(e)}")
+
+            unknown_keys = sorted(set(args_obj.keys()) - allowed_params)
+            if unknown_keys:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "extra_forbidden",
+                                "loc": [key],
+                                "msg": "Extra inputs are not permitted",
+                                "input": args_obj.get(key),
+                            }
+                            for key in unknown_keys
+                        ],
+                    },
+                )
+
+            missing_required = sorted(required_params - set(args_obj.keys()))
+            if missing_required:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {
+                        "error": "Invalid parameters",
+                        "details": [
+                            {
+                                "type": "missing",
+                                "loc": [key],
+                                "msg": "Field required",
+                                "input": args_obj,
+                            }
+                            for key in missing_required
+                        ],
+                    },
+                )
 
             try:
-                # Call the original function with validated params
+                params = params_type.model_validate(args_obj)
+            except ValidationError as e:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": "Invalid parameters", "details": e.errors()},
+                )
+            except Exception as e:
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Validation error: {str(e)}"},
+                )
+
+            try:
                 result = await func(params, payload, mutations)
-                # Wrap the result in tool message format
                 return _tool_message(tool_name, call_id, result)
             except Exception as e:
-                return _tool_error(tool_name, call_id, f"Execution error: {str(e)}")
+                return _tool_message(
+                    tool_name,
+                    call_id,
+                    {"error": f"Execution error: {str(e)}"},
+                )
 
-        # Register the tool
         _TOOL_REGISTRY[tool_name] = {
             "function": wrapper,
             "schema": tool_def,
             "params_model": params_type,
+            "allowed_roles": normalized_roles,
+            "capability": capability,
+            "project_types": tuple(project_types) if project_types else None,
+            "opt_in": opt_in,
+            "module": func.__module__,
         }
 
         return wrapper
@@ -162,9 +281,40 @@ def chat_tool(
     return decorator
 
 
-def get_tool_schemas() -> list[dict]:
-    """Return all registered tool schemas for passing to LLM."""
-    return [info["schema"] for info in _TOOL_REGISTRY.values()]
+def get_tool_schemas(
+    model_type: str | None = None,
+    project_type: str | None = None,
+) -> list[dict]:
+    """Return registered tool schemas, optionally filtered by model role and project type."""
+    normalized_role = normalize_model_role(model_type) if model_type else None
+    schemas: list[dict] = []
+    for info in _TOOL_REGISTRY.values():
+        if info.get("opt_in"):
+            continue
+        if normalized_role and normalized_role not in info.get(
+            "allowed_roles", MODEL_ROLES
+        ):
+            continue
+        if project_type == "short-story" and str(info.get("module", "")).endswith(
+            ".chapter_tools"
+        ):
+            continue
+        allowed_project_types = info.get("project_types")
+        if project_type and allowed_project_types is not None:
+            if project_type not in allowed_project_types:
+                continue
+        schemas.append(deepcopy(info["schema"]))
+    return schemas
+
+
+def get_opt_in_tool_schemas(capability: str) -> list[dict]:
+    """Return schemas for opt-in tools matching a specific capability label."""
+    ensure_tool_registry_loaded()
+    return [
+        deepcopy(info["schema"])
+        for info in _TOOL_REGISTRY.values()
+        if info.get("opt_in") and info.get("capability") == capability
+    ]
 
 
 def get_tool_function(name: str) -> Callable | None:
@@ -173,11 +323,90 @@ def get_tool_function(name: str) -> Callable | None:
     return info["function"] if info else None
 
 
-def get_all_tool_names() -> list[str]:
-    """Return list of all registered tool names."""
-    return list(_TOOL_REGISTRY.keys())
+def ensure_tool_registry_loaded() -> None:
+    """Ensure all chat tool modules are imported so decorator registration has run."""
+    from augmentedquill.services.chat import chat_tools  # noqa: F401
 
 
-def clear_registry():
-    """Clear the tool registry (useful for testing)."""
-    _TOOL_REGISTRY.clear()
+def get_registered_tool_allowed_roles(name: str) -> tuple[str, ...] | None:
+    """Return allowed roles for a tool from the canonical registry."""
+    ensure_tool_registry_loaded()
+    info = _TOOL_REGISTRY.get(name)
+    if not info:
+        return None
+    return tuple(info.get("allowed_roles") or MODEL_ROLES)
+
+
+def get_registered_tool_schemas(
+    model_type: str | None = None,
+    project_type: str | None = None,
+) -> list[dict]:
+    """Get OpenAI tool schemas from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    return get_tool_schemas(model_type=model_type, project_type=project_type)
+
+
+def write_tools_json_tempfile() -> str:
+    """Write the current tool schema to a temporary tools.json file.
+
+    Returns:
+        The path to the temporary file.
+    """
+
+    import json
+    import tempfile
+
+    schemas = get_registered_tool_schemas(model_type=None)
+
+    f = tempfile.NamedTemporaryFile(
+        prefix="augmentedquill-tools-",
+        suffix=".json",
+        delete=False,
+        mode="w",
+        encoding="utf-8",
+    )
+    json.dump(schemas, f, indent=2)
+    f.write("\n")
+    f.flush()
+    f.close()
+    return f.name
+
+
+async def execute_registered_tool(
+    name: str,
+    args_obj: dict,
+    call_id: str,
+    payload: dict,
+    mutations: dict,
+    tool_role: str | None = None,
+) -> dict:
+    """Execute a tool from the canonical decorator registry."""
+    ensure_tool_registry_loaded()
+    tool_fn = get_tool_function(name)
+    if tool_fn is None:
+        return _tool_error(name, call_id, f"Unknown tool: {name}")
+
+    effective_role = resolve_tool_role(payload, tool_role)
+    allowed_roles = get_registered_tool_allowed_roles(name) or MODEL_ROLES
+    if effective_role not in allowed_roles:
+        return _tool_message(
+            name,
+            call_id,
+            {
+                "error": "Tool unavailable for model role",
+                "details": {
+                    "tool": name,
+                    "model_role": effective_role,
+                    "allowed_roles": list(allowed_roles),
+                },
+            },
+        )
+
+    try:
+        return await tool_fn(args_obj, call_id, payload, mutations)
+    except ServiceError as e:
+        return _tool_error(name, call_id, f"Tool failed: {e.detail}")
+    except Exception as e:
+        return _tool_error(
+            name, call_id, f"Tool failed with unexpected error: {str(e)}"
+        )

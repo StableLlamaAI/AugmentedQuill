@@ -1,0 +1,78 @@
+/* Copyright (C) 2026 StableLlama
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Purpose: Global CSS entrypoint (Tailwind + app global styles).
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #0c0a09;
+}
+
+/* Force no smooth scrolling globally to prevent scrollbar lag */
+html,
+body {
+  scroll-behavior: auto !important;
+}
+
+/* Custom scrollbar for webkit */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Default (Dark/Mixed) */
+::-webkit-scrollbar-thumb {
+  background: #57534e;
+  /* brand-gray-600 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
+  /* brand-gray-500 */
+}
+
+/* Light Mode overrides */
+body.light ::-webkit-scrollbar-thumb {
+  background: #e7e5e4;
+  /* brand-gray-200 */
+}
+
+body.light ::-webkit-scrollbar-thumb:hover {
+  background: #d6d3d1;
+  /* brand-gray-300 */
+}
+
+/* Editor Styles for WYSIWYG */
+.prose-editor {
+  line-height: 1.75;
+}
+
+.prose-editor:focus {
+  outline: none;
+}
+
+.prose-editor p:first-child {
+  margin-top: 0;
+}
+
+.prose-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-editor p {
+  margin: 1em 0;
+}

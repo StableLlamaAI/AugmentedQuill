@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test image features unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test image features unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import os
 import json
@@ -19,11 +20,12 @@ from fastapi.testclient import TestClient
 from augmentedquill.main import create_app
 from augmentedquill.services.projects.projects import select_project, create_project
 from augmentedquill.utils.image_helpers import (
+    delete_image_metadata,
     load_image_metadata,
     get_project_images,
     update_image_metadata,
 )
-from augmentedquill.api.v1.chat import _inject_project_images
+from augmentedquill.services.chat.chat_api_helpers import inject_project_images
 from augmentedquill.services.chat.chat_tool_dispatcher import exec_chat_tool
 
 
@@ -107,6 +109,25 @@ class ImageFeaturesTest(TestCase):
         self.assertEqual(ph["title"], "Dreamy")
         self.assertIsNone(ph["url"])
 
+    def test_load_image_metadata_invalid_json_returns_empty(self):
+        """Corrupt metadata should fail closed to an empty mapping."""
+        (self.images_dir / "metadata.json").write_text(
+            "{not-valid-json", encoding="utf-8"
+        )
+        self.assertEqual(load_image_metadata(), {})
+
+    def test_delete_image_metadata_removes_only_target(self):
+        """Deleting one image metadata entry must keep unrelated entries intact."""
+        update_image_metadata("a.png", description="A", title="Title A")
+        update_image_metadata("b.png", description="B", title="Title B")
+
+        delete_image_metadata("a.png")
+        remaining = load_image_metadata()
+
+        self.assertNotIn("a.png", remaining)
+        self.assertIn("b.png", remaining)
+        self.assertEqual(remaining["b.png"].get("description"), "B")
+
     def test_endpoints_crud(self):
         """Test the REST API endpoints for images."""
         # 1. List empty
@@ -165,9 +186,64 @@ class ImageFeaturesTest(TestCase):
         meta = load_image_metadata()
         self.assertNotIn(filename, meta)
 
+    def test_delete_and_restore_image(self):
+        """Deleted images should be restorable with metadata and bytes."""
+        filename = "restore_me.png"
+        original_bytes = b"original-bytes"
+        (self.images_dir / filename).write_bytes(original_bytes)
+        update_image_metadata(
+            filename, description="Restore desc", title="Restore title"
+        )
+
+        delete_resp = self.client.post(
+            "/api/v1/projects/images/delete", json={"filename": filename}
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        restore_id = delete_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertFalse((self.images_dir / filename).exists())
+
+        restore_resp = self.client.post(
+            "/api/v1/projects/images/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200)
+        self.assertEqual(restore_resp.json().get("filename"), filename)
+        self.assertEqual((self.images_dir / filename).read_bytes(), original_bytes)
+
+        images = (
+            self.client.get("/api/v1/projects/images/list").json().get("images", [])
+        )
+        restored = next(
+            (item for item in images if item.get("filename") == filename), None
+        )
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.get("description"), "Restore desc")
+        self.assertEqual(restored.get("title"), "Restore title")
+
+    def test_upload_overwrite_returns_restore_id_and_can_restore(self):
+        """Overwriting an existing image should return restore_id for rollback."""
+        filename = "overwrite.png"
+        original_bytes = b"old-image"
+        (self.images_dir / filename).write_bytes(original_bytes)
+
+        files = {"file": (filename, b"new-image", "image/png")}
+        overwrite_resp = self.client.post(
+            f"/api/v1/projects/images/upload?target_name={filename}", files=files
+        )
+        self.assertEqual(overwrite_resp.status_code, 200)
+        restore_id = overwrite_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertEqual((self.images_dir / filename).read_bytes(), b"new-image")
+
+        restore_resp = self.client.post(
+            "/api/v1/projects/images/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200)
+        self.assertEqual((self.images_dir / filename).read_bytes(), original_bytes)
+
     async def _test_inject_images_impl(self):
         """Test that images mentioned in user message are injected as base64."""
-        # Setup async test for _inject_project_images
+        # Setup async test for inject_project_images
 
         # Create image
         img_path = self.images_dir / "ref.png"
@@ -175,7 +251,7 @@ class ImageFeaturesTest(TestCase):
 
         messages = [{"role": "user", "content": "Look at ref.png please."}]
 
-        await _inject_project_images(messages)
+        await inject_project_images(messages)
 
         new_content = messages[0]["content"]
         self.assertIsInstance(new_content, list)

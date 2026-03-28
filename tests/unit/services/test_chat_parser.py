@@ -4,13 +4,22 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test chat parser unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test chat parser unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import unittest
+import json
+
 from augmentedquill.services.llm.llm import (
     parse_tool_calls_from_content as _parse_tool_calls_from_content,
 )
-import json
+from augmentedquill.utils.llm_parsing import (
+    extract_thinking_from_content,
+    parse_complete_assistant_output,
+    parse_stream_channel_fragments,
+    strip_thinking_tags,
+    strip_tool_call_tags,
+)
 
 
 class TestChatParser(unittest.TestCase):
@@ -66,6 +75,40 @@ class TestChatParser(unittest.TestCase):
         args = json.loads(calls[0]["function"]["arguments"])
         self.assertEqual(args["chap_id"], 1)
 
+    def test_parse_xml_style_tool_call_parameter_tags(self):
+        """Test parsing of XML-style tool calls that encode args as parameter tags."""
+        content = """
+        <tool_call>
+        <function=get_chapter_metadata>
+        <parameter=chap_id>
+        6
+        </parameter>
+        </function>
+        </tool_call>
+        """
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["function"]["name"], "get_chapter_metadata")
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["chap_id"], 6)
+
+    def test_parse_xml_style_tool_call_multiple_parameter_tags(self):
+        """Test parsing of XML-style tool calls with multiple typed parameters."""
+        content = """
+        <tool_call>
+        <function=update_chapter_metadata>
+        <parameter=chap_id>4</parameter>
+        <parameter=notes>"Updated notes"</parameter>
+        </function>
+        </tool_call>
+        """
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["chap_id"], 4)
+        self.assertEqual(args["notes"], "Updated notes")
+
     def test_parse_func_call_style(self):
         """Test parsing of function call style: Tool(Args)."""
         content = """
@@ -112,6 +155,64 @@ class TestChatParser(unittest.TestCase):
 
         # Actually let's check what it does.
         pass
+
+    def test_parse_complete_assistant_output_includes_thinking_and_tools(self):
+        content = (
+            "<thinking>internal plan</thinking> "
+            '<tool_call>{"name": "list_images", "arguments": {}}</tool_call> '
+            "Visible answer."
+        )
+        parsed = parse_complete_assistant_output(content)
+        self.assertEqual(parsed["thinking"], "internal plan")
+        self.assertEqual(parsed["content"], "Visible answer.")
+        self.assertEqual(len(parsed["tool_calls"]), 1)
+        self.assertEqual(parsed["tool_calls"][0]["function"]["name"], "list_images")
+
+    def test_parse_stream_channel_fragments_generates_tool_call_event(self):
+        fragments = [
+            {
+                "channel": "commentary to=functions.get_project_overview",
+                "content": '{"verbose": true}',
+            }
+        ]
+        events = parse_stream_channel_fragments(fragments, set())
+        self.assertEqual(len(events), 1)
+        tc = events[0]["tool_calls"][0]
+        self.assertEqual(tc["function"]["name"], "get_project_overview")
+        self.assertEqual(tc["function"]["arguments"], '{"verbose": true}')
+
+    def test_parse_stream_channel_fragments_deduplicates_call_ids(self):
+        seen = {"call_get_project_overview"}
+        fragments = [
+            {
+                "channel": "commentary to=functions.get_project_overview",
+                "content": "{}",
+            }
+        ]
+        events = parse_stream_channel_fragments(fragments, seen)
+        self.assertEqual(events, [])
+
+    def test_strip_thinking_tags_prefers_final_channel_output(self):
+        content = (
+            "<|channel|>analysis<|message|>Hidden reasoning<|end|>"
+            "<|start|>assistant<|channel|>final<|message|>Visible answer"
+        )
+        self.assertEqual(strip_thinking_tags(content), "Visible answer")
+
+    def test_strip_thinking_tags_removes_inline_thinking_blocks(self):
+        content = "Before <thinking>hidden</thinking> After"
+        self.assertEqual(strip_thinking_tags(content), "Before  After")
+
+    def test_strip_tool_call_tags_removes_tool_markup(self):
+        content = (
+            'Intro <tool_call>{"name":"x"}</tool_call> '
+            "[TOOL_CALL]do_stuff[/TOOL_CALL] Outro"
+        )
+        self.assertEqual(strip_tool_call_tags(content), "Intro   Outro")
+
+    def test_extract_thinking_from_content_returns_first_block(self):
+        content = "<thought>internal note</thought> final"
+        self.assertEqual(extract_thinking_from_content(content), "internal note")
 
 
 if __name__ == "__main__":

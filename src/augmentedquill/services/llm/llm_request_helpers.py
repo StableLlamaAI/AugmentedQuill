@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the llm request helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the llm request helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -59,3 +60,29 @@ def find_model_in_list(models: list, selected_name: str | None) -> dict | None:
         if isinstance(m, dict) and m.get("name") == selected_name:
             return m
     return None
+
+
+def apply_native_tool_calling_mode(
+    extra_body: Dict[str, Any] | None,
+    *,
+    supports_function_calling: bool,
+    tools: list[dict] | None,
+    tool_choice: str | None,
+) -> Dict[str, Any]:
+    """Force provider request options that keep native tool calling stable.
+
+    Some OpenAI-compatible backends switch to template-driven thinking output when
+    reasoning is enabled, which can cause pseudo-tool syntax to leak into
+    reasoning channels instead of returning structured tool calls.
+    """
+    merged = dict(extra_body or {})
+    if not (supports_function_calling and tools and tool_choice != "none"):
+        return merged
+
+    # Preserve any chat template kwargs provided by the model configuration.
+    # We should not override the model's own choice about whether thinking templates
+    # are enabled or disabled.
+    chat_template_kwargs = merged.get("chat_template_kwargs")
+    if isinstance(chat_template_kwargs, dict):
+        merged["chat_template_kwargs"] = dict(chat_template_kwargs)
+    return merged

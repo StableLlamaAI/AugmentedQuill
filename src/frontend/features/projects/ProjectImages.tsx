@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the project images unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the project images unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -28,6 +31,7 @@ import {
 import { api } from '../../services/api';
 import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 
 interface ImageEntry {
@@ -43,6 +47,7 @@ interface ProjectImagesProps {
   onClose: () => void;
   theme: AppTheme;
   settings: AppSettings;
+  imageActionsAvailable?: boolean;
   prompts?: {
     system_messages: Record<string, string>;
     user_prompts: Record<string, string>;
@@ -51,6 +56,11 @@ interface ProjectImagesProps {
   imageAdditionalInfo?: string;
   onUpdateSettings?: (style: string, info: string) => void;
   onInsert?: (filename: string, url: string | null, altText?: string) => void;
+  onRecordHistory?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 }
 
 export const ProjectImages: React.FC<ProjectImagesProps> = ({
@@ -58,11 +68,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   onClose,
   theme = 'mixed',
   settings,
+  imageActionsAvailable = true,
   prompts,
   imageStyle = '',
   imageAdditionalInfo = '',
   onUpdateSettings,
   onInsert,
+  onRecordHistory,
 }) => {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +96,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const [copied, setCopied] = useState(false);
   const [showImageSettings, setShowImageSettings] = useState(false);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-700';
@@ -137,6 +149,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     const newDesc =
       edit.description !== undefined ? edit.description : original.description;
     const newTitle = edit.title !== undefined ? edit.title : original.title;
+    const oldDesc = original.description;
+    const oldTitle = original.title;
 
     try {
       await api.projects.updateImage(filename, newDesc, newTitle);
@@ -153,12 +167,24 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         delete next[filename];
         return next;
       });
+      onRecordHistory?.({
+        label: `Update image metadata: ${filename}`,
+        onUndo: async () => {
+          await api.projects.updateImage(filename, oldDesc, oldTitle);
+          await loadImages();
+        },
+        onRedo: async () => {
+          await api.projects.updateImage(filename, newDesc, newTitle);
+          await loadImages();
+        },
+      });
     } catch (err: unknown) {
       setError('Failed to save metadata: ' + getErrorMessage(err, 'Unknown error'));
     }
   };
 
   const handleGenerateDescription = async (img: ImageEntry) => {
+    if (!imageActionsAvailable) return;
     if (generating) return;
     setGenerating(img.filename);
     setError(null);
@@ -196,6 +222,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleCreatePrompt = async (img: ImageEntry) => {
+    if (!imageActionsAvailable) return;
     if (!img.description) return;
 
     setPromptPopup({ isOpen: true, content: '', loading: true });
@@ -208,33 +235,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       if (!activeProvider) throw new Error('No active chat provider configured');
 
       const system = prompts?.system_messages?.image_prompt_generator || '';
-      const userContentArray = [];
-      if (img.title) {
-        userContentArray.push(`Title:\n${img.title}`);
-      }
-      if (img.description) {
-        userContentArray.push(`Description:\n${img.description}`);
-      }
-      if (imageStyle) {
-        userContentArray.push(`Project image style:\n${imageStyle}`);
-      }
-      if (imageAdditionalInfo) {
-        userContentArray.push(`Additional information:\n${imageAdditionalInfo}`);
-      }
-      const userContent = userContentArray.join('\n\n');
 
-      await generateSimpleContent(userContent, system, activeProvider, 'EDITING', {
-        tool_choice: 'none',
-        onUpdate: (text) => {
-          const clean = text.replace(/^"|"$/g, '');
-          setPromptPopup((prev) => ({ ...prev, content: clean }));
-        },
+      await generateImagePrompt(img, activeProvider, system, (text) => {
+        setPromptPopup((prev) => ({ ...prev, content: text }));
       });
 
-      setPromptPopup((prev) => {
-        const clean = prev.content.replace(/^"|"$/g, '');
-        return { ...prev, content: clean, loading: false };
-      });
+      setPromptPopup((prev) => ({ ...prev, loading: false }));
     } catch (err: unknown) {
       setPromptPopup((prev) => ({
         ...prev,
@@ -245,6 +251,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleGenerateAllPrompts = async () => {
+    if (!imageActionsAvailable) return;
     const placeholders = images.filter((i) => i.is_placeholder);
     if (placeholders.length === 0) return;
 
@@ -262,23 +269,17 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       for (const img of placeholders) {
         if (!img.description) continue;
 
-        const userContent = `Title: ${img.title || 'Untitled'}\nDescription: ${img.description}\nProject Image Style: ${imageStyle || 'Not specified'}\nAdditional Information: ${imageAdditionalInfo || 'None'}`;
         const system = prompts?.system_messages?.image_prompt_generator || '';
 
         let currentItemText = '';
-        await generateSimpleContent(userContent, system, activeProvider, 'EDITING', {
-          tool_choice: 'none',
-          onUpdate: (text) => {
-            // Normalize output into single-line prompt format expected by generators.
-            const clean = text.replace(/^"|"$/g, '');
-            currentItemText = clean.replace(/[\r\n]+/g, ' ');
-            setPromptPopup((prev) => ({
-              ...prev,
-              content: completedOutput + currentItemText,
-            }));
-          },
+        await generateImagePrompt(img, activeProvider, system, (text) => {
+          currentItemText = text.replace(/[\r\n]+/g, ' ');
+          setPromptPopup((prev) => ({
+            ...prev,
+            content: completedOutput + currentItemText,
+          }));
         });
-        currentItemText = currentItemText.replace(/^"|"$/g, '');
+
         completedOutput += currentItemText + '\n';
         setPromptPopup((prev) => ({ ...prev, content: completedOutput }));
       }
@@ -309,7 +310,25 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       if (replaceTargetName) {
         // Keep replacement intent while preserving metadata when filenames differ.
         if (file.name === replaceTargetName) {
-          await api.projects.uploadImage(file, replaceTargetName);
+          const replaced = await api.projects.uploadImage(file, replaceTargetName);
+          let previousRestoreId = replaced.restore_id || '';
+          onRecordHistory?.({
+            label: `Replace image: ${replaceTargetName}`,
+            onUndo: async () => {
+              if (previousRestoreId) {
+                await api.projects.restoreImage(previousRestoreId);
+                await loadImages();
+              }
+            },
+            onRedo: async () => {
+              const redoReplace = await api.projects.uploadImage(
+                file,
+                replaceTargetName
+              );
+              previousRestoreId = redoReplace.restore_id || previousRestoreId;
+              await loadImages();
+            },
+          });
         } else {
           const res = await api.projects.uploadImage(file);
           const newFilename = res.filename;
@@ -322,10 +341,45 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               oldImage.title
             );
           }
-          await api.projects.deleteImage(replaceTargetName);
+          const deletedOld = await api.projects.deleteImage(replaceTargetName);
+          let oldRestoreId = deletedOld.restore_id || '';
+          let newRestoreId = '';
+          onRecordHistory?.({
+            label: `Replace image: ${replaceTargetName}`,
+            onUndo: async () => {
+              const deletedNew = await api.projects.deleteImage(newFilename);
+              newRestoreId = deletedNew.restore_id || newRestoreId;
+              if (oldRestoreId) {
+                await api.projects.restoreImage(oldRestoreId);
+              }
+              await loadImages();
+            },
+            onRedo: async () => {
+              if (!newRestoreId) return;
+              const deletedOldAgain = await api.projects.deleteImage(replaceTargetName);
+              oldRestoreId = deletedOldAgain.restore_id || oldRestoreId;
+              await api.projects.restoreImage(newRestoreId);
+              await loadImages();
+            },
+          });
         }
       } else {
-        await api.projects.uploadImage(file);
+        const uploaded = await api.projects.uploadImage(file);
+        let uploadedRestoreId = '';
+        onRecordHistory?.({
+          label: `Upload image: ${uploaded.filename}`,
+          onUndo: async () => {
+            const deleted = await api.projects.deleteImage(uploaded.filename);
+            uploadedRestoreId = deleted.restore_id || '';
+            await loadImages();
+          },
+          onRedo: async () => {
+            if (uploadedRestoreId) {
+              await api.projects.restoreImage(uploadedRestoreId);
+              await loadImages();
+            }
+          },
+        });
       }
       await loadImages();
       setReplaceTarget(null);
@@ -343,8 +397,23 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const handleDelete = async (filename: string) => {
     if (!window.confirm('Are you sure you want to delete this image?')) return;
     try {
-      await api.projects.deleteImage(filename);
+      const deleted = await api.projects.deleteImage(filename);
       setImages((prev) => prev.filter((i) => i.filename !== filename));
+      let latestRestoreId = deleted.restore_id || '';
+      onRecordHistory?.({
+        label: `Delete image: ${filename}`,
+        onUndo: async () => {
+          if (latestRestoreId) {
+            await api.projects.restoreImage(latestRestoreId);
+            await loadImages();
+          }
+        },
+        onRedo: async () => {
+          const redoDelete = await api.projects.deleteImage(filename);
+          latestRestoreId = redoDelete.restore_id || latestRestoreId;
+          await loadImages();
+        },
+      });
     } catch (err: unknown) {
       setError('Delete failed: ' + getErrorMessage(err, 'Unknown error'));
     }
@@ -352,8 +421,29 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 
   const handleCreatePlaceholder = async () => {
     try {
-      await api.projects.createImagePlaceholder('', '');
+      const created = await api.projects.createImagePlaceholder('', '');
       await loadImages();
+      let restoreId = '';
+      onRecordHistory?.({
+        label: `Create image placeholder: ${created.filename}`,
+        onUndo: async () => {
+          const deleted = await api.projects.deleteImage(created.filename);
+          restoreId = deleted.restore_id || '';
+          await loadImages();
+        },
+        onRedo: async () => {
+          if (restoreId) {
+            await api.projects.restoreImage(restoreId);
+          } else {
+            await api.projects.updateImage(
+              created.filename,
+              '',
+              'Untitled Placeholder'
+            );
+          }
+          await loadImages();
+        },
+      });
     } catch (e: unknown) {
       setError('Failed to create placeholder: ' + getErrorMessage(e, 'Unknown error'));
     }
@@ -399,7 +489,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div
+      id="project-images-dialog"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+    >
       <div
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
         onDragOver={handleDragOver}
@@ -494,6 +587,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             <Button
               variant="secondary"
               onClick={handleGenerateAllPrompts}
+              disabled={!imageActionsAvailable}
               icon={<Sparkles className="w-4 h-4" />}
               title="Generate prompts for all placeholders"
               className="whitespace-nowrap"
@@ -664,7 +758,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleGenerateDescription(img)}
-                        disabled={!!generating}
+                        disabled={!!generating || !imageActionsAvailable}
                         icon={<Wand2 className="w-3 h-3" />}
                       >
                         {img.description
@@ -676,7 +770,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleCreatePrompt(img)}
-                        disabled={!img.description}
+                        disabled={!img.description || !imageActionsAvailable}
                         icon={<Sparkles className="w-3 h-3" />}
                         title="Create image generation prompt"
                       >

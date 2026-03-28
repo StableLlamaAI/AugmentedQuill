@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines shared layout control-bundle types so prop contracts stay consistent across layout components.
+
+/**
+ * Defines shared layout control-bundle types so prop contracts stay consistent across layout components.
+ */
 
 import type { ComponentProps, Dispatch, RefObject, SetStateAction } from 'react';
 
@@ -15,8 +18,10 @@ import type {
   ChatMessage,
   ChatSession,
   EditorSettings,
+  LLMConfig,
   StoryState,
   ViewMode,
+  WritingUnit,
 } from '../../types';
 import type { ModelSelector } from '../chat/ModelSelector';
 import type { EditorHandle } from '../editor/Editor';
@@ -35,6 +40,12 @@ export type HeaderSettingsControls = {
 export type HeaderHistoryControls = {
   undo: () => void;
   redo: () => void;
+  undoSteps: (steps: number) => void;
+  redoSteps: (steps: number) => void;
+  undoOptions: Array<{ id: string; label: string; steps: number }>;
+  redoOptions: Array<{ id: string; label: string; steps: number }>;
+  nextUndoLabel: string | null;
+  nextRedoLabel: string | null;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -55,6 +66,7 @@ export type HeaderFormatControls = {
   setIsFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
   isMobileFormatMenuOpen: boolean;
   setIsMobileFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  onOpenImages: () => void;
 };
 
 export type HeaderAiControls = {
@@ -63,6 +75,7 @@ export type HeaderAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
 };
 
 export type HeaderModelControls = {
@@ -70,6 +83,7 @@ export type HeaderModelControls = {
   setAppSettings: Dispatch<SetStateAction<AppSettings>>;
   modelConnectionStatus: ComponentProps<typeof ModelSelector>['connectionStatus'];
   detectedCapabilities: ComponentProps<typeof ModelSelector>['detectedCapabilities'];
+  recheckUnavailableProviderIfStale: (providerId: string, minAgeMs?: number) => void;
 };
 
 export type HeaderAppearanceControlsState = {
@@ -113,22 +127,37 @@ export type MainSidebarControls = {
   handleReorderChapters: (chapterIds: number[], bookId?: string) => Promise<void>;
   handleReorderBooks: (bookIds: string[]) => Promise<void>;
   handleSidebarAiAction: (
-    type: 'chapter' | 'book',
+    type: 'chapter' | 'book' | 'story',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
+  isEditingAvailable: boolean;
   handleOpenImages: () => void;
+  // story metadata updates now include optional language so that the UI
+  // can propagate project language changes from the metadata editor.
   updateStoryMetadata: (
-    updates: Partial<{
-      title: string;
-      summary: string;
-      styleTags: string[];
-      notes: string;
-      private_notes: string;
-      conflicts: string[];
-    }>
+    title: string,
+    summary: string,
+    tags: string[],
+    notes?: string,
+    private_notes?: string,
+    conflicts?: Array<{ id: string; description: string; resolution: string }>,
+    language?: string
   ) => Promise<void>;
+  // optional sourcebook relevance controls (provided by suggestions hook)
+  checkedSourcebookIds?: string[];
+  onToggleSourcebook?: (id: string, checked: boolean) => void;
+  isAutoSourcebookSelectionEnabled?: boolean;
+  onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
+  isSourcebookSelectionRunning?: boolean;
+  onSourcebookMutated?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 };
 
 export type MainEditorSuggestionControls = {
@@ -139,11 +168,13 @@ export type MainEditorSuggestionControls = {
     contentOverride?: string,
     enableSuggestionMode?: boolean
   ) => Promise<void>;
-  handleAcceptContinuation: (text: string) => Promise<void>;
+  handleCancelSuggestions?: () => void;
+  handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: (
     action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
-    cursor?: number
+    cursor?: number,
+    contentOverride?: string
   ) => Promise<void>;
 };
 
@@ -153,14 +184,17 @@ export type MainEditorAiControls = {
     action: 'update' | 'rewrite' | 'extend'
   ) => Promise<void>;
   isAiActionLoading: boolean;
+  isWritingAvailable: boolean;
+  cancelAiAction?: () => void;
 };
 
 export type MainEditorControls = {
-  currentChapter?: Chapter;
+  currentChapter?: WritingUnit | null;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
+  setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   viewMode: ViewMode;
-  updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
+  updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;
   aiControls: MainEditorAiControls;
   setActiveFormats: Dispatch<SetStateAction<string[]>>;
@@ -172,6 +206,8 @@ export type MainChatControls = {
   isChatOpen: boolean;
   chatMessages: ChatMessage[];
   isChatLoading: boolean;
+  isChatAvailable: boolean;
+  activeChatConfig: LLMConfig;
   systemPrompt: string;
   handleSendMessage: (text: string) => Promise<void>;
   handleStopChat: () => void;

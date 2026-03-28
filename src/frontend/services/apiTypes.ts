@@ -4,9 +4,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the api types unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import { Book, Chapter, Conflict, SourcebookEntry } from '../types';
+/**
+ * Defines the api types unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
+import { Book, Chapter, Conflict, SourcebookEntry, SourcebookRelation } from '../types';
 
 export interface MachineModelConfig {
   name: string;
@@ -14,6 +17,19 @@ export interface MachineModelConfig {
   api_key?: string;
   model: string;
   timeout_s?: number;
+  context_window_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  stop?: string[];
+  seed?: number;
+  top_k?: number;
+  min_p?: number;
+  extra_body?: string;
+  preset_id?: string;
+  writing_warning?: string;
   is_multimodal?: boolean;
   supports_function_calling?: boolean;
   prompt_overrides?: Record<string, string>;
@@ -27,6 +43,23 @@ export interface MachineOpenAIConfig {
   selected_editing?: string;
 }
 
+export interface ModelPresetWarning {
+  writing?: string;
+}
+
+export interface ModelPresetEntry {
+  id: string;
+  name: string;
+  description: string;
+  model_id_patterns: string[];
+  parameters: Partial<MachineModelConfig>;
+  warnings?: ModelPresetWarning;
+}
+
+export interface MachinePresetsResponse {
+  presets: ModelPresetEntry[];
+}
+
 export interface MachineConfigResponse {
   openai?: MachineOpenAIConfig;
 }
@@ -37,11 +70,15 @@ export interface ProjectListItem {
   type?: 'short-story' | 'novel' | 'series';
   path?: string;
   is_valid?: boolean;
+  language?: string;
 }
 
 export interface StoryApiPayload {
   project_title?: string;
   story_summary?: string;
+  language?: string;
+  notes?: string;
+  private_notes?: string;
   tags?: string[];
   image_style?: string;
   image_additional_info?: string;
@@ -76,10 +113,8 @@ export interface ProjectSelectResponse {
   ok?: boolean;
   message?: string;
   story?: StoryApiPayload | null;
-  error?: 'version_outdated' | 'invalid_config' | string;
+  error?: 'invalid_config' | string;
   error_message?: string;
-  current_version?: number;
-  required_version?: number;
 }
 
 export interface ProjectMutationResponse {
@@ -88,6 +123,11 @@ export interface ProjectMutationResponse {
   detail?: string;
   available?: ProjectListItem[];
   story?: StoryApiPayload;
+}
+
+export interface StoryContentResponse {
+  ok: boolean;
+  content: string;
 }
 
 export interface ChapterListItem {
@@ -142,7 +182,20 @@ export interface ChatToolExecutionResponse {
     name: string;
     content: string;
   }>;
-  mutations?: { story_changed?: boolean };
+  mutations?: {
+    story_changed?: boolean;
+    tool_batch?: {
+      batch_id: string;
+      tool_names: string[];
+      operation_count: number;
+      label: string;
+    };
+  };
+}
+
+export interface ChatToolBatchMutationResponse {
+  ok: boolean;
+  batch_id: string;
 }
 
 export interface ProjectImage {
@@ -164,10 +217,13 @@ export interface SourcebookUpsertPayload {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
+  relations?: SourcebookRelation[];
 }
 
 export interface DebugLogEntry {
   id: string;
+  caller_id?: string;
   model_type?: string;
   timestamp_start: string;
   timestamp_end: string | null;

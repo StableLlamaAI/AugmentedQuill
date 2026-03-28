@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project chapter ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project chapter ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -35,11 +36,14 @@ def update_chapter_metadata_in_project(
     conflicts: list = None,
 ) -> None:
     """Update metadata fields for a chapter by its ID across all project types."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
+
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapter metadata")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
 
     target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
 
@@ -88,10 +92,7 @@ def update_chapter_metadata_in_project(
         )
 
 
-def add_chapter_conflict_in_project(
-    active: Path, chap_id: int, description: str, resolution: str, index: int = None
-) -> None:
-    """Add a conflict to a chapter. If index is provided, inserts there; else appends."""
+def _get_chapter_target_and_story(active: Path, chap_id: int):
     _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
     story_path = active / "story.json"
@@ -100,6 +101,14 @@ def add_chapter_conflict_in_project(
     target = _get_chapter_metadata_entry(story, chap_id, path, files)
     if target is None:
         raise ValueError(f"Chapter {chap_id} metadata not found.")
+    return story, story_path, target
+
+
+def add_chapter_conflict_in_project(
+    active: Path, chap_id: int, description: str, resolution: str, index: int = None
+) -> None:
+    """Add a conflict to a chapter. If index is provided, inserts there; else appends."""
+    story, story_path, target = _get_chapter_target_and_story(active, chap_id)
 
     conflicts = target.setdefault("conflicts", [])
     new_conflict = {"description": description, "resolution": resolution}
@@ -120,14 +129,7 @@ def update_chapter_conflict_in_project(
     resolution: str = None,
 ) -> None:
     """Update a specific conflict in a chapter by its index."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-    story_path = active / "story.json"
-
-    story = load_story_config(story_path) or {}
-    target = _get_chapter_metadata_entry(story, chap_id, path, files)
-    if target is None:
-        raise ValueError(f"Chapter {chap_id} metadata not found.")
+    story, story_path, target = _get_chapter_target_and_story(active, chap_id)
 
     conflicts = target.get("conflicts", [])
     if not (0 <= index < len(conflicts)):
@@ -145,14 +147,7 @@ def update_chapter_conflict_in_project(
 
 def remove_chapter_conflict_in_project(active: Path, chap_id: int, index: int) -> None:
     """Remove a conflict from a chapter by its index."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-    story_path = active / "story.json"
-
-    story = load_story_config(story_path) or {}
-    target = _get_chapter_metadata_entry(story, chap_id, path, files)
-    if target is None:
-        raise ValueError(f"Chapter {chap_id} metadata not found.")
+    story, story_path, target = _get_chapter_target_and_story(active, chap_id)
 
     conflicts = target.get("conflicts", [])
     if not (0 <= index < len(conflicts)):
@@ -168,14 +163,7 @@ def reorder_chapter_conflicts_in_project(
     active: Path, chap_id: int, new_indices: List[int]
 ) -> None:
     """Reorder conflicts in a chapter providing the new sequence of indices."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-    story_path = active / "story.json"
-
-    story = load_story_config(story_path) or {}
-    target = _get_chapter_metadata_entry(story, chap_id, path, files)
-    if target is None:
-        raise ValueError(f"Chapter {chap_id} metadata not found.")
+    story, story_path, target = _get_chapter_target_and_story(active, chap_id)
 
     conflicts = target.get("conflicts", [])
     if len(new_indices) != len(conflicts):
@@ -193,11 +181,14 @@ def reorder_chapter_conflicts_in_project(
 
 def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> None:
     """Update the title of a chapter in the story.json across all project types."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
+
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapter titles")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
 
     new_title_str = str(title).strip()
     if new_title_str.lower() == "[object object]":
@@ -214,13 +205,15 @@ def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> No
 
 def delete_chapter_in_project(active: Path, chap_id: int) -> None:
     """Delete a chapter file and remove its metadata from story.json."""
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapters")
+
     _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
 
     path.unlink()
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
     p_type = story.get("project_type", "novel")
 
     if p_type == "series":

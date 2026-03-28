@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the build backend unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the build backend unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import os
 import sys
@@ -20,6 +21,11 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "onedir":
         mode = "--onedir"
         name = "run_app"
+        # We need an entry point that calls main()
+        # In the original it was run_app.py, but we can use a wrapper or -m
+        # Let's create a minimal run_app.py as well or use --entry-point if pyinstaller supports it via hook
+
+    # We will create run_app.py to be the entry point for PyInstaller
 
     cmd = [
         "pyinstaller",
@@ -30,6 +36,10 @@ def main():
         f"static/dist{sep}static/dist",
         "--add-data",
         f"static/images{sep}static/images",
+        "--add-data",
+        f"resources{sep}resources",
+        "--collect-all",
+        "augmentedquill",
         "run_app.py",
     ]
 

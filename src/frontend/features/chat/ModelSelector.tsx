@@ -4,15 +4,20 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the model selector unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the model selector unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, Wand2, ChevronDown, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
 import { LLMConfig, AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface ModelSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  onSelectorClick?: () => void;
   options: LLMConfig[];
   label: string;
   theme: AppTheme;
@@ -27,6 +32,7 @@ interface ModelSelectorProps {
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   value,
   onChange,
+  onSelectorClick,
   options,
   label,
   theme,
@@ -36,9 +42,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
-  const selectedOption = options.find((o) => o.id === value) || options[0];
+  const selectedOption = options.find((o) => o.id === value);
+
+  // If the provided value (ID) is not in our current options (e.g., after duplication or name change),
+  // but we find an option with the same name, we should probably switch to that ID.
+  // This helps when the backend/dialog uses names as IDs but the UI uses stable IDs or vice-versa.
+  useEffect(() => {
+    if (value && options.length > 0 && !selectedOption) {
+      // Try finding by name if ID mismatch (common if names are used as human-readable IDs in some places)
+      const byName = options.find((o) => o.name === value);
+      if (byName && byName.id !== value) {
+        onChange(byName.id);
+      }
+    }
+  }, [value, options, selectedOption, onChange]);
+
+  const activeOption = selectedOption || options[0];
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -88,29 +109,39 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         >
           {label}
         </label>
-        {selectedOption &&
-          hasCapability(selectedOption, 'isMultimodal', 'is_multimodal') && (
+        {activeOption &&
+          hasCapability(activeOption, 'isMultimodal', 'is_multimodal') && (
             <Eye size={8} className={labelColorClass} title="Multimodal" />
           )}
-        {selectedOption &&
+        {activeOption &&
           hasCapability(
-            selectedOption,
+            activeOption,
             'supportsFunctionCalling',
             'supports_function_calling'
           ) && <Wand2 size={8} className={labelColorClass} title="Function Calling" />}
+        {label === 'Writing' && activeOption?.writingWarning && (
+          <AlertTriangle
+            size={8}
+            className="text-amber-500"
+            title={activeOption.writingWarning}
+          />
+        )}
       </div>
 
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          onSelectorClick?.();
+          setIsOpen(!isOpen);
+        }}
         className={`text-[10px] bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-24 flex items-center justify-start font-medium truncate ${
           isLight
             ? 'text-brand-gray-600 hover:text-brand-gray-900'
             : 'text-brand-gray-300 hover:text-brand-gray-100'
         }`}
-        title={`Selected: ${selectedOption?.name}`}
+        title={`Selected: ${activeOption?.name}`}
       >
         {getStatusIcon(value)}
-        <span className="truncate ml-1">{selectedOption?.name || 'Select...'}</span>
+        <span className="truncate ml-1">{activeOption?.name || 'Select...'}</span>
       </button>
 
       {isOpen && (
@@ -157,6 +188,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   ) && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
                       <Wand2 size={8} className="mr-0.5" /> Fn
+                    </span>
+                  )}
+                  {label === 'Writing' && opt.writingWarning && (
+                    <span
+                      className="flex items-center text-[9px] text-amber-500"
+                      title={opt.writingWarning}
+                    >
+                      <AlertTriangle size={8} className="mr-0.5" /> Warn
                     </span>
                   )}
                 </div>

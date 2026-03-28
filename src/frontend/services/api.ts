@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the api unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the api unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { machineApi } from './apiClients/machine';
 import { projectsApi } from './apiClients/projects';
@@ -15,6 +18,7 @@ import { settingsApi } from './apiClients/settings';
 import { chatApi } from './apiClients/chat';
 import { sourcebookApi } from './apiClients/sourcebook';
 import { debugApi } from './apiClients/debug';
+import { checkpointsApi } from './apiClients/checkpoints';
 
 export const api = {
   machine: machineApi,
@@ -26,4 +30,5 @@ export const api = {
   chat: chatApi,
   sourcebook: sourcebookApi,
   debug: debugApi,
+  checkpoints: checkpointsApi,
 };

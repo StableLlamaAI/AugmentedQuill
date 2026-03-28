@@ -4,7 +4,7 @@
 
 - AugmentedQuill is a web-based GUI for AI-assisted prose writing, with a FastAPI backend and a React + TypeScript SPA frontend (Vite).
 - Backend lives in src/augmentedquill/, frontend in src/frontend/, tests in tests/.
-- Python 3.11+ required (CI uses 3.11; local validation on 3.12.3). Node.js 18+ required (CI uses 18).
+- Python 3.12+ required (CI uses 3.12). Node.js 24+ required (CI uses 24).
 - The backend serves the built frontend from static/dist; frontend build output must be present for production-like runs.
 
 ## High-level structure and key files
@@ -111,6 +111,13 @@ Top-level directories (one level down):
 - Prefer editing backend logic in services/ and keep API routes thin.
 - Prefer frontend changes inside features/<domain>/ and keep API calls in services/.
 - Trust these instructions and only search the repo if something is missing or contradicts these notes.
+
+## Test Data Safety (Mandatory)
+
+- Never read from or write to real user runtime files under `data/config/`, `data/projects/`, or `data/logs/` when running tests.
+- For all automated tests, force the app to use a temporary user data root by setting `AUGQ_USER_DATA_DIR` to a temp directory (for example under `/tmp`).
+- Tests and AI-generated test code must isolate runtime paths via environment variables before importing app modules so default config constants resolve into temp paths.
+- When tests need projects/registry overrides, use temp values for `AUGQ_PROJECTS_ROOT` and `AUGQ_PROJECTS_REGISTRY` inside that same temp root.
 
 ## Branching and Release Policy
 

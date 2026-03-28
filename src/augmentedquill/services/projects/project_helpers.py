@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.config import load_story_config
@@ -24,6 +25,11 @@ def normalize_story_for_frontend(story: dict) -> dict:
     if not story:
         return {}
     res = story.copy()
+
+    # ensure language field is surfaced; frontend may use it to display
+    # or to pass back when creating new content.
+    if "language" not in res:
+        res["language"] = "en"
 
     # Frontend expects a list shape; normalizing here keeps storage format
     # decoupled from UI transport format.
@@ -59,7 +65,6 @@ def normalize_story_for_frontend(story: dict) -> dict:
                                 b_copy["id"] = b_copy.get("folder")
 
                             if not b_copy.get("id"):
-                                # Filesystem order fallback preserves legacy projects
                                 # that predate explicit IDs.
                                 if i < len(folders):
                                     b_copy["id"] = folders[i]
@@ -69,6 +74,7 @@ def normalize_story_for_frontend(story: dict) -> dict:
     # Conflict IDs are synthesized when missing so editing and reordering
     # remain stable in the frontend.
     def _handle_chapters(chapters):
+        """Handle Chapters."""
         if not isinstance(chapters, list):
             return
         for chap in chapters:
@@ -78,6 +84,12 @@ def normalize_story_for_frontend(story: dict) -> dict:
                     for i, conflict in enumerate(conflicts):
                         if isinstance(conflict, dict) and "id" not in conflict:
                             conflict["id"] = f"conf_{i}"
+
+    story_conflicts = res.get("conflicts")
+    if isinstance(story_conflicts, list):
+        for i, conflict in enumerate(story_conflicts):
+            if isinstance(conflict, dict) and "id" not in conflict:
+                conflict["id"] = f"story_conf_{i}"
 
     if res.get("project_type") == "series" and "books" in res:
         for book in res["books"]:
@@ -89,8 +101,11 @@ def normalize_story_for_frontend(story: dict) -> dict:
     return res
 
 
-def _project_overview() -> dict:
-    """Return project title and a list of chapters with id, filename, title, summary."""
+def _project_overview(include_notes: bool = False) -> dict:
+    """Return project title and a list of chapters with id, filename, title, summary.
+
+    Notes are excluded by default to keep the overview lightweight.
+    """
     active = get_active_project_dir()
     raw_story = load_story_config((active / "story.json") if active else None) or {}
     story = normalize_story_for_frontend(raw_story)
@@ -104,44 +119,18 @@ def _project_overview() -> dict:
 
     if p_type == "short-story":
         fn = story.get("content_file", "content.md")
-
-        # Preserve authored metadata so single-file projects still present
-        # rich chapter details in the same shape as multi-chapter projects.
-        chapters = story.get("chapters", [])
-        title = "Story Content"
-        summary = "Full content of the story"
-
-        if chapters and len(chapters) > 0:
-            c0 = chapters[0]
-            if isinstance(c0, dict):
-                t = c0.get("title")
-                if t and str(t).strip():
-                    title = str(t).strip()
-                s = c0.get("summary")
-                if s and str(s).strip():
-                    summary = str(s).strip()
-                notes = c0.get("notes", "")
-                conflicts = c0.get("conflicts", [])
-            else:
-                notes = ""
-                conflicts = []
-        else:
-            notes = ""
-            conflicts = []
+        draft = {
+            "filename": fn,
+            "title": story.get("project_title") or (active.name if active else ""),
+            "summary": story.get("story_summary") or "",
+        }
+        if include_notes:
+            draft["notes"] = story.get("notes") or ""
 
         return {
             **base_info,
             "content_file": fn,
-            "chapters": [
-                {
-                    "id": 1,
-                    "filename": fn,
-                    "title": title,
-                    "summary": summary,
-                    "notes": notes,
-                    "conflicts": conflicts,
-                }
-            ],
+            "draft": draft,
         }
 
     if p_type == "series":
@@ -191,16 +180,15 @@ def _project_overview() -> dict:
             for vid, path in files:
                 if f"books/{bid}/" in str(path):
                     meta = id_to_meta.get(vid, {})
-                    b_chapters.append(
-                        {
-                            "id": vid,
-                            "filename": path.name,
-                            "title": meta.get("title") or path.stem,
-                            "summary": meta.get("summary") or "",
-                            "notes": meta.get("notes") or "",
-                            "conflicts": meta.get("conflicts") or [],
-                        }
-                    )
+                    chapter_item = {
+                        "id": vid,
+                        "filename": path.name,
+                        "title": meta.get("title") or path.stem,
+                        "summary": meta.get("summary") or "",
+                    }
+                    if include_notes:
+                        chapter_item["notes"] = meta.get("notes") or ""
+                    b_chapters.append(chapter_item)
             enriched_books.append(
                 {
                     "id": bid,
@@ -218,24 +206,21 @@ def _project_overview() -> dict:
         title = None
         summary = ""
         notes = ""
-        conflicts = []
         if isinstance(pos, int) and pos < len(chapters_meta):
             title = chapters_meta[pos].get("title")
             summary = chapters_meta[pos].get("summary") or ""
             notes = chapters_meta[pos].get("notes") or ""
-            conflicts = chapters_meta[pos].get("conflicts") or []
         if not title or str(title).strip() in ("[object Object]", "object Object"):
             title = path.name
-        out.append(
-            {
-                "id": idx,
-                "filename": path.name,
-                "title": title,
-                "summary": summary,
-                "notes": notes,
-                "conflicts": conflicts,
-            }
-        )
+        chapter_item = {
+            "id": idx,
+            "filename": path.name,
+            "title": title,
+            "summary": summary,
+        }
+        if include_notes:
+            chapter_item["notes"] = notes
+        out.append(chapter_item)
     return {**base_info, "chapters": out}
 
 

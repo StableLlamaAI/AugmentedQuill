@@ -4,11 +4,15 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { StoryState, Chapter, Book } from '../../types';
+import { StoryState, Chapter, Book, WritingUnit } from '../../types';
 import { api } from '../../services/api';
+import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
 import { notifyError } from '../../services/errorNotifier';
 
@@ -38,6 +42,7 @@ const INITIAL_STORY: StoryState = {
   image_style: '',
   image_additional_info: '',
   chapters: [],
+  draft: null,
   projectType: 'novel',
   books: [],
   sourcebook: [],
@@ -46,115 +51,292 @@ const INITIAL_STORY: StoryState = {
   lastUpdated: Date.now(),
 };
 
+const areStoriesEqual = (a: StoryState, b: StoryState): boolean => {
+  try {
+    const aCopy = { ...a, lastUpdated: 0 };
+    const bCopy = { ...b, lastUpdated: 0 };
+    return JSON.stringify(aCopy) === JSON.stringify(bCopy);
+  } catch {
+    return false;
+  }
+};
+
+export interface StoryHistoryOption {
+  id: string;
+  label: string;
+  steps: number;
+}
+
+interface StoryHistoryEntry {
+  id: string;
+  label: string;
+  state: StoryState;
+  onUndo?: () => Promise<void> | void;
+  onRedo?: () => Promise<void> | void;
+}
+
+export const resolveExternalHistorySourceState = (
+  explicitState: StoryState | undefined,
+  latestState: StoryState,
+  fallbackState: StoryState
+): StoryState => {
+  if (explicitState) return explicitState;
+  return latestState || fallbackState;
+};
+
+const buildStoryDraft = (
+  projectId: string,
+  story: StoryApiPayload,
+  content: string = ''
+): WritingUnit => ({
+  id: 'story',
+  scope: 'story',
+  title: story.project_title || projectId,
+  summary: story.story_summary || '',
+  content,
+  notes: story.notes || '',
+  private_notes: story.private_notes || '',
+  conflicts: story.conflicts || [],
+  filename: 'content.md',
+});
+
+export const buildInitialStoryState = (
+  projectId: string,
+  story: StoryApiPayload,
+  chapters: Chapter[]
+): StoryState => ({
+  id: projectId,
+  title: story.project_title || projectId,
+  summary: story.story_summary || '',
+  notes: story.notes || '',
+  private_notes: story.private_notes || '',
+  styleTags: story.tags || [],
+  image_style: story.image_style || '',
+  image_additional_info: story.image_additional_info || '',
+  chapters,
+  draft:
+    story.project_type === 'short-story' ? buildStoryDraft(projectId, story) : null,
+  projectType: story.project_type || 'novel',
+  language: story.language || 'en',
+  books: story.books || [],
+  sourcebook: story.sourcebook || [],
+  conflicts: story.conflicts || [],
+  llm_prefs: story.llm_prefs,
+  currentChapterId:
+    story.project_type === 'short-story'
+      ? null
+      : chapters.length > 0
+        ? chapters[0].id
+        : null,
+  lastUpdated: Date.now(),
+});
+
+const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
+  id: `history-${Date.now()}`,
+  label: 'Initial story state',
+  state: INITIAL_STORY,
+};
+
+const createHistoryEntry = (
+  state: StoryState,
+  label: string,
+  handlers?: Pick<StoryHistoryEntry, 'onUndo' | 'onRedo'>
+): StoryHistoryEntry => ({
+  id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  label,
+  state,
+  onUndo: handlers?.onUndo,
+  onRedo: handlers?.onRedo,
+});
+
+const buildChapterUpdateLabel = (
+  chapter: Chapter | undefined,
+  partial: Partial<Chapter>
+): string => {
+  const chapterName = chapter?.title?.trim() || `Chapter ${chapter?.id || ''}`.trim();
+  if (partial.content !== undefined) return `Edit chapter content: ${chapterName}`;
+  if (partial.title !== undefined) return `Rename chapter: ${chapterName}`;
+  if (partial.summary !== undefined) return `Update chapter summary: ${chapterName}`;
+  if (partial.notes !== undefined || partial.private_notes !== undefined) {
+    return `Update chapter notes: ${chapterName}`;
+  }
+  return `Update chapter: ${chapterName}`;
+};
+
+const buildDraftUpdateLabel = (partial: Partial<WritingUnit>): string => {
+  if (partial.content !== undefined) return 'Edit story draft';
+  if (partial.title !== undefined) return 'Rename story';
+  if (partial.summary !== undefined) return 'Update story summary';
+  if (partial.conflicts !== undefined) return 'Update story conflicts';
+  if (partial.notes !== undefined || partial.private_notes !== undefined) {
+    return 'Update story notes';
+  }
+  return 'Update story draft';
+};
+
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const [story, setStory] = useState<StoryState>(INITIAL_STORY);
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null);
-  const [history, setHistory] = useState<StoryState[]>([INITIAL_STORY]);
+  const [history, setHistory] = useState<StoryHistoryEntry[]>([INITIAL_HISTORY_ENTRY]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const hasFetchedRef = useRef(false);
+  const latestStoryRef = useRef(story);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
   const dialogsRef = useRef(dialogs);
   useEffect(() => {
     dialogsRef.current = dialogs;
   });
 
+  useEffect(() => {
+    latestStoryRef.current = story;
+  }, [story]);
+
   const pushState = useCallback(
-    (newState: StoryState) => {
+    (newState: StoryState, label: string) => {
       const updatedState = { ...newState, lastUpdated: Date.now() };
+      const currentEntry = history[currentIndex];
+      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+        // Avoid no-op history entries that cause apparent "double undo".
+        setStory(updatedState);
+        latestStoryRef.current = updatedState;
+        return;
+      }
+
       const trimmed = history.slice(0, currentIndex + 1);
-      trimmed.push(updatedState);
+      trimmed.push(createHistoryEntry(updatedState, label));
       const bounded = trimmed.slice(-MAX_HISTORY);
       setHistory(bounded);
       setCurrentIndex(bounded.length - 1);
       setStory(updatedState);
+      latestStoryRef.current = updatedState;
     },
     [history, currentIndex]
   );
 
-  const refreshStory = useCallback(async () => {
-    try {
-      const projects = await api.projects.list();
-      const currentProject = projects.current || story.id;
-      if (!currentProject) return;
+  const pushExternalHistoryEntry = useCallback(
+    (params: {
+      label: string;
+      state?: StoryState;
+      onUndo?: () => Promise<void> | void;
+      onRedo?: () => Promise<void> | void;
+    }) => {
+      const sourceState = resolveExternalHistorySourceState(
+        params.state,
+        latestStoryRef.current,
+        story
+      );
+      const updatedState = { ...sourceState, lastUpdated: Date.now() };
 
-      const res = await api.projects.select(currentProject);
-      if (res.error === 'version_outdated') {
-        // Block normal loading so schema transitions are explicit and recoverable.
-        const shouldUpdate = await dialogsRef.current.confirm(
-          `The story config is outdated (version ${res.current_version}). Current version is ${res.required_version}. Do you want to update it?`
-        );
-        if (shouldUpdate) {
-          try {
-            const updateRes = await api.projects.updateConfig();
-            if (updateRes.ok) {
-              // Reload immediately to ensure local state reflects migrated structure.
-              const res2 = await api.projects.select(currentProject);
-              if (res2.ok && res2.story) {
-                const chaptersRes = await api.chapters.list();
-                const chapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
+      const currentEntry = history[currentIndex];
+      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+        // Update the existing entry with the undo/redo handlers if they are missing
+        const updatedOnUndo = params.onUndo ?? currentEntry.onUndo;
+        const updatedOnRedo = params.onRedo ?? currentEntry.onRedo;
 
-                const newStory: StoryState = mapSelectStoryToState(
-                  currentProject,
-                  res2.story,
-                  chapters,
-                  currentChapterId,
-                  story.chapters
-                );
-
-                setStory(newStory);
-                setCurrentChapterId(newStory.currentChapterId);
-              } else if (res2.error) {
-                if (res2.error === 'invalid_config') {
-                  dialogsRef.current.alert(
-                    `Invalid story config: ${res2.error_message}`
-                  );
-                } else {
-                  dialogsRef.current.alert(
-                    `Failed to load story after update: ${res2.error}`
-                  );
-                }
-              }
-            } else {
-              dialogsRef.current.alert(`Failed to update config: ${updateRes.detail}`);
-            }
-          } catch (e) {
-            dialogsRef.current.alert(`Failed to update config: ${e}`);
-          }
+        if (
+          updatedOnUndo !== currentEntry.onUndo ||
+          updatedOnRedo !== currentEntry.onRedo
+        ) {
+          const updatedHistory = [...history];
+          updatedHistory[currentIndex] = {
+            ...currentEntry,
+            label: params.label,
+            onUndo: updatedOnUndo,
+            onRedo: updatedOnRedo,
+          };
+          setHistory(updatedHistory);
         }
+        setStory(updatedState);
+        latestStoryRef.current = updatedState;
         return;
-      } else if (res.error === 'invalid_config') {
-        dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
-        return;
-      } else if (res.ok && res.story) {
-        const chaptersRes = await api.chapters.list();
-        const chapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
-
-        const newStory: StoryState = mapSelectStoryToState(
-          currentProject,
-          res.story,
-          chapters,
-          currentChapterId,
-          story.chapters
-        );
-
-        setStory(newStory);
-        setCurrentChapterId(newStory.currentChapterId);
       }
-    } catch (e) {
-      console.error('Failed to refresh story', e);
-    }
-  }, [story.id, currentChapterId]);
 
-  const selectChapter = useCallback((id: string | null) => {
-    setCurrentChapterId(id);
-  }, []);
+      const trimmed = history.slice(0, currentIndex + 1);
+      trimmed.push(
+        createHistoryEntry(updatedState, params.label, {
+          onUndo: params.onUndo,
+          onRedo: params.onRedo,
+        })
+      );
+      const bounded = trimmed.slice(-MAX_HISTORY);
+      setHistory(bounded);
+      setCurrentIndex(bounded.length - 1);
+      setStory(updatedState);
+      latestStoryRef.current = updatedState;
+      setCurrentChapterId(updatedState.currentChapterId ?? null);
+    },
+    [story, history, currentIndex]
+  );
+
+  const lastLoadedChapterId = useRef<string | null>(null);
+
+  const refreshStory = useCallback(
+    async (historyLabel?: string) => {
+      try {
+        const projects = await api.projects.list();
+        const currentProject = projects.current || story.id;
+        if (!currentProject) return;
+
+        const res = await api.projects.select(currentProject);
+        if (res.error === 'invalid_config') {
+          dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
+          return;
+        } else if (res.ok && res.story) {
+          const chapters: Chapter[] =
+            res.story.project_type === 'short-story'
+              ? []
+              : mapApiChapters((await api.chapters.list()).chapters);
+
+          let newStory: StoryState = mapSelectStoryToState(
+            currentProject,
+            res.story,
+            chapters,
+            currentChapterId,
+            story.chapters
+          );
+
+          if (res.story.project_type === 'short-story') {
+            const content = (await api.story.getContent()).content;
+            newStory = {
+              ...newStory,
+              draft: buildStoryDraft(currentProject, res.story, content),
+              currentChapterId: null,
+            };
+          }
+
+          lastLoadedChapterId.current = null;
+          if (historyLabel) {
+            pushState(newStory, historyLabel);
+          } else {
+            setStory(newStory);
+            latestStoryRef.current = newStory;
+          }
+          setCurrentChapterId(newStory.currentChapterId);
+        }
+      } catch (e) {
+        console.error('Failed to refresh story', e);
+      }
+    },
+    [story.id, currentChapterId, pushState]
+  );
+
+  const selectChapter = useCallback(
+    (id: string | null) => {
+      if (id !== currentChapterId) {
+        lastLoadedChapterId.current = null;
+        setCurrentChapterId(id);
+      }
+    },
+    [currentChapterId]
+  );
 
   // Load chapter content lazily so list refreshes stay responsive.
   useEffect(() => {
-    if (currentChapterId) {
+    if (currentChapterId && currentChapterId !== lastLoadedChapterId.current) {
       const loadContent = async () => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
+          lastLoadedChapterId.current = currentChapterId;
           setStory((prev) => {
             const updatedChapters = prev.chapters.map((c) =>
               c.id === currentChapterId
@@ -186,27 +368,25 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       if (projects.current) {
         const res = await api.projects.select(projects.current);
         if (res.ok && res.story) {
-          const chaptersRes = await api.chapters.list();
-          const chapters = mapApiChapters(chaptersRes.chapters);
+          const chapters =
+            res.story.project_type === 'short-story'
+              ? []
+              : mapApiChapters((await api.chapters.list()).chapters);
 
-          const newStory: StoryState = {
-            id: projects.current,
-            title: res.story.project_title || projects.current,
-            summary: res.story.story_summary || '',
-            styleTags: res.story.tags || [],
-            image_style: res.story.image_style || '',
-            image_additional_info: res.story.image_additional_info || '',
-            chapters: chapters,
-            projectType: res.story.project_type || 'novel',
-            books: res.story.books || [],
-            sourcebook: res.story.sourcebook || [],
-            conflicts: res.story.conflicts || [],
-            currentChapterId: chapters.length > 0 ? chapters[0].id : null,
-            lastUpdated: Date.now(),
-          };
+          let newStory = buildInitialStoryState(projects.current, res.story, chapters);
+
+          if (res.story.project_type === 'short-story') {
+            const content = (await api.story.getContent()).content;
+            newStory = {
+              ...newStory,
+              draft: buildStoryDraft(projects.current, res.story, content),
+              currentChapterId: null,
+            };
+          }
 
           setStory(newStory);
-          setHistory([newStory]);
+          latestStoryRef.current = newStory;
+          setHistory([createHistoryEntry(newStory, 'Load story')]);
           setCurrentIndex(0);
 
           setCurrentChapterId(newStory.currentChapterId);
@@ -229,7 +409,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     summary: string,
     tags: string[],
     notes?: string,
-    private_notes?: string
+    private_notes?: string,
+    conflicts?: StoryState['conflicts'],
+    language?: string
   ) => {
     const newState = {
       ...story,
@@ -238,8 +420,21 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       styleTags: tags,
       notes,
       private_notes,
+      conflicts: conflicts ?? story.conflicts,
+      language,
+      draft:
+        story.projectType === 'short-story' && story.draft
+          ? {
+              ...story.draft,
+              title,
+              summary,
+              notes,
+              private_notes,
+              conflicts: conflicts ?? story.draft.conflicts,
+            }
+          : story.draft,
     };
-    pushState(newState);
+    pushState(newState, `Update story metadata: ${title || story.title || 'Untitled'}`);
 
     try {
       await api.story.updateMetadata({
@@ -248,16 +443,69 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         tags,
         notes,
         private_notes,
+        conflicts,
+        language,
       });
-      await api.story.updateTags(tags);
     } catch (e) {
       console.error('Failed to update story metadata', e);
     }
   };
 
+  const updateStoryDraft = async (
+    partial: Partial<WritingUnit>,
+    sync: boolean = true,
+    pushHistory: boolean = true
+  ) => {
+    if (!story.draft) return;
+
+    const newState: StoryState = {
+      ...story,
+      title: partial.title ?? story.title,
+      summary: partial.summary ?? story.summary,
+      notes: partial.notes ?? story.notes,
+      private_notes: partial.private_notes ?? story.private_notes,
+      conflicts: partial.conflicts ?? story.conflicts,
+      draft: { ...story.draft, ...partial },
+    };
+
+    if (pushHistory) {
+      pushState(newState, buildDraftUpdateLabel(partial));
+    } else {
+      setStory(newState);
+      latestStoryRef.current = newState;
+    }
+
+    if (!sync) return;
+
+    try {
+      if (partial.content !== undefined) {
+        await api.story.updateContent(partial.content);
+      }
+
+      if (
+        partial.title !== undefined ||
+        partial.summary !== undefined ||
+        partial.notes !== undefined ||
+        partial.private_notes !== undefined
+      ) {
+        await api.story.updateMetadata({
+          title: partial.title ?? story.title,
+          summary: partial.summary ?? story.summary,
+          tags: story.styleTags,
+          notes: partial.notes ?? story.notes,
+          private_notes: partial.private_notes ?? story.private_notes,
+          conflicts: partial.conflicts ?? story.conflicts,
+          language: story.language,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to update story draft', e);
+    }
+  };
+
   const updateStoryImageSettings = async (style: string, info: string) => {
     const newState = { ...story, image_style: style, image_additional_info: info };
-    pushState(newState);
+    pushState(newState, 'Update story image settings');
     try {
       await api.story.updateSettings({
         image_style: style,
@@ -268,12 +516,41 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     }
   };
 
-  const updateChapter = async (id: string, partial: Partial<Chapter>) => {
+  const updateChapter = async (
+    id: string,
+    partial: Partial<Chapter>,
+    sync: boolean = true,
+    pushHistory: boolean = true
+  ) => {
+    if (story.projectType === 'short-story') {
+      await updateStoryDraft(partial, sync, pushHistory);
+      return;
+    }
+
+    const chapter = story.chapters.find((ch) => ch.id === id);
+    if (!chapter) return;
+
+    const isDifferent = Object.entries(partial).some(([key, value]) => {
+      if (value === undefined) return false;
+      const old = (chapter as any)[key];
+      return value !== old;
+    });
+
     const newChapters = story.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
     const newState = { ...story, chapters: newChapters };
-    pushState(newState);
+
+    if (pushHistory) {
+      pushState(newState, buildChapterUpdateLabel(chapter, partial));
+    } else {
+      setStory(newState);
+      latestStoryRef.current = newState;
+    }
+
+    if (!sync) return;
+
+    if (!isDifferent) return;
 
     try {
       const numId = Number(id);
@@ -294,7 +571,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     const newBooks =
       story.books?.map((b) => (b.id === id ? { ...b, ...partial } : b)) || [];
     const newState = { ...story, books: newBooks };
-    pushState(newState);
+    const bookTitle =
+      story.books?.find((book) => book.id === id)?.title || partial.title || 'Untitled';
+    pushState(newState, `Update book: ${bookTitle}`);
     // Book persistence stays at call sites that own the surrounding workflow
     // (rename, reorder, metadata edit) to keep this hook narrowly scoped.
   };
@@ -309,10 +588,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const chaptersRes = await api.chapters.list();
       const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
 
-      // Prefer backend-returned identity, then fallback to list tail for compatibility.
-      const newChapter =
-        newChapters.find((c) => c.id === String(res.id)) ||
-        newChapters[newChapters.length - 1];
+      const newChapter = newChapters.find((c) => c.id === String(res.id));
+      if (!newChapter) {
+        throw new Error('Created chapter not found in refreshed chapter list');
+      }
 
       const newState: StoryState = {
         ...story,
@@ -320,7 +599,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentChapterId: newChapter.id,
         lastUpdated: Date.now(),
       };
-      pushState(newState);
+      pushState(newState, `Create chapter: ${newChapter.title || title}`);
     } catch (e) {
       console.error('Failed to add chapter', e);
     }
@@ -362,7 +641,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentChapterId: newSelection,
         lastUpdated: Date.now(),
       };
-      pushState(newState);
+      pushState(newState, `Delete chapter: ${deletedChapter?.title || id}`);
     } catch (e) {
       console.error('Failed to delete chapter', e);
     }
@@ -379,7 +658,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       }
 
       setStory(newStory);
-      setHistory([newStory]);
+      latestStoryRef.current = newStory;
+      setHistory([createHistoryEntry(newStory, 'Load story')]);
       setCurrentIndex(0);
       if (newStory.currentChapterId) {
         setCurrentChapterId(newStory.currentChapterId);
@@ -392,25 +672,81 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     [story.id, fetchStory]
   );
 
-  const undo = useCallback(() => {
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
-      setCurrentIndex(prevIndex);
-      const prevState = history[prevIndex];
-      setStory(prevState);
-      if (prevState.currentChapterId) setCurrentChapterId(prevState.currentChapterId);
-    }
-  }, [currentIndex, history]);
+  const undoSteps = useCallback(
+    async (steps: number) => {
+      if (steps <= 0 || currentIndex <= 0) return;
+      const targetIndex = Math.max(0, currentIndex - steps);
+      const callbacks: Array<() => Promise<void> | void> = [];
+      for (let idx = currentIndex; idx > targetIndex; idx -= 1) {
+        const handler = history[idx].onUndo;
+        if (handler) callbacks.push(handler);
+      }
 
-  const redo = useCallback(() => {
-    if (currentIndex < history.length - 1) {
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      const nextState = history[nextIndex];
+      setCurrentIndex(targetIndex);
+      const prevState = history[targetIndex].state;
+      setStory(prevState);
+      latestStoryRef.current = prevState;
+      setCurrentChapterId(prevState.currentChapterId ?? null);
+
+      for (const callback of callbacks) {
+        await callback();
+      }
+    },
+    [currentIndex, history]
+  );
+
+  const redoSteps = useCallback(
+    async (steps: number) => {
+      if (steps <= 0 || currentIndex >= history.length - 1) return;
+      const targetIndex = Math.min(history.length - 1, currentIndex + steps);
+      const callbacks: Array<() => Promise<void> | void> = [];
+      for (let idx = currentIndex + 1; idx <= targetIndex; idx += 1) {
+        const handler = history[idx].onRedo;
+        if (handler) callbacks.push(handler);
+      }
+
+      setCurrentIndex(targetIndex);
+      const nextState = history[targetIndex].state;
       setStory(nextState);
-      if (nextState.currentChapterId) setCurrentChapterId(nextState.currentChapterId);
-    }
-  }, [currentIndex, history]);
+      latestStoryRef.current = nextState;
+      setCurrentChapterId(nextState.currentChapterId ?? null);
+
+      for (const callback of callbacks) {
+        await callback();
+      }
+    },
+    [currentIndex, history]
+  );
+
+  const undo = useCallback(async () => {
+    await undoSteps(1);
+  }, [undoSteps]);
+
+  const redo = useCallback(async () => {
+    await redoSteps(1);
+  }, [redoSteps]);
+
+  const undoOptions: StoryHistoryOption[] = [];
+  for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
+    undoOptions.push({
+      id: history[idx].id,
+      label: history[idx].label,
+      steps: currentIndex - idx + 1,
+    });
+  }
+
+  const redoOptions: StoryHistoryOption[] = [];
+  for (
+    let idx = currentIndex + 1;
+    idx < history.length && redoOptions.length < 10;
+    idx += 1
+  ) {
+    redoOptions.push({
+      id: history[idx].id,
+      label: history[idx].label,
+      steps: idx - currentIndex,
+    });
+  }
 
   return {
     story,
@@ -426,6 +762,16 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     refreshStory,
     undo,
     redo,
+    undoSteps,
+    redoSteps,
+    pushExternalHistoryEntry,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel: currentIndex > 0 ? history[currentIndex].label : null,
+    nextRedoLabel:
+      currentIndex < history.length - 1 ? history[currentIndex + 1].label : null,
+    historyIndex: currentIndex,
+    historySize: history.length,
     canUndo: currentIndex > 0,
     canRedo: currentIndex < history.length - 1,
   };

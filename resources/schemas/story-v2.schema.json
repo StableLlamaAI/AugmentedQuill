@@ -14,6 +14,11 @@
       "enum": ["novel", "series", "short-story"],
       "description": "The type of the project"
     },
+    "language": {
+      "type": "string",
+      "description": "Two\u2011letter language code used for prompt selection",
+      "default": "en"
+    },
     "chapters": {
       "type": "array",
       "items": {
@@ -96,6 +101,13 @@
     "story_summary": {
       "type": "string",
       "description": "Summary of the story"
+    },
+    "sourcebook_relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/story_relation"
+      },
+      "description": "Global list of all sourcebook relations"
     }
   },
   "required": ["project_title", "format", "metadata"],
@@ -177,6 +189,33 @@
         }
       },
       "required": ["description", "category"]
+    },
+    "story_relation": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "start_chapter": {
+          "type": ["string", "null"]
+        },
+        "start_book": {
+          "type": ["string", "null"]
+        },
+        "end_chapter": {
+          "type": ["string", "null"]
+        },
+        "end_book": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["source_id", "target_id", "relation"]
     }
   }
 }

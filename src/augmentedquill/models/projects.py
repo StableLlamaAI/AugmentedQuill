@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Pydantic models for project-related API requests and responses.
 """
 
@@ -25,6 +25,7 @@ class ProjectSelectRequest(BaseModel):
 class ProjectCreateRequest(BaseModel):
     name: str
     type: str  # 'short-story', 'novel', 'series'
+    language: Optional[str] = "en"
 
 
 class ProjectConvertRequest(BaseModel):
@@ -37,6 +38,10 @@ class BookCreateRequest(BaseModel):
 
 class BookDeleteRequest(BaseModel):
     name: str
+
+
+class BookRestoreRequest(BaseModel):
+    restore_id: str
 
 
 class ImageDescriptionUpdateRequest(BaseModel):
@@ -53,6 +58,10 @@ class ImagePlaceholderRequest(BaseModel):
 
 class ImageDeleteRequest(BaseModel):
     filename: str
+
+
+class ImageRestoreRequest(BaseModel):
+    restore_id: str
 
 
 # ---------------------------------------------------------------------------

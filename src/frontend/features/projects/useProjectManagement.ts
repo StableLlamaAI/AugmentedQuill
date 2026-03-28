@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use project management unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use project management unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { useCallback, useEffect, useState } from 'react';
 import { StoryState, ProjectMetadata, ChatSession } from '../../types';
@@ -22,7 +25,11 @@ type UseProjectManagementParams = {
   updateStoryMetadata: (
     title: string,
     summary: string,
-    tags: string[]
+    tags: string[],
+    notes?: string,
+    private_notes?: string,
+    conflicts?: StoryState['conflicts'],
+    language?: string
   ) => Promise<void>;
   handleSelectChat: (id: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
@@ -30,7 +37,21 @@ type UseProjectManagementParams = {
   getErrorMessage: (error: unknown, fallback: string) => string;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
+  recordHistoryEntry?: (entry: {
+    label: string;
+    onUndo?: () => Promise<void>;
+    onRedo?: () => Promise<void>;
+  }) => void;
 };
+
+const mapProjectsList = (projects: ProjectListItem[]) =>
+  projects.map((project) => ({
+    id: project.name,
+    title: project.title || project.name,
+    type: project.type || 'novel',
+    updatedAt: Date.now(),
+    language: project.language || 'en',
+  }));
 
 export function useProjectManagement({
   story,
@@ -43,6 +64,7 @@ export function useProjectManagement({
   getErrorMessage,
   isSettingsOpen,
   setIsSettingsOpen,
+  recordHistoryEntry,
 }: UseProjectManagementParams) {
   const [projects, setProjects] = useState<ProjectMetadata[]>(() => {
     const saved = localStorage.getItem('augmentedquill_projects_meta');
@@ -51,19 +73,13 @@ export function useProjectManagement({
       : [{ id: story.id, title: story.title, updatedAt: Date.now() }];
   });
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [instructionLanguages, setInstructionLanguages] = useState<string[]>(['en']);
 
   const refreshProjects = useCallback(async () => {
     try {
       const data = await api.projects.list();
       if (data.available) {
-        setProjects(
-          data.available.map((project: ProjectListItem) => ({
-            id: project.name,
-            title: project.title || project.name,
-            type: project.type || 'novel',
-            updatedAt: Date.now(),
-          }))
-        );
+        setProjects(mapProjectsList(data.available));
       }
     } catch (error) {
       console.error('Failed to fetch projects', error);
@@ -144,43 +160,84 @@ export function useProjectManagement({
   const handleImportProject = useCallback(
     async (file: File) => {
       try {
+        const previousActiveProjectId = story.id;
+        const importedFileSnapshot = file;
+        const knownProjectIds = new Set(projects.map((project) => project.id));
         const response = await api.projects.import(file);
         if (response.ok && response.available) {
-          setProjects(
-            response.available.map((project: ProjectListItem) => ({
-              id: project.name,
-              title: project.title || project.name,
-              type: project.type || 'novel',
-              updatedAt: Date.now(),
-            }))
-          );
+          setProjects(mapProjectsList(response.available));
+
+          const importedNameFromList = response.available
+            .map((project) => project.name)
+            .find((name) => !knownProjectIds.has(name));
+          const importedNameFromMessage =
+            typeof response.message === 'string'
+              ? response.message.match(/Imported as\s+(.+)$/)?.[1]?.trim()
+              : undefined;
+          const importedProjectName =
+            importedNameFromList || importedNameFromMessage || null;
+
+          if (importedProjectName) {
+            recordHistoryEntry?.({
+              label: `Import project: ${importedProjectName}`,
+              onUndo: async () => {
+                await api.projects.delete(importedProjectName);
+                await refreshProjects();
+                if (previousActiveProjectId) {
+                  await handleLoadProject(previousActiveProjectId);
+                }
+              },
+              onRedo: async () => {
+                await api.projects.import(importedFileSnapshot);
+                await refreshProjects();
+                await handleLoadProject(importedProjectName);
+              },
+            });
+          }
         }
       } catch (error) {
         notifyError(`Import failed: ${getErrorMessage(error, 'Unknown error')}`, error);
       }
     },
-    [getErrorMessage]
+    [
+      story.id,
+      projects,
+      recordHistoryEntry,
+      refreshProjects,
+      handleLoadProject,
+      getErrorMessage,
+    ]
   );
 
   const handleCreateProject = useCallback(() => {
     setIsCreateProjectOpen(true);
   }, []);
 
-  const handleCreateProjectConfirm = useCallback(
-    async (name: string, type: CreateProjectType) => {
+  // gather languages from the instructions endpoint so the create dialog can
+  // populate its dropdown
+  useEffect(() => {
+    const loadLangs = async () => {
       try {
-        const result = await api.projects.create(name, type);
+        const data = await api.settings.getPrompts();
+        if (data.languages) setInstructionLanguages(data.languages);
+      } catch (e) {
+        console.error('unable to load instruction languages', e);
+        setInstructionLanguages(['en']);
+      }
+    };
+    loadLangs();
+  }, []);
+
+  const handleCreateProjectConfirm = useCallback(
+    async (name: string, type: CreateProjectType, language: string = 'en') => {
+      try {
+        const previousProjectId = story.id;
+        const result = await api.projects.create(name, type, language);
         if (!result.ok) return;
 
         const listing = await api.projects.list();
         if (listing.projects) {
-          setProjects(
-            listing.projects.map((project: ProjectListItem) => ({
-              id: project.name,
-              title: project.title || project.name,
-              updatedAt: Date.now(),
-            }))
-          );
+          setProjects(mapProjectsList(listing.projects));
         }
 
         if (result.story) {
@@ -202,20 +259,39 @@ export function useProjectManagement({
             []
           );
 
-          if (type === 'short-story' && mappedStory.chapters.length === 0) {
-            mappedStory.chapters = [
-              {
-                id: '1',
-                title: mappedStory.title,
-                summary: '',
-                content: '',
-              },
-            ];
-            mappedStory.currentChapterId = '1';
+          if (type === 'short-story') {
+            mappedStory.draft = {
+              id: 'story',
+              scope: 'story',
+              title: mappedStory.title,
+              summary: mappedStory.summary,
+              content: '',
+              notes: mappedStory.notes,
+              private_notes: mappedStory.private_notes,
+              conflicts: mappedStory.conflicts,
+              filename: 'content.md',
+            };
+            mappedStory.currentChapterId = null;
           }
 
           loadStory(mappedStory);
           handleNewChat(false);
+
+          recordHistoryEntry?.({
+            label: `Create project: ${name}`,
+            onUndo: async () => {
+              await api.projects.delete(name);
+              await refreshProjects();
+              if (previousProjectId && previousProjectId !== name) {
+                await handleLoadProject(previousProjectId);
+              }
+            },
+            onRedo: async () => {
+              await api.projects.create(name, type, language);
+              await refreshProjects();
+              await handleLoadProject(name);
+            },
+          });
         }
 
         setIsCreateProjectOpen(false);
@@ -224,7 +300,16 @@ export function useProjectManagement({
         notifyError(`Failed to create project: ${formatError(error)}`, error);
       }
     },
-    [loadStory, handleNewChat, isSettingsOpen, setIsSettingsOpen]
+    [
+      story.id,
+      loadStory,
+      handleNewChat,
+      refreshProjects,
+      handleLoadProject,
+      recordHistoryEntry,
+      isSettingsOpen,
+      setIsSettingsOpen,
+    ]
   );
 
   const handleDeleteProject = useCallback(
@@ -232,6 +317,13 @@ export function useProjectManagement({
       if (projects.length <= 1) return;
 
       try {
+        let exported: Blob | null = null;
+        try {
+          exported = await api.projects.export(id);
+        } catch (snapshotError) {
+          console.warn('Project export snapshot failed before delete', snapshotError);
+        }
+
         await api.projects.delete(id);
         const newProjects = projects.filter((project) => project.id !== id);
         setProjects(newProjects);
@@ -240,6 +332,24 @@ export function useProjectManagement({
         if (id === story.id && newProjects.length > 0) {
           await handleLoadProject(newProjects[0].id);
         }
+
+        if (exported) {
+          recordHistoryEntry?.({
+            label: `Delete project: ${id}`,
+            onUndo: async () => {
+              const snapshotFile = new File([exported as Blob], `${id}.zip`, {
+                type: 'application/zip',
+              });
+              await api.projects.import(snapshotFile);
+              await refreshProjects();
+              await handleLoadProject(id);
+            },
+            onRedo: async () => {
+              await api.projects.delete(id);
+              await refreshProjects();
+            },
+          });
+        }
       } catch (error) {
         notifyError(
           `Failed to delete project: ${getErrorMessage(error, 'Unknown error')}`,
@@ -247,25 +357,44 @@ export function useProjectManagement({
         );
       }
     },
-    [projects, story.id, handleLoadProject, getErrorMessage]
+    [
+      projects,
+      story.id,
+      handleLoadProject,
+      refreshProjects,
+      recordHistoryEntry,
+      getErrorMessage,
+    ]
   );
 
   const handleRenameProject = useCallback(
-    (id: string, newName: string) => {
+    (id: string, newName: string, newLang?: string) => {
       if (id === story.id) {
-        updateStoryMetadata(newName, story.summary, story.styleTags);
+        // if the active project is renamed, update story metadata
+        updateStoryMetadata(
+          newName,
+          story.summary,
+          story.styleTags,
+          undefined,
+          undefined,
+          story.conflicts,
+          newLang
+        );
         return;
       }
 
       setProjects((prev) =>
         prev.map((project) =>
-          project.id === id ? { ...project, title: newName } : project
+          project.id === id
+            ? { ...project, title: newName, language: newLang || project.language }
+            : project
         )
       );
       const saved = localStorage.getItem(`project_${id}`);
       if (!saved) return;
       const loaded = JSON.parse(saved);
       loaded.title = newName;
+      if (newLang) loaded.language = newLang;
       localStorage.setItem(`project_${id}`, JSON.stringify(loaded));
     },
     [story.id, story.summary, story.styleTags, updateStoryMetadata]
@@ -277,6 +406,7 @@ export function useProjectManagement({
     refreshProjects,
     isCreateProjectOpen,
     setIsCreateProjectOpen,
+    instructionLanguages,
     handleLoadProject,
     handleImportProject,
     handleCreateProject,

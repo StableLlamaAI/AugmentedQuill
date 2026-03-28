@@ -4,18 +4,24 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the create project dialog unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the create project dialog unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface CreateProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (name: string, type: string) => void;
+  // third argument is ISO language code (e.g. 'en', 'es')
+  onCreate: (name: string, type: string, language: string) => void;
   theme: AppTheme;
+  languages: string[];
 }
 
 export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
@@ -23,13 +29,17 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   onClose,
   onCreate,
   theme,
+  languages,
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('novel');
+  const [language, setLanguage] = useState(() =>
+    languages && languages.length ? languages[0] : 'en'
+  );
+  const { isLight } = useThemeClasses();
 
   if (!isOpen) return null;
 
-  const isLight = theme === 'light';
   const bgClass = isLight
     ? 'bg-white text-gray-900'
     : 'bg-brand-gray-900 text-gray-100 border border-brand-gray-800';
@@ -51,6 +61,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
           <div>
             <label className="block text-sm font-medium mb-1">Project Name</label>
             <input
+              data-no-smart-quotes="true"
               type="text"
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={name}
@@ -58,6 +69,20 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               placeholder="My Story"
               autoFocus
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Project Language</label>
+            <select
+              className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              {languages.map((lng) => (
+                <option key={lng} value={lng}>
+                  {lng.toUpperCase()}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -77,12 +102,12 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                 <div>
                   <span
                     className="block font-bold text-sm"
-                    title="Short Story: No chapters"
+                    title="Short Story: One chapter"
                   >
                     Short Story
                   </span>
                   <span className="text-xs opacity-70 block">
-                    Best for short stories, poems, or notes.
+                    Single-chapter structure for short fiction, poems, or compact prose.
                   </span>
                 </div>
               </label>
@@ -144,7 +169,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
             <Button
               variant="primary"
               onClick={() => {
-                if (name.trim()) onCreate(name, type);
+                if (name.trim()) onCreate(name, type, language);
               }}
               disabled={!name.trim()}
               theme={theme}

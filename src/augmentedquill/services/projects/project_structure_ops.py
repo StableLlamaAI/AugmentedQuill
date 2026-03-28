@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project structure ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project structure ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -19,10 +20,6 @@ from augmentedquill.services.chapters.chapter_helpers import (
     _normalize_chapter_entry,
     _scan_chapter_files,
 )
-
-
-def _ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
 
 
 def create_new_chapter_in_project(
@@ -63,9 +60,29 @@ def create_new_chapter_in_project(
             current_count = len(target_book.get("chapters", []))
             final_title = f"Chapter {current_count + 1}"
 
-        book_dir = active / "books" / book_id
+        # Security: Prevent path traversal by ensuring book_id is a simple name
+        # and validating it exists within the story metadata.
+        if not book_id:
+            raise ValueError("book_id is required")
+
+        # Normalize book_id to just the filename component
+        safe_book_id = os.path.basename(book_id)
+
+        # Validate that the book_id corresponds to a folder defined in story.json
+        # This prevents attackers from using existing directory names outside the books scope
+        valid_folders = {
+            b.get("folder") for b in books if isinstance(b.get("folder"), str)
+        }
+        if safe_book_id not in valid_folders:
+            raise ValueError(f"Unauthorized or invalid book_id: {book_id}")
+
+        book_dir = (active / "books" / safe_book_id).resolve()
+        # Double check the dir is actually within the books directory
+        if not book_dir.is_relative_to((active / "books").resolve()):
+            raise ValueError(f"Access denied to book directory: {safe_book_id}")
+
         chapters_dir = book_dir / "chapters"
-        _ensure_dir(chapters_dir)
+        (chapters_dir).mkdir(parents=True, exist_ok=True)
 
         existing = [path for path in chapters_dir.glob("*.txt") if path.is_file()]
         max_index = 0
@@ -104,7 +121,7 @@ def create_new_chapter_in_project(
 
     filename = f"{next_idx:04d}.txt"
     chapters_dir = active / "chapters"
-    _ensure_dir(chapters_dir)
+    (chapters_dir).mkdir(parents=True, exist_ok=True)
     path = chapters_dir / filename
     path.write_text("", encoding="utf-8")
 
@@ -135,9 +152,23 @@ def create_new_book_in_project(active: Path, title: str) -> str:
     story["books"] = books
     save_story_config(story_path, story)
 
-    book_dir = active / "books" / book_id
-    _ensure_dir(book_dir / "chapters")
-    _ensure_dir(book_dir / "images")
+    # Security: Ensure book_id is safe (though it's a UUID here, CodeQL often flags the pattern)
+    if not book_id:
+        raise ValueError("book_id is required")
+    book_id = os.path.basename(book_id)
+
+    if not book_id or book_id in (".", "..") or "/" in book_id or "\\" in book_id:
+        raise ValueError(f"Invalid book_id: {book_id}")
+
+    books_parent = (active / "books").resolve()
+    books_parent.mkdir(parents=True, exist_ok=True)
+    book_dir = (books_parent / book_id).resolve()
+
+    if not book_dir.is_relative_to(books_parent):
+        raise ValueError(f"Access denied to book directory: {book_id}")
+
+    (book_dir / "chapters").mkdir(parents=True, exist_ok=True)
+    (book_dir / "images").mkdir(parents=True, exist_ok=True)
     (book_dir / "book_content.md").write_text("", encoding="utf-8")
 
     return book_id
@@ -152,7 +183,10 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
     if old_type == new_type:
         return True, "Already this type"
 
-    def _convert(current_old_type: str, target_type: str) -> Tuple[bool, str]:
+    def _convert_project_type(
+        current_old_type: str, target_type: str
+    ) -> Tuple[bool, str]:
+        """Convert Project Type."""
         local_story = load_story_config(story_path) or {}
         local_old_type = local_story.get("project_type", "novel")
 
@@ -160,16 +194,16 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
             return True, "Already this type"
 
         if local_old_type == "short-story" and target_type == "series":
-            ok, msg = _convert("short-story", "novel")
+            ok, msg = _convert_project_type("short-story", "novel")
             if not ok:
                 return ok, msg
-            return _convert("novel", "series")
+            return _convert_project_type("novel", "series")
 
         if local_old_type == "series" and target_type == "short-story":
-            ok, msg = _convert("series", "novel")
+            ok, msg = _convert_project_type("series", "novel")
             if not ok:
                 return ok, msg
-            return _convert("novel", "short-story")
+            return _convert_project_type("novel", "short-story")
 
         if local_old_type == "short-story" and target_type == "novel":
             content_path = active / "content.md"
@@ -178,7 +212,7 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
                 content = content_path.read_text(encoding="utf-8")
                 os.remove(content_path)
 
-            _ensure_dir(active / "chapters")
+            (active / "chapters").mkdir(parents=True, exist_ok=True)
             (active / "chapters" / "0001.txt").write_text(content, encoding="utf-8")
 
             local_story["project_type"] = "novel"
@@ -211,10 +245,10 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
             book_title = "Book 1"
 
             books_dir = active / "books"
-            _ensure_dir(books_dir)
+            (books_dir).mkdir(parents=True, exist_ok=True)
             book_dir = books_dir / book_id
-            _ensure_dir(book_dir / "chapters")
-            _ensure_dir(book_dir / "images")
+            (book_dir / "chapters").mkdir(parents=True, exist_ok=True)
+            (book_dir / "images").mkdir(parents=True, exist_ok=True)
 
             chapters_dir = active / "chapters"
             if chapters_dir.exists():
@@ -250,10 +284,26 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
             if books:
                 book = books[0]
                 book_id = book.get("id") or book.get("folder")
-                book_dir = active / "books" / book_id
+                # Security: Prevent path traversal by ensuring book_id is a simple name
+                if not book_id:
+                    raise ValueError("book_id is required")
+                book_id = os.path.basename(book_id)
 
-                _ensure_dir(active / "chapters")
-                _ensure_dir(active / "images")
+                if (
+                    not book_id
+                    or book_id in (".", "..")
+                    or "/" in book_id
+                    or "\\" in book_id
+                ):
+                    raise ValueError(f"Invalid book_id: {book_id}")
+
+                book_dir = (active / "books" / book_id).resolve()
+                # Double check the dir is actually within the books directory
+                if not book_dir.is_relative_to((active / "books").resolve()):
+                    raise ValueError(f"Access denied to book directory: {book_id}")
+
+                (active / "chapters").mkdir(parents=True, exist_ok=True)
+                (active / "images").mkdir(parents=True, exist_ok=True)
 
                 if (book_dir / "chapters").exists():
                     for file_path in (book_dir / "chapters").glob("*"):
@@ -283,4 +333,4 @@ def change_project_type_in_project(active: Path, new_type: str) -> Tuple[bool, s
         save_story_config(story_path, local_story)
         return True, f"Converted to {target_type}"
 
-    return _convert(old_type, new_type)
+    return _convert_project_type(old_type, new_type)

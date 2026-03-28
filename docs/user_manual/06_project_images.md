@@ -40,16 +40,16 @@ Uploaded and placeholder images are shown in a responsive grid (1–4 columns de
 ### Thumbnail Area
 
 - **Click the thumbnail** to open the full-size **Lightbox** view (see below).
-- **Replace** button (appears on hover): Opens the file picker to swap the image file while keeping the same title and description.
+- **Replace** button (<img src="assets/refresh-cw.svg" alt="Refresh icon" width="16" height="16" style="vertical-align:text-bottom;" /> appears on hover): Opens the file picker to swap the image file while keeping the same title and description.
 - **Drag-and-drop**: Drag an image file onto a card to replace it.
 
 ### Title and Description
 
-| Field                                                | Description                                                                                                                               |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Title** text input                                 | An editable name for this image (e.g. "Elara — Chapter 3"). Shown below the thumbnail and used when inserting the image into the editor.  |
-| **Description** textarea                             | A resizable text area for a written description of the image. The AI uses this description when referencing the image in prompts or chat. |
-| **Save** button (appears when unsaved changes exist) | Writes the title and description to disk. Changes to the text fields are not auto-saved — you must click Save to persist them.            |
+| Field                                                                                                                                                         | Description                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Title** text input                                                                                                                                          | An editable name for this image (e.g. "Elara — Chapter 3"). Shown below the thumbnail and used when inserting the image into the editor.  |
+| **Description** textarea                                                                                                                                      | A resizable text area for a written description of the image. The AI uses this description when referencing the image in prompts or chat. |
+| **Save** button (<img src="assets/save.svg" alt="Save icon" width="16" height="16" style="vertical-align:text-bottom;" /> appears when unsaved changes exist) | Writes the title and description to disk. Changes to the text fields are not auto-saved — you must click Save to persist them.            |
 
 ### Per-Image Actions
 
@@ -66,7 +66,7 @@ Four small action buttons appear below the description:
 
 ## Lightbox
 
-Clicking a thumbnail opens the **Lightbox** — a full-screen overlay showing the image at maximum size (up to 90 % of the screen width and height). The filename and description appear as a caption below the image. Click the **✕** button or the backdrop to close it.
+Clicking a thumbnail opens the **Lightbox** — a full-screen overlay showing the image at maximum size (up to 90 % of the screen width and height). The filename and description appear as a caption below the image. Click the **✕** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />) button or the backdrop to close it.
 
 ---
 
@@ -76,7 +76,7 @@ When you click **Create prompt** on an image card, a popup panel appears showing
 
 | Control                                                                                                                            | Description                                                                                         |
 | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Close** (✕)                                                                                                                      | Closes the popup without copying.                                                                   |
+| **Close** (<img src="assets/x.svg" alt="Close icon" width="16" height="16" style="vertical-align:text-bottom;" />)                 | Closes the popup without copying.                                                                   |
 | **Output text area**                                                                                                               | Read-only display of the generated prompt. Updates in real time while streaming.                    |
 | **Generating…** indicator                                                                                                          | A spinner shown while the generation is still in progress.                                          |
 | **Copy to Clipboard** (<img src="assets/edit-2.svg" alt="Copy icon" width="16" height="16" style="vertical-align:text-bottom;" />) | Copies the full prompt text. The button label changes to "Copied!" for two seconds as confirmation. |

@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the settings dialog unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the settings dialog unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -12,6 +15,7 @@ import {
   X,
   HardDrive,
   Cpu,
+  Info,
   CheckCircle2,
   AlertCircle,
   Save,
@@ -24,10 +28,11 @@ import {
   DEFAULT_LLM_CONFIG,
 } from '../../types';
 import { api } from '../../services/api';
-import { MachineModelConfig } from '../../services/apiTypes';
+import { MachineModelConfig, ModelPresetEntry } from '../../services/apiTypes';
 import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
 import { SettingsMachine } from './settings/SettingsMachine';
+import { useThemeClasses } from '../layout/ThemeContext';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -39,7 +44,7 @@ interface SettingsDialogProps {
   onLoadProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, newName: string) => void;
+  onRenameProject: (id: string, newName: string, newLang?: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
   onRefreshProjects: () => void;
@@ -53,6 +58,7 @@ interface SettingsDialogProps {
     system_messages: Record<string, string>;
     user_prompts: Record<string, string>;
   };
+  projectLanguages: string[];
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -73,8 +79,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   activeProjectStats = { chapterCount: 0, bookCount: 0 },
   theme,
   defaultPrompts = { system_messages: {}, user_prompts: {} },
+  projectLanguages,
 }) => {
-  const [activeTab, setActiveTab] = useState<'projects' | 'machine'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'machine' | 'about'>(
+    'projects'
+  );
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{
@@ -87,122 +96,162 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [detectedCapabilities, setDetectedCapabilities] = useState<
     Record<string, { is_multimodal: boolean; supports_function_calling: boolean }>
   >({});
+  const [modelPresets, setModelPresets] = useState<ModelPresetEntry[]>([]);
   const [saveError, setSaveError] = useState<string>('');
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
 
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
+  const currentYear = new Date().getFullYear();
+  const browserVersion =
+    typeof navigator !== 'undefined' ? `${navigator.userAgent}` : 'unknown';
 
   // Reinitialize dialog state on open to avoid stale provider/test cache leakage.
   useEffect(() => {
-    if (isOpen) {
-      setLocalSettings(settings);
-      setEditingProviderId(settings.activeChatProviderId);
-      setSaveError('');
-      setModelLists({});
+    if (!isOpen) return undefined;
 
-      // Force fresh capability/model checks for the current editing session.
-      lastConnTestKeyRef.current = {};
-      prevModelIdRef.current = {};
+    setLocalSettings(settings);
+    setEditingProviderId(settings.activeChatProviderId);
+    setSaveError('');
+    setModelLists({});
 
-      let cancelled = false;
-      (async () => {
-        try {
-          const machine = await api.machine.get();
-          const openai = machine?.openai || {};
-          const models = Array.isArray(openai?.models) ? openai.models : [];
-          const selectedName = (openai?.selected || '') as string;
+    // Force fresh capability/model checks for the current editing session.
+    lastConnTestKeyRef.current = {};
+    prevModelIdRef.current = {};
 
-          const providers: LLMConfig[] = models
-            .filter((m): m is MachineModelConfig => Boolean(m && typeof m === 'object'))
-            .map((m) => {
-              const name = String(m.name || '').trim() || 'Unnamed';
-              const timeoutS = Number(m.timeout_s ?? 60);
-              return {
-                ...DEFAULT_LLM_CONFIG,
-                id: name,
-                name,
-                baseUrl: String(m.base_url || '').trim(),
-                apiKey: String(m.api_key || ''),
-                timeout: Number.isFinite(timeoutS)
-                  ? Math.max(1, timeoutS) * 1000
-                  : 60000,
-                modelId: String(m.model || '').trim(),
-                isMultimodal: m.is_multimodal,
-                supportsFunctionCalling: m.supports_function_calling,
-                prompts: {
-                  ...DEFAULT_LLM_CONFIG.prompts,
-                  ...(m.prompt_overrides || {}),
-                },
-              };
-            });
+    let cancelled = false;
+    (async () => {
+      try {
+        const [machine, presetsResponse] = await Promise.all([
+          api.machine.get(),
+          api.machine.getPresets(),
+        ]);
+        const openai = machine?.openai || {};
+        setModelPresets(
+          Array.isArray(presetsResponse?.presets) ? presetsResponse.presets : []
+        );
+        const models = Array.isArray(openai?.models) ? openai.models : [];
+        const selectedName = (openai?.selected || '') as string;
 
-          if (cancelled) return;
-
-          if (providers.length > 0) {
-            const fallbackId =
-              providers.find((p) => p.id === selectedName)?.id || providers[0].id;
-
-            const getValidId = (
-              currentId: string | undefined,
-              specificSaved: string | undefined
-            ) => {
-              // Prioritize current in-memory selection to preserve user intent.
-              if (currentId && providers.some((p) => p.id === currentId)) {
-                return currentId;
-              }
-              // Fall back to persisted per-role selection when available.
-              if (specificSaved && providers.some((p) => p.id === specificSaved)) {
-                return specificSaved;
-              }
-              // Final fallback keeps dialog operable with partially configured data.
-              return fallbackId;
+        const providers: LLMConfig[] = models
+          .filter((m): m is MachineModelConfig => Boolean(m && typeof m === 'object'))
+          .map((m) => {
+            const name = String(m.name || '').trim() || 'Unnamed';
+            const timeoutS = Number(m.timeout_s ?? 60);
+            return {
+              ...DEFAULT_LLM_CONFIG,
+              id: name,
+              name,
+              baseUrl: String(m.base_url || '').trim(),
+              apiKey: String(m.api_key || ''),
+              timeout: Number.isFinite(timeoutS) ? Math.max(1, timeoutS) * 1000 : 60000,
+              modelId: String(m.model || '').trim(),
+              contextWindowTokens:
+                m.context_window_tokens === null ||
+                m.context_window_tokens === undefined
+                  ? undefined
+                  : Number(m.context_window_tokens),
+              temperature:
+                m.temperature === null || m.temperature === undefined
+                  ? DEFAULT_LLM_CONFIG.temperature
+                  : Number(m.temperature),
+              topP:
+                m.top_p === null || m.top_p === undefined
+                  ? DEFAULT_LLM_CONFIG.topP
+                  : Number(m.top_p),
+              maxTokens:
+                m.max_tokens === null || m.max_tokens === undefined
+                  ? DEFAULT_LLM_CONFIG.maxTokens
+                  : Number(m.max_tokens),
+              presencePenalty:
+                m.presence_penalty === null || m.presence_penalty === undefined
+                  ? DEFAULT_LLM_CONFIG.presencePenalty
+                  : Number(m.presence_penalty),
+              frequencyPenalty:
+                m.frequency_penalty === null || m.frequency_penalty === undefined
+                  ? DEFAULT_LLM_CONFIG.frequencyPenalty
+                  : Number(m.frequency_penalty),
+              stop: Array.isArray(m.stop) ? m.stop.map((entry) => String(entry)) : [],
+              seed:
+                m.seed === null || m.seed === undefined ? undefined : Number(m.seed),
+              topK:
+                m.top_k === null || m.top_k === undefined ? undefined : Number(m.top_k),
+              minP:
+                m.min_p === null || m.min_p === undefined ? undefined : Number(m.min_p),
+              extraBody: String(m.extra_body || ''),
+              presetId: m.preset_id || null,
+              writingWarning: m.writing_warning || null,
+              isMultimodal: m.is_multimodal,
+              supportsFunctionCalling: m.supports_function_calling,
+              prompts: {
+                ...DEFAULT_LLM_CONFIG.prompts,
+                ...(m.prompt_overrides || {}),
+              },
             };
+          });
 
-            setLocalSettings((prev) => {
-              const selectedChat = openai.selected_chat;
-              const selectedWriting = openai.selected_writing;
-              const selectedEditing = openai.selected_editing;
+        if (cancelled) return;
 
-              const newChatId = getValidId(prev.activeChatProviderId, selectedChat);
-              // Keep the editor target stable unless it points to a removed provider.
-              setEditingProviderId((currEdit) => {
-                if (currEdit && providers.some((p) => p.id === currEdit))
-                  return currEdit;
-                return newChatId;
-              });
+        if (providers.length > 0) {
+          const fallbackId =
+            providers.find((p) => p.id === selectedName)?.id || providers[0].id;
 
-              return {
-                ...prev,
-                providers,
-                activeChatProviderId: newChatId,
-                activeWritingProviderId: getValidId(
-                  prev.activeWritingProviderId,
-                  selectedWriting
-                ),
-                activeEditingProviderId: getValidId(
-                  prev.activeEditingProviderId,
-                  selectedEditing
-                ),
-              };
+          const getValidId = (
+            currentId: string | undefined,
+            specificSaved: string | undefined
+          ) => {
+            if (currentId && providers.some((p) => p.id === currentId)) {
+              return currentId;
+            }
+            if (specificSaved && providers.some((p) => p.id === specificSaved)) {
+              return specificSaved;
+            }
+            return fallbackId;
+          };
+
+          setLocalSettings((prev) => {
+            const selectedChat = openai.selected_chat;
+            const selectedWriting = openai.selected_writing;
+            const selectedEditing = openai.selected_editing;
+
+            const newChatId = getValidId(prev.activeChatProviderId, selectedChat);
+            setEditingProviderId((currEdit) => {
+              if (currEdit && providers.some((p) => p.id === currEdit)) {
+                return currEdit;
+              }
+              return newChatId;
             });
-          }
-        } catch (e) {
-          console.error('Failed to load machine config', e);
-        }
-      })();
 
-      return () => {
-        cancelled = true;
-      };
-    }
+            return {
+              ...prev,
+              providers,
+              activeChatProviderId: newChatId,
+              activeWritingProviderId: getValidId(
+                prev.activeWritingProviderId,
+                selectedWriting
+              ),
+              activeEditingProviderId: getValidId(
+                prev.activeEditingProviderId,
+                selectedEditing
+              ),
+            };
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load machine config', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, settings]);
 
   // Auto-test connectivity so model selectors can rely on known-good endpoints.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
 
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -268,7 +317,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   // Validate selected model IDs only after connectivity succeeds.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
 
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -312,9 +361,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           });
           if (cancelled) return;
           prevModelIdRef.current[providerId] = modelId;
-          if (Array.isArray(res?.models)) {
-            setModelLists((prev) => ({ ...prev, [providerId]: res.models }));
-          }
+          // Do NOT overwrite modelLists here — test_model only returns the
+          // single tested model; the full list comes from the connection test.
           if (res?.capabilities) {
             setDetectedCapabilities((prev) => ({
               ...prev,
@@ -358,18 +406,43 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         providers.find((p) => p.id === localSettings.activeEditingProviderId) ||
         providers[0];
 
+      const cleanPromptOverrides = (prompts?: Record<string, string> | null) =>
+        Object.fromEntries(
+          Object.entries(prompts || {}).filter(
+            ([, value]) => String(value || '').trim() !== ''
+          )
+        );
+
+      const cleanedProviders = providers.map((p) => ({
+        ...p,
+        prompts: cleanPromptOverrides(p.prompts),
+      }));
+
       const machinePayload = {
         openai: {
           selected: activeChat?.name || '',
           selected_chat: activeChat?.name || '',
           selected_writing: activeWriting?.name || '',
           selected_editing: activeEditing?.name || '',
-          models: providers.map((p) => ({
+          models: cleanedProviders.map((p) => ({
             name: (p.name || '').trim(),
             base_url: (p.baseUrl || '').trim(),
             api_key: p.apiKey || '',
             timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
             model: (p.modelId || '').trim(),
+            context_window_tokens: p.contextWindowTokens,
+            temperature: p.temperature,
+            top_p: p.topP,
+            max_tokens: p.maxTokens,
+            presence_penalty: p.presencePenalty,
+            frequency_penalty: p.frequencyPenalty,
+            stop: p.stop || [],
+            seed: p.seed,
+            top_k: p.topK,
+            min_p: p.minP,
+            extra_body: p.extraBody || '',
+            preset_id: p.presetId || null,
+            writing_warning: p.writingWarning || null,
             is_multimodal: p.isMultimodal,
             supports_function_calling: p.supportsFunctionCalling,
             prompt_overrides: p.prompts || {},
@@ -377,8 +450,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         },
       };
 
+      const cleanedSettings = { ...localSettings, providers: cleanedProviders };
+
       await api.machine.save(machinePayload);
-      onSaveSettings(localSettings);
+      onSaveSettings(cleanedSettings);
       onClose();
     } catch (e: unknown) {
       console.error('Failed to save machine settings', e);
@@ -402,6 +477,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       activeEditingProviderId: prev.activeEditingProviderId || newProvider.id,
     }));
     setEditingProviderId(newProvider.id);
+  };
+
+  const duplicateProvider = (id: string) => {
+    setLocalSettings((prev) => {
+      const source = prev.providers.find((p) => p.id === id);
+      if (!source) return prev;
+      const newProvider: LLMConfig = {
+        ...source,
+        id: Date.now().toString(),
+        name: `${source.name} (Copy)`,
+      };
+      setEditingProviderId(newProvider.id);
+      return {
+        ...prev,
+        providers: [...prev.providers, newProvider],
+      };
+    });
   };
 
   const updateProvider = (id: string, updates: Partial<LLMConfig>) => {
@@ -433,8 +525,33 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     if (editingProviderId === id) setEditingProviderId(null);
   };
 
+  const renderTab = (
+    id: 'projects' | 'machine' | 'about',
+    icon: React.ReactNode,
+    label: string
+  ) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
+        activeTab === id
+          ? isLight
+            ? 'bg-brand-600 text-white border border-brand-500'
+            : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
+          : isLight
+            ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
+            : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4">
+    <div
+      id="settings-dialog"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4"
+    >
       <div
         className={`w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
           isLight
@@ -491,36 +608,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 : 'border-brand-gray-800 bg-brand-gray-950'
             }`}
           >
-            <button
-              onClick={() => setActiveTab('projects')}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
-                activeTab === 'projects'
-                  ? isLight
-                    ? 'bg-brand-600 text-white border border-brand-500'
-                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
-                  : isLight
-                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
-              }`}
-            >
-              <HardDrive size={18} />
-              <span>Projects</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('machine')}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
-                activeTab === 'machine'
-                  ? isLight
-                    ? 'bg-brand-600 text-white border border-brand-500'
-                    : 'bg-brand-gray-800 text-brand-gray-200 border border-brand-gray-700'
-                  : isLight
-                    ? 'text-brand-gray-600 hover:text-brand-gray-900 hover:bg-brand-gray-100'
-                    : 'text-brand-gray-400 hover:text-brand-gray-300 hover:bg-brand-gray-900'
-              }`}
-            >
-              <Cpu size={18} />
-              <span>Machine Settings</span>
-            </button>
+            {renderTab('projects', <HardDrive size={18} />, 'Projects')}
+            {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
+            {renderTab('about', <Info size={18} />, 'About')}
           </div>
 
           {/* Tab Content */}
@@ -544,6 +634,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 activeProjectType={activeProjectType}
                 activeProjectStats={activeProjectStats}
                 theme={theme}
+                languages={projectLanguages}
               />
             )}
 
@@ -557,12 +648,69 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 modelStatus={modelStatus}
                 detectedCapabilities={detectedCapabilities}
                 modelLists={modelLists}
+                modelPresets={modelPresets}
                 theme={theme}
                 defaultPrompts={defaultPrompts}
                 onAddProvider={addProvider}
+                onDuplicateProvider={duplicateProvider}
                 onUpdateProvider={updateProvider}
                 onRemoveProvider={removeProvider}
               />
+            )}
+
+            {activeTab === 'about' && (
+              <div>
+                <h3
+                  className={`text-xl font-semibold mb-4 ${
+                    isLight ? 'text-brand-gray-900' : 'text-brand-gray-100'
+                  }`}
+                >
+                  About AugmentedQuill
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <strong>Version:</strong> {process.env.APP_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Git revision:</strong>{' '}
+                    {process.env.GIT_REVISION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Built:</strong> {new Date().toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>License:</strong> GNU General Public License v3+
+                  </div>
+                  <div>
+                    <strong>Copyright:</strong> © 2025
+                    {currentYear > 2025 ? `-${currentYear}` : ''} StableLlama and
+                    contributors
+                  </div>
+                  <div>
+                    <strong>Python:</strong> {process.env.PYTHON_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Node:</strong> {process.env.NODE_VERSION || 'unknown'}
+                  </div>
+                  <div>
+                    <strong>Browser:</strong> {browserVersion}
+                  </div>
+                  <div>
+                    <strong>Project:</strong>{' '}
+                    <a
+                      href={process.env.GITHUB_PROJECT_URL}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-brand-blue-600 underline"
+                    >
+                      {process.env.GITHUB_PROJECT_URL}
+                    </a>
+                  </div>
+                  <div className="text-xs text-brand-gray-500 pt-1">
+                    App platform: React + Vite, Backend: FastAPI
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>

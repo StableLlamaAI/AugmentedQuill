@@ -4,17 +4,24 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the index unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the index unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './index.css';
 import { AppErrorBoundary } from './features/layout/AppErrorBoundary';
+import { setupSmartQuotesProxy } from './utils/textUtils';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Could not find root element to mount to');
 }
+
+setupSmartQuotesProxy();
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(

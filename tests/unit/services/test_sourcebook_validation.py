@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test sourcebook validation unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test sourcebook validation unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
 import os
@@ -12,10 +13,11 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
-    sb_create,
-    sb_delete,
-    sb_get,
-    sb_update,
+    sourcebook_create_entry,
+    sourcebook_delete_entry,
+    sourcebook_get_entry,
+    sourcebook_refresh_entry_keywords,
+    sourcebook_update_entry,
 )
 from augmentedquill.services.projects.projects import select_project
 
@@ -47,7 +49,9 @@ class SourcebookValidationTest(TestCase):
 
     def test_create_invalid_entry_returns_error(self):
         # Category is now mandatory, so we must provide it to test other fields
-        result = sb_create(name=None, description="Valid desc", category="Cat")
+        result = sourcebook_create_entry(
+            name=None, description="Valid desc", category="Character"
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -58,7 +62,9 @@ class SourcebookValidationTest(TestCase):
                 )
 
     def test_create_entry_with_null_description_returns_error(self):
-        result = sb_create(name="Valid Name", description=None, category="Cat")
+        result = sourcebook_create_entry(
+            name="Valid Name", description=None, category="Character"
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -69,17 +75,25 @@ class SourcebookValidationTest(TestCase):
                 )
 
     def test_create_entry_with_invalid_category_returns_error(self):
-        result = sb_create(name="Valid Name", description="Valid", category=123)
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category=123
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
             self.fail("Should create error for numeric category")
 
+    def test_create_entry_with_unknown_category_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category="NotARealCategory"
+        )
+        self.assertIn("error", result)
+
     def test_create_entry_with_invalid_synonyms_returns_error(self):
-        result = sb_create(
+        result = sourcebook_create_entry(
             name="Valid Name",
             description="Valid",
-            category="Cat",
+            category="Character",
             synonyms="not a list",
         )
         if "error" in result:
@@ -87,9 +101,53 @@ class SourcebookValidationTest(TestCase):
         else:
             self.fail("Should create error for non-list synonyms")
 
+    def test_create_entry_with_invalid_images_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images",
+            description="Valid",
+            category="Character",
+            images="not a list",
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            self.fail("Should create error for non-list images")
+
+    def test_create_entry_with_none_images_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images 2",
+            description="Valid",
+            category="Character",
+            images=None,
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            entries = self._get_entries()
+            val = entries[0]["images"]
+            if val is None:
+                self.fail("Bug: images is None in database")
+            else:
+                self.fail(f"Bug: images is {val}")
+
+    def test_create_entry_with_invalid_image_type_inside_list_returns_error(self):
+        result = sourcebook_create_entry(
+            name="Valid Name Images 3",
+            description="Valid",
+            category="Character",
+            images=[123, "img1"],
+        )
+        if "error" in result:
+            self.assertIn("error", result)
+        else:
+            self.fail("Should create error for non-string image in list")
+
     def test_create_entry_with_none_synonyms_returns_error(self):
-        result = sb_create(
-            name="Valid Name", description="Valid", category="Cat", synonyms=None
+        result = sourcebook_create_entry(
+            name="Valid Name",
+            description="Valid",
+            category="Character",
+            synonyms=None,
         )
         if "error" in result:
             self.assertIn("error", result)
@@ -103,20 +161,22 @@ class SourcebookValidationTest(TestCase):
 
     def test_delete_entry_with_none_returns_false_safe(self):
         try:
-            result = sb_delete(None)
+            result = sourcebook_delete_entry(None)
             self.assertFalse(result)
         except AttributeError:
-            self.fail("sb_delete crashed on None input")
+            self.fail("sourcebook_delete_entry crashed on None input")
 
     def test_get_entry_with_none_returns_none_safe(self):
         try:
-            result = sb_get(None)
+            result = sourcebook_get_entry(None)
             self.assertIsNone(result)
         except AttributeError:
-            self.fail("sb_get crashed on None input")
+            self.fail("sourcebook_get_entry crashed on None input")
 
     def test_create_requires_category(self):
-        result = sb_create(name="Valid Name", description="Valid", category=None)
+        result = sourcebook_create_entry(
+            name="Valid Name", description="Valid", category=None
+        )
         if "error" in result:
             self.assertIn("error", result)
         else:
@@ -124,16 +184,19 @@ class SourcebookValidationTest(TestCase):
 
     def test_update_success(self):
         # Create valid entry
-        entry = sb_create("UpdateTarget", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget", "Desc", "Character")
         self.assertNotIn("error", entry)
         eid = entry["id"]
 
         # Update it
-        updated = sb_update(eid, name="NewName", description="NewDesc")
+        updated = sourcebook_update_entry(
+            eid, name="NewName", description="NewDesc", images=["img1"]
+        )
         self.assertNotIn("error", updated)
         self.assertEqual(updated["name"], "NewName")
         self.assertEqual(updated["description"], "NewDesc")
-        self.assertEqual(updated["category"], "Cat")  # Unchanged
+        self.assertEqual(updated["category"], "Character")  # Unchanged
+        self.assertEqual(updated["images"], ["img1"])
 
         # Check persistence
         entries = self._get_entries()
@@ -142,31 +205,129 @@ class SourcebookValidationTest(TestCase):
         self.assertEqual(saved["name"], "NewName")
 
     def test_update_with_invalid_id_returns_error(self):
-        result = sb_update("nonexistent", name="Foo")
+        result = sourcebook_update_entry("nonexistent", name="Foo")
         self.assertIn("error", result)
 
     def test_update_with_invalid_fields_returns_error(self):
         # Create valid entry
-        entry = sb_create("UpdateTarget2", "Desc", "Cat")
+        entry = sourcebook_create_entry("UpdateTarget2", "Desc", "Character")
         eid = entry["id"]
 
         # Valid update
-        updated = sb_update(eid, name="Valid")
+        updated = sourcebook_update_entry(eid, name="Valid")
         self.assertNotIn("error", updated)
         eid = updated["id"]
 
         # Invalid name
-        self.assertIn("error", sb_update(eid, name=""))
+        self.assertIn("error", sourcebook_update_entry(eid, name=""))
 
         # Test None explicitly logic
-        res = sb_update(eid, name=None)  # Should be fine, just no update
+        res = sourcebook_update_entry(eid, name=None)  # Should be fine, just no update
         self.assertNotIn("error", res)
 
         # Invalid Type
-        self.assertIn("error", sb_update(eid, category=123))
+        self.assertIn("error", sourcebook_update_entry(eid, category=123))
+
+        # Invalid Category Value
+        self.assertIn(
+            "error", sourcebook_update_entry(eid, category="NotARealCategory")
+        )
+
+        # Invalid Images
+        self.assertIn("error", sourcebook_update_entry(eid, images="Not A List"))
+        self.assertIn("error", sourcebook_update_entry(eid, images=[123]))
 
         # Invalid Identifier (None)
-        self.assertIn("error", sb_update(None))
+        self.assertIn("error", sourcebook_update_entry(None))
+
+    def test_pydantic_schema_validates_images_on_create_tool(self):
+        from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
+            CreateSourcebookEntryParams,
+        )
+        from pydantic import ValidationError
+
+        # Valid
+        params = CreateSourcebookEntryParams(
+            name="Valid Model",
+            description="Valid",
+            category="Character",
+            images=["img1", "img2"],
+        )
+        self.assertEqual(params.images, ["img1", "img2"])
+
+        # Default is empty list
+        params2 = CreateSourcebookEntryParams(
+            name="Valid Model 2", description="Valid", category="Character"
+        )
+        self.assertEqual(params2.images, [])
+
+        # Invalid
+        with self.assertRaises(ValidationError):
+            CreateSourcebookEntryParams(
+                name="Invalid Model",
+                description="Valid",
+                category="Character",
+                images="not a list",
+            )
+
+    def test_pydantic_schema_validates_images_on_update_tool(self):
+        from augmentedquill.services.chat.chat_tools.sourcebook_tools import (
+            UpdateSourcebookEntryParams,
+        )
+        from pydantic import ValidationError
+
+        # Valid
+        params = UpdateSourcebookEntryParams(name_or_id="id1", images=["img1"])
+        self.assertEqual(params.images, ["img1"])
+
+        # Default is None
+        params2 = UpdateSourcebookEntryParams(name_or_id="id1")
+        self.assertIsNone(params2.images)
+
+        # Invalid
+        with self.assertRaises(ValidationError):
+            UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
+
+    def test_keywords_stay_empty_without_editing_model(self):
+        description = (
+            "Anne is a disciplined caretaker, but she hides fear. "
+            "She maintains strict routines and records daily schedules. "
+            "She coordinates preparation rituals and tracks selected outfits."
+        )
+        created = sourcebook_create_entry(
+            name="Anne",
+            description=description,
+            category="Character",
+            synonyms=["caretaker"],
+        )
+        self.assertNotIn("error", created)
+
+        refreshed = self._run_async(
+            sourcebook_refresh_entry_keywords("Anne", payload={})
+        )
+        self.assertIsNotNone(refreshed)
+
+        entry = sourcebook_get_entry("Anne")
+        self.assertIsNotNone(entry)
+        keywords = entry.get("keywords", [])
+        self.assertEqual(keywords, [])
+
+    def test_description_update_clears_keywords(self):
+        created = sourcebook_create_entry(
+            name="Keyword Reset",
+            description="Original facts.",
+            category="Character",
+            keywords=["original", "facts"],
+        )
+        self.assertNotIn("error", created)
+        self.assertGreater(len(created.get("keywords", [])), 0)
+
+        updated = sourcebook_update_entry(
+            name_or_id="Keyword Reset",
+            description="Completely different facts now.",
+        )
+        self.assertNotIn("error", updated)
+        self.assertEqual(updated.get("keywords", []), [])
 
     def _get_entries(self):
         story_path = self.pdir / "story.json"
@@ -176,3 +337,8 @@ class SourcebookValidationTest(TestCase):
             # Convert to list for tests that expect it
             return [{"id": name, "name": name, **data} for name, data in sb.items()]
         return sb
+
+    def _run_async(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)

@@ -4,18 +4,15 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chat tools schema unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the chat tools schema unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Chat tool schemas for LLM function calling.
 
-All tools are now decorator-based and auto-registered via @chat_tool.
+Compatibility shim for legacy imports that resolves schemas from the canonical
+decorator-based tool registry.
 """
 
-from augmentedquill.services.chat.chat_tool_decorator import get_tool_schemas
-from augmentedquill.services.chat import chat_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tool_decorator import get_registered_tool_schemas
 
-
-def get_story_tools() -> list[dict]:
-    """Return the complete tool schema list for chat/tool calling."""
-    return get_tool_schemas()
+get_story_tools = get_registered_tool_schemas

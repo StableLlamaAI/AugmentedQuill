@@ -4,13 +4,12 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test projects unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
-import os
-import tempfile
 from pathlib import Path
-from unittest import TestCase
+import tempfile
 
 from augmentedquill.services.projects.projects import (
     validate_project_dir,
@@ -20,25 +19,15 @@ from augmentedquill.services.projects.projects import (
     write_chapter_content,
     write_chapter_summary,
 )
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class ProjectsTest(TestCase):
+class ProjectsTest(ApiTestCase):
     def setUp(self):
-        # Point registry and projects root to temp locations
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.projects_root = Path(self.td.name) / "projects"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        self.projects_root.mkdir(parents=True, exist_ok=True)
+        super().setUp()
         # Ensure clean
         if self.registry_path.exists():
             self.registry_path.unlink()
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
 
     def test_validate_empty_then_initialize(self):
         with tempfile.TemporaryDirectory() as pd:
@@ -148,3 +137,54 @@ class ProjectsTest(TestCase):
         # Check the story.json was updated
         updated_story = json.loads(story_file.read_text(encoding="utf-8"))
         self.assertEqual(updated_story["chapters"][0]["summary"], new_summary)
+
+    def test_delete_and_restore_book(self):
+        # Create series project with a book and file content
+        name = "series_restore_book"
+        ok, msg = select_project(name)
+        self.assertTrue(ok, msg)
+        project_dir = self.projects_root / name
+
+        story_file = project_dir / "story.json"
+        story = json.loads(story_file.read_text(encoding="utf-8"))
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": "book-1",
+                "folder": "book-1",
+                "title": "Book One",
+                "chapters": [{"filename": "0001.txt", "title": "C1", "summary": ""}],
+            }
+        ]
+        story.pop("chapters", None)
+        story_file.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        book_dir = project_dir / "books" / "book-1"
+        (book_dir / "chapters").mkdir(parents=True, exist_ok=True)
+        (book_dir / "chapters" / "0001.txt").write_text(
+            "Book chapter", encoding="utf-8"
+        )
+        (book_dir / "book_content.md").write_text("Book intro", encoding="utf-8")
+
+        from fastapi.testclient import TestClient
+        import augmentedquill.main as main
+
+        client = TestClient(main.app)
+
+        delete_resp = client.post("/api/v1/books/delete", json={"name": "book-1"})
+        self.assertEqual(delete_resp.status_code, 200, delete_resp.text)
+        restore_id = delete_resp.json().get("restore_id")
+        self.assertTrue(restore_id)
+        self.assertFalse((project_dir / "books" / "book-1").exists())
+
+        restore_resp = client.post(
+            "/api/v1/books/restore", json={"restore_id": restore_id}
+        )
+        self.assertEqual(restore_resp.status_code, 200, restore_resp.text)
+        self.assertTrue((project_dir / "books" / "book-1").exists())
+        self.assertEqual(
+            (project_dir / "books" / "book-1" / "book_content.md").read_text(
+                encoding="utf-8"
+            ),
+            "Book intro",
+        )

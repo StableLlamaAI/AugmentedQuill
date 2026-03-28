@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the init unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the init unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Chat tool implementations for specific domain areas.
 
 This module imports all tool modules to ensure decorator registration happens.
@@ -20,6 +20,7 @@ from augmentedquill.services.chat.chat_tools import order_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import project_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import sourcebook_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import story_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tools import web_search_tools  # noqa: F401
 
 __all__ = [
     "chapter_tools",
@@ -28,4 +29,5 @@ __all__ = [
     "project_tools",
     "sourcebook_tools",
     "story_tools",
+    "web_search_tools",
 ]

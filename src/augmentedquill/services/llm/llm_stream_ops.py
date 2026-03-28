@@ -4,41 +4,137 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the llm stream ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the llm stream ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, AsyncIterator
-import datetime
 import json as _json
+import os
 
 import httpx
 
+from augmentedquill.core.config import (
+    load_machine_config,
+)
+from augmentedquill.services.llm.llm_http_ops import logged_stream_request
+from augmentedquill.services.llm.llm_request_helpers import (
+    apply_native_tool_calling_mode,
+)
 from augmentedquill.utils.stream_helpers import ChannelFilter
-from augmentedquill.utils.llm_parsing import parse_tool_calls_from_content
+from augmentedquill.utils.llm_parsing import (
+    parse_complete_assistant_output,
+    parse_stream_channel_fragments,
+    parse_tool_calls_from_content,
+)
 
 
-def _normalize_tool_name(name: str) -> str:
-    cleaned = name.strip()
-    if cleaned.startswith("functions."):
-        cleaned = cleaned.split("functions.", 1)[1]
-    return cleaned
+def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
+    """Validate base_url against configured models or environment overrides to prevent SSRF."""
+    if not base_url or skip_validation:
+        return
+
+    # Check for suspicious schemes or non-HTTP/HTTPS URLs
+    if not (base_url.startswith("http://") or base_url.startswith("https://")):
+        raise ValueError(f"Invalid base_url scheme: {base_url}")
+
+    # Check for forbidden characters in URL (basic SSRF protection)
+    if any(c in base_url for c in "@[]"):
+        raise ValueError(f"Potentially dangerous base_url: {base_url}")
+
+    # 1. Check environment overrides (trusted)
+    overrides = {
+        os.getenv("OPENAI_BASE_URL"),
+        os.getenv("ANTHROPIC_BASE_URL"),
+        os.getenv("GOOGLE_BASE_URL"),
+    }
+    if base_url in overrides:
+        return
+
+    # 2. Check machine.json models
+    machine_config = load_machine_config()
+    if not machine_config:
+        from augmentedquill.services.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+        )
+
+    for provider in ["openai", "anthropic", "google"]:
+        all_models = machine_config.get(provider, {}).get("models", [])
+        for model in all_models:
+            model_url = model.get("base_url")
+            if model_url and base_url == model_url:
+                return
+
+    # 3. Allow explicitly trusted local inference servers (e.g. Ollama, LM Studio)
+    trusted_locals = {
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://0.0.0.0",
+        "https://localhost",
+        "https://127.0.0.1",
+        "http://fake",  # Trusted for unit tests
+    }
+    for trusted in trusted_locals:
+        if base_url == trusted or base_url.startswith(trusted + ":"):
+            suffix = base_url[len(trusted) :]
+            if not suffix or (
+                suffix.startswith(":") and suffix[1:].split("/")[0].isdigit()
+            ):
+                return
+
+    raise ValueError(f"Untrusted or unconfirmed base_url: {base_url}")
 
 
 async def unified_chat_stream(
     *,
+    caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
-    log_entry: dict | None = None,
+    extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
+    """Unified Chat Stream."""
+    from augmentedquill.services.llm.llm_completion_ops import (
+        _resolve_machine_model_cfg,
+        _resolve_temperature_max_tokens,
+        _build_model_extra_body,
+    )
+
+    _validate_base_url(base_url, skip_validation=skip_validation)
+
+    model_cfg = _resolve_machine_model_cfg(base_url, model_id, model_name)
+    temperature, max_tokens = _resolve_temperature_max_tokens(
+        temperature, max_tokens, model_cfg
+    )
+
+    # For EDITING tasks (like summarization), if we have a thinking model, we likely need more tokens.
+    # We boost max_tokens to 16k if it's below that, to allow for extensive reasoning.
+    if model_type == "EDITING" and (max_tokens is None or max_tokens < 16384):
+        # We check for known reasoning model patterns if possible, or just apply it for all editing tasks
+        # since summaries usually don't reach 16k anyway, so it's a safe upper bound.
+        max_tokens = 16384
+
+    merged_extra_body = apply_native_tool_calling_mode(
+        extra_body,
+        supports_function_calling=supports_function_calling,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
+    merged_extra_body.update(_build_model_extra_body(model_cfg))
+
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -52,6 +148,8 @@ async def unified_chat_stream(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+    if merged_extra_body:
+        body.update(merged_extra_body)
 
     if supports_function_calling and tools and tool_choice != "none":
         body["tools"] = tools
@@ -62,9 +160,13 @@ async def unified_chat_stream(
 
     for attempt in range(attempts):
         is_fallback = attempt == 1
+        request_log_entry: dict | None = None
         channel_filter = ChannelFilter()
         sent_tool_call_ids = set()
         full_content = ""
+        full_reasoning = ""
+        # Accumulate native streaming tool call fragments keyed by delta index
+        _tc_acc: dict[int, dict] = {}
 
         current_body = body.copy()
         if is_fallback:
@@ -105,277 +207,238 @@ async def unified_chat_stream(
                 )
 
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(float(timeout_s or 60))
-            ) as client:
-                async with client.stream(
-                    "POST", url, headers=headers, json=current_body
-                ) as resp:
-                    if log_entry:
-                        log_entry["response"]["status_code"] = resp.status_code
+            async with logged_stream_request(
+                caller_id=caller_id,
+                model_type=model_type,
+                method="POST",
+                url=url,
+                headers=headers,
+                body=current_body,
+                timeout=httpx.Timeout(float(timeout_s or 60)),
+            ) as (resp, request_log_entry):
 
-                    if resp.status_code >= 400:
-                        error_content = await resp.aread()
-                        if not is_fallback and supports_function_calling:
-                            err_text_check = error_content.decode(
-                                "utf-8", errors="ignore"
-                            )
-                            if "tool choice requires" in err_text_check:
-                                continue
-
-                        if log_entry:
-                            log_entry["timestamp_end"] = (
-                                datetime.datetime.now().isoformat()
-                            )
-                        try:
-                            error_data = _json.loads(error_content)
-                            if log_entry:
-                                log_entry["response"]["error"] = error_data
-                            yield {
-                                "error": "Upstream error",
-                                "status": resp.status_code,
-                                "data": error_data,
-                            }
-                        except Exception:
-                            err_text = error_content.decode("utf-8", errors="ignore")
-                            if log_entry:
-                                log_entry["response"]["error"] = err_text
-                            yield {
-                                "error": "Upstream error",
-                                "status": resp.status_code,
-                                "data": err_text,
-                            }
-                        return
-
-                    content_type = resp.headers.get("content-type", "")
-                    if "text/event-stream" not in content_type:
-                        try:
-                            response_data = await resp.json()
-                            if log_entry:
-                                log_entry["response"]["body"] = response_data
-                                log_entry["timestamp_end"] = (
-                                    datetime.datetime.now().isoformat()
-                                )
-
-                            choices = response_data.get("choices", [])
-                            if choices:
-                                choice = choices[0]
-                                message = choice.get("message", {})
-                                content = message.get("content", "")
-
-                                if content:
-                                    for res in channel_filter.feed(content):
-                                        if res["channel"] == "thinking":
-                                            yield {"thinking": res["content"]}
-                                        elif res["channel"].startswith(
-                                            "commentary to="
-                                        ):
-                                            func_name = _normalize_tool_name(
-                                                res["channel"]
-                                                .split("commentary to=", 1)[1]
-                                                .strip()
-                                            )
-                                            if func_name:
-                                                yield {
-                                                    "tool_calls": [
-                                                        {
-                                                            "id": f"call_{func_name}",
-                                                            "type": "function",
-                                                            "function": {
-                                                                "name": func_name,
-                                                                "arguments": res[
-                                                                    "content"
-                                                                ],
-                                                            },
-                                                        }
-                                                    ]
-                                                }
-                                        elif res["channel"] == "final":
-                                            yield {"content": res["content"]}
-
-                                    parsed = parse_tool_calls_from_content(content)
-                                    if parsed:
-                                        yield {"tool_calls": parsed}
-
-                                if message.get("tool_calls"):
-                                    yield {"tool_calls": message["tool_calls"]}
-
-                            yield {"done": True}
-                        except Exception as e:
-                            yield {
-                                "error": "Failed to parse response",
-                                "message": str(e),
-                            }
-                        break
-
-                    async for line in resp.aiter_lines():
-                        if not line.strip():
+                if resp.status_code >= 400:
+                    error_content = await resp.aread()
+                    if not is_fallback and supports_function_calling:
+                        err_text_check = error_content.decode("utf-8", errors="ignore")
+                        if "tool choice requires" in err_text_check:
                             continue
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            if data_str.strip() == "[DONE]":
-                                if full_content:
-                                    parsed = parse_tool_calls_from_content(full_content)
-                                    if parsed:
-                                        new_calls = [
-                                            c
-                                            for c in parsed
-                                            if c["id"] not in sent_tool_call_ids
-                                        ]
-                                        if new_calls:
-                                            yield {"tool_calls": new_calls}
 
-                                for res in channel_filter.flush():
-                                    if res["channel"] == "thinking":
-                                        yield {"thinking": res["content"]}
-                                    elif res["channel"].startswith("commentary to="):
-                                        func_name = _normalize_tool_name(
-                                            res["channel"]
-                                            .split("commentary to=", 1)[1]
-                                            .strip()
-                                        )
-                                        if func_name:
-                                            call_id = f"call_{func_name}"
-                                            if call_id not in sent_tool_call_ids:
+                    try:
+                        error_data = _json.loads(error_content)
+                        if request_log_entry:
+                            request_log_entry["response"]["error"] = error_data
+                        yield {
+                            "error": "Upstream error",
+                            "status": resp.status_code,
+                            "data": error_data,
+                        }
+                    except Exception:
+                        err_text = error_content.decode("utf-8", errors="ignore")
+                        if request_log_entry:
+                            request_log_entry["response"]["error"] = err_text
+                        yield {
+                            "error": "Upstream error",
+                            "status": resp.status_code,
+                            "data": err_text,
+                        }
+                    return
+
+                content_type = resp.headers.get("content-type", "")
+                if "text/event-stream" not in content_type:
+                    try:
+                        response_data = await resp.json()
+                        if request_log_entry:
+                            request_log_entry["response"]["body"] = response_data
+
+                        choices = response_data.get("choices", [])
+                        if choices:
+                            choice = choices[0]
+                            message = choice.get("message", {})
+                            content = message.get("content", "")
+
+                            if content:
+                                events = parse_stream_channel_fragments(
+                                    channel_filter.feed(content), sent_tool_call_ids
+                                )
+                                for event in events:
+                                    yield event
+
+                                parsed_full = parse_complete_assistant_output(
+                                    content,
+                                )
+                                parsed_calls = parsed_full["tool_calls"]
+                                if parsed_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
                                                 sent_tool_call_ids.add(call_id)
-                                            yield {
-                                                "tool_calls": [
-                                                    {
-                                                        "id": call_id,
-                                                        "type": "function",
-                                                        "function": {
-                                                            "name": func_name,
-                                                            "arguments": res["content"],
-                                                        },
-                                                    }
-                                                ]
-                                            }
-                                    elif res["channel"].startswith("call:"):
-                                        func_name = res["channel"][5:]
-                                        call_id = f"call_{func_name}"
-                                        if call_id not in sent_tool_call_ids:
-                                            yield {
-                                                "tool_calls": [
-                                                    {
-                                                        "id": call_id,
-                                                        "type": "function",
-                                                        "function": {
-                                                            "name": func_name,
-                                                            "arguments": res["content"],
-                                                        },
-                                                    }
-                                                ]
-                                            }
-                                    elif res["channel"] == "tool_def":
-                                        continue
-                                    elif res["content"]:
-                                        yield {"content": res["content"]}
+                                        yield {"tool_calls": new_calls}
 
-                                yield {"done": True}
-                                break
+                            if message.get("tool_calls"):
+                                yield {"tool_calls": message["tool_calls"]}
 
-                            try:
-                                chunk = _json.loads(data_str)
-                                if log_entry:
-                                    log_entry["response"]["chunks"].append(chunk)
-
-                                choices = chunk.get("choices", [])
-                                if not choices:
-                                    continue
-                                delta = choices[0].get("delta", {})
-
-                                reasoning = delta.get("reasoning_content")
-                                if reasoning:
-                                    yield {"thinking": reasoning}
-
-                                content = delta.get("content")
-                                if content:
-                                    full_content += content
-                                    if log_entry:
-                                        log_entry["response"]["full_content"] += content
-
-                                    for res in channel_filter.feed(content):
-                                        if res["channel"] == "thinking":
-                                            yield {"thinking": res["content"]}
-                                        elif res["channel"].startswith(
-                                            "commentary to="
-                                        ):
-                                            func_name = _normalize_tool_name(
-                                                res["channel"]
-                                                .split("commentary to=", 1)[1]
-                                                .strip()
-                                            )
-                                            if func_name:
-                                                call_id = f"call_{func_name}"
-                                                if call_id not in sent_tool_call_ids:
-                                                    sent_tool_call_ids.add(call_id)
-                                                yield {
-                                                    "tool_calls": [
-                                                        {
-                                                            "id": call_id,
-                                                            "type": "function",
-                                                            "function": {
-                                                                "name": func_name,
-                                                                "arguments": res[
-                                                                    "content"
-                                                                ],
-                                                            },
-                                                        }
-                                                    ]
-                                                }
-                                        elif res["channel"].startswith("call:"):
-                                            func_name = res["channel"][5:]
-                                            yield {
-                                                "tool_calls": [
-                                                    {
-                                                        "id": f"call_{func_name}",
-                                                        "type": "function",
-                                                        "function": {
-                                                            "name": func_name,
-                                                            "arguments": res["content"],
-                                                        },
-                                                    }
-                                                ]
-                                            }
-                                        elif res["channel"] == "tool_def":
-                                            continue
-                                        else:
-                                            c_lower = res["content"].lower()
-                                            has_syntax = (
-                                                "<tool_call" in c_lower
-                                                or "[tool_call" in c_lower
-                                                or c_lower.strip().startswith("tool:")
-                                            )
-                                            if has_syntax:
-                                                parsed = parse_tool_calls_from_content(
-                                                    res["content"]
-                                                )
-                                                if parsed:
-                                                    new_calls = [
-                                                        c
-                                                        for c in parsed
-                                                        if c["id"]
-                                                        not in sent_tool_call_ids
-                                                    ]
-                                                    if new_calls:
-                                                        for c in new_calls:
-                                                            sent_tool_call_ids.add(
-                                                                c["id"]
-                                                            )
-                                                        yield {"tool_calls": new_calls}
-                                                    continue
-                                            yield {"content": res["content"]}
-
-                                tc = delta.get("tool_calls")
-                                if tc:
-                                    yield {"tool_calls": tc}
-
-                            except Exception:
-                                continue
+                        yield {"done": True}
+                    except Exception as e:
+                        if request_log_entry:
+                            request_log_entry["response"]["error_detail"] = str(e)
+                            request_log_entry["response"][
+                                "error"
+                            ] = "Failed to parse non-stream response"
+                        yield {
+                            "error": "Failed to parse response",
+                            "message": f"An error occurred while processing the response: {e}",
+                        }
                     break
 
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            if full_content:
+                                parsed_calls = parse_complete_assistant_output(
+                                    full_content,
+                                    extra_tool_call_content=full_reasoning,
+                                )["tool_calls"]
+                                if parsed_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
+                                                sent_tool_call_ids.add(call_id)
+                                        yield {"tool_calls": new_calls}
+                                        if request_log_entry:
+                                            request_log_entry["response"][
+                                                "tool_calls"
+                                            ] = (
+                                                request_log_entry["response"].get(
+                                                    "tool_calls"
+                                                )
+                                                or []
+                                            ) + new_calls
+
+                            # Store assembled native tool calls in the log entry
+                            if _tc_acc and request_log_entry:
+                                assembled = list(_tc_acc.values())
+                                existing = (
+                                    request_log_entry["response"].get("tool_calls")
+                                    or []
+                                )
+                                request_log_entry["response"]["tool_calls"] = (
+                                    existing + assembled
+                                )
+
+                            events = parse_stream_channel_fragments(
+                                channel_filter.flush(), sent_tool_call_ids
+                            )
+                            for event in events:
+                                yield event
+
+                            yield {"done": True}
+                            break
+
+                        try:
+                            chunk = _json.loads(data_str)
+                            if request_log_entry:
+                                request_log_entry["response"]["chunks"].append(chunk)
+
+                            choices = chunk.get("choices", [])
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {})
+
+                            reasoning = delta.get("reasoning_content") or delta.get(
+                                "reasoning"
+                            )
+                            if reasoning:
+                                full_reasoning += reasoning
+                                if request_log_entry:
+                                    if "thinking" not in request_log_entry["response"]:
+                                        request_log_entry["response"]["thinking"] = ""
+                                    request_log_entry["response"][
+                                        "thinking"
+                                    ] += reasoning
+                                parsed_reasoning_calls = (
+                                    parse_tool_calls_from_content(full_reasoning) or []
+                                )
+                                if parsed_reasoning_calls:
+                                    new_calls = [
+                                        c
+                                        for c in parsed_reasoning_calls
+                                        if c.get("id") not in sent_tool_call_ids
+                                    ]
+                                    if new_calls:
+                                        for call in new_calls:
+                                            call_id = call.get("id")
+                                            if isinstance(call_id, str):
+                                                sent_tool_call_ids.add(call_id)
+                                        yield {"tool_calls": new_calls}
+                                yield {"thinking": reasoning}
+
+                            content = delta.get("content")
+                            if content:
+                                full_content += content
+                                if request_log_entry:
+                                    request_log_entry["response"][
+                                        "full_content"
+                                    ] += content
+
+                                events = parse_stream_channel_fragments(
+                                    channel_filter.feed(content),
+                                    sent_tool_call_ids,
+                                )
+                                for event in events:
+                                    yield event
+
+                            tc = delta.get("tool_calls")
+                            if tc:
+                                for tc_delta in tc:
+                                    idx = tc_delta.get("index") or 0
+                                    if idx not in _tc_acc:
+                                        _tc_acc[idx] = {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    if tc_delta.get("id"):
+                                        _tc_acc[idx]["id"] = tc_delta["id"]
+                                    if tc_delta.get("type"):
+                                        _tc_acc[idx]["type"] = tc_delta["type"]
+                                    fn = tc_delta.get("function") or {}
+                                    if fn.get("name"):
+                                        _tc_acc[idx]["function"]["name"] += fn["name"]
+                                    if fn.get("arguments"):
+                                        _tc_acc[idx]["function"]["arguments"] += fn[
+                                            "arguments"
+                                        ]
+                                yield {"tool_calls": tc}
+
+                        except Exception:
+                            continue
+                break
+
         except Exception as e:
-            if log_entry:
-                log_entry["response"]["error"] = str(e)
-            yield {"error": "Connection error", "message": str(e)}
+            err_text = str(e).strip() or f"{type(e).__name__}: {repr(e)}"
+            if request_log_entry:
+                request_log_entry["response"]["error_detail"] = err_text
+                request_log_entry["response"][
+                    "error"
+                ] = f"An internal error occurred during the LLM request: {err_text}"
+            yield {
+                "error": "Connection error",
+                "message": f"An error occurred: {err_text}.",
+            }
             break

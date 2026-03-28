@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the types unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the types unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 export interface Conflict {
   id: string; // or something simple
@@ -24,6 +27,19 @@ export interface Chapter {
   conflicts?: Conflict[];
 }
 
+export interface WritingUnit {
+  id: string;
+  scope: 'story' | 'chapter';
+  title: string;
+  summary: string;
+  content: string;
+  filename?: string;
+  book_id?: string;
+  notes?: string;
+  private_notes?: string;
+  conflicts?: Conflict[];
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -33,6 +49,16 @@ export interface Book {
   private_notes?: string;
 }
 
+export interface SourcebookRelation {
+  target_id: string;
+  direction?: 'forward' | 'reverse';
+  relation: string;
+  start_chapter?: string;
+  start_book?: string;
+  end_chapter?: string;
+  end_book?: string;
+}
+
 export interface SourcebookEntry {
   id: string;
   name: string;
@@ -40,6 +66,8 @@ export interface SourcebookEntry {
   category?: string;
   description: string;
   images: string[];
+  keywords?: string[];
+  relations?: SourcebookRelation[];
 }
 
 export interface Story {
@@ -51,7 +79,9 @@ export interface Story {
   image_style?: string;
   image_additional_info?: string;
   chapters: Chapter[];
+  draft: WritingUnit | null;
   projectType: 'short-story' | 'novel' | 'series';
+  language?: string;
   books?: Book[];
   sourcebook?: SourcebookEntry[];
   llm_prefs?: {
@@ -93,11 +123,22 @@ export interface ChatSession {
   systemPrompt?: string;
   isIncognito?: boolean;
   allowWebSearch?: boolean;
+  scratchpad?: string;
+  editing_scratchpad?: string;
 }
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
 export type AppTheme = 'light' | 'mixed' | 'dark';
+
+export interface SidebarSettings {
+  storyHeight?: number;
+  chaptersHeight?: number;
+  sourcebookHeight?: number;
+  isStoryCollapsed?: boolean;
+  isChaptersCollapsed?: boolean;
+  isSourcebookCollapsed?: boolean;
+}
 
 export interface EditorSettings {
   fontSize: number;
@@ -106,6 +147,7 @@ export interface EditorSettings {
   contrast: number; // 0.5 - 1.0
   theme: AppTheme;
   sidebarWidth: number;
+  sidebar?: SidebarSettings;
 }
 
 export interface LLMConfig {
@@ -115,8 +157,19 @@ export interface LLMConfig {
   apiKey: string;
   timeout: number;
   modelId: string;
+  contextWindowTokens?: number;
   temperature?: number;
   topP?: number;
+  maxTokens?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  stop?: string[];
+  seed?: number;
+  topK?: number;
+  minP?: number;
+  extraBody?: string;
+  presetId?: string | null;
+  writingWarning?: string | null;
   isMultimodal?: boolean | null; // null/undefined = auto-detect
   supportsFunctionCalling?: boolean | null; // null/undefined = auto-detect
   prompts: {
@@ -136,6 +189,15 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   modelId: 'gpt-4o',
   temperature: 0.7,
   topP: 0.95,
+  maxTokens: 16384,
+  presencePenalty: 0,
+  frequencyPenalty: 0,
+  stop: [],
+  seed: undefined,
+  topK: undefined,
+  minP: undefined,
+  extraBody: '',
+  presetId: null,
   prompts: { system: '', continuation: '', summary: '' },
 };
 
@@ -154,6 +216,7 @@ export interface ProjectMetadata {
   title: string;
   type: 'short-story' | 'novel' | 'series';
   updatedAt: number;
+  language?: string; // two-letter code
 }
 
 // Tool definitions

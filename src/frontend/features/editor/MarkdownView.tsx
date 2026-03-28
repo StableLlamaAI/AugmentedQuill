@@ -4,15 +4,23 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import React from 'react';
+/**
+ * Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
+import React, { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { configureMarked } from './configureMarked';
+
+// Configure marked extensions (subscript, superscript, footnotes) once.
+configureMarked();
 
 interface MarkdownViewProps {
-  content: string;
+  content?: string | null;
   className?: string;
   simple?: boolean;
 }
@@ -20,15 +28,10 @@ interface MarkdownViewProps {
 // Configure markdown rendering once to keep parsing behavior stable.
 const renderer = new marked.Renderer();
 // @ts-ignore
-renderer.image = (href, title, text) => {
-  type LegacyImageArg = { href?: string; title?: string; text?: string };
-  // Support both legacy positional args and modern object-style image args.
-  if (typeof href === 'object' && href !== null) {
-    const obj = href as LegacyImageArg;
-    href = obj.href;
-    title = obj.title;
-    text = obj.text;
-  }
+renderer.image = function (token) {
+  let href = typeof token === 'object' && token !== null ? token.href : arguments[0];
+  let title = typeof token === 'object' && token !== null ? token.title : arguments[1];
+  let text = typeof token === 'object' && token !== null ? token.text : arguments[2];
 
   if (
     typeof href === 'string' &&
@@ -36,22 +39,34 @@ renderer.image = (href, title, text) => {
     !href.startsWith('http') &&
     !href.startsWith('/')
   ) {
-    href = `/api/projects/images/${href}`;
+    href = `/api/v1/projects/images/${href}`;
   }
   return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full h-auto rounded shadow-lg my-4" />`;
 };
 marked.use({ renderer });
 
-export const MarkdownView: React.FC<MarkdownViewProps> = ({
+const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   content,
   className = '',
   simple = false,
 }) => {
+  const safeContent = typeof content === 'string' ? content : '';
+
+  const cleanHtml = useMemo(() => {
+    if (simple) return '';
+
+    const rawHtml = marked.parse(safeContent) as string;
+    return DOMPurify.sanitize(rawHtml, {
+      ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code'],
+      ADD_ATTR: ['src', 'alt', 'title', 'class', 'id', 'href'],
+    });
+  }, [safeContent, simple]);
+
   if (!simple) {
     return (
       <div
         className={`prose-editor whitespace-normal ${className}`}
-        dangerouslySetInnerHTML={{ __html: marked.parse(content) as string }}
+        dangerouslySetInnerHTML={{ __html: cleanHtml }}
       />
     );
   }
@@ -117,10 +132,12 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
 
   return (
     <div className={`whitespace-pre-wrap break-words ${className}`}>
-      {content.split('\n').map((line, i) => renderLine(line, i))}
+      {safeContent.split('\n').map((line, i) => renderLine(line, i))}
     </div>
   );
 };
+
+export const MarkdownView = React.memo(MarkdownViewComponent);
 
 export const hasUnsupportedSummaryMarkdown = (text: string): boolean => {
   const lines = text.split('\n');

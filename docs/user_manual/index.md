@@ -13,3 +13,5 @@ Welcome to AugmentedQuill, your AI-assisted prose writing companion. This manual
 7. [The AI Chat Assistant](07_ai_chat_assistant.md)
 8. [Appearance and Display](08_appearance_and_display.md)
 9. [Tutorial: Writing Your First Story](09_tutorial_first_story.md)
+10. [Writing Your Story: A Practical Roadmap](10_writing_a_story.md)
+11. [Troubleshooting & FAQ](11_troubleshooting.md)

@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the use chat session management unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the use chat session management unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -49,7 +52,8 @@ export function useChatSessionManagement({
 
   const handleNewChat = useCallback(
     (incognito: boolean = false) => {
-      const newId = uuidv4();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const newId = incognito ? uuidv4() : `chat-${timestamp}`;
       if (incognito) {
         const newSession: ChatSession = {
           id: newId,

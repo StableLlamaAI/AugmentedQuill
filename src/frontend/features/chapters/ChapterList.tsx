@@ -4,10 +4,14 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the chapter list unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the chapter list unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
 import { api } from '../../services/api';
 import {
@@ -27,7 +31,12 @@ interface ChapterListProps {
   currentChapterId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdateChapter?: (id: string, updates: Partial<Chapter>) => void;
+  onUpdateChapter?: (
+    id: string,
+    updates: Partial<Chapter>,
+    sync?: boolean,
+    pushHistory?: boolean
+  ) => void;
   onUpdateBook?: (id: string, updates: Partial<Book>) => void;
   onCreate: (bookId?: string) => void;
   onBookCreate?: (title: string) => void;
@@ -38,10 +47,14 @@ interface ChapterListProps {
     type: 'chapter' | 'book',
     id: string,
     action: 'write' | 'update' | 'rewrite',
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
+  isAiAvailable?: boolean;
   theme?: AppTheme;
   onOpenImages?: () => void;
+  languages?: string[];
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -59,10 +72,12 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onReorderChapters,
   onReorderBooks,
   onAiAction,
+  isAiAvailable = true,
   theme = 'mixed',
   onOpenImages,
+  languages = [],
 }) => {
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
   const [newBookTitle, setNewBookTitle] = useState('');
   const [isCreatingBook, setIsCreatingBook] = useState(false);
@@ -261,6 +276,16 @@ export const ChapterList: React.FC<ChapterListProps> = ({
     type: 'chapter' | 'book';
     id: string;
   } | null>(null);
+  const [pendingMetadataUpdate, setPendingMetadataUpdate] = useState<{
+    id: string;
+    data: {
+      title?: string;
+      summary?: string;
+      notes?: string;
+      private_notes?: string;
+      conflicts?: Chapter['conflicts'];
+    };
+  } | null>(null);
 
   const activeEditingData = useMemo(() => {
     if (!editingMetadata) return null;
@@ -300,7 +325,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
         });
 
         if (onUpdateChapter) {
-          onUpdateChapter(editingMetadata.id, data);
+          onUpdateChapter(editingMetadata.id, data, false, false);
+          setPendingMetadataUpdate({ id: editingMetadata.id, data });
         } else {
           if (data.title !== activeEditingData.title) {
             await api.chapters.updateTitle(id, data.title || '');
@@ -390,7 +416,10 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   };
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 border-r relative ${bgClass}`}>
+    <div
+      id="chapter-list"
+      className={`flex flex-col flex-1 min-h-0 border-r relative ${bgClass}`}
+    >
       {editingMetadata && activeEditingData && (
         <MetadataEditorDialog
           type={editingMetadata.type}
@@ -399,19 +428,56 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           }: ${activeEditingData.title}`}
           initialData={activeEditingData}
           onSave={saveMetadata}
-          onClose={() => setEditingMetadata(null)}
+          onClose={() => {
+            if (
+              pendingMetadataUpdate &&
+              pendingMetadataUpdate.id === editingMetadata.id
+            ) {
+              const currentChapter = displayChapters.find(
+                (c) => c.id === pendingMetadataUpdate.id
+              );
+              const isDifferent =
+                currentChapter &&
+                Object.entries(pendingMetadataUpdate.data).some(([key, value]) => {
+                  if (value === undefined) return false;
+                  return (
+                    JSON.stringify(value) !==
+                    JSON.stringify((currentChapter as any)[key])
+                  );
+                });
+
+              if (isDifferent) {
+                onUpdateChapter?.(
+                  pendingMetadataUpdate.id,
+                  pendingMetadataUpdate.data,
+                  false,
+                  true
+                );
+              }
+            }
+            setPendingMetadataUpdate(null);
+            setEditingMetadata(null);
+          }}
           theme={theme}
+          aiDisabledReason={
+            !isAiAvailable
+              ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              : undefined
+          }
           onAiGenerate={
             onAiAction && editingMetadata
-              ? (action, onProgress) =>
+              ? (action, onProgress, currentText, onThinking) =>
                   onAiAction(
                     editingMetadata.type,
                     editingMetadata.id,
                     action,
-                    onProgress
+                    onProgress,
+                    currentText,
+                    onThinking
                   )
               : undefined
           }
+          languages={languages}
         />
       )}
       <div
@@ -419,18 +485,23 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
         }`}
       >
-        <h2 className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}>
-          {projectType === 'series' ? 'Books & Chapters' : 'Chapters'}
-        </h2>
-        {projectType === 'novel' && (
-          <button
-            onClick={() => onCreate()}
-            className={`p-1 rounded-full transition-colors ${btnHover}`}
-            title="New Chapter"
+        {/* title with inline create button so it hugs the header text */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h2
+            className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}
           >
-            <Plus size={18} />
-          </button>
-        )}
+            {projectType === 'series' ? 'Books & Chapters' : 'Chapters'}
+          </h2>
+          {projectType === 'novel' && (
+            <button
+              onClick={() => onCreate()}
+              className={`p-1 rounded-full transition-colors ${btnHover}`}
+              title="New Chapter"
+            >
+              <Plus size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">

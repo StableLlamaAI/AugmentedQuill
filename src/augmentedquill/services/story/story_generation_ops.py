@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the story generation ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the story generation ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -24,15 +25,18 @@ from augmentedquill.services.story.story_generation_common import (
 async def generate_story_summary(
     *, mode: str = "", payload: dict | None = None
 ) -> dict:
+    """Generate Story Summary."""
     payload = payload or {}
     prepared = prepare_story_summary_generation(payload, mode)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.generate_story_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     new_summary = data.get("content", "")
@@ -44,15 +48,18 @@ async def generate_story_summary(
 async def generate_chapter_summary(
     *, chap_id: int, mode: str = "", payload: dict | None = None
 ) -> dict:
+    """Generate Chapter Summary."""
     payload = payload or {}
     prepared = prepare_chapter_summary_generation(payload, chap_id, mode)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.generate_chapter_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     new_summary = data.get("content", "")
@@ -78,15 +85,18 @@ async def generate_chapter_summary(
 async def write_chapter_from_summary(
     *, chap_id: int, payload: dict | None = None
 ) -> dict:
+    """Write Chapter From Summary."""
     payload = payload or {}
     prepared = prepare_write_chapter_generation(payload, chap_id)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.write_chapter_from_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     content = data.get("content", "")
@@ -97,15 +107,18 @@ async def write_chapter_from_summary(
 async def continue_chapter_from_summary(
     *, chap_id: int, payload: dict | None = None
 ) -> dict:
+    """Continue Chapter From Summary."""
     payload = payload or {}
     prepared = prepare_continue_chapter_generation(payload, chap_id)
 
     data = await llm.unified_chat_complete(
+        caller_id="story_generation.continue_chapter_from_summary",
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
         timeout_s=prepared["timeout_s"],
+        model_name=prepared.get("model_name"),
     )
 
     appended = data.get("content", "")

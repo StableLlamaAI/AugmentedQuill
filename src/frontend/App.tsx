@@ -4,9 +4,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
+import React, { useState, useCallback, useRef } from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -31,11 +34,18 @@ import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage, ViewMode } from './types';
+import { ChatMessage } from './types';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
+import { useBrowserHistory } from './features/app/useBrowserHistory';
+import { useEditorUIState } from './features/app/useEditorUIState';
+import { useSettingsPersistence } from './features/app/useSettingsPersistence';
+import { useToolCallGate } from './features/app/useToolCallGate';
+import { useUIPanels } from './features/app/useUIPanels';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
+  resolveRoleAvailability,
+  supportsImageActions,
 } from './features/app/appSelectors';
 
 const App: React.FC = () => {
@@ -56,70 +66,108 @@ const App: React.FC = () => {
     refreshStory,
     undo,
     redo,
+    undoSteps,
+    redoSteps,
+    pushExternalHistoryEntry,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    historyIndex,
     canUndo,
     canRedo,
   } = useStory({ confirm, alert: window.alert });
 
-  const currentChapter = story.chapters.find((c) => c.id === currentChapterId);
+  useBrowserHistory({
+    historyIndex,
+    canUndo,
+    canRedo,
+    undoSteps,
+    redoSteps,
+    undo,
+    redo,
+  });
+
+  const activeChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const currentChapter =
+    story.projectType === 'short-story'
+      ? story.draft
+      : activeChapter
+        ? { ...activeChapter, scope: 'chapter' as const }
+        : null;
+  const currentChapterContext = activeChapter
+    ? {
+        id: activeChapter.id,
+        title: activeChapter.title,
+        is_empty: !activeChapter.content || activeChapter.content.trim() === '',
+      }
+    : null;
   const editorRef = useRef<EditorHandle | null>(null);
-  const appearanceRef = useRef<HTMLDivElement>(null);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
 
   const prompts = usePrompts(story.id);
 
-  const { modelConnectionStatus, detectedCapabilities } =
-    useProviderHealth(appSettings);
+  const {
+    modelConnectionStatus,
+    detectedCapabilities,
+    refreshHealth,
+    recheckUnavailableProviderIfStale,
+  } = useProviderHealth(appSettings);
 
-  const [toolCallLoopDialog, setToolCallLoopDialog] = useState<{
-    count: number;
-    resolver: (choice: 'stop' | 'continue' | 'unlimited') => void;
-  } | null>(null);
+  const { handleSaveSettings } = useSettingsPersistence({
+    appSettings,
+    setAppSettings,
+    pushExternalHistoryEntry,
+    refreshHealth,
+  });
+
+  const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
+  const imageActionsAvailable = supportsImageActions(
+    appSettings,
+    detectedCapabilities,
+    modelConnectionStatus
+  );
+
+  const { toolCallLoopDialog, requestToolCallLoopAccess } = useToolCallGate();
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        appearanceRef.current &&
-        !appearanceRef.current.contains(event.target as Node)
-      ) {
-        setIsAppearanceOpen(false);
-      }
-    }
+  const {
+    isChatOpen,
+    setIsChatOpen,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    isAppearanceOpen,
+    setIsAppearanceOpen,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isImagesOpen,
+    setIsImagesOpen,
+    isDebugLogsOpen,
+    setIsDebugLogsOpen,
+    appearanceRef,
+  } = useUIPanels();
 
-    if (isAppearanceOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isAppearanceOpen]);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isImagesOpen, setIsImagesOpen] = useState(false);
-  const [isDebugLogsOpen, setIsDebugLogsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('raw');
-  const [showWhitespace, setShowWhitespace] = useState<boolean>(false);
-  const [activeFormats, setActiveFormats] = useState<string[]>([]);
-
-  // UI State for Header Dropdowns
-  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-  const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
-  const [isMobileFormatMenuOpen, setIsMobileFormatMenuOpen] = useState(false);
+  const {
+    viewMode,
+    setViewMode,
+    showWhitespace,
+    setShowWhitespace,
+    activeFormats,
+    setActiveFormats,
+    isViewMenuOpen,
+    setIsViewMenuOpen,
+    isFormatMenuOpen,
+    setIsFormatMenuOpen,
+    isMobileFormatMenuOpen,
+    setIsMobileFormatMenuOpen,
+  } = useEditorUIState();
 
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
-  const buttonActive = isLight
-    ? 'bg-brand-100 text-brand-700'
-    : 'bg-brand-900/40 text-brand-300 border border-brand-800/50';
-
-  // Project Management Functions
   const getSystemPrompt = useCallback(() => {
     return prompts.system_messages.chat_llm || '';
   }, [prompts]);
@@ -153,6 +201,7 @@ const App: React.FC = () => {
     refreshProjects,
     isCreateProjectOpen,
     setIsCreateProjectOpen,
+    instructionLanguages,
     handleLoadProject,
     handleImportProject,
     handleCreateProject,
@@ -170,23 +219,12 @@ const App: React.FC = () => {
     getErrorMessage,
     isSettingsOpen,
     setIsSettingsOpen,
+    recordHistoryEntry: pushExternalHistoryEntry,
   });
 
   // Get Active LLM Configs
   const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
     resolveActiveProviderConfigs(appSettings);
-
-  const { isAiActionLoading, handleAiAction, handleSidebarAiAction } = useAiActions({
-    currentChapter,
-    story,
-    prompts,
-    systemPrompt,
-    activeEditingConfig,
-    activeWritingConfig,
-    updateChapter,
-    setChatMessages,
-    getErrorMessage,
-  });
 
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
     setChatMessages,
@@ -200,17 +238,36 @@ const App: React.FC = () => {
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
+    cancelSuggestions,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
   } = useChapterSuggestions({
-    currentChapter,
-    currentChapterId,
+    currentUnit: currentChapter || undefined,
     story,
     systemPrompt,
     activeWritingConfig,
+    isWritingAvailable: roleAvailability.writing,
     updateChapter,
     viewMode,
     setChatMessages,
     getErrorMessage,
   });
+
+  const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
+    useAiActions({
+      currentUnit: currentChapter || undefined,
+      story,
+      prompts,
+      isEditingAvailable: roleAvailability.editing,
+      isWritingAvailable: roleAvailability.writing,
+      checkedSourcebookIds: Array.from(checkedEntries),
+      updateChapter,
+      setChatMessages,
+      getErrorMessage,
+    });
 
   const {
     handleFormat,
@@ -231,35 +288,28 @@ const App: React.FC = () => {
     selectChapter,
     setIsSidebarOpen,
     setEditorSettings,
+    story,
+    currentProjectType: story.projectType,
     refreshStory,
     getErrorMessage,
+    recordHistoryEntry: pushExternalHistoryEntry,
   });
-
-  const requestToolCallLoopAccess = (
-    count: number
-  ): Promise<'stop' | 'continue' | 'unlimited'> => {
-    return new Promise((resolve) => {
-      setToolCallLoopDialog({
-        count,
-        resolver: (choice) => {
-          setToolCallLoopDialog(null);
-          resolve(choice);
-        },
-      });
-    });
-  };
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     systemPrompt,
     activeChatConfig,
+    isChatAvailable: roleAvailability.chat,
     allowWebSearch,
     currentChapterId,
+    currentChatId,
+    currentChapter: currentChapterContext,
     chatMessages,
     setChatMessages,
     isChatLoading,
     setIsChatLoading,
     refreshProjects,
     refreshStory,
+    pushExternalHistoryEntry,
     requestToolCallLoopAccess,
   });
 
@@ -270,6 +320,7 @@ const App: React.FC = () => {
   return (
     <ThemeProvider currentTheme={currentTheme}>
       <div
+        id="aq-app-root"
         className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
         style={
           {
@@ -281,7 +332,7 @@ const App: React.FC = () => {
           isSettingsOpen={isSettingsOpen}
           setIsSettingsOpen={setIsSettingsOpen}
           appSettings={appSettings}
-          setAppSettings={setAppSettings}
+          setAppSettings={handleSaveSettings}
           projects={projects}
           story={story}
           handleLoadProject={handleLoadProject}
@@ -293,9 +344,12 @@ const App: React.FC = () => {
           refreshProjects={refreshProjects}
           currentTheme={currentTheme}
           prompts={prompts}
+          instructionLanguages={instructionLanguages}
           isImagesOpen={isImagesOpen}
           setIsImagesOpen={setIsImagesOpen}
           updateStoryImageSettings={updateStoryImageSettings}
+          imageActionsAvailable={imageActionsAvailable}
+          recordHistoryEntry={pushExternalHistoryEntry}
           editorRef={editorRef}
           isCreateProjectOpen={isCreateProjectOpen}
           setIsCreateProjectOpen={setIsCreateProjectOpen}
@@ -310,7 +364,18 @@ const App: React.FC = () => {
             setIsImagesOpen,
             setIsDebugLogsOpen,
           }}
-          historyControls={{ undo, redo, canUndo, canRedo }}
+          historyControls={{
+            undo,
+            redo,
+            undoSteps,
+            redoSteps,
+            undoOptions,
+            redoOptions,
+            nextUndoLabel,
+            nextRedoLabel,
+            canUndo,
+            canRedo,
+          }}
           viewControls={{
             viewMode,
             setViewMode,
@@ -326,13 +391,19 @@ const App: React.FC = () => {
             setIsFormatMenuOpen,
             isMobileFormatMenuOpen,
             setIsMobileFormatMenuOpen,
+            onOpenImages: () => setIsImagesOpen(true),
           }}
-          aiControls={{ handleAiAction, isAiActionLoading }}
+          aiControls={{
+            handleAiAction,
+            isAiActionLoading,
+            isWritingAvailable: roleAvailability.writing,
+          }}
           modelControls={{
             appSettings,
             setAppSettings,
             modelConnectionStatus,
             detectedCapabilities,
+            recheckUnavailableProviderIfStale,
           }}
           appearanceControls={{
             appearanceRef,
@@ -361,26 +432,37 @@ const App: React.FC = () => {
             handleReorderChapters,
             handleReorderBooks,
             handleSidebarAiAction,
+            isEditingAvailable: roleAvailability.editing,
             handleOpenImages,
             updateStoryMetadata,
+            checkedSourcebookIds: Array.from(checkedEntries),
+            onToggleSourcebook: handleToggleEntry,
+            isAutoSourcebookSelectionEnabled,
+            onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+            isSourcebookSelectionRunning,
+            onSourcebookMutated: pushExternalHistoryEntry,
           }}
           editorControls={{
             currentChapter,
             editorRef,
             editorSettings,
+            setEditorSettings,
             viewMode,
             updateChapter,
             suggestionControls: {
               continuations,
               isSuggesting,
               handleTriggerSuggestions,
+              cancelSuggestions,
               handleAcceptContinuation,
               isSuggestionMode,
               handleKeyboardSuggestionAction,
             },
             aiControls: {
               handleAiAction,
+              cancelAiAction,
               isAiActionLoading,
+              isWritingAvailable: roleAvailability.writing,
             },
             setActiveFormats,
             showWhitespace,
@@ -390,6 +472,8 @@ const App: React.FC = () => {
             isChatOpen,
             chatMessages,
             isChatLoading,
+            isChatAvailable: roleAvailability.chat,
+            activeChatConfig,
             systemPrompt,
             handleSendMessage,
             handleStopChat,
@@ -410,6 +494,7 @@ const App: React.FC = () => {
             allowWebSearch,
             setAllowWebSearch,
           }}
+          instructionLanguages={instructionLanguages}
         />
 
         <DebugLogs
@@ -423,13 +508,6 @@ const App: React.FC = () => {
           count={toolCallLoopDialog?.count ?? 0}
           theme={currentTheme}
           onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-        />
-
-        <ConfirmDialog
-          isOpen={confirmDialogState.isOpen}
-          message={confirmDialogState.message}
-          onConfirm={handleConfirm}
-          onCancel={handleCancel}
         />
       </div>
     </ThemeProvider>

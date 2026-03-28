@@ -4,8 +4,10 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test config unit so this responsibility stays isolated, testable, and easy to evolve.
 
+"""Defines the test config unit so this responsibility stays isolated, testable, and easy to evolve."""
+
+import logging
 import os
 import tempfile
 import json
@@ -84,3 +86,86 @@ class ConfigLoaderTest(TestCase):
             self.assertEqual(cfg["project_title"], "My Novel")
             self.assertEqual(cfg["format"], "markdown")
             self.assertEqual(cfg["chapters"], ["000-intro.md", "010-conflict.md"])
+
+
+class MachineSchemaValidationTest(TestCase):
+    """Tests for schema-based validation inside load_machine_config."""
+
+    def _minimal_valid_machine(self) -> dict:
+        return {
+            "openai": {
+                "models": [
+                    {
+                        "name": "test-model",
+                        "base_url": "https://api.example.com/v1",
+                        "api_key": "sk-test",
+                        "timeout_s": 30,
+                        "model": "gpt-4o",
+                    }
+                ],
+                "selected": "test-model",
+            }
+        }
+
+    def test_valid_machine_config_loads_without_warning(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "machine.json"
+            cfg_path.write_text(
+                json.dumps(self._minimal_valid_machine()), encoding="utf-8"
+            )
+            with self.assertLogs(
+                "augmentedquill.core.config", level=logging.WARNING
+            ) as cm:
+                # Trigger a different harmless warning so assertLogs doesn't fail
+                # when no warning is emitted.  We verify our warning is absent.
+                import logging as _logging
+
+                _logging.getLogger("augmentedquill.core.config").warning("sentinel")
+                load_machine_config(cfg_path)
+
+            # Our validation warning should not appear; only the sentinel should.
+            machine_warnings = [
+                m for m in cm.output if "invalid" in m or "Could not validate" in m
+            ]
+            self.assertEqual(machine_warnings, [])
+
+    def test_invalid_machine_config_emits_warning_but_returns_data(self):
+        """A machine config violating the schema emits a warning but still loads."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "machine.json"
+            # Missing required fields in the model object (name, base_url, etc.)
+            cfg_path.write_text(
+                json.dumps(
+                    {"openai": {"models": [{"bad_field": True}], "selected": ""}}
+                ),
+                encoding="utf-8",
+            )
+            with self.assertLogs(
+                "augmentedquill.core.config", level=logging.WARNING
+            ) as cm:
+                result = load_machine_config(cfg_path)
+
+            machine_warnings = [
+                m for m in cm.output if "machine config" in m and "invalid" in m
+            ]
+            self.assertTrue(
+                len(machine_warnings) >= 1,
+                msg=f"Expected a validation warning, got: {cm.output}",
+            )
+            # Config is returned regardless
+            self.assertIn("openai", result)
+
+    def test_empty_machine_config_skips_validation(self):
+        """An empty machine.json (fresh install) should not emit any warnings."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "machine.json"
+            cfg_path.write_text("{}", encoding="utf-8")
+            import logging as _logging
+
+            logger = _logging.getLogger("augmentedquill.core.config")
+            with self.assertLogs(logger, level=logging.WARNING) as cm:
+                logger.warning("sentinel")
+                load_machine_config(cfg_path)
+
+            machine_warnings = [m for m in cm.output if "machine config" in m]
+            self.assertEqual(machine_warnings, [])

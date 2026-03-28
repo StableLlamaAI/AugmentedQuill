@@ -4,13 +4,17 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the vitest.config unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the vitest.config unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['**/*.test.ts'],
+    // include both .ts and .tsx so component tests are discovered
+    include: ['**/*.test.ts', '**/*.test.tsx'],
   },
 });

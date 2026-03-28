@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test tool symmetry unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test tool symmetry unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
 import os
@@ -177,10 +178,12 @@ class TestChatToolsSymmetry(TestCase):
         data = r.json()
         content = json.loads(data["appended_messages"][0]["content"])
 
-        self.assertEqual(content["title"], "New Chapter Title")
-        self.assertEqual(content["summary"], "New Chapter Summary")
-        self.assertEqual(content["notes"], "New Chapter Notes")
-        self.assertEqual(content["conflicts"][0]["description"], "Conflict 1")
+        self.assertEqual(content["chapter"]["title"], "New Chapter Title")
+        self.assertEqual(content["chapter"]["summary"], "New Chapter Summary")
+        self.assertEqual(content["chapter"]["notes"], "New Chapter Notes")
+        self.assertEqual(
+            content["chapter"]["conflicts"][0]["description"], "Conflict 1"
+        )
 
     def test_chapter_metadata_persistence(self):
         self._bootstrap_project()

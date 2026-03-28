@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the main unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""
+"""Defines the main unit so this responsibility stays isolated, testable, and easy to evolve.
+
 Main application entry point for the AugmentedQuill API server.
 Includes global configuration setup, error handling, and router registration.
 """
@@ -17,17 +17,25 @@ import argparse
 from typing import Optional
 import os
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from augmentedquill.core.config import load_machine_config, STATIC_DIR, CONFIG_DIR
+from augmentedquill.core.config import (
+    load_machine_config,
+    STATIC_DIR,
+    ensure_runtime_user_config_files,
+)
+from augmentedquill.services.exceptions import ServiceError
+from augmentedquill.services.chat.chat_tool_decorator import write_tools_json_tempfile
 
 # Import API routers
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
 from augmentedquill.api.v1.projects import router as projects_router  # noqa: E402
 from augmentedquill.api.v1.chapters import router as chapters_router  # noqa: E402
-from augmentedquill.api.v1.story import router as story_router  # noqa: E402
+from augmentedquill.api.v1.story import router as story_router
+from augmentedquill.api.v1.checkpoints import router as checkpoints_router  # noqa: E402
 from augmentedquill.api.v1.chat import router as chat_router  # noqa: E402
 from augmentedquill.api.v1.debug import router as debug_router  # noqa: E402
 from augmentedquill.api.v1.sourcebook import router as sourcebook_router  # noqa: E402
@@ -41,11 +49,31 @@ def create_app() -> FastAPI:
     """
 
     app = FastAPI(title="AugmentedQuill")
+    ensure_runtime_user_config_files()
+
+    # Generate a temporary tools.json for any tooling that wants it.
+    # This file is intentionally not checked in; it is regenerated on each run.
+    app.state.tools_json_path = write_tools_json_tempfile()
+
+    # Dynamic CORS origin handler to support variable ports
+    async def get_origins(request: Request) -> list[str]:
+        origin = request.headers.get("origin")
+        if not origin:
+            return []
+
+        # Allow localhost/127.0.0.1 on any port in development context
+        # In a real production setup, one might restrict this further.
+        if origin.startswith(("http://localhost:", "http://127.0.0.1:")) or origin in (
+            "http://localhost",
+            "http://127.0.0.1",
+        ):
+            return [origin]
+        return []
 
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # In production, specify allowed origins
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -60,21 +88,37 @@ def create_app() -> FastAPI:
     api_v1_router.include_router(projects_router)
     api_v1_router.include_router(chapters_router)
     api_v1_router.include_router(story_router)
+    api_v1_router.include_router(checkpoints_router)
     api_v1_router.include_router(chat_router)
     api_v1_router.include_router(debug_router)
     api_v1_router.include_router(sourcebook_router)
 
     # JSON REST APIs to serve dynamic data to the frontend (no server-side injection in HTML)
-    @api_v1_router.get("/health")
-    async def api_health() -> dict:
-        return {"status": "ok"}
-
-    @api_v1_router.get("/machine")
-    async def api_machine() -> dict:
-        machine = load_machine_config(CONFIG_DIR / "machine.json")
-        return machine or {}
+    api_v1_router.add_api_route(
+        "/health", endpoint=lambda: {"status": "ok"}, methods=["GET"]
+    )
+    api_v1_router.add_api_route(
+        "/machine",
+        endpoint=lambda: load_machine_config() or {},
+        methods=["GET"],
+    )
 
     app.include_router(api_v1_router)
+
+    # Redirect root to the SPA entrypoint so `http://localhost:8000/` works.
+    @app.get("/")
+    async def _root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/static/dist/index.html")
+
+    # --------------- global exception handler ---------------
+    @app.exception_handler(ServiceError)
+    async def _service_error_handler(
+        _request: Request, exc: ServiceError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"ok": False, "detail": exc.detail},
+        )
 
     return app
 
@@ -83,6 +127,7 @@ app = create_app()
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Build Arg Parser."""
     parser = argparse.ArgumentParser(
         prog="augmentedquill",
         description="Run the AugmentedQuill FastAPI server",

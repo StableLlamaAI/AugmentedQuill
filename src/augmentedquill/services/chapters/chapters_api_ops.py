@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chapters api ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chapters api ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from augmentedquill.services.chapters.chapter_helpers import (
 
 
 def _resolve_title(path: Path, chapter_entry: dict) -> str:
+    """Resolve Title."""
     raw_title = (chapter_entry.get("title") or "").strip()
     if raw_title and raw_title.lower() != "[object object]":
         return raw_title
@@ -39,6 +41,7 @@ def _normalize_conflicts(conflicts: list) -> list:
 def build_chapter_entry(
     idx: int, path: Path, story: dict, files: list[tuple[int, Path]]
 ) -> dict:
+    """Build Chapter Entry."""
     chapter_entry = _get_chapter_metadata_entry(story, idx, path, files) or {}
     conflicts = _normalize_conflicts(chapter_entry.get("conflicts") or [])
 
@@ -67,6 +70,7 @@ def list_chapters_payload(active: Path | None) -> list[dict]:
 
 
 def chapter_detail_payload(active: Path | None, chap_id: int, path: Path) -> dict:
+    """Chapter Detail Payload."""
     files = _scan_chapter_files()
     story = load_story_config((active / "story.json") if active else None) or {}
     base = build_chapter_entry(chap_id, path, story, files)
@@ -82,6 +86,7 @@ def chapter_detail_payload(active: Path | None, chap_id: int, path: Path) -> dic
 
 
 def reorder_chapters_in_project(active: Path, payload: dict) -> None:
+    """Reorder Chapters In Project."""
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     project_type = story.get("project_type", "novel")
@@ -89,6 +94,7 @@ def reorder_chapters_in_project(active: Path, payload: dict) -> None:
     if project_type == "series":
         book_id = payload.get("book_id")
         if not book_id:
+            # Check if this project is a series but the request came without book_id
             raise ValueError("book_id required for series projects")
 
         chapter_ids = payload.get("chapter_ids", [])
@@ -360,6 +366,7 @@ def reorder_chapters_in_project(active: Path, payload: dict) -> None:
 
 
 def reorder_books_in_project(active: Path, payload: dict) -> None:
+    """Reorder Books In Project."""
     book_ids = payload.get("book_ids", [])
     if not isinstance(book_ids, list):
         raise ValueError("book_ids must be a list")

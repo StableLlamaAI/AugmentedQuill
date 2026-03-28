@@ -8,12 +8,15 @@ The Sourcebook is your story's encyclopedia. It is crucial for keeping both you 
 
 The Sourcebook list lives at the bottom of the left sidebar, below the chapter list. It shows every entry in the current project as a scrollable list. Each row displays the category icon, the entry name, and (on hover) a floating preview tooltip with the description excerpt and associated image.
 
-| Control                         | Description                                                                                                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **+** (Plus icon) in the header | Opens the **Sourcebook Entry Dialog** to create a new entry.                                                                                                         |
-| **Search / filter** text field  | Type to filter the list in real time by name, category name, or any synonym. Useful in large world-building projects with dozens or hundreds of entries.             |
-| **Entry row** (click)           | Opens the entry in the Sourcebook Entry Dialog for editing.                                                                                                          |
-| **Hover tooltip**               | Appears automatically when you hover an entry — shows the category badge, description preview, and primary image thumbnail (if any) without opening the full dialog. |
+| Control                         | Description                                                                                                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **+** (Plus icon) in the header | Opens the **Sourcebook Entry Dialog** to create a new entry.                                                                                                                |
+| **Auto** checkbox in header     | Turns automatic sourcebook relevance selection on or off. When enabled, a background AI helper updates which entries are checked based on the chapter text.                 |
+| **Spinning icon** next to Auto  | Appears while the automatic relevance helper is running.                                                                                                                    |
+| **Search / filter** text field  | Type to filter the list in real time by name, category name, or any synonym. Useful in large world-building projects with dozens or hundreds of entries.                    |
+| **Entry row** (click)           | Opens the entry in the Sourcebook Entry Dialog for editing.                                                                                                                 |
+| **Include/Exclude** (Checkbox)  | Toggle whether this entry is explicitly included in the AI context. These checkboxes are disabled (greyed out) while **Auto** is enabled, but still show current selection. |
+| **Hover tooltip**               | Appears automatically when you hover an entry — shows the category badge, description preview, and primary image thumbnail (if any) without opening the full dialog.        |
 
 ---
 
@@ -67,6 +70,8 @@ This panel shows thumbnail images currently linked to this entry. Use images to 
 
 A large, resizable textarea where you write all the details about this entry that the AI should know — personality, history, rules, quirks, or appearance. There is no length limit; write as much or as little as the story needs. The content of this field is included in the AI context whenever this entry is relevant.
 
+This usually works best after you have rough story notes and a preliminary summary, but before heavy chapter drafting. CHAT uses Sourcebook material to maintain logic, while WRITING and EDITING receive relevant entries as read-only context.
+
 ### Dialog Footer
 
 | Button                                                                                                                      | Description                                                                                               |
@@ -93,6 +98,21 @@ Images shown here are managed in the [Project Images](06_project_images.md) dial
 ## Why it Matters
 
 The Sourcebook keeps every collaborator and AI call referring to the same canonical lore. A well-maintained Sourcebook is the single most effective thing you can do to prevent the AI from hallucinating wrong names, places, and world rules. Updating descriptions, pulling in new visuals, or reorganizing categories here means every writing session and AI prompt stays on-model.
+
+## Automatic Selection Mode
+
+The **Auto** checkbox in the Sourcebook header controls whether a dedicated AI helper should continuously select relevant entries for the current chapter.
+
+- **Auto enabled**:
+  - The app periodically asks the model which entries are relevant to the current chapter text.
+  - Entry checkboxes become read-only (greyed out) so the automatic selection remains authoritative.
+  - The checkmarks still update and remain visible, so you can always see what the model selected.
+  - A spinning status icon appears beside **Auto** while that request is currently running.
+- **Auto disabled**:
+  - The automatic relevance helper is not run.
+  - Entry checkboxes become editable again so you can choose entries manually.
+
+Mouse-over tooltips on the **Auto** control, spinner, and disabled checkboxes explain this behavior directly in the UI.
 
 ---
 

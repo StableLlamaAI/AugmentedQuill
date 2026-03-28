@@ -4,9 +4,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the machine unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import { MachineConfigResponse } from '../apiTypes';
+/**
+ * Defines the machine unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
+import { MachineConfigResponse, MachinePresetsResponse } from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const machineApi = {
@@ -62,6 +65,13 @@ export const machineApi = {
         body: JSON.stringify(payload),
       },
       'Failed to test model'
+    );
+  },
+  getPresets: async () => {
+    return fetchJson<MachinePresetsResponse>(
+      '/machine/presets',
+      undefined,
+      'Failed to load model presets'
     );
   },
 };

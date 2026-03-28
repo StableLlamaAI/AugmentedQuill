@@ -4,33 +4,16 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test story settings unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import os
+"""Defines the test story settings unit so this responsibility stays isolated, testable, and easy to evolve."""
+
 import json
-import tempfile
 from pathlib import Path
-from unittest import TestCase
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
+from .api_test_case import ApiTestCase
 
 
-class StorySettingsTest(TestCase):
-    def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.client = TestClient(app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+class StorySettingsTest(ApiTestCase):
 
     def _make_project(self, name: str = "art_project") -> Path:
         ok, msg = select_project(name)
@@ -105,3 +88,13 @@ class StorySettingsTest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("No active project", response.json()["detail"])
+
+    def test_post_story_settings_rejects_invalid_json(self):
+        self._make_project("bad_json_project")
+        response = self.client.post(
+            "/api/v1/story/settings",
+            content="{bad",
+            headers={"content-type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Invalid JSON body", response.json().get("detail", ""))

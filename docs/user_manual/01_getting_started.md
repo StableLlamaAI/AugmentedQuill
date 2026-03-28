@@ -2,15 +2,24 @@
 
 AugmentedQuill is designed to be a seamless extension of your creative process. It combines a traditional writing environment with powerful AI tools that understand your story's context.
 
+> Your story belongs to you. AugmentedQuill keeps you in the driver seat: every beat, character voice, and plot decision is always yours. AI is here as a collaborator—to brainstorm, refine, and ghostwrite in ways that match your intent, not replace it.
+
+## Important Limits (As of 2026)
+
+- AugmentedQuill is local-first and not designed for public internet deployment without adding your own security layer.
+- No built-in user authentication or per-project access control exists. Treat the running instance as trusted local software.
+- No external editor sync is provided; project data is kept in local folders (e.g., `data/projects/`).
+- Accessibility support is currently not implemented (no dedicated keyboard shortcuts, ARIA, screen-reader enhancements).
+
 ## Core Concepts
 
 Before diving in, it's helpful to understand how AugmentedQuill organizes your work:
 
-- **Projects**: A project is the container for your entire book or story. It holds everything related to that specific work.
+- **Projects**: A project is the container for your entire short story, novel, or series. It holds everything related to that specific work.
 - **Story Metadata**: The overarching information about your project — the title, synopsis, style tags, and notes that guide the AI.
-- **Chapters**: The actual prose of your story, broken down into manageable sections. In a series, chapters live inside books.
+- **Chapters**: The actual prose of your story. A short story exposes one chapter-like writing unit, a novel uses a flat chapter list, and a series stores chapters inside books.
 - **Sourcebook**: Your story's encyclopedia. This is where you keep track of characters, locations, lore, items, and other important details. The AI uses this to stay consistent.
-- **Chat Assistant**: Your AI co-writer. You can brainstorm, ask for suggestions, or have it generate text based on your instructions and the context of your story.
+- **Chat Assistant**: Your AI coordinator. You can brainstorm, ask for suggestions, let it maintain metadata, or let it delegate prose writing to WRITING and prose refinement to EDITING.
 
 ## The Main Interface
 
@@ -20,7 +29,7 @@ When you open AugmentedQuill, you'll be greeted by the main writing environment.
 
 1. **Left Sidebar** — Your project's control center. Scroll through it to find:
    - **Story Metadata**: The story title, summary, style tags, and LLM-visible notes at a glance. Click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon to open the full Metadata Editor.
-   - **Chapters** (or Books & Chapters in a series): The navigation list for your prose. Click any entry to open it in the editor; drag entries to reorder them.
+   - **Chapters** (or Books & Chapters in a series): The navigation list for your prose. In a short story this shows the single writing unit; in other project types it shows the active chapter structure. Click any entry to open it in the editor; drag entries to reorder them where supported.
    - **Sourcebook**: A searchable list of every character, location, and lore entry in your world.
 
 2. **Main Area (The Editor)** — The central writing canvas. It shows the active chapter title and body, along with the AI suggestion footer at the bottom.
@@ -61,13 +70,18 @@ On mobile a single **View** dropdown (showing the current mode and a chevron) co
 
 - **B** (Bold): Wraps the selected text in `**bold**` markers.
 - **I** (Italic): Wraps the selection in `_italic_` markers.
-- **Link** (<img src="assets/edit-2.svg" alt="Link icon" width="16" height="16" style="vertical-align:text-bottom;" />): Inserts a `[text](url)` link skeleton.
+- **Image**: Opens the project image picker and inserts an `![alt](url)` tag at the cursor.
 - **H1**, **H2**, **H3**: Prepend the appropriate heading level to the selected line.
 - **Quote** (blockquote icon): Inserts a `> ` blockquote prefix.
 - **List** (bullet list icon): Starts an unordered `- ` list.
 - **Numbered List** (numbered list icon): Starts an ordered `1. ` list.
+- **Link** (<img src="assets/edit-2.svg" alt="Link icon" width="16" height="16" style="vertical-align:text-bottom;" />): Inserts a `[text](url)` link skeleton.
+- **Footnote** (hash icon): Inserts a numbered footnote reference and a matching definition block.
+- **Code Block** (code icon): Wraps the selection in a fenced code block ` ``` … ``` `.
+- **Subscript** / **Superscript**: Wraps the selection in `~…~` or `^…^`.
+- **Strikethrough**: Wraps the selection in `~~…~~`.
 
-On medium screens the heading and list buttons collapse into a **Format** dropdown (the <img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon with chevron).
+On medium screens the less common buttons collapse into a **Format** dropdown (the <img src="assets/type.svg" alt="Type icon" width="16" height="16" style="vertical-align:text-bottom;" /> Type icon with chevron). See [The Writing Interface](03_writing_interface.md#supported-markdown-elements) for the full list of all supported markdown elements, including tables and inline code.
 
 **Chapter AI** — Two quick actions that call the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> [WRITING model](02_projects_and_settings.md#the-three-ai-models) on the current chapter:
 

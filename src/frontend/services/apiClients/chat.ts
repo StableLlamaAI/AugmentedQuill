@@ -4,10 +4,17 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { ChatSession } from '../../types';
-import { ChatApiMessage, ChatToolExecutionResponse } from '../apiTypes';
+import {
+  ChatApiMessage,
+  ChatToolBatchMutationResponse,
+  ChatToolExecutionResponse,
+} from '../apiTypes';
 import { fetchJson } from './shared';
 
 export const chatApi = {
@@ -58,6 +65,7 @@ export const chatApi = {
     messages: ChatApiMessage[];
     active_chapter_id?: number;
     model_name?: string;
+    chat_id?: string;
   }) => {
     return fetchJson<ChatToolExecutionResponse>(
       '/chat/tools',
@@ -67,6 +75,26 @@ export const chatApi = {
         body: JSON.stringify(payload),
       },
       'Failed to execute chat tools'
+    );
+  },
+
+  undoToolBatch: async (batchId: string) => {
+    return fetchJson<ChatToolBatchMutationResponse>(
+      `/chat/tools/undo/${encodeURIComponent(batchId)}`,
+      {
+        method: 'POST',
+      },
+      'Failed to undo AI tool batch'
+    );
+  },
+
+  redoToolBatch: async (batchId: string) => {
+    return fetchJson<ChatToolBatchMutationResponse>(
+      `/chat/tools/redo/${encodeURIComponent(batchId)}`,
+      {
+        method: 'POST',
+      },
+      'Failed to redo AI tool batch'
     );
   },
 };

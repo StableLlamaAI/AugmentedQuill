@@ -1,6 +1,21 @@
 # Projects and Settings
 
-To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has two main tabs: **Projects** and **Machine Settings**.
+To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has three main tabs: **Projects**, **Machine Settings**, and **About**.
+
+## The About Tab
+
+The About tab provides version and runtime information about AugmentedQuill and the environment it is running in:
+
+- **Version** (from `src/frontend/package.json`)
+- **Git revision** (short commit hash)
+- **Built** timestamp
+- **Python version** (build environment)
+- **Node version** (build environment)
+- **Browser user agent** (runtime client browser)
+- **License** and **copyright** notice
+- **GitHub project** link
+
+This tab is useful for troubleshooting, bug reports, and confirming exactly which code and dependencies are in use.
 
 ## The Projects Tab
 
@@ -22,10 +37,11 @@ Three buttons sit above the project list:
 
 Each project in the list shows:
 
-- **Project name** — click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon next to the name to edit it inline. A text field appears; press **Enter** or click the **Save** icon to confirm. The name change takes effect on disk immediately.
+- **Project name** — click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon next to the name to edit it inline. A text field appears; press **Enter** or click the **Save** icon to confirm. The name change takes effect on disk immediately. While editing you can also change the **Project Language** using the adjacent dropdown.
 - **Active badge** — the currently loaded project has an "Active" label in place of the Open button.
 - **Project type selector** — a `<select>` dropdown that lets you convert the current type (Short Story → Novel → Series or any combination). Rules apply (see [Chapters and Books](04_chapters_and_books.md#story-types-and-when-to-upgrade) for the full conversion rules). When a conversion is blocked because of too much content, the blocked option shows "Too many items" and is disabled.
-- **Export** (↓ Download icon) — downloads a `.zip` archive of the project that you can share, move to another computer, or use as a backup.
+- **Export (EPUB)** (<img src="assets/book.svg" alt="Book icon" width="16" height="16" style="vertical-align:text-bottom;" /> Book icon) — compiles and downloads the project's contents as a formatted `.epub` e-book.
+- **Export (ZIP)** (<img src="assets/download.svg" alt="Download icon" width="16" height="16" style="vertical-align:text-bottom;" /> Download icon) — downloads a `.zip` archive of the project that you can share, move to another computer, or use as a backup.
 - **Open** button (secondary, non-active projects only) — loads that project and closes the Settings dialog.
 - **Delete** (<img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />) — permanently removes the project after a confirmation prompt. This cannot be undone.
 
@@ -35,14 +51,41 @@ Clicking **New Project** opens a small dialog:
 
 `[SCREENSHOT: The Create Project dialog showing the name field and three project type radio buttons]`
 
-| Field                        | Description                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Project Name** text field  | Type the title of your new story. The **Create Project** button stays disabled until you enter at least one character.   |
-| **Short Story** radio button | Best for poems, flash fiction, or a single-scene story — gives you exactly one chapter to work in.                       |
-| **Novel** radio button       | Standard multi-chapter structure. Use this for any full-length story.                                                    |
-| **Series** radio button      | Chapters are organized inside books. Choose this for a trilogy, serial fiction, or any work that spans multiple volumes. |
-| **Cancel**                   | Closes the dialog without creating anything.                                                                             |
-| **Create Project**           | Creates the project and loads it immediately.                                                                            |
+| Field                         | Description                                                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Project Name** text field   | Type the title of your new story. The **Create Project** button stays disabled until you enter at least one character.                   |
+| **Project Language** dropdown | Choose the language used for LLM instructions; available options come from the bundled `instructions.json` file (e.g. English, Spanish). |
+| **Short Story** radio button  | Best for poems, flash fiction, or a single-scene story — gives you exactly one chapter to work in.                                       |
+| **Novel** radio button        | Standard multi-chapter structure. Use this for any full-length story.                                                                    |
+| **Series** radio button       | Chapters are organized inside books. Choose this for a trilogy, serial fiction, or any work that spans multiple volumes.                 |
+| **Cancel**                    | Closes the dialog without creating anything.                                                                                             |
+| **Create Project**            | Creates the project and loads it immediately.                                                                                            |
+
+---
+
+## Project Checkpoints
+
+Project Checkpoints allow you to save the entire state of your project at a specific point in time and return to it later. This is useful before making major changes to your story structure or when experimenting with different plot directions.
+
+### Managing Checkpoints
+
+The Checkpoints menu is located in the top navigation bar, represented by a <img src="assets/save.svg" alt="Save icon" width="16" height="16" style="vertical-align:text-bottom;" /> **Checkpoints** button.
+
+- **Store Current State**: Creates a new snapshot of your project. This includes all chapters, books, sourcebook entries, and settings.
+- **Load Checkpoint**: Replaces the current project state with a previously saved version.
+  - _Note: Loading a checkpoint will overwrite your current unsaved changes. The application will prompt you with a warning if you have unsaved work._
+- **Delete Checkpoint**: Permanently removes a stored snapshot from your machine.
+
+### What is saved?
+
+Checkpoints capture:
+
+- Story metadata (title, summary, style tags).
+- All manuscript content (chapters and books).
+- The entire Sourcebook.
+- Project-specific settings.
+
+_Note: Chat histories and generated images are currently not included in project checkpoints to keep snapshot sizes manageable._
 
 ---
 
@@ -57,19 +100,39 @@ The Machine Settings tab is where you configure the AI models (providers) that p
 AugmentedQuill uses three distinct model roles, each optimized for a specific part of the writing process. You can assign a different provider to each role based on its strengths. The application uses color hints everywhere in the UI to help you see which role is active.
 
 1. **WRITING Model** — <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Violet**
-   - Called when generating new prose: **Extend Chapter**, **Rewrite Chapter**, and **Suggest Next Paragraph**.
+   - Called when generating new prose: **Extend Chapter**, **Rewrite Chapter**, **Suggest Next Paragraph**, and any story text delegated from chat.
    - Optimized for creativity, narrative flow, and honoring your style tags.
+   - Starts each request cold; it only knows what the current prompt contains.
+   - This is the only model that should create fresh story prose.
 
 2. **EDITING Model** — <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Fuchsia**
    - Called for structured text tasks: writing or updating chapter summaries, story summaries, and the **AI Write / AI Update / AI Rewrite** summary buttons in the Metadata Editor.
    - Optimized for accuracy, conciseness, and following specific instructions without adding new plot points.
+   - Starts each request cold; it must rely on the current prompt and any tool results it fetches.
+   - It may refine existing prose, but if additional story content is needed it should delegate that work to WRITING.
 
 3. **CHAT Model** — <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> **Blue**
    - Powers the AI Chat Assistant panel.
    - Supports tool calls (creating Sourcebook entries, managing chapters, generating images, etc.) and optionally web search.
    - Optimized for conversation, reasoning, and multi-step actions.
+   - Uses only the current chat session history plus tool results from this session; starting a new chat does not carry over older chat sessions.
+   - Acts as the workflow brain: it keeps metadata and sourcebook information aligned, decides what step comes next, and delegates prose work to WRITING or EDITING.
 
 By separating these tasks you can use a highly creative model for writing, a precise model for editing, and a fast conversational model for chatting — mix and match according to your budget and needs.
+
+### Recommended Story Workflow
+
+AugmentedQuill treats the following sequence as the default workflow, not as a rigid law:
+
+1. Write story notes, ideas, and constraints in markdown.
+2. Set the title and style tags.
+3. Draft a preliminary story summary.
+4. Build the Sourcebook.
+5. Outline chapters and write chapter notes before prose.
+6. Track conflicts and expected resolutions, then refine chapter summaries.
+7. Write the actual prose in the appropriate structure: the single chapter for a short story, chapter by chapter for a novel, or book by book for a series.
+
+The CHAT model may revisit earlier steps whenever a later discovery reveals a missing setup detail.
 
 ### Provider List
 
@@ -80,8 +143,9 @@ The left column of the Machine Settings tab shows all configured providers as cl
 - A **connection status dot**: green = connected, red = failed, grey = not yet tested.
 - A **model status dot**: shows whether the configured model ID was confirmed available.
 - **Vision** (<img src="assets/eye.svg" alt="Eye icon" width="16" height="16" style="vertical-align:text-bottom;" />) and/or **Function Calling** (<img src="assets/wand.svg" alt="Wand icon" width="16" height="16" style="vertical-align:text-bottom;" />) capability icons when those features are enabled.
+- Duplication icon (<img src="assets/copy-plus.svg" alt="Copy Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />): appears on hover over the provider card.
 
-Click the **+** button above the list to add a new provider. Click any card to select it for editing.
+Click the **+** button above the list to add a new provider from scratch. Click the **Duplicate** icon (<img src="assets/copy-plus.svg" alt="Copy Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />) on an existing provider's card to create an exact copy of its configuration (including prompt overrides). This is useful for testing different temperatures or prompts on the same model. Click any card to select it for editing.
 
 ### Provider Configuration Form
 
@@ -169,7 +233,13 @@ AugmentedQuill has 22 built-in prompts, split into two groups:
 | AI Action: Extend Chapter User      | WRITING |
 | AI Action: Rewrite Chapter User     | WRITING |
 
-Each textarea shows the built-in default as its placeholder text. Type into any textarea to override only that prompt for this provider. Clear the field to revert to the default. Role badges (violet for WRITING, fuchsia for EDITING, blue for CHAT) beside each label remind you which model role will use that prompt.
+Each textarea shows the built-in default as its placeholder text. Type into any textarea to override only that prompt for this provider.
+
+To keep the override list manageable, you can choose which prompt you want to override from a dropdown menu and then click **Add**. Once added, the override appears in the list as an editable textarea.
+
+If you clear a prompt override (leaving it empty) and click **Save & Close**, that override is removed entirely and the system defaults are used again.
+
+Role badges (violet for WRITING, fuchsia for EDITING, blue for CHAT) beside each label remind you which model role will use that prompt.
 
 #### Deleting a Provider
 

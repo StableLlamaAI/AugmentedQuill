@@ -4,10 +4,14 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, AppTheme, ChatSession } from '../../types';
+/**
+ * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import {
   Loader2,
   Bot,
@@ -27,10 +31,13 @@ import { WebSearchResults, VisitPageResult } from './components/ToolResultViews'
 import { ChatHeader } from './components/ChatHeader';
 import { ChatHistoryPanel } from './components/ChatHistoryPanel';
 import { ChatComposer } from './components/ChatComposer';
+import { estimateChatContextUsage } from './chatContextBudget';
 
 interface ChatProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  isModelAvailable?: boolean;
+  activeChatConfig: LLMConfig;
   systemPrompt: string;
   onSendMessage: (text: string) => void;
   onStop?: () => void;
@@ -52,9 +59,33 @@ interface ChatProps {
   onToggleWebSearch: (val: boolean) => void;
 }
 
+type ToolCallArgumentsProps = {
+  args: unknown;
+};
+
+const ToolCallArguments: React.FC<ToolCallArgumentsProps> = React.memo(({ args }) => {
+  const formattedArgs = useMemo(() => {
+    if (typeof args === 'string') return args;
+
+    try {
+      return JSON.stringify(args, null, 2);
+    } catch {
+      return String(args);
+    }
+  }, [args]);
+
+  return (
+    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
+      {formattedArgs}
+    </div>
+  );
+});
+
 export const Chat: React.FC<ChatProps> = ({
   messages,
   isLoading,
+  isModelAvailable = true,
+  activeChatConfig,
   systemPrompt,
   onSendMessage,
   onStop,
@@ -75,19 +106,25 @@ export const Chat: React.FC<ChatProps> = ({
   allowWebSearch,
   onToggleWebSearch,
 }) => {
-  const [input, setInput] = useState('');
+  const chatDisabledReason =
+    'Chat is unavailable because no working CHAT model is configured.';
+
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
 
+  const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
+    Record<string, boolean>
+  >({});
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-400';
@@ -105,20 +142,40 @@ export const Chat: React.FC<ChatProps> = ({
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Consider "at bottom" if within 100px of the actual bottom to be more forgiving
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      // Consider "at bottom" if within 50px of the actual bottom to handle fast layouts
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
       isAtBottomRef.current = isAtBottom;
     }
   };
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    if (!scrollContainerRef.current) return;
+    const { scrollHeight } = scrollContainerRef.current;
+    scrollContainerRef.current.scrollTo({
+      top: scrollHeight,
+      behavior,
+    });
   };
 
   useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return undefined;
+
+    // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
+    const observer = new MutationObserver(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom(isLoading ? 'auto' : 'smooth');
+      }
+    });
+
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+
+    // Ensure we scroll immediately if a basic dependency change caused an update too
     if (isAtBottomRef.current) {
-      scrollToBottom();
+      scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
+
+    return () => observer.disconnect();
   }, [messages, isLoading, editingMessageId]);
 
   // Always scroll to bottom on session switch
@@ -131,28 +188,17 @@ export const Chat: React.FC<ChatProps> = ({
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
-  // Handle textarea auto-resize
-  useEffect(() => {
+  const handleSubmit = (text: string) => {
+    if (isLoading || !isModelAvailable) return;
+
+    onSendMessage(text);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      const maxHeight = window.innerHeight * 0.5;
-      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
-      textareaRef.current.style.height = `${newHeight}px`;
     }
-  }, [input]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSendMessage(input.trim());
-      setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-      // Force scroll to bottom on user message
-      isAtBottomRef.current = true;
-      setTimeout(() => scrollToBottom('auto'), 0);
-    }
+    // Force scroll to bottom on user message
+    isAtBottomRef.current = true;
+    setTimeout(() => scrollToBottom('auto'), 0);
   };
 
   const startEditing = (msg: ChatMessage) => {
@@ -179,16 +225,31 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const lastMessage = messages[messages.length - 1];
-  const canRegenerate = !isLoading && lastMessage?.role === 'model';
+  const canRegenerate = !isLoading && isModelAvailable && lastMessage?.role === 'model';
+  const contextUsage = useMemo(
+    () =>
+      estimateChatContextUsage({
+        systemInstruction: systemPrompt,
+        messages,
+        config: activeChatConfig,
+      }),
+    [activeChatConfig, messages, systemPrompt]
+  );
 
   return (
     <div
+      id="chat-panel"
       className={`flex flex-col h-full border-l ${bgMain} ${borderMain} ${textMain}`}
     >
       <ChatHeader
         title={isIncognito ? 'Incognito Chat' : 'Writing Partner'}
+        headerBg={headerBg}
+        isLightTheme={isLight}
         currentSessionId={currentSessionId}
         isIncognito={isIncognito}
+        contextUsage={contextUsage}
+        isDisabled={!isModelAvailable}
+        disabledReason={chatDisabledReason}
         showHistory={showHistory}
         setShowHistory={setShowHistory}
         showSystemPrompt={showSystemPrompt}
@@ -203,6 +264,8 @@ export const Chat: React.FC<ChatProps> = ({
         <ChatHistoryPanel
           sessions={sessions}
           currentSessionId={currentSessionId}
+          isDisabled={!isModelAvailable}
+          disabledReason={chatDisabledReason}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
           onDeleteAllSessions={onDeleteAllSessions}
@@ -222,6 +285,8 @@ export const Chat: React.FC<ChatProps> = ({
             onChange={(e) => setTempSystemPrompt(e.target.value)}
             className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
             placeholder="Define the AI's persona and rules..."
+            disabled={!isModelAvailable}
+            title={!isModelAvailable ? chatDisabledReason : 'System Instruction'}
           />
           <div className="flex justify-end space-x-2">
             <Button
@@ -229,6 +294,8 @@ export const Chat: React.FC<ChatProps> = ({
               size="sm"
               variant="ghost"
               onClick={() => setShowSystemPrompt(false)}
+              disabled={!isModelAvailable}
+              title={!isModelAvailable ? chatDisabledReason : 'Cancel'}
             >
               Cancel
             </Button>
@@ -237,6 +304,8 @@ export const Chat: React.FC<ChatProps> = ({
               size="sm"
               variant="primary"
               onClick={handleSystemPromptSave}
+              disabled={!isModelAvailable}
+              title={!isModelAvailable ? chatDisabledReason : 'Update Persona'}
             >
               Update Persona
             </Button>
@@ -251,6 +320,18 @@ export const Chat: React.FC<ChatProps> = ({
           isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
       >
+        {!isModelAvailable && (
+          <div
+            className={`rounded-md border px-3 py-2 text-xs ${
+              isLight
+                ? 'border-amber-500/40 bg-amber-100/50 text-amber-700'
+                : 'border-amber-500/40 bg-amber-900/20 text-amber-300'
+            }`}
+          >
+            {chatDisabledReason}
+          </div>
+        )}
+
         {messages.length === 0 && !showSystemPrompt && (
           <div className="text-center text-brand-gray-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
@@ -263,7 +344,7 @@ export const Chat: React.FC<ChatProps> = ({
 
         {messages.map((msg, i) => (
           <div
-            key={msg.id}
+            key={`${msg.id || 'msg'}-${i}`}
             className={`group flex items-start space-x-3 ${
               msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
             }`}
@@ -349,6 +430,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   size="sm"
                                   variant="secondary"
                                   onClick={() => {
+                                    if (!isModelAvailable) return;
                                     // Extract project name from either raw text or JSON message field
                                     let projectName = '';
                                     try {
@@ -373,6 +455,12 @@ export const Chat: React.FC<ChatProps> = ({
                                     }
                                   }}
                                   icon={<ArrowRight size={14} />}
+                                  disabled={!isModelAvailable}
+                                  title={
+                                    !isModelAvailable
+                                      ? chatDisabledReason
+                                      : 'Switch to New Project'
+                                  }
                                 >
                                   Switch to New Project
                                 </Button>
@@ -386,7 +474,17 @@ export const Chat: React.FC<ChatProps> = ({
                       {msg.thinking && (
                         <CollapsibleToolSection
                           title="Thinking Process"
-                          defaultExpanded={isLoading && i === messages.length - 1}
+                          isExpanded={
+                            thinkingProcessExpanded[msg.id] !== undefined
+                              ? thinkingProcessExpanded[msg.id]
+                              : isLoading && i === messages.length - 1
+                          }
+                          onExpandedChange={(next) =>
+                            setThinkingProcessExpanded((prev) => ({
+                              ...prev,
+                              [msg.id]: next,
+                            }))
+                          }
                         >
                           <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
                             {msg.thinking}
@@ -419,11 +517,7 @@ export const Chat: React.FC<ChatProps> = ({
                                 <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
                                   Call: {tc.name}
                                 </div>
-                                <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                  {typeof tc.args === 'string'
-                                    ? tc.args
-                                    : JSON.stringify(tc.args, null, 2)}
-                                </div>
+                                <ToolCallArguments args={tc.args} />
                               </div>
                             ))}
                           </div>
@@ -443,16 +537,24 @@ export const Chat: React.FC<ChatProps> = ({
                   } opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1`}
                 >
                   <button
-                    onClick={() => startEditing(msg)}
+                    onClick={() => {
+                      if (!isModelAvailable) return;
+                      startEditing(msg);
+                    }}
                     className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
-                    title="Edit"
+                    title={!isModelAvailable ? chatDisabledReason : 'Edit'}
+                    disabled={!isModelAvailable}
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
-                    onClick={() => onDeleteMessage(msg.id)}
+                    onClick={() => {
+                      if (!isModelAvailable) return;
+                      onDeleteMessage(msg.id);
+                    }}
                     className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
-                    title="Delete"
+                    title={!isModelAvailable ? chatDisabledReason : 'Delete'}
+                    disabled={!isModelAvailable}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -508,9 +610,14 @@ export const Chat: React.FC<ChatProps> = ({
                 size="sm"
                 variant="secondary"
                 onClick={onRegenerate}
+                disabled={!isModelAvailable}
                 icon={<RefreshCw size={12} />}
                 className="text-xs py-1 h-7 border-dashed"
-                title="Regenerate last response (CHAT model)"
+                title={
+                  !isModelAvailable
+                    ? chatDisabledReason
+                    : 'Regenerate last response (CHAT model)'
+                }
               >
                 Regenerate last response
               </Button>
@@ -520,9 +627,9 @@ export const Chat: React.FC<ChatProps> = ({
 
         <ChatComposer
           textareaRef={textareaRef}
-          input={input}
-          setInput={setInput}
           isLoading={isLoading}
+          isModelAvailable={isModelAvailable}
+          disabledReason={chatDisabledReason}
           inputBg={inputBg}
           onSubmit={handleSubmit}
         />

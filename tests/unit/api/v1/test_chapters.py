@@ -4,34 +4,16 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test chapters unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import os
-import tempfile
+"""Defines the test chapters unit so this responsibility stays isolated, testable, and easy to evolve."""
+
 import json
 from pathlib import Path
-from unittest import TestCase
-
-from fastapi.testclient import TestClient
-
-from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
+from tests.unit.api.v1.api_test_case import ApiTestCase
 
 
-class ChaptersApiTest(TestCase):
-    def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.projects_root = Path(self.td.name) / "projects"
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.client = TestClient(app)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+class ChaptersApiTest(ApiTestCase):
 
     def _make_project_with_chapters(self, name: str = "novel") -> Path:
         ok, msg = select_project(name)

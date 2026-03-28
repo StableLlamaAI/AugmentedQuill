@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chapter tools unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chapter tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json as _json
 
@@ -16,7 +17,11 @@ from augmentedquill.services.chapters.chapter_helpers import (
     _get_chapter_metadata_entry,
     _scan_chapter_files,
 )
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 from augmentedquill.services.projects.project_helpers import (
     _chapter_content_slice,
     _project_overview,
@@ -35,8 +40,11 @@ from augmentedquill.services.projects.projects import (
     write_chapter_title,
 )
 
+_MAX_CHAPTER_CHARS = 8000
+
 
 def _overview_chapters():
+    """Overview Chapters."""
     ov = _project_overview()
     chapters = []
     if ov.get("project_type") == "series":
@@ -47,13 +55,101 @@ def _overview_chapters():
     return ov, chapters
 
 
+def _find_chapter(ov: dict, chap_id: int | None = None, book_id: str | None = None):
+    """Find a chapter record by ID and optional book_id."""
+    if chap_id is None:
+        return None, None
+
+    p_type = ov.get("project_type", "novel")
+    if p_type == "series":
+        for book in ov.get("books", []):
+            if book_id is not None and str(book.get("id")) != str(book_id):
+                continue
+            for chap in book.get("chapters", []):
+                if isinstance(chap, dict) and chap.get("id") == chap_id:
+                    return chap, book
+        return None, None
+
+    for chap in ov.get("chapters", []):
+        if isinstance(chap, dict) and chap.get("id") == chap_id:
+            return chap, None
+    return None, None
+
+
+def compose_current_chapter_state(payload: dict) -> dict | None:
+    """Compose centralized current-chapter state payload for tool injection and explicit call.
+
+    Returns only the minimal required fields:
+      - chapter_id
+      - chapter_title
+      - book_id (series only)
+
+    This ensures LLM tool is minimal and explicit additional data must be requested.
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    # Resolve IDs from explicit fields or current_chapter helper object
+    chap_id = payload.get("active_chapter_id")
+    book_id = payload.get("active_book_id")
+    if not isinstance(chap_id, int):
+        cc = payload.get("current_chapter")
+        if isinstance(cc, dict):
+            chap_id = cc.get("id")
+            if not isinstance(chap_id, int):
+                try:
+                    chap_id = int(chap_id)
+                except Exception:
+                    chap_id = None
+            if book_id is None:
+                book_id = cc.get("book_id")
+
+    if not isinstance(chap_id, int):
+        return None
+
+    ov, _ = _overview_chapters()
+    chap, book = _find_chapter(ov, chap_id=chap_id, book_id=book_id)
+    if not chap:
+        # fall back to minimal current_chapter object to avoid hidden context failure
+        cc = payload.get("current_chapter")
+        if isinstance(cc, dict) and cc.get("id") == chap_id:
+            fallback = {
+                "chapter_id": chap_id,
+                "chapter_title": cc.get("title"),
+            }
+            if "book_id" in cc:
+                fallback["book_id"] = cc.get("book_id")
+            return fallback
+        return None
+
+    state = {
+        "chapter_id": chap.get("id"),
+        "chapter_title": chap.get("title"),
+    }
+    if book:
+        state["book_id"] = book.get("id")
+
+    return state
+
+
 # ============================================================================
 # Tool Parameter Models
 # ============================================================================
 
 
 class GetChapterMetadataParams(BaseModel):
-    chap_id: int = Field(..., description="The chapter ID to get metadata for")
+    chap_id: int | None = Field(
+        None,
+        description="The chapter ID to get metadata for. If omitted and current is true, the active chapter is used.",
+    )
+    book_id: str | None = Field(
+        None,
+        description="Optional book id for series projects to narrow the chapter lookup.",
+    )
+    current: bool = Field(
+        False,
+        description="If true, return metadata for the current active chapter from payload rather than the explicit chap_id.",
+    )
 
 
 class UpdateChapterMetadataParams(BaseModel):
@@ -61,11 +157,12 @@ class UpdateChapterMetadataParams(BaseModel):
     title: str | None = Field(None, description="The chapter title")
     summary: str | None = Field(None, description="The chapter summary")
     notes: str | None = Field(None, description="Public notes about the chapter")
-    private_notes: str | None = Field(
-        None, description="Private notes about the chapter"
-    )
     conflicts: list | str | None = Field(
-        None, description="List of conflicts in the chapter (can be JSON string)"
+        None,
+        description=(
+            "List of conflicts in the chapter (can be JSON string). "
+            "Each conflict should include description, resolution, and optional resolved status."
+        ),
     )
 
 
@@ -79,12 +176,27 @@ class GetChapterContentParams(BaseModel):
         description="The chapter ID to get content for. If not provided, uses active chapter.",
     )
     start: int = Field(0, description="The starting character position")
-    max_chars: int = Field(8000, description="Maximum characters to return (1-8000)")
+    max_chars: int = Field(
+        _MAX_CHAPTER_CHARS,
+        description=f"Maximum characters to return (1-{_MAX_CHAPTER_CHARS})",
+    )
+
+
+class GetCurrentChapterParams(BaseModel):
+    """No parameters required, active chapter is inferred from context."""
+
+    pass
 
 
 class WriteChapterContentParams(BaseModel):
     chap_id: int = Field(..., description="The chapter ID to write content to")
     content: str = Field(..., description="The content to write")
+
+
+class ReplaceTextInChapterParams(BaseModel):
+    chap_id: int = Field(..., description="The chapter ID to edit")
+    old_text: str = Field(..., description="The exact literal text to replace")
+    new_text: str = Field(..., description="The new text to insert instead")
 
 
 class WriteChapterSummaryParams(BaseModel):
@@ -135,35 +247,117 @@ class DeleteChapterParams(BaseModel):
     confirm: bool = Field(False, description="Set to true to confirm deletion")
 
 
+class RecommendMetadataUpdatesParams(BaseModel):
+    story_summary: str | None = Field(
+        None,
+        description="Suggested replacement or refinement for the story summary.",
+    )
+    story_notes: str | None = Field(
+        None,
+        description="Suggested addition or revision for story-level notes.",
+    )
+    story_tags: list[str] | None = Field(
+        None,
+        description="Suggested story style tags if they should be revised.",
+    )
+    chapter_updates: list[dict] = Field(
+        default_factory=list,
+        description="Suggested chapter metadata changes such as summary, notes, conflicts, or reminders.",
+    )
+    sourcebook_updates: list[dict] = Field(
+        default_factory=list,
+        description="Suggested sourcebook additions or updates for CHAT to review and apply.",
+    )
+    rationale: str | None = Field(
+        None,
+        description="Short explanation of why these metadata changes are recommended.",
+    )
+
+
 # ============================================================================
 # Tool Implementations
 # ============================================================================
 
 
 @chat_tool(
-    description="Get metadata for a specific chapter including title, summary, notes, and conflicts."
+    description=(
+        "Get metadata for a specific chapter including title, summary, notes, and conflicts. "
+        "Conflicts are treated as current unresolved story threads that the assistant should prioritize when generating text."
+    ),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_chapter_metadata(
     params: GetChapterMetadataParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Metadata."""
+    ov, _ = _overview_chapters()
+
+    if params.current:
+        chap_id = payload.get("active_chapter_id")
+        book_id = payload.get("active_book_id")
+    else:
+        chap_id = params.chap_id
+        book_id = params.book_id
+
+    if not isinstance(chap_id, int):
+        return {"error": "chap_id is required unless current=true is set"}
+
+    chap, book = _find_chapter(ov, chap_id=chap_id, book_id=book_id)
+    if not chap:
+        return {"error": f"Chapter {chap_id} not found"}
+
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
-    _, path, _ = _chapter_by_id_or_404(params.chap_id)
-    meta = _get_chapter_metadata_entry(story, params.chap_id, path) or {}
-    return {
-        "title": meta.get("title", "") or path.name,
-        "summary": meta.get("summary", ""),
-        "notes": meta.get("notes", ""),
-        "conflicts": meta.get("conflicts") or [],
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    meta = _get_chapter_metadata_entry(story, chap_id, path) or {}
+
+    result = {
+        "chapter": {
+            "id": chap.get("id"),
+            "title": chap.get("title"),
+            "summary": chap.get("summary"),
+            "filename": chap.get("filename"),
+            "notes": meta.get("notes", ""),
+            "conflicts": meta.get("conflicts") or [],
+        },
+        "project_type": ov.get("project_type"),
     }
+
+    # Add lightweight size hints so callers can budget read calls
+    _, chap_path, _ = _chapter_by_id_or_404(chap_id)
+    try:
+        raw = chap_path.read_bytes()
+        char_count = len(raw.decode("utf-8", errors="replace"))
+        word_count = len(
+            chap_path.read_text(encoding="utf-8", errors="replace").split()
+        )
+        result["char_count"] = char_count
+        result["word_count"] = word_count
+    except OSError:
+        pass
+
+    if book:
+        result["current_book"] = {
+            "id": book.get("id"),
+            "title": book.get("title"),
+        }
+
+    return result
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, private_notes, conflicts)."
+    description=(
+        "Update metadata for a specific chapter (title, summary, notes, conflicts). "
+        "Chapter conflicts are treated as active story arcs; include any resolved status changes."
+    ),
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def update_chapter_metadata(
     params: UpdateChapterMetadataParams, payload: dict, mutations: dict
 ):
+    """Update Chapter Metadata."""
     conflicts = params.conflicts
     if isinstance(conflicts, str):
         try:
@@ -176,7 +370,6 @@ async def update_chapter_metadata(
         title=params.title,
         summary=params.summary,
         notes=params.notes,
-        private_notes=params.private_notes,
         conflicts=conflicts,
     )
     mutations["story_changed"] = True
@@ -184,11 +377,14 @@ async def update_chapter_metadata(
 
 
 @chat_tool(
-    description="Get summaries for all chapters in the project (across all books if series)."
+    description="Get summaries for all chapters in the project (across all books if series).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_chapter_summaries(
     params: GetChapterSummariesParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Summaries."""
     ov = _project_overview()
     p_type = ov.get("project_type", "novel")
 
@@ -204,18 +400,22 @@ async def get_chapter_summaries(
         if isinstance(chapter, dict):
             chap_id = chapter.get("id")
             title = chapter.get("title", "").strip() or f"Chapter {chap_id}"
-            summary = chapter.get("summary", "").strip()
-            if summary:
-                summaries.append(
-                    {"chapter_id": chap_id, "title": title, "summary": summary}
-                )
+            summary = chapter.get("summary", "")
+            summaries.append(
+                {"chapter_id": chap_id, "title": title, "summary": summary}
+            )
     return {"chapter_summaries": summaries}
 
 
-@chat_tool(description="Get content from a specific chapter with pagination support.")
+@chat_tool(
+    description="Get content from a specific chapter with pagination support.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="prose-read",
+)
 async def get_chapter_content(
     params: GetChapterContentParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Content."""
     chap_id = params.chap_id
     if chap_id is None:
         ac = payload.get("active_chapter_id")
@@ -225,12 +425,36 @@ async def get_chapter_content(
         return {"error": "chap_id is required"}
 
     start = max(0, params.start)
-    max_chars = max(1, min(8000, params.max_chars))
+    max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
     data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
     return data
 
 
-@chat_tool(description="Write content to a specific chapter.")
+@chat_tool(
+    name="get_current_chapter_id",
+    description="Get current application chapter identifier (active chapter id/title + optional book id).",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
+)
+async def get_current_chapter_id(
+    params: GetCurrentChapterParams, payload: dict, mutations: dict
+):
+    """Get Current Chapter ID state."""
+    state = compose_current_chapter_state(payload)
+    if not state:
+        return {"error": "active_chapter_id (or current_chapter object) is required"}
+    return state
+
+
+@chat_tool(
+    description=(
+        "Overwrite the ENTIRE content of a chapter. "
+        "WARNING: replaces all existing text – only use for short chapters or complete rewrites. "
+        "For targeted edits prefer replace_text_in_chapter or apply_chapter_replacements."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
 async def write_chapter_content(
     params: WriteChapterContentParams, payload: dict, mutations: dict
 ):
@@ -239,7 +463,144 @@ async def write_chapter_content(
     return {"message": f"Content written to chapter {params.chap_id} successfully"}
 
 
-@chat_tool(description="Write summary to a specific chapter.")
+@chat_tool(
+    description="Replace an exact literal string in a chapter with a new string. Better for small edits to avoid JSON truncation errors.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def replace_text_in_chapter(
+    params: ReplaceTextInChapterParams, payload: dict, mutations: dict
+):
+    # Retrieve current text
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    if params.old_text not in text:
+        return {
+            "error": "The exact old_text was not found in the chapter. Please ensure it matches exactly or use get_chapter_content to verify the exact string."
+        }
+
+    occurrences = text.count(params.old_text)
+    if occurrences > 1:
+        return {
+            "error": f"The old_text was found {occurrences} times. Please provide a more specific old_text to ensure only one instance is replaced, or replace them one by one."
+        }
+
+    new_content = text.replace(params.old_text, params.new_text, 1)
+    _write_chapter_content(params.chap_id, new_content)
+    mutations["story_changed"] = True
+    return {"message": f"Successfully replaced text in chapter {params.chap_id}"}
+
+
+MARKER = "~~~"
+
+
+class InsertTextAtMarkerParams(BaseModel):
+    """Parameters for inserting text at the fixed marker in a chapter."""
+
+    chap_id: int = Field(..., description="The numeric ID of the chapter.")
+    insert_text: str = Field(..., description="Text to insert at the marker location.")
+    mode: str = Field(
+        "replace",
+        description="How to insert relative to the marker: 'replace' (default), 'before', or 'after'.",
+    )
+
+
+@chat_tool(
+    description="Insert or replace text at a specific marker string in a chapter.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def insert_text_at_marker(
+    params: InsertTextAtMarkerParams, payload: dict, mutations: dict
+):
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    idx = text.find(MARKER)
+    if idx < 0:
+        return {"error": f"Marker '{MARKER}' not found in chapter {params.chap_id}."}
+
+    if params.mode == "replace":
+        new_text = text[:idx] + params.insert_text + text[idx + len(MARKER) :]
+    elif params.mode == "before":
+        new_text = text[:idx] + params.insert_text + text[idx:]
+    elif params.mode == "after":
+        new_text = (
+            text[: idx + len(MARKER)] + params.insert_text + text[idx + len(MARKER) :]
+        )
+    else:
+        return {
+            "error": f"Unknown mode '{params.mode}'. Use 'replace', 'before', or 'after'."
+        }
+
+    _write_chapter_content(params.chap_id, new_text)
+    mutations["story_changed"] = True
+    return {
+        "chap_id": params.chap_id,
+        "marker": MARKER,
+        "mode": params.mode,
+        "inserted_length": len(params.insert_text),
+    }
+
+
+class ApplyChapterReplacementsParams(BaseModel):
+    """Parameters for applying multiple replacements in a chapter."""
+
+    chap_id: int = Field(..., description="The numeric ID of the chapter.")
+    replacements: list[dict] = Field(
+        ...,
+        description=(
+            "A list of replacements, each an object with 'old_text' and 'new_text'. "
+            "Each replacement will be applied sequentially."
+        ),
+    )
+
+
+@chat_tool(
+    description="Apply one or more search-and-replace edits to a chapter in sequence.",
+    allowed_roles=(EDITING_ROLE,),
+    capability="prose-write",
+)
+async def apply_chapter_replacements(
+    params: ApplyChapterReplacementsParams, payload: dict, mutations: dict
+):
+    _, path, _pos = _chapter_by_id_or_404(params.chap_id)
+    text = path.read_text(encoding="utf-8")
+
+    for i, rep in enumerate(params.replacements):
+        if not isinstance(rep, dict):
+            return {"error": f"Replacement #{i} is not an object."}
+        old_text = rep.get("old_text")
+        new_text = rep.get("new_text")
+        if not isinstance(old_text, str) or not isinstance(new_text, str):
+            return {
+                "error": f"Replacement #{i} must have string 'old_text' and 'new_text'."
+            }
+
+        occurrences = text.count(old_text)
+        if occurrences == 0:
+            return {"error": f"Replacement #{i}: old_text not found in chapter."}
+        if occurrences > 1:
+            return {
+                "error": (
+                    f"Replacement #{i}: old_text found {occurrences} times. "
+                    "Please make it more specific so only one instance matches."
+                )
+            }
+
+        text = text.replace(old_text, new_text, 1)
+
+    _write_chapter_content(params.chap_id, text)
+    mutations["story_changed"] = True
+    return {"chap_id": params.chap_id, "replacements_applied": len(params.replacements)}
+
+
+@chat_tool(
+    description="Write summary to a specific chapter.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_chapter_summary(
     params: WriteChapterSummaryParams, payload: dict, mutations: dict
 ):
@@ -249,7 +610,9 @@ async def write_chapter_summary(
 
 
 @chat_tool(
-    description="Generate a chapter summary from its content using AI. Optionally specify a mode for generation style."
+    description="Generate a chapter summary from its content using AI. Optionally specify a mode for generation style.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict):
     mode = str(params.mode).lower()
@@ -258,14 +621,22 @@ async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict
     return data
 
 
-@chat_tool(description="Write a full chapter from its summary using AI.")
+@chat_tool(
+    description="Write a full chapter from its summary using AI.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="prose-write",
+)
 async def write_chapter(params: WriteChapterParams, payload: dict, mutations: dict):
     data = await write_chapter_from_summary(chap_id=params.chap_id)
     mutations["story_changed"] = True
     return data
 
 
-@chat_tool(description="Continue writing a chapter from its summary using AI.")
+@chat_tool(
+    description="Continue writing a chapter from its summary using AI.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="prose-write",
+)
 async def continue_chapter(
     params: ContinueChapterParams, payload: dict, mutations: dict
 ):
@@ -274,10 +645,15 @@ async def continue_chapter(
     return data
 
 
-@chat_tool(description="Create a new chapter with an optional title and book_id.")
+@chat_tool(
+    description="Create a new chapter with an optional title and book_id.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict
 ):
+    """Create New Chapter."""
     active = get_active_project_dir()
     if not active:
         return {"error": "No active project"}
@@ -292,10 +668,10 @@ async def create_new_chapter(
     }
 
 
-@chat_tool(description="Get the heading (title) of a specific chapter.")
 async def get_chapter_heading(
     params: GetChapterHeadingParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Heading — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -303,10 +679,15 @@ async def get_chapter_heading(
     return {"heading": heading}
 
 
-@chat_tool(description="Write the heading (title) of a specific chapter.")
+@chat_tool(
+    description="Write the heading (title) of a specific chapter.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+)
 async def write_chapter_heading(
     params: WriteChapterHeadingParams, payload: dict, mutations: dict
 ):
+    """Write Chapter Heading."""
     heading = params.heading.strip()
     write_chapter_title(params.chap_id, heading)
     mutations["story_changed"] = True
@@ -316,10 +697,10 @@ async def write_chapter_heading(
     }
 
 
-@chat_tool(description="Get the summary of a specific chapter.")
 async def get_chapter_summary(
     params: GetChapterSummaryParams, payload: dict, mutations: dict
 ):
+    """Get Chapter Summary — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
     chapter = next((c for c in chapters if c["id"] == params.chap_id), None)
@@ -328,9 +709,12 @@ async def get_chapter_summary(
 
 
 @chat_tool(
-    description="Delete a specific chapter. Requires confirmation by setting confirm=true."
+    description="Delete a specific chapter. Requires confirmation by setting confirm=true.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
 )
 async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: dict):
+    """Delete Chapter."""
     if not params.confirm:
         return {
             "status": "confirmation_required",
@@ -338,25 +722,335 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
         }
 
     active = get_active_project_dir()
-    files = _scan_chapter_files()
-    match = next(((idx, p) for (idx, p) in files if idx == params.chap_id), None)
-    if not match:
-        return {"error": "Chapter not found"}
-
-    _, path = match
-    if path.exists():
-        path.unlink()
+    chap_id, path, _pos = _chapter_by_id_or_404(params.chap_id)
 
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
-    chapters = story.get("chapters", [])
-    if params.chap_id < len(chapters):
-        idx_to_remove = params.chap_id - 1
-        if 0 <= idx_to_remove < len(chapters):
-            chapters.pop(idx_to_remove)
-            story["chapters"] = chapters
-            with open(story_path, "w", encoding="utf-8") as f:
-                _json.dump(story, f, indent=2, ensure_ascii=False)
+    p_type = story.get("project_type", "novel")
+    chap_filename = path.name
+
+    if p_type == "short-story":
+        if path.exists():
+            path.unlink()
+        mutations["story_changed"] = True
+        return {"ok": True, "message": "Content file removed (short-story project.)"}
+
+    if p_type == "series":
+        # path layout: <active>/books/<book_id>/chapters/<filename>
+        book_id_str = path.parent.parent.name
+        books = story.get("books", [])
+        target_book = next((b for b in books if b.get("id") == book_id_str), None)
+        if target_book is not None:
+            chapters_list = target_book.setdefault("chapters", [])
+            # Prefer filename match; fall back to linear scan.
+            # Resolve BEFORE deleting the file so glob-based scan still works.
+            c_idx = next(
+                (
+                    i
+                    for i, c in enumerate(chapters_list)
+                    if isinstance(c, dict) and c.get("filename") == chap_filename
+                ),
+                None,
+            )
+            if c_idx is None:
+                book_files = [
+                    p
+                    for _, p in _scan_chapter_files()
+                    if p.parent.parent.name == book_id_str
+                ]
+                c_idx = next((li for li, p in enumerate(book_files) if p == path), None)
+            if c_idx is not None and c_idx < len(chapters_list):
+                chapters_list.pop(c_idx)
+    else:
+        chapters_list = story.get("chapters", [])
+        c_idx = next(
+            (
+                i
+                for i, c in enumerate(chapters_list)
+                if isinstance(c, dict) and c.get("filename") == chap_filename
+            ),
+            None,
+        )
+        if c_idx is None and _pos < len(chapters_list):
+            c_idx = _pos
+        if c_idx is not None:
+            chapters_list.pop(c_idx)
+        story["chapters"] = chapters_list
+
+    if path.exists():
+        path.unlink()
+
+    with open(story_path, "w", encoding="utf-8") as f:
+        _json.dump(story, f, indent=2, ensure_ascii=False)
 
     mutations["story_changed"] = True
     return {"ok": True, "message": "Chapter deleted"}
+
+
+class CallWritingLlmParams(BaseModel):
+    instruction: str = Field(
+        ...,
+        description="The task for the WRITING LLM for the active draft or chapter (e.g. 'Rewrite this paragraph to be more descriptive').",
+    )
+    context: str = Field(
+        ..., description="The text context the WRITING LLM needs to operate on."
+    )
+
+
+@chat_tool(
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="delegation",
+)
+async def call_writing_llm(
+    params: CallWritingLlmParams, payload: dict, mutations: dict
+):
+    from augmentedquill.core.config import BASE_DIR, load_machine_config
+    from augmentedquill.core.prompts import (
+        get_system_message,
+        load_model_prompt_overrides,
+    )
+    from augmentedquill.services.llm import llm
+
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="WRITING"
+    )
+
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    system_prompt = get_system_message(
+        "story_writer", model_overrides, language=project_lang
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Task for this request:\n{params.instruction}\n\n"
+                f"Context materials:\n{params.context}"
+            ),
+        },
+    ]
+
+    response = await llm.unified_chat_complete(
+        caller_id="chat_tools.call_writing_llm",
+        model_type="WRITING",
+        messages=messages,
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
+        timeout_s=timeout_s,
+        model_name=model_name,
+    )
+    return {"generated_text": response.get("content", "")}
+
+
+class CallEditingAssistantParams(BaseModel):
+    task: str = Field(
+        ...,
+        description="The task the user wants the editor to perform on existing project prose (e.g., 'Fix the grammar in the current draft', 'Rewrite paragraph 2 to be more descriptive').",
+    )
+    chapter_id: int | None = Field(
+        None,
+        description="Optional chapter ID to set as the active writing unit for chapter-based EDITING sessions. Omit this for short-story projects.",
+    )
+    book_id: str | None = Field(
+        None,
+        description="Optional book ID (series only). Used together with chapter_id to disambiguate the active chapter.",
+    )
+
+
+@chat_tool(
+    description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual stored project prose.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="delegation",
+)
+async def call_editing_assistant(
+    params: CallEditingAssistantParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+    from augmentedquill.services.chat.chat_tool_decorator import (
+        execute_registered_tool,
+        get_registered_tool_schemas,
+    )
+    from augmentedquill.core.prompts import (
+        load_model_prompt_overrides,
+        get_system_message,
+    )
+    from augmentedquill.core.config import load_machine_config, BASE_DIR
+    import json
+
+    # Resolve EDITING model
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="EDITING"
+    )
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+    sys_msg = get_system_message("editing_llm", model_overrides, language=project_lang)
+
+    ctx_note = ""
+    if params.chapter_id is not None:
+        ctx_note = f"\nActive chapter ID for this task: {params.chapter_id}"
+        if params.book_id:
+            ctx_note += f", book ID: {params.book_id}"
+
+    messages = [
+        {"role": "system", "content": sys_msg},
+        {
+            "role": "user",
+            "content": (
+                "Editing task for this request:\n"
+                f"{params.task}\n\n"
+                "Read any additional story, chapter, or sourcebook context you need with tools before editing."
+                + ctx_note
+            ),
+        },
+    ]
+
+    # Build base payload so EDITING tools can resolve the active chapter automatically
+    base_nested_payload = dict(payload or {})
+    if params.chapter_id is not None:
+        base_nested_payload["active_chapter_id"] = params.chapter_id
+    if params.book_id is not None:
+        base_nested_payload["active_book_id"] = params.book_id
+
+    _editing_project_type: str | None = None
+    try:
+        if active:
+            _story_cfg = load_story_config(active / "story.json") or {}
+            _editing_project_type = _story_cfg.get("project_type") or None
+    except Exception:
+        pass
+
+    tools = get_registered_tool_schemas(
+        model_type=EDITING_ROLE, project_type=_editing_project_type
+    )
+
+    final_output = ""
+    recommended_updates: list[dict] = []
+    for _ in range(7):  # max 7 steps
+        try:
+            res = await llm.unified_chat_complete(
+                caller_id="chat_tools.call_editing_assistant",
+                model_type="EDITING",
+                messages=messages,
+                base_url=base_url,
+                api_key=api_key,
+                model_id=model_id,
+                timeout_s=timeout_s,
+                model_name=model_name,
+                tools=tools,
+            )
+        except Exception as e:
+            # Llama.cpp and some endpoints return 500 when tool call JSON is malformed
+            # Catching it gives the subagent a chance to adjust (e.g. use smaller chunk sizes)
+            err_msg = str(e)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"System Warning: Your previous attempt failed with an API/parsing error ({err_msg}). This typically occurs if your output was truncated due to length limits or formed invalid JSON. Please try again using smaller operations, shorter text chunks, or a different approach.",
+                }
+            )
+            continue
+
+        tool_calls = res.get("tool_calls", [])
+        content = res.get("content", "")
+
+        assistant_msg = {"role": "assistant"}
+        if content:
+            assistant_msg["content"] = content
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+
+        messages.append(assistant_msg)
+
+        if not tool_calls:
+            final_output = content
+            break
+
+        for tcall in tool_calls:
+            func = tcall.get("function", {})
+            f_name = func.get("name")
+            f_args = func.get("arguments", "{}")
+            if isinstance(f_args, str):
+                try:
+                    args_obj = json.loads(f_args)
+                except Exception:
+                    args_obj = {}
+            else:
+                args_obj = f_args
+
+            tcall_id = tcall.get("id")
+
+            nested_payload = dict(base_nested_payload)
+            nested_payload["_tool_role"] = EDITING_ROLE
+
+            tool_res = await execute_registered_tool(
+                f_name,
+                args_obj,
+                tcall_id,
+                nested_payload,
+                mutations,
+                tool_role=EDITING_ROLE,
+            )
+            if "role" not in tool_res:
+                from augmentedquill.services.chat.chat_tool_decorator import (
+                    tool_message,
+                )
+
+                tool_res = tool_message(f_name, tcall_id, tool_res)
+
+            if f_name == "recommend_metadata_updates":
+                try:
+                    tool_content = json.loads(tool_res.get("content") or "{}")
+                except Exception:
+                    tool_content = {}
+                recommendation = tool_content.get("recommended_updates")
+                if recommendation:
+                    recommended_updates.append(recommendation)
+            messages.append(tool_res)
+
+    if not final_output:
+        final_output = "Task completed using tools."
+
+    result = {"message": "Editing Assistant finished", "response": final_output}
+    if recommended_updates:
+        result["recommended_updates"] = recommended_updates
+    return result
+
+
+@chat_tool(
+    description=(
+        "Return structured metadata or sourcebook updates that CHAT should review and apply after an editing task. "
+        "This tool does not modify project files. "
+        "If story content directly contradicts sourcebook or character data in a way you cannot resolve via prose edits alone, "
+        "describe the discrepancy in `rationale` so the user can be informed and decide how to proceed."
+    ),
+    allowed_roles=(EDITING_ROLE,),
+    capability="metadata-recommendation",
+)
+async def recommend_metadata_updates(
+    params: RecommendMetadataUpdatesParams, payload: dict, mutations: dict
+):
+    return {
+        "recommended_updates": {
+            "story_summary": params.story_summary,
+            "story_notes": params.story_notes,
+            "story_tags": params.story_tags,
+            "chapter_updates": params.chapter_updates,
+            "sourcebook_updates": params.sourcebook_updates,
+            "rationale": params.rationale,
+        }
+    }

@@ -4,14 +4,19 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project tools unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json as _json
 
 from pydantic import BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
-from augmentedquill.services.chat.chat_tool_decorator import chat_tool
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
 from augmentedquill.services.projects.project_helpers import _project_overview
 from augmentedquill.services.projects.projects import (
     create_project,
@@ -24,9 +29,12 @@ from augmentedquill.services.projects.projects import (
 
 
 class GetProjectOverviewParams(BaseModel):
-    """Parameters for get_project_overview (no parameters needed)."""
+    """Parameters for get_project_overview."""
 
-    pass
+    include_notes: bool = Field(
+        False,
+        description="If true, include per-chapter notes in the overview output (default false).",
+    )
 
 
 class CreateProjectParams(BaseModel):
@@ -34,7 +42,8 @@ class CreateProjectParams(BaseModel):
 
     name: str = Field(..., description="The project directory name")
     project_type: str = Field(
-        "novel", description="The project type: 'novel' or 'series'"
+        "novel",
+        description="The project type: 'short-story', 'novel', or 'series'",
     )
 
 
@@ -71,37 +80,48 @@ class CreateNewBookParams(BaseModel):
 class ChangeProjectTypeParams(BaseModel):
     """Parameters for changing project type."""
 
-    new_type: str = Field(..., description="The new project type: 'novel' or 'series'")
+    new_type: str = Field(
+        ...,
+        description="The new project type: 'short-story', 'novel', or 'series'",
+    )
 
 
 # Tool implementations with co-located schemas
 
 
 @chat_tool(
-    description="Get project title, type, and a structured list of all books (for series) or chapters (for novels). Use this to find the correct NUMERIC chapter IDs and UUID book IDs. Never assume an ID based on a title."
+    description="Get project title, type, and a structured view of the current draft: the single chapter for a short story, the chapter list for a novel, or the books and chapters for a series. Use this to find the correct NUMERIC chapter IDs and UUID book IDs. Never assume an ID based on a title.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="metadata-read",
 )
 async def get_project_overview(
     params: GetProjectOverviewParams, payload: dict, mutations: dict
 ):
-    data = _project_overview()
+    data = _project_overview(include_notes=params.include_notes)
     # Return data directly - decorator handles wrapping in tool message format
     return data
 
 
 @chat_tool(
     name="create_project",
-    description="Create a new project with the specified name and type (novel or series).",
+    description="Create a new project with the specified name and type ('short-story', 'novel', or 'series').",
+    allowed_roles=(CHAT_ROLE,),
+    capability="project-admin",
 )
 async def create_project_tool(
     params: CreateProjectParams, payload: dict, mutations: dict
 ):
     ok, msg = create_project(params.name, params.project_type)
+    if ok:
+        mutations["story_changed"] = True
     return {"ok": ok, "message": msg}
 
 
 @chat_tool(
     name="list_projects",
     description="List all available projects with their names and titles.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="project-admin",
 )
 async def list_projects_tool(
     params: ListProjectsParams, payload: dict, mutations: dict
@@ -114,23 +134,32 @@ async def list_projects_tool(
 @chat_tool(
     name="delete_project",
     description="Delete a project permanently. Requires confirmation with confirm=true.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="project-admin",
 )
 async def delete_project_tool(
     params: DeleteProjectParams, payload: dict, mutations: dict
 ):
+    """Delete Project Tool."""
     if not params.confirm:
         return {
             "status": "confirmation_required",
             "message": "This operation deletes the project. Call again with confirm=true to proceed.",
         }
     ok, msg = delete_project(params.name)
+    if ok:
+        mutations["story_changed"] = True
     return {"ok": ok, "message": msg}
 
 
 @chat_tool(
-    description="Delete a book from a series project. Requires confirmation with confirm=true."
+    description="Delete a book from a series project. Requires confirmation with confirm=true.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+    project_types=("series",),
 )
 async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
+    """Delete Book."""
     if not params.confirm:
         return {
             "status": "confirmation_required",
@@ -157,8 +186,14 @@ async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
     return {"ok": True, "message": "Book deleted"}
 
 
-@chat_tool(description="Create a new book in a series project.")
+@chat_tool(
+    description="Create a new book in a series project.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="metadata-write",
+    project_types=("series",),
+)
 async def create_new_book(params: CreateNewBookParams, payload: dict, mutations: dict):
+    """Create New Book."""
     from augmentedquill.services.projects.projects import (
         create_new_book as _create_book,
     )
@@ -169,11 +204,14 @@ async def create_new_book(params: CreateNewBookParams, payload: dict, mutations:
 
 
 @chat_tool(
-    description="Change the project type between 'novel' and 'series'. This restructures the project organization."
+    description="Change the project type between 'short-story', 'novel', and 'series'. This restructures the project organization.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="project-admin",
 )
 async def change_project_type(
     params: ChangeProjectTypeParams, payload: dict, mutations: dict
 ):
+    """Change Project Type."""
     from augmentedquill.services.projects.projects import (
         change_project_type as _change_type,
     )

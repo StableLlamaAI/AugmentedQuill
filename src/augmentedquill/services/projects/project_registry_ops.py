@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project registry ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project registry ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -12,8 +13,28 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+import jsonschema
+
+from augmentedquill.core.config import SCHEMAS_DIR
+
+
+def _validate_registry(data: Dict, path_label: str) -> None:
+    """Validate registry data against projects.schema.json.
+
+    Raises ValueError so callers are forced to handle a corrupt registry.
+    """
+    schema_path = SCHEMAS_DIR / "projects.schema.json"
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(data, schema)
+    except jsonschema.ValidationError as exc:
+        raise ValueError(
+            f"Invalid projects registry at {path_label}: {exc.message}"
+        ) from exc
+
 
 def load_registry_from_path(registry_path: Path) -> Dict:
+    """Load Registry From Path."""
     if not registry_path.exists():
         return {"current": "", "recent": []}
     try:
@@ -32,6 +53,7 @@ def load_registry_from_path(registry_path: Path) -> Dict:
 
 
 def save_registry_to_path(registry_path: Path, current: str, recent: List[str]) -> None:
+    """Save Registry To Path."""
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     seen = set()
     deduped: List[str] = []
@@ -42,6 +64,7 @@ def save_registry_to_path(registry_path: Path, current: str, recent: List[str]) 
             deduped.append(path_str)
     final_list = deduped[:5]
     payload = {"current": current, "recent": final_list}
+    _validate_registry(payload, str(registry_path))
     registry_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -50,6 +73,7 @@ def set_active_project_in_registry(
     project_path: Path,
     current_registry: Dict,
 ) -> tuple[str, List[str]]:
+    """Set Active Project In Registry."""
     current = str(project_path)
     recent: List[str] = []
     for item in current_registry.get("recent", []) or []:
@@ -65,6 +89,7 @@ def set_active_project_in_registry(
 
 
 def get_active_project_dir_from_registry(current_registry: Dict) -> Path | None:
+    """Get Active Project Dir From Registry."""
     cur = current_registry.get("current") or ""
     if cur:
         try:

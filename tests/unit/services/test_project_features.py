@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test project features unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test project features unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import json
 import io
@@ -19,8 +20,8 @@ from augmentedquill.services.projects.projects import (
     select_project,
     change_project_type,
     get_active_project_dir,
-    load_story_config,
 )
+from augmentedquill.core.config import load_story_config
 from augmentedquill.services.projects.project_helpers import _project_overview
 from fastapi.testclient import TestClient
 from augmentedquill.main import app
@@ -44,8 +45,16 @@ class ProjectFeaturesTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
+    def test_project_language_is_recorded(self):
+        # language provided during creation should be persisted in story.json
+        create_project("lang_proj", project_type="novel", language="es")
+        select_project("lang_proj")
+        active = get_active_project_dir()
+        story = load_story_config(active / "story.json")
+        self.assertEqual(story.get("language"), "es")
+
     def test_convert_short_story_to_novel(self):
-        # 1. Create Short Story project
+        # 1. Create Short Story project (default language should be english)
         create_project("test_sm", project_type="short-story")
         select_project("test_sm")
         active = get_active_project_dir()
@@ -196,35 +205,105 @@ class ProjectFeaturesTest(TestCase):
         self.assertIn("multiple chapters", msg.lower())
 
     def test_short_story_project_overview_with_metadata(self):
-        """Test the regression fix: Short Story project using story.json metadata for title/summary."""
+        """Short-story overview exposes the canonical single draft metadata."""
         create_project("test_sm_meta", project_type="short-story")
         select_project("test_sm_meta")
         active = get_active_project_dir()
 
-        # Simulate LLM adding a summary to story.json
         story = load_story_config(active / "story.json")
-        story["chapters"] = [{"title": "The Beginning", "summary": "A great start"}]
+        story["project_title"] = "The Beginning"
+        story["story_summary"] = "A great start"
         (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
 
-        # Check overview
         overview = _project_overview()
-
-        chapters = overview["chapters"]
-        self.assertEqual(len(chapters), 1)
-        self.assertEqual(chapters[0]["title"], "The Beginning")
-        self.assertEqual(chapters[0]["summary"], "A great start")
-        self.assertEqual(chapters[0]["filename"], "content.md")
+        draft = overview["draft"]
+        self.assertEqual(draft["title"], "The Beginning")
+        self.assertEqual(draft["summary"], "A great start")
+        self.assertEqual(draft["filename"], "content.md")
+        self.assertNotIn("chapters", overview)
 
     def test_short_story_project_overview_defaults(self):
-        """Test fallback when no metadata exists."""
+        """Short-story overview falls back to project-level draft metadata."""
         create_project("test_sm_def", project_type="short-story")
         select_project("test_sm_def")
 
         overview = _project_overview()
-        chapters = overview["chapters"]
-        self.assertEqual(len(chapters), 1)
-        self.assertEqual(chapters[0]["title"], "Story Content")
-        self.assertEqual(chapters[0]["summary"], "Full content of the story")
+        draft = overview["draft"]
+        self.assertEqual(draft["title"], "test_sm_def")
+        self.assertEqual(draft["summary"], "")
+        self.assertEqual(draft["filename"], "content.md")
+
+    def test_project_overview_include_notes_for_short_story(self):
+        create_project("test_sm_notes", project_type="short-story")
+        select_project("test_sm_notes")
+        active = get_active_project_dir()
+
+        story = load_story_config(active / "story.json")
+        story["project_title"] = "Short Note Story"
+        story["story_summary"] = "Summary with notes"
+        story["notes"] = "Short story note"
+        (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
+
+        overview = _project_overview(include_notes=True)
+        self.assertEqual(overview["draft"]["notes"], "Short story note")
+
+    def test_project_overview_include_notes_for_novel(self):
+        create_project("test_novel_notes", project_type="novel")
+        select_project("test_novel_notes")
+        active = get_active_project_dir()
+
+        (active / "chapters").mkdir(parents=True, exist_ok=True)
+        (active / "chapters" / "0001.txt").write_text("Chapter 1", encoding="utf-8")
+
+        story = load_story_config(active / "story.json")
+        story["chapters"] = [
+            {
+                "title": "Chapter One",
+                "summary": "Novel summary",
+                "notes": "Novel chapter note",
+                "conflicts": [{"description": "Novel conflict"}],
+            }
+        ]
+        (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
+
+        overview = _project_overview(include_notes=True)
+        self.assertEqual(overview["chapters"][0]["notes"], "Novel chapter note")
+        self.assertNotIn("conflicts", overview["chapters"][0])
+
+    def test_project_overview_include_notes_for_series(self):
+        create_project("test_series_notes", project_type="series")
+        select_project("test_series_notes")
+        active = get_active_project_dir()
+
+        from augmentedquill.services.projects.projects import create_new_book
+
+        book_id = create_new_book("Book Notes")
+        (active / "books" / book_id / "chapters" / "0001.txt").write_text(
+            "Book chapter", encoding="utf-8"
+        )
+
+        story = load_story_config(active / "story.json")
+        story["books"] = [
+            {
+                "id": book_id,
+                "title": "Book Notes",
+                "chapters": [
+                    {
+                        "title": "Book Chapter 1",
+                        "summary": "Series summary",
+                        "notes": "Series chapter note",
+                        "conflicts": [{"description": "Series conflict"}],
+                    }
+                ],
+            }
+        ]
+        (active / "story.json").write_text(json.dumps(story), encoding="utf-8")
+
+        overview = _project_overview(include_notes=True)
+        self.assertEqual(
+            overview["books"][0]["chapters"][0]["notes"], "Series chapter note"
+        )
+        self.assertNotIn("conflicts", overview["books"][0]["chapters"][0])
 
     def test_export_import_zip(self):
         # 1. Setup a project

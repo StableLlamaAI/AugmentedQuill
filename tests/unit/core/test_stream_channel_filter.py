@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test stream channel filter unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the test stream channel filter unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 import unittest
 from augmentedquill.utils.stream_helpers import ChannelFilter
@@ -64,6 +65,23 @@ class TestChannelFilter(unittest.TestCase):
         cf.feed("</tool")
         cf.feed("_call>")
         self.assertEqual(cf.current_channel, "final")
+
+    def test_flush_returns_buffered_content(self):
+        cf = ChannelFilter()
+        cf.feed("<tool")
+        flushed = cf.flush()
+        self.assertEqual(flushed, [{"channel": "final", "content": "<tool"}])
+        self.assertEqual(cf.flush(), [])
+
+    def test_pathological_buffer_degrades_to_progress(self):
+        cf = ChannelFilter()
+        # Starts with an unmatched tag-like prefix that should trigger fallback
+        # progress logic once the internal buffer grows beyond the guard threshold.
+        chunk = "<" + ("x" * 180)
+        out = cf.feed(chunk)
+        self.assertGreaterEqual(len(out), 1)
+        self.assertEqual(out[0]["channel"], "final")
+        self.assertEqual(out[0]["content"], "<")
 
 
 if __name__ == "__main__":

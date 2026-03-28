@@ -4,10 +4,18 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the openai service unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the openai service unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import { LLMConfig } from '../types';
-
+import { applySmartQuotes } from '../utils/textUtils';
+import {
+  ChatContextUsage,
+  prepareChatContext,
+  ChatHistoryMessage,
+} from '../features/chat/chatContextBudget';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
 type UserMessageInput = string | { message: string };
@@ -21,28 +29,40 @@ type ToolCallChunk = {
   };
 };
 
+export const parseToolArguments = (args: string): Record<string, unknown> | string => {
+  try {
+    return JSON.parse(args);
+  } catch {
+    // Some tool argument payloads can contain unescaped newlines or other
+    // characters that make the JSON invalid when streamed from the backend.
+    // Try a best-effort repair so we don't lose tool call data.
+    const normalized = args
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
+      .replace(/\r\n/g, '\\n')
+      .replace(/\n/g, '\\n')
+      .replace(/\t/g, '\\t');
+
+    const firstBrace = normalized.indexOf('{');
+    const lastBrace = normalized.lastIndexOf('}');
+    const candidate =
+      firstBrace !== -1 && lastBrace > firstBrace
+        ? normalized.slice(firstBrace, lastBrace + 1)
+        : normalized;
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Fall back to the raw string so callers can still pass it through.
+      return args;
+    }
+  }
+};
+
 type ParsedFunctionCall = {
   id: string;
   name: string;
-  args: Record<string, unknown>;
-};
-
-type HistoryMessage = {
-  role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
-  text?: string;
-  parts?: Array<{ text?: string }>;
-  name?: string;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    name: string;
-    args: string | Record<string, unknown>;
-  }>;
-};
-
-type ModelsResponse = {
-  data?: Array<{ id?: string }>;
-  models?: Array<string | { id?: string }>;
+  args: Record<string, unknown> | string;
 };
 
 export class ChatError extends Error {
@@ -78,69 +98,37 @@ export interface UnifiedChat {
   }>;
 }
 
-export const testConnection = async (config: LLMConfig): Promise<boolean> => {
-  try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.modelId,
-        messages: [{ role: 'user', content: 'Test' }],
-        max_tokens: 5,
-      }),
-    });
-    return response.ok;
-  } catch (e) {
-    console.error('Connection test failed', e);
-    return false;
-  }
-};
-
-export const getModels = async (config: LLMConfig): Promise<string[]> => {
-  try {
-    const res = await fetch(`${config.baseUrl}/models`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-    });
-
-    if (!res.ok) return [];
-    const data = (await res.json()) as ModelsResponse;
-
-    // OpenAI returns { data: [{ id: 'gpt-4' }, ...] }
-    if (Array.isArray(data?.data)) {
-      return data.data.map((m) => m.id).filter((id): id is string => Boolean(id));
-    }
-
-    // Some compatible endpoints may return { models: [...] }
-    if (Array.isArray(data?.models)) {
-      return data.models
-        .map((m) => (typeof m === 'string' ? m : m.id))
-        .filter((id): id is string => Boolean(id));
-    }
-
-    return [];
-  } catch (e) {
-    console.error('Failed to list models', e);
-    return [];
-  }
+export type CancelSignal = {
+  cancelled: boolean;
+  reader?: ReadableStreamDefaultReader<Uint8Array>;
 };
 
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onToolCalls?: (toolCalls: ToolCallChunk[]) => void,
   onThinking?: (thinking: string) => void,
-  onContent?: (content: string) => void
+  onContent?: (content: string) => void,
+  cancelSignal?: CancelSignal
 ): Promise<string> {
   let text = '';
   let buffer = '';
   const decoder = new TextDecoder();
 
+  if (cancelSignal) {
+    cancelSignal.reader = reader;
+  }
+
   while (true) {
+    if (cancelSignal?.cancelled) {
+      // Stop reading further and close the stream.
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+      break;
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -205,51 +193,30 @@ async function readSSEStream(
 
 export const createChatSession = (
   systemInstruction: string,
-  history: HistoryMessage[],
+  history: ChatHistoryMessage[],
   config: LLMConfig,
   modelType: 'CHAT' | 'WRITING' | 'EDITING' = 'CHAT',
-  options?: { allowWebSearch?: boolean }
+  options?: {
+    allowWebSearch?: boolean;
+    currentChapter?: { id: string; title: string } | null;
+    onContextUsage?: (usage: ChatContextUsage) => void;
+  }
 ): UnifiedChat => {
   return {
     sendMessage: async (msg, onUpdate) => {
       const userMsgText = typeof msg === 'string' ? msg : msg.message;
+      const preparedContext = prepareChatContext({
+        systemInstruction,
+        history,
+        config,
+        userMessageText: userMsgText,
+      });
+      options?.onContextUsage?.(preparedContext.usage);
 
-      const messages = [
-        { role: 'system', content: systemInstruction },
-        ...history.map((h) => {
-          const m: {
-            role: string;
-            content: string;
-            name?: string;
-            tool_call_id?: string;
-            tool_calls?: Array<{
-              id: string;
-              type: 'function';
-              function: { name: string; arguments: string };
-            }>;
-          } = {
-            role: h.role === 'model' ? 'assistant' : h.role,
-            content: h.text || (h.parts && h.parts[0]?.text) || '',
-          };
-          if (h.name) m.name = h.name;
-          if (h.tool_call_id) m.tool_call_id = h.tool_call_id;
-          if (h.tool_calls) {
-            m.tool_calls = h.tool_calls.map((tc) => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments:
-                  typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args),
-              },
-            }));
-          }
-          return m;
-        }),
-      ];
-
-      if (userMsgText) {
-        messages.push({ role: 'user', content: userMsgText });
+      if (preparedContext.usage.enabled && !preparedContext.usage.withinBudget) {
+        throw new ChatError(
+          'Chat context is still too large after compaction. Start a new chat or remove older long messages.'
+        );
       }
 
       try {
@@ -257,10 +224,11 @@ export const createChatSession = (
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages,
+            messages: preparedContext.messages,
             model_type: modelType,
-            model_name: config.id,
+            model_name: config.name || config.id,
             allow_web_search: options?.allowWebSearch,
+            current_chapter: options?.currentChapter,
           }),
         });
 
@@ -297,33 +265,25 @@ export const createChatSession = (
           },
           (t) => {
             thinking += t;
-            if (onUpdate) onUpdate({ thinking });
+            if (onUpdate) onUpdate({ thinking: applySmartQuotes(thinking) });
           },
           (chunk) => {
             fullText += chunk;
-            if (onUpdate) onUpdate({ text: fullText });
+            if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
           }
         );
 
         const functionCalls = toolCallsAccumulator
           .filter((c) => c && (c.name || c.args))
-          .map((c) => {
-            let parsedArgs = {};
-            try {
-              parsedArgs = c.args ? JSON.parse(c.args) : {};
-            } catch (e) {
-              console.error('Failed to parse tool arguments', c.args);
-            }
-            return {
-              id: c.id,
-              name: c.name,
-              args: parsedArgs,
-            };
-          });
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            args: c.args ? parseToolArguments(c.args) : {},
+          }));
 
         return {
-          text,
-          thinking: thinking || undefined,
+          text: applySmartQuotes(text),
+          thinking: thinking ? applySmartQuotes(thinking) : undefined,
           functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
           traceback: undefined, // Or capture if needed
         };
@@ -356,7 +316,7 @@ export const generateSimpleContent = async (
       body: JSON.stringify({
         messages,
         model_type: modelType,
-        model_name: config.id,
+        model_name: config.name || config.id,
         tool_choice: options?.tool_choice,
       }),
     });
@@ -367,14 +327,77 @@ export const generateSimpleContent = async (
     if (!reader) return '';
 
     let accumulated = '';
-    return await readSSEStream(reader, undefined, undefined, (delta) => {
+    const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
       accumulated += delta;
-      options?.onUpdate?.(accumulated);
+      options?.onUpdate?.(applySmartQuotes(accumulated));
     });
+    return applySmartQuotes(finalResult);
   } catch (e: unknown) {
     // Re-throw so the caller can handle it and show it to the user
     throw e;
   }
+};
+
+export const streamAiAction = async (
+  target: 'book_summary' | 'story_summary' | 'summary' | 'chapter',
+  action: 'write' | 'update' | 'rewrite' | 'extend',
+  targetId: string,
+  currentText: string,
+  onUpdate?: (fullText: string) => void,
+  onThinking?: (thinking: string) => void,
+  source?: 'chapter' | 'notes',
+  checkedSourcebookIds?: string[],
+  cancelSignal?: CancelSignal
+): Promise<string> => {
+  const scope = targetId === 'story' ? 'story' : 'chapter';
+  const body: any = {
+    target,
+    action,
+    scope,
+    chap_id: scope === 'chapter' ? Number(targetId) : undefined,
+    target_id: scope === 'chapter' ? Number(targetId) : targetId,
+    current_text: currentText,
+    source,
+  };
+  if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+    body.checked_sourcebook = checkedSourcebookIds;
+  }
+
+  const res = await fetch('/api/v1/story/action/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || 'Action failed');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) return '';
+
+  let accumulated = '';
+  let thinking = '';
+  const finalResult = await readSSEStream(
+    reader,
+    undefined,
+    (t) => {
+      thinking += t;
+      onThinking?.(thinking);
+    },
+    (delta) => {
+      accumulated += delta;
+      onUpdate?.(applySmartQuotes(accumulated));
+    },
+    cancelSignal
+  );
+
+  if (cancelSignal?.cancelled) {
+    return accumulated;
+  }
+
+  return applySmartQuotes(finalResult);
 };
 
 export const generateContinuations = async (
@@ -382,20 +405,31 @@ export const generateContinuations = async (
   storyContext: string,
   systemInstruction: string,
   config: LLMConfig,
-  chapterId?: string
+  chapterId?: string,
+  checkedSourcebookIds?: string[],
+  options?: {
+    onSuggestionUpdate?: (index: number, text: string) => void;
+    cancelSignal?: CancelSignal;
+  }
 ): Promise<string[]> => {
   if (!chapterId) return [];
+  const scope = chapterId === 'story' ? 'story' : 'chapter';
 
-  const fetchSuggestion = async () => {
+  const fetchSuggestion = async (index: number) => {
     try {
+      const body: any = {
+        scope,
+        chap_id: scope === 'chapter' ? Number(chapterId) : undefined,
+        model_name: config.name || config.id,
+        current_text: currentContent,
+      };
+      if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
+        body.checked_sourcebook = checkedSourcebookIds;
+      }
       const res = await fetch('/api/v1/story/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chap_id: Number(chapterId),
-          model_name: config.id,
-          current_text: currentContent,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) return '';
@@ -403,18 +437,31 @@ export const generateContinuations = async (
       const reader = res.body?.getReader();
       let text = '';
       if (reader) {
+        const decoder = new TextDecoder();
         while (true) {
+          if (options?.cancelSignal?.cancelled) {
+            try {
+              await reader.cancel();
+            } catch {
+              // ignore
+            }
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
-          text += new TextDecoder().decode(value);
+          text += decoder.decode(value, { stream: true });
+          options?.onSuggestionUpdate?.(index, applySmartQuotes(text));
         }
+        text += decoder.decode();
+        options?.onSuggestionUpdate?.(index, applySmartQuotes(text));
       }
-      return text;
+      return applySmartQuotes(text);
     } catch (e) {
       return '';
     }
   };
 
-  const [opt1, opt2] = await Promise.all([fetchSuggestion(), fetchSuggestion()]);
-  return [opt1, opt2].filter((s) => s);
+  const [opt1, opt2] = await Promise.all([fetchSuggestion(0), fetchSuggestion(1)]);
+  return [opt1, opt2];
 };

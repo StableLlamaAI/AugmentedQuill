@@ -82,6 +82,23 @@ The Metadata Editor is a full-screen or sidebar panel that opens whenever you cl
 
 `[SCREENSHOT: Conflicts tab showing two conflict rows with description, resolution plan, and reorder arrows]`
 
+### Why conflicts matter
+
+Conflicts are the engine that helps your story move forward. Every chapter should either:
+
+- introduce a new unresolved tension,
+- escalate one or more existing tensions, or
+- move a previous conflict toward resolution while opening new stakes.
+
+When you or AI generate or continue text, keep the conflict list visible as a “story law”: updates should always keep at least one conflict alive and explain the current status.
+
+### Conflict-aware workflow for beginners and experts
+
+1. Define each conflict in clear, concrete terms (who has a problem, what’s at risk, and why it is hard to solve).
+2. In the same row, state a resolution plan (what success looks like and where it should probably pay off).
+3. If the AI writes a chapter, ask explicitly: “Incorporate or advance these conflicts and mark anything that changes.”
+4. Use the **AI Summary** tools or **Chat tools** to check if the chapter’s outcome is consistent with the conflict list.
+
 ## Book Controls (Series Only)
 
 When you switch to a series, each book renders as a collapsible panel showing the book title, the number of chapters it contains, and a summary preview. The controls include:
@@ -105,6 +122,8 @@ When you switch to a series, each book renders as a collapsible panel showing th
 - **AI Summary buttons** here also use the Fuchsia EDITING model so that updating the story-wide summary behaves like editing a chapter summary.
 
 Because every piece of metadata feeds the AI, treat the summary, tags, and notes as live prompts that get bundled into context whenever you ask the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> writing or <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> chat models for help.
+
+In practice, the strongest workflow is to write notes first, keep summaries current enough to explain intent, and use conflicts to track what still needs to pay off in later chapters.
 
 ---
 

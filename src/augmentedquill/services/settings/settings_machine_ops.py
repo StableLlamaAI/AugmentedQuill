@@ -4,19 +4,17 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the settings machine ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the settings machine ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
-import datetime
-
+import asyncio
+import time
 import httpx
 
-from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
-
-
-def normalize_base_url(base_url: str) -> str:
-    return str(base_url or "").strip().rstrip("/")
+from augmentedquill.services.llm.llm_http_ops import logged_request
+from augmentedquill.services.llm.llm_completion_ops import _validate_base_url
 
 
 def auth_headers(api_key: str | None) -> dict[str, str]:
@@ -27,6 +25,7 @@ def auth_headers(api_key: str | None) -> dict[str, str]:
 
 
 def parse_connection_payload(payload: dict | None) -> tuple[str, str | None, int]:
+    """Parse Connection Payload."""
     base_url = (payload or {}).get("base_url") or ""
     api_key = (payload or {}).get("api_key") or None
     timeout_s = (payload or {}).get("timeout_s")
@@ -40,10 +39,15 @@ def parse_connection_payload(payload: dict | None) -> tuple[str, str | None, int
 async def list_remote_models(
     *, base_url: str, api_key: str | None, timeout_s: int
 ) -> tuple[bool, list[str], str | None]:
-    url = normalize_base_url(base_url) + "/models"
+    """List Remote Models."""
+    url = str(base_url or "").strip().rstrip("/") + "/models"
+    try:
+        # user-specified base URLs may be arbitrary; skip strict validation
+        _validate_base_url(base_url, skip_validation=True)
+    except ValueError as e:
+        return False, [], str(e)
+
     headers = auth_headers(api_key)
-    log_entry = create_log_entry(url, "GET", headers, None)
-    add_llm_log(log_entry)
 
     try:
         timeout_obj = httpx.Timeout(float(timeout_s))
@@ -51,18 +55,19 @@ async def list_remote_models(
         timeout_obj = httpx.Timeout(10.0)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_obj) as client:
-            response = await client.get(url, headers=headers)
-            log_entry["response"]["status_code"] = response.status_code
-            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-            if not response.is_success:
-                log_entry["response"]["error"] = f"HTTP {response.status_code}"
-                return False, [], f"HTTP {response.status_code}"
-            data = response.json()
-            log_entry["response"]["body"] = data
+        response = await logged_request(
+            caller_id="settings_machine.list_remote_models",
+            method="GET",
+            url=url,
+            headers=headers,
+            timeout=timeout_obj,
+            body=None,
+            raise_for_status=False,
+        )
+        if not response.is_success:
+            return False, [], f"HTTP {response.status_code}"
+        data = response.json()
     except Exception as exc:
-        log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-        log_entry["response"]["error"] = str(exc)
         return False, [], str(exc)
 
     models: list[str] = []
@@ -90,10 +95,45 @@ async def list_remote_models(
     return True, deduped, None
 
 
-async def remote_model_exists(
+_MODEL_EXISTS_CACHE_TTL_S = 60
+
+# in‑memory caches keyed by (base_url, model_id, api_key_hash)
+# - ``_model_exists_cache`` holds (expiry, exists) tuples
+# - ``_model_exists_inflight`` tracks probes already underway, enabling
+#    parallel callers to share one task
+_model_exists_cache: dict[tuple[str, str, str], tuple[float, bool]] = {}
+_model_exists_inflight: dict[tuple[str, str, str], asyncio.Task] = {}
+_exists_lock = asyncio.Lock()
+
+
+def _exists_cache_key(
+    base_url: str,
+    api_key: str | None,
+    model_id: str,
+) -> tuple[str, str, str]:
+    """Normalize inputs for caching key."""
+    normalized_base = str(base_url or "").strip().rstrip("/").lower()
+    normalized_model = str(model_id or "").strip()
+    # Keep key material in-memory only; avoid custom hashing of secrets.
+    api_scope = str(api_key or "")
+    return normalized_base, normalized_model, api_scope
+
+
+async def _remote_model_exists_probe(
     *, base_url: str, api_key: str | None, model_id: str, timeout_s: int
 ) -> tuple[bool, str | None]:
-    base = normalize_base_url(base_url)
+    """Probe the provider to determine if a given model is present.
+
+    This low‑level implementation is separated so callers can add caching
+    and coalescing around it without duplicating network logic.
+    """
+    base = str(base_url or "").strip().rstrip("/")
+    try:
+        # skip validation for settings connections; the caller controls the URL
+        _validate_base_url(base_url, skip_validation=True)
+    except ValueError as e:
+        return False, str(e)
+
     model_id = str(model_id or "").strip()
     if not model_id:
         return False, "Missing model_id"
@@ -106,38 +146,82 @@ async def remote_model_exists(
     headers = {"Content-Type": "application/json", **auth_headers(api_key)}
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_obj) as client:
-            url1 = f"{base}/models/{model_id}"
-            log_entry1 = create_log_entry(url1, "GET", auth_headers(api_key), None)
-            add_llm_log(log_entry1)
+        url1 = f"{base}/models/{model_id}"
+        response = await logged_request(
+            caller_id="settings_machine.remote_model_exists_get_model",
+            method="GET",
+            url=url1,
+            headers=auth_headers(api_key),
+            timeout=timeout_obj,
+            body=None,
+            raise_for_status=False,
+        )
 
-            response = await client.get(url1, headers=auth_headers(api_key))
-            log_entry1["response"]["status_code"] = response.status_code
-            log_entry1["timestamp_end"] = datetime.datetime.now().isoformat()
+        if response.is_success:
+            return True, None
 
-            if response.is_success:
-                log_entry1["response"]["body"] = response.json()
-                return True, None
+        url2 = f"{base}/chat/completions"
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "temperature": 0,
+        }
 
-            url2 = f"{base}/chat/completions"
-            payload = {
-                "model": model_id,
-                "messages": [{"role": "user", "content": "ping"}],
-                "max_tokens": 1,
-                "temperature": 0,
-            }
-            log_entry2 = create_log_entry(url2, "POST", headers, payload)
-            add_llm_log(log_entry2)
+        response2 = await logged_request(
+            caller_id="settings_machine.remote_model_exists_chat_probe",
+            method="POST",
+            url=url2,
+            headers=headers,
+            timeout=timeout_obj,
+            body=payload,
+            raise_for_status=False,
+        )
+        if response2.is_success:
+            return True, None
 
-            response2 = await client.post(url2, headers=headers, json=payload)
-            log_entry2["response"]["status_code"] = response2.status_code
-            log_entry2["timestamp_end"] = datetime.datetime.now().isoformat()
-
-            if response2.is_success:
-                log_entry2["response"]["body"] = response2.json()
-                return True, None
-
-            log_entry2["response"]["error"] = f"HTTP {response2.status_code}"
-            return False, f"HTTP {response2.status_code}"
+        return False, f"HTTP {response2.status_code}"
     except Exception as exc:
         return False, str(exc)
+
+
+async def remote_model_exists(
+    *, base_url: str, api_key: str | None, model_id: str, timeout_s: int
+) -> tuple[bool, str | None]:
+    """Determine if *model_id* exists at *base_url*.
+
+    Results are cached briefly and simultaneous callers share a single
+    probe task.  Consumers of this module simply call this function; the
+    implementation manages caching, validation and concurrency internally.
+    """
+    key = _exists_cache_key(base_url, api_key, model_id)
+    now = time.monotonic()
+
+    async with _exists_lock:
+        entry = _model_exists_cache.get(key)
+        if entry and entry[0] > now:
+            return entry[1], None
+        inflight = _model_exists_inflight.get(key)
+        if inflight is None:
+            inflight = asyncio.create_task(
+                _remote_model_exists_probe(
+                    base_url=base_url,
+                    api_key=api_key,
+                    model_id=model_id,
+                    timeout_s=timeout_s,
+                )
+            )
+            _model_exists_inflight[key] = inflight
+
+    try:
+        exists, detail = await inflight
+        if exists and _MODEL_EXISTS_CACHE_TTL_S > 0:
+            expires = time.monotonic() + _MODEL_EXISTS_CACHE_TTL_S
+            async with _exists_lock:
+                _model_exists_cache[key] = (expires, exists)
+        return exists, detail
+    finally:
+        async with _exists_lock:
+            current = _model_exists_inflight.get(key)
+            if current is inflight:
+                _model_exists_inflight.pop(key, None)

@@ -4,47 +4,30 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the test chat sessions unit so this responsibility stays isolated, testable, and easy to evolve.
 
-import os
-import tempfile
-from pathlib import Path
-from unittest import TestCase
-from fastapi.testclient import TestClient
+"""Defines the test chat sessions unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from augmentedquill.main import app
-from augmentedquill.services.projects.projects import (
-    initialize_project_dir,
-    select_project,
-    get_chats_dir,
+from augmentedquill.services.chat.chat_session_helpers import (
+    delete_chat,
     list_chats,
     load_chat,
     save_chat,
-    delete_chat,
+)
+from augmentedquill.services.projects.projects import (
+    initialize_project_dir,
+    select_project,
 )
 
+from .api_test_case import ApiTestCase
 
-class ChatSessionsTest(TestCase):
+
+class TestChatSessionsApi(ApiTestCase):
     def setUp(self):
-        self.td = tempfile.TemporaryDirectory()
-        self.addCleanup(self.td.cleanup)
-        self.registry_path = Path(self.td.name) / "projects.json"
-        os.environ["AUGQ_PROJECTS_REGISTRY"] = str(self.registry_path)
-        self.projects_root = Path(self.td.name) / "projects"
-        os.environ["AUGQ_PROJECTS_ROOT"] = str(self.projects_root)
-        self.projects_root.mkdir(parents=True, exist_ok=True)
-
-        self.client = TestClient(app)
-
-        # Setup an active project
+        super().setUp()
         self.project_name = "test_project"
         self.project_path = self.projects_root / self.project_name
         initialize_project_dir(self.project_path, project_title="Test Project")
         select_project(self.project_name)
-
-    def tearDown(self):
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
 
     def test_backend_chat_operations(self):
         chat_id = "chat_123"
@@ -56,7 +39,7 @@ class ChatSessionsTest(TestCase):
 
         # Save
         save_chat(self.project_path, chat_id, chat_data)
-        chats_dir = get_chats_dir(self.project_path)
+        chats_dir = self.project_path / "chats"
         self.assertTrue((chats_dir / f"{chat_id}.json").exists())
 
         # List
@@ -125,3 +108,15 @@ class ChatSessionsTest(TestCase):
         save_chat(self.project_path, chat_id, chat_data)
         loaded_again = load_chat(self.project_path, chat_id)
         self.assertGreaterEqual(loaded_again["updated_at"], first_updated)
+
+    def test_api_load_missing_chat_returns_not_found(self):
+        resp = self.client.get("/api/v1/chats/does-not-exist")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_api_save_chat_rejects_malformed_json(self):
+        resp = self.client.post(
+            "/api/v1/chats/bad-json",
+            content="{bad",
+            headers={"content-type": "application/json"},
+        )
+        self.assertEqual(resp.status_code, 400)

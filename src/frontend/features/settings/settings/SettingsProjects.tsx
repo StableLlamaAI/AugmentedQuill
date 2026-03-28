@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the settings projects unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the settings projects unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useRef, useState } from 'react';
 import {
@@ -15,11 +18,13 @@ import {
   BookOpen,
   Upload,
   Download,
+  Book,
   FileText,
   Library,
   RefreshCw,
 } from 'lucide-react';
 import { AppTheme, ProjectMetadata } from '../../../types';
+import { useThemeClasses } from '../../layout/ThemeContext';
 import { Button } from '../../../components/ui/Button';
 import { api } from '../../../services/api';
 import { notifyError } from '../../../services/errorNotifier';
@@ -30,7 +35,8 @@ interface SettingsProjectsProps {
   onLoadProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, newName: string) => void;
+  // new optional language parameter when renaming
+  onRenameProject: (id: string, newName: string, newLang?: string) => void;
   onConvertProject: (newType: string) => void;
   onImportProject: (file: File) => Promise<void>;
   onRefreshProjects: () => void;
@@ -41,6 +47,7 @@ interface SettingsProjectsProps {
     bookCount: number;
   };
   theme: AppTheme;
+  languages: string[];
 }
 
 export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
@@ -57,12 +64,14 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   activeProjectType,
   activeProjectStats,
   theme,
+  languages,
 }) => {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
+  const [tempLang, setTempLang] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
 
   const canConvertTo = (target: string) => {
     if (!activeProjectType) return false;
@@ -117,6 +126,21 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
       window.URL.revokeObjectURL(url);
     } catch (e) {
       notifyError('Export failed', e);
+    }
+  };
+
+  const handleExportEpub = async (id: string) => {
+    try {
+      const blob = await api.projects.exportEpub(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${id}.epub`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      notifyError('EPUB Export failed', e);
     }
   };
 
@@ -211,14 +235,29 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          onRenameProject(proj.id, tempName);
+                          onRenameProject(proj.id, tempName, tempLang);
                           setEditingNameId(null);
                         }
                       }}
                     />
+                    <select
+                      value={tempLang}
+                      onChange={(e) => setTempLang(e.target.value)}
+                      className={`ml-2 border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 ${
+                        isLight
+                          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                          : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
+                      }`}
+                    >
+                      {languages.map((lng) => (
+                        <option key={lng} value={lng}>
+                          {lng.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       onClick={() => {
-                        onRenameProject(proj.id, tempName);
+                        onRenameProject(proj.id, tempName, tempLang);
                         setEditingNameId(null);
                       }}
                       className="text-brand-600 hover:text-brand-700"
@@ -244,10 +283,16 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                         >
                           {proj.title}
                         </h4>
+                        {proj.language && (
+                          <span className="ml-1 px-1 py-px text-[10px] font-medium uppercase rounded bg-gray-200 dark:bg-gray-700">
+                            {proj.language.toUpperCase()}
+                          </span>
+                        )}
                         <button
                           onClick={() => {
                             setEditingNameId(proj.id);
                             setTempName(proj.title);
+                            setTempLang(proj.language || 'en');
                           }}
                           className={`opacity-0 group-hover/title:opacity-100 transition-opacity ${
                             isLight
@@ -272,6 +317,17 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
             </div>
 
             <div className="flex items-center space-x-3 justify-end">
+              <button
+                className={`p-2 rounded transition-colors ${
+                  isLight
+                    ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-100'
+                    : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-800'
+                }`}
+                onClick={() => handleExportEpub(proj.id)}
+                title="Export Project (EPUB)"
+              >
+                <Book size={18} />
+              </button>
               <button
                 className={`p-2 rounded transition-colors ${
                   isLight

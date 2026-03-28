@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the chat api helpers unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the chat api helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -40,11 +41,15 @@ def normalize_chat_messages(val: Any) -> list[dict]:
         tcs = m.get("tool_calls")
         if isinstance(tcs, list) and tcs:
             msg["tool_calls"] = tcs
+            # OpenAI requires content=null for assistant messages that have tool_calls
+            if role == "assistant":
+                msg["content"] = None
         out.append(msg)
     return out
 
 
 async def inject_project_images(messages: list[dict]):
+    """Inject Project Images."""
     if not messages:
         return
 

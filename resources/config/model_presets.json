@@ -1,0 +1,100 @@
+{
+  "presets": [
+    {
+      "id": "openai-balanced-chat",
+      "name": "Balanced Chat",
+      "description": "Balanced default for general chat and co-writing tasks.",
+      "model_id_patterns": ["^gpt-4(\\.|-|o)", "^gpt-5"],
+      "parameters": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_tokens": 2048,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "stop": [],
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": ""
+      }
+    },
+    {
+      "id": "reasoning-low-temp",
+      "name": "Reasoning (Low Temp)",
+      "description": "Conservative sampling for analysis/editing and deterministic behavior.",
+      "model_id_patterns": ["reason", "^o[13]", "^gpt-5"],
+      "parameters": {
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 4096,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "stop": [],
+        "seed": 42,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": ""
+      }
+    },
+    {
+      "id": "thinking-heavy-chat",
+      "name": "Thinking Heavy",
+      "description": "High-latency reasoning-focused setup. Usually a poor default for writing flow.",
+      "model_id_patterns": ["thinking", "reasoning"],
+      "parameters": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "max_tokens": 4096,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "stop": [],
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": "{\"reasoning\": {\"enabled\": true}}"
+      },
+      "warnings": {
+        "writing": "This preset is optimized for deep reasoning and may slow writing flow or produce overlong internal reasoning output."
+      }
+    },
+    {
+      "id": "qwen35-thinking-default",
+      "name": "Qwen 3.5 Thinking",
+      "description": "Qwen3.5 recommended sampling for default thinking mode.",
+      "model_id_patterns": ["^qwen(/|-)?.*3\\.5", "Qwen3\\.5", "Qwen/Qwen3\\.5"],
+      "parameters": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "max_tokens": null,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "stop": [],
+        "seed": null,
+        "top_k": 20,
+        "min_p": 0.0,
+        "extra_body": "{\"repetition_penalty\": 1.0}"
+      },
+      "warnings": {
+        "writing": "This is a thinking-mode preset and should not be used for WRITING; prefer the non-thinking preset for drafting flow."
+      }
+    },
+    {
+      "id": "qwen35-instruct-non-thinking",
+      "name": "Qwen 3.5 Instruct (Non-Thinking)",
+      "description": "Qwen3.5 recommended non-thinking sampling profile with direct responses.",
+      "model_id_patterns": ["^qwen(/|-)?.*3\\.5", "Qwen3\\.5", "Qwen/Qwen3\\.5"],
+      "parameters": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "max_tokens": null,
+        "presence_penalty": 1.5,
+        "frequency_penalty": 0.0,
+        "stop": [],
+        "seed": null,
+        "top_k": 20,
+        "min_p": 0.0,
+        "extra_body": "{\"repetition_penalty\": 1.0, \"chat_template_kwargs\": {\"enable_thinking\": false}}"
+      }
+    }
+  ]
+}

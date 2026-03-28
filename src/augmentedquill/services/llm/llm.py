@@ -4,9 +4,9 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the llm unit so this responsibility stays isolated, testable, and easy to evolve.
 
-"""LLM adapter facade.
+"""Defines the llm unit so this responsibility stays isolated, testable, and easy to evolve.
+
 
 Public API is kept stable while implementations are split into:
 - llm_stream_ops: streaming + tool parsing stream pipeline
@@ -20,7 +20,7 @@ import os
 
 import httpx
 
-from augmentedquill.core.config import load_machine_config, CONFIG_DIR
+from augmentedquill.core.config import load_machine_config
 from augmentedquill.services.llm import llm_logging as _llm_logging
 from augmentedquill.services.llm import llm_stream_ops as _llm_stream_ops
 from augmentedquill.services.llm import llm_completion_ops as _llm_completion_ops
@@ -39,7 +39,7 @@ def get_selected_model_name(
     payload: Dict[str, Any], model_type: str | None = None
 ) -> str | None:
     """Get the selected model name based on payload and model_type."""
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config() or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = payload.get("model_name")
@@ -59,7 +59,7 @@ def get_selected_model_name(
 def resolve_openai_credentials(
     payload: Dict[str, Any],
     model_type: str | None = None,
-) -> Tuple[str, str | None, str, int]:
+) -> Tuple[str, str | None, str, int, str | None]:
     """Resolve (base_url, api_key, model_id, timeout_s) from machine config and overrides.
 
     Precedence:
@@ -67,7 +67,7 @@ def resolve_openai_credentials(
     2. Payload overrides: base_url, api_key, model, timeout_s or model_name (by name)
     3. machine.json -> openai.models[] (selected by name based on model_type)
     """
-    machine = load_machine_config(CONFIG_DIR / "machine.json") or {}
+    machine = load_machine_config() or {}
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = get_selected_model_name(payload, model_type)
@@ -79,11 +79,10 @@ def resolve_openai_credentials(
 
     models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
     if not (isinstance(models, list) and models):
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400,
-            detail="No OpenAI models configured. Configure openai.models[] in machine.json.",
+        raise ConfigurationError(
+            "No OpenAI models configured. Configure openai.models[] in machine.json.",
         )
 
     chosen = find_model_in_list(models, selected_name) or models[0]
@@ -101,156 +100,234 @@ def resolve_openai_credentials(
         api_key = env_key
 
     if not base_url or not model_id:
-        from fastapi import HTTPException
+        from augmentedquill.services.exceptions import ConfigurationError
 
-        raise HTTPException(
-            status_code=400, detail="Missing base_url or model in configuration"
-        )
+        raise ConfigurationError("Missing base_url or model in configuration")
 
     try:
         ts = int(timeout_s or 60)
     except Exception:
         ts = 60
-    return str(base_url), (str(api_key) if api_key else None), str(model_id), ts
+    return (
+        str(base_url),
+        (str(api_key) if api_key else None),
+        str(model_id),
+        ts,
+        selected_name,
+    )
 
 
 async def unified_chat_stream(
     *,
+    caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
-    log_entry: dict | None = None,
+    extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[dict]:
     # Keep tests monkeypatching augmentedquill.services.llm.llm.httpx effective.
+    """Unified Chat Stream."""
+    if model_type == "WRITING":
+        tools = None
+        tool_choice = None
+        supports_function_calling = False
     _llm_stream_ops.httpx = httpx
     async for chunk in _llm_stream_ops.unified_chat_stream(
+        caller_id=caller_id,
+        model_type=model_type,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         supports_function_calling=supports_function_calling,
         tools=tools,
         tool_choice=tool_choice,
         temperature=temperature,
         max_tokens=max_tokens,
-        log_entry=log_entry,
+        extra_body=extra_body,
+        skip_validation=skip_validation,
     ):
         yield chunk
 
 
 async def unified_chat_complete(
     *,
+    caller_id: str,
+    model_type: str | None = None,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     supports_function_calling: bool = True,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
-    temperature: float = 0.7,
+    temperature: float | None = None,
     max_tokens: int | None = None,
+    extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Unified Chat Complete."""
+    if model_type == "WRITING":
+        tools = None
+        tool_choice = None
+        supports_function_calling = False
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.unified_chat_complete(
+        caller_id=caller_id,
+        model_type=model_type,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         supports_function_calling=supports_function_calling,
         tools=tools,
         tool_choice=tool_choice,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
+        skip_validation=skip_validation,
     )
 
 
 async def openai_chat_complete(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Openai Chat Complete."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_chat_complete(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     )
 
 
 async def openai_completions(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
     n: int = 1,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> dict:
+    """Openai Completions."""
     _llm_completion_ops.httpx = httpx
     return await _llm_completion_ops.openai_completions(
+        caller_id=caller_id,
         prompt=prompt,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
         n=n,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     )
 
 
 async def openai_chat_complete_stream(
     *,
+    caller_id: str,
     messages: list[dict],
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[str]:
+    """Openai Chat Complete Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_chat_complete_stream(
+        caller_id=caller_id,
         messages=messages,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        extra_body=extra_body,
+        skip_validation=skip_validation,
     ):
         yield chunk
 
 
 async def openai_completions_stream(
     *,
+    caller_id: str,
     prompt: str,
     base_url: str,
     api_key: str | None,
     model_id: str,
     timeout_s: int,
+    model_name: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     extra_body: dict | None = None,
+    skip_validation: bool = False,
 ) -> AsyncIterator[str]:
+    """Openai Completions Stream."""
     _llm_completion_ops.httpx = httpx
     async for chunk in _llm_completion_ops.openai_completions_stream(
+        caller_id=caller_id,
         prompt=prompt,
         base_url=base_url,
         api_key=api_key,
         model_id=model_id,
         timeout_s=timeout_s,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
         extra_body=extra_body,
+        skip_validation=skip_validation,
     ):
         yield chunk

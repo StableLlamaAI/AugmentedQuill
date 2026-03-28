@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "AugmentedQuill - Your Words, Amplified",
   "main": "main.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
@@ -15,24 +18,31 @@
   },
   "license": "GPL-3.0",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "com.stablellamaai.augmentedquill",
     "productName": "AugmentedQuill",
+    "afterPack": "./afterPack.js",
     "directories": {
       "output": "dist"
-    },
-    "mac": {
-      "category": "public.app-category.productivity"
     },
     "win": {
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "category": "Office",
+      "desktop": {
+        "entry": {
+          "Terminal": "false",
+          "StartupNotify": "true"
+        }
+      }
     },
+    "asar": true,
+    "asarUnpack": "backend/run_app/**",
     "extraResources": [
       {
         "from": "../dist/run_app",

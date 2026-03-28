@@ -2,12 +2,16 @@ name: Create Release (manual)
 
 on:
   workflow_dispatch:
-    branches: [ "main" ]
     inputs:
       version:
         description: 'New release version (tag), e.g. v1.2.3'
         required: true
         type: string
+      prerelease:
+        description: 'Set as a pre-release'
+        required: false
+        default: false
+        type: boolean
       body:
         description: 'Release notes / body'
         required: false
@@ -16,35 +20,150 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_VERSION: ${{ github.event.inputs.version }}
+
 jobs:
-  create-release:
+  pre-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Ensure workflow is running on `main`
+      - name: Ensure workflow is running on allowed branches
         run: |
-          if [ "${GITHUB_REF#refs/heads/}" != "main" ]; then
-            echo "This workflow can only be run on the main branch.";
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          if [ "${BRANCH_NAME}" != "main" ] && [ "${BRANCH_NAME}" != "develop" ]; then
+            echo "This workflow can only be run on main or develop.";
+            echo "Current branch: ${BRANCH_NAME}";
             exit 1;
           fi
 
-      - name: Ensure RELEASE_TOKEN secret is provided
+  build-backend-onedir:
+    needs: pre-check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
         run: |
-          if [ -z "${{ secrets.RELEASE_TOKEN }}" ]; then
-            echo "Secret RELEASE_TOKEN is not set. This workflow requires a personal access token (repo scope) in the repo secrets named RELEASE_TOKEN.";
-            echo "Create a PAT with 'repo' scope and add it at Settings → Secrets → Actions → New repository secret.";
-            exit 1;
-          fi
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller uvicorn
+          cd src/frontend
+          npm ci
+          npm run build
+      - name: Build Backend (onedir)
+        run: python build_backend.py onedir
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-onedir-${{ runner.os }}
+          path: dist/run_app/
 
-      - name: Create GitHub Release (action)
+  build-electron:
+    needs: build-backend-onedir
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download Backend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-onedir-${{ runner.os }}
+          path: dist/run_app
+      - name: Set version in electron/package.json
+        run: |
+          VERSION="${{ env.RELEASE_VERSION }}"
+          VERSION_CLEAN="${VERSION#v}"
+          # Use python for cross-platform JSON editing to avoid sed incompatibilities
+          python3 -c "import json; p='electron/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
+        shell: bash
+      - name: Build Electron App
+        run: |
+          cd electron
+          npm install
+          npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Electron Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-assets-${{ runner.os }}
+          path: electron/dist/*
+
+  build-backend-onefile:
+    needs: pre-check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller uvicorn
+          cd src/frontend
+          npm ci
+          npm run build
+      - name: Build Backend (onefile)
+        run: python build_backend.py onefile
+      - name: Upload Onefile Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-onefile-${{ runner.os }}
+          path: dist/AugmentedQuill*
+
+  create-release:
+    needs: [build-electron, build-backend-onefile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-assets
+          merge-multiple: true
+
+      - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.version }}
           name: ${{ github.event.inputs.version }}
           body: ${{ github.event.inputs.body }}
           draft: false
-          prerelease: false
-          commit: main
-          token: ${{ secrets.RELEASE_TOKEN }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          commit: ${{ github.ref_name }}
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          artifacts: "all-assets/*"
+          allowUpdates: true
+          replacesArtifacts: true

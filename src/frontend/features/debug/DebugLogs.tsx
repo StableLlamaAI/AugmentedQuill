@@ -4,7 +4,10 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// Purpose: Defines the debug logs unit so this responsibility stays isolated, testable, and easy to evolve.
+
+/**
+ * Defines the debug logs unit so this responsibility stays isolated, testable, and easy to evolve.
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -18,6 +21,7 @@ import {
   List,
 } from 'lucide-react';
 import { AppTheme } from '../../types';
+import { useThemeClasses } from '../layout/ThemeContext';
 import { api } from '../../services/api';
 import { DebugLogEntry } from '../../services/apiTypes';
 
@@ -40,7 +44,7 @@ const JsonView: React.FC<{
     return false;
   });
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const textMuted = 'text-brand-gray-500';
 
@@ -48,8 +52,15 @@ const JsonView: React.FC<{
     if (data === null) return <span className="text-blue-400">null</span>;
     if (typeof data === 'undefined')
       return <span className="text-brand-gray-600">undefined</span>;
-    if (typeof data === 'string')
-      return <span className="text-green-500 whitespace-pre-wrap">"{data}"</span>;
+    if (typeof data === 'string') {
+      // Replace escaped newlines (e.g. from JSON strings in tool arguments) with real line breaks
+      const formattedData = data.replace(/\\n/g, '\n');
+      return (
+        <span className="text-green-500 whitespace-pre-wrap break-words break-all">
+          "{formattedData}"
+        </span>
+      );
+    }
     if (typeof data === 'number')
       return <span className="text-orange-500">{data}</span>;
     if (typeof data === 'boolean')
@@ -101,6 +112,23 @@ const JsonView: React.FC<{
   );
 };
 
+const getCallerOrigin = (caller_id?: string) => {
+  if (!caller_id) return 'Unknown';
+  if (caller_id.startsWith('api.')) return 'User request';
+  if (
+    caller_id.startsWith('story_generation') ||
+    caller_id.startsWith('sourcebook.') ||
+    caller_id.startsWith('chat_tools.') ||
+    caller_id.startsWith('llm_utils.') ||
+    caller_id.startsWith('settings_machine.') ||
+    caller_id.startsWith('story_api_stream.') ||
+    caller_id.startsWith('chat_api_proxy.')
+  ) {
+    return 'Internal workflow';
+  }
+  return 'Internal';
+};
+
 export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
@@ -108,7 +136,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   const [streamMode, setStreamMode] = useState<'chunks' | 'aggregated'>('aggregated');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const isLight = theme === 'light';
+  const { isLight } = useThemeClasses();
   const bgMain = isLight ? 'bg-white' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
@@ -250,9 +278,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               <p>No LLM communications logged yet.</p>
             </div>
           ) : (
-            logs.map((log) => (
+            logs.map((log, idx) => (
               <div
-                key={log.id}
+                key={`${log.id ?? 'log'}-${idx}`}
                 className={`border rounded-lg overflow-hidden ${borderMain} ${
                   expandedLogs[log.id] ? 'ring-1 ring-blue-500/30' : ''
                 }`}
@@ -263,38 +291,40 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                   }`}
                   onClick={() => toggleExpand(log.id)}
                 >
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                    {expandedLogs[log.id] ? (
-                      <ChevronDown size={16} />
-                    ) : (
-                      <ChevronRight size={16} />
-                    )}
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-mono px-1.5 py-0.5 rounded ${
-                            log.request.method === 'POST'
-                              ? 'bg-green-500/10 text-green-500'
-                              : 'bg-blue-500/10 text-blue-500'
-                          }`}
-                        >
-                          {log.request.method}
-                        </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
+                    <div className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[62%]">
+                      {expandedLogs[log.id] ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                        {log.request && (
+                          <span
+                            className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                              log.request.method === 'POST'
+                                ? 'bg-green-500/10 text-green-500'
+                                : 'bg-blue-500/10 text-blue-500'
+                            }`}
+                          >
+                            {log.request.method}
+                          </span>
+                        )}
                         {log.model_type && (
                           <span
                             className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                               log.model_type === 'EDITING'
-                                ? 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+                                ? 'bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20'
                                 : log.model_type === 'WRITING'
-                                  ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                                  : 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                  ? 'bg-violet-500/10 text-violet-500 border-violet-500/20'
+                                  : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
                             }`}
                           >
                             {log.model_type}
                           </span>
                         )}
                         <span className={`text-sm font-medium truncate ${textMain}`}>
-                          {log.request.url.split('/').pop()}
+                          {log.request?.url?.split('/').pop() || ''}
                         </span>
                         {log.response?.status_code && (
                           <span
@@ -309,16 +339,21 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[10px] text-brand-gray-500 font-mono">
-                          Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                    </div>
+                    <div className="w-full sm:w-[36%] text-right flex flex-wrap items-center justify-end gap-3 text-[10px] text-brand-gray-500 font-mono">
+                      {log.caller_id && (
+                        <span className="truncate">
+                          Caller: {log.caller_id} ({getCallerOrigin(log.caller_id)})
                         </span>
-                        {log.timestamp_end && (
-                          <span className="text-[10px] text-brand-gray-500 font-mono">
-                            End: {new Date(log.timestamp_end).toLocaleTimeString()}
-                          </span>
-                        )}
-                      </div>
+                      )}
+                      <span className="truncate">
+                        Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                      </span>
+                      {log.timestamp_end && (
+                        <span className="truncate">
+                          End: {new Date(log.timestamp_end).toLocaleTimeString()}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -327,6 +362,22 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                   <div
                     className={`p-4 border-t ${borderMain} space-y-4 font-mono text-xs`}
                   >
+                    {log.caller_id && (
+                      <div className="space-y-2">
+                        <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
+                          Caller
+                        </h4>
+                        <div
+                          className={`p-3 rounded-lg overflow-x-auto ${
+                            isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900'
+                          }`}
+                        >
+                          <div className="text-blue-400">
+                            {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
                         Request
@@ -365,6 +416,18 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                                   {typeof log.response.error === 'string'
                                     ? log.response.error
                                     : JSON.stringify(log.response.error, null, 2)}
+                                </div>
+                              </div>
+                            )}
+                            {log.response.thinking && (
+                              <div className="space-y-1">
+                                <span className="text-blue-400">thinking:</span>
+                                <div
+                                  className={
+                                    'mt-1 p-2 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 whitespace-pre-wrap font-sans text-sm italic'
+                                  }
+                                >
+                                  {log.response.thinking}
                                 </div>
                               </div>
                             )}

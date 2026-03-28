@@ -4,10 +4,12 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project story ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project story ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List
 
@@ -22,6 +24,12 @@ def update_book_metadata_in_project(
     notes: str = None,
     private_notes: str = None,
 ) -> None:
+    """Update Book Metadata In Project."""
+    # Security: Prevent path traversal
+    if not book_id:
+        raise ValueError("book_id is required")
+    book_id = os.path.basename(book_id)
+
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
 
@@ -46,14 +54,32 @@ def update_book_metadata_in_project(
 
 
 def read_book_content_in_project(active: Path, book_id: str) -> str:
-    content_path = active / "books" / book_id / "book_content.md"
+    # Security: Prevent path traversal by ensuring book_id is a simple name
+    if not book_id:
+        return ""
+    book_id = os.path.basename(book_id)
+
+    content_path = (active / "books" / book_id / "book_content.md").resolve()
+    # Ensure the resolved path is actually inside the books directory
+    if not content_path.is_relative_to((active / "books").resolve()):
+        return ""
+
     if not content_path.exists():
         return ""
     return content_path.read_text(encoding="utf-8")
 
 
 def write_book_content_in_project(active: Path, book_id: str, content: str) -> None:
-    book_dir = active / "books" / book_id
+    # Security: Prevent path traversal by ensuring book_id is a simple name
+    if not book_id:
+        raise ValueError("book_id is required")
+    book_id = os.path.basename(book_id)
+
+    book_dir = (active / "books" / book_id).resolve()
+    # Ensure the directory is inside the books scope
+    if not book_dir.is_relative_to((active / "books").resolve()):
+        raise ValueError(f"Access denied to book directory: {book_id}")
+
     book_dir.mkdir(parents=True, exist_ok=True)
     content_path = book_dir / "book_content.md"
     content_path.write_text(content, encoding="utf-8")
@@ -66,7 +92,10 @@ def update_story_metadata_in_project(
     tags: List[str] = None,
     notes: str = None,
     private_notes: str = None,
+    conflicts: list | None = None,
+    language: str = None,
 ) -> None:
+    """Update Story Metadata In Project."""
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
 
@@ -80,11 +109,16 @@ def update_story_metadata_in_project(
         story["notes"] = notes
     if private_notes is not None:
         story["private_notes"] = private_notes
+    if conflicts is not None:
+        story["conflicts"] = conflicts
+    if language is not None:
+        story["language"] = language
 
     save_story_config(story_path, story)
 
 
 def read_story_content_in_project(active: Path) -> str:
+    """Read Story Content In Project."""
     story = load_story_config(active / "story.json") or {}
     project_type = story.get("project_type", "novel")
 
@@ -100,6 +134,7 @@ def read_story_content_in_project(active: Path) -> str:
 
 
 def write_story_content_in_project(active: Path, content: str) -> None:
+    """Write Story Content In Project."""
     story = load_story_config(active / "story.json") or {}
     project_type = story.get("project_type", "novel")
 
@@ -110,3 +145,31 @@ def write_story_content_in_project(active: Path, content: str) -> None:
         content_path = active / "story_content.md"
 
     content_path.write_text(content, encoding="utf-8")
+
+
+def read_scratchpad_in_project(active: Path) -> str:
+    """Read Scratchpad In Project."""
+    scratchpad_path = active / "scratchpad.txt"
+    if not scratchpad_path.exists():
+        return ""
+    return scratchpad_path.read_text(encoding="utf-8")
+
+
+def write_scratchpad_in_project(active: Path, content: str) -> None:
+    """Write Scratchpad In Project."""
+    scratchpad_path = active / "scratchpad.txt"
+    scratchpad_path.write_text(content, encoding="utf-8")
+
+
+def read_editing_scratchpad_in_project(active: Path) -> str:
+    """Read the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
+    scratchpad_path = active / "editing_scratchpad.txt"
+    if not scratchpad_path.exists():
+        return ""
+    return scratchpad_path.read_text(encoding="utf-8")
+
+
+def write_editing_scratchpad_in_project(active: Path, content: str) -> None:
+    """Write the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
+    scratchpad_path = active / "editing_scratchpad.txt"
+    scratchpad_path.write_text(content, encoding="utf-8")

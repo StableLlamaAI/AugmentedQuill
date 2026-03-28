@@ -4,7 +4,8 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# Purpose: Defines the project lifecycle ops unit so this responsibility stays isolated, testable, and easy to evolve.
+
+"""Defines the project lifecycle ops unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ def delete_project_under_root(
     projects_root: Path,
     current_registry: Dict,
 ) -> Tuple[bool, str, str, List[str]]:
+    """Delete Project Under Root."""
     if not name:
         return False, "Project name is required", "", []
     if (
@@ -65,6 +67,7 @@ def delete_project_under_root(
 
 
 def validate_project_dir_data(path: Path) -> Tuple[bool, str]:
+    """Validate Project Dir Data."""
     if not path.exists():
         return False, "does_not_exist"
     if not path.is_dir():
@@ -111,7 +114,13 @@ def initialize_project_dir_data(
     project_title: str,
     project_type: str,
     now_iso: str,
+    language: str = "en",
 ) -> None:
+    """Initialize Project Dir Data.
+
+    ``language`` is stored in story.json so the LLM helpers know which
+    translation to select.
+    """
     path.mkdir(parents=True, exist_ok=True)
     story_path = path / "story.json"
 
@@ -122,14 +131,17 @@ def initialize_project_dir_data(
             "metadata": {"version": 2},
             "project_title": project_title,
             "project_type": project_type,
-            "chapters": [],
-            "books": [],
+            "language": language,
             "content_file": "content.md",
             "format": "markdown",
             "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
             "created_at": now_iso,
             "tags": [],
         }
+        if project_type == "series":
+            payload["books"] = []
+        elif project_type == "novel":
+            payload["chapters"] = []
         save_story_config(story_path, payload)
 
     if project_type == "short-story":
@@ -146,6 +158,7 @@ def list_projects_under_root(
     projects_root: Path,
     validate_project_dir: Callable[[Path], object],
 ) -> List[Dict[str, str | bool]]:
+    """List Projects Under Root."""
     if not projects_root.exists():
         return []
 
@@ -165,6 +178,12 @@ def list_projects_under_root(
             except Exception:
                 pass
 
+        lang = "en"
+        try:
+            story = load_story_config(directory / "story.json") or {}
+            lang = str(story.get("language", "en") or "en")
+        except Exception:
+            pass
         items.append(
             {
                 "id": directory.name,
@@ -173,6 +192,7 @@ def list_projects_under_root(
                 "is_valid": getattr(info, "is_valid", False),
                 "title": title,
                 "type": project_type,
+                "language": lang,
             }
         )
 
@@ -183,9 +203,11 @@ def create_project_under_root(
     name: str,
     project_type: str,
     projects_root: Path,
-    initialize_project: Callable[[Path, str, str], None],
+    initialize_project: Callable[[Path, str, str, str], None],
     validate_project: Callable[[Path], object],
+    language: str = "en",
 ) -> Tuple[bool, str, Path | None]:
+    """Create Project Under Root."""
     if not name:
         return False, "Project name is required", None
     if name.strip() != name or name in (".", ".."):
@@ -206,7 +228,7 @@ def create_project_under_root(
         project_path = projects_root / f"{safe_name}_{counter}"
 
     projects_root.mkdir(parents=True, exist_ok=True)
-    initialize_project(project_path, name, project_type)
+    initialize_project(project_path, name, project_type, language)
 
     if not getattr(validate_project(project_path), "is_valid", False):
         return False, "Failed to initialize project", None
@@ -220,6 +242,7 @@ def select_project_under_root(
     initialize_project: Callable[[Path, str, str], None],
     validate_project: Callable[[Path], object],
 ) -> Tuple[bool, str, Path | None]:
+    """Select Project Under Root."""
     if not name:
         return False, "Project name is required", None
 
