@@ -166,6 +166,19 @@ jobs:
           path: all-assets
           merge-multiple: true
 
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          find all-assets -type f \(
+            -name '*.tar.gz' -o \
+            -name '*.exe' -o \
+            -name '*.dmg' -o \
+            -name '*.AppImage' -o \
+            -name '*.zip'
+          \) -exec cp {} release-assets/ \;
+          echo "Release asset candidates:"
+          ls -la release-assets
+
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
@@ -176,6 +189,6 @@ jobs:
           prerelease: ${{ github.event.inputs.prerelease }}
           commit: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "all-assets/**/*.{tar.gz,exe,dmg,AppImage,zip}"
+          artifacts: "release-assets/*"
           allowUpdates: true
           replacesArtifacts: true
