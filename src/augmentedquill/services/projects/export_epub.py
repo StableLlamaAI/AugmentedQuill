@@ -114,7 +114,10 @@ def export_project_epub_response(name: str | None = None) -> Response:
 
         # Normalize and ensure the project directory is directly under the projects root
         candidate_path = (projects_root / name).resolve()
-        if not candidate_path.is_relative_to(projects_root) or candidate_path.parent != projects_root:
+        if (
+            not candidate_path.is_relative_to(projects_root)
+            or candidate_path.parent != projects_root
+        ):
             raise BadRequestError("Project not found")
         path = candidate_path
     else:
