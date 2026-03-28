@@ -105,16 +105,27 @@ def scan_project_chapters(active: Path) -> List[Tuple[int, Path, str, str]]:
 
 def export_project_epub_response(name: str | None = None) -> Response:
     """Export the project as an EPUB file."""
+    projects_root = get_projects_root().resolve()
+
     if name:
-        # Prevent path traversal
+        # Basic disallow of obvious traversal characters
         if ".." in name or "/" in name or "\\" in name:
             raise BadRequestError("Invalid project name")
-        path = get_projects_root() / name
-    else:
-        path = get_active_project_dir()
 
-    if not path or not path.resolve().is_relative_to(get_projects_root().resolve()):
-        raise BadRequestError("Project not found")
+        # Normalize and ensure the project directory is directly under the projects root
+        candidate_path = (projects_root / name).resolve()
+        if not candidate_path.is_relative_to(projects_root) or candidate_path.parent != projects_root:
+            raise BadRequestError("Project not found")
+        path = candidate_path
+    else:
+        # Use the active project, but still normalize and ensure it is under the projects root
+        active_path = get_active_project_dir()
+        if not active_path:
+            raise BadRequestError("Project not found")
+        active_path = active_path.resolve()
+        if not active_path.is_relative_to(projects_root):
+            raise BadRequestError("Project not found")
+        path = active_path
 
     if not path.exists():
         raise BadRequestError("Project not found")
