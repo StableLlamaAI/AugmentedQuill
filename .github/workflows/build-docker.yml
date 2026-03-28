@@ -2,8 +2,9 @@ name: Build Docker Image
 
 on:
   release:
-    # Run this workflow when a release or pre-release is published
-    types: [published, released, prereleased]
+    # Run this workflow when a release is created/published/prereleased
+    # `ncipollo/release-action` sometimes emits `created` first, so include it.
+    types: [created, published, prereleased]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
