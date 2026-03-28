@@ -65,6 +65,41 @@ class StoryEndpointsTest(ApiTestCase):
         (pdir / "story.json").write_text(json.dumps(story_cfg), encoding="utf-8")
         return pdir
 
+    def _make_series_project(self, name: str = "series") -> Path:
+        ok, msg = select_project(name)
+        self.assertTrue(ok, msg)
+        pdir = self.projects_root / name
+
+        import json
+
+        story_cfg = {
+            "project_title": "Series P",
+            "project_type": "series",
+            "format": "markdown",
+            "story_summary": "Existing series summary.",
+            "books": [
+                {
+                    "id": "book-1",
+                    "folder": "book-1",
+                    "title": "Book One",
+                    "summary": "Book-level summary one.",
+                    "chapters": [{"title": "Chapter 1", "summary": "CHAPTER ONLY ONE"}],
+                },
+                {
+                    "id": "book-2",
+                    "folder": "book-2",
+                    "title": "Book Two",
+                    "summary": "Book-level summary two.",
+                    "chapters": [{"title": "Chapter 2", "summary": "CHAPTER ONLY TWO"}],
+                },
+            ],
+            "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
+            "metadata": {"version": 2},
+            "tags": ["fantasy"],
+        }
+        (pdir / "story.json").write_text(json.dumps(story_cfg), encoding="utf-8")
+        return pdir
+
     # ---- PUT /api/v1/chapters/{id}/summary ----
     def test_put_summary_updates_story(self):
         pdir = self._make_project()
@@ -134,6 +169,49 @@ class StoryEndpointsTest(ApiTestCase):
 
         story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story["chapters"][0]["summary"], "AI summary")
+
+    def test_story_story_summary_for_series_uses_book_summaries(self):
+        pdir = self._make_series_project()
+        self._orig_resolve = llm.resolve_openai_credentials
+        self._orig_unified = llm.unified_chat_complete
+
+        async def fake_complete(**kwargs):  # type: ignore
+            content = kwargs.get("messages", [{}])[-1].get("content", "")
+            self.assertIn("Book summaries:", content)
+            self.assertIn("Book One:\nBook-level summary one.", content)
+            self.assertIn("Book Two:\nBook-level summary two.", content)
+            self.assertNotIn("CHAPTER ONLY ONE", content)
+            self.assertNotIn("CHAPTER ONLY TWO", content)
+            return {"content": "Series AI summary", "tool_calls": [], "thinking": ""}
+
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+        llm.unified_chat_complete = fake_complete  # type: ignore
+
+        def _undo():
+            llm.resolve_openai_credentials = self._orig_resolve  # type: ignore
+            llm.unified_chat_complete = self._orig_unified  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/story-summary",
+            json={"mode": "update", "model_name": "fake"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data["summary"], "Series AI summary")
+
+        import json
+
+        story = json.loads((pdir / "story.json").read_text(encoding="utf-8"))
+        self.assertEqual(story["story_summary"], "Series AI summary")
 
     def test_story_write_overwrites_file(self):
         pdir = self._make_project()

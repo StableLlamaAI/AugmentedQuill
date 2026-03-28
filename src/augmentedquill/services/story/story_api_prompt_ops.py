@@ -174,7 +174,8 @@ def build_story_summary_messages(
     *,
     mode: str,
     current_story_summary: str,
-    chapter_summaries: list[str],
+    source_summaries: list[str],
+    summary_heading: str,
     model_overrides: dict,
     language: str | None = None,
     project_type: str | None = None,
@@ -228,7 +229,8 @@ def build_story_summary_messages(
         user_prompt = get_user_prompt(
             "story_summary_new",
             language=language,
-            chapter_summaries="\n\n".join(chapter_summaries),
+            summary_heading=summary_heading,
+            source_summaries="\n\n".join(source_summaries),
             user_prompt_overrides=model_overrides,
         )
     else:
@@ -236,7 +238,8 @@ def build_story_summary_messages(
             "story_summary_update",
             language=language,
             existing_summary=current_story_summary,
-            chapter_summaries="\n\n".join(chapter_summaries),
+            summary_heading=summary_heading,
+            source_summaries="\n\n".join(source_summaries),
             user_prompt_overrides=model_overrides,
         )
     return [sys_msg, {"role": "user", "content": user_prompt}]

@@ -10,7 +10,10 @@
 from unittest import TestCase
 
 from augmentedquill.core.prompts import get_system_message
-from augmentedquill.services.story.story_api_prompt_ops import build_ai_action_messages
+from augmentedquill.services.story.story_api_prompt_ops import (
+    build_ai_action_messages,
+    build_story_summary_messages,
+)
 
 
 class StoryApiPromptOpsTest(TestCase):
@@ -65,3 +68,20 @@ class StoryApiPromptOpsTest(TestCase):
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         self.assertIsNotNone(user_msg)
         self.assertIn("current draft", user_msg["content"].lower())
+
+    def test_story_summary_messages_use_book_heading_for_series(self):
+        messages = build_story_summary_messages(
+            mode="update",
+            current_story_summary="Current project summary",
+            source_summaries=["Book One:\nSeries setup", "Book Two:\nSeries payoff"],
+            summary_heading="Book summaries",
+            model_overrides={},
+            language="en",
+            project_type="series",
+        )
+
+        user_msg = next((m for m in messages if m["role"] == "user"), None)
+        self.assertIsNotNone(user_msg)
+        self.assertIn("Book summaries:", user_msg["content"])
+        self.assertIn("Book One:\nSeries setup", user_msg["content"])
+        self.assertNotIn("Chapter summaries:", user_msg["content"])

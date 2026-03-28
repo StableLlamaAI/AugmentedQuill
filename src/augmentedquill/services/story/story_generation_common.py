@@ -29,6 +29,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     get_tool_schemas,
 )
 from augmentedquill.services.story.story_api_state_ops import (
+    collect_book_summaries,
     collect_chapter_summaries,
     ensure_chapter_slot,
     get_active_story_or_raise,
@@ -245,12 +246,19 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
             ),
         }
 
-    chapters_data = get_all_normalized_chapters(story)
     current_story_summary = story.get("story_summary", "")
 
-    chapter_summaries = collect_chapter_summaries(chapters_data)
-    if not chapter_summaries:
-        raise BadRequestError("No chapter summaries available")
+    if story.get("project_type") == "series":
+        source_summaries = collect_book_summaries(story.get("books", []))
+        summary_heading = "Book summaries"
+        if not source_summaries:
+            raise BadRequestError("No book summaries available")
+    else:
+        chapters_data = get_all_normalized_chapters(story)
+        source_summaries = collect_chapter_summaries(chapters_data)
+        summary_heading = "Chapter summaries"
+        if not source_summaries:
+            raise BadRequestError("No chapter summaries available")
 
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
@@ -262,7 +270,8 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     messages = build_story_summary_messages(
         mode=mode,
         current_story_summary=current_story_summary,
-        chapter_summaries=chapter_summaries,
+        source_summaries=source_summaries,
+        summary_heading=summary_heading,
         model_overrides=model_overrides,
         language=story.get("language", "en"),
         project_type=story.get("project_type"),

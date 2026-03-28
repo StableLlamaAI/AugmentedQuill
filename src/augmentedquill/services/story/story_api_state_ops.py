@@ -76,3 +76,16 @@ def collect_chapter_summaries(chapters_data: list[dict]) -> list[str]:
         if summary:
             chapter_summaries.append(f"{title}:\n{summary}")
     return chapter_summaries
+
+
+def collect_book_summaries(books_data: list[dict]) -> list[str]:
+    """Collect Book Summaries."""
+    book_summaries: list[str] = []
+    for index, book in enumerate(books_data):
+        if not isinstance(book, dict):
+            continue
+        summary = str(book.get("summary", "")).strip()
+        title = str(book.get("title", "")).strip() or f"Book {index + 1}"
+        if summary:
+            book_summaries.append(f"{title}:\n{summary}")
+    return book_summaries

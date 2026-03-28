@@ -75,6 +75,11 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     ? 'bg-brand-gray-50 text-brand-gray-600 border-brand-gray-200'
     : 'bg-brand-gray-800 text-brand-gray-400 border-brand-gray-700';
   const usesStoryDraftSource = projectType === 'short-story';
+  const primarySourceLabel = usesStoryDraftSource
+    ? 'Story Draft'
+    : projectType === 'series'
+      ? 'Books'
+      : 'Chapters';
 
   const handleMetadataSave = async (data: {
     title: string;
@@ -118,7 +123,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           onSave={handleMetadataSave}
           onClose={() => setMetadataModalOpen(false)}
           allowConflicts={usesStoryDraftSource}
-          primarySourceLabel={usesStoryDraftSource ? 'Story Draft' : 'Chapters'}
+          primarySourceLabel={primarySourceLabel}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
           theme={theme}

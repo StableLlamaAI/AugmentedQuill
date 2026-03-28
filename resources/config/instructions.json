@@ -92,8 +92,8 @@
     "_use": "EDITING",
     "en": [
       "You are an expert story editor.",
-      "Base the summary strictly on the provided chapter summaries.",
-      "Write a comprehensive summary of the entire story based on the chapter summaries provided.",
+      "Base the summary strictly on the provided summaries.",
+      "Write a comprehensive summary of the entire story based on the provided summaries.",
       "Capture the overall plot, main characters, themes, tone, and narrative arc.",
       "Do not invent new events or metadata."
     ]
@@ -353,9 +353,9 @@
     "story_summary_new": {
       "_use": "EDITING",
       "en": [
-        "Chapter summaries:",
+        "{summary_heading}:",
         "",
-        "{chapter_summaries}",
+        "{source_summaries}",
         "",
         "Task: Write a comprehensive story summary (10-20 sentences)."
       ]
@@ -367,11 +367,11 @@
         "",
         "{existing_summary}",
         "",
-        "Chapter summaries:",
+        "{summary_heading}:",
         "",
-        "{chapter_summaries}",
+        "{source_summaries}",
         "",
-        "Task: Update the story summary to accurately reflect all chapters, keeping style and comprehensiveness."
+        "Task: Update the story summary to accurately reflect all provided summaries, keeping style and comprehensiveness."
       ]
     },
     "suggest_continuation": {
