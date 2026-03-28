@@ -259,33 +259,37 @@ def get_image_file_response(filename: str) -> FileResponse:
 
 def export_project_response(name: str | None = None) -> Response:
     """Export Project Response."""
+    projects_root = get_projects_root()
     if name:
-        # Prevent path traversal
-        if ".." in name or "/" in name or "\\" in name:
-            raise BadRequestError("Invalid project name")
-        path = get_projects_root() / name
+        # Use safe child path to prevent path traversal
+        path = _safe_child_path(projects_root, name)
     else:
         path = get_active_project_dir()
 
-    if not path or not path.resolve().is_relative_to(get_projects_root().resolve()):
+    if not path:
         raise BadRequestError("Project not found")
 
-    if not path.exists():
+    resolved_root = projects_root.resolve()
+    resolved_path = path.resolve()
+    if not resolved_path.is_relative_to(resolved_root):
+        raise BadRequestError("Project not found")
+
+    if not resolved_path.exists():
         raise BadRequestError("Project not found")
 
     mem_zip = io.BytesIO()
     with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in shutil.os.walk(path):
+        for root, _, files in shutil.os.walk(resolved_path):
             for file in files:
                 file_path = Path(root) / file
-                archive_name = file_path.relative_to(path)
+                archive_name = file_path.relative_to(resolved_path)
                 zf.write(file_path, arcname=archive_name)
 
     mem_zip.seek(0)
     return Response(
         content=mem_zip.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={path.name}.zip"},
+        headers={"Content-Disposition": f"attachment; filename={resolved_path.name}.zip"},
     )
 
 
