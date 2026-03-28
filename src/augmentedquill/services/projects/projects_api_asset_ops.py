@@ -289,7 +289,9 @@ def export_project_response(name: str | None = None) -> Response:
     return Response(
         content=mem_zip.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={resolved_path.name}.zip"},
+        headers={
+            "Content-Disposition": f"attachment; filename={resolved_path.name}.zip"
+        },
     )
 
 
