@@ -41,6 +41,8 @@ interface Props {
   title: string;
   theme?: AppTheme;
   languages?: string[];
+  allowConflicts?: boolean;
+  primarySourceLabel?: string;
   onAiGenerate?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -59,6 +61,8 @@ export function MetadataEditorDialog({
   title,
   theme = 'mixed',
   languages = [],
+  allowConflicts = false,
+  primarySourceLabel = 'Chapters',
   onAiGenerate,
   aiDisabledReason,
 }: Props) {
@@ -101,6 +105,9 @@ export function MetadataEditorDialog({
 
     if (Object.keys(updates).length > 0) {
       setData((prev) => ({ ...prev, ...updates }));
+      if (updates.conflicts) {
+        setConflicts(updates.conflicts.map((conflict) => normalizeConflict(conflict)));
+      }
       lastSavedDataRef.current = {
         ...lastSavedDataRef.current,
         ...updates,
@@ -248,6 +255,10 @@ export function MetadataEditorDialog({
     (type === 'story'
       ? 'Generate story summary with AI (EDITING model)'
       : 'Generate summary with AI (EDITING model)');
+  const primarySourceTitle = `from ${primarySourceLabel}`;
+  const regeneratePrimaryTitle = `Regenerate summary from ${primarySourceLabel}`;
+  const updatePrimaryTitle = `Update existing summary with facts from ${primarySourceLabel}`;
+  const rewritePrimaryTitle = `Rewrite existing summary using ${primarySourceLabel} style`;
 
   const modalContent = (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -396,7 +407,7 @@ export function MetadataEditorDialog({
                 <Lock size={16} />
                 Private Notes
               </button>
-              {type === 'chapter' && (
+              {(type === 'chapter' || allowConflicts) && (
                 <button
                   onClick={() => setActiveTab('conflicts')}
                   className={`px-4 py-2 flex items-center gap-2 whitespace-nowrap text-sm ${
@@ -485,7 +496,7 @@ export function MetadataEditorDialog({
                                 }`}
                               >
                                 <Wand2 size={12} className="mr-2" />
-                                from Chapters
+                                {primarySourceTitle}
                               </span>
                               <span
                                 className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
@@ -500,7 +511,7 @@ export function MetadataEditorDialog({
                             </div>
                           ) : (
                             <>
-                              {/* Chapter Group */}
+                              {/* Primary Source Group */}
                               <div
                                 className={`flex items-center rounded-md p-1 space-x-1 border ${
                                   theme === 'light'
@@ -514,10 +525,10 @@ export function MetadataEditorDialog({
                                       ? 'bg-primary/20 text-primary'
                                       : 'text-brand-gray-500'
                                   }`}
-                                  title="Regenerate summary from Chapters"
+                                  title={regeneratePrimaryTitle}
                                 >
                                   <Wand2 size={12} className="mr-2" />
-                                  from Chapters
+                                  {primarySourceTitle}
                                 </span>
                                 <div
                                   className={`w-px h-4 ${
@@ -537,7 +548,7 @@ export function MetadataEditorDialog({
                                   }}
                                   disabled={isAiGenerating || !!aiDisabledReason}
                                   className="text-xs h-6"
-                                  title="Update existing summary with facts from Chapters"
+                                  title={updatePrimaryTitle}
                                 >
                                   Update
                                 </Button>
@@ -552,7 +563,7 @@ export function MetadataEditorDialog({
                                   }}
                                   disabled={isAiGenerating || !!aiDisabledReason}
                                   className="text-xs h-6"
-                                  title="Rewrite existing summary using Chapter style"
+                                  title={rewritePrimaryTitle}
                                 >
                                   Rewrite
                                 </Button>
@@ -682,8 +693,9 @@ export function MetadataEditorDialog({
               {activeTab === 'conflicts' && (
                 <div className="space-y-4">
                   <div className="text-sm text-brand-gray-500">
-                    Track unresolved tensions in story order. CHAT can use these to keep
-                    pacing and logic coherent while planning later chapters.
+                    {allowConflicts
+                      ? 'Track unresolved tensions in the story draft. CHAT can use these conflicts to maintain continuity while planning and revising the text.'
+                      : 'Track unresolved tensions in story order. CHAT can use these to keep pacing and logic coherent while planning later chapters.'}
                   </div>
                   <Button onClick={addConflict} variant="secondary" theme={theme}>
                     + Add Conflict

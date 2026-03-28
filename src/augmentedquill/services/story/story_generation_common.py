@@ -29,6 +29,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     get_tool_schemas,
 )
 from augmentedquill.services.story.story_api_state_ops import (
+    collect_book_summaries,
     collect_chapter_summaries,
     ensure_chapter_slot,
     get_active_story_or_raise,
@@ -37,6 +38,10 @@ from augmentedquill.services.story.story_api_state_ops import (
     get_normalized_chapters,
     read_text_or_raise,
 )
+
+
+def _resolve_story_draft_path(active, story: dict):
+    return active / str(story.get("content_file") or "content.md")
 
 
 def sanitize_prompt(prompt: str) -> str:
@@ -102,7 +107,11 @@ def gather_writing_context(
         story_tags = str(tags)
 
     # conflicts
-    raw_conflicts = chapters_data[pos].get("conflicts", [])
+    raw_conflicts = (
+        story.get("conflicts", [])
+        if pos is None
+        else chapters_data[pos].get("conflicts", [])
+    )
     conflict_lines = []
     if isinstance(raw_conflicts, list):
         for c in raw_conflicts:
@@ -115,10 +124,13 @@ def gather_writing_context(
                 conflict_lines.append(line)
     conflicts_text = "\n".join(conflict_lines)
 
-    # chapter notes
+    # draft notes
     chapter_notes = ""
     try:
-        chapter_notes = str(chapters_data[pos].get("notes", "") or "").strip()
+        if pos is None:
+            chapter_notes = str(story.get("notes", "") or "").strip()
+        else:
+            chapter_notes = str(chapters_data[pos].get("notes", "") or "").strip()
     except Exception:
         chapter_notes = ""
 
@@ -183,13 +195,70 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     if mode not in ("discard", "update", ""):
         raise BadRequestError("mode must be discard|update")
 
-    _, story_path, story = get_active_story_or_raise()
-    chapters_data = get_all_normalized_chapters(story)
+    active, story_path, story = get_active_story_or_raise()
+    if story.get("project_type") == "short-story":
+        content_path = _resolve_story_draft_path(active, story)
+        story_text = read_text_or_raise(content_path, message="Failed to read story")
+        if not story_text.strip():
+            raise BadRequestError("No story content available")
+
+        (
+            base_url,
+            api_key,
+            model_id,
+            timeout_s,
+            model_name,
+            model_overrides,
+            model_type,
+        ) = resolve_model_runtime(
+            payload=payload,
+            model_type="EDITING",
+            base_dir=BASE_DIR,
+        )
+        content_label = get_system_message(
+            "chapter_text_label",
+            model_overrides,
+            language=story.get("language", "en"),
+        )
+        messages = build_chapter_summary_messages(
+            mode=mode,
+            current_summary=story.get("story_summary", ""),
+            chapter_text=story_text,
+            content_label=content_label,
+            model_overrides=model_overrides,
+            language=story.get("language", "en"),
+            project_type="short-story",
+        )
+        return {
+            "story": story,
+            "story_path": story_path,
+            "messages": messages,
+            "base_url": base_url,
+            "api_key": api_key,
+            "model_id": model_id,
+            "model_name": model_name,
+            "model_type": model_type,
+            "timeout_s": timeout_s,
+            "tools": (
+                get_tool_schemas(EDITING_ROLE, project_type="short-story")
+                if model_type == "EDITING"
+                else None
+            ),
+        }
+
     current_story_summary = story.get("story_summary", "")
 
-    chapter_summaries = collect_chapter_summaries(chapters_data)
-    if not chapter_summaries:
-        raise BadRequestError("No chapter summaries available")
+    if story.get("project_type") == "series":
+        source_summaries = collect_book_summaries(story.get("books", []))
+        summary_heading = "Book summaries"
+        if not source_summaries:
+            raise BadRequestError("No book summaries available")
+    else:
+        chapters_data = get_all_normalized_chapters(story)
+        source_summaries = collect_chapter_summaries(chapters_data)
+        summary_heading = "Chapter summaries"
+        if not source_summaries:
+            raise BadRequestError("No chapter summaries available")
 
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
@@ -201,9 +270,11 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     messages = build_story_summary_messages(
         mode=mode,
         current_story_summary=current_story_summary,
-        chapter_summaries=chapter_summaries,
+        source_summaries=source_summaries,
+        summary_heading=summary_heading,
         model_overrides=model_overrides,
         language=story.get("language", "en"),
+        project_type=story.get("project_type"),
     )
     return {
         "story": story,
@@ -215,7 +286,11 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
-        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
+        "tools": (
+            get_tool_schemas(EDITING_ROLE, project_type=story.get("project_type"))
+            if model_type == "EDITING"
+            else None
+        ),
     }
 
 
@@ -257,6 +332,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         model_overrides=model_overrides,
         story_summary=story.get("story_summary"),
         language=story.get("language", "en"),
+        project_type=story.get("project_type"),
     )
 
     return {
@@ -272,7 +348,11 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
-        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
+        "tools": (
+            get_tool_schemas(EDITING_ROLE, project_type=story.get("project_type"))
+            if model_type == "EDITING"
+            else None
+        ),
     }
 
 
@@ -396,17 +476,27 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
 
 def prepare_ai_action_generation(payload: dict) -> dict:
     """Prepare generic AI action generation (Extend/Rewrite/Summary)."""
-    target = payload.get("target")  # 'summary' | 'chapter'
+    target = payload.get("target")  # 'summary' | 'chapter' | 'story'
     action = payload.get("action")  # 'update' | 'rewrite' | 'extend'
     chap_id = payload.get("chap_id")
 
-    if target in ("summary", "chapter") and not chap_id:
-        raise BadRequestError("chap_id is required for chapter-level actions")
+    active, story_path, story = get_active_story_or_raise()
+    project_type = story.get("project_type", "novel")
+    scope = str(
+        payload.get("scope")
+        or ("story" if project_type == "short-story" else "chapter")
+    ).lower()
 
-    if chap_id:
-        _, path, pos = get_chapter_locator(chap_id)
+    if scope == "story":
+        path = _resolve_story_draft_path(active, story)
+        pos = None
     else:
-        path, pos = None, None
+        if target in ("summary", "chapter") and not chap_id:
+            raise BadRequestError("chap_id is required for chapter-level actions")
+        if chap_id:
+            _, path, pos = get_chapter_locator(chap_id)
+        else:
+            path, pos = None, None
 
     # Read the current chapter text once (if we have a chapter path).
     actual_chapter_text = read_text_or_raise(path) if path else None
@@ -427,10 +517,12 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     ):
         is_notes_source = True
 
-    _, story_path, story = get_active_story_or_raise()
-    chapters_data = get_normalized_chapters(story)
+    chapters_data = get_all_normalized_chapters(story)
 
-    if pos is not None:
+    if scope == "story":
+        chapter_summary = story.get("story_summary", "")
+        chapter_title = story.get("project_title") or path.name
+    elif pos is not None:
         ensure_chapter_slot(chapters_data, pos)
         chapter_summary = chapters_data[pos].get("summary", "")
         chapter_title = chapters_data[pos].get("title") or path.name
@@ -444,7 +536,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     context = gather_writing_context(
         story=story,
         chapters_data=chapters_data,
-        pos=pos if pos is not None else 0,
+        pos=pos,
         title=chapter_title,
         summary=chapter_summary,
         payload=payload,
@@ -485,6 +577,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         ),
         model_overrides=model_overrides,
         language=story.get("language", "en"),
+        project_type=project_type,
     )
 
     # Sanitize the last message content (the user prompt)
@@ -511,5 +604,9 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
-        "tools": get_tool_schemas(EDITING_ROLE) if model_type == "EDITING" else None,
+        "tools": (
+            get_tool_schemas(EDITING_ROLE, project_type=project_type)
+            if model_type == "EDITING"
+            else None
+        ),
     }

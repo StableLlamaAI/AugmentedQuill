@@ -49,6 +49,10 @@ class UpdateStoryMetadataParams(BaseModel):
     summary: str | None = Field(None, description="The new story summary")
     notes: str | None = Field(None, description="General notes for the story")
     tags: list[str] | None = Field(None, description="List of tags for the story")
+    conflicts: list[dict] | None = Field(
+        None,
+        description="List of active story conflicts with description and optional resolution.",
+    )
 
 
 class ReadStoryContentParams(BaseModel):
@@ -180,7 +184,7 @@ class WriteEditingScratchpadParams(BaseModel):
 
 
 @chat_tool(
-    description="Get the overall story title, summary, notes, tags, and project type.",
+    description="Get the overall story title, summary, notes, conflicts, tags, and project type.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
 )
@@ -195,12 +199,13 @@ async def get_story_metadata(
         "summary": story.get("story_summary", ""),
         "notes": story.get("notes", ""),
         "tags": story.get("tags", []),
+        "conflicts": story.get("conflicts", []),
         "project_type": story.get("project_type", "novel"),
     }
 
 
 @chat_tool(
-    description="Update the story title, summary, notes, or tags. Provide only the fields you want to change.",
+    description="Update story-level metadata such as title, summary, notes, tags, or story-level conflicts. Provide only the fields you want to change.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
@@ -209,7 +214,11 @@ async def update_story_metadata(
 ):
     """Update Story Metadata."""
     _update_story_metadata(
-        title=params.title, summary=params.summary, notes=params.notes, tags=params.tags
+        title=params.title,
+        summary=params.summary,
+        notes=params.notes,
+        tags=params.tags,
+        conflicts=params.conflicts,
     )
     mutations["story_changed"] = True
     return {"ok": True}
@@ -239,7 +248,7 @@ async def read_story_content(
     description=(
         "Overwrite the ENTIRE story-level content file. "
         "WARNING: replaces all existing text — only use for short stories or complete rewrites. "
-        "For targeted edits prefer replace_text_in_chapter."
+        "In chapter-based projects, prefer targeted chapter editing tools instead of whole-document replacement."
     ),
     allowed_roles=(EDITING_ROLE,),
     capability="prose-write",
@@ -449,7 +458,7 @@ async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: d
 
 @chat_tool(
     description=(
-        "Auto-generate a story summary from chapter content using AI. "
+        "Auto-generate a story summary from the current project prose context using AI. "
         "Use mode='discard' to write from scratch or mode='update' (default) to refine the existing one."
     ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),

@@ -282,11 +282,12 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     ) {
       // Intelligence: Check content to decide priorities
       const hasStorySummary = !!story.summary;
-      const chapterCount = story.chapters.length;
+      const chapterCount =
+        story.projectType === 'short-story' ? 0 : story.chapters.length;
 
       // Base ratios
-      let storyRatio = 0.33;
-      let chaptersRatio = 0.33;
+      let storyRatio = story.projectType === 'short-story' ? 0.5 : 0.33;
+      let chaptersRatio = story.projectType === 'short-story' ? 0.15 : 0.33;
 
       if (chapterCount < 2) {
         chaptersRatio = 0.2;
@@ -410,6 +411,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             private_notes={story.private_notes}
             language={story.language}
             conflicts={story.conflicts}
+            projectType={story.projectType}
             onAiGenerateSummary={(action, onProgress, currentText, onThinking) =>
               handleSidebarAiAction(
                 'story',
@@ -431,35 +433,37 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           />
         </CollapsibleSection>
 
-        <CollapsibleSection
-          title="Chapters"
-          isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
-          onToggle={() => toggleCollapsed('isChaptersCollapsed')}
-          height={sidebarPrefs.chaptersHeight}
-          onHeightChange={(h) => updateHeight('chaptersHeight', h)}
-          isLight={isLight}
-        >
-          <ChapterList
-            chapters={story.chapters}
-            books={story.books}
-            projectType={story.projectType}
-            currentChapterId={currentChapterId}
-            onSelect={handleChapterSelect}
-            onDelete={deleteChapter}
-            onUpdateChapter={updateChapter}
-            onUpdateBook={updateBook}
-            onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
-            onBookCreate={handleBookCreate}
-            onBookDelete={handleBookDelete}
-            onReorderChapters={handleReorderChapters}
-            onReorderBooks={handleReorderBooks}
-            onAiAction={handleSidebarAiAction}
-            isAiAvailable={isEditingAvailable}
-            theme={currentTheme}
-            onOpenImages={handleOpenImages}
-            languages={instructionLanguages}
-          />
-        </CollapsibleSection>
+        {story.projectType !== 'short-story' && (
+          <CollapsibleSection
+            title="Chapters"
+            isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
+            onToggle={() => toggleCollapsed('isChaptersCollapsed')}
+            height={sidebarPrefs.chaptersHeight}
+            onHeightChange={(h) => updateHeight('chaptersHeight', h)}
+            isLight={isLight}
+          >
+            <ChapterList
+              chapters={story.chapters}
+              books={story.books}
+              projectType={story.projectType}
+              currentChapterId={currentChapterId}
+              onSelect={handleChapterSelect}
+              onDelete={deleteChapter}
+              onUpdateChapter={updateChapter}
+              onUpdateBook={updateBook}
+              onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
+              onBookCreate={handleBookCreate}
+              onBookDelete={handleBookDelete}
+              onReorderChapters={handleReorderChapters}
+              onReorderBooks={handleReorderBooks}
+              onAiAction={handleSidebarAiAction}
+              isAiAvailable={isEditingAvailable}
+              theme={currentTheme}
+              onOpenImages={handleOpenImages}
+              languages={instructionLanguages}
+            />
+          </CollapsibleSection>
+        )}
 
         <CollapsibleSection
           title="Sourcebook"

@@ -341,7 +341,7 @@ export const generateSimpleContent = async (
 export const streamAiAction = async (
   target: 'book_summary' | 'story_summary' | 'summary' | 'chapter',
   action: 'write' | 'update' | 'rewrite' | 'extend',
-  chapId: string,
+  targetId: string,
   currentText: string,
   onUpdate?: (fullText: string) => void,
   onThinking?: (thinking: string) => void,
@@ -349,11 +349,13 @@ export const streamAiAction = async (
   checkedSourcebookIds?: string[],
   cancelSignal?: CancelSignal
 ): Promise<string> => {
+  const scope = targetId === 'story' ? 'story' : 'chapter';
   const body: any = {
     target,
     action,
-    chap_id: Number(chapId),
-    target_id: Number(chapId),
+    scope,
+    chap_id: scope === 'chapter' ? Number(targetId) : undefined,
+    target_id: scope === 'chapter' ? Number(targetId) : targetId,
     current_text: currentText,
     source,
   };
@@ -411,11 +413,13 @@ export const generateContinuations = async (
   }
 ): Promise<string[]> => {
   if (!chapterId) return [];
+  const scope = chapterId === 'story' ? 'story' : 'chapter';
 
   const fetchSuggestion = async (index: number) => {
     try {
       const body: any = {
-        chap_id: Number(chapterId),
+        scope,
+        chap_id: scope === 'chapter' ? Number(chapterId) : undefined,
         model_name: config.name || config.id,
         current_text: currentContent,
       };

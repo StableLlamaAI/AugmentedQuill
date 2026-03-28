@@ -132,7 +132,11 @@ describe('storyApi', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap_id: 1, current_text: 'text' }),
+        body: JSON.stringify({
+          scope: 'chapter',
+          chap_id: 1,
+          current_text: 'text',
+        }),
       },
       'Failed to compute sourcebook relevance'
     );

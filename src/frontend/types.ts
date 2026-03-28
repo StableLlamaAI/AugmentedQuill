@@ -27,6 +27,19 @@ export interface Chapter {
   conflicts?: Conflict[];
 }
 
+export interface WritingUnit {
+  id: string;
+  scope: 'story' | 'chapter';
+  title: string;
+  summary: string;
+  content: string;
+  filename?: string;
+  book_id?: string;
+  notes?: string;
+  private_notes?: string;
+  conflicts?: Conflict[];
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -66,6 +79,7 @@ export interface Story {
   image_style?: string;
   image_additional_info?: string;
   chapters: Chapter[];
+  draft: WritingUnit | null;
   projectType: 'short-story' | 'novel' | 'series';
   language?: string;
   books?: Book[];

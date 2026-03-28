@@ -90,6 +90,7 @@ def build_chapter_summary_messages(
     story_summary: str | None = None,
     story_tags: str = "",
     language: str | None = None,
+    project_type: str | None = None,
 ):
     """Build messages for creating or updating a chapter summary."""
     _ensure_tools_loaded()
@@ -108,7 +109,7 @@ def build_chapter_summary_messages(
             )
         )
 
-    tools = get_tool_schemas(EDITING_ROLE)
+    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
     if tools:
         # Only expose read-only tools that provide facts and story context.
         relevant_names = {
@@ -173,16 +174,18 @@ def build_story_summary_messages(
     *,
     mode: str,
     current_story_summary: str,
-    chapter_summaries: list[str],
+    source_summaries: list[str],
+    summary_heading: str,
     model_overrides: dict,
     language: str | None = None,
+    project_type: str | None = None,
 ):
     """Build messages for creating or updating a story-level summary."""
     sys_parts = [
         get_system_message("story_summarizer", model_overrides, language=language)
     ]
 
-    tools = get_tool_schemas(EDITING_ROLE)
+    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
     if tools:
         # Only expose read-only tools relevant for understanding the story state.
         relevant_names = {
@@ -226,7 +229,8 @@ def build_story_summary_messages(
         user_prompt = get_user_prompt(
             "story_summary_new",
             language=language,
-            chapter_summaries="\n\n".join(chapter_summaries),
+            summary_heading=summary_heading,
+            source_summaries="\n\n".join(source_summaries),
             user_prompt_overrides=model_overrides,
         )
     else:
@@ -234,7 +238,8 @@ def build_story_summary_messages(
             "story_summary_update",
             language=language,
             existing_summary=current_story_summary,
-            chapter_summaries="\n\n".join(chapter_summaries),
+            summary_heading=summary_heading,
+            source_summaries="\n\n".join(source_summaries),
             user_prompt_overrides=model_overrides,
         )
     return [sys_msg, {"role": "user", "content": user_prompt}]
@@ -325,6 +330,7 @@ def build_ai_action_messages(
     content_label: str | None = None,
     model_overrides: dict,
     language: str | None = None,
+    project_type: str | None = None,
 ):
     """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
     _ensure_tools_loaded()
@@ -372,7 +378,7 @@ def build_ai_action_messages(
                 story_tags=story_tags,
             )
 
-        tools = get_tool_schemas(EDITING_ROLE)
+        tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
         if tools:
             # Only expose read-only tools that provide facts and story context.
             relevant_names = {

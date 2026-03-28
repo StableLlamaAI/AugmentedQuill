@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { StoryState, Chapter, Book } from '../../types';
+import { StoryState, Chapter, Book, WritingUnit } from '../../types';
 import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
@@ -42,6 +42,7 @@ const INITIAL_STORY: StoryState = {
   image_style: '',
   image_additional_info: '',
   chapters: [],
+  draft: null,
   projectType: 'novel',
   books: [],
   sourcebook: [],
@@ -83,6 +84,22 @@ export const resolveExternalHistorySourceState = (
   return latestState || fallbackState;
 };
 
+const buildStoryDraft = (
+  projectId: string,
+  story: StoryApiPayload,
+  content: string = ''
+): WritingUnit => ({
+  id: 'story',
+  scope: 'story',
+  title: story.project_title || projectId,
+  summary: story.story_summary || '',
+  content,
+  notes: story.notes || '',
+  private_notes: story.private_notes || '',
+  conflicts: story.conflicts || [],
+  filename: 'content.md',
+});
+
 export const buildInitialStoryState = (
   projectId: string,
   story: StoryApiPayload,
@@ -97,13 +114,20 @@ export const buildInitialStoryState = (
   image_style: story.image_style || '',
   image_additional_info: story.image_additional_info || '',
   chapters,
+  draft:
+    story.project_type === 'short-story' ? buildStoryDraft(projectId, story) : null,
   projectType: story.project_type || 'novel',
   language: story.language || 'en',
   books: story.books || [],
   sourcebook: story.sourcebook || [],
   conflicts: story.conflicts || [],
   llm_prefs: story.llm_prefs,
-  currentChapterId: chapters.length > 0 ? chapters[0].id : null,
+  currentChapterId:
+    story.project_type === 'short-story'
+      ? null
+      : chapters.length > 0
+        ? chapters[0].id
+        : null,
   lastUpdated: Date.now(),
 });
 
@@ -137,6 +161,17 @@ const buildChapterUpdateLabel = (
     return `Update chapter notes: ${chapterName}`;
   }
   return `Update chapter: ${chapterName}`;
+};
+
+const buildDraftUpdateLabel = (partial: Partial<WritingUnit>): string => {
+  if (partial.content !== undefined) return 'Edit story draft';
+  if (partial.title !== undefined) return 'Rename story';
+  if (partial.summary !== undefined) return 'Update story summary';
+  if (partial.conflicts !== undefined) return 'Update story conflicts';
+  if (partial.notes !== undefined || partial.private_notes !== undefined) {
+    return 'Update story notes';
+  }
+  return 'Update story draft';
 };
 
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
@@ -247,16 +282,27 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
           return;
         } else if (res.ok && res.story) {
-          const chaptersRes = await api.chapters.list();
-          const chapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
+          const chapters: Chapter[] =
+            res.story.project_type === 'short-story'
+              ? []
+              : mapApiChapters((await api.chapters.list()).chapters);
 
-          const newStory: StoryState = mapSelectStoryToState(
+          let newStory: StoryState = mapSelectStoryToState(
             currentProject,
             res.story,
             chapters,
             currentChapterId,
             story.chapters
           );
+
+          if (res.story.project_type === 'short-story') {
+            const content = (await api.story.getContent()).content;
+            newStory = {
+              ...newStory,
+              draft: buildStoryDraft(currentProject, res.story, content),
+              currentChapterId: null,
+            };
+          }
 
           lastLoadedChapterId.current = null;
           if (historyLabel) {
@@ -322,14 +368,21 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       if (projects.current) {
         const res = await api.projects.select(projects.current);
         if (res.ok && res.story) {
-          const chaptersRes = await api.chapters.list();
-          const chapters = mapApiChapters(chaptersRes.chapters);
+          const chapters =
+            res.story.project_type === 'short-story'
+              ? []
+              : mapApiChapters((await api.chapters.list()).chapters);
 
-          const newStory = buildInitialStoryState(
-            projects.current,
-            res.story,
-            chapters
-          );
+          let newStory = buildInitialStoryState(projects.current, res.story, chapters);
+
+          if (res.story.project_type === 'short-story') {
+            const content = (await api.story.getContent()).content;
+            newStory = {
+              ...newStory,
+              draft: buildStoryDraft(projects.current, res.story, content),
+              currentChapterId: null,
+            };
+          }
 
           setStory(newStory);
           latestStoryRef.current = newStory;
@@ -357,6 +410,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     tags: string[],
     notes?: string,
     private_notes?: string,
+    conflicts?: StoryState['conflicts'],
     language?: string
   ) => {
     const newState = {
@@ -366,7 +420,19 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       styleTags: tags,
       notes,
       private_notes,
+      conflicts: conflicts ?? story.conflicts,
       language,
+      draft:
+        story.projectType === 'short-story' && story.draft
+          ? {
+              ...story.draft,
+              title,
+              summary,
+              notes,
+              private_notes,
+              conflicts: conflicts ?? story.draft.conflicts,
+            }
+          : story.draft,
     };
     pushState(newState, `Update story metadata: ${title || story.title || 'Untitled'}`);
 
@@ -377,11 +443,63 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         tags,
         notes,
         private_notes,
+        conflicts,
         language,
       });
-      await api.story.updateTags(tags);
     } catch (e) {
       console.error('Failed to update story metadata', e);
+    }
+  };
+
+  const updateStoryDraft = async (
+    partial: Partial<WritingUnit>,
+    sync: boolean = true,
+    pushHistory: boolean = true
+  ) => {
+    if (!story.draft) return;
+
+    const newState: StoryState = {
+      ...story,
+      title: partial.title ?? story.title,
+      summary: partial.summary ?? story.summary,
+      notes: partial.notes ?? story.notes,
+      private_notes: partial.private_notes ?? story.private_notes,
+      conflicts: partial.conflicts ?? story.conflicts,
+      draft: { ...story.draft, ...partial },
+    };
+
+    if (pushHistory) {
+      pushState(newState, buildDraftUpdateLabel(partial));
+    } else {
+      setStory(newState);
+      latestStoryRef.current = newState;
+    }
+
+    if (!sync) return;
+
+    try {
+      if (partial.content !== undefined) {
+        await api.story.updateContent(partial.content);
+      }
+
+      if (
+        partial.title !== undefined ||
+        partial.summary !== undefined ||
+        partial.notes !== undefined ||
+        partial.private_notes !== undefined
+      ) {
+        await api.story.updateMetadata({
+          title: partial.title ?? story.title,
+          summary: partial.summary ?? story.summary,
+          tags: story.styleTags,
+          notes: partial.notes ?? story.notes,
+          private_notes: partial.private_notes ?? story.private_notes,
+          conflicts: partial.conflicts ?? story.conflicts,
+          language: story.language,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to update story draft', e);
     }
   };
 
@@ -404,6 +522,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     sync: boolean = true,
     pushHistory: boolean = true
   ) => {
+    if (story.projectType === 'short-story') {
+      await updateStoryDraft(partial, sync, pushHistory);
+      return;
+    }
+
     const chapter = story.chapters.find((ch) => ch.id === id);
     if (!chapter) return;
 

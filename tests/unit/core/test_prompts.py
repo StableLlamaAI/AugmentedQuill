@@ -63,3 +63,15 @@ class PromptsTest(TestCase):
         )
         # spanish translation doesn't exist so we fall back to english
         self.assertIn("Task: Write a new summary", prompt)
+
+    def test_chat_and_editing_prompts_are_project_structure_safe(self):
+        chat_msg = get_system_message("chat_llm", model_overrides={}, language="en")
+        editing_msg = get_system_message(
+            "editing_llm", model_overrides={}, language="en"
+        )
+
+        self.assertIn(
+            "Only use tools that are actually available in this session", chat_msg
+        )
+        self.assertIn("a short story has one story draft", chat_msg)
+        self.assertIn("write_story_content", editing_msg)

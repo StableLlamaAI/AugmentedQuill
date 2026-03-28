@@ -21,6 +21,7 @@ import type {
   LLMConfig,
   StoryState,
   ViewMode,
+  WritingUnit,
 } from '../../types';
 import type { ModelSelector } from '../chat/ModelSelector';
 import type { EditorHandle } from '../editor/Editor';
@@ -143,6 +144,7 @@ export type MainSidebarControls = {
     tags: string[],
     notes?: string,
     private_notes?: string,
+    conflicts?: Array<{ id: string; description: string; resolution: string }>,
     language?: string
   ) => Promise<void>;
   // optional sourcebook relevance controls (provided by suggestions hook)
@@ -187,12 +189,12 @@ export type MainEditorAiControls = {
 };
 
 export type MainEditorControls = {
-  currentChapter?: Chapter;
+  currentChapter?: WritingUnit | null;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   viewMode: ViewMode;
-  updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
+  updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;
   aiControls: MainEditorAiControls;
   setActiveFormats: Dispatch<SetStateAction<string[]>>;

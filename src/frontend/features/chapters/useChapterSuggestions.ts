@@ -19,28 +19,26 @@ import {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, Chapter, LLMConfig, StoryState, ViewMode } from '../../types';
+import { ChatMessage, LLMConfig, StoryState, ViewMode, WritingUnit } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 
 type UseChapterSuggestionsParams = {
-  currentChapter?: Chapter;
-  currentChapterId: string | null;
+  currentUnit?: WritingUnit;
   story: StoryState;
   systemPrompt: string;
   activeWritingConfig: LLMConfig;
   isWritingAvailable: boolean;
-  updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
+  updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   viewMode: ViewMode;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
 export function useChapterSuggestions({
-  currentChapter,
-  currentChapterId,
+  currentUnit,
   story,
   systemPrompt,
   activeWritingConfig,
@@ -88,11 +86,11 @@ export function useChapterSuggestions({
   // request the backend to recompute which sourcebook entries appear
   // relevant given the provided text; results replace the current checks.
   const fetchRelevance = async (text: string) => {
-    if (!currentChapterId || !autoSelectionEnabledRef.current) return;
+    if (!currentUnit || !autoSelectionEnabledRef.current) return;
     relevanceInFlightRef.current += 1;
     setIsSourcebookSelectionRunning(true);
     try {
-      const res = await api.story.computeSourcebookRelevance(currentChapterId, text);
+      const res = await api.story.computeSourcebookRelevance(currentUnit.id, text);
       if (!autoSelectionEnabledRef.current) return;
       const relevant = new Set<string>(res.relevant || []);
       setCheckedEntries(relevant);
@@ -121,12 +119,12 @@ export function useChapterSuggestions({
   // when chapter content changes, recompute sourcebook relevance after a
   // pause; this prevents a flood of model calls while the user types.
   useEffect(() => {
-    if (!currentChapter || !isAutoSourcebookSelectionEnabled) return;
+    if (!currentUnit || !isAutoSourcebookSelectionEnabled) return;
     const timer = setTimeout(() => {
-      fetchRelevance(currentChapter.content);
+      fetchRelevance(currentUnit.content);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [currentChapter?.content, isAutoSourcebookSelectionEnabled]);
+  }, [currentUnit?.content, isAutoSourcebookSelectionEnabled]);
 
   const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
@@ -187,11 +185,11 @@ export function useChapterSuggestions({
     contentOverride?: string,
     enableSuggestionMode: boolean = true
   ) => {
-    if (!currentChapter) return;
+    if (!currentUnit) return;
     if (!isWritingAvailable) return;
     if (isSuggesting) return;
 
-    const baseContent = contentOverride ?? currentChapter.content;
+    const baseContent = contentOverride ?? currentUnit.content;
 
     // Suggestion is always appended (next-paragraph style), not inline rewrite.
     const c = baseContent.length;
@@ -211,7 +209,7 @@ export function useChapterSuggestions({
         storyContext,
         systemPrompt,
         activeWritingConfig,
-        currentChapter.id,
+        currentUnit.id,
         Array.from(checkedEntries),
         {
           cancelSignal: cancelSignalRef.current,
@@ -244,7 +242,7 @@ export function useChapterSuggestions({
   };
 
   const handleAcceptContinuation = async (text: string, contentOverride?: string) => {
-    if (!currentChapterId || !currentChapter) return;
+    if (!currentUnit) return;
 
     if (!text) {
       // Dismiss: keep current content unchanged, clear suggestion state
@@ -255,7 +253,7 @@ export function useChapterSuggestions({
       return;
     }
 
-    const currentContent = contentOverride ?? currentChapter.content;
+    const currentContent = contentOverride ?? currentUnit.content;
 
     // Always append suggestions to the end of the rendered text.
     // The model's predictions are next-paragraph continuation, not in-place
@@ -272,7 +270,7 @@ export function useChapterSuggestions({
     );
 
     setSuggestUndoStack((prev) => [...prev, { content: currentContent, cursor: c }]);
-    await updateChapter(currentChapterId, { content: newContent });
+    await updateChapter(currentUnit.id, { content: newContent });
 
     const newCursor = c + separator.length + text.length;
     setSuggestCursor(newCursor);
@@ -289,7 +287,7 @@ export function useChapterSuggestions({
     cursor?: number,
     contentOverride?: string
   ) => {
-    if (!currentChapterId || !currentChapter) return;
+    if (!currentUnit) return;
     if (isSuggesting && action !== 'exit') return;
 
     if (action === 'exit') {
@@ -315,7 +313,7 @@ export function useChapterSuggestions({
     }
 
     if (action === 'regenerate') {
-      const baseContent = contentOverride ?? currentChapter.content;
+      const baseContent = contentOverride ?? currentUnit.content;
       const clampedCursor = clampCursor(
         suggestCursor ?? cursor ?? baseContent.length,
         baseContent
@@ -330,7 +328,7 @@ export function useChapterSuggestions({
       const nextStack = suggestUndoStack.slice(0, -1);
       setSuggestUndoStack(nextStack);
 
-      await updateChapter(currentChapterId, { content: last.content });
+      await updateChapter(currentUnit.id, { content: last.content });
       setSuggestCursor(last.cursor);
       setIsSuggestionMode(true);
       await handleTriggerSuggestions(last.cursor, last.content, true);

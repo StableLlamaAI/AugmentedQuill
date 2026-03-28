@@ -11,7 +11,7 @@
 
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 
-import { ChatMessage, Chapter, StoryState } from '../../types';
+import { ChatMessage, StoryState, WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
@@ -22,7 +22,7 @@ type PromptsState = {
 };
 
 type UseAiActionsParams = {
-  currentChapter?: Chapter;
+  currentUnit?: WritingUnit;
   story: StoryState;
   prompts: PromptsState;
   isEditingAvailable: boolean;
@@ -30,7 +30,7 @@ type UseAiActionsParams = {
   checkedSourcebookIds?: string[];
   updateChapter: (
     id: string,
-    partial: Partial<Chapter>,
+    partial: Partial<WritingUnit>,
     sync?: boolean
   ) => Promise<void>;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
@@ -38,7 +38,7 @@ type UseAiActionsParams = {
 };
 
 export function useAiActions({
-  currentChapter,
+  currentUnit,
   isEditingAvailable,
   isWritingAvailable,
   checkedSourcebookIds,
@@ -66,7 +66,7 @@ export function useAiActions({
     target: 'summary' | 'chapter',
     action: 'update' | 'rewrite' | 'extend'
   ) => {
-    if (!currentChapter) return;
+    if (!currentUnit) return;
     if (target === 'summary' && !isEditingAvailable) return;
     if (target === 'chapter' && !isWritingAvailable) return;
 
@@ -77,7 +77,7 @@ export function useAiActions({
     try {
       const isChapterStreamingAction =
         target === 'chapter' && (action === 'extend' || action === 'rewrite');
-      const baseContent = currentChapter.content;
+      const baseContent = currentUnit.content;
       const separator =
         action === 'extend' && baseContent.length > 0 && !baseContent.endsWith('\n')
           ? '\n\n'
@@ -98,14 +98,14 @@ export function useAiActions({
           action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
 
         // Atomic local state update WITHOUT server sync during stream
-        void updateChapter(currentChapter.id, { content: nextContent }, false);
+        void updateChapter(currentUnit.id, { content: nextContent }, false);
       };
 
       const result = await streamAiAction(
         target as any,
         action,
-        currentChapter.id,
-        currentChapter.content,
+        currentUnit.id,
+        currentUnit.content,
         pushProgress,
         undefined,
         undefined,
@@ -121,13 +121,13 @@ export function useAiActions({
       }
 
       if (target === 'summary') {
-        await updateChapter(currentChapter.id, { summary: result });
+        await updateChapter(currentUnit.id, { summary: result });
       } else if (action === 'extend') {
-        await updateChapter(currentChapter.id, {
+        await updateChapter(currentUnit.id, {
           content: baseContent + separator + result,
         });
       } else {
-        await updateChapter(currentChapter.id, { content: result });
+        await updateChapter(currentUnit.id, { content: result });
       }
     } catch (error: unknown) {
       console.error('AI Action Error:', error);

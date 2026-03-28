@@ -790,7 +790,7 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
 class CallWritingLlmParams(BaseModel):
     instruction: str = Field(
         ...,
-        description="The task for the WRITING LLM (e.g. 'Rewrite this paragraph to be more descriptive').",
+        description="The task for the WRITING LLM for the active draft or chapter (e.g. 'Rewrite this paragraph to be more descriptive').",
     )
     context: str = Field(
         ..., description="The text context the WRITING LLM needs to operate on."
@@ -856,11 +856,11 @@ async def call_writing_llm(
 class CallEditingAssistantParams(BaseModel):
     task: str = Field(
         ...,
-        description="The task the user wants the editor to perform (e.g., 'Fix the grammar in Chapter 1', 'Rewrite paragraph 2 to be more descriptive').",
+        description="The task the user wants the editor to perform on existing project prose (e.g., 'Fix the grammar in the current draft', 'Rewrite paragraph 2 to be more descriptive').",
     )
     chapter_id: int | None = Field(
         None,
-        description="Optional chapter ID to set as the active chapter for the EDITING session. Provide this when the task targets a specific chapter so the EDITING LLM has it in context from the start.",
+        description="Optional chapter ID to set as the active writing unit for chapter-based EDITING sessions. Omit this for short-story projects.",
     )
     book_id: str | None = Field(
         None,
@@ -869,7 +869,7 @@ class CallEditingAssistantParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual chapter text.",
+    description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual stored project prose.",
     allowed_roles=(CHAT_ROLE,),
     capability="delegation",
 )
@@ -895,7 +895,10 @@ async def call_editing_assistant(
 
     machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
-    sys_msg = get_system_message("editing_llm", model_overrides, language="en")
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+    sys_msg = get_system_message("editing_llm", model_overrides, language=project_lang)
 
     ctx_note = ""
     if params.chapter_id is not None:
@@ -923,7 +926,6 @@ async def call_editing_assistant(
     if params.book_id is not None:
         base_nested_payload["active_book_id"] = params.book_id
 
-    active = get_active_project_dir()
     _editing_project_type: str | None = None
     try:
         if active:

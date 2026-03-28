@@ -39,8 +39,7 @@ def _scan_chapter_files() -> List[Tuple[str, Path]]:
     p_type = story.get("project_type", "novel")
 
     if p_type == "short-story":
-        p = active / "content.md"
-        return [(1, p)]
+        return []
 
     if p_type == "series":
         books = story.get("books", [])

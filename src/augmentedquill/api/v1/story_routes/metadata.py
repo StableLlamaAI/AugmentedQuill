@@ -16,6 +16,8 @@ from augmentedquill.services.projects.project_helpers import (
     normalize_story_for_frontend,
 )
 from augmentedquill.services.projects.projects import (
+    read_story_content,
+    write_story_content,
     update_book_metadata,
     update_story_metadata,
 )
@@ -100,6 +102,7 @@ async def api_story_metadata(request: Request) -> JSONResponse:
         tags = payload.get("tags")
         notes = payload.get("notes")
         private_notes = payload.get("private_notes")
+        conflicts = payload.get("conflicts")
         language = payload.get("language")
 
         try:
@@ -109,12 +112,40 @@ async def api_story_metadata(request: Request) -> JSONResponse:
                 tags=tags,
                 notes=notes,
                 private_notes=private_notes,
+                conflicts=conflicts,
                 language=language,
             )
         except ValueError as exc:
             return JSONResponse(
                 status_code=400, content={"ok": False, "detail": str(exc)}
             )
+        return JSONResponse(content={"ok": True})
+
+    return await _dispatch_metadata_request(request, _handler)
+
+
+@router.get("/story/content")
+async def api_story_content() -> JSONResponse:
+    """Api Story Content."""
+    try:
+        _require_active_story_context()
+        return JSONResponse(content={"ok": True, "content": read_story_content()})
+    except Exception as exc:
+        return map_story_exception(exc)
+
+
+@router.post("/story/content")
+async def api_story_content_update(request: Request) -> JSONResponse:
+    """Api Story Content Update."""
+
+    async def _handler(payload: dict) -> JSONResponse:
+        _require_active_story_context()
+
+        content = payload.get("content")
+        if not isinstance(content, str):
+            raise StoryBadRequestError("content must be a string")
+
+        write_story_content(content)
         return JSONResponse(content={"ok": True})
 
     return await _dispatch_metadata_request(request, _handler)

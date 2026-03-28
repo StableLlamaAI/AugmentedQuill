@@ -78,6 +78,7 @@ export const mapSelectStoryToState = (
     image_style: story.image_style || '',
     image_additional_info: story.image_additional_info || '',
     chapters: chaptersWithPreservedState,
+    draft: null,
     projectType: story.project_type || 'novel',
     language: story.language || 'en',
     books: story.books || [],

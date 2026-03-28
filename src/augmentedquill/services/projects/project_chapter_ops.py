@@ -36,11 +36,14 @@ def update_chapter_metadata_in_project(
     conflicts: list = None,
 ) -> None:
     """Update metadata fields for a chapter by its ID across all project types."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
+
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapter metadata")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
 
     target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
 
@@ -178,11 +181,14 @@ def reorder_chapter_conflicts_in_project(
 
 def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> None:
     """Update the title of a chapter in the story.json across all project types."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
-
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
+
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapter titles")
+
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    files = _scan_chapter_files()
 
     new_title_str = str(title).strip()
     if new_title_str.lower() == "[object object]":
@@ -199,13 +205,15 @@ def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> No
 
 def delete_chapter_in_project(active: Path, chap_id: int) -> None:
     """Delete a chapter file and remove its metadata from story.json."""
+    story_path = active / "story.json"
+    story = load_story_config(story_path) or {}
+    if story.get("project_type") == "short-story":
+        raise ValueError("Short Story projects do not have chapters")
+
     _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
 
     path.unlink()
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
     p_type = story.get("project_type", "novel")
 
     if p_type == "series":

@@ -132,14 +132,16 @@ def initialize_project_dir_data(
             "project_title": project_title,
             "project_type": project_type,
             "language": language,
-            "chapters": [],
-            "books": [],
             "content_file": "content.md",
             "format": "markdown",
             "llm_prefs": {"temperature": 0.7, "max_tokens": 2048},
             "created_at": now_iso,
             "tags": [],
         }
+        if project_type == "series":
+            payload["books"] = []
+        elif project_type == "novel":
+            payload["chapters"] = []
         save_story_config(story_path, payload)
 
     if project_type == "short-story":

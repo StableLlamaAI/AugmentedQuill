@@ -85,6 +85,12 @@ def normalize_story_for_frontend(story: dict) -> dict:
                         if isinstance(conflict, dict) and "id" not in conflict:
                             conflict["id"] = f"conf_{i}"
 
+    story_conflicts = res.get("conflicts")
+    if isinstance(story_conflicts, list):
+        for i, conflict in enumerate(story_conflicts):
+            if isinstance(conflict, dict) and "id" not in conflict:
+                conflict["id"] = f"story_conf_{i}"
+
     if res.get("project_type") == "series" and "books" in res:
         for book in res["books"]:
             if isinstance(book, dict):
@@ -113,58 +119,18 @@ def _project_overview(include_notes: bool = False) -> dict:
 
     if p_type == "short-story":
         fn = story.get("content_file", "content.md")
-
-        # Preserve authored metadata so single-file projects still present
-        # rich chapter details in the same shape as multi-chapter projects.
-        chapters = story.get("chapters", [])
-        title = "Story Content"
-        summary = "Full content of the story"
-
-        if chapters and len(chapters) > 0:
-            c0 = chapters[0]
-            if isinstance(c0, dict):
-                t = c0.get("title")
-                if t and str(t).strip():
-                    title = str(t).strip()
-                s = c0.get("summary")
-                if s and str(s).strip():
-                    summary = str(s).strip()
-                notes = c0.get("notes", "")
-                conflicts = c0.get("conflicts", [])
-            else:
-                notes = ""
-                conflicts = []
-        else:
-            notes = ""
-            conflicts = []
-
-        chapter_item = {
-            "id": 1,
+        draft = {
             "filename": fn,
-            "title": title,
-            "summary": summary,
+            "title": story.get("project_title") or (active.name if active else ""),
+            "summary": story.get("story_summary") or "",
         }
         if include_notes:
-            chapter_item["notes"] = notes
+            draft["notes"] = story.get("notes") or ""
 
         return {
             **base_info,
             "content_file": fn,
-            "chapters": [chapter_item],
-        }
-
-        return {
-            **base_info,
-            "content_file": fn,
-            "chapters": [
-                {
-                    "id": 1,
-                    "filename": fn,
-                    "title": title,
-                    "summary": summary,
-                    "conflicts": conflicts,
-                }
-            ],
+            "draft": draft,
         }
 
     if p_type == "series":
@@ -239,12 +205,10 @@ def _project_overview(include_notes: bool = False) -> dict:
         pos = next((i for i, (cid, _) in enumerate(files) if cid == idx), None)
         title = None
         summary = ""
-        conflicts = []
         notes = ""
         if isinstance(pos, int) and pos < len(chapters_meta):
             title = chapters_meta[pos].get("title")
             summary = chapters_meta[pos].get("summary") or ""
-            conflicts = chapters_meta[pos].get("conflicts") or []
             notes = chapters_meta[pos].get("notes") or ""
         if not title or str(title).strip() in ("[object Object]", "object Object"):
             title = path.name
