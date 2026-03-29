@@ -2,13 +2,8 @@ name: Build Docker Image
 
 on:
   release:
-    # Run this workflow when a release is created/published/prereleased
-    # `ncipollo/release-action` sometimes emits `created` first, so include it.
-    types: [created, published, prereleased]
-  workflow_run:
-    workflows: ["Create Release (manual)"]
-    types:
-      - completed
+    # Use the release tag as the single source of truth for published image tags.
+    types: [published, prereleased]
 
 env:
   REGISTRY: ghcr.io
@@ -16,6 +11,7 @@ env:
 
 jobs:
   build-and-push-image:
+    if: ${{ github.event.release.tag_name != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,9 +21,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Lowercase image name
+      - name: Prepare image name
+        id: image
         run: |
-          echo "IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          IMAGE_NAME_LOWER="$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')"
+          echo "name=${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
+          echo "uri=${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
         uses: docker/login-action@v4
@@ -40,7 +39,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
+          images: ${{ steps.image.outputs.uri }}
           tags: |
             type=raw,value=latest
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
@@ -51,6 +50,6 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
-            ${{ github.event_name == 'release' && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME_LOWER, github.event.release.tag_name) || '' }}
+            ${{ steps.image.outputs.uri }}:latest
+            ${{ steps.image.outputs.uri }}:${{ github.event.release.tag_name }}
           labels: ${{ steps.meta.outputs.labels }}
