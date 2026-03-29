@@ -1,6 +1,12 @@
 name: Build Docker Image
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: Docker image tag to publish alongside latest.
+        required: true
+        type: string
   release:
     # Use the release tag as the single source of truth for published image tags.
     types: [published, prereleased]
@@ -11,7 +17,6 @@ env:
 
 jobs:
   build-and-push-image:
-    if: ${{ github.event.release.tag_name != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,6 +33,16 @@ jobs:
           echo "name=${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
           echo "uri=${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve image version tag
+        id: version
+        run: |
+          IMAGE_TAG="${{ inputs.version || github.event.release.tag_name }}"
+          if [ -z "${IMAGE_TAG}" ]; then
+            echo "Image tag is required but was not provided."
+            exit 1
+          fi
+          echo "tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to the Container registry
         uses: docker/login-action@v4
         with:
@@ -42,7 +57,7 @@ jobs:
           images: ${{ steps.image.outputs.uri }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ steps.version.outputs.tag }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
@@ -51,5 +66,5 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.uri }}:latest
-            ${{ steps.image.outputs.uri }}:${{ github.event.release.tag_name }}
+            ${{ steps.image.outputs.uri }}:${{ steps.version.outputs.tag }}
           labels: ${{ steps.meta.outputs.labels }}

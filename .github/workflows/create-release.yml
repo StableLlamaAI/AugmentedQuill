@@ -186,3 +186,13 @@ jobs:
           artifacts: "release-assets/*"
           allowUpdates: true
           replacesArtifacts: true
+
+  publish-docker:
+    needs: create-release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ github.event.inputs.version }}
+    secrets: inherit
