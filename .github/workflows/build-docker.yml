@@ -1,12 +1,17 @@
 name: Build Docker Image
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: Docker image tag to publish alongside latest.
+        required: true
+        type: string
   release:
-    # Run this workflow when a release or pre-release is published
-    types: [published, released, prereleased]
+    # Use the release tag as the single source of truth for published image tags.
+    types: [published, prereleased]
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -19,10 +24,27 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+
+      - name: Prepare image name
+        id: image
+        run: |
+          IMAGE_NAME_LOWER="$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')"
+          echo "name=${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
+          echo "uri=${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve image version tag
+        id: version
+        run: |
+          IMAGE_TAG="${{ inputs.version || github.event.release.tag_name }}"
+          if [ -z "${IMAGE_TAG}" ]; then
+            echo "Image tag is required but was not provided."
+            exit 1
+          fi
+          echo "tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -30,14 +52,19 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ steps.image.outputs.uri }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.version.outputs.tag }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          push: true
+          tags: |
+            ${{ steps.image.outputs.uri }}:latest
+            ${{ steps.image.outputs.uri }}:${{ steps.version.outputs.tag }}
           labels: ${{ steps.meta.outputs.labels }}
