@@ -21,7 +21,6 @@ permissions:
   contents: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RELEASE_VERSION: ${{ github.event.inputs.version }}
 
 jobs:

@@ -5,9 +5,12 @@ on:
     # Run this workflow when a release is created/published/prereleased
     # `ncipollo/release-action` sometimes emits `created` first, so include it.
     types: [created, published, prereleased]
+  workflow_run:
+    workflows: ["Create Release (manual)"]
+    types:
+      - completed
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
