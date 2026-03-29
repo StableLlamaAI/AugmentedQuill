@@ -2,7 +2,7 @@
 
 The main column of AugmentedQuill is your prose studio. It shows the active chapter (title plus editable body), hosts the AI buttons that extend or rewrite the draft, and keeps suggestions, uploads, and formatting controls just within reach. The chapter and book management UI lives in the sidebar, which is described in [Chapters and Books](04_chapters_and_books.md).
 
-`[SCREENSHOT: Main editor view with the Chapter AI badge visible at the top and the suggestion footer offering cards]`
+![Main editor view with the Chapter AI badge visible at the top and the suggestion footer offering cards](screenshots/main.png)
 
 ## Editor Workspace
 
@@ -36,7 +36,7 @@ Drag an image file (PNG, JPEG, GIF, WEBP) and drop it onto the editor paper area
 
 The condensed bar above the editor holds view toggles, formatting helpers, AI buttons, and the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING / <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> EDITING / <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> CHAT model selectors. On desktop the buttons are exposed; smaller screens wrap the view and formatting controls inside expandable menus so the same commands stay within reach.
 
-`[SCREENSHOT: Top header bar focused on the center section: view toggles, format toolbar, Chapter AI, and model selectors]`
+![Top header bar focused on the center section: view toggles, format toolbar, Chapter AI, and model selectors](screenshots/main.png)
 
 ### View and Whitespace
 
