@@ -137,6 +137,23 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, Any]:
 
 def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
     """Chapter By Id Or 404."""
+    from augmentedquill.services.projects.projects import get_active_project_dir
+
+    active = get_active_project_dir()
+    if active:
+        story = load_story_config(active / "story.json") or {}
+        p_type = story.get("project_type", "novel")
+        if p_type == "short-story":
+            # Short-story projects do not have chapter files.
+            # Treat the single story content file as a pseudo chapter #1.
+            if chap_id != 1:
+                raise NotFoundError(
+                    f"Chapter with ID {chap_id} not found. Short-story projects only support chap_id=1."
+                )
+            filename = story.get("content_file", "content.md")
+            path = active / filename
+            return (1, path, 0)
+
     files = _scan_chapter_files()
     match = next(
         ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None

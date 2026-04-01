@@ -661,6 +661,49 @@ class ToolParityTest(TestCase):
         )
         self.assertIn("error", res)
 
+    def test_insert_image_in_chapter_short_story(self):
+        # Create a short-story project with content.md
+        project_name = "test_short_story_image"
+        r = self.client.post(
+            "/api/v1/projects/create",
+            json={"name": project_name, "type": "short-story"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        r = self.client.post(
+            "/api/v1/projects/select",
+            json={"name": project_name},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+
+        from augmentedquill.services.projects.projects import get_active_project_dir
+
+        active = get_active_project_dir()
+        (active / "content.md").write_text(
+            "Paragraph one.\n\nParagraph two.", encoding="utf-8"
+        )
+
+        # Should insert in short-story content as if chap_id=1
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "hero.png", "position": "end"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"), res)
+
+        updated = (active / "content.md").read_text(encoding="utf-8")
+        self.assertIn("![hero.png](hero.png)", updated)
+
+        # Should also support write_chapter_content in short-story context as a pseudo chapter.
+        res = self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "New short story content."},
+            model_type="EDITING",
+        )
+        self.assertIn("successfully", res.get("message", ""))
+
+        updated2 = (active / "content.md").read_text(encoding="utf-8")
+        self.assertEqual(updated2, "New short story content.")
+
     def test_editing_scratchpad(self):
         # Read before any write → empty content
         res = self._call_tool("read_editing_scratchpad", {}, model_type="EDITING")
