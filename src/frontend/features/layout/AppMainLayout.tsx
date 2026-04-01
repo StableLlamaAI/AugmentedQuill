@@ -509,6 +509,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               aiControls={{
                 onAiAction: aiControls.handleAiAction,
                 isAiLoading: aiControls.isAiActionLoading,
+                isProseStreaming: aiControls.isProseStreaming,
                 isWritingAvailable: aiControls.isWritingAvailable,
                 onCancelAiAction: aiControls.cancelAiAction,
               }}

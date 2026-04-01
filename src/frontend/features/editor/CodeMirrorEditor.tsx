@@ -23,7 +23,7 @@ import {
   ViewUpdate,
   DecorationSet,
 } from '@codemirror/view';
-import { EditorState, Compartment, Prec } from '@codemirror/state';
+import { EditorState, Compartment, Prec, Annotation } from '@codemirror/state';
 import type { Extension, Range } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -246,6 +246,10 @@ const baseTheme = EditorView.theme({
   },
 });
 
+// Marks transactions that mirror external prop updates so updateListener
+// can skip emitting onChange for those programmatic document replacements.
+const externalValueSyncAnnotation = Annotation.define<boolean>();
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface CodeMirrorEditorProps {
@@ -395,6 +399,12 @@ export const CodeMirrorEditor = React.forwardRef<
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
+            const isExternalSync = update.transactions.some((tx) =>
+              tx.annotation(externalValueSyncAnnotation)
+            );
+            if (isExternalSync) {
+              return;
+            }
             const val = update.state.doc.toString();
             lastEmittedRef.current = val;
             onChangeRef.current(val);
@@ -476,6 +486,7 @@ export const CodeMirrorEditor = React.forwardRef<
 
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
+        annotations: externalValueSyncAnnotation.of(true),
         selection: {
           anchor: Math.min(anchor, maxPos),
           head: Math.min(head, maxPos),

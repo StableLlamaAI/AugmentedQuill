@@ -88,51 +88,104 @@ export const chatApi = {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // Coalesce chunk callbacks to at most once per frame so prose preview
+    // updates do not force token-rate React re-renders.
+    let pendingProseChunk: {
+      chapId: number;
+      writeMode: string;
+      accumulated: string;
+    } | null = null;
+    let proseFlushHandle: number | ReturnType<typeof setTimeout> | null = null;
+    let proseFlushUsesRaf = false;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() ?? '';
+    const flushPendingProseChunk = () => {
+      proseFlushHandle = null;
+      if (!pendingProseChunk || !onProseChunk) return;
+      const chunk = pendingProseChunk;
+      pendingProseChunk = null;
+      onProseChunk(chunk.chapId, chunk.writeMode, chunk.accumulated);
+    };
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const dataStr = trimmed.slice(6);
-        if (dataStr === '[DONE]') continue;
-        try {
-          const event = JSON.parse(dataStr) as {
-            type?: string;
-            accumulated?: string;
-            chap_id?: number;
-            write_mode?: string;
-            ok?: boolean;
-            appended_messages?: ChatToolExecutionResponse['appended_messages'];
-            mutations?: ChatToolExecutionResponse['mutations'];
-            error?: string;
-          };
+    const scheduleProseChunkFlush = () => {
+      if (!onProseChunk || proseFlushHandle !== null) return;
 
-          if (event.type === 'prose_chunk' && onProseChunk) {
-            onProseChunk(
-              event.chap_id ?? 0,
-              event.write_mode ?? '',
-              event.accumulated ?? ''
-            );
-          } else if (event.type === 'result') {
-            return {
-              ok: event.ok ?? true,
-              appended_messages: event.appended_messages ?? [],
-              mutations: event.mutations,
+      if (typeof globalThis.requestAnimationFrame === 'function') {
+        proseFlushUsesRaf = true;
+        proseFlushHandle = globalThis.requestAnimationFrame(() => {
+          flushPendingProseChunk();
+        });
+      } else {
+        proseFlushUsesRaf = false;
+        proseFlushHandle = setTimeout(() => {
+          flushPendingProseChunk();
+        }, 16);
+      }
+    };
+
+    const cancelScheduledProseFlush = () => {
+      if (proseFlushHandle === null) return;
+
+      if (proseFlushUsesRaf && typeof globalThis.cancelAnimationFrame === 'function') {
+        globalThis.cancelAnimationFrame(proseFlushHandle as number);
+      } else {
+        clearTimeout(proseFlushHandle as ReturnType<typeof setTimeout>);
+      }
+      proseFlushHandle = null;
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === '[DONE]') continue;
+          try {
+            const event = JSON.parse(dataStr) as {
+              type?: string;
+              accumulated?: string;
+              chap_id?: number;
+              write_mode?: string;
+              ok?: boolean;
+              appended_messages?: ChatToolExecutionResponse['appended_messages'];
+              mutations?: ChatToolExecutionResponse['mutations'];
+              error?: string;
             };
-          } else if (event.type === 'error') {
-            throw new Error(event.error ?? 'Tool execution failed');
+
+            if (event.type === 'prose_chunk') {
+              pendingProseChunk = {
+                chapId: event.chap_id ?? 0,
+                writeMode: event.write_mode ?? '',
+                accumulated: event.accumulated ?? '',
+              };
+              scheduleProseChunkFlush();
+            } else if (event.type === 'result') {
+              cancelScheduledProseFlush();
+              flushPendingProseChunk();
+              return {
+                ok: event.ok ?? true,
+                appended_messages: event.appended_messages ?? [],
+                mutations: event.mutations,
+              };
+            } else if (event.type === 'error') {
+              throw new Error(event.error ?? 'Tool execution failed');
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue; // malformed SSE line – skip
+            throw e;
           }
-        } catch (e) {
-          if (e instanceof SyntaxError) continue; // malformed SSE line – skip
-          throw e;
         }
       }
+    } finally {
+      cancelScheduledProseFlush();
+      flushPendingProseChunk();
     }
 
     // Stream ended without a result event (should not normally happen).

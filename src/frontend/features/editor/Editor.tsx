@@ -12,6 +12,7 @@
 import React, {
   useRef,
   useEffect,
+  useLayoutEffect,
   useImperativeHandle,
   useCallback,
   useState,
@@ -144,6 +145,8 @@ interface EditorProps {
     isAiLoading: boolean;
     isWritingAvailable?: boolean;
     onCancelAiAction?: () => void;
+    /** True whenever any LLM is writing prose into the editor. */
+    isProseStreaming?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
 }
@@ -238,9 +241,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const wysiwygRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const paperDivRef = useRef<HTMLDivElement>(null);
     const showInlineTitle = true;
     const conflictCount = chapter.conflicts?.length ?? 0;
     const isAtBottomRef = useRef<boolean>(true);
+    const isDetachedFromBottomRef = useRef<boolean>(false);
+    const autoScrollRafRef = useRef<number | null>(null);
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,6 +257,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // typed value immediately, while the parent onChange (API call) is debounced.
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
+    const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
     // Keep local state in sync when the chapter changes externally (chapter
     // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
@@ -264,10 +271,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       // undo/redo) only sync when the editor is not focused — when it IS
       // focused CodeMirror already has the correct document state.
       const editorFocused = editorViewRef.current?.hasFocus ?? false;
-      if (isChapterSwitch || !editorFocused) {
+      const shouldDeferStreamingSync =
+        proseStreamingActive && isDetachedFromBottomRef.current && !isChapterSwitch;
+      if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
         setLocalContent(chapter.content);
       }
-    }, [chapter.id, chapter.content]);
+    }, [chapter.id, chapter.content, proseStreamingActive]);
 
     useEffect(() => {
       setLocalTitle(chapter.title);
@@ -286,42 +295,102 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       isAiLoading,
       isWritingAvailable = true,
       onCancelAiAction,
+      isProseStreaming = false,
     } = aiControls;
 
-    // Detect if we are at the bottom of the scroll container
+    // Keep a stable ref to isProseStreaming so handleScroll (which has [] deps
+    // and cannot close over changing props) can read the current value.
+    // Assigning to a ref during render is safe — it is the canonical
+    // "useLatest" pattern recommended by the React team.
+    const isProseStreamingRef = useRef(isProseStreaming);
+    isProseStreamingRef.current = isProseStreaming;
+    // "useLatest" refs so effect cleanup functions always call current values
+    // without needing unstable props in their dependency arrays.
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+    const chapterContentRef = useRef(chapter.content);
+    chapterContentRef.current = chapter.content;
+    const chapterIdRef = useRef(chapter.id);
+    chapterIdRef.current = chapter.id;
+
+    // ── Scroll management ─────────────────────────────────────────────────────
+    //
+    // Design goals:
+    //   1. At bottom → auto-scroll to follow new content.
+    //   2. Not at bottom → never programmatically move the user's viewport.
+    //   3. No synthetic min-height locks (they create temporary blank space).
+    //
+    // While prose streams and the user is NOT at bottom, we freeze editor text
+    // syncing (see localContent sync effect above). This keeps scroll geometry
+    // stable and avoids jump-to-top/clamp artifacts.
+
     const handleScroll = useCallback(() => {
       if (!scrollContainerRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Use a small buffer (5px) for "at bottom" detection
-      const atBottom = scrollHeight - scrollTop - clientHeight < 5;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const atBottom = distanceFromBottom < 24;
       isAtBottomRef.current = atBottom;
+
+      // Hysteresis prevents accidental detachment caused by tiny geometry
+      // fluctuations while streaming. Only a clear manual scroll-away should
+      // pause live content sync.
+      if (atBottom) {
+        isDetachedFromBottomRef.current = false;
+      } else if (distanceFromBottom > 64) {
+        isDetachedFromBottomRef.current = true;
+      }
     }, []);
 
-    // Effect to scroll to bottom under scenarios where bottom content should remain visible
-    // while the continuation area / AI streaming can change layout.
-    useEffect(() => {
-      const hasContinuationOptionsLocal = continuations.some(
-        (option) => option && option.trim().length > 0
-      );
+    // Follow stream at bottom only.
+    useLayoutEffect(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
 
-      const shouldScroll =
-        isAiLoading ||
-        isSuggesting ||
-        (isAtBottomRef.current && hasContinuationOptionsLocal);
+      if (isDetachedFromBottomRef.current) return; // user intentionally scrolled away
 
-      if (!shouldScroll || !scrollContainerRef.current) {
-        return undefined;
+      // At bottom: follow new content, but coalesce writes to one per frame.
+      if (autoScrollRafRef.current === null) {
+        autoScrollRafRef.current = window.requestAnimationFrame(() => {
+          autoScrollRafRef.current = null;
+          const activeContainer = scrollContainerRef.current;
+          if (!activeContainer || isDetachedFromBottomRef.current) return;
+
+          const maxScrollTop = Math.max(
+            0,
+            activeContainer.scrollHeight - activeContainer.clientHeight
+          );
+          if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
+            activeContainer.scrollTop = maxScrollTop;
+          }
+
+          isAtBottomRef.current = true;
+        });
       }
+    }, [chapter.content]);
 
-      const raf = window.requestAnimationFrame(() => {
-        scrollContainerRef.current!.scrollTop =
-          scrollContainerRef.current!.scrollHeight;
-      });
+    // Chapter switch: reset scroll so the new chapter starts at the top.
+    useLayoutEffect(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      if (autoScrollRafRef.current !== null) {
+        window.cancelAnimationFrame(autoScrollRafRef.current);
+        autoScrollRafRef.current = null;
+      }
+      container.scrollTop = 0;
+      isAtBottomRef.current = true;
+      isDetachedFromBottomRef.current = false;
+    }, [chapter.id]);
 
+    useEffect(() => {
       return () => {
-        window.cancelAnimationFrame(raf);
+        if (autoScrollRafRef.current !== null) {
+          window.cancelAnimationFrame(autoScrollRafRef.current);
+          autoScrollRafRef.current = null;
+        }
       };
-    }, [chapter.content, continuations, isAiLoading, isSuggesting]);
+    }, []);
+
+    // ──────────────────────────────────────────────────────────────────────────
 
     const writingUnavailableReason =
       'This action is unavailable because no working WRITING model is configured.';
@@ -425,6 +494,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // marked → turndown round-trip lossless for soft line-breaks.
     useEffect(() => {
       if (viewMode === 'wysiwyg' && wysiwygRef.current) {
+        if (isProseStreaming && !isAtBottomRef.current) {
+          return;
+        }
         if (document.activeElement !== wysiwygRef.current) {
           wysiwygRef.current.innerHTML = marked.parse(chapter.content, {
             breaks: true,
@@ -434,7 +506,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           }
         }
       }
-    }, [chapter.content, viewMode, chapter.id, showWhitespace]);
+    }, [chapter.content, viewMode, chapter.id, showWhitespace, isProseStreaming]);
 
     const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
       if (e && !e.nativeEvent.isTrusted) return;
@@ -747,14 +819,21 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     useEffect(() => {
       if (viewMode !== 'wysiwyg' || !wysiwygRef.current) return () => {};
       // Always preserve the latest WYSIWYG state when leaving visual mode.
+      // Use refs (onChangeRef, chapterContentRef, chapterIdRef) so that this
+      // effect only re-runs when viewMode changes — not on every streaming
+      // chunk that updates chapter.content or recreates the onChange function.
+      // Without refs, the cleanup would fire on every render with a stale DOM
+      // (innerHTML not yet updated by the sync effect), writing old content
+      // back to state and causing a Maximum Update Depth Exceeded loop.
       return () => {
+        if (!wysiwygRef.current) return;
         const currentMd =
-          turndownService.current?.turndown(wysiwygRef.current!.innerHTML) ?? '';
-        if (currentMd !== chapter.content) {
-          onChange(chapter.id, { content: currentMd });
+          turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
+        if (currentMd !== chapterContentRef.current) {
+          onChangeRef.current(chapterIdRef.current, { content: currentMd });
         }
       };
-    }, [viewMode, chapter.content, chapter.id, onChange]);
+    }, [viewMode]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (maybeHandleSuggestionHotkey(e)) return;
@@ -1163,11 +1242,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     }, []);
 
     // We need to scroll in a few scenarios:
-    //   * the LLM is in the middle of loading or suggesting content, since
-    //     new text streaming at the bottom should always be visible.  By
-    //     including `continuations` in the dependency list we rerun the effect
-    //     each time the options array is updated; while `isSuggesting` is true
-    //     this ensures the viewport keeps up with an expanding suggestion.
+    //   * suggestion generation is active and options are changing,
+    //   * the continuation panel just became visible.
+    //
+    // IMPORTANT: prose streaming has its own dedicated bottom-follow logic in
+    // the layout effect above. Running this effect at the same time causes two
+    // competing scroll writers and can produce up/down flicker at bottom.
     //   * the continuation panel first becomes visible
     //     (`hasContinuationOptions` transitions from false to true), because
     //     its appearance can push the editor content upward and may hide the
@@ -1181,6 +1261,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
       prevHasContinuationRef.current = hasContinuationOptions;
 
+      if (isProseStreaming) return undefined;
       if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
       const raf = window.requestAnimationFrame(() => {
@@ -1192,10 +1273,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         window.cancelAnimationFrame(raf);
       };
     }, [
-      chapter.content,
       continuations,
       isAiLoading,
       isSuggesting,
+      isProseStreaming,
       hasContinuationOptions,
       scrollMainContentToBottom,
     ]);
@@ -1273,6 +1354,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           ref={scrollContainerRef}
           data-testid="editor-scroll-container"
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
+          style={{ overflowAnchor: 'none' }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -1288,15 +1370,14 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           )}
           {/* The Paper - Grows infinitely */}
           <div
-            className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none"
+            ref={paperDivRef}
+            className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
               backgroundColor: pageBackgroundColor,
               color: textColor,
               fontSize: `${settings.fontSize}px`,
               fontFamily: fontFamily,
-              // At least fill the available scroll area height, but always grow with content.
-              minHeight: '100%',
             }}
           >
             {/* Toolbar - Removed Image Icon here */}
