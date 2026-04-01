@@ -1154,6 +1154,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const hasContinuationOptions = continuations.some(
       (option) => option && option.trim().length > 0
     );
+    const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
 
     const scrollMainContentToBottom = useCallback(() => {
       const container = scrollContainerRef.current;
@@ -1248,14 +1249,16 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   variant="ghost"
                   className="text-xs h-7"
                   onClick={() => onAiAction('chapter', 'rewrite')}
-                  disabled={isAiLoading || !isWritingAvailable}
+                  disabled={isAiLoading || !isWritingAvailable || isChapterEmpty}
                   icon={<FileEdit size={12} />}
                   title={
                     !isWritingAvailable
                       ? writingUnavailableReason
-                      : chapter.scope === 'story'
-                        ? 'Rewrite Story Draft (WRITING model)'
-                        : 'Rewrite Chapter (WRITING model)'
+                      : isChapterEmpty
+                        ? 'Chapter is empty; cannot rewrite existing text.'
+                        : chapter.scope === 'story'
+                          ? 'Rewrite Story Draft (WRITING model)'
+                          : 'Rewrite Chapter (WRITING model)'
                   }
                 >
                   Rewrite

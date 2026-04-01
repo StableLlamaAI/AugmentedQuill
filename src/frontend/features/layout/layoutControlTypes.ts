@@ -76,6 +76,7 @@ export type HeaderAiControls = {
   ) => Promise<void>;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
+  isChapterEmpty?: boolean;
 };
 
 export type HeaderModelControls = {

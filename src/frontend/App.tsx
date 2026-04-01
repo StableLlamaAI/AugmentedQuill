@@ -397,6 +397,10 @@ const App: React.FC = () => {
             handleAiAction,
             isAiActionLoading,
             isWritingAvailable: roleAvailability.writing,
+            isChapterEmpty:
+              !currentChapter ||
+              !currentChapter.content ||
+              currentChapter.content.trim().length === 0,
           }}
           modelControls={{
             appSettings,
@@ -463,6 +467,10 @@ const App: React.FC = () => {
               cancelAiAction,
               isAiActionLoading,
               isWritingAvailable: roleAvailability.writing,
+              isChapterEmpty:
+                !currentChapter ||
+                !currentChapter.content ||
+                currentChapter.content.trim().length === 0,
             },
             setActiveFormats,
             showWhitespace,
