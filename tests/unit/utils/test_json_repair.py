@@ -8,7 +8,15 @@
 """Unit tests for the JSON repair utility."""
 
 import json
-from augmentedquill.utils.json_repair import repair_json_quotes, try_parse_json_robust
+from augmentedquill.utils.json_repair import (
+    apply_typographic_quotes,
+    repair_json_quotes,
+    try_parse_json_robust,
+)
+
+
+def test_apply_typographic_quotes_basic():
+    assert apply_typographic_quotes('She said "Hello".') == "She said “Hello”."
 
 
 def test_repair_json_no_change_valid():

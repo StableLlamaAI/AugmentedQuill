@@ -12,6 +12,7 @@ import json as _json
 from pydantic import BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
+from augmentedquill.utils.json_repair import apply_typographic_quotes
 from augmentedquill.services.chapters.chapter_helpers import (
     _chapter_by_id_or_404,
     _get_chapter_metadata_entry,
@@ -887,7 +888,9 @@ async def call_writing_llm(
         timeout_s=timeout_s,
         model_name=model_name,
     )
-    generated_text = response.get("content", "")
+    generated_text = apply_typographic_quotes(
+        response.get("content", ""), language=project_lang
+    )
 
     # If write_mode is specified, persist the generated text
     if params.write_mode:
@@ -1139,6 +1142,7 @@ async def call_editing_assistant(
     if not final_output:
         final_output = "Task completed using tools."
 
+    final_output = apply_typographic_quotes(final_output, language=project_lang)
     result = {"message": "Editing Assistant finished", "response": final_output}
     if recommended_updates:
         result["recommended_updates"] = recommended_updates

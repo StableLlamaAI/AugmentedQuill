@@ -48,7 +48,7 @@ def _get_typographic_quotes(language: str = "en") -> tuple[str, str, str, str]:
     return double_open, double_close, single_open, single_close
 
 
-def _apply_typographic_quotes(text: str, language: str = "en") -> str:
+def apply_typographic_quotes(text: str, language: str = "en") -> str:
     """Convert straight quotes in `text` into typographic quotes for the language."""
 
     double_open, double_close, single_open, single_close = _get_typographic_quotes(
@@ -76,6 +76,10 @@ def _apply_typographic_quotes(text: str, language: str = "en") -> str:
     return text
 
 
+# Keep backward compatibility for private-style usage
+_apply_typographic_quotes = apply_typographic_quotes
+
+
 def repair_json_quotes(json_str: str, language: str = "en") -> str:
     """
     Attempts to repair a JSON string where the LLM failed to escape double quotes
@@ -100,7 +104,7 @@ def repair_json_quotes(json_str: str, language: str = "en") -> str:
         suffix = match.group(3)  # e.g., '"' or '",'
 
         # Convert quotes inside the value using the language-specific quote styles.
-        converted = _apply_typographic_quotes(content, language=language)
+        converted = apply_typographic_quotes(content, language=language)
 
         # Escape newlines for valid JSON
         converted = converted.replace("\n", "\\n").replace("\r", "\\r")
