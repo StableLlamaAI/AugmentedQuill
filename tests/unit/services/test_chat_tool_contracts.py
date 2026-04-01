@@ -218,6 +218,8 @@ class ChatToolContractsTest(TestCase):
         )
 
     def _tool_role_for_execution(self, tool_name: str) -> str:
+        if tool_name in {"write_chapter", "continue_chapter"}:
+            return "WRITING"
         return "EDITING" if tool_name in self._EDITING_ONLY_TOOLS else "CHAT"
 
     def _base_valid_args(self, tool_name: str):
@@ -420,9 +422,11 @@ class ChatToolContractsTest(TestCase):
             for tool in get_registered_tool_schemas(model_type="CHAT")
         }
 
-        self.assertEqual(writing_tools, set())
+        self.assertEqual(writing_tools, {"write_chapter", "continue_chapter"})
         self.assertIn("call_editing_assistant", chat_tools)
         self.assertIn("update_story_metadata", chat_tools)
+        self.assertNotIn("write_chapter", chat_tools)
+        self.assertNotIn("continue_chapter", chat_tools)
         self.assertNotIn("replace_text_in_chapter", chat_tools)
         self.assertIn("replace_text_in_chapter", editing_tools)
         self.assertIn("recommend_metadata_updates", editing_tools)
@@ -456,6 +460,20 @@ class ChatToolContractsTest(TestCase):
         content = self._call_tool(
             "recommend_metadata_updates",
             {"story_summary": "Suggested only"},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "write_chapter",
+            {"chap_id": 1},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "continue_chapter",
+            {"chap_id": 1},
             model_type="CHAT",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")

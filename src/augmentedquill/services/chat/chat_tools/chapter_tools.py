@@ -20,6 +20,7 @@ from augmentedquill.services.chapters.chapter_helpers import (
 from augmentedquill.services.chat.chat_tool_decorator import (
     CHAT_ROLE,
     EDITING_ROLE,
+    WRITING_ROLE,
     chat_tool,
 )
 from augmentedquill.services.projects.project_helpers import (
@@ -623,7 +624,7 @@ async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict
 
 @chat_tool(
     description="Write a full chapter from its summary using AI.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(WRITING_ROLE,),
     capability="prose-write",
 )
 async def write_chapter(params: WriteChapterParams, payload: dict, mutations: dict):
@@ -634,7 +635,7 @@ async def write_chapter(params: WriteChapterParams, payload: dict, mutations: di
 
 @chat_tool(
     description="Continue writing a chapter from its summary using AI.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(WRITING_ROLE,),
     capability="prose-write",
 )
 async def continue_chapter(
@@ -795,10 +796,18 @@ class CallWritingLlmParams(BaseModel):
     context: str = Field(
         ..., description="The text context the WRITING LLM needs to operate on."
     )
+    write_mode: str | None = Field(
+        None,
+        description="How to persist output: 'append' (add to end of chapter), 'replace' (overwrite entire chapter), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+    )
+    chap_id: int | None = Field(
+        None,
+        description="Chapter ID to write to. For short-story projects, use 1 (or omit and it will be auto-detected). For chapter-based projects, provide the chapter ID.",
+    )
 
 
 @chat_tool(
-    description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated.",
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="delegation",
     project_types=("short-story", "novel", "series"),
@@ -878,7 +887,83 @@ async def call_writing_llm(
         timeout_s=timeout_s,
         model_name=model_name,
     )
-    return {"generated_text": response.get("content", "")}
+    generated_text = response.get("content", "")
+
+    # If write_mode is specified, persist the generated text
+    if params.write_mode:
+        # Auto-detect chapter ID for short-story projects if not provided
+        chap_id = params.chap_id
+        if chap_id is None:
+            if project_type == "short-story":
+                chap_id = 1  # Short-story projects use pseudo-chapter ID 1
+            else:
+                raise BadRequestError(
+                    "chap_id is required when write_mode is set for chapter-based projects (novel/series). "
+                    "Call get_project_overview to see available chapter IDs."
+                )
+
+        # Validate chapter exists and get path
+        _, path, _ = _chapter_by_id_or_404(chap_id)
+
+        if params.write_mode == "append":
+            # Append to end of chapter (like continue_chapter)
+            existing = path.read_text(encoding="utf-8")
+            new_content = (
+                existing
+                + ("\n" if existing and not existing.endswith("\n") else "")
+                + generated_text
+            )
+            _write_chapter_content(chap_id, new_content)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "append",
+                "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "replace":
+            # Replace entire chapter content
+            _write_chapter_content(chap_id, generated_text)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "replace",
+                "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "insert_at_marker":
+            # Insert at ~~~ marker (replace marker with text)
+            existing = path.read_text(encoding="utf-8")
+            marker_pos = existing.find(MARKER)
+            if marker_pos < 0:
+                raise BadRequestError(
+                    f"Marker '{MARKER}' not found in chapter {chap_id}. "
+                    "Place the marker where you want text inserted."
+                )
+            new_content = (
+                existing[:marker_pos]
+                + generated_text
+                + existing[marker_pos + len(MARKER) :]
+            )
+            _write_chapter_content(chap_id, new_content)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "insert_at_marker",
+                "chap_id": chap_id,
+            }
+
+        else:
+            raise BadRequestError(
+                f"Invalid write_mode: {params.write_mode}. "
+                "Use 'append', 'replace', 'insert_at_marker', or omit for return-only."
+            )
+
+    # Default: just return the generated text without writing
+    return {"generated_text": generated_text}
 
 
 class CallEditingAssistantParams(BaseModel):
