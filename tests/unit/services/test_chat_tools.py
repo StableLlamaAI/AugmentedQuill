@@ -563,6 +563,20 @@ class ChatToolsTest(TestCase):
 
     def test_call_writing_llm_is_read_only_in_mutation_pipeline(self):
         self._bootstrap_project()
+        # Ensure a conflict exists to satisfy conflict-first guard policy.
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Establish protagonist's personal stakes",
+                        "resolution": "Confront antagonistic force",
+                    }
+                ]
+            },
+        )
+
         with (
             patch(
                 "augmentedquill.services.llm.llm.resolve_openai_credentials",
@@ -599,6 +613,30 @@ class ChatToolsTest(TestCase):
         self.assertEqual(len(appended), 1)
         payload = json.loads(appended[0].get("content") or "{}")
         self.assertEqual(payload.get("generated_text"), "Rewritten prose")
+
+    def test_call_writing_llm_requires_conflict_metadata(self):
+        self._bootstrap_project()
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.return_value = {"content": "Some prose"}
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {"instruction": "Write an opening scene", "context": ""},
+            )
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)
+        self.assertIn("conflicts", result.get("error", ""))
 
     def test_chat_sourcebook_create_is_visible_in_project_select_payload(self):
         self._bootstrap_project()

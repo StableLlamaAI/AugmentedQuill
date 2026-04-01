@@ -298,7 +298,9 @@ def get_tool_schemas(
         if project_type == "short-story" and str(info.get("module", "")).endswith(
             ".chapter_tools"
         ):
-            continue
+            allowed_project_types = info.get("project_types")
+            if not allowed_project_types or "short-story" not in allowed_project_types:
+                continue
         allowed_project_types = info.get("project_types")
         if project_type and allowed_project_types is not None:
             if project_type not in allowed_project_types:

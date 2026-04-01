@@ -801,6 +801,7 @@ class CallWritingLlmParams(BaseModel):
     description="Delegate a creative writing or rewriting task to the WRITING LLM. Useful when the editor needs new content generated.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="delegation",
+    project_types=("short-story", "novel", "series"),
 )
 async def call_writing_llm(
     params: CallWritingLlmParams, payload: dict, mutations: dict
@@ -819,6 +820,33 @@ async def call_writing_llm(
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     project_lang = str(story.get("language", "en") or "en")
+
+    from augmentedquill.services.exceptions import BadRequestError
+
+    # Enforce conflict-first workflow: writing requires at least one defined conflict.
+    story_conflicts = story.get("conflicts") or []
+    has_conflicts = bool(story_conflicts)
+    project_type = str(story.get("project_type") or "")
+    if not has_conflicts and project_type in ("novel", "series"):
+        chapters = []
+        if project_type == "novel":
+            chapters = story.get("chapters") or []
+        else:
+            books = story.get("books") or []
+            for book in books:
+                for chapter in book.get("chapters") or []:
+                    chapters.append(chapter)
+
+        for c in chapters:
+            if isinstance(c, dict) and c.get("conflicts"):
+                has_conflicts = True
+                break
+
+    if not has_conflicts:
+        raise BadRequestError(
+            "No conflicts are set in the story or chapters. "
+            "Set conflicts and resolution directions before calling call_writing_llm."
+        )
 
     machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
@@ -872,6 +900,7 @@ class CallEditingAssistantParams(BaseModel):
     description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual stored project prose.",
     allowed_roles=(CHAT_ROLE,),
     capability="delegation",
+    project_types=("short-story", "novel", "series"),
 )
 async def call_editing_assistant(
     params: CallEditingAssistantParams, payload: dict, mutations: dict

@@ -179,6 +179,14 @@ class ChatToolContractsTest(TestCase):
         self.assertIsInstance(content, (dict, list, str, int, float, bool, type(None)))
         return content
 
+    def test_short_story_chat_tools_include_writing_delegation_tools(self):
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type="short-story"
+        )
+        names = [t["function"]["name"] for t in tools]
+        self.assertIn("call_writing_llm", names)
+        self.assertIn("call_editing_assistant", names)
+
     def _call_tool_with_payload(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
             arguments = args
@@ -502,6 +510,22 @@ class ChatToolContractsTest(TestCase):
                 self.assertTrue(ok, msg)
 
                 name = tool_schema["function"]["name"]
+
+                if name in ("call_writing_llm", "call_editing_assistant"):
+                    self._call_tool(
+                        "update_story_metadata",
+                        {
+                            "conflicts": [
+                                {
+                                    "id": "c1",
+                                    "description": "Auto conflict guard for test",
+                                    "resolution": "Auto resolution",
+                                }
+                            ]
+                        },
+                        model_type="CHAT",
+                    )
+
                 args = self._build_args_for_schema(tool_schema, invalid=False)
                 content = self._call_tool(
                     name,
