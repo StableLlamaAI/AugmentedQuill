@@ -26,6 +26,19 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 )
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ChatToolContractsTest(TestCase):
     _SPECIAL_CASE_MUTATION_TOOLS = {
         # Covered with nested-tool-call behavior assertions in test_chat_tools.py
@@ -169,7 +182,7 @@ class ChatToolContractsTest(TestCase):
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         appended = payload.get("appended_messages") or []
         self.assertEqual(len(appended), 1, payload)
         msg = appended[0]
@@ -212,7 +225,7 @@ class ChatToolContractsTest(TestCase):
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         return payload, json.loads(
             (payload.get("appended_messages") or [{}])[0].get("content") or "{}"
         )

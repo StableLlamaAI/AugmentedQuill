@@ -61,21 +61,82 @@ export const chatApi = {
     );
   },
 
-  executeTools: async (payload: {
-    messages: ChatApiMessage[];
-    active_chapter_id?: number;
-    model_name?: string;
-    chat_id?: string;
-  }) => {
-    return fetchJson<ChatToolExecutionResponse>(
-      '/chat/tools',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      'Failed to execute chat tools'
-    );
+  executeTools: async (
+    payload: {
+      messages: ChatApiMessage[];
+      active_chapter_id?: number;
+      model_name?: string;
+      chat_id?: string;
+    },
+    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
+  ): Promise<ChatToolExecutionResponse> => {
+    const res = await fetch('/api/v1/chat/tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to execute chat tools');
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to execute chat tools: no response body');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const dataStr = trimmed.slice(6);
+        if (dataStr === '[DONE]') continue;
+        try {
+          const event = JSON.parse(dataStr) as {
+            type?: string;
+            accumulated?: string;
+            chap_id?: number;
+            write_mode?: string;
+            ok?: boolean;
+            appended_messages?: ChatToolExecutionResponse['appended_messages'];
+            mutations?: ChatToolExecutionResponse['mutations'];
+            error?: string;
+          };
+
+          if (event.type === 'prose_chunk' && onProseChunk) {
+            onProseChunk(
+              event.chap_id ?? 0,
+              event.write_mode ?? '',
+              event.accumulated ?? ''
+            );
+          } else if (event.type === 'result') {
+            return {
+              ok: event.ok ?? true,
+              appended_messages: event.appended_messages ?? [],
+              mutations: event.mutations,
+            };
+          } else if (event.type === 'error') {
+            throw new Error(event.error ?? 'Tool execution failed');
+          }
+        } catch (e) {
+          if (e instanceof SyntaxError) continue; // malformed SSE line – skip
+          throw e;
+        }
+      }
+    }
+
+    // Stream ended without a result event (should not normally happen).
+    throw new Error('Failed to execute chat tools: stream ended unexpectedly');
   },
 
   undoToolBatch: async (batchId: string) => {

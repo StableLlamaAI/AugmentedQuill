@@ -878,19 +878,71 @@ async def call_writing_llm(
         },
     ]
 
-    response = await llm.unified_chat_complete(
-        caller_id="chat_tools.call_writing_llm",
-        model_type="WRITING",
-        messages=messages,
-        base_url=base_url,
-        api_key=api_key,
-        model_id=model_id,
-        timeout_s=timeout_s,
-        model_name=model_name,
-    )
-    generated_text = apply_typographic_quotes(
-        response.get("content", ""), language=project_lang
-    )
+    stream_queue = mutations.get("_stream_queue")
+
+    if stream_queue is not None:
+        # Streaming path: emit prose chunks so the frontend can show live progress.
+
+        accumulated = ""
+        # Resolve write_mode and chap_id early so we can include them in events.
+        # (Actual persistence happens after streaming completes below.)
+        preview_write_mode = params.write_mode or "return_only"
+        preview_chap_id: int | None = params.chap_id
+        if (
+            preview_chap_id is None
+            and params.write_mode
+            and project_type == "short-story"
+        ):
+            preview_chap_id = 1
+
+        await stream_queue.put(
+            (
+                "prose_start",
+                {"chap_id": preview_chap_id, "write_mode": preview_write_mode},
+            )
+        )
+
+        async for chunk in llm.unified_chat_stream(
+            caller_id="chat_tools.call_writing_llm",
+            model_type="WRITING",
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+            model_name=model_name,
+            supports_function_calling=False,
+            skip_validation=True,
+        ):
+            if "content" in chunk:
+                accumulated += chunk["content"]
+                await stream_queue.put(
+                    (
+                        "prose_chunk",
+                        {
+                            "accumulated": accumulated,
+                            "chap_id": preview_chap_id,
+                            "write_mode": preview_write_mode,
+                        },
+                    )
+                )
+
+        generated_text = apply_typographic_quotes(accumulated, language=project_lang)
+    else:
+        # Non-streaming path (fallback / backward-compat).
+        response = await llm.unified_chat_complete(
+            caller_id="chat_tools.call_writing_llm",
+            model_type="WRITING",
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+            model_name=model_name,
+        )
+        generated_text = apply_typographic_quotes(
+            response.get("content", ""), language=project_lang
+        )
 
     # If write_mode is specified, persist the generated text
     if params.write_mode:

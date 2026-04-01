@@ -19,6 +19,19 @@ from fastapi.testclient import TestClient
 import augmentedquill.main as main
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ToolParityTest(TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
@@ -110,7 +123,7 @@ class ToolParityTest(TestCase):
         }
         r = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(r.status_code, 200, r.text)
-        data = r.json()
+        data = _parse_tool_sse_result(r.text)
         self.assertTrue(data.get("ok"))
         return json.loads(data["appended_messages"][0]["content"])
 

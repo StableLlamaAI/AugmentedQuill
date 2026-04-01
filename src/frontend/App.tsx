@@ -309,6 +309,36 @@ const App: React.FC = () => {
     setIsChatLoading,
     refreshProjects,
     refreshStory,
+    onProseChunk: useCallback(
+      (chapId: number, writeMode: string, accumulated: string) => {
+        // Find the writing unit for the given chapter ID so we can compute the
+        // correct full content to preview in the editor while the LLM writes.
+        let unit: { id: string; content: string } | null = null;
+        if (story.projectType === 'short-story' && story.draft) {
+          unit = story.draft;
+        } else {
+          const found = story.chapters.find((c) => Number(c.id) === chapId);
+          unit = found ?? null;
+        }
+        if (!unit) return;
+
+        let newContent: string;
+        if (writeMode === 'replace') {
+          newContent = accumulated;
+        } else if (writeMode === 'append') {
+          const base = unit.content || '';
+          const separator = base && !base.endsWith('\n') ? '\n' : '';
+          newContent = base + separator + accumulated;
+        } else {
+          // insert_at_marker: skip live preview (position is inside the text)
+          return;
+        }
+
+        // Update local state only (no server sync) so the user sees progress.
+        void updateChapter(unit.id, { content: newContent }, false);
+      },
+      [story.projectType, story.draft, story.chapters, updateChapter]
+    ),
     pushExternalHistoryEntry,
     requestToolCallLoopAccess,
   });

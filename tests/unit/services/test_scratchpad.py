@@ -18,6 +18,19 @@ from augmentedquill.main import app
 from augmentedquill.services.projects.projects import select_project
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ScratchpadTest(TestCase):
     def setUp(self):
         # Setup temporary environment for tests
@@ -70,7 +83,7 @@ class ScratchpadTest(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = _parse_tool_sse_result(response.text)
         self.assertEqual(
             data["appended_messages"][0]["content"], json.dumps({"content": ""})
         )
@@ -140,7 +153,7 @@ class ScratchpadTest(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = _parse_tool_sse_result(response.text)
         self.assertEqual(
             data["appended_messages"][0]["content"],
             json.dumps({"content": test_content}),
@@ -201,7 +214,7 @@ class ScratchpadTest(TestCase):
                 },
             )
             self.assertEqual(response.status_code, 200)
-            data = response.json()
+            data = _parse_tool_sse_result(response.text)
             self.assertEqual(
                 data["appended_messages"][0]["content"],
                 json.dumps({"content": expected}),
