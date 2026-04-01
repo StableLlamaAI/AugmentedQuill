@@ -9,7 +9,7 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -295,6 +295,19 @@ const App: React.FC = () => {
     recordHistoryEntry: pushExternalHistoryEntry,
   });
 
+  // Keep a stable base snapshot per prose stream so append-mode previews are
+  // composed from the original chapter text, not from already preview-mutated
+  // text (which would duplicate prior chunks and cause heavy flicker/jumps).
+  const prosePreviewStateRef = useRef<
+    Record<string, { base: string; lastAccumulated: string }>
+  >({});
+
+  useEffect(() => {
+    if (!isChatLoading) {
+      prosePreviewStateRef.current = {};
+    }
+  }, [isChatLoading]);
+
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     systemPrompt,
     activeChatConfig,
@@ -309,6 +322,62 @@ const App: React.FC = () => {
     setIsChatLoading,
     refreshProjects,
     refreshStory,
+    onProseChunk: useCallback(
+      (chapId: number, writeMode: string, accumulated: string) => {
+        // Find the writing unit for the given chapter ID so we can compute the
+        // correct full content to preview in the editor while the LLM writes.
+        let unit: { id: string; content: string } | null = null;
+        if (story.projectType === 'short-story' && story.draft) {
+          unit = story.draft;
+        } else {
+          const found = story.chapters.find((c) => Number(c.id) === chapId);
+          unit = found ?? null;
+        }
+        if (!unit) return;
+
+        const streamKey = `${chapId}:${writeMode}`;
+        const prevState = prosePreviewStateRef.current[streamKey];
+        const isRestarted =
+          !prevState ||
+          accumulated.length < prevState.lastAccumulated.length ||
+          !accumulated.startsWith(prevState.lastAccumulated);
+
+        const streamState = isRestarted
+          ? {
+              base: unit.content || '',
+              lastAccumulated: '',
+            }
+          : prevState;
+
+        let newContent: string;
+        if (writeMode === 'replace') {
+          newContent = accumulated;
+        } else if (writeMode === 'append') {
+          const base = streamState.base;
+          const separator = base && !base.endsWith('\n') ? '\n' : '';
+          newContent = base + separator + accumulated;
+        } else {
+          // insert_at_marker: skip live preview (position is inside the text)
+          return;
+        }
+
+        prosePreviewStateRef.current[streamKey] = {
+          base: streamState.base,
+          lastAccumulated: accumulated,
+        };
+
+        if (newContent === unit.content) {
+          return;
+        }
+
+        // Update local state only (no server sync) so the user sees progress.
+        // sync=false: skip server write during streaming preview.
+        // pushHistory=false: skip undo-history entries for every chunk;
+        // intermediate states are ephemeral and must not pollute the undo stack.
+        void updateChapter(unit.id, { content: newContent }, false, false);
+      },
+      [story.projectType, story.draft, story.chapters, updateChapter]
+    ),
     pushExternalHistoryEntry,
     requestToolCallLoopAccess,
   });
@@ -397,6 +466,10 @@ const App: React.FC = () => {
             handleAiAction,
             isAiActionLoading,
             isWritingAvailable: roleAvailability.writing,
+            isChapterEmpty:
+              !currentChapter ||
+              !currentChapter.content ||
+              currentChapter.content.trim().length === 0,
           }}
           modelControls={{
             appSettings,
@@ -463,6 +536,11 @@ const App: React.FC = () => {
               cancelAiAction,
               isAiActionLoading,
               isWritingAvailable: roleAvailability.writing,
+              isProseStreaming: isChatLoading || isAiActionLoading,
+              isChapterEmpty:
+                !currentChapter ||
+                !currentChapter.content ||
+                currentChapter.content.trim().length === 0,
             },
             setActiveFormats,
             showWhitespace,

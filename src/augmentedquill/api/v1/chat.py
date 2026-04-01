@@ -10,6 +10,7 @@
 API endpoints for chat sessions and conversational interactions with the LLM writing partner.
 """
 
+import asyncio
 import datetime
 import re
 import augmentedquill.services.llm.llm as llm
@@ -74,10 +75,15 @@ async def _run_tool_calls(
     payload: dict,
     model_type: str,
     active_dir: Path | None,
+    initial_mutations: dict | None = None,
 ) -> tuple[list[dict], dict, list[str]]:
     """Execute raw tool_calls and return (appended_messages, mutations, tool_names)."""
     appended: list[dict] = []
-    mutations: dict = {"story_changed": False}
+    mutations: dict = (
+        initial_mutations if initial_mutations is not None else {"story_changed": False}
+    )
+    if "story_changed" not in mutations:
+        mutations["story_changed"] = False
     tool_names: list[str] = []
 
     # Determine project language for typographic quote handling in tool arguments.
@@ -203,27 +209,37 @@ async def api_get_chat() -> ChatInitialStateResponse:
 
 
 @router.post("/chat/tools")
-async def api_chat_tools(request: Request) -> JSONResponse:
-    """Execute OpenAI-style tool calls and return tool messages.
+async def api_chat_tools(request: Request) -> StreamingResponse:
+    """Execute OpenAI-style tool calls and stream tool messages as SSE.
 
-    The endpoint does not call the upstream LLM; it only executes provided tool_calls
-    from the last assistant message and returns corresponding {role:"tool"} messages.
+    The endpoint does not call the upstream LLM; it only executes provided
+    tool_calls from the last assistant message and returns corresponding
+    {role:"tool"} messages.  When call_writing_llm is among the tools, prose
+    chunks are streamed as ``prose_chunk`` events before the final ``result``.
 
     Body JSON:
       {
         "model_name": str | null,
         "messages": [
-          {"role":"user|assistant|system|tool", "content": str, "tool_calls"?: [{"id":str, "type":"function", "function": {"name": str, "arguments": str}}], "tool_call_id"?: str, "name"?: str}
+          {"role":"user|assistant|system|tool", "content": str,
+           "tool_calls"?: [{"id":str, "type":"function",
+                            "function": {"name": str, "arguments": str}}],
+           "tool_call_id"?: str, "name"?: str}
         ],
         "active_chapter_id"?: int
       }
+
+    SSE events emitted:
+      {"type": "prose_start", "chap_id": N, "write_mode": str}  (optional)
+      {"type": "prose_chunk", "accumulated": str, "chap_id": N, "write_mode": str}
+      {"type": "result", "ok": true, "appended_messages": [...], "mutations": {...}}
     """
     payload = await parse_json_object_body(request)
 
     messages = payload.get("messages") or []
     model_type = str((payload or {}).get("model_type") or "CHAT").upper()
     if not isinstance(messages, list):
-        return error_json("messages must be an array", status_code=400)
+        raise HTTPException(status_code=400, detail="messages must be an array")
 
     last = messages[-1] if messages else None
     tool_calls: list = []
@@ -240,42 +256,97 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
-    appended, mutations, tool_names = await _run_tool_calls(
-        tool_calls, payload, model_type, active_project_dir
-    )
-
-    if (
-        active_project_dir
-        and batch_id
-        and before_snapshot is not None
-        and mutations.get("story_changed")
-    ):
-        after_snapshot = capture_project_snapshot(active_project_dir)
-        _store_chat_tool_batch_snapshot(
-            active_project_dir,
-            batch_id,
-            before_snapshot,
-            after_snapshot,
-            tool_names,
-        )
-        mutations["tool_batch"] = {
-            "batch_id": batch_id,
-            "tool_names": tool_names,
-            "operation_count": len(tool_names),
-            "label": _build_chat_tool_batch_label(tool_names),
+    async def _gen():
+        stream_queue: asyncio.Queue = asyncio.Queue()
+        initial_mutations: dict = {
+            "story_changed": False,
+            "_stream_queue": stream_queue,
         }
 
-    # Log tool execution if there were any
-    if appended:
-        log_entry = create_log_entry(
-            "/api/v1/chat/tools", "POST", {}, {"tool_calls": tool_calls}
-        )
-        log_entry["response"]["status_code"] = 200
-        log_entry["response"]["body"] = {"appended_messages": appended}
-        log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-        add_llm_log(log_entry)
+        result_holder: list = []
 
-    return ok_json(appended_messages=appended, mutations=mutations)
+        async def _run_and_signal():
+            try:
+                appended_inner, mutations_inner, names_inner = await _run_tool_calls(
+                    tool_calls,
+                    payload,
+                    model_type,
+                    active_project_dir,
+                    initial_mutations=initial_mutations,
+                )
+                result_holder.append(
+                    (appended_inner, mutations_inner, names_inner, None)
+                )
+            except Exception as exc:  # noqa: BLE001
+                result_holder.append(([], initial_mutations, [], exc))
+            finally:
+                await stream_queue.put(None)  # sentinel – signals end of stream
+
+        task = asyncio.create_task(_run_and_signal())
+
+        # Relay prose-streaming events emitted by call_writing_llm.
+        while True:
+            item = await stream_queue.get()
+            if item is None:
+                break
+            kind, data = item
+            if kind == "prose_start":
+                yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
+            elif kind == "prose_chunk":
+                yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+
+        await task  # ensure the background task has fully finished
+
+        if not result_holder:
+            yield f"data: {_json.dumps({'type': 'error', 'error': 'Tool execution produced no result'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        appended, mutations, tool_names, exc = result_holder[0]
+
+        if exc is not None:
+            yield f"data: {_json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # Remove internal _stream_queue key before sending mutations to client.
+        mutations.pop("_stream_queue", None)
+
+        if (
+            active_project_dir
+            and batch_id
+            and before_snapshot is not None
+            and mutations.get("story_changed")
+        ):
+            after_snapshot = capture_project_snapshot(active_project_dir)
+            _store_chat_tool_batch_snapshot(
+                active_project_dir,
+                batch_id,
+                before_snapshot,
+                after_snapshot,
+                tool_names,
+            )
+            mutations["tool_batch"] = {
+                "batch_id": batch_id,
+                "tool_names": tool_names,
+                "operation_count": len(tool_names),
+                "label": _build_chat_tool_batch_label(tool_names),
+            }
+
+        # Log tool execution if there were any
+        if appended:
+            log_entry = create_log_entry(
+                "/api/v1/chat/tools", "POST", {}, {"tool_calls": tool_calls}
+            )
+            log_entry["response"]["status_code"] = 200
+            log_entry["response"]["body"] = {"appended_messages": appended}
+            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            add_llm_log(log_entry)
+
+        yield f"data: {_json.dumps({'type': 'result', 'ok': True, 'appended_messages': appended, 'mutations': mutations})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 @router.post("/chat/tools/undo/{batch_id}")

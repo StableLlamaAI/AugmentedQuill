@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import List
 
 from augmentedquill.core.config import load_story_config, save_story_config
+from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
 def update_book_metadata_in_project(
@@ -137,6 +138,7 @@ def write_story_content_in_project(active: Path, content: str) -> None:
     """Write Story Content In Project."""
     story = load_story_config(active / "story.json") or {}
     project_type = story.get("project_type", "novel")
+    project_lang = str(story.get("language", "en") or "en")
 
     if project_type == "short-story":
         filename = story.get("content_file", "content.md")
@@ -144,7 +146,9 @@ def write_story_content_in_project(active: Path, content: str) -> None:
     else:
         content_path = active / "story_content.md"
 
-    content_path.write_text(content, encoding="utf-8")
+    content_path.write_text(
+        apply_typographic_quotes(content, language=project_lang), encoding="utf-8"
+    )
 
 
 def read_scratchpad_in_project(active: Path) -> str:

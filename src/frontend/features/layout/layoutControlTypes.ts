@@ -76,6 +76,7 @@ export type HeaderAiControls = {
   ) => Promise<void>;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
+  isChapterEmpty?: boolean;
 };
 
 export type HeaderModelControls = {
@@ -186,6 +187,8 @@ export type MainEditorAiControls = {
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
   cancelAiAction?: () => void;
+  /** True whenever any LLM is writing prose into the editor (direct AI action or chat-tool streaming). */
+  isProseStreaming?: boolean;
 };
 
 export type MainEditorControls = {

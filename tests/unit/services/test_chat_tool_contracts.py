@@ -26,6 +26,19 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 )
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ChatToolContractsTest(TestCase):
     _SPECIAL_CASE_MUTATION_TOOLS = {
         # Covered with nested-tool-call behavior assertions in test_chat_tools.py
@@ -169,7 +182,7 @@ class ChatToolContractsTest(TestCase):
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         appended = payload.get("appended_messages") or []
         self.assertEqual(len(appended), 1, payload)
         msg = appended[0]
@@ -178,6 +191,14 @@ class ChatToolContractsTest(TestCase):
         content = json.loads(msg.get("content") or "{}")
         self.assertIsInstance(content, (dict, list, str, int, float, bool, type(None)))
         return content
+
+    def test_short_story_chat_tools_include_writing_delegation_tools(self):
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type="short-story"
+        )
+        names = [t["function"]["name"] for t in tools]
+        self.assertIn("call_writing_llm", names)
+        self.assertIn("call_editing_assistant", names)
 
     def _call_tool_with_payload(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
@@ -204,12 +225,14 @@ class ChatToolContractsTest(TestCase):
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         return payload, json.loads(
             (payload.get("appended_messages") or [{}])[0].get("content") or "{}"
         )
 
     def _tool_role_for_execution(self, tool_name: str) -> str:
+        if tool_name in {"write_chapter", "continue_chapter"}:
+            return "WRITING"
         return "EDITING" if tool_name in self._EDITING_ONLY_TOOLS else "CHAT"
 
     def _base_valid_args(self, tool_name: str):
@@ -412,9 +435,11 @@ class ChatToolContractsTest(TestCase):
             for tool in get_registered_tool_schemas(model_type="CHAT")
         }
 
-        self.assertEqual(writing_tools, set())
+        self.assertEqual(writing_tools, {"write_chapter", "continue_chapter"})
         self.assertIn("call_editing_assistant", chat_tools)
         self.assertIn("update_story_metadata", chat_tools)
+        self.assertNotIn("write_chapter", chat_tools)
+        self.assertNotIn("continue_chapter", chat_tools)
         self.assertNotIn("replace_text_in_chapter", chat_tools)
         self.assertIn("replace_text_in_chapter", editing_tools)
         self.assertIn("recommend_metadata_updates", editing_tools)
@@ -448,6 +473,20 @@ class ChatToolContractsTest(TestCase):
         content = self._call_tool(
             "recommend_metadata_updates",
             {"story_summary": "Suggested only"},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "write_chapter",
+            {"chap_id": 1},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "continue_chapter",
+            {"chap_id": 1},
             model_type="CHAT",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")
@@ -502,6 +541,22 @@ class ChatToolContractsTest(TestCase):
                 self.assertTrue(ok, msg)
 
                 name = tool_schema["function"]["name"]
+
+                if name in ("call_writing_llm", "call_editing_assistant"):
+                    self._call_tool(
+                        "update_story_metadata",
+                        {
+                            "conflicts": [
+                                {
+                                    "id": "c1",
+                                    "description": "Auto conflict guard for test",
+                                    "resolution": "Auto resolution",
+                                }
+                            ]
+                        },
+                        model_type="CHAT",
+                    )
+
                 args = self._build_args_for_schema(tool_schema, invalid=False)
                 content = self._call_tool(
                     name,

@@ -76,9 +76,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     setIsMobileFormatMenuOpen,
     onOpenImages,
   } = formatControls;
-  const { handleAiAction, isAiActionLoading, isWritingAvailable } = aiControls;
+  const { handleAiAction, isAiActionLoading, isWritingAvailable, isChapterEmpty } =
+    aiControls;
   const writingUnavailableReason =
     'This action is unavailable because no working WRITING model is configured.';
+  const chapterExtendDisabled = isAiActionLoading || !isWritingAvailable;
+  const chapterRewriteDisabled =
+    isAiActionLoading || !isWritingAvailable || !!isChapterEmpty;
   const {
     appSettings,
     setAppSettings,
@@ -508,7 +512,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'extend')}
-            disabled={isAiActionLoading || !isWritingAvailable}
+            disabled={chapterExtendDisabled}
             icon={<Wand2 size={12} />}
             title={
               !isWritingAvailable
@@ -524,12 +528,14 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             variant="ghost"
             className="text-xs h-6"
             onClick={() => handleAiAction('chapter', 'rewrite')}
-            disabled={isAiActionLoading || !isWritingAvailable}
+            disabled={chapterRewriteDisabled}
             icon={<FileEdit size={12} />}
             title={
               !isWritingAvailable
                 ? writingUnavailableReason
-                : 'Rewrite Chapter (WRITING model)'
+                : isChapterEmpty
+                  ? 'Chapter is empty; cannot rewrite existing text.'
+                  : 'Rewrite Chapter (WRITING model)'
             }
           >
             <span className="hidden 2xl:inline">Rewrite</span>

@@ -22,6 +22,19 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 )
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class SourcebookSearchRefinementTest(TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
@@ -81,7 +94,7 @@ class SourcebookSearchRefinementTest(TestCase):
         }
         response = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(response.status_code, 200)
-        appended = response.json().get("appended_messages") or []
+        appended = _parse_tool_sse_result(response.text).get("appended_messages") or []
         self.assertEqual(len(appended), 1)
         return json.loads(appended[0]["content"])
 

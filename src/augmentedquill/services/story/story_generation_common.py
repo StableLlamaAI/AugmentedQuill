@@ -48,9 +48,14 @@ def sanitize_prompt(prompt: str) -> str:
     """Remove empty labels and collapse blank lines in a prompt."""
     lines = prompt.splitlines()
     filtered: list[str] = []
+
+    def _is_label_line(text: str) -> bool:
+        """Return True if this line looks like a label line (key: or key: value)."""
+        return bool(re.match(r"^[A-Za-z'\- ]+:", text))
+
     for i, line in enumerate(lines):
         # drop any line that looks like a label with nothing after colon
-        # UNLESS the next lines contain content for this label
+        # UNLESS the next lines contain actual content for this label.
         if re.match(r"^[A-Za-z'\- ]+:\s*$", line):
             has_content = False
             for next_line in lines[i + 1 :]:
@@ -59,7 +64,7 @@ def sanitize_prompt(prompt: str) -> str:
                     continue
                 if next_line == "---":
                     break
-                if re.match(r"^[A-Za-z'\- ]+:\s*$", next_line):
+                if _is_label_line(next_line):
                     break
                 has_content = True
                 break
@@ -100,6 +105,10 @@ def gather_writing_context(
     # story-level info
     story_title = story.get("project_title", "")
     story_summary = story.get("story_summary", "")
+    if project_type == "short-story":
+        # Short stories use a single prose unit; avoid repeating story_summary
+        # when the chapter-summary is already the canonical summary text.
+        story_summary = ""
     tags = story.get("tags", [])
     if isinstance(tags, list):
         story_tags = ", ".join(str(t) for t in tags)

@@ -14,6 +14,10 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_ai_action_messages,
     build_story_summary_messages,
 )
+from augmentedquill.services.story.story_generation_common import (
+    gather_writing_context,
+    sanitize_prompt,
+)
 
 
 class StoryApiPromptOpsTest(TestCase):
@@ -85,3 +89,36 @@ class StoryApiPromptOpsTest(TestCase):
         self.assertIn("Book summaries:", user_msg["content"])
         self.assertIn("Book One:\nSeries setup", user_msg["content"])
         self.assertNotIn("Chapter summaries:", user_msg["content"])
+
+    def test_gather_writing_context_short_story_drops_story_summary(self):
+        story = {
+            "project_type": "short-story",
+            "project_title": "My Short Story",
+            "story_summary": "My Short Story Summary",
+            "tags": ["fantasy"],
+        }
+
+        context = gather_writing_context(
+            story=story,
+            chapters_data=[],
+            pos=None,
+            title="My Short Story",
+            summary="My Short Story Summary",
+            payload={},
+        )
+
+        self.assertEqual(context["project_type_label"], "Short Story")
+        self.assertEqual(context["story_summary"], "")
+
+    def test_sanitize_prompt_removes_empty_story_description_label(self):
+        prompt = """
+Story title: My Short Story
+
+Story description:
+
+Story tags: cozy
+"""
+        cleaned = sanitize_prompt(prompt)
+        self.assertNotIn("Story description:", cleaned)
+        self.assertIn("Story title: My Short Story", cleaned)
+        self.assertIn("Story tags: cozy", cleaned)

@@ -44,6 +44,7 @@ type UseChatExecutionParams = {
   setIsChatLoading: Dispatch<SetStateAction<boolean>>;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
+  onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
   pushExternalHistoryEntry?: (params: {
     label: string;
     onUndo?: () => Promise<void>;
@@ -66,6 +67,7 @@ export function useChatExecution({
   setIsChatLoading,
   refreshProjects,
   refreshStory,
+  onProseChunk,
   pushExternalHistoryEntry,
   requestToolCallLoopAccess,
 }: UseChatExecutionParams) {
@@ -253,25 +255,28 @@ export function useChatExecution({
 
         currentHistory.push(assistantMessage);
 
-        const toolResponse = await api.chat.executeTools({
-          messages: currentHistory.map((message) => ({
-            role: message.role === 'model' ? 'assistant' : message.role,
-            content: message.text || null,
-            tool_calls: message.tool_calls?.map((toolCall) => ({
-              id: toolCall.id,
-              type: 'function',
-              function: {
-                name: toolCall.name,
-                arguments:
-                  typeof toolCall.args === 'string'
-                    ? toolCall.args
-                    : JSON.stringify(toolCall.args),
-              },
+        const toolResponse = await api.chat.executeTools(
+          {
+            messages: currentHistory.map((message) => ({
+              role: message.role === 'model' ? 'assistant' : message.role,
+              content: message.text || null,
+              tool_calls: message.tool_calls?.map((toolCall) => ({
+                id: toolCall.id,
+                type: 'function',
+                function: {
+                  name: toolCall.name,
+                  arguments:
+                    typeof toolCall.args === 'string'
+                      ? toolCall.args
+                      : JSON.stringify(toolCall.args),
+                },
+              })),
             })),
-          })),
-          active_chapter_id: currentChapterId ? Number(currentChapterId) : undefined,
-          chat_id: currentChatId || undefined,
-        });
+            active_chapter_id: currentChapterId ? Number(currentChapterId) : undefined,
+            chat_id: currentChatId || undefined,
+          },
+          onProseChunk
+        );
 
         if (stopSignalRef.current) break;
 
