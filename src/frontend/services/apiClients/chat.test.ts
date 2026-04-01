@@ -89,8 +89,6 @@ describe('chatApi', () => {
   });
 
   it('calls POST /chat/tools', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, appended_messages: [] });
-
     const payload = {
       messages: [
         {
@@ -103,16 +101,29 @@ describe('chatApi', () => {
       model_name: 'demo-model',
     };
 
+    const encoder = new TextEncoder();
+    const resultChunk = encoder.encode(
+      'data: {"type":"result","ok":true,"appended_messages":[]}\n\n'
+    );
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: resultChunk })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({ read }),
+      },
+    } as unknown as Response);
+
     await chatApi.executeTools(payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chat/tools',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      'Failed to execute chat tools'
-    );
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/chat/tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    fetchSpy.mockRestore();
   });
 });
