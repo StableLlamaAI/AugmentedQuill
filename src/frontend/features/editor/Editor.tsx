@@ -246,7 +246,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const conflictCount = chapter.conflicts?.length ?? 0;
     const isAtBottomRef = useRef<boolean>(true);
     const isDetachedFromBottomRef = useRef<boolean>(false);
+    const distanceFromBottomRef = useRef<number>(0);
+    const prevScrollTopRef = useRef<number>(0);
     const autoScrollRafRef = useRef<number | null>(null);
+    const autoScrollSettleRafRef = useRef<number | null>(null);
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -272,7 +275,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       // focused CodeMirror already has the correct document state.
       const editorFocused = editorViewRef.current?.hasFocus ?? false;
       const shouldDeferStreamingSync =
-        proseStreamingActive && isDetachedFromBottomRef.current && !isChapterSwitch;
+        proseStreamingActive &&
+        isDetachedFromBottomRef.current &&
+        distanceFromBottomRef.current > 120 &&
+        !isChapterSwitch;
       if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
         setLocalContent(chapter.content);
       }
@@ -328,6 +334,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       if (!scrollContainerRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const scrollDelta = scrollTop - prevScrollTopRef.current;
+      prevScrollTopRef.current = scrollTop;
+      distanceFromBottomRef.current = distanceFromBottom;
       const atBottom = distanceFromBottom < 24;
       isAtBottomRef.current = atBottom;
 
@@ -336,8 +345,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       // pause live content sync.
       if (atBottom) {
         isDetachedFromBottomRef.current = false;
-      } else if (distanceFromBottom > 64) {
+      } else if (scrollDelta < -2 && distanceFromBottom > 96) {
         isDetachedFromBottomRef.current = true;
+      } else if (scrollDelta > 2 && distanceFromBottom < 240) {
+        // Reattach early when user scrolls back down near the end so
+        // streaming resumes before reaching exact bottom.
+        isDetachedFromBottomRef.current = false;
       }
     }, []);
 
@@ -355,15 +368,43 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           const activeContainer = scrollContainerRef.current;
           if (!activeContainer || isDetachedFromBottomRef.current) return;
 
-          const maxScrollTop = Math.max(
-            0,
-            activeContainer.scrollHeight - activeContainer.clientHeight
-          );
-          if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
-            activeContainer.scrollTop = maxScrollTop;
+          const pinToBottom = () => {
+            const maxScrollTop = Math.max(
+              0,
+              activeContainer.scrollHeight - activeContainer.clientHeight
+            );
+            if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
+              activeContainer.scrollTop = maxScrollTop;
+            }
+          };
+
+          pinToBottom();
+
+          // Paragraph boundaries can change final line-wrapping/height one
+          // frame later; repin once more to avoid visible down/up jitter.
+          if (autoScrollSettleRafRef.current !== null) {
+            window.cancelAnimationFrame(autoScrollSettleRafRef.current);
           }
+          autoScrollSettleRafRef.current = window.requestAnimationFrame(() => {
+            autoScrollSettleRafRef.current = null;
+            const settledContainer = scrollContainerRef.current;
+            if (!settledContainer || isDetachedFromBottomRef.current) return;
+            const maxScrollTop = Math.max(
+              0,
+              settledContainer.scrollHeight - settledContainer.clientHeight
+            );
+            if (Math.abs(maxScrollTop - settledContainer.scrollTop) > 1) {
+              settledContainer.scrollTop = maxScrollTop;
+            }
+            distanceFromBottomRef.current =
+              settledContainer.scrollHeight -
+              settledContainer.scrollTop -
+              settledContainer.clientHeight;
+            prevScrollTopRef.current = settledContainer.scrollTop;
+          });
 
           isAtBottomRef.current = true;
+          isDetachedFromBottomRef.current = false;
         });
       }
     }, [chapter.content]);
@@ -376,9 +417,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         window.cancelAnimationFrame(autoScrollRafRef.current);
         autoScrollRafRef.current = null;
       }
+      if (autoScrollSettleRafRef.current !== null) {
+        window.cancelAnimationFrame(autoScrollSettleRafRef.current);
+        autoScrollSettleRafRef.current = null;
+      }
       container.scrollTop = 0;
       isAtBottomRef.current = true;
       isDetachedFromBottomRef.current = false;
+      prevScrollTopRef.current = 0;
+      distanceFromBottomRef.current = 0;
     }, [chapter.id]);
 
     useEffect(() => {
@@ -386,6 +433,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         if (autoScrollRafRef.current !== null) {
           window.cancelAnimationFrame(autoScrollRafRef.current);
           autoScrollRafRef.current = null;
+        }
+        if (autoScrollSettleRafRef.current !== null) {
+          window.cancelAnimationFrame(autoScrollSettleRafRef.current);
+          autoScrollSettleRafRef.current = null;
         }
       };
     }, []);
@@ -1371,7 +1422,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           {/* The Paper - Grows infinitely */}
           <div
             ref={paperDivRef}
-            className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
+            className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
               backgroundColor: pageBackgroundColor,
