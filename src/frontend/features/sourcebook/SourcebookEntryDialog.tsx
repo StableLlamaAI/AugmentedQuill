@@ -41,6 +41,7 @@ import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for rela
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 
 const CATEGORY_DETAILS: Record<
   string,
