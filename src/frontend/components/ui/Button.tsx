@@ -64,6 +64,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      title={title}
       aria-label={computedAriaLabel}
       {...props}
     >

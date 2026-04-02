@@ -144,6 +144,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
       >
         <Save size={14} className="mr-1" />
         <ChevronDown size={12} />
+        <span className="sr-only">Checkpoints</span>
       </Button>
 
       {isOpen && (

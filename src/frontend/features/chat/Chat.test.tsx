@@ -107,7 +107,7 @@ describe('Chat', () => {
     );
 
     fireEvent.click(screen.getByTitle('Open Scratchpad'));
-    expect(screen.getByText('Scratchpad')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /scratchpad/i })).toBeTruthy();
 
     fireEvent.change(
       screen.getByPlaceholderText('Current internal notes of the chat LLM...'),
