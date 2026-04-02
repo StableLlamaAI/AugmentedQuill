@@ -1284,6 +1284,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const hasContinuationOptions = continuations.some(
       (option) => option && option.trim().length > 0
     );
+    const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
+    const displayedContinuations =
+      continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
     const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
 
     const scrollMainContentToBottom = useCallback(() => {
@@ -1532,7 +1535,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         <div
           className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
         >
-          {hasContinuationOptions ? (
+          {shouldShowContinuationPanel ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center space-x-2 text-brand-500">
@@ -1568,28 +1571,38 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
-                {continuations.map((option, idx) => {
-                  if (!option || option.trim().length === 0) {
-                    return null;
-                  }
+                {displayedContinuations.map((option, idx) => {
+                  const isEmpty = !option || option.trim().length === 0;
                   return (
                     <div
                       key={idx}
-                      onClick={() => onAcceptContinuation(option, localContent)}
-                      className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
+                      onClick={
+                        isEmpty
+                          ? undefined
+                          : () => onAcceptContinuation(option, localContent)
+                      }
+                      className={`group relative p-5 rounded-lg border transition-all ${
+                        isEmpty
+                          ? 'cursor-default opacity-60'
+                          : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
+                      } ${
                         settings.theme === 'light'
                           ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
+                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
                       }`}
                     >
                       <div
                         className={`font-serif text-sm leading-relaxed ${
                           settings.theme === 'light'
-                            ? 'text-brand-gray-800'
-                            : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                            ? isEmpty
+                              ? 'text-brand-gray-400 italic'
+                              : 'text-brand-gray-800'
+                            : isEmpty
+                              ? 'text-brand-gray-500 italic'
+                              : 'text-brand-gray-300 group-hover:text-brand-gray-200'
                         }`}
                       >
-                        {option}
+                        {isEmpty ? 'Waiting for suggestion...' : option}
                       </div>
                     </div>
                   );
