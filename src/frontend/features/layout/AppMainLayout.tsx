@@ -9,7 +9,7 @@
  * Defines the app main layout unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { ChevronDown, ChevronRight, GripHorizontal } from 'lucide-react';
 
 import { ChapterList } from '../chapters/ChapterList';
@@ -171,6 +171,35 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const gripDefault = isLight ? 'text-amber-500' : 'text-rose-400';
   const gripActive = isLight ? 'text-amber-600' : 'text-rose-300';
 
+  const sectionId = useId();
+  const contentId = `${sectionId}-content`;
+
+  const handleHeaderKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
+  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!sectionRef.current) return;
+    let currentHeight = sectionRef.current.getBoundingClientRect().height;
+    const step = 10;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = Math.max(minHeaderHeight, currentHeight - step);
+      applyHeight(next);
+      heightRef.current = next;
+      onHeightChange?.(next);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.max(minHeaderHeight, currentHeight + step);
+      applyHeight(next);
+      heightRef.current = next;
+      onHeightChange?.(next);
+    }
+  };
+
   return (
     <div
       ref={sectionRef}
@@ -179,8 +208,14 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     >
       <div
         ref={headerRef}
+        id={`${sectionId}-header`}
         className={`flex items-center justify-between px-4 py-2 cursor-pointer select-none shrink-0 ${headerBg}`}
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={handleHeaderKeyDown}
+        aria-expanded={!isCollapsed}
+        aria-controls={contentId}
       >
         <div className="flex items-center gap-2">
           {isCollapsed ? (
@@ -196,14 +231,26 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
         </div>
       </div>
       {!isCollapsed && (
-        <div className="flex-1 overflow-hidden flex flex-col">{children}</div>
+        <div id={contentId} className="flex-1 overflow-hidden flex flex-col">
+          {children}
+        </div>
       )}
       {!isLast && !isCollapsed && (
         <div
           className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
           onMouseDown={startResizing}
+          onKeyDown={handleResizerKeyDown}
+          tabIndex={0}
           aria-label={`Resize ${title} section`}
           role="separator"
+          aria-orientation="horizontal"
+          aria-valuemin={minHeaderHeight}
+          aria-valuemax={Math.max(minHeaderHeight, height ?? minHeaderHeight)}
+          aria-valuenow={
+            sectionRef.current?.getBoundingClientRect().height ??
+            height ??
+            minHeaderHeight
+          }
         >
           <GripHorizontal
             size={12}

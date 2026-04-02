@@ -592,6 +592,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     <div className="pl-3 space-y-2 border-l ml-3 border-brand-gray-700/30">
                       {bookChapters.map(renderChapter)}
                       <button
+                        type="button"
+                        aria-label="Add chapter"
                         className={`w-full text-left text-xs p-2 rounded flex items-center space-x-2 opacity-60 hover:opacity-100 ${titleInactive}`}
                         onClick={() => {
                           onCreate(book.id);
@@ -626,12 +628,16 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   />
                   <div className="flex justify-end gap-2">
                     <button
+                      type="button"
+                      aria-label="Cancel create book"
                       onClick={() => setIsCreatingBook(false)}
                       className="text-xs opacity-50"
                     >
                       Cancel
                     </button>
                     <button
+                      type="button"
+                      aria-label="Create book"
                       onClick={() => {
                         onBookCreate?.(newBookTitle);
                         setNewBookTitle('');
@@ -645,6 +651,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 </div>
               ) : (
                 <button
+                  type="button"
+                  aria-label="Start creating a new book"
                   onClick={() => setIsCreatingBook(true)}
                   className={`w-full flex items-center justify-center gap-2 p-2 rounded border border-dashed text-sm opacity-60 hover:opacity-100 ${
                     isLight ? 'border-brand-gray-300' : 'border-brand-gray-700'

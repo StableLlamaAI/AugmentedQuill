@@ -42,12 +42,22 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
+  const titleId = 'confirm-dialog-title';
+  const messageId = 'confirm-dialog-description';
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
+      aria-describedby={messageId}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
     >
       <div
         className={`${
@@ -58,6 +68,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       >
         {title && (
           <h2
+            id={titleId}
             className={`text-lg font-bold mb-2 ${
               isDanger
                 ? 'text-red-600 dark:text-red-500'
@@ -70,6 +81,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </h2>
         )}
         <p
+          id={messageId}
           className={`${
             isLight ? 'text-brand-gray-700' : 'text-brand-gray-200'
           } text-sm whitespace-pre-wrap mb-6`}

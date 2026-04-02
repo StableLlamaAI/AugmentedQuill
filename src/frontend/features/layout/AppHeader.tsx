@@ -195,12 +195,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsUndoMenuOpen((open) => !open)}
               disabled={!canUndo}
               title="Undo multiple actions"
+              aria-haspopup="menu"
+              aria-expanded={isUndoMenuOpen}
               className="px-2 rounded-l-none border-l"
             >
               <ChevronDown size={12} />
             </Button>
             {isUndoMenuOpen && canUndo && (
-              <div className={menuContainerClass}>
+              <div className={menuContainerClass} role="menu" aria-label="Undo actions">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                   Undo Actions
                 </div>
@@ -208,6 +210,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <button
                     key={option.id}
                     type="button"
+                    role="menuitem"
                     className={menuButtonClass}
                     onClick={() => {
                       undoSteps(option.steps);
@@ -241,12 +244,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsRedoMenuOpen((open) => !open)}
               disabled={!canRedo}
               title="Redo multiple actions"
+              aria-haspopup="menu"
+              aria-expanded={isRedoMenuOpen}
               className="px-2 rounded-l-none border-l"
             >
               <ChevronDown size={12} />
             </Button>
             {isRedoMenuOpen && canRedo && (
-              <div className={menuContainerClass}>
+              <div className={menuContainerClass} role="menu" aria-label="Redo actions">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                   Redo Actions
                 </div>
@@ -254,6 +259,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <button
                     key={option.id}
                     type="button"
+                    role="menuitem"
                     className={menuButtonClass}
                     onClick={() => {
                       redoSteps(option.steps);
