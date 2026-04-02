@@ -1540,6 +1540,24 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   <span className="text-xs font-bold uppercase tracking-wider">
                     Choose a continuation
                   </span>
+                  <button
+                    onClick={() => {
+                      const cursor =
+                        (typeof getEditorCaretOffset === 'function'
+                          ? getEditorCaretOffset()
+                          : null) ?? localContent.length;
+                      suggestionControls.onKeyboardSuggestionAction?.(
+                        'regenerate',
+                        cursor,
+                        localContent
+                      );
+                    }}
+                    className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
+                    title="Reload suggestions (same as arrow-down)"
+                    aria-label="Reload continuation suggestions"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
                 </div>
                 <button
                   onClick={() => onAcceptContinuation('', localContent)}
