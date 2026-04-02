@@ -34,7 +34,7 @@ const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
 
 export const useFocusTrap = (
   isActive: boolean,
-  dialogRef: React.RefObject<HTMLElement>,
+  dialogRef: React.RefObject<HTMLElement | null>,
   onDismiss?: () => void
 ): void => {
   const previousActiveElement = useRef<HTMLElement | null>(null);

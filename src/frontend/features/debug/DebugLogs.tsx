@@ -85,16 +85,18 @@ const JsonView: React.FC<{
 
   return (
     <div className="pl-4 border-l border-brand-gray-500/20 my-0.5">
-      <div
-        className="flex items-center gap-1 cursor-pointer hover:bg-brand-gray-500/5 -ml-4 px-1 rounded"
+      <button
+        type="button"
+        className="flex items-center gap-1 cursor-pointer hover:bg-brand-gray-500/5 -ml-4 px-1 rounded w-full text-left"
         onClick={() => setIsCollapsed(!isCollapsed)}
+        aria-expanded={!isCollapsed}
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         {label && <span className="text-blue-400 mr-1">{label}:</span>}
         <span className={textMuted}>
           {isArray ? `Array(${keys.length})` : 'Object'}
         </span>
-      </div>
+      </button>
       {!isCollapsed && (
         <div className="space-y-0.5 mt-0.5">
           {keys.map((key) => (
@@ -297,19 +299,23 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                 }`}
               >
                 <div
-                  className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-brand-gray-500/5 transition-colors ${
+                  className={`flex items-center justify-between px-4 py-3 hover:bg-brand-gray-500/5 transition-colors ${
                     expandedLogs[log.id] ? bgSecondary : ''
                   }`}
-                  onClick={() => toggleExpand(log.id)}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
-                    <div className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[62%]">
+                    <button
+                      type="button"
+                      className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[75%] text-left"
+                      onClick={() => toggleExpand(log.id)}
+                      aria-expanded={expandedLogs[log.id]}
+                    >
                       {expandedLogs[log.id] ? (
                         <ChevronDown size={16} />
                       ) : (
                         <ChevronRight size={16} />
                       )}
-                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden flex-1">
                         {log.request && (
                           <span
                             className={`text-xs font-mono px-1.5 py-0.5 rounded ${
@@ -350,7 +356,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           </span>
                         )}
                       </div>
-                    </div>
+                    </button>
                     <div className="w-full sm:w-[36%] text-right flex flex-wrap items-center justify-end gap-3 text-[10px] text-brand-gray-500 font-mono">
                       {log.caller_id && (
                         <span className="truncate">

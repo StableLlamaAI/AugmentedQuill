@@ -1409,9 +1409,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           data-testid="editor-scroll-container"
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
           style={{ overflowAnchor: 'none' }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onScroll={handleScroll}
         >
           {isDragging && (
@@ -1433,6 +1430,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               fontSize: `${settings.fontSize}px`,
               fontFamily: fontFamily,
             }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             {/* Toolbar - Removed Image Icon here */}
             {showInlineTitle && (
@@ -1480,6 +1480,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 id="wysiwyg-editor"
                 ref={wysiwygRef}
                 contentEditable
+                role="textbox"
+                tabIndex={0}
+                aria-multiline="true"
+                aria-label="Story content"
                 onInput={handleWysiwygInput}
                 onBlur={handleWysiwygBlur}
                 onMouseUp={checkContext}
@@ -1575,18 +1579,23 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
+              <div
+                className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
+                role="list"
+              >
                 {displayedContinuations.map((option, idx) => {
                   const isEmpty = !option || option.trim().length === 0;
                   return (
-                    <div
+                    <button
                       key={idx}
+                      type="button"
+                      disabled={isEmpty}
                       onClick={
                         isEmpty
                           ? undefined
                           : () => onAcceptContinuation(option, localContent)
                       }
-                      className={`group relative p-5 rounded-lg border transition-all ${
+                      className={`group relative p-5 rounded-lg border transition-all text-left ${
                         isEmpty
                           ? 'cursor-default opacity-60'
                           : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
@@ -1595,6 +1604,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                           ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
                           : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
                       }`}
+                      role="listitem"
+                      aria-label={
+                        isEmpty
+                          ? 'Waiting for suggestion'
+                          : `Accept suggestion: ${option.substring(0, 50)}...`
+                      }
                     >
                       <div
                         className={`font-serif text-sm leading-relaxed ${
@@ -1609,7 +1624,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                       >
                         {isEmpty ? 'Waiting for suggestion...' : option}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

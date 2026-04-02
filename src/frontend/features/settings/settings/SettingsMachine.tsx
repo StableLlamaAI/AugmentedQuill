@@ -87,12 +87,17 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
     const val = activeProvider[field];
     const detected = detectedCapabilities[activeProvider.id]?.[detectedField];
 
+    const id = `provider-${field}`;
     return (
       <div className="space-y-1">
-        <label className="text-xs font-medium text-brand-gray-500 uppercase">
+        <label
+          htmlFor={id}
+          className="text-xs font-medium text-brand-gray-500 uppercase"
+        >
           {label}
         </label>
         <select
+          id={id}
           value={val === true ? 'true' : val === false ? 'false' : 'auto'}
           onChange={(e) => {
             const v = e.target.value;
@@ -127,6 +132,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   ) => {
     if (!activeProvider) return null;
     const disabled = !!activeProvider.presetId;
+    const id = `provider-${field}`;
     return (
       <div className={`space-y-2 ${disabled ? 'opacity-60' : ''}`}>
         <div
@@ -134,7 +140,8 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
             isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
           }`}
         >
-          <span
+          <label
+            htmlFor={id}
             title={tooltip}
             className={
               tooltip
@@ -143,10 +150,11 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
             }
           >
             {label}
-          </span>
+          </label>
           <span>{activeProvider[field] ?? 0}</span>
         </div>
         <input
+          id={id}
           type="range"
           min={min}
           max={max}
@@ -249,6 +257,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
           </span>
         </label>
         <input
+          id={`provider-${field}`}
           type="number"
           step={
             field === 'seed' ||
@@ -310,10 +319,11 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
         </div>
         <div className="space-y-2">
           {localSettings.providers.map((p) => (
-            <div
+            <button
               key={p.id}
+              type="button"
               onClick={() => setEditingProviderId(p.id)}
-              className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 group ${
+              className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 group w-full text-left ${
                 editingProviderId === p.id
                   ? 'bg-brand-50 border-brand-500/50'
                   : isLight
@@ -411,11 +421,12 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDuplicateProvider(p.id);
                   }}
-                  className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                  className={`p-1 rounded transition-colors opacity-100 sm:opacity-0 group-hover:opacity-100 ${
                     isLight
                       ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-200'
                       : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-700'
@@ -425,7 +436,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   <CopyPlus size={12} />
                 </button>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>

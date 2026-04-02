@@ -264,15 +264,12 @@ export function MetadataEditorDialog({
   const rewritePrimaryTitle = `Rewrite existing summary using ${primarySourceLabel} style`;
 
   const modalContent = (
-    <div
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="metadata-dialog-title"
-      tabIndex={-1}
-      className={isDarkMode ? 'dark' : ''}
-    >
+    <div ref={dialogRef} role="none" className={isDarkMode ? 'dark' : ''}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="metadata-dialog-title"
+        tabIndex={-1}
         className={`${
           isFullscreen
             ? 'fixed inset-0 z-[100] flex items-center justify-center p-2 bg-black/50'

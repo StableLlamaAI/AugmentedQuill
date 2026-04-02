@@ -365,48 +365,54 @@ export const ChapterList: React.FC<ChapterListProps> = ({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onDragEnd={handleDragEnd}
-        className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-150 border ${
+        className={`group relative p-3 rounded-lg transition-all duration-150 border ${
           currentChapterId === chapter.id ? itemActive : itemInactive
         } ${
           isDragging
             ? 'opacity-20 grayscale border-dashed border-brand-gray-500/50'
             : 'opacity-100'
         }`}
-        onClick={() => onSelect(chapter.id)}
       >
-        <div className="flex justify-between items-start pointer-events-none">
-          <div className="flex items-center gap-2">
-            <h3
-              className={`font-medium text-sm mb-1 ${
-                currentChapterId === chapter.id ? titleActive : titleInactive
-              }`}
-            >
-              {chapter.title || 'Untitled Chapter'}
-            </h3>
-            {chapter.conflicts && chapter.conflicts.length > 0 && (
-              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold">
-                {chapter.conflicts.length}
-              </span>
-            )}
+        <button
+          className="flex flex-col w-full text-left cursor-pointer"
+          onClick={() => onSelect(chapter.id)}
+          aria-current={currentChapterId === chapter.id ? 'true' : undefined}
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="flex items-center gap-2">
+              <h3
+                className={`font-medium text-sm mb-1 ${
+                  currentChapterId === chapter.id ? titleActive : titleInactive
+                }`}
+              >
+                {chapter.title || 'Untitled Chapter'}
+              </h3>
+              {chapter.conflicts && chapter.conflicts.length > 0 && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold">
+                  {chapter.conflicts.length}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
-            <button
-              onClick={(e) => handleEditChapterMetadata(e, chapter)}
-              className="p-1 text-brand-gray-400 hover:text-blue-500"
-              title="Edit Metadata"
-            >
-              <Edit size={14} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(chapter.id);
-              }}
-              className="p-1 text-brand-gray-400 hover:text-red-500"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+        </button>
+        <div className="absolute top-2 right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => handleEditChapterMetadata(e, chapter)}
+            className="p-1 text-brand-gray-400 hover:text-blue-500"
+            title="Edit Metadata"
+          >
+            <Edit size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(chapter.id);
+            }}
+            className="p-1 text-brand-gray-400 hover:text-red-500"
+            title="Delete Chapter"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
         <p className="text-xs text-brand-gray-500 line-clamp-2 pointer-events-none">
           {chapter.summary || 'No summary available...'}
@@ -528,7 +534,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
-                    className={`flex flex-col p-2 rounded cursor-pointer transition-all duration-150 group ${
+                    className={`flex flex-col p-2 rounded transition-all duration-150 group ${
                       isLight
                         ? 'hover:bg-brand-gray-200/50'
                         : 'hover:bg-brand-gray-800/50'
@@ -537,44 +543,53 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                         ? 'opacity-20 grayscale border-dashed border-brand-gray-500/50'
                         : 'opacity-100'
                     }`}
-                    onClick={() => toggleBook(book.id)}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
-                        {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
-                        <span>{book.title}</span>
-                        <span className="text-xs opacity-50 font-normal">
-                          ({bookChapters.length})
-                        </span>
-                      </div>
-                      <div className="flex items-center pointer-events-auto">
-                        <button
-                          onClick={(e) => handleEditBookMetadata(e, book)}
-                          className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
-                          title="Edit Book Metadata"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onCreate(book.id);
-                          }}
-                          className={`p-1 opacity-0 hover:opacity-100 ${btnHover}`}
-                        >
-                          <Plus size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm('Delete Book and all its chapters?')) {
-                              onBookDelete?.(book.id);
-                            }
-                          }}
-                          className="text-brand-gray-400 hover:text-red-500 p-1"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                    <div className="flex items-center justify-between w-full text-left">
+                      <button
+                        className="flex items-center space-x-2 font-bold text-sm cursor-pointer"
+                        onClick={() => toggleBook(book.id)}
+                        aria-expanded={isExpanded}
+                      >
+                        <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
+                          {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
+                          <span>{book.title}</span>
+                          <span className="text-xs opacity-50 font-normal">
+                            ({bookChapters.length})
+                          </span>
+                        </div>
+                      </button>
+                      <div className="flex items-center">
+                        <div className="flex items-center">
+                          <button
+                            onClick={(e) => handleEditBookMetadata(e, book)}
+                            className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
+                            title="Edit Book Metadata"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onCreate(book.id);
+                            }}
+                            className={`p-1 opacity-0 group-hover:opacity-100 ${btnHover}`}
+                            title="Add Chapter to Book"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Delete Book and all its chapters?')) {
+                                onBookDelete?.(book.id);
+                              }
+                            }}
+                            className="text-brand-gray-400 hover:text-red-500 p-1"
+                            title="Delete Book"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="pl-6 mt-1.5 w-full">

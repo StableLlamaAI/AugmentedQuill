@@ -169,24 +169,24 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
               </div>
             ) : (
               checkpoints.map((cp) => (
-                <button
-                  key={cp.timestamp}
-                  type="button"
-                  className={menuButtonClass}
-                  onClick={() => handleLoad(cp.timestamp)}
-                  title={`Load checkpoint ${cp.timestamp}`}
-                >
-                  <div className="flex flex-col truncate w-full pr-2">
+                <div key={cp.timestamp} className={menuButtonClass} role="listitem">
+                  <button
+                    type="button"
+                    className="flex flex-col truncate w-full pr-2 text-left"
+                    onClick={() => handleLoad(cp.timestamp)}
+                    title={`Load checkpoint ${cp.timestamp}`}
+                  >
                     <span className="truncate">{cp.timestamp}</span>
-                  </div>
-                  <div
+                  </button>
+                  <button
+                    type="button"
                     className="p-1 hover:text-red-500 rounded-full flex-shrink-0"
                     onClick={(e) => handleDelete(e, cp.timestamp)}
                     title="Delete"
                   >
                     <Trash2 size={14} />
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))
             )}
           </div>

@@ -124,8 +124,10 @@ export const Chat: React.FC<ChatProps> = ({
   const [scratchpadDraft, setScratchpadDraft] = useState(scratchpad);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
   const systemPromptRef = useRef<HTMLDivElement>(null);
+  const scratchpadRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(showSystemPrompt, systemPromptRef, () => setShowSystemPrompt(false));
+  useFocusTrap(showScratchpad, scratchpadRef, () => setShowScratchpad(false));
 
   const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
     Record<string, boolean>
@@ -293,11 +295,25 @@ export const Chat: React.FC<ChatProps> = ({
       )}
 
       {showScratchpad && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="none"
+        >
           <div
+            ref={scratchpadRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scratchpad-dialog-title"
+            tabIndex={-1}
             className={`w-full max-w-2xl rounded-lg border shadow-xl p-4 ${isLight ? 'bg-white text-brand-gray-800 border-brand-gray-200' : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'}`}
           >
             <div className="flex items-center justify-between mb-3">
+              <h2
+                id="scratchpad-dialog-title"
+                className="text-sm font-bold uppercase tracking-wider text-brand-gray-500"
+              >
+                Scratchpad
+              </h2>
               <h3 className="text-sm font-semibold">Scratchpad</h3>
               <button
                 onClick={() => setShowScratchpad(false)}
