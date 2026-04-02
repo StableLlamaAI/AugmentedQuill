@@ -332,42 +332,48 @@ export function MetadataEditorDialog({
 
               {type === 'story' && (
                 <>
-                  <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
-                    Style Tags
-                  </label>
-                  <input
-                    value={data.tags ? data.tags.join(', ') : ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      // Preserve user-entered ordering; normalization happens server-side.
-                      const tags = val.split(',').map((s) => s.trimStart());
-                      setData({ ...data, tags: tags });
-                    }}
-                    className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
-                    placeholder="e.g. Noir, Sci-Fi, First-Person"
-                  />
-                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500">
+                  <div className="flex items-start gap-3 mt-3">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-sm font-medium dark:text-brand-gray-400">
+                        Style Tags
+                      </label>
+                      <input
+                        value={data.tags ? data.tags.join(', ') : ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Preserve user-entered ordering; normalization happens server-side.
+                          const tags = val.split(',').map((s) => s.trimStart());
+                          setData({ ...data, tags: tags });
+                        }}
+                        className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                        placeholder="e.g. Noir, Sci-Fi, First-Person"
+                      />
+                    </div>
+                    {languages && (
+                      <div className="flex-shrink-0 w-24">
+                        <label className="block text-sm font-medium dark:text-brand-gray-400 text-right">
+                          Lang
+                        </label>
+                        <select
+                          value={data.language || ''}
+                          onChange={(e) =>
+                            setData({ ...data, language: e.target.value })
+                          }
+                          className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                        >
+                          {languages.map((lng) => (
+                            <option key={lng} value={lng}>
+                              {lng.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500 mt-2">
                     Style tags guide the WRITING model’s voice and the EDITING model’s
                     tone checks. Keep them short, specific, and stable.
                   </p>
-                  {languages && (
-                    <>
-                      <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
-                        Language
-                      </label>
-                      <select
-                        value={data.language || ''}
-                        onChange={(e) => setData({ ...data, language: e.target.value })}
-                        className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
-                      >
-                        {languages.map((lng) => (
-                          <option key={lng} value={lng}>
-                            {lng.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
                 </>
               )}
             </div>
