@@ -320,10 +320,17 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
         </div>
         <div className="space-y-2">
           {localSettings.providers.map((p) => (
-            <button
+            <div
               key={p.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => setEditingProviderId(p.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setEditingProviderId(p.id);
+                }
+              }}
               className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col gap-2 group w-full text-left ${
                 editingProviderId === p.id
                   ? 'bg-brand-50 border-brand-500/50'
@@ -437,7 +444,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   <CopyPlus size={12} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
