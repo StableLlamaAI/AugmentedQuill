@@ -8,9 +8,8 @@
  * Purpose: Global CSS entrypoint (Tailwind + app global styles).
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@config "./tailwind.config.js";
 
 body {
   font-family: 'Inter', sans-serif;
