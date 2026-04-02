@@ -222,11 +222,11 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           ) : (
             <ChevronDown size={16} className={textColor} />
           )}
-          <h3
+          <h2
             className={`text-[11px] font-bold uppercase tracking-widest ${textColor}`}
           >
             {title}
-          </h3>
+          </h2>
         </div>
       </button>
       {!isCollapsed && (

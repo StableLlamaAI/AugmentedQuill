@@ -408,7 +408,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         )}
 
         {entries.length > 0 && (
-          <div className="space-y-0.5">
+          <div className="space-y-0.5" role="list">
             {entries.map((e) => {
               const CategoryIcon =
                 (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;

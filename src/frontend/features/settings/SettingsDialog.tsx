@@ -598,6 +598,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close settings"
             className={`transition-colors ${
               isLight
                 ? 'text-brand-gray-500 hover:text-brand-gray-700'

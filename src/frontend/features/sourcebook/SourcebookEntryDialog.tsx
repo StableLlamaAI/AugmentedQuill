@@ -334,6 +334,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             </div>
             <button
               onClick={onClose}
+              aria-label="Close sourcebook entry"
               className={`p-1 rounded-md transition-colors ${
                 isLight
                   ? 'hover:bg-brand-gray-100 text-brand-gray-500'

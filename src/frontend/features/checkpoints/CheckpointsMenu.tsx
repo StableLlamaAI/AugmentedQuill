@@ -162,7 +162,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
             <Plus size={14} />
           </button>
 
-          <div className="max-h-60 overflow-y-auto">
+          <div className="max-h-60 overflow-y-auto" role="list">
             {checkpoints.length === 0 ? (
               <div className="px-3 py-4 text-xs text-center opacity-50">
                 No checkpoints yet

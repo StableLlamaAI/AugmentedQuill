@@ -31,7 +31,9 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const computedAriaLabel =
-    ariaLabel ?? (typeof title === 'string' && !children ? title : undefined);
+    ariaLabel ??
+    (typeof title === 'string' && !children ? title : undefined) ??
+    (!children ? 'Action' : undefined);
 
   const baseStyles =
     'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border';

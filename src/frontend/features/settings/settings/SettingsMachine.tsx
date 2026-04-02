@@ -308,6 +308,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
           </h3>
           <button
             onClick={onAddProvider}
+            aria-label="Add provider"
             className={`p-1 rounded transition-colors ${
               isLight
                 ? 'bg-brand-gray-100 text-brand-gray-600 hover:text-brand-600'

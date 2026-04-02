@@ -81,6 +81,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="Close chat history panel"
           className="text-brand-gray-500 hover:text-brand-gray-700"
         >
           <X size={14} />
