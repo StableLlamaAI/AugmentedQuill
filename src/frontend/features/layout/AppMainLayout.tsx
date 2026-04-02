@@ -578,9 +578,13 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
               <img
-                src="/static/images/logo_2048.png"
+                src="/static/images/logo_512.png"
+                srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
+                sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
                 className="w-64 h-64 mb-8 opacity-20"
                 alt="AugmentedQuill Logo"
+                decoding="async"
+                loading="lazy"
               />
               <p className="text-lg font-medium">
                 Select or create a chapter to start writing.
