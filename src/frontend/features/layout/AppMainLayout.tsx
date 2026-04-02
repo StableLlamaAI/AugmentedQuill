@@ -206,12 +206,11 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       className={`flex flex-col overflow-hidden ${isLast ? 'flex-1' : ''} ${!isLast ? `border-b ${borderClass}` : ''}`}
       style={!isLast && !isCollapsed && height ? { height: `${height}px` } : {}}
     >
-      <div
+      <button
         ref={headerRef}
         id={`${sectionId}-header`}
+        type="button"
         className={`flex items-center justify-between px-4 py-2 cursor-pointer select-none shrink-0 ${headerBg}`}
-        role="button"
-        tabIndex={0}
         onClick={onToggle}
         onKeyDown={handleHeaderKeyDown}
         aria-expanded={!isCollapsed}
@@ -229,21 +228,23 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             {title}
           </h3>
         </div>
-      </div>
+      </button>
       {!isCollapsed && (
         <div id={contentId} className="flex-1 overflow-hidden flex flex-col">
           {children}
         </div>
       )}
       {!isLast && !isCollapsed && (
-        <div
+        <button
+          type="button"
           className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
-          onMouseDown={startResizing}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            startResizing();
+          }}
           onKeyDown={handleResizerKeyDown}
           tabIndex={0}
           aria-label={`Resize ${title} section`}
-          role="separator"
-          aria-orientation="horizontal"
           aria-valuemin={minHeaderHeight}
           aria-valuemax={Math.max(minHeaderHeight, height ?? minHeaderHeight)}
           aria-valuenow={
@@ -251,12 +252,14 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             height ??
             minHeaderHeight
           }
+          aria-orientation="horizontal"
+          role="slider"
         >
           <GripHorizontal
             size={12}
             className={`${isResizing ? gripActive : gripDefault} opacity-70 group-hover:opacity-100 transition-opacity`}
           />
-        </div>
+        </button>
       )}
     </div>
   );

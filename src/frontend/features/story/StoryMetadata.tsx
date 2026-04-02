@@ -152,6 +152,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         <button
           onClick={() => setMetadataModalOpen(true)}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"
+          aria-label="Edit story metadata"
+          title="Edit story metadata"
         >
           <Edit size={16} />
         </button>

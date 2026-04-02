@@ -529,7 +529,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             <ImageIcon className="w-5 h-5" />
             Project Images
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-black/10 rounded-full">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-black/10 rounded-full"
+            aria-label="Close image manager"
+            title="Close image manager"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>

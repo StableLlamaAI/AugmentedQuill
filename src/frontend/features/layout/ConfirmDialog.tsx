@@ -9,7 +9,7 @@
  * Defines the confirm dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useRef } from 'react';
+import React, { useId, useRef } from 'react';
 import { useFocusTrap } from './useFocusTrap';
 
 export interface ConfirmDialogProps {
@@ -43,11 +43,24 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
-  const titleId = 'confirm-dialog-title';
-  const messageId = 'confirm-dialog-description';
+  const idBase = useId();
+  const titleId = title ? `${idBase}-confirm-dialog-title` : undefined;
+  const messageId = `${idBase}-confirm-dialog-description`;
 
   return (
     <div
@@ -58,12 +71,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       aria-labelledby={title ? titleId : undefined}
       aria-describedby={messageId}
       tabIndex={-1}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          onCancel();
-        }
-      }}
     >
       <div
         className={`${
@@ -112,7 +119,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 : 'bg-brand-700 hover:bg-brand-600'
             } px-4 py-2 text-sm rounded-md text-white border-transparent transition-colors`}
             onClick={onConfirm}
-            autoFocus
           >
             {confirmLabel}
           </button>

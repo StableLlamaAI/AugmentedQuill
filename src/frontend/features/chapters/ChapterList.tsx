@@ -612,7 +612,6 @@ export const ChapterList: React.FC<ChapterListProps> = ({
               {isCreatingBook ? (
                 <div className="flex flex-col gap-2 p-2">
                   <input
-                    autoFocus
                     className="bg-transparent border rounded p-1 text-sm outline-none focus:border-brand-500"
                     placeholder="Book Title"
                     value={newBookTitle}

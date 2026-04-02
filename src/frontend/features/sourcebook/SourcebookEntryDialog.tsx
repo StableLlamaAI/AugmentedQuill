@@ -350,7 +350,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     onChange={(e) => setName(e.target.value)}
                     className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
                     placeholder="E.g. Captain Ahab"
-                    autoFocus
                   />
                 </div>
               </div>

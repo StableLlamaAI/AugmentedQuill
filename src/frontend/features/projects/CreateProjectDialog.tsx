@@ -64,7 +64,13 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
           <h2 id="create-project-title" className="text-xl font-bold">
             Create New Project
           </h2>
-          <Button variant="ghost" size="sm" onClick={onClose} theme={theme}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            theme={theme}
+            aria-label="Close create project dialog"
+          >
             <X size={20} />
           </Button>
         </div>
@@ -79,7 +85,6 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Story"
-              autoFocus
             />
           </div>
           <div>

@@ -279,6 +279,12 @@ export function MetadataEditorDialog({
             : 'fixed top-14 bottom-0 z-[60] bg-white dark:bg-brand-gray-900 border-r dark:border-brand-gray-800 flex flex-col'
         }`}
         style={!isFullscreen ? { width: 'var(--sidebar-width)', left: 0 } : {}}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            handleClose();
+          }
+        }}
       >
         <div
           className={`flex flex-col pointer-events-auto ${
@@ -319,12 +325,17 @@ export function MetadataEditorDialog({
                 title={
                   isFullscreen ? 'Switch to Sidebar View' : 'Switch to Full Screen'
                 }
+                aria-label={
+                  isFullscreen ? 'Switch to sidebar view' : 'Switch to full screen view'
+                }
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
               <button
                 onClick={handleClose}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Close dialog"
+                aria-label="Close metadata editor dialog"
               >
                 ✕
               </button>

@@ -26,8 +26,13 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   className = '',
   theme = 'dark', // Default to dark/mixed behavior
+  title,
+  'aria-label': ariaLabel,
   ...props
 }) => {
+  const computedAriaLabel =
+    ariaLabel ?? (typeof title === 'string' && !children ? title : undefined);
+
   const baseStyles =
     'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border';
 
@@ -57,6 +62,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      aria-label={computedAriaLabel}
       {...props}
     >
       {icon && <span className="mr-2">{icon}</span>}

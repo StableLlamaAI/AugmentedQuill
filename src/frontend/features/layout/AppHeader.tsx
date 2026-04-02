@@ -141,13 +141,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
+          aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
           <Menu size={24} />
         </button>
 
-        <div
-          className="flex items-center space-x-2 cursor-pointer"
+        <button
+          type="button"
           onClick={() => setIsSettingsOpen(true)}
+          className="flex items-center space-x-2"
+          aria-label="Open settings"
         >
           <div
             className={`rounded-md p-1 shadow-lg ${
@@ -172,7 +175,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               {storyTitle}
             </span>
           </div>
-        </div>
+        </button>
 
         <div className={`h-6 w-px hidden lg:block ${dividerColor}`}></div>
 
@@ -185,6 +188,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={undo}
               disabled={!canUndo}
               title={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
+              aria-label={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
               className="rounded-r-none"
             >
               <Undo size={16} />
@@ -196,6 +200,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsUndoMenuOpen((open) => !open)}
               disabled={!canUndo}
               title="Undo multiple actions"
+              aria-label="Open undo actions list"
               aria-haspopup="menu"
               aria-expanded={isUndoMenuOpen}
               className="px-2 rounded-l-none border-l"
@@ -234,6 +239,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={redo}
               disabled={!canRedo}
               title={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
+              aria-label={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
               className="rounded-r-none"
             >
               <Redo size={16} />
@@ -245,6 +251,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsRedoMenuOpen((open) => !open)}
               disabled={!canRedo}
               title="Redo multiple actions"
+              aria-label="Open redo actions list"
               aria-haspopup="menu"
               aria-expanded={isRedoMenuOpen}
               className="px-2 rounded-l-none border-l"

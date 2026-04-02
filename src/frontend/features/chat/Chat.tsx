@@ -299,6 +299,7 @@ export const Chat: React.FC<ChatProps> = ({
                 onClick={() => setShowScratchpad(false)}
                 className="p-1 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800"
                 title="Close Scratchpad"
+                aria-label="Close scratchpad"
               >
                 <X size={16} />
               </button>
@@ -457,12 +458,16 @@ export const Chat: React.FC<ChatProps> = ({
                     <button
                       onClick={cancelEdit}
                       className="p-1 text-brand-gray-400 hover:text-brand-gray-600"
+                      aria-label="Cancel message edit"
+                      title="Cancel edit"
                     >
                       <X size={14} />
                     </button>
                     <button
                       onClick={() => saveEdit(msg.id)}
                       className="p-1 text-brand-500 hover:opacity-80"
+                      aria-label="Save message edit"
+                      title="Save edit"
                     >
                       <Save size={14} />
                     </button>
