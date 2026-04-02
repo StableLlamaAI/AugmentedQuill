@@ -635,7 +635,7 @@ export const Chat: React.FC<ChatProps> = ({
         ))}
 
         {isLoading && (
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3" role="status" aria-live="polite">
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
                 isLight

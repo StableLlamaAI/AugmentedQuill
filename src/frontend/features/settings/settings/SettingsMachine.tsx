@@ -772,7 +772,11 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
                   </div>
                 )}
                 {/* Model availability indicator */}
-                <div className="mt-1 flex items-center gap-2 text-xs">
+                <div
+                  className="mt-1 flex items-center gap-2 text-xs"
+                  role="status"
+                  aria-live="polite"
+                >
                   <span
                     className={`h-2 w-2 rounded-full ${
                       modelStatus[activeProvider.id] === 'success'

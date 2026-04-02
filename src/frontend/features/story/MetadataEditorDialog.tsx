@@ -296,7 +296,7 @@ export function MetadataEditorDialog({
               >
                 {title}
               </h2>
-              <div className="text-xs font-mono">
+              <div className="text-xs font-mono" role="status" aria-live="polite">
                 {saveStatus === 'saving' && (
                   <span className="flex items-center gap-1 text-brand-500">
                     <Loader2 size={12} className="animate-spin" /> Saving...
