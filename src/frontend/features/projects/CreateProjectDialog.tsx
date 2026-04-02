@@ -9,8 +9,9 @@
  * Defines the create project dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -37,6 +38,8 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
     languages && languages.length ? languages[0] : 'en'
   );
   const { isLight } = useThemeClasses();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef);
 
   if (!isOpen) return null;
 
@@ -48,10 +51,19 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
     : 'bg-brand-gray-800 border-brand-gray-700';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-project-title"
+      tabIndex={-1}
+    >
       <div className={`w-full max-w-md p-6 rounded-lg shadow-xl ${bgClass}`}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Create New Project</h2>
+          <h2 id="create-project-title" className="text-xl font-bold">
+            Create New Project
+          </h2>
           <Button variant="ghost" size="sm" onClick={onClose} theme={theme}>
             <X size={20} />
           </Button>

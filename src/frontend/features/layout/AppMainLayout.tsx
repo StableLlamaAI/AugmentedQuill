@@ -427,7 +427,12 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
   } = chatControls;
 
   return (
-    <div id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
+    <main
+      id="aq-main-layout"
+      role="main"
+      aria-label="Story editor and sidebar"
+      className="flex-1 flex overflow-hidden relative"
+    >
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden"
@@ -616,6 +621,6 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
           />
         </div>
       )}
-    </div>
+    </main>
   );
 };

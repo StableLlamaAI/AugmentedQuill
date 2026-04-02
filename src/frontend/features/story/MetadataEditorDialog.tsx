@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MetadataParams, computeSyncUpdates } from './metadataSync';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { createPortal } from 'react-dom';
 import {
   Maximize2,
@@ -70,6 +71,8 @@ export function MetadataEditorDialog({
   const [activeTab, setActiveTab] = useState<
     'summary' | 'notes' | 'private' | 'conflicts'
   >('summary');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, dialogRef);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
@@ -261,7 +264,14 @@ export function MetadataEditorDialog({
   const rewritePrimaryTitle = `Rewrite existing summary using ${primarySourceLabel} style`;
 
   const modalContent = (
-    <div className={isDarkMode ? 'dark' : ''}>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="metadata-dialog-title"
+      tabIndex={-1}
+      className={isDarkMode ? 'dark' : ''}
+    >
       <div
         className={`${
           isFullscreen
@@ -280,7 +290,10 @@ export function MetadataEditorDialog({
           {/* Header */}
           <div className="flex justify-between items-center p-4 border-b dark:border-brand-gray-800">
             <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold dark:text-brand-gray-300">
+              <h2
+                id="metadata-dialog-title"
+                className="text-base font-semibold dark:text-brand-gray-300"
+              >
                 {title}
               </h2>
               <div className="text-xs font-mono">

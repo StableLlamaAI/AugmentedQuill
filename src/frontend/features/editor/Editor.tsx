@@ -1537,7 +1537,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         >
           {shouldShowContinuationPanel ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center justify-between mb-3 px-1">
+              <div
+                className="flex items-center justify-between mb-3 px-1"
+                role="region"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <div className="flex items-center space-x-2 text-brand-500">
                   <SplitSquareHorizontal size={18} />
                   <span className="text-xs font-bold uppercase tracking-wider">

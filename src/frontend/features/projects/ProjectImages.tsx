@@ -32,6 +32,7 @@ import { api } from '../../services/api';
 import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
 
 interface ImageEntry {
@@ -83,6 +84,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     Record<string, { description?: string; title?: string }>
   >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
@@ -490,8 +493,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       id="project-images-dialog"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="project-images-title"
+      tabIndex={-1}
     >
       <div
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
@@ -514,7 +522,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         <div
           className={`flex items-center justify-between p-4 border-b ${borderClass}`}
         >
-          <h2 className="text-xl font-semibold flex items-center gap-2">
+          <h2
+            id="project-images-title"
+            className="text-xl font-semibold flex items-center gap-2"
+          >
             <ImageIcon className="w-5 h-5" />
             Project Images
           </h2>

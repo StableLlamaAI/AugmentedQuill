@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { ConfirmDialog } from './ConfirmDialog';
@@ -62,5 +62,33 @@ describe('ConfirmDialog accessibility', () => {
     const confirmButton = screen.getByText('OK');
     fireEvent.click(confirmButton);
     expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it('sets focus inside dialog when opened and traps tab', () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+
+    render(
+      <ConfirmDialog
+        isOpen={true}
+        message="Proceed?"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    const dialogs = screen.getAllByRole('dialog');
+    const dialog = dialogs[dialogs.length - 1];
+    expect(dialog).toBeTruthy();
+    const cancelButton = within(dialog).getByText('Cancel');
+    const confirmButton = within(dialog).getByText('OK');
+
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });

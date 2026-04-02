@@ -9,7 +9,8 @@
  * Defines the confirm dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
+import { useFocusTrap } from './useFocusTrap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -39,6 +40,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   variant = 'primary',
 }) => {
   const { isLight } = useTheme();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef);
+
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
@@ -47,11 +51,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
       aria-describedby={messageId}
+      tabIndex={-1}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
