@@ -85,7 +85,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(isOpen, dialogRef);
+  useFocusTrap(isOpen, dialogRef, onClose);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);

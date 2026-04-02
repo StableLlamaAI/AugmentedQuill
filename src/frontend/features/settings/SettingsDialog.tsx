@@ -391,7 +391,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   }, [isOpen, localSettings.providers, connectionStatus]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(isOpen, dialogRef);
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   if (!isOpen) return null;
 

@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { useThemeClasses } from '../layout/ThemeContext';
 import {
   Loader2,
@@ -122,6 +123,9 @@ export const Chat: React.FC<ChatProps> = ({
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [scratchpadDraft, setScratchpadDraft] = useState(scratchpad);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
+  const systemPromptRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(showSystemPrompt, systemPromptRef, () => setShowSystemPrompt(false));
 
   const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
     Record<string, boolean>
@@ -346,9 +350,16 @@ export const Chat: React.FC<ChatProps> = ({
 
       {showSystemPrompt && (
         <div
+          ref={systemPromptRef}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="system-instruction-title"
           className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}
         >
-          <label className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2">
+          <label
+            id="system-instruction-title"
+            className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2"
+          >
             System Instruction
           </label>
           <textarea

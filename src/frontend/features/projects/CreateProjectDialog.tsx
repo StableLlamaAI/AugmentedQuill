@@ -39,7 +39,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   );
   const { isLight } = useThemeClasses();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(isOpen, dialogRef);
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   if (!isOpen) return null;
 

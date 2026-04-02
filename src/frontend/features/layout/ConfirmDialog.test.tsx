@@ -36,8 +36,20 @@ describe('ConfirmDialog accessibility', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(dialog.getAttribute('aria-labelledby')).toBe('confirm-dialog-title');
-    expect(dialog.getAttribute('aria-describedby')).toBe('confirm-dialog-description');
+
+    const labelledby = dialog.getAttribute('aria-labelledby');
+    const describedby = dialog.getAttribute('aria-describedby');
+    expect(labelledby).toBeTruthy();
+    expect(describedby).toBeTruthy();
+    expect(labelledby).toMatch(/-confirm-dialog-title$/);
+    expect(describedby).toMatch(/-confirm-dialog-description$/);
+
+    if (labelledby) {
+      expect(document.getElementById(labelledby)).toBeTruthy();
+    }
+    if (describedby) {
+      expect(document.getElementById(describedby)).toBeTruthy();
+    }
 
     expect(screen.getByText('Confirm deletion')).toBeTruthy();
     expect(screen.getByText('Are you sure?')).toBeTruthy();
@@ -90,5 +102,22 @@ describe('ConfirmDialog accessibility', () => {
 
     fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab' });
     expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('calls onCancel when Escape is pressed', () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+
+    render(
+      <ConfirmDialog
+        isOpen={true}
+        message="Proceed?"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    expect(onCancel).toHaveBeenCalled();
   });
 });

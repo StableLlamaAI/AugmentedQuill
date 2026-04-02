@@ -34,7 +34,8 @@ const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
 
 export const useFocusTrap = (
   isActive: boolean,
-  dialogRef: React.RefObject<HTMLElement>
+  dialogRef: React.RefObject<HTMLElement>,
+  onDismiss?: () => void
 ): void => {
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -56,6 +57,11 @@ export const useFocusTrap = (
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!dialogRef.current) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onDismiss?.();
+        return;
+      }
       if (event.key === 'Tab') {
         const focusables = getFocusableElements(dialogRef.current);
         if (focusables.length === 0) {

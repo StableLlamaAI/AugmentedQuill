@@ -72,7 +72,7 @@ export function MetadataEditorDialog({
     'summary' | 'notes' | 'private' | 'conflicts'
   >('summary');
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(true, dialogRef);
+  useFocusTrap(true, dialogRef, onClose);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);

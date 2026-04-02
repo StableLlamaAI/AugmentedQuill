@@ -20,6 +20,7 @@ import {
   Layers,
   List,
 } from 'lucide-react';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { api } from '../../services/api';
@@ -135,6 +136,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   const [isLoading, setIsLoading] = useState(false);
   const [streamMode, setStreamMode] = useState<'chunks' | 'aggregated'>('aggregated');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   const { isLight } = useThemeClasses();
   const bgMain = isLight ? 'bg-white' : 'bg-brand-gray-950';
@@ -191,8 +195,15 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black/50 backdrop-blur-sm p-4 md:p-8">
+    <div
+      className="fixed inset-0 z-[100] flex flex-col bg-black/50 backdrop-blur-sm p-4 md:p-8"
+      role="presentation"
+    >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="debug-logs-title"
         className={`flex-1 flex flex-col rounded-xl shadow-2xl overflow-hidden border ${borderMain} ${bgMain}`}
       >
         {/* Header */}
@@ -204,7 +215,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               <Bug className="text-blue-500" size={20} />
             </div>
             <div>
-              <h2 className={`text-lg font-bold ${textMain}`}>
+              <h2 id="debug-logs-title" className={`text-lg font-bold ${textMain}`}>
                 LLM Communication Logs
               </h2>
               <p className="text-xs text-brand-gray-500">

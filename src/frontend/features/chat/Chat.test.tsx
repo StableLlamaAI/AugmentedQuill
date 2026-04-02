@@ -120,4 +120,23 @@ describe('Chat', () => {
 
     expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
   });
+
+  it('closes system instruction panel on Escape', () => {
+    render(
+      <Chat
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Chat Settings'));
+    expect(screen.getByText('System Instruction')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('System Instruction')).toBeNull();
+  });
 });
