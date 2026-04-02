@@ -318,11 +318,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
 
           {isViewMenuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-10"
+              <button
+                className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setIsViewMenuOpen(false)}
-              ></div>
+                aria-label="Close menu"
+              ></button>
               <div
+                role="menu"
                 className={`absolute top-full left-0 mt-2 w-32 rounded-lg shadow-lg border p-1 z-20 flex flex-col gap-1 ${
                   isLight
                     ? 'bg-brand-gray-50 border-brand-gray-200'
@@ -412,10 +414,11 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               </button>
               {isFormatMenuOpen && (
                 <>
-                  <div
-                    className="fixed inset-0 z-10"
+                  <button
+                    className="fixed inset-0 z-10 cursor-default"
                     onClick={() => setIsFormatMenuOpen(false)}
-                  ></div>
+                    aria-label="Close formatting menu"
+                  ></button>
                   <div
                     className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl border p-2 z-20 flex gap-1 flex-wrap max-w-48 ${
                       isLight
@@ -462,10 +465,11 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
 
         {isMobileFormatMenuOpen && (
           <>
-            <div
-              className="fixed inset-0 z-10"
+            <button
+              className="fixed inset-0 z-10 cursor-default"
               onClick={() => setIsMobileFormatMenuOpen(false)}
-            ></div>
+              aria-label="Close mobile format menu"
+            ></button>
             <div
               className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-xl shadow-2xl border p-3 z-50 flex flex-wrap gap-1 ${
                 isLight
@@ -566,10 +570,11 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           </button>
           {isModelMenuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-10"
+              <button
+                className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setIsModelMenuOpen(false)}
-              ></div>
+                aria-label="Close model menu"
+              ></button>
               <div
                 className={`absolute top-full right-0 mt-2 w-72 rounded-lg shadow-xl border p-3 z-20 flex flex-col gap-3 ${
                   isLight

@@ -1284,6 +1284,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const hasContinuationOptions = continuations.some(
       (option) => option && option.trim().length > 0
     );
+    const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
+    const displayedContinuations =
+      continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
     const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
 
     const scrollMainContentToBottom = useCallback(() => {
@@ -1406,9 +1409,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           data-testid="editor-scroll-container"
           className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
           style={{ overflowAnchor: 'none' }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onScroll={handleScroll}
         >
           {isDragging && (
@@ -1430,6 +1430,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
               fontSize: `${settings.fontSize}px`,
               fontFamily: fontFamily,
             }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             {/* Toolbar - Removed Image Icon here */}
             {showInlineTitle && (
@@ -1477,6 +1480,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 id="wysiwyg-editor"
                 ref={wysiwygRef}
                 contentEditable
+                role="textbox"
+                tabIndex={0}
+                aria-multiline="true"
+                aria-label="Story content"
                 onInput={handleWysiwygInput}
                 onBlur={handleWysiwygBlur}
                 onMouseUp={checkContext}
@@ -1532,14 +1539,37 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         <div
           className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
         >
-          {hasContinuationOptions ? (
+          {shouldShowContinuationPanel ? (
             <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center justify-between mb-3 px-1">
+              <div
+                className="flex items-center justify-between mb-3 px-1"
+                role="region"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <div className="flex items-center space-x-2 text-brand-500">
                   <SplitSquareHorizontal size={18} />
                   <span className="text-xs font-bold uppercase tracking-wider">
                     Choose a continuation
                   </span>
+                  <button
+                    onClick={() => {
+                      const cursor =
+                        (typeof getEditorCaretOffset === 'function'
+                          ? getEditorCaretOffset()
+                          : null) ?? localContent.length;
+                      suggestionControls.onKeyboardSuggestionAction?.(
+                        'regenerate',
+                        cursor,
+                        localContent
+                      );
+                    }}
+                    className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
+                    title="Reload suggestions (same as arrow-down)"
+                    aria-label="Reload continuation suggestions"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
                 </div>
                 <button
                   onClick={() => onAcceptContinuation('', localContent)}
@@ -1549,31 +1579,52 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
-                {continuations.map((option, idx) => {
-                  if (!option || option.trim().length === 0) {
-                    return null;
-                  }
+              <div
+                className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
+                role="list"
+              >
+                {displayedContinuations.map((option, idx) => {
+                  const isEmpty = !option || option.trim().length === 0;
                   return (
-                    <div
+                    <button
                       key={idx}
-                      onClick={() => onAcceptContinuation(option, localContent)}
-                      className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
+                      type="button"
+                      disabled={isEmpty}
+                      onClick={
+                        isEmpty
+                          ? undefined
+                          : () => onAcceptContinuation(option, localContent)
+                      }
+                      className={`group relative p-5 rounded-lg border transition-all text-left ${
+                        isEmpty
+                          ? 'cursor-default opacity-60'
+                          : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
+                      } ${
                         settings.theme === 'light'
                           ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
+                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
                       }`}
+                      role="listitem"
+                      aria-label={
+                        isEmpty
+                          ? 'Waiting for suggestion'
+                          : `Accept suggestion: ${option.substring(0, 50)}...`
+                      }
                     >
                       <div
                         className={`font-serif text-sm leading-relaxed ${
                           settings.theme === 'light'
-                            ? 'text-brand-gray-800'
-                            : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                            ? isEmpty
+                              ? 'text-brand-gray-400 italic'
+                              : 'text-brand-gray-800'
+                            : isEmpty
+                              ? 'text-brand-gray-500 italic'
+                              : 'text-brand-gray-300 group-hover:text-brand-gray-200'
                         }`}
                       >
-                        {option}
+                        {isEmpty ? 'Waiting for suggestion...' : option}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

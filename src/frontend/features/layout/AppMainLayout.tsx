@@ -9,7 +9,7 @@
  * Defines the app main layout unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { ChevronDown, ChevronRight, GripHorizontal } from 'lucide-react';
 
 import { ChapterList } from '../chapters/ChapterList';
@@ -171,16 +171,50 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const gripDefault = isLight ? 'text-amber-500' : 'text-rose-400';
   const gripActive = isLight ? 'text-amber-600' : 'text-rose-300';
 
+  const sectionId = useId();
+  const contentId = `${sectionId}-content`;
+
+  const handleHeaderKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
+  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!sectionRef.current) return;
+    let currentHeight = sectionRef.current.getBoundingClientRect().height;
+    const step = 10;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = Math.max(minHeaderHeight, currentHeight - step);
+      applyHeight(next);
+      heightRef.current = next;
+      onHeightChange?.(next);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.max(minHeaderHeight, currentHeight + step);
+      applyHeight(next);
+      heightRef.current = next;
+      onHeightChange?.(next);
+    }
+  };
+
   return (
     <div
       ref={sectionRef}
       className={`flex flex-col overflow-hidden ${isLast ? 'flex-1' : ''} ${!isLast ? `border-b ${borderClass}` : ''}`}
       style={!isLast && !isCollapsed && height ? { height: `${height}px` } : {}}
     >
-      <div
+      <button
         ref={headerRef}
+        id={`${sectionId}-header`}
+        type="button"
         className={`flex items-center justify-between px-4 py-2 cursor-pointer select-none shrink-0 ${headerBg}`}
         onClick={onToggle}
+        onKeyDown={handleHeaderKeyDown}
+        aria-expanded={!isCollapsed}
+        aria-controls={contentId}
       >
         <div className="flex items-center gap-2">
           {isCollapsed ? (
@@ -188,28 +222,44 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           ) : (
             <ChevronDown size={16} className={textColor} />
           )}
-          <h3
+          <h2
             className={`text-[11px] font-bold uppercase tracking-widest ${textColor}`}
           >
             {title}
-          </h3>
+          </h2>
         </div>
-      </div>
+      </button>
       {!isCollapsed && (
-        <div className="flex-1 overflow-hidden flex flex-col">{children}</div>
+        <div id={contentId} className="flex-1 overflow-hidden flex flex-col">
+          {children}
+        </div>
       )}
       {!isLast && !isCollapsed && (
-        <div
+        <button
+          type="button"
           className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
-          onMouseDown={startResizing}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            startResizing();
+          }}
+          onKeyDown={handleResizerKeyDown}
+          tabIndex={0}
           aria-label={`Resize ${title} section`}
-          role="separator"
+          aria-valuemin={minHeaderHeight}
+          aria-valuemax={Math.max(minHeaderHeight, height ?? minHeaderHeight)}
+          aria-valuenow={
+            sectionRef.current?.getBoundingClientRect().height ??
+            height ??
+            minHeaderHeight
+          }
+          aria-orientation="horizontal"
+          role="slider"
         >
           <GripHorizontal
             size={12}
             className={`${isResizing ? gripActive : gripDefault} opacity-70 group-hover:opacity-100 transition-opacity`}
           />
-        </div>
+        </button>
       )}
     </div>
   );
@@ -374,18 +424,24 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     setIsIncognito,
     allowWebSearch,
     setAllowWebSearch,
+    scratchpad,
+    onUpdateScratchpad,
+    onDeleteScratchpad,
   } = chatControls;
 
   return (
-    <div id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
+    <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
       {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden"
+        <button
+          className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
           onClick={() => setIsSidebarOpen(false)}
-        ></div>
+          aria-label="Close sidebar"
+        ></button>
       )}
-      <div
+      <nav
         id="aq-sidebar"
+        role="navigation"
+        aria-label="Project sidebar"
         ref={sidebarRef}
         className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -483,9 +539,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onMutated={onSourcebookMutated}
           />
         </CollapsibleSection>
-      </div>
-      <div
+      </nav>
+      <section
         id="aq-editor"
+        role="main"
+        aria-label="Story editor"
         className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
       >
         <div className="flex-1 overflow-hidden h-full flex flex-col">
@@ -530,10 +588,12 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             </div>
           )}
         </div>
-      </div>
+      </section>
+
       {isChatOpen && (
-        <div
+        <aside
           id="aq-chat"
+          aria-label="AI Chat Assistant"
           className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
         >
           <Chat
@@ -560,9 +620,12 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onToggleIncognito={setIsIncognito}
             allowWebSearch={allowWebSearch}
             onToggleWebSearch={setAllowWebSearch}
+            scratchpad={scratchpad}
+            onUpdateScratchpad={onUpdateScratchpad}
+            onDeleteScratchpad={onDeleteScratchpad}
           />
-        </div>
+        </aside>
       )}
-    </div>
+    </main>
   );
 };

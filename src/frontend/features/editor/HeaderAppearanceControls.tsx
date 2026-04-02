@@ -9,7 +9,7 @@
  * Defines the header appearance controls unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { RefObject } from 'react';
+import React, { RefObject, useRef } from 'react';
 import {
   Bug,
   LayoutTemplate,
@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
 import { AppTheme, EditorSettings } from '../../types';
 
@@ -55,6 +56,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
   sliderClass,
   setIsDebugLogsOpen,
 }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isAppearanceOpen, panelRef, () => setIsAppearanceOpen(false));
+
   const renderSlider = (
     icon: React.ReactNode,
     label: string,
@@ -98,6 +102,10 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
 
       {isAppearanceOpen && (
         <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="page-appearance-title"
           className={`absolute top-full right-0 mt-2 w-80 border rounded-lg shadow-2xl p-5 z-50 ${
             isLight
               ? 'bg-brand-gray-50 border-brand-gray-200'
@@ -109,7 +117,10 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'
             }`}
           >
-            <h3 className="text-xs font-semibold text-brand-gray-500 uppercase tracking-wider">
+            <h3
+              id="page-appearance-title"
+              className="text-xs font-semibold text-brand-gray-500 uppercase tracking-wider"
+            >
               Page Appearance
             </h3>
             <button

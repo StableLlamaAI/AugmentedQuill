@@ -408,7 +408,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         )}
 
         {entries.length > 0 && (
-          <div className="space-y-0.5">
+          <div className="space-y-0.5" role="list">
             {entries.map((e) => {
               const CategoryIcon =
                 (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
@@ -416,29 +416,35 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
               return (
                 <div
                   key={e.id}
-                  onClick={async () => {
-                    setIsLoadingEntry(true);
-                    try {
-                      const all = await api.sourcebook.list();
-                      const full = all.find((x) => x.id === e.id) || e;
-                      setEntries(all);
-                      setSelectedEntry(full);
-                      setIsDialogOpen(true);
-                    } finally {
-                      setIsLoadingEntry(false);
-                    }
-                  }}
-                  onMouseEnter={(evt) => handleMouseEnter(evt, e)}
-                  onMouseLeave={() => setHoveredEntry(null)}
-                  className={`group px-3 py-2 rounded-md cursor-pointer transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${
+                  className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${
                     isLoadingEntry ? 'pointer-events-none opacity-70' : ''
                   }`}
+                  role="listitem"
                 >
-                  <CategoryIcon
-                    size={14}
-                    className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-                  />
-                  <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsLoadingEntry(true);
+                      try {
+                        const all = await api.sourcebook.list();
+                        const full = all.find((x) => x.id === e.id) || e;
+                        setEntries(all);
+                        setSelectedEntry(full);
+                        setIsDialogOpen(true);
+                      } finally {
+                        setIsLoadingEntry(false);
+                      }
+                    }}
+                    onMouseEnter={(evt) => handleMouseEnter(evt, e)}
+                    onMouseLeave={() => setHoveredEntry(null)}
+                    className="flex items-center gap-2 flex-1 min-w-0"
+                  >
+                    <CategoryIcon
+                      size={14}
+                      className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
+                    />
+                    <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                  </button>
                   <button
                     onClick={(ev) => {
                       ev.stopPropagation();

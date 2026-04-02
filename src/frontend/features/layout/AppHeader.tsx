@@ -134,19 +134,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   return (
     <header
       id="aq-header"
+      role="banner"
       className={`sm:h-14 py-1.5 sm:py-0 border-b flex flex-wrap sm:flex-nowrap items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
     >
       <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
+          aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
           <Menu size={24} />
         </button>
 
-        <div
-          className="flex items-center space-x-2 cursor-pointer"
+        <button
+          type="button"
           onClick={() => setIsSettingsOpen(true)}
+          className="flex items-center space-x-2"
+          aria-label="Open settings"
         >
           <div
             className={`rounded-md p-1 shadow-lg ${
@@ -171,7 +175,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               {storyTitle}
             </span>
           </div>
-        </div>
+        </button>
 
         <div className={`h-6 w-px hidden lg:block ${dividerColor}`}></div>
 
@@ -184,6 +188,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={undo}
               disabled={!canUndo}
               title={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
+              aria-label={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
               className="rounded-r-none"
             >
               <Undo size={16} />
@@ -195,12 +200,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsUndoMenuOpen((open) => !open)}
               disabled={!canUndo}
               title="Undo multiple actions"
+              aria-label="Open undo actions list"
+              aria-haspopup="menu"
+              aria-expanded={isUndoMenuOpen}
               className="px-2 rounded-l-none border-l"
             >
               <ChevronDown size={12} />
             </Button>
             {isUndoMenuOpen && canUndo && (
-              <div className={menuContainerClass}>
+              <div className={menuContainerClass} role="menu" aria-label="Undo actions">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                   Undo Actions
                 </div>
@@ -208,6 +216,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <button
                     key={option.id}
                     type="button"
+                    role="menuitem"
                     className={menuButtonClass}
                     onClick={() => {
                       undoSteps(option.steps);
@@ -230,6 +239,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={redo}
               disabled={!canRedo}
               title={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
+              aria-label={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
               className="rounded-r-none"
             >
               <Redo size={16} />
@@ -241,12 +251,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={() => setIsRedoMenuOpen((open) => !open)}
               disabled={!canRedo}
               title="Redo multiple actions"
+              aria-label="Open redo actions list"
+              aria-haspopup="menu"
+              aria-expanded={isRedoMenuOpen}
               className="px-2 rounded-l-none border-l"
             >
               <ChevronDown size={12} />
             </Button>
             {isRedoMenuOpen && canRedo && (
-              <div className={menuContainerClass}>
+              <div className={menuContainerClass} role="menu" aria-label="Redo actions">
                 <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                   Redo Actions
                 </div>
@@ -254,6 +267,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <button
                     key={option.id}
                     type="button"
+                    role="menuitem"
                     className={menuButtonClass}
                     onClick={() => {
                       redoSteps(option.steps);

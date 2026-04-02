@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import {
   Settings,
   X,
@@ -389,6 +390,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     };
   }, [isOpen, localSettings.providers, connectionStatus]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, onClose);
+
   if (!isOpen) return null;
 
   const handleSave = async () => {
@@ -549,8 +553,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       id="settings-dialog"
       className="fixed inset-0 z-50 flex items-center justify-center bg-brand-gray-950/70 backdrop-blur-sm p-2 md:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-dialog-title"
+      tabIndex={-1}
     >
       <div
         className={`w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
@@ -579,6 +588,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               />
             </div>
             <h2
+              id="settings-dialog-title"
               className={`text-xl font-bold ${
                 isLight ? 'text-brand-gray-800' : 'text-brand-gray-300'
               }`}
@@ -588,6 +598,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close settings"
             className={`transition-colors ${
               isLight
                 ? 'text-brand-gray-500 hover:text-brand-gray-700'

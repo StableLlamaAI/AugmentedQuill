@@ -378,6 +378,8 @@ export const CodeMirrorEditor = React.forwardRef<
     useEffect(() => {
       if (!containerRef.current) return undefined;
 
+      const editorAriaLabel = placeholder ?? 'Story content';
+
       const extensions: Extension[] = [
         baseTheme,
         EditorView.lineWrapping,
@@ -387,6 +389,9 @@ export const CodeMirrorEditor = React.forwardRef<
           autocomplete: 'off',
           autocorrect: 'off',
           autocapitalize: 'off',
+          role: 'textbox',
+          'aria-multiline': 'true',
+          'aria-label': editorAriaLabel,
         }),
         history(),
         // Enter/history keymaps take precedence over defaultKeymap

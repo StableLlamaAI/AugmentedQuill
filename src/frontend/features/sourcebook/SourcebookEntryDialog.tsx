@@ -41,6 +41,7 @@ import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for rela
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -116,6 +117,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
+
+  const entryDialogRef = useRef<HTMLDivElement>(null);
+  const imagePickerRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, entryDialogRef, onClose);
+  useFocusTrap(isImagePickerOpen, imagePickerRef, () => setIsImagePickerOpen(false));
 
   useEffect(() => {
     if (isOpen) {
@@ -300,8 +307,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        role="none"
+      >
         <div
+          ref={entryDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sourcebook-entry-title"
+          tabIndex={-1}
           className={`${bgClass} ${textClass} w-full max-w-[90vw] rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[94vh]`}
         >
           {/* Header */}
@@ -313,12 +328,13 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 size={20}
                 className={isLight ? 'text-brand-700' : 'text-brand-400'}
               />
-              <h2 className="text-lg font-bold">
+              <h2 id="sourcebook-entry-title" className="text-lg font-bold">
                 {entry ? 'Edit Entry' : 'New Sourcebook Entry'}
               </h2>
             </div>
             <button
               onClick={onClose}
+              aria-label="Close sourcebook entry"
               className={`p-1 rounded-md transition-colors ${
                 isLight
                   ? 'hover:bg-brand-gray-100 text-brand-gray-500'
@@ -350,7 +366,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     onChange={(e) => setName(e.target.value)}
                     className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
                     placeholder="E.g. Captain Ahab"
-                    autoFocus
                   />
                 </div>
               </div>
@@ -649,14 +664,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   </p>
                 </div>
                 <div className="relative inline-block group">
-                  <div
+                  <button
+                    type="button"
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold tracking-wide cursor-pointer ${labelClass} ${borderClass}`}
                     aria-label={keywordsTooltip}
                     onClick={() => setShowKeywordsPanel((v) => !v)}
+                    aria-expanded={showKeywordsPanel}
                   >
                     <Tag size={12} />
                     Keywords
-                  </div>
+                  </button>
 
                   <div
                     className={`absolute right-0 z-10 mt-2 min-w-[calc(100vw-2rem)] sm:min-w-[50vw] max-w-[90vw] rounded-lg border ${borderClass} ${
@@ -755,8 +772,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
       {/* Image Picker Modal */}
       {isImagePickerOpen && (
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          role="none"
+        >
           <div
+            ref={imagePickerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="image-picker-title"
+            tabIndex={-1}
             className={`${bgClass} ${textClass} w-full max-w-4xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[85vh]`}
           >
             <div
@@ -764,9 +789,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             >
               <div className="flex items-center gap-2">
                 <ImagePlus size={20} className="text-brand-500" />
-                <h3 className="text-lg font-bold">Select Images</h3>
+                <h3 id="image-picker-title" className="text-lg font-bold">
+                  Select Images
+                </h3>
               </div>
-              <button onClick={() => setIsImagePickerOpen(false)}>
+              <button
+                onClick={() => setIsImagePickerOpen(false)}
+                aria-label="Close image picker"
+              >
                 <X size={20} className="text-gray-500 hover:text-gray-300" />
               </button>
             </div>
@@ -782,10 +812,13 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     const isSelected = images.includes(img.filename);
                     const tooltip = `${img.title || img.filename}\n${img.description || ''}`;
                     return (
-                      <div
+                      <button
                         key={img.filename}
+                        type="button"
                         onClick={() => toggleImage(img.filename)}
                         title={tooltip}
+                        aria-label={`Toggle ${img.title || img.filename} selection`}
+                        aria-pressed={isSelected}
                         className={`group relative aspect-square cursor-pointer rounded-lg overflow-hidden border-2 transition-all bg-gray-100 dark:bg-gray-800 ${
                           isSelected
                             ? 'border-brand-500 ring-2 ring-brand-500/20'
@@ -810,7 +843,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                             </div>
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

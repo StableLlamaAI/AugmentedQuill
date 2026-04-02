@@ -61,8 +61,10 @@ describe('useChatSessionManagement', () => {
     expect(result.current.isIncognito).toBe(true);
     expect(result.current.currentChatId).toBe('incognito-session-id');
     expect(result.current.allowWebSearch).toBe(false);
+    expect(result.current.scratchpad).toBe('');
     expect(result.current.incognitoSessions).toHaveLength(1);
     expect(result.current.incognitoSessions[0].name).toBe('Incognito Chat');
+    expect(result.current.incognitoSessions[0].scratchpad).toBe('');
     expect(setChatMessages).toHaveBeenCalled();
   });
 
@@ -75,6 +77,7 @@ describe('useChatSessionManagement', () => {
       messages: [{ id: 'm1', role: 'user', text: 'hello' }],
       systemPrompt: 'Saved prompt',
       allowWebSearch: true,
+      scratchpad: 'My Scratch',
     } as any);
 
     const { result } = renderHook(() =>
@@ -99,6 +102,7 @@ describe('useChatSessionManagement', () => {
     });
     expect(result.current.isIncognito).toBe(false);
     expect(result.current.systemPrompt).toBe('Saved prompt');
+    expect(result.current.scratchpad).toBe('My Scratch');
     expect(setChatMessages).toHaveBeenCalledWith([
       { id: 'm1', role: 'user', text: 'hello' },
     ]);

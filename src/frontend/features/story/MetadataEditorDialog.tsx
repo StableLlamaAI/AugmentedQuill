@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MetadataParams, computeSyncUpdates } from './metadataSync';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { createPortal } from 'react-dom';
 import {
   Maximize2,
@@ -70,6 +71,8 @@ export function MetadataEditorDialog({
   const [activeTab, setActiveTab] = useState<
     'summary' | 'notes' | 'private' | 'conflicts'
   >('summary');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, dialogRef, onClose);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
@@ -261,14 +264,24 @@ export function MetadataEditorDialog({
   const rewritePrimaryTitle = `Rewrite existing summary using ${primarySourceLabel} style`;
 
   const modalContent = (
-    <div className={isDarkMode ? 'dark' : ''}>
+    <div ref={dialogRef} role="none" className={isDarkMode ? 'dark' : ''}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="metadata-dialog-title"
+        tabIndex={-1}
         className={`${
           isFullscreen
             ? 'fixed inset-0 z-[100] flex items-center justify-center p-2 bg-black/50'
             : 'fixed top-14 bottom-0 z-[60] bg-white dark:bg-brand-gray-900 border-r dark:border-brand-gray-800 flex flex-col'
         }`}
         style={!isFullscreen ? { width: 'var(--sidebar-width)', left: 0 } : {}}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            handleClose();
+          }
+        }}
       >
         <div
           className={`flex flex-col pointer-events-auto ${
@@ -280,10 +293,13 @@ export function MetadataEditorDialog({
           {/* Header */}
           <div className="flex justify-between items-center p-4 border-b dark:border-brand-gray-800">
             <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold dark:text-brand-gray-300">
+              <h2
+                id="metadata-dialog-title"
+                className="text-base font-semibold dark:text-brand-gray-300"
+              >
                 {title}
               </h2>
-              <div className="text-xs font-mono">
+              <div className="text-xs font-mono" role="status" aria-live="polite">
                 {saveStatus === 'saving' && (
                   <span className="flex items-center gap-1 text-brand-500">
                     <Loader2 size={12} className="animate-spin" /> Saving...
@@ -306,12 +322,17 @@ export function MetadataEditorDialog({
                 title={
                   isFullscreen ? 'Switch to Sidebar View' : 'Switch to Full Screen'
                 }
+                aria-label={
+                  isFullscreen ? 'Switch to sidebar view' : 'Switch to full screen view'
+                }
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
               <button
                 onClick={handleClose}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Close dialog"
+                aria-label="Close metadata editor dialog"
               >
                 ✕
               </button>
@@ -332,42 +353,48 @@ export function MetadataEditorDialog({
 
               {type === 'story' && (
                 <>
-                  <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
-                    Style Tags
-                  </label>
-                  <input
-                    value={data.tags ? data.tags.join(', ') : ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      // Preserve user-entered ordering; normalization happens server-side.
-                      const tags = val.split(',').map((s) => s.trimStart());
-                      setData({ ...data, tags: tags });
-                    }}
-                    className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
-                    placeholder="e.g. Noir, Sci-Fi, First-Person"
-                  />
-                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500">
+                  <div className="flex items-start gap-3 mt-3">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-sm font-medium dark:text-brand-gray-400">
+                        Style Tags
+                      </label>
+                      <input
+                        value={data.tags ? data.tags.join(', ') : ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Preserve user-entered ordering; normalization happens server-side.
+                          const tags = val.split(',').map((s) => s.trimStart());
+                          setData({ ...data, tags: tags });
+                        }}
+                        className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                        placeholder="e.g. Noir, Sci-Fi, First-Person"
+                      />
+                    </div>
+                    {languages && (
+                      <div className="flex-shrink-0 w-24">
+                        <label className="block text-sm font-medium dark:text-brand-gray-400 text-right">
+                          Lang
+                        </label>
+                        <select
+                          value={data.language || ''}
+                          onChange={(e) =>
+                            setData({ ...data, language: e.target.value })
+                          }
+                          className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
+                        >
+                          {languages.map((lng) => (
+                            <option key={lng} value={lng}>
+                              {lng.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500 mt-2">
                     Style tags guide the WRITING model’s voice and the EDITING model’s
                     tone checks. Keep them short, specific, and stable.
                   </p>
-                  {languages && (
-                    <>
-                      <label className="block text-sm font-medium dark:text-brand-gray-400 mt-3">
-                        Language
-                      </label>
-                      <select
-                        value={data.language || ''}
-                        onChange={(e) => setData({ ...data, language: e.target.value })}
-                        className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
-                      >
-                        {languages.map((lng) => (
-                          <option key={lng} value={lng}>
-                            {lng.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
                 </>
               )}
             </div>

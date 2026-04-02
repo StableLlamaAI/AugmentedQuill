@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { useThemeClasses } from '../layout/ThemeContext';
 import {
   Loader2,
@@ -57,6 +58,9 @@ interface ChatProps {
   onToggleIncognito: (val: boolean) => void;
   allowWebSearch: boolean;
   onToggleWebSearch: (val: boolean) => void;
+  scratchpad?: string;
+  onUpdateScratchpad: (newContent: string) => void;
+  onDeleteScratchpad: () => void;
 }
 
 type ToolCallArgumentsProps = {
@@ -105,6 +109,9 @@ export const Chat: React.FC<ChatProps> = ({
   onToggleIncognito,
   allowWebSearch,
   onToggleWebSearch,
+  scratchpad = '',
+  onUpdateScratchpad,
+  onDeleteScratchpad,
 }) => {
   const chatDisabledReason =
     'Chat is unavailable because no working CHAT model is configured.';
@@ -113,7 +120,14 @@ export const Chat: React.FC<ChatProps> = ({
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showScratchpad, setShowScratchpad] = useState(false);
+  const [scratchpadDraft, setScratchpadDraft] = useState(scratchpad);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
+  const systemPromptRef = useRef<HTMLDivElement>(null);
+  const scratchpadRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(showSystemPrompt, systemPromptRef, () => setShowSystemPrompt(false));
+  useFocusTrap(showScratchpad, scratchpadRef, () => setShowScratchpad(false));
 
   const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
     Record<string, boolean>
@@ -188,6 +202,12 @@ export const Chat: React.FC<ChatProps> = ({
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
+  useEffect(() => {
+    if (!showScratchpad) {
+      setScratchpadDraft(scratchpad || '');
+    }
+  }, [scratchpad, showScratchpad]);
+
   const handleSubmit = (text: string) => {
     if (isLoading || !isModelAvailable) return;
 
@@ -257,6 +277,7 @@ export const Chat: React.FC<ChatProps> = ({
         allowWebSearch={allowWebSearch}
         onDeleteSession={onDeleteSession}
         onNewSession={onNewSession}
+        onScratchpadOpen={() => setShowScratchpad(true)}
         onToggleWebSearch={onToggleWebSearch}
       />
 
@@ -273,11 +294,88 @@ export const Chat: React.FC<ChatProps> = ({
         />
       )}
 
+      {showScratchpad && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="none"
+        >
+          <div
+            ref={scratchpadRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scratchpad-dialog-title"
+            tabIndex={-1}
+            className={`w-full max-w-2xl rounded-lg border shadow-xl p-4 ${isLight ? 'bg-white text-brand-gray-800 border-brand-gray-200' : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'}`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2
+                id="scratchpad-dialog-title"
+                className="text-sm font-bold uppercase tracking-wider text-brand-gray-500"
+              >
+                Scratchpad
+              </h2>
+              <h3 className="text-sm font-semibold">Scratchpad</h3>
+              <button
+                onClick={() => setShowScratchpad(false)}
+                className="p-1 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800"
+                title="Close Scratchpad"
+                aria-label="Close scratchpad"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <textarea
+              value={scratchpadDraft}
+              onChange={(e) => setScratchpadDraft(e.target.value)}
+              className={`w-full min-h-[220px] rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${isLight ? 'bg-white border-brand-gray-300 text-brand-gray-900' : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-100'}`}
+              placeholder="Current internal notes of the chat LLM..."
+            />
+            <div className="mt-3 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  onDeleteScratchpad();
+                  setScratchpadDraft('');
+                }}
+                className="rounded px-3 py-1 text-xs font-medium text-red-500 hover:bg-red-500/10"
+                title="Delete scratchpad content"
+              >
+                Delete
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowScratchpad(false)}
+                  className="rounded px-3 py-1 text-xs font-medium border border-brand-gray-300 hover:bg-brand-gray-100 dark:border-brand-gray-700 dark:hover:bg-brand-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onUpdateScratchpad(scratchpadDraft);
+                    setShowScratchpad(false);
+                  }}
+                  aria-label="Save Scratchpad"
+                  className="rounded px-3 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSystemPrompt && (
         <div
+          ref={systemPromptRef}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="system-instruction-title"
           className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}
         >
-          <label className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2">
+          <label
+            id="system-instruction-title"
+            className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2"
+          >
             System Instruction
           </label>
           <textarea
@@ -387,12 +485,16 @@ export const Chat: React.FC<ChatProps> = ({
                     <button
                       onClick={cancelEdit}
                       className="p-1 text-brand-gray-400 hover:text-brand-gray-600"
+                      aria-label="Cancel message edit"
+                      title="Cancel edit"
                     >
                       <X size={14} />
                     </button>
                     <button
                       onClick={() => saveEdit(msg.id)}
                       className="p-1 text-brand-500 hover:opacity-80"
+                      aria-label="Save message edit"
+                      title="Save edit"
                     >
                       <Save size={14} />
                     </button>
@@ -565,7 +667,7 @@ export const Chat: React.FC<ChatProps> = ({
         ))}
 
         {isLoading && (
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3" role="status" aria-live="polite">
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
                 isLight

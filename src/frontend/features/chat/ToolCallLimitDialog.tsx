@@ -9,8 +9,9 @@
  * Defines the tool call limit dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useFocusTrap } from '../layout/useFocusTrap';
 
 import { AppTheme } from '../../types';
 
@@ -29,10 +30,20 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
   theme,
   onResolve,
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, () => onResolve('stop'));
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="toolcall-dialog-title"
+      tabIndex={-1}
+    >
       <div
         className={`p-6 rounded-lg shadow-2xl max-w-sm w-full ${
           theme === 'dark'
@@ -42,7 +53,9 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
       >
         <div className="flex items-center gap-3 mb-4 text-amber-500">
           <RefreshCw className="w-6 h-6 animate-spin-slow" />
-          <h3 className="text-xl font-bold">Tool Call Limit</h3>
+          <h3 id="toolcall-dialog-title" className="text-xl font-bold">
+            Tool Call Limit
+          </h3>
         </div>
         <p className="mb-6 opacity-90">
           The AI has executed <strong>{count}</strong> tool calls in a row.

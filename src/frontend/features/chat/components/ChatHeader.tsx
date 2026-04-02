@@ -10,7 +10,16 @@
  */
 
 import React from 'react';
-import { Ghost, Globe, History, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import {
+  Clipboard,
+  Ghost,
+  Globe,
+  History,
+  Plus,
+  Settings2,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { ChatContextUsage } from '../chatContextBudget';
 
 type ChatHeaderProps = {
@@ -29,6 +38,7 @@ type ChatHeaderProps = {
   allowWebSearch: boolean;
   onDeleteSession: (id: string) => void;
   onNewSession: (incognito?: boolean) => void;
+  onScratchpadOpen: () => void;
   onToggleWebSearch: (value: boolean) => void;
 };
 
@@ -48,6 +58,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   allowWebSearch,
   onDeleteSession,
   onNewSession,
+  onScratchpadOpen,
   onToggleWebSearch,
 }) => {
   const reason =
@@ -103,6 +114,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <button
           onClick={() => {
             if (isDisabled) return;
+            onNewSession(false);
+          }}
+          className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
+          title={isDisabled ? reason : 'New Chat'}
+          disabled={isDisabled}
+        >
+          <Plus size={16} />
+        </button>
+        <button
+          onClick={() => {
+            if (isDisabled) return;
             if (currentSessionId) {
               onDeleteSession(currentSessionId);
             }
@@ -122,17 +144,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <button
           onClick={() => {
             if (isDisabled) return;
-            onNewSession(false);
-          }}
-          className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
-          title={isDisabled ? reason : 'New Chat'}
-          disabled={isDisabled}
-        >
-          <Plus size={16} />
-        </button>
-        <button
-          onClick={() => {
-            if (isDisabled) return;
             onNewSession(true);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
@@ -142,21 +153,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           disabled={isDisabled}
         >
           <Ghost size={16} />
-        </button>
-        <button
-          onClick={() => {
-            if (isDisabled) return;
-            setShowHistory(!showHistory);
-          }}
-          className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
-            showHistory
-              ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
-              : 'text-brand-gray-500'
-          }`}
-          title={isDisabled ? reason : 'Chat History'}
-          disabled={isDisabled}
-        >
-          <History size={16} />
         </button>
         <button
           onClick={() => {
@@ -178,6 +174,32 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           disabled={isDisabled}
         >
           <Globe size={16} />
+        </button>
+        <button
+          onClick={() => {
+            if (isDisabled) return;
+            onScratchpadOpen();
+          }}
+          className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
+          title={isDisabled ? reason : 'Open Scratchpad'}
+          disabled={isDisabled}
+        >
+          <Clipboard size={16} />
+        </button>
+        <button
+          onClick={() => {
+            if (isDisabled) return;
+            setShowHistory(!showHistory);
+          }}
+          className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
+            showHistory
+              ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
+              : 'text-brand-gray-500'
+          }`}
+          title={isDisabled ? reason : 'Chat History'}
+          disabled={isDisabled}
+        >
+          <History size={16} />
         </button>
         <button
           onClick={() => {

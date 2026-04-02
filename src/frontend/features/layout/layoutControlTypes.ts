@@ -230,4 +230,7 @@ export type MainChatControls = {
   setIsIncognito: Dispatch<SetStateAction<boolean>>;
   allowWebSearch: boolean;
   setAllowWebSearch: Dispatch<SetStateAction<boolean>>;
+  scratchpad: string;
+  onUpdateScratchpad: (content: string) => void;
+  onDeleteScratchpad: () => void;
 };

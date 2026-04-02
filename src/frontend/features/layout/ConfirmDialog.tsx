@@ -9,7 +9,8 @@
  * Defines the confirm dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useId, useRef } from 'react';
+import { useFocusTrap } from './useFocusTrap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -39,15 +40,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   variant = 'primary',
 }) => {
   const { isLight } = useTheme();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, onCancel);
+
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
+  const idBase = useId();
+  const titleId = title ? `${idBase}-confirm-dialog-title` : undefined;
+  const messageId = `${idBase}-confirm-dialog-description`;
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
+      aria-describedby={messageId}
+      tabIndex={-1}
     >
       <div
         className={`${
@@ -58,6 +69,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       >
         {title && (
           <h2
+            id={titleId}
             className={`text-lg font-bold mb-2 ${
               isDanger
                 ? 'text-red-600 dark:text-red-500'
@@ -70,6 +82,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </h2>
         )}
         <p
+          id={messageId}
           className={`${
             isLight ? 'text-brand-gray-700' : 'text-brand-gray-200'
           } text-sm whitespace-pre-wrap mb-6`}
@@ -94,7 +107,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 : 'bg-brand-700 hover:bg-brand-600'
             } px-4 py-2 text-sm rounded-md text-white border-transparent transition-colors`}
             onClick={onConfirm}
-            autoFocus
           >
             {confirmLabel}
           </button>

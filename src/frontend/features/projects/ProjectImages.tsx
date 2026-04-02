@@ -32,6 +32,7 @@ import { api } from '../../services/api';
 import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
 
 interface ImageEntry {
@@ -83,6 +84,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     Record<string, { description?: string; title?: string }>
   >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, onClose);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
@@ -95,6 +98,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   }>({ isOpen: false, content: '', loading: false });
   const [copied, setCopied] = useState(false);
   const [showImageSettings, setShowImageSettings] = useState(false);
+  const selectedImageRef = useRef<HTMLDivElement>(null);
+  const promptPopupRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(!!selectedImage, selectedImageRef, () => setSelectedImage(null));
+  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
+    setPromptPopup({ ...promptPopup, isOpen: false })
+  );
 
   const { isLight } = useThemeClasses();
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
@@ -490,8 +500,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       id="project-images-dialog"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="project-images-title"
+      tabIndex={-1}
     >
       <div
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
@@ -514,11 +529,19 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         <div
           className={`flex items-center justify-between p-4 border-b ${borderClass}`}
         >
-          <h2 className="text-xl font-semibold flex items-center gap-2">
+          <h2
+            id="project-images-title"
+            className="text-xl font-semibold flex items-center gap-2"
+          >
             <ImageIcon className="w-5 h-5" />
             Project Images
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-black/10 rounded-full">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-black/10 rounded-full"
+            aria-label="Close image manager"
+            title="Close image manager"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -665,16 +688,18 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         <div className="text-sm font-medium mt-1">{img.filename}</div>
                       </div>
                     ) : (
-                      <div
+                      <button
+                        type="button"
                         className="w-full h-full cursor-zoom-in"
                         onClick={() => setSelectedImage(img)}
+                        aria-label={`View ${img.filename}`}
                       >
                         <img
                           src={img.url!}
                           alt={img.filename}
                           className="w-full h-full object-contain"
                         />
-                      </div>
+                      </button>
                     )}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                       <div className="pointer-events-auto">
@@ -810,18 +835,25 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       {selectedImage && selectedImage.url && (
         <div
           className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          role="none"
           onClick={() => setSelectedImage(null)}
         >
           <button
             className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-50 p-2"
             onClick={() => setSelectedImage(null)}
+            aria-label="Close image preview"
           >
             <X size={32} />
           </button>
 
           <div
+            ref={selectedImageRef}
             className="relative max-w-full max-h-full flex flex-col items-center justify-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Preview of ${selectedImage.filename}`}
             onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
           >
             <img
               src={selectedImage.url}
@@ -841,12 +873,23 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       )}
 
       {promptPopup.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          role="none"
+        >
           <div
+            ref={promptPopupRef}
             className={`${bgClass} ${textClass} rounded-lg shadow-xl w-full max-w-[90vw] h-[90vh] border ${borderClass} flex flex-col`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="prompt-popup-title"
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between p-4 border-b border-brand-gray-200 dark:border-brand-gray-700 flex-shrink-0">
-              <h3 className="font-semibold flex items-center gap-2">
+              <h3
+                id="prompt-popup-title"
+                className="font-semibold flex items-center gap-2"
+              >
                 <Sparkles className="w-4 h-4 text-brand-purple-500" />
                 Generated Prompt
               </h3>

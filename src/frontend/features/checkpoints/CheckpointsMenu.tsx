@@ -144,6 +144,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
       >
         <Save size={14} className="mr-1" />
         <ChevronDown size={12} />
+        <span className="sr-only">Checkpoints</span>
       </Button>
 
       {isOpen && (
@@ -162,31 +163,31 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
             <Plus size={14} />
           </button>
 
-          <div className="max-h-60 overflow-y-auto">
+          <div className="max-h-60 overflow-y-auto" role="list">
             {checkpoints.length === 0 ? (
               <div className="px-3 py-4 text-xs text-center opacity-50">
                 No checkpoints yet
               </div>
             ) : (
               checkpoints.map((cp) => (
-                <button
-                  key={cp.timestamp}
-                  type="button"
-                  className={menuButtonClass}
-                  onClick={() => handleLoad(cp.timestamp)}
-                  title={`Load checkpoint ${cp.timestamp}`}
-                >
-                  <div className="flex flex-col truncate w-full pr-2">
+                <div key={cp.timestamp} className={menuButtonClass} role="listitem">
+                  <button
+                    type="button"
+                    className="flex flex-col truncate w-full pr-2 text-left"
+                    onClick={() => handleLoad(cp.timestamp)}
+                    title={`Load checkpoint ${cp.timestamp}`}
+                  >
                     <span className="truncate">{cp.timestamp}</span>
-                  </div>
-                  <div
+                  </button>
+                  <button
+                    type="button"
                     className="p-1 hover:text-red-500 rounded-full flex-shrink-0"
                     onClick={(e) => handleDelete(e, cp.timestamp)}
                     title="Delete"
                   >
                     <Trash2 size={14} />
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))
             )}
           </div>

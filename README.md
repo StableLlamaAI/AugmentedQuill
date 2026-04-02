@@ -106,6 +106,7 @@ The complete user guide is in `docs/user_manual/`:
   - `black --check .`
   - `python -m pytest`
 - Frontend: `cd src/frontend && npm run lint && npm run test && npm run build`
+- Accessibility validation: `cd src/frontend && npm run test:accessibility` (new)
 - Quick run: `augmentedquill --reload --host 127.0.0.1 --port 28000`
 
 ### Configuration paths
@@ -143,5 +144,4 @@ Model endpoint variables:
 ## 🧩 Known limitations
 
 - No multi-user access controls.
-- Limited accessibility support.
 - No real-time external editor sync.

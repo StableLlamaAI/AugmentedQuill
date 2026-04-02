@@ -35,6 +35,7 @@ export function useChatSessionManagement({
   const [isIncognito, setIsIncognito] = useState(false);
   const [allowWebSearch, setAllowWebSearch] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt());
+  const [scratchpad, setScratchpad] = useState('');
   const [incognitoSessions, setIncognitoSessions] = useState<ChatSession[]>([]);
 
   useEffect(() => {
@@ -62,17 +63,20 @@ export function useChatSessionManagement({
           systemPrompt: getSystemPrompt(),
           isIncognito: true,
           allowWebSearch: false,
+          scratchpad: '',
         };
         setIncognitoSessions((prev) => [newSession, ...prev]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
+        setScratchpad('');
       } else {
         setChatMessages([]);
         setIsIncognito(false);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
+        setScratchpad('');
       }
       setSystemPrompt(getSystemPrompt());
     },
@@ -99,6 +103,7 @@ export function useChatSessionManagement({
           setChatMessages(chat.messages || []);
           setCurrentChatId(id);
           setIsIncognito(false);
+          setScratchpad(chat.scratchpad || '');
           if (chat.systemPrompt) {
             setSystemPrompt(chat.systemPrompt);
           }
@@ -110,6 +115,25 @@ export function useChatSessionManagement({
     },
     [incognitoSessions, setChatMessages]
   );
+
+  const handleUpdateScratchpad = useCallback(
+    (content: string) => {
+      setScratchpad(content);
+
+      if (isIncognito && currentChatId) {
+        setIncognitoSessions((prev) =>
+          prev.map((session) =>
+            session.id === currentChatId ? { ...session, scratchpad: content } : session
+          )
+        );
+      }
+    },
+    [currentChatId, isIncognito]
+  );
+
+  const handleDeleteScratchpad = useCallback(() => {
+    handleUpdateScratchpad('');
+  }, [handleUpdateScratchpad]);
 
   const handleDeleteChat = useCallback(
     async (id: string) => {
@@ -188,6 +212,7 @@ export function useChatSessionManagement({
                   messages: chatMessages,
                   systemPrompt,
                   allowWebSearch,
+                  scratchpad,
                 }
               : session
           )
@@ -204,6 +229,7 @@ export function useChatSessionManagement({
               messages: chatMessages,
               systemPrompt,
               allowWebSearch,
+              scratchpad,
             });
             refreshChatList();
           } catch (error) {
@@ -219,6 +245,7 @@ export function useChatSessionManagement({
     currentChatId,
     isIncognito,
     systemPrompt,
+    scratchpad,
     isChatLoading,
     allowWebSearch,
     refreshChatList,
@@ -235,6 +262,8 @@ export function useChatSessionManagement({
     setAllowWebSearch,
     systemPrompt,
     setSystemPrompt,
+    scratchpad,
+    setScratchpad,
     incognitoSessions,
     setIncognitoSessions,
     refreshChatList,
@@ -242,5 +271,7 @@ export function useChatSessionManagement({
     handleSelectChat,
     handleDeleteChat,
     handleDeleteAllChats,
+    onUpdateScratchpad: handleUpdateScratchpad,
+    onDeleteScratchpad: handleDeleteScratchpad,
   };
 }

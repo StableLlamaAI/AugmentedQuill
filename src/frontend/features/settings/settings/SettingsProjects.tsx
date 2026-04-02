@@ -232,7 +232,6 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                           ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
                           : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
                       }`}
-                      autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           onRenameProject(proj.id, tempName, tempLang);

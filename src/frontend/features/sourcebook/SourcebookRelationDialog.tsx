@@ -9,13 +9,14 @@
  * Defines the sourcebook relation dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, ArrowRightLeft } from 'lucide-react';
 import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 
 interface SourcebookRelationDialogProps {
   isOpen: boolean;
@@ -41,6 +42,9 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   const [projectType, setProjectType] = useState<'short-story' | 'novel' | 'series'>(
     'novel'
   );
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   // Form fields
   const [targetId, setTargetId] = useState('');
@@ -131,17 +135,31 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   const showBooks = projectType === 'series';
 
   return createPortal(
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div
+      className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      role="none"
+    >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="relation-dialog-title"
+        tabIndex={-1}
         className={`${bgClass} ${textClass} w-full max-w-2xl rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[90vh]`}
       >
         <div
           className={`flex items-center justify-between px-6 py-4 border-b ${borderClass}`}
         >
-          <h2 className="text-xl font-semibold">
+          <h2 id="relation-dialog-title" className="text-xl font-semibold">
             {initialRelation ? 'Edit Relation' : 'Add Relation'}
           </h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Close relation dialog"
+            title="Close"
+          >
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -168,20 +186,22 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
                   </p>
                 ) : (
                   filteredEntries.map((entry) => (
-                    <div
+                    <button
                       key={entry.id}
+                      type="button"
                       onClick={() => setTargetId(entry.id)}
-                      className={`px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
+                      className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
                         targetId === entry.id
                           ? 'bg-brand-500 text-white border-brand-500'
                           : 'border-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
                       }`}
+                      aria-label={`Select target entry ${entry.name}`}
                     >
                       <div className="font-medium">{entry.name}</div>
                       <div className="text-xs opacity-70 truncate">
                         {entry.description}
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>

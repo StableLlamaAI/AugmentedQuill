@@ -90,4 +90,53 @@ describe('Chat', () => {
     rerender(<Chat messages={messages} isLoading={false} {...defaultProps} />);
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
+
+  it('opens and saves scratchpad modal content', () => {
+    const onUpdateScratchpad = vi.fn();
+    const onDeleteScratchpad = vi.fn();
+
+    render(
+      <Chat
+        messages={[]}
+        isLoading={false}
+        scratchpad="initial"
+        onUpdateScratchpad={onUpdateScratchpad}
+        onDeleteScratchpad={onDeleteScratchpad}
+        {...defaultProps}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Open Scratchpad'));
+    expect(screen.getByRole('dialog', { name: /scratchpad/i })).toBeTruthy();
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Current internal notes of the chat LLM...'),
+      {
+        target: { value: 'updated content' },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Scratchpad/i }));
+
+    expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
+  });
+
+  it('closes system instruction panel on Escape', () => {
+    render(
+      <Chat
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Chat Settings'));
+    expect(screen.getByText('System Instruction')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('System Instruction')).toBeNull();
+  });
 });
