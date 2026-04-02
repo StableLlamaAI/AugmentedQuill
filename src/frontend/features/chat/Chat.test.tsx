@@ -90,4 +90,34 @@ describe('Chat', () => {
     rerender(<Chat messages={messages} isLoading={false} {...defaultProps} />);
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
+
+  it('opens and saves scratchpad modal content', () => {
+    const onUpdateScratchpad = vi.fn();
+    const onDeleteScratchpad = vi.fn();
+
+    render(
+      <Chat
+        messages={[]}
+        isLoading={false}
+        scratchpad="initial"
+        onUpdateScratchpad={onUpdateScratchpad}
+        onDeleteScratchpad={onDeleteScratchpad}
+        {...defaultProps}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Open Scratchpad'));
+    expect(screen.getByText('Scratchpad')).toBeTruthy();
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Current internal notes of the chat LLM...'),
+      {
+        target: { value: 'updated content' },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Scratchpad/i }));
+
+    expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
+  });
 });

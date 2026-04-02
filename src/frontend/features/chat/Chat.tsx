@@ -57,6 +57,9 @@ interface ChatProps {
   onToggleIncognito: (val: boolean) => void;
   allowWebSearch: boolean;
   onToggleWebSearch: (val: boolean) => void;
+  scratchpad?: string;
+  onUpdateScratchpad: (newContent: string) => void;
+  onDeleteScratchpad: () => void;
 }
 
 type ToolCallArgumentsProps = {
@@ -105,6 +108,9 @@ export const Chat: React.FC<ChatProps> = ({
   onToggleIncognito,
   allowWebSearch,
   onToggleWebSearch,
+  scratchpad = '',
+  onUpdateScratchpad,
+  onDeleteScratchpad,
 }) => {
   const chatDisabledReason =
     'Chat is unavailable because no working CHAT model is configured.';
@@ -113,6 +119,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showScratchpad, setShowScratchpad] = useState(false);
+  const [scratchpadDraft, setScratchpadDraft] = useState(scratchpad);
   const [tempSystemPrompt, setTempSystemPrompt] = useState(systemPrompt);
 
   const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
@@ -188,6 +196,12 @@ export const Chat: React.FC<ChatProps> = ({
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
+  useEffect(() => {
+    if (!showScratchpad) {
+      setScratchpadDraft(scratchpad || '');
+    }
+  }, [scratchpad, showScratchpad]);
+
   const handleSubmit = (text: string) => {
     if (isLoading || !isModelAvailable) return;
 
@@ -257,6 +271,7 @@ export const Chat: React.FC<ChatProps> = ({
         allowWebSearch={allowWebSearch}
         onDeleteSession={onDeleteSession}
         onNewSession={onNewSession}
+        onScratchpadOpen={() => setShowScratchpad(true)}
         onToggleWebSearch={onToggleWebSearch}
       />
 
@@ -271,6 +286,61 @@ export const Chat: React.FC<ChatProps> = ({
           onDeleteAllSessions={onDeleteAllSessions}
           onClose={() => setShowHistory(false)}
         />
+      )}
+
+      {showScratchpad && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            className={`w-full max-w-2xl rounded-lg border shadow-xl p-4 ${isLight ? 'bg-white text-brand-gray-800 border-brand-gray-200' : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'}`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Scratchpad</h3>
+              <button
+                onClick={() => setShowScratchpad(false)}
+                className="p-1 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800"
+                title="Close Scratchpad"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <textarea
+              value={scratchpadDraft}
+              onChange={(e) => setScratchpadDraft(e.target.value)}
+              className={`w-full min-h-[220px] rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${isLight ? 'bg-white border-brand-gray-300 text-brand-gray-900' : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-100'}`}
+              placeholder="Current internal notes of the chat LLM..."
+            />
+            <div className="mt-3 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  onDeleteScratchpad();
+                  setScratchpadDraft('');
+                }}
+                className="rounded px-3 py-1 text-xs font-medium text-red-500 hover:bg-red-500/10"
+                title="Delete scratchpad content"
+              >
+                Delete
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowScratchpad(false)}
+                  className="rounded px-3 py-1 text-xs font-medium border border-brand-gray-300 hover:bg-brand-gray-100 dark:border-brand-gray-700 dark:hover:bg-brand-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onUpdateScratchpad(scratchpadDraft);
+                    setShowScratchpad(false);
+                  }}
+                  aria-label="Save Scratchpad"
+                  className="rounded px-3 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showSystemPrompt && (

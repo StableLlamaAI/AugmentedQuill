@@ -374,6 +374,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     setIsIncognito,
     allowWebSearch,
     setAllowWebSearch,
+    scratchpad,
+    onUpdateScratchpad,
+    onDeleteScratchpad,
   } = chatControls;
 
   return (
@@ -560,6 +563,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onToggleIncognito={setIsIncognito}
             allowWebSearch={allowWebSearch}
             onToggleWebSearch={setAllowWebSearch}
+            scratchpad={scratchpad}
+            onUpdateScratchpad={onUpdateScratchpad}
+            onDeleteScratchpad={onDeleteScratchpad}
           />
         </div>
       )}
