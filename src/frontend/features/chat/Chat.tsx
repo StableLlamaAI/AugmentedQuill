@@ -10,7 +10,13 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ChatMessage, AppTheme, ChatSession, LLMConfig } from '../../types';
+import {
+  ChatAttachment,
+  ChatMessage,
+  AppTheme,
+  ChatSession,
+  LLMConfig,
+} from '../../types';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { useThemeClasses } from '../layout/ThemeContext';
 import {
@@ -24,6 +30,8 @@ import {
   X,
   Settings2,
   ArrowRight,
+  FileText,
+  Paperclip,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { MarkdownView } from '../editor/MarkdownView';
@@ -40,7 +48,7 @@ interface ChatProps {
   isModelAvailable?: boolean;
   activeChatConfig: LLMConfig;
   systemPrompt: string;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, attachments?: ChatAttachment[]) => void;
   onStop?: () => void;
   onRegenerate: () => void;
   onEditMessage: (id: string, newText: string) => void;
@@ -135,6 +143,8 @@ export const Chat: React.FC<ChatProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
@@ -208,10 +218,10 @@ export const Chat: React.FC<ChatProps> = ({
     }
   }, [scratchpad, showScratchpad]);
 
-  const handleSubmit = (text: string) => {
+  const handleSubmit = (text: string, attachments?: ChatAttachment[]) => {
     if (isLoading || !isModelAvailable) return;
 
-    onSendMessage(text);
+    onSendMessage(text, attachments);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -594,6 +604,29 @@ export const Chat: React.FC<ChatProps> = ({
                         </CollapsibleToolSection>
                       )}
                       <MarkdownView content={msg.text} />
+                      {msg.role === 'user' &&
+                        msg.attachments &&
+                        msg.attachments.length > 0 && (
+                          <div className="mt-3 rounded-lg border border-brand-gray-200/80 bg-brand-gray-50/80 p-3 text-sm text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-950/60 dark:text-brand-gray-200">
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-gray-500 dark:text-brand-gray-400">
+                              Attachments
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {msg.attachments.map((attachment) => (
+                                <div
+                                  key={attachment.id}
+                                  className="inline-flex items-center gap-2 rounded-full border border-brand-gray-300 bg-white px-3 py-1 text-xs text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-900 dark:text-brand-gray-200"
+                                  title={attachment.name}
+                                >
+                                  <FileText size={14} />
+                                  <span className="truncate max-w-[10rem]">
+                                    {attachment.name}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       {msg.traceback && (
                         <CollapsibleToolSection
                           title="Stack Trace"
@@ -692,47 +725,67 @@ export const Chat: React.FC<ChatProps> = ({
       </div>
 
       <div className={`p-4 border-t ${bgMain} ${borderMain}`}>
-        {(canRegenerate || isLoading) && (
-          <div className="flex justify-center mb-4">
-            {isLoading ? (
-              <Button
-                theme={theme}
-                size="sm"
-                variant="secondary"
-                onClick={onStop}
-                icon={<X size={12} />}
-                className="text-xs py-1 h-7 border-dashed border-red-500/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-                title="Stop generation"
+        {(canRegenerate || isLoading || attachments.length === 0) && (
+          <div className="relative mb-3 min-h-[2.75rem] py-1">
+            <div className="absolute inset-x-0 flex justify-center">
+              {isLoading ? (
+                <Button
+                  theme={theme}
+                  size="sm"
+                  variant="secondary"
+                  onClick={onStop}
+                  icon={<X size={12} />}
+                  className="text-xs py-1 h-7 border-dashed border-red-500/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+                  title="Stop generation"
+                >
+                  Stop generation
+                </Button>
+              ) : canRegenerate ? (
+                <Button
+                  theme={theme}
+                  size="sm"
+                  variant="secondary"
+                  onClick={onRegenerate}
+                  disabled={!isModelAvailable}
+                  icon={<RefreshCw size={12} />}
+                  className="text-xs py-1 h-7 border-dashed"
+                  title={
+                    !isModelAvailable
+                      ? chatDisabledReason
+                      : 'Regenerate last response (CHAT model)'
+                  }
+                >
+                  Regenerate last response
+                </Button>
+              ) : null}
+            </div>
+            {attachments.length === 0 && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach files"
+                aria-label="Attach files"
+                className={`absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition ${
+                  isLight
+                    ? 'border-brand-gray-300 bg-white text-brand-gray-700 hover:bg-brand-gray-50'
+                    : 'border-brand-gray-700 bg-brand-gray-900 text-brand-gray-200 hover:bg-brand-gray-800'
+                }`}
               >
-                Stop generation
-              </Button>
-            ) : (
-              <Button
-                theme={theme}
-                size="sm"
-                variant="secondary"
-                onClick={onRegenerate}
-                disabled={!isModelAvailable}
-                icon={<RefreshCw size={12} />}
-                className="text-xs py-1 h-7 border-dashed"
-                title={
-                  !isModelAvailable
-                    ? chatDisabledReason
-                    : 'Regenerate last response (CHAT model)'
-                }
-              >
-                Regenerate last response
-              </Button>
+                <Paperclip size={16} />
+              </button>
             )}
           </div>
         )}
 
         <ChatComposer
           textareaRef={textareaRef}
+          fileInputRef={fileInputRef}
           isLoading={isLoading}
           isModelAvailable={isModelAvailable}
           disabledReason={chatDisabledReason}
           inputBg={inputBg}
+          attachments={attachments}
+          onAttachmentsChange={setAttachments}
           onSubmit={handleSubmit}
         />
       </div>

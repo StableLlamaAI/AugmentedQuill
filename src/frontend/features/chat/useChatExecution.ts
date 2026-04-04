@@ -26,7 +26,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
-import { ChatMessage, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
 
 type ToolLoopChoice = 'stop' | 'continue' | 'unlimited';
 
@@ -423,7 +423,7 @@ export function useChatExecution({
     };
   };
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, attachments?: ChatAttachment[]) => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const historyBefore = [...chatMessages];
@@ -440,9 +440,16 @@ export function useChatExecution({
     setChatMessages((prev) => [
       ...prev,
       ...(contextMsg ? [contextMsg] : []),
-      { id: userMsgId, role: 'user', text },
+      { id: userMsgId, role: 'user', text, attachments },
     ]);
-    await executeChatRequest(text, historyWithContext, userMsgId);
+
+    const textForBackend =
+      text +
+      (attachments && attachments.length > 0
+        ? `\n\n[Attached files: ${attachments.map((a) => a.name).join(', ')}]`
+        : '');
+
+    await executeChatRequest(textForBackend, historyWithContext, userMsgId);
   };
 
   const handleStopChat = () => {

@@ -121,6 +121,65 @@ describe('Chat', () => {
     expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
   });
 
+  it('allows file attachments to be added, previewed, and sent', () => {
+    const onSendMessage = vi.fn();
+    const file = new File(['story'], 'example.txt', { type: 'text/plain' });
+
+    render(
+      <Chat
+        {...defaultProps}
+        onSendMessage={onSendMessage}
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Attach files/i }));
+    fireEvent.change(screen.getByTestId('chat-attachment-input'), {
+      target: { files: [file] },
+    });
+
+    expect(screen.getByTitle(/Click to remove example.txt/i)).toBeTruthy();
+
+    const input = screen.getByRole('textbox', { name: /Chat message/i });
+    fireEvent.change(input, { target: { value: 'Please review this file' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Message/i }));
+
+    expect(onSendMessage).toHaveBeenCalledWith('Please review this file', [
+      expect.objectContaining({ name: 'example.txt' }),
+    ]);
+  });
+
+  it('offers removal when clicking an attachment preview', () => {
+    const file = new File(['story'], 'example.txt', { type: 'text/plain' });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <Chat
+        {...defaultProps}
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Attach files/i }));
+    fireEvent.change(screen.getByTestId('chat-attachment-input'), {
+      target: { files: [file] },
+    });
+
+    fireEvent.click(screen.getByTitle(/Click to remove example.txt/i));
+    expect(confirmSpy).toHaveBeenCalledWith('Remove attachment “example.txt”?');
+    expect(screen.queryByTitle(/Click to remove example.txt/i)).toBeNull();
+
+    confirmSpy.mockRestore();
+  });
+
   it('closes system instruction panel on Escape', () => {
     render(
       <Chat

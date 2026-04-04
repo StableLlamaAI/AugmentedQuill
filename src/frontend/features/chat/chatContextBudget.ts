@@ -9,7 +9,7 @@
  * Defines chat context budgeting helpers so oversized histories are compacted before they hit upstream LLM limits.
  */
 
-import { ChatMessage, ChatToolCall, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, ChatToolCall, LLMConfig } from '../../types';
 
 export type ChatHistoryMessage = {
   role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
@@ -22,6 +22,7 @@ export type ChatHistoryMessage = {
     name: string;
     args: string | Record<string, unknown>;
   }>;
+  attachments?: ChatAttachment[];
 };
 
 export type ChatApiPreparedMessage = {
