@@ -54,7 +54,60 @@ const buildStory = (summary: string): StoryState => ({
   conflicts: [],
   currentChapterId: null,
   lastUpdated: 1,
+  draft: null,
 });
+
+const buildChapter = (id: string, content: string) => ({
+  id,
+  title: `Chapter ${id}`,
+  summary: '',
+  content,
+  filename: `ch${id}.md`,
+  book_id: undefined as string | undefined,
+  notes: '',
+  private_notes: '',
+  conflicts: [] as { id: string; description: string; resolution: string }[],
+});
+
+const baseHook = () => useStory({ confirm: async () => true, alert: () => {} });
+
+/** Render the hook and perform the initial loadStory so history starts clean. */
+const hookWithStory = async (
+  summary: string = 'initial',
+  chapters: ReturnType<typeof buildChapter>[] = []
+) => {
+  // The lazy-load useEffect inside useStory calls api.chapters.get whenever
+  // currentChapterId changes.  A previous test in this file may have left a
+  // mock that returns {content: ''}, which would silently overwrite the
+  // content we just loaded.  Wire the mock to return the real content so the
+  // overwrite is a no-op and baseline tests stay deterministic.
+  vi.mocked(api.chapters.get).mockImplementation(async (id: number) => {
+    const ch = chapters.find((c) => c.id === String(id));
+    return {
+      content: ch?.content ?? '',
+      notes: ch?.notes ?? '',
+      private_notes: ch?.private_notes ?? '',
+      conflicts: ch?.conflicts ?? [],
+      title: ch?.title ?? '',
+      summary: ch?.summary ?? '',
+    } as any;
+  });
+
+  const hook = renderHook(baseHook);
+  // Use async act so React flushes both the synchronous loadStory state
+  // updates AND the async lazy-load useEffect (api.chapters.get) that fires
+  // when currentChapterId changes.  Without this, the lazy-load may complete
+  // after updateChapter and overwrite chapter content with a stale value.
+  await act(async () => {
+    hook.result.current.loadStory({
+      ...buildStory(summary),
+      id: '',
+      chapters,
+      currentChapterId: chapters[0]?.id ?? null,
+    });
+  });
+  return hook;
+};
 
 describe('resolveExternalHistorySourceState', () => {
   it('prefers latest in-memory story when explicit state is omitted', () => {
@@ -394,6 +447,300 @@ describe('buildInitialStoryState', () => {
     expect(result.current.story.draft?.conflicts).toEqual(conflicts);
     expect(api.story.updateMetadata).toHaveBeenCalledWith(
       expect.objectContaining({ conflicts })
+    );
+  });
+});
+
+// ─── baselineState diff highlighting ─────────────────────────────────────────
+//
+// Rules:
+//  - AI/external push  → baseline = state BEFORE the push (shows new text)
+//  - User-edit push    → baseline = state AFTER  the push (no highlight)
+//  - undo              → baseline = state we left (shows restored text)
+//  - redo              → baseline = state we left (shows re-inserted text)
+//  - loadStory         → baseline = the loaded state (no highlight)
+
+describe('baselineState diff highlighting', () => {
+  it('starts with baseline equal to current state (no highlight on load)', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Hello world');
+    expect(result.current.story.chapters[0]?.content).toBe('Hello world');
+  });
+
+  it('sets baseline to pre-push state when AI pushes new chapter content', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Hello world with AI paragraph' },
+        false, // no server sync in tests
+        true, // push history
+        false // NOT a user edit → AI
+      );
+    });
+
+    // Baseline should still hold the pre-AI content
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Hello world');
+    // Current story has the new content
+    expect(result.current.story.chapters[0]?.content).toBe(
+      'Hello world with AI paragraph'
+    );
+  });
+
+  it('sets baseline to new state when user types (no highlight)', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Hello world edited by user' },
+        false,
+        true,
+        true // IS a user edit
+      );
+    });
+
+    // Baseline == current state: nothing would be highlighted
+    expect(result.current.baselineState.chapters[0]?.content).toBe(
+      'Hello world edited by user'
+    );
+    expect(result.current.story.chapters[0]?.content).toBe(
+      'Hello world edited by user'
+    );
+  });
+
+  it('highlights only the second AI addition after two sequential AI pushes', async () => {
+    const ch = buildChapter('1', 'Para 1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // First AI push
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Para 1\nPara 2' },
+        false,
+        true,
+        false
+      );
+    });
+    // Second AI push
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Para 1\nPara 2\nPara 3' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Baseline should be the state after the FIRST push
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Para 1\nPara 2');
+    expect(result.current.story.chapters[0]?.content).toBe('Para 1\nPara 2\nPara 3');
+  });
+
+  it('sets baseline to the left-behind state when undoing an AI change', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Undo — baseline should become the AI state we just left
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Original');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original + AI');
+  });
+
+  it('sets baseline to the left-behind state when undoing a user edit', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'User typed this' },
+        false,
+        true,
+        true
+      );
+    });
+
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    // After undo, current = Original; baseline = what we left = user-typed text
+    expect(result.current.story.chapters[0]?.content).toBe('Original');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('User typed this');
+  });
+
+  it('sets baseline to the left-behind state when redoing an AI change', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    // Now redo
+    await act(async () => {
+      await result.current.redo();
+    });
+
+    // After redo, current = 'Original + AI'; baseline = what we left = 'Original'
+    expect(result.current.story.chapters[0]?.content).toBe('Original + AI');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+  });
+
+  it('sets baseline to the left-behind state when redoing a user edit', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'User edit' },
+        false,
+        true,
+        true
+      );
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    await act(async () => {
+      await result.current.redo();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('User edit');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+  });
+
+  it('resets baseline to loaded state (no highlight) when loadStory is called', async () => {
+    const ch = buildChapter('1', 'Before load');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI change' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Load a completely fresh story
+    const freshCh = buildChapter('1', 'Fresh content');
+    act(() => {
+      result.current.loadStory({
+        ...buildStory('fresh'),
+        chapters: [freshCh],
+        currentChapterId: '1',
+      });
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Fresh content');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Fresh content');
+  });
+
+  it('after undo then new AI push, shows baseline relative to the undo target', async () => {
+    const ch = buildChapter('1', 'v1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // AI writes v2
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v2' }, false, true, false);
+    });
+    // User undoes back to v1
+    await act(async () => {
+      await result.current.undo();
+    });
+    // AI writes v3 from v1
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v3' }, false, true, false);
+    });
+
+    // Baseline should be v1 (state before the new AI push)
+    expect(result.current.story.chapters[0]?.content).toBe('v3');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('v1');
+  });
+
+  it('multi-step undo highlights each intermediate state correctly', async () => {
+    const ch = buildChapter('1', 'v1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v2' }, false, true, false);
+    });
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v3' }, false, true, false);
+    });
+
+    // Jump back 2 steps at once
+    await act(async () => {
+      await result.current.undoSteps(2);
+    });
+
+    // We left 'v3' (the most recent state before jumping), so baseline = v3
+    expect(result.current.story.chapters[0]?.content).toBe('v1');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('v3');
+  });
+
+  it('user edit after AI change clears the highlight (baseline advances)', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // AI adds content
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+
+    // User edits: highlight should disappear (baseline = new state)
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI + user' },
+        false,
+        true,
+        true
+      );
+    });
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe(
+      'Original + AI + user'
     );
   });
 });

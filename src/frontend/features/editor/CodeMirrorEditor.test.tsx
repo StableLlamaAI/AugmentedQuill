@@ -218,6 +218,36 @@ describe('CodeMirrorEditor', () => {
     expect(marker?.style.width).toBe('1ch');
   });
 
+  it('renders a visible tab marker when showWhitespace is active', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const { container } = render(
+      <CodeMirrorEditor
+        ref={ref}
+        value={'a\tb'}
+        onChange={vi.fn()}
+        showWhitespace={true}
+      />
+    );
+    await act(async () => {});
+
+    const docText = ref.current?.state.doc.toString() ?? '';
+    expect(docText).toBe('a\tb');
+    const markers = Array.from(container.querySelectorAll('.cm-ws-marker'));
+    const marker = markers.find((el) => el.textContent === '→');
+    expect(marker).toBeDefined();
+    expect(marker?.textContent).toBe('→');
+  });
+
+  it('inserts a literal tab character when Tab is pressed', async () => {
+    const ref = React.createRef<EditorView | null>();
+    await act(async () => {
+      render(<CodeMirrorEditor ref={ref} value="" onChange={vi.fn()} />);
+    });
+
+    pressKey(ref.current!, 'Tab');
+    expect(ref.current?.state.doc.toString()).toBe('\t');
+  });
+
   it('places cursor before end-of-line ws marker', async () => {
     const ref = React.createRef<EditorView | null>();
     const { container } = render(

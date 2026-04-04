@@ -14,15 +14,19 @@ import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { diff_match_patch } from 'diff-match-patch';
 import { configureMarked } from './configureMarked';
 
 // Configure marked extensions (subscript, superscript, footnotes) once.
 configureMarked();
 
+const dmp = new diff_match_patch();
+
 interface MarkdownViewProps {
   content?: string | null;
   className?: string;
   simple?: boolean;
+  baseline?: string;
 }
 
 // Configure markdown rendering once to keep parsing behavior stable.
@@ -49,18 +53,46 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   content,
   className = '',
   simple = false,
+  baseline = '',
 }) => {
   const safeContent = typeof content === 'string' ? content : '';
 
   const cleanHtml = useMemo(() => {
     if (simple) return '';
 
-    const rawHtml = marked.parse(safeContent) as string;
+    let contentToParse = safeContent;
+
+    if (baseline && baseline !== safeContent) {
+      const diffs = dmp.diff_main(baseline, safeContent);
+      dmp.diff_cleanupSemantic(diffs);
+
+      let highlightedMd = '';
+      for (const [op, text] of diffs) {
+        if (op === 0) {
+          highlightedMd += text;
+        } else if (op === 1) {
+          // Wrap inserted text in a span with a class that can be styled.
+          // Since marked parses MD, we should ensure the HTML is valid.
+          highlightedMd += `<span class="diff-inserted">${text}</span>`;
+        }
+      }
+      contentToParse = highlightedMd;
+    }
+
+    const rawHtml = marked.parse(contentToParse) as string;
     return DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code'],
+      ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code', 'span'],
       ADD_ATTR: ['src', 'alt', 'title', 'class', 'id', 'href'],
     });
-  }, [safeContent, simple]);
+  }, [safeContent, simple, baseline]);
+
+  // Diff pairs for simple (inline) rendering — computed only when needed.
+  const simpleDiff = useMemo(() => {
+    if (!simple || !baseline || baseline === safeContent) return null;
+    const diffs = dmp.diff_main(baseline, safeContent);
+    dmp.diff_cleanupSemantic(diffs);
+    return diffs;
+  }, [simple, baseline, safeContent]);
 
   if (!simple) {
     return (
@@ -132,7 +164,18 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
 
   return (
     <div className={`whitespace-pre-wrap break-words ${className}`}>
-      {safeContent.split('\n').map((line, i) => renderLine(line, i))}
+      {simpleDiff
+        ? simpleDiff.map(([op, text], i) => {
+            if (op === 0) return <React.Fragment key={i}>{text}</React.Fragment>;
+            if (op === 1)
+              return (
+                <span key={i} className="diff-inserted">
+                  {text}
+                </span>
+              );
+            return null; // deletions: not shown
+          })
+        : safeContent.split('\n').map((line, i) => renderLine(line, i))}
     </div>
   );
 };
