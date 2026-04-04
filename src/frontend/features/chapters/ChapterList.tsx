@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
+import { useConfirm } from '../layout/ConfirmDialogContext';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
 import { api } from '../../services/api';
@@ -81,6 +82,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   baselineChapters = [],
 }) => {
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
   const [newBookTitle, setNewBookTitle] = useState('');
   const [isCreatingBook, setIsCreatingBook] = useState(false);
@@ -614,9 +616,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                             <Plus size={14} />
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (window.confirm('Delete Book and all its chapters?')) {
+                              if (await confirm('Delete Book and all its chapters?')) {
                                 onBookDelete?.(book.id);
                               }
                             }}

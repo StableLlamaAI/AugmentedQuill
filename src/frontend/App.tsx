@@ -27,6 +27,7 @@ import { AppDialogs } from './features/layout/AppDialogs';
 import { AppHeader } from './features/layout/AppHeader';
 import { AppMainLayout } from './features/layout/AppMainLayout';
 import { ConfirmDialog } from './features/layout/ConfirmDialog';
+import { ConfirmDialogProvider } from './features/layout/ConfirmDialogContext';
 import { useConfirmDialog } from './features/layout/useConfirmDialog';
 import { ThemeProvider } from './features/layout/ThemeContext';
 import { useProjectManagement } from './features/projects/useProjectManagement';
@@ -391,215 +392,227 @@ const App: React.FC = () => {
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
 
   return (
-    <ThemeProvider currentTheme={currentTheme}>
-      <div
-        id="aq-app-root"
-        className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
-        style={
-          {
-            '--sidebar-width': `${editorSettings.sidebarWidth}px`,
-          } as React.CSSProperties
-        }
-      >
-        <AppDialogs
-          isSettingsOpen={isSettingsOpen}
-          setIsSettingsOpen={setIsSettingsOpen}
-          appSettings={appSettings}
-          setAppSettings={handleSaveSettings}
-          projects={projects}
-          story={story}
-          handleLoadProject={handleLoadProject}
-          handleCreateProject={handleCreateProject}
-          handleImportProject={handleImportProject}
-          handleDeleteProject={handleDeleteProject}
-          handleRenameProject={handleRenameProject}
-          handleConvertProject={handleConvertProject}
-          refreshProjects={refreshProjects}
-          currentTheme={currentTheme}
-          prompts={prompts}
-          instructionLanguages={instructionLanguages}
-          isImagesOpen={isImagesOpen}
-          setIsImagesOpen={setIsImagesOpen}
-          updateStoryImageSettings={updateStoryImageSettings}
-          imageActionsAvailable={imageActionsAvailable}
-          recordHistoryEntry={pushExternalHistoryEntry}
-          editorRef={editorRef}
-          isCreateProjectOpen={isCreateProjectOpen}
-          setIsCreateProjectOpen={setIsCreateProjectOpen}
-          handleCreateProjectConfirm={handleCreateProjectConfirm}
+    <ConfirmDialogProvider value={confirm}>
+      <ThemeProvider currentTheme={currentTheme}>
+        <ConfirmDialog
+          isOpen={confirmDialogState.isOpen}
+          title={confirmDialogState.title}
+          message={confirmDialogState.message}
+          confirmLabel={confirmDialogState.confirmLabel}
+          cancelLabel={confirmDialogState.cancelLabel}
+          variant={confirmDialogState.variant as any}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
         />
+        <div
+          id="aq-app-root"
+          className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
+          style={
+            {
+              '--sidebar-width': `${editorSettings.sidebarWidth}px`,
+            } as React.CSSProperties
+          }
+        >
+          <AppDialogs
+            isSettingsOpen={isSettingsOpen}
+            setIsSettingsOpen={setIsSettingsOpen}
+            appSettings={appSettings}
+            setAppSettings={handleSaveSettings}
+            projects={projects}
+            story={story}
+            handleLoadProject={handleLoadProject}
+            handleCreateProject={handleCreateProject}
+            handleImportProject={handleImportProject}
+            handleDeleteProject={handleDeleteProject}
+            handleRenameProject={handleRenameProject}
+            handleConvertProject={handleConvertProject}
+            refreshProjects={refreshProjects}
+            currentTheme={currentTheme}
+            prompts={prompts}
+            instructionLanguages={instructionLanguages}
+            isImagesOpen={isImagesOpen}
+            setIsImagesOpen={setIsImagesOpen}
+            updateStoryImageSettings={updateStoryImageSettings}
+            imageActionsAvailable={imageActionsAvailable}
+            recordHistoryEntry={pushExternalHistoryEntry}
+            editorRef={editorRef}
+            isCreateProjectOpen={isCreateProjectOpen}
+            setIsCreateProjectOpen={setIsCreateProjectOpen}
+            handleCreateProjectConfirm={handleCreateProjectConfirm}
+          />
 
-        <AppHeader
-          storyTitle={story.title}
-          sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
-          settingsControls={{
-            setIsSettingsOpen,
-            setIsImagesOpen,
-            setIsDebugLogsOpen,
-          }}
-          historyControls={{
-            undo,
-            redo,
-            undoSteps,
-            redoSteps,
-            undoOptions,
-            redoOptions,
-            nextUndoLabel,
-            nextRedoLabel,
-            canUndo,
-            canRedo,
-          }}
-          viewControls={{
-            viewMode,
-            setViewMode,
-            showWhitespace,
-            setShowWhitespace,
-            isViewMenuOpen,
-            setIsViewMenuOpen,
-          }}
-          formatControls={{
-            handleFormat,
-            getFormatButtonClass,
-            isFormatMenuOpen,
-            setIsFormatMenuOpen,
-            isMobileFormatMenuOpen,
-            setIsMobileFormatMenuOpen,
-            onOpenImages: () => setIsImagesOpen(true),
-          }}
-          aiControls={{
-            handleAiAction,
-            isAiActionLoading,
-            isWritingAvailable: roleAvailability.writing,
-            isChapterEmpty:
-              !currentChapter ||
-              !currentChapter.content ||
-              currentChapter.content.trim().length === 0,
-          }}
-          modelControls={{
-            appSettings,
-            setAppSettings,
-            modelConnectionStatus,
-            detectedCapabilities,
-            recheckUnavailableProviderIfStale,
-          }}
-          appearanceControls={{
-            appearanceRef,
-            isAppearanceOpen,
-            setIsAppearanceOpen,
-            setAppTheme,
-            editorSettings,
-            setEditorSettings,
-          }}
-          chatPanelControls={{ isChatOpen, setIsChatOpen }}
-        />
-
-        <AppMainLayout
-          sidebarControls={{
-            isSidebarOpen,
-            setIsSidebarOpen,
-            story,
-            currentChapterId,
-            handleChapterSelect,
-            deleteChapter,
-            updateChapter,
-            updateBook,
-            addChapter,
-            handleBookCreate,
-            handleBookDelete,
-            handleReorderChapters,
-            handleReorderBooks,
-            handleSidebarAiAction,
-            isEditingAvailable: roleAvailability.editing,
-            handleOpenImages,
-            updateStoryMetadata,
-            checkedSourcebookIds: Array.from(checkedEntries),
-            onToggleSourcebook: handleToggleEntry,
-            isAutoSourcebookSelectionEnabled,
-            onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
-            isSourcebookSelectionRunning,
-            onSourcebookMutated: pushExternalHistoryEntry,
-            baselineState,
-          }}
-          editorControls={{
-            currentChapter,
-            editorRef,
-            editorSettings,
-            setEditorSettings,
-            viewMode,
-            updateChapter: (id, partial) =>
-              updateChapter(id, partial, true, true, true),
-            suggestionControls: {
-              continuations,
-              isSuggesting,
-              handleTriggerSuggestions,
-              cancelSuggestions,
-              handleAcceptContinuation,
-              isSuggestionMode,
-              handleKeyboardSuggestionAction,
-            },
-            aiControls: {
+          <AppHeader
+            storyTitle={story.title}
+            sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
+            settingsControls={{
+              setIsSettingsOpen,
+              setIsImagesOpen,
+              setIsDebugLogsOpen,
+            }}
+            historyControls={{
+              undo,
+              redo,
+              undoSteps,
+              redoSteps,
+              undoOptions,
+              redoOptions,
+              nextUndoLabel,
+              nextRedoLabel,
+              canUndo,
+              canRedo,
+            }}
+            viewControls={{
+              viewMode,
+              setViewMode,
+              showWhitespace,
+              setShowWhitespace,
+              isViewMenuOpen,
+              setIsViewMenuOpen,
+            }}
+            formatControls={{
+              handleFormat,
+              getFormatButtonClass,
+              isFormatMenuOpen,
+              setIsFormatMenuOpen,
+              isMobileFormatMenuOpen,
+              setIsMobileFormatMenuOpen,
+              onOpenImages: () => setIsImagesOpen(true),
+            }}
+            aiControls={{
               handleAiAction,
-              cancelAiAction,
               isAiActionLoading,
               isWritingAvailable: roleAvailability.writing,
-              isProseStreaming: isChatLoading || isAiActionLoading,
               isChapterEmpty:
                 !currentChapter ||
                 !currentChapter.content ||
                 currentChapter.content.trim().length === 0,
-            },
-            setActiveFormats,
-            showWhitespace,
-            setShowWhitespace,
-            baselineContent:
-              currentChapter?.scope === 'story'
-                ? baselineState.draft?.content
-                : baselineState.chapters.find((c) => c.id === currentChapter?.id)
-                    ?.content,
-          }}
-          chatControls={{
-            isChatOpen,
-            chatMessages,
-            isChatLoading,
-            isChatAvailable: roleAvailability.chat,
-            activeChatConfig,
-            systemPrompt,
-            handleSendMessage,
-            handleStopChat,
-            handleRegenerate,
-            handleEditMessage,
-            handleDeleteMessage,
-            setSystemPrompt,
-            handleLoadProject,
-            incognitoSessions,
-            chatHistoryList,
-            currentChatId,
-            isIncognito,
-            handleSelectChat,
-            handleNewChat,
-            handleDeleteChat,
-            handleDeleteAllChats,
-            setIsIncognito,
-            allowWebSearch,
-            setAllowWebSearch,
-          }}
-          instructionLanguages={instructionLanguages}
-        />
+            }}
+            modelControls={{
+              appSettings,
+              setAppSettings,
+              modelConnectionStatus,
+              detectedCapabilities,
+              recheckUnavailableProviderIfStale,
+            }}
+            appearanceControls={{
+              appearanceRef,
+              isAppearanceOpen,
+              setIsAppearanceOpen,
+              setAppTheme,
+              editorSettings,
+              setEditorSettings,
+            }}
+            chatPanelControls={{ isChatOpen, setIsChatOpen }}
+          />
 
-        <DebugLogs
-          isOpen={isDebugLogsOpen}
-          onClose={() => setIsDebugLogsOpen(false)}
-          theme={currentTheme}
-        />
+          <AppMainLayout
+            sidebarControls={{
+              isSidebarOpen,
+              setIsSidebarOpen,
+              story,
+              currentChapterId,
+              handleChapterSelect,
+              deleteChapter,
+              updateChapter,
+              updateBook,
+              addChapter,
+              handleBookCreate,
+              handleBookDelete,
+              handleReorderChapters,
+              handleReorderBooks,
+              handleSidebarAiAction,
+              isEditingAvailable: roleAvailability.editing,
+              handleOpenImages,
+              updateStoryMetadata,
+              checkedSourcebookIds: Array.from(checkedEntries),
+              onToggleSourcebook: handleToggleEntry,
+              isAutoSourcebookSelectionEnabled,
+              onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+              isSourcebookSelectionRunning,
+              onSourcebookMutated: pushExternalHistoryEntry,
+              baselineState,
+            }}
+            editorControls={{
+              currentChapter,
+              editorRef,
+              editorSettings,
+              setEditorSettings,
+              viewMode,
+              updateChapter: (id, partial) =>
+                updateChapter(id, partial, true, true, true),
+              suggestionControls: {
+                continuations,
+                isSuggesting,
+                handleTriggerSuggestions,
+                cancelSuggestions,
+                handleAcceptContinuation,
+                isSuggestionMode,
+                handleKeyboardSuggestionAction,
+              },
+              aiControls: {
+                handleAiAction,
+                cancelAiAction,
+                isAiActionLoading,
+                isWritingAvailable: roleAvailability.writing,
+                isProseStreaming: isChatLoading || isAiActionLoading,
+                isChapterEmpty:
+                  !currentChapter ||
+                  !currentChapter.content ||
+                  currentChapter.content.trim().length === 0,
+              },
+              setActiveFormats,
+              showWhitespace,
+              setShowWhitespace,
+              baselineContent:
+                currentChapter?.scope === 'story'
+                  ? baselineState.draft?.content
+                  : baselineState.chapters.find((c) => c.id === currentChapter?.id)
+                      ?.content,
+            }}
+            chatControls={{
+              isChatOpen,
+              chatMessages,
+              isChatLoading,
+              isChatAvailable: roleAvailability.chat,
+              activeChatConfig,
+              systemPrompt,
+              handleSendMessage,
+              handleStopChat,
+              handleRegenerate,
+              handleEditMessage,
+              handleDeleteMessage,
+              setSystemPrompt,
+              handleLoadProject,
+              incognitoSessions,
+              chatHistoryList,
+              currentChatId,
+              isIncognito,
+              handleSelectChat,
+              handleNewChat,
+              handleDeleteChat,
+              handleDeleteAllChats,
+              setIsIncognito,
+              allowWebSearch,
+              setAllowWebSearch,
+            }}
+            instructionLanguages={instructionLanguages}
+          />
 
-        <ToolCallLimitDialog
-          isOpen={!!toolCallLoopDialog}
-          count={toolCallLoopDialog?.count ?? 0}
-          theme={currentTheme}
-          onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-        />
-      </div>
-    </ThemeProvider>
+          <DebugLogs
+            isOpen={isDebugLogsOpen}
+            onClose={() => setIsDebugLogsOpen(false)}
+            theme={currentTheme}
+          />
+
+          <ToolCallLimitDialog
+            isOpen={!!toolCallLoopDialog}
+            count={toolCallLoopDialog?.count ?? 0}
+            theme={currentTheme}
+            onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
+          />
+        </div>
+      </ThemeProvider>
+    </ConfirmDialogProvider>
   );
 };
 

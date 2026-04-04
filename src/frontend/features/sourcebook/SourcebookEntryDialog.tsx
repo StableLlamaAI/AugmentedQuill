@@ -37,6 +37,7 @@ import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { SourcebookRelationDialog } from './SourcebookRelationDialog';
+import { useConfirm } from '../layout/ConfirmDialogContext';
 import { Link, Edit2 } from 'lucide-react'; // Using Lucide 'Link' icon for relations
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
@@ -732,8 +733,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             <div>
               {entry && onDelete && (
                 <Button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete this entry?')) {
+                  onClick={async () => {
+                    if (await confirm('Are you sure you want to delete this entry?')) {
                       onDelete(entry.id);
                       onClose();
                     }

@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useConfirm } from '../../layout/ConfirmDialogContext';
 import {
   Plus,
   Trash2,
@@ -72,6 +73,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
 
   const canConvertTo = (target: string) => {
     if (!activeProjectType) return false;
@@ -395,9 +397,9 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                 </div>
               )}
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await confirm(
                       `Are you sure you want to delete "${proj.title}"? This action cannot be undone.`
                     )
                   ) {

@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Paperclip, FileText } from 'lucide-react';
+import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
 
 type ChatAttachment = {
@@ -78,13 +79,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     e.target.value = '';
   };
 
-  const handleRemoveAttachment = (attachmentId: string) => {
+  const handleRemoveAttachment = async (attachmentId: string) => {
     const attachment = attachments.find((item) => item.id === attachmentId);
     if (!attachment) return;
-    const confirmRemove = window.confirm(`Remove attachment “${attachment.name}”?`);
-    if (!confirmRemove) return;
+    if (!(await confirm(`Remove attachment “${attachment.name}”?`))) return;
     onAttachmentsChange(attachments.filter((item) => item.id !== attachmentId));
   };
+
+  const confirm = useConfirm();
 
   const adjustTextareaHeight = useCallback(() => {
     if (!textareaRef.current) return;

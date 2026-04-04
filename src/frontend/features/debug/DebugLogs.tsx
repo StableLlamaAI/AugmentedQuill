@@ -20,6 +20,7 @@ import {
   Layers,
   List,
 } from 'lucide-react';
+import { useConfirm } from '../layout/ConfirmDialogContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -143,6 +144,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   useFocusTrap(isOpen, dialogRef, onClose);
 
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
   const bgMain = isLight ? 'bg-white' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
@@ -167,7 +169,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   };
 
   const clearLogs = async () => {
-    if (!confirm('Are you sure you want to clear all logs?')) return;
+    if (!(await confirm('Are you sure you want to clear all logs?'))) return;
     try {
       await api.debug.clearLogs();
       setLogs([]);

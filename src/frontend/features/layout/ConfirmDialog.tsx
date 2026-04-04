@@ -41,12 +41,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
   const { isLight } = useTheme();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const idBase = useId();
   useFocusTrap(isOpen, dialogRef, onCancel);
 
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
-  const idBase = useId();
   const titleId = title ? `${idBase}-confirm-dialog-title` : undefined;
   const messageId = `${idBase}-confirm-dialog-description`;
 

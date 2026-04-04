@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useConfirm } from '../layout/ConfirmDialogContext';
 import {
   Image as ImageIcon,
   Upload,
@@ -405,7 +406,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   };
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm('Are you sure you want to delete this image?')) return;
+    if (!(await confirm('Are you sure you want to delete this image?'))) return;
     try {
       const deleted = await api.projects.deleteImage(filename);
       setImages((prev) => prev.filter((i) => i.filename !== filename));

@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   message: string;
   confirmLabel?: string;
