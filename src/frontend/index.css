@@ -68,8 +68,46 @@ body.light ::-webkit-scrollbar-thumb:hover {
   border-radius: 2px;
 }
 
-.prose-editor:focus {
-  outline: none;
+.prose-editor:focus,
+.prose-editor:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.prose-editor h1,
+.prose-editor h2,
+.prose-editor h3,
+.prose-editor h4,
+.prose-editor h5,
+.prose-editor h6 {
+  margin-top: 1.6em;
+  margin-bottom: 0.7em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.prose-editor h1 {
+  font-size: 2rem;
+}
+
+.prose-editor h2 {
+  font-size: 1.75rem;
+}
+
+.prose-editor h3 {
+  font-size: 1.5rem;
+}
+
+.prose-editor h4 {
+  font-size: 1.25rem;
+}
+
+.prose-editor h5 {
+  font-size: 1.1rem;
+}
+
+.prose-editor h6 {
+  font-size: 1rem;
 }
 
 .prose-editor p:first-child {

@@ -115,6 +115,11 @@ class WsTabWidget extends WidgetType {
     el.setAttribute('aria-hidden', 'true');
     el.className = 'cm-ws-marker';
     el.textContent = '→';
+    el.style.display = 'inline-block';
+    el.style.minWidth = '1ch';
+    el.style.width = '1ch';
+    el.style.textAlign = 'center';
+    el.style.verticalAlign = 'baseline';
     el.style.opacity = '0.5';
     el.style.pointerEvents = 'none';
     el.style.userSelect = 'none';
@@ -440,6 +445,34 @@ export const CodeMirrorEditor = React.forwardRef<
       return [];
     };
 
+    const buildTabExtension = (): Extension =>
+      keymap.of([
+        {
+          key: 'Tab',
+          run: (view) => {
+            const { from, to } = view.state.selection.main;
+            view.dispatch({
+              changes: { from, to, insert: '\t' },
+              selection: { anchor: from + 1 },
+              userEvent: 'input.type',
+            });
+            return true;
+          },
+        },
+        {
+          key: 'Shift-Tab',
+          run: (view) => {
+            const { from, to } = view.state.selection.main;
+            view.dispatch({
+              changes: { from, to, insert: '\t' },
+              selection: { anchor: from + 1 },
+              userEvent: 'input.type',
+            });
+            return true;
+          },
+        },
+      ]);
+
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
 
@@ -468,6 +501,8 @@ export const CodeMirrorEditor = React.forwardRef<
         Prec.high(keymap.of(historyKeymap)),
         // Enter-behavior keymap in its own compartment
         enterCompartment.current.of(buildEnterExtension(enterBehavior)),
+        // Tab keymap for Raw/Markdown modes
+        Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
         diffCompartment.current.of(buildDiffExtension(baselineValue)),
         keymap.of(defaultKeymap),

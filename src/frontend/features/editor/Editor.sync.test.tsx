@@ -164,6 +164,40 @@ describe('Editor diff highlighting', () => {
     vi.useRealTimers();
   });
 
+  it('renders a visible tab marker in wysiwyg whitespace mode', async () => {
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'a\tb' }}
+        showWhitespace={true}
+      />
+    );
+
+    await act(async () => {});
+
+    const marker = container.querySelector('#wysiwyg-editor .cm-ws-marker');
+    expect(marker).toBeDefined();
+    expect(marker?.textContent).toBe('→');
+  });
+
+  it('uses pre-wrap whitespace handling in wysiwyg whitespace mode', async () => {
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'a  b' }}
+        showWhitespace={true}
+      />
+    );
+
+    await act(async () => {});
+
+    const editor = container.querySelector('#wysiwyg-editor');
+    expect(editor).toBeDefined();
+    expect(editor?.getAttribute('style')).toContain('white-space: pre-wrap');
+  });
+
   it('re-shows diff decoration when a new baselineContent prop arrives after user cleared it', async () => {
     const onChange = vi.fn();
     const { rerender } = render(
@@ -193,5 +227,40 @@ describe('Editor diff highlighting', () => {
 
     cmContent = document.querySelector('.cm-content');
     expect(cmContent?.innerHTML).toContain('diff-inserted');
+  });
+
+  it('inserts a tab character in wysiwyg mode instead of moving focus', async () => {
+    const originalExecCommand = document.execCommand;
+    const execCommandMock = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', {
+      value: execCommandMock,
+      configurable: true,
+    });
+
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'Line one' }}
+      />
+    );
+
+    const wysiwyg = container.querySelector('#wysiwyg-editor');
+    expect(wysiwyg).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(wysiwyg as HTMLElement, {
+        key: 'Tab',
+        code: 'Tab',
+        keyCode: 9,
+        charCode: 9,
+      });
+    });
+
+    expect(execCommandMock).toHaveBeenCalledWith('insertText', false, '\t');
+    Object.defineProperty(document, 'execCommand', {
+      value: originalExecCommand,
+      configurable: true,
+    });
   });
 });

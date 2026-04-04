@@ -190,21 +190,20 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
 
   for (const textNode of textNodes) {
     const text = textNode.textContent ?? '';
-    if (!text.includes(' ')) continue;
+    if (!text.includes(' ') && !text.includes('\t')) continue;
     const frag = document.createDocumentFragment();
     let i = 0;
     for (let j = 0; j <= text.length; j++) {
-      if (j === text.length || text[j] === ' ') {
+      if (j === text.length || text[j] === ' ' || text[j] === '\t') {
         if (j > i) frag.appendChild(document.createTextNode(text.slice(i, j)));
         if (j < text.length) {
           const span = document.createElement('span');
           span.dataset.wsMarker = '1';
           span.setAttribute('aria-hidden', 'true');
           span.className = 'cm-ws-marker';
-          span.textContent = '\u00b7'; // MIDDLE DOT
+          const isTab = text[j] === '\t';
+          span.textContent = isTab ? '→' : '\u00b7';
           span.style.display = 'inline-block';
-          // Use 1ch so the visible marker takes up a single monospace char width
-          // and matches the expected Raw mode layout.
           span.style.minWidth = '1ch';
           span.style.width = '1ch';
           span.style.textAlign = 'center';
@@ -952,6 +951,16 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         setTimeout(checkContext, 0);
       }
 
+      if (viewMode === 'wysiwyg' && e.key === 'Tab') {
+        e.preventDefault();
+        const inserted = document.execCommand('insertText', false, '\t');
+        if (!inserted) {
+          document.execCommand('insertHTML', false, '&#9;');
+        }
+        handleWysiwygInput();
+        return;
+      }
+
       // Visual mode: intercept Enter to implement the soft-break / paragraph
       // semantics that match MD mode:
       //  • Plain Enter  → soft line-break (inserts <br>, stored as '\n')
@@ -1553,7 +1562,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 className={`prose-editor outline-none w-full ${
                   viewMode === 'wysiwyg' ? 'block' : 'hidden'
                 }${showWhitespace ? ' prose-editor-ws' : ''}`}
-                style={{ ...commonTextStyle, whiteSpace: 'normal' }}
+                style={{
+                  ...commonTextStyle,
+                  whiteSpace: showWhitespace ? 'pre-wrap' : 'normal',
+                }}
               />
 
               {/* Raw / Markdown View */}
