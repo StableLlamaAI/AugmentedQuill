@@ -41,6 +41,7 @@ import { marked } from 'marked';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { createEditorTurndownService } from './turndown';
 import { configureMarked } from './configureMarked';
+import { diff_match_patch } from 'diff-match-patch';
 import {
   applyInlineFormatAtSelection,
   getBlockType,
@@ -124,6 +125,7 @@ interface EditorProps {
   showWhitespace?: boolean;
   onToggleShowWhitespace?: () => void;
   onChange: (id: string, updates: Partial<WritingUnit>) => void;
+  baselineContent?: string;
   suggestionControls: {
     continuations: string[];
     isSuggesting: boolean;
@@ -228,6 +230,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       showWhitespace,
       onToggleShowWhitespace,
       onChange,
+      baselineContent = '',
       suggestionControls,
       aiControls,
       onContextChange,
@@ -260,6 +263,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // typed value immediately, while the parent onChange (API call) is debounced.
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
+
+    // Local copy of the diff baseline: shadows the prop so we can clear the
+    // highlight *immediately* on the first keystroke, before the debounce fires.
+    const [localBaseline, setLocalBaseline] = useState<string>(baselineContent);
+    useEffect(() => {
+      setLocalBaseline(baselineContent);
+    }, [baselineContent]);
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
     // Keep local state in sync when the chapter changes externally (chapter
@@ -270,6 +280,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     useEffect(() => {
       const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
       lastChapterIdRef.current = chapter.id;
+
       // On chapter switch always reset.  For in-place content changes (AI,
       // undo/redo) only sync when the editor is not focused — when it IS
       // focused CodeMirror already has the correct document state.
@@ -279,7 +290,14 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         isDetachedFromBottomRef.current &&
         distanceFromBottomRef.current > 120 &&
         !isChapterSwitch;
-      if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
+
+      // Always update local content when streaming so AI changes flow in
+      // even while the editor is focused.
+      if (
+        isChapterSwitch ||
+        proseStreamingActive ||
+        (!editorFocused && !shouldDeferStreamingSync)
+      ) {
         setLocalContent(chapter.content);
       }
     }, [chapter.id, chapter.content, proseStreamingActive]);
@@ -318,6 +336,10 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     chapterContentRef.current = chapter.content;
     const chapterIdRef = useRef(chapter.id);
     chapterIdRef.current = chapter.id;
+    const baselineContentRef = useRef(baselineContent);
+    baselineContentRef.current = baselineContent;
+    const localContentRef = useRef(localContent);
+    localContentRef.current = localContent;
 
     // ── Scroll management ─────────────────────────────────────────────────────
     //
@@ -545,22 +567,59 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // marked → turndown round-trip lossless for soft line-breaks.
     useEffect(() => {
       if (viewMode === 'wysiwyg' && wysiwygRef.current) {
+        // Don't interrupt the user's view when streaming and they've scrolled up.
         if (isProseStreaming && !isAtBottomRef.current) {
           return;
         }
-        if (document.activeElement !== wysiwygRef.current) {
-          wysiwygRef.current.innerHTML = marked.parse(chapter.content, {
+
+        // We sync if not focused OR if we are actively streaming from AI
+        if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
+          let contentToRender = chapter.content;
+          if (localBaseline && localBaseline !== chapter.content) {
+            const diffs = new diff_match_patch().diff_main(
+              localBaseline,
+              chapter.content
+            );
+            new diff_match_patch().diff_cleanupSemantic(diffs);
+            let highlightedMd = '';
+            for (const [op, text] of diffs) {
+              if (op === 0) {
+                highlightedMd += text;
+              } else if (op === 1) {
+                highlightedMd += `<span class="diff-inserted">${text}</span>`;
+              }
+            }
+            contentToRender = highlightedMd;
+          }
+
+          wysiwygRef.current.innerHTML = marked.parse(contentToRender, {
             breaks: true,
           }) as string;
           if (showWhitespace) {
             injectWsMarkersWysiwyg(wysiwygRef.current);
           }
+
+          // Apply diff background styles to the injected spans.
+          const diffSpans = wysiwygRef.current.querySelectorAll('.diff-inserted');
+          diffSpans.forEach((span) => {
+            const htmlSpan = span as HTMLElement;
+            htmlSpan.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+            htmlSpan.style.borderBottom = '1px solid rgba(34, 197, 94, 0.4)';
+          });
         }
       }
-    }, [chapter.content, viewMode, chapter.id, showWhitespace, isProseStreaming]);
+    }, [
+      chapter.content,
+      viewMode,
+      chapter.id,
+      showWhitespace,
+      isProseStreaming,
+      localBaseline,
+    ]);
 
     const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
       if (e && !e.nativeEvent.isTrusted) return;
+      setLocalBaseline(''); // clear diff immediately on user input
       if (wysiwygRef.current) {
         const html = wysiwygRef.current.innerHTML;
         const md = turndownService.current.turndown(html);
@@ -1505,6 +1564,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     value={localContent}
                     onChange={(val: string) => {
                       setLocalContent(val);
+                      setLocalBaseline(''); // clear diff immediately on user input
                       checkContext();
                       if (contentDebounceRef.current)
                         clearTimeout(contentDebounceRef.current);
@@ -1515,6 +1575,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     onSelectionChange={checkContext}
                     mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
+                    baselineValue={localBaseline}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'

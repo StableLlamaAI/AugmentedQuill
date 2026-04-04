@@ -23,12 +23,61 @@ import {
   ViewUpdate,
   DecorationSet,
 } from '@codemirror/view';
-import { EditorState, Compartment, Prec, Annotation } from '@codemirror/state';
-import type { Extension, Range } from '@codemirror/state';
+import { EditorState, Compartment, Prec, Annotation, Range } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
+import { diff_match_patch } from 'diff-match-patch';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+
+// ─── Diff Highlight ──────────────────────────────────────────────────────────
+
+const dmp = new diff_match_patch();
+
+const diffMark = Decoration.mark({
+  class: 'cm-diff-inserted',
+});
+
+const buildDiffPlugin = (baseline: string) =>
+  ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged || u.viewportChanged) {
+          this.decorations = this.build(u.view);
+        }
+      }
+      build(view: EditorView): DecorationSet {
+        const currentText = view.state.doc.toString();
+        if (!baseline || baseline === currentText) return Decoration.none;
+
+        const diffs = dmp.diff_main(baseline, currentText);
+        dmp.diff_cleanupSemantic(diffs);
+
+        const decs: Range<Decoration>[] = [];
+        let pos = 0;
+
+        for (const [op, text] of diffs) {
+          if (op === 0) {
+            // UNCHANGED
+            pos += text.length;
+          } else if (op === 1) {
+            // INSERTED — decorate the added range in the current document.
+            decs.push(diffMark.range(pos, pos + text.length));
+            pos += text.length;
+          }
+          // DELETED (op === -1): exists in baseline only, no position in current doc.
+        }
+
+        return Decoration.set(decs, true);
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
 
 // ─── Whitespace display ──────────────────────────────────────────────────────
 // These widgets replace spaces, tabs and newline-positions with a visible glyph
@@ -238,11 +287,25 @@ const baseTheme = EditorView.theme({
     fontStyle: 'normal',
     fontWeight: 'normal',
   },
+  '.diff-inserted': {
+    backgroundColor: 'rgba(34, 197, 94, 0.25) !important', // brand-green-500 @ 0.25
+    borderBottomStyle: 'dashed',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.5)',
+    borderRadius: '2px',
+    transition: 'background-color 0.2s ease',
+  },
   // Placeholder styling
   '.cm-placeholder': {
     color: 'inherit',
     opacity: '0.4',
     fontStyle: 'normal',
+  },
+  '.cm-diff-inserted': {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)', // Light green
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
   },
 });
 
@@ -278,6 +341,8 @@ export interface CodeMirrorEditorProps {
   style?: React.CSSProperties;
   /** Called on every selection / cursor change */
   onSelectionChange?: (anchor: number, head: number) => void;
+  /** Text state to compare against for change highlighting (AI additions) */
+  baselineValue?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -297,6 +362,7 @@ export const CodeMirrorEditor = React.forwardRef<
       className,
       style,
       onSelectionChange,
+      baselineValue = '',
     },
     ref
   ) => {
@@ -317,6 +383,7 @@ export const CodeMirrorEditor = React.forwardRef<
     // Compartments allow dynamic extension switching without recreating the view
     const languageCompartment = useRef(new Compartment());
     const wsCompartment = useRef(new Compartment());
+    const diffCompartment = useRef(new Compartment());
     const enterCompartment = useRef(new Compartment());
     const placeholderCompartment = useRef(new Compartment());
 
@@ -329,6 +396,9 @@ export const CodeMirrorEditor = React.forwardRef<
 
     const buildWsExtension = (ws: boolean): Extension =>
       ws ? buildWhitespacePlugin() : [];
+
+    const buildDiffExtension = (bv: string): Extension =>
+      bv ? buildDiffPlugin(bv) : [];
 
     const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
       if (eb === 'ignore') {
@@ -398,6 +468,8 @@ export const CodeMirrorEditor = React.forwardRef<
         Prec.high(keymap.of(historyKeymap)),
         // Enter-behavior keymap in its own compartment
         enterCompartment.current.of(buildEnterExtension(enterBehavior)),
+        // Diff highlights for AI changes
+        diffCompartment.current.of(buildDiffExtension(baselineValue)),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
         wsCompartment.current.of(buildWsExtension(showWhitespace)),
@@ -473,6 +545,12 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [placeholder]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: diffCompartment.current.reconfigure(buildDiffExtension(baselineValue)),
+      });
+    }, [baselineValue]);
 
     // ── External value sync ─────────────────────────────────────────────────
     // Update the CodeMirror document when the value prop changes due to an

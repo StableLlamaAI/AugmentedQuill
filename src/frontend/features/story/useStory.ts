@@ -71,6 +71,9 @@ interface StoryHistoryEntry {
   id: string;
   label: string;
   state: StoryState;
+  /** True when this entry was created by the user typing in the editor,
+   * not by an AI action.  Entries tagged this way do not trigger highlights. */
+  isUserEdit?: boolean;
   onUndo?: () => Promise<void> | void;
   onRedo?: () => Promise<void> | void;
 }
@@ -140,11 +143,12 @@ const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
 const createHistoryEntry = (
   state: StoryState,
   label: string,
-  handlers?: Pick<StoryHistoryEntry, 'onUndo' | 'onRedo'>
+  handlers?: Pick<StoryHistoryEntry, 'onUndo' | 'onRedo' | 'isUserEdit'>
 ): StoryHistoryEntry => ({
   id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   label,
   state,
+  isUserEdit: handlers?.isUserEdit ?? false,
   onUndo: handlers?.onUndo,
   onRedo: handlers?.onRedo,
 });
@@ -179,6 +183,13 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null);
   const [history, setHistory] = useState<StoryHistoryEntry[]>([INITIAL_HISTORY_ENTRY]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Explicit baseline for diff highlights.  Updated at exactly the right
+  // moments: before an AI push (shows what changed), cleared to current state
+  // on user edits (no highlight), and set to the state we leave on undo/redo
+  // (so inserted/restored text is always highlighted).
+  const [baselineState, setBaselineState] = useState<StoryState>(
+    () => INITIAL_HISTORY_ENTRY.state
+  );
   const hasFetchedRef = useRef(false);
   const latestStoryRef = useRef(story);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
@@ -192,18 +203,27 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   }, [story]);
 
   const pushState = useCallback(
-    (newState: StoryState, label: string) => {
+    (newState: StoryState, label: string, isUserEdit: boolean = false) => {
       const updatedState = { ...newState, lastUpdated: Date.now() };
       const currentEntry = history[currentIndex];
-      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+      if (
+        !isUserEdit &&
+        currentEntry &&
+        areStoriesEqual(currentEntry.state, updatedState)
+      ) {
         // Avoid no-op history entries that cause apparent "double undo".
         setStory(updatedState);
         latestStoryRef.current = updatedState;
         return;
       }
 
+      // Baseline for diff display:
+      // - AI/external: capture state BEFORE the push so new text is highlighted
+      // - User edits: advance baseline to new state so nothing is highlighted
+      setBaselineState(isUserEdit ? updatedState : history[currentIndex].state);
+
       const trimmed = history.slice(0, currentIndex + 1);
-      trimmed.push(createHistoryEntry(updatedState, label));
+      trimmed.push(createHistoryEntry(updatedState, label, { isUserEdit }));
       const bounded = trimmed.slice(-MAX_HISTORY);
       setHistory(bounded);
       setCurrentIndex(bounded.length - 1);
@@ -454,7 +474,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const updateStoryDraft = async (
     partial: Partial<WritingUnit>,
     sync: boolean = true,
-    pushHistory: boolean = true
+    pushHistory: boolean = true,
+    isUserEdit: boolean = false
   ) => {
     if (!story.draft) return;
 
@@ -466,10 +487,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       private_notes: partial.private_notes ?? story.private_notes,
       conflicts: partial.conflicts ?? story.conflicts,
       draft: { ...story.draft, ...partial },
+      lastUpdated: Date.now(),
     };
 
     if (pushHistory) {
-      pushState(newState, buildDraftUpdateLabel(partial));
+      pushState(newState, buildDraftUpdateLabel(partial), isUserEdit);
     } else {
       setStory(newState);
       latestStoryRef.current = newState;
@@ -520,10 +542,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     id: string,
     partial: Partial<Chapter>,
     sync: boolean = true,
-    pushHistory: boolean = true
+    pushHistory: boolean = true,
+    isUserEdit: boolean = false
   ) => {
     if (story.projectType === 'short-story') {
-      await updateStoryDraft(partial, sync, pushHistory);
+      await updateStoryDraft(partial, sync, pushHistory, isUserEdit);
       return;
     }
 
@@ -539,10 +562,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     const newChapters = story.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
-    const newState = { ...story, chapters: newChapters };
+    const newState = { ...story, chapters: newChapters, lastUpdated: Date.now() };
 
     if (pushHistory) {
-      pushState(newState, buildChapterUpdateLabel(chapter, partial));
+      pushState(newState, buildChapterUpdateLabel(chapter, partial), isUserEdit);
     } else {
       setStory(newState);
       latestStoryRef.current = newState;
@@ -661,6 +684,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       latestStoryRef.current = newStory;
       setHistory([createHistoryEntry(newStory, 'Load story')]);
       setCurrentIndex(0);
+      setBaselineState(newStory); // no highlight after a fresh project load
       if (newStory.currentChapterId) {
         setCurrentChapterId(newStory.currentChapterId);
       } else if (newStory.chapters.length > 0) {
@@ -681,6 +705,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         const handler = history[idx].onUndo;
         if (handler) callbacks.push(handler);
       }
+
+      // Baseline = the state we're leaving so undo-restored text is highlighted.
+      setBaselineState(history[currentIndex].state);
 
       setCurrentIndex(targetIndex);
       const prevState = history[targetIndex].state;
@@ -705,6 +732,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         if (handler) callbacks.push(handler);
       }
 
+      // Baseline = the state we're leaving so redo-restored text is highlighted.
+      setBaselineState(history[currentIndex].state);
+
       setCurrentIndex(targetIndex);
       const nextState = history[targetIndex].state;
       setStory(nextState);
@@ -725,6 +755,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const redo = useCallback(async () => {
     await redoSteps(1);
   }, [redoSteps]);
+
+  // Baseline is managed explicitly via setBaselineState — see pushState,
+  // undoSteps, redoSteps, and loadStory above.
 
   const undoOptions: StoryHistoryOption[] = [];
   for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
@@ -774,5 +807,6 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     historySize: history.length,
     canUndo: currentIndex > 0,
     canRedo: currentIndex < history.length - 1,
+    baselineState,
   };
 };

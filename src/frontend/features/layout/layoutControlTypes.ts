@@ -148,6 +148,7 @@ export type MainSidebarControls = {
     conflicts?: Array<{ id: string; description: string; resolution: string }>,
     language?: string
   ) => Promise<void>;
+  baselineState?: StoryState;
   // optional sourcebook relevance controls (provided by suggestions hook)
   checkedSourcebookIds?: string[];
   onToggleSourcebook?: (id: string, checked: boolean) => void;
@@ -203,6 +204,7 @@ export type MainEditorControls = {
   setActiveFormats: Dispatch<SetStateAction<string[]>>;
   showWhitespace: boolean;
   setShowWhitespace: Dispatch<SetStateAction<boolean>>;
+  baselineContent?: string;
 };
 
 export type MainChatControls = {

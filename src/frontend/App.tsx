@@ -76,6 +76,7 @@ const App: React.FC = () => {
     historyIndex,
     canUndo,
     canRedo,
+    baselineState,
   } = useStory({ confirm, alert: window.alert });
 
   useBrowserHistory({
@@ -517,6 +518,7 @@ const App: React.FC = () => {
             onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
             isSourcebookSelectionRunning,
             onSourcebookMutated: pushExternalHistoryEntry,
+            baselineState,
           }}
           editorControls={{
             currentChapter,
@@ -524,7 +526,8 @@ const App: React.FC = () => {
             editorSettings,
             setEditorSettings,
             viewMode,
-            updateChapter,
+            updateChapter: (id, partial) =>
+              updateChapter(id, partial, true, true, true),
             suggestionControls: {
               continuations,
               isSuggesting,
@@ -548,6 +551,11 @@ const App: React.FC = () => {
             setActiveFormats,
             showWhitespace,
             setShowWhitespace,
+            baselineContent:
+              currentChapter?.scope === 'story'
+                ? baselineState.draft?.content
+                : baselineState.chapters.find((c) => c.id === currentChapter?.id)
+                    ?.content,
           }}
           chatControls={{
             isChatOpen,

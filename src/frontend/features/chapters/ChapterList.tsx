@@ -9,11 +9,12 @@
  * Defines the chapter list unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
 import { api } from '../../services/api';
+import { diff_match_patch } from 'diff-match-patch';
 import {
   Plus,
   Trash2,
@@ -55,6 +56,7 @@ interface ChapterListProps {
   theme?: AppTheme;
   onOpenImages?: () => void;
   languages?: string[];
+  baselineChapters?: Chapter[];
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -76,6 +78,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   theme = 'mixed',
   onOpenImages,
   languages = [],
+  baselineChapters = [],
 }) => {
   const { isLight } = useThemeClasses();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
@@ -350,6 +353,39 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   const renderChapter = (chapter: Chapter, index: number) => {
     const isDragging = draggedItem?.type === 'chapter' && draggedItem.id === chapter.id;
 
+    const baselineChapter = baselineChapters.find(
+      (c) => String(c.id) === String(chapter.id)
+    );
+    const baselineSummary = baselineChapter?.summary || '';
+
+    const renderSummary = () => {
+      const summary = chapter.summary || 'No summary available...';
+      if (!baselineSummary || baselineSummary === summary) {
+        return <Fragment>{summary}</Fragment>;
+      }
+
+      const diffs = new diff_match_patch().diff_main(baselineSummary, summary);
+      new diff_match_patch().diff_cleanupSemantic(diffs);
+
+      return diffs.map(([op, text], i) => {
+        if (op === 0) return <Fragment key={i}>{text}</Fragment>;
+        if (op === 1) {
+          return (
+            <span
+              key={i}
+              style={{
+                backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                borderBottom: '1px solid rgba(34, 197, 94, 0.4)',
+              }}
+            >
+              {text}
+            </span>
+          );
+        }
+        return null;
+      });
+    };
+
     return (
       <div
         key={chapter.id}
@@ -415,7 +451,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           </button>
         </div>
         <p className="text-xs text-brand-gray-500 line-clamp-2 pointer-events-none">
-          {chapter.summary || 'No summary available...'}
+          {renderSummary()}
         </p>
       </div>
     );

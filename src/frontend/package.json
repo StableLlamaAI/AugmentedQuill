@@ -20,9 +20,11 @@
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@testing-library/dom": "^10.4.1",
+    "@types/diff-match-patch": "^1.0.36",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "codemirror": "^6.0.2",
+    "diff-match-patch": "^1.0.5",
     "dompurify": "^3.3.3",
     "lucide-react": "^1.7.0",
     "marked": "17.0.5",
@@ -32,6 +34,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/react": "^16.3.2",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^25.5.0",
@@ -44,7 +47,6 @@
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.2.2",
-    "@tailwindcss/postcss": "^4.2.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.3",
     "vitest": "^4.1.2"

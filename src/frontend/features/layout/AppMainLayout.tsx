@@ -468,6 +468,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             language={story.language}
             conflicts={story.conflicts}
             projectType={story.projectType}
+            baselineSummary={sidebarControls.baselineState?.summary}
             onAiGenerateSummary={(action, onProgress, currentText, onThinking) =>
               handleSidebarAiAction(
                 'story',
@@ -517,6 +518,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               theme={currentTheme}
               onOpenImages={handleOpenImages}
               languages={instructionLanguages}
+              baselineChapters={sidebarControls.baselineState?.chapters}
             />
           </CollapsibleSection>
         )}
@@ -574,6 +576,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               onContextChange={setActiveFormats}
               showWhitespace={showWhitespace}
               onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
+              baselineContent={editorControls.baselineContent}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">

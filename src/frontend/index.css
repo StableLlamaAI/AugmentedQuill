@@ -60,6 +60,14 @@ body.light ::-webkit-scrollbar-thumb:hover {
   line-height: 1.75;
 }
 
+/* AI diff highlight — shows text added/changed since the last undo/redo point.
+   Used in WYSIWYG mode and Markdown view renderings outside the CM editor. */
+.diff-inserted {
+  background-color: rgba(34, 197, 94, 0.12);
+  border-bottom: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 2px;
+}
+
 .prose-editor:focus {
   outline: none;
 }
