@@ -45,6 +45,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onSubmit,
 }) => {
   const [input, setInput] = useState('');
+  const [isDragActive, setIsDragActive] = useState(false);
   const { isLight } = useTheme();
 
   const isDisabled = isLoading || !isModelAvailable;
@@ -77,6 +78,32 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     addFiles(e.target.files);
     e.target.value = '';
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isDisabled) {
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isDisabled) {
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    addFiles(e.dataTransfer.files);
   };
 
   const handleRemoveAttachment = async (attachmentId: string) => {
@@ -138,7 +165,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="relative">
+    <form
+      onSubmit={handleSubmit}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`relative ${isDragActive ? 'ring-2 ring-brand-500/50 bg-brand-gray-100 dark:bg-brand-gray-800' : ''}`}
+    >
       {attachments.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {attachments.map((attachment) => (

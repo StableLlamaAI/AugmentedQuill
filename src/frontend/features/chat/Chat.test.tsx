@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { Chat } from './Chat';
@@ -153,7 +153,42 @@ describe('Chat', () => {
     ]);
   });
 
-  it('offers removal when clicking an attachment preview', () => {
+  it('allows file attachments to be added by dropping on the message input', () => {
+    const onSendMessage = vi.fn();
+    const file = new File(['story'], 'drop-example.txt', { type: 'text/plain' });
+    const dataTransfer = {
+      files: [file],
+      types: ['Files'],
+    } as unknown as DataTransfer;
+
+    render(
+      <Chat
+        {...defaultProps}
+        onSendMessage={onSendMessage}
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Chat message/i });
+    fireEvent.drop(input, {
+      dataTransfer,
+    });
+
+    expect(screen.getByTitle(/Click to remove drop-example.txt/i)).toBeTruthy();
+
+    fireEvent.change(input, { target: { value: 'Please handle this dropped file' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Message/i }));
+
+    expect(onSendMessage).toHaveBeenCalledWith('Please handle this dropped file', [
+      expect.objectContaining({ name: 'drop-example.txt' }),
+    ]);
+  });
+
+  it('offers removal when clicking an attachment preview', async () => {
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
@@ -175,7 +210,10 @@ describe('Chat', () => {
 
     fireEvent.click(screen.getByTitle(/Click to remove example.txt/i));
     expect(confirmSpy).toHaveBeenCalledWith('Remove attachment “example.txt”?');
-    expect(screen.queryByTitle(/Click to remove example.txt/i)).toBeNull();
+
+    await waitFor(() => {
+      expect(screen.queryByTitle(/Click to remove example.txt/i)).toBeNull();
+    });
 
     confirmSpy.mockRestore();
   });
