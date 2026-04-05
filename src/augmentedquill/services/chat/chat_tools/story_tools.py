@@ -205,7 +205,7 @@ async def get_story_metadata(
 
 
 @chat_tool(
-    description="Update story-level metadata such as title, summary, notes, tags, or story-level conflicts. Provide only the fields you want to change.",
+    description="Update story-level metadata such as title, summary, notes, or tags. Provide only the fields you want to change.",
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
@@ -246,9 +246,8 @@ async def read_story_content(
 
 @chat_tool(
     description=(
-        "Overwrite the ENTIRE story-level content file. "
-        "WARNING: replaces all existing text — only use for short stories or complete rewrites. "
-        "In chapter-based projects, prefer targeted chapter editing tools instead of whole-document replacement."
+        "Overwrite the ENTIRE story-level content file. WARNING: replaces all existing text. "
+        "Use this only when the current task explicitly targets the story-level content file."
     ),
     allowed_roles=(EDITING_ROLE,),
     capability="prose-write",

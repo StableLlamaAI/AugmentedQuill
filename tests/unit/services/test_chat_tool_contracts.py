@@ -200,6 +200,115 @@ class ChatToolContractsTest(TestCase):
         self.assertIn("call_writing_llm", names)
         self.assertIn("call_editing_assistant", names)
 
+    def test_update_story_metadata_hides_conflicts_for_chapter_based_projects(self):
+        for project_type in ("novel", "series"):
+            tools = get_registered_tool_schemas(
+                model_type="CHAT", project_type=project_type
+            )
+            metadata_tool = next(
+                (t for t in tools if t["function"]["name"] == "update_story_metadata"),
+                None,
+            )
+            self.assertIsNotNone(
+                metadata_tool, "update_story_metadata schema should exist"
+            )
+            properties = (
+                metadata_tool.get("function", {})
+                .get("parameters", {})
+                .get("properties", {})
+            )
+            self.assertIsInstance(properties, dict)
+            self.assertNotIn(
+                "conflicts",
+                properties,
+                "chapter-based projects should not expose story-level conflicts in update_story_metadata schema",
+            )
+
+    def test_add_sourcebook_relation_schema_filters_chapter_and_book_fields_by_project_type(
+        self,
+    ):
+        expected = {
+            "short-story": {"source_id", "relation_type", "target_id"},
+            "novel": {
+                "source_id",
+                "relation_type",
+                "target_id",
+                "start_chapter",
+                "end_chapter",
+            },
+            "series": {
+                "source_id",
+                "relation_type",
+                "target_id",
+                "start_chapter",
+                "end_chapter",
+                "start_book",
+                "end_book",
+            },
+        }
+        for project_type, expected_props in expected.items():
+            tools = get_registered_tool_schemas(
+                model_type="CHAT", project_type=project_type
+            )
+            tool = next(
+                (
+                    t
+                    for t in tools
+                    if t["function"]["name"] == "add_sourcebook_relation"
+                ),
+                None,
+            )
+            self.assertIsNotNone(tool, "add_sourcebook_relation schema should exist")
+            properties = (
+                tool.get("function", {}).get("parameters", {}).get("properties", {})
+            )
+            self.assertEqual(
+                set(properties.keys()),
+                expected_props,
+                f"Unexpected schema properties for add_sourcebook_relation in {project_type}",
+            )
+
+    def test_call_writing_llm_chap_id_description_matches_active_project_type(self):
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type="short-story"
+        )
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "call_writing_llm"),
+            None,
+        )
+        self.assertIsNotNone(tool, "call_writing_llm schema should exist")
+        chap_id_desc = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("chap_id", {})
+            .get("description", "")
+        )
+        self.assertIn(
+            "Use 1 or omit",
+            chap_id_desc,
+            "Short-story schema should indicate chap_id can be omitted",
+        )
+
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="novel")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "call_writing_llm"),
+            None,
+        )
+        self.assertIsNotNone(tool, "call_writing_llm schema should exist")
+        chap_id_desc = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("chap_id", {})
+            .get("description", "")
+        )
+        self.assertIn(
+            "Required when write_mode is set",
+            chap_id_desc,
+            "Novel schema should indicate chap_id is required when write_mode is set",
+        )
+
     def _call_tool_with_payload(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
             arguments = args

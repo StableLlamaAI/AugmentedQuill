@@ -803,7 +803,7 @@ class CallWritingLlmParams(BaseModel):
     )
     chap_id: int | None = Field(
         None,
-        description="Chapter ID to write to. For short-story projects, use 1 (or omit and it will be auto-detected). For chapter-based projects, provide the chapter ID.",
+        description="Chapter ID to write to when writing into a chapter. The active schema indicates whether this parameter is required.",
     )
 
 

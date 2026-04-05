@@ -234,6 +234,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       baselineContent = '',
       suggestionControls,
       aiControls,
+      language,
+      spellCheck,
       onContextChange,
     },
     ref
