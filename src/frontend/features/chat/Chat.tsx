@@ -649,7 +649,7 @@ export const Chat: React.FC<ChatProps> = ({
                         <CollapsibleToolSection
                           title={`${msg.tool_calls.length} Tool Call${
                             msg.tool_calls.length > 1 ? 's' : ''
-                          }`}
+                          } [${msg.tool_calls.map((tc) => tc.name).join(', ')}]`}
                         >
                           <div className="space-y-2">
                             {msg.tool_calls.map((tc, i) => (

@@ -279,6 +279,30 @@ describe('Chat', () => {
     expect(screen.queryByText('System Instruction')).toBeNull();
   });
 
+  it('shows tool call names in the hidden tool call title', () => {
+    render(
+      <Chat
+        {...defaultProps}
+        messages={[
+          {
+            id: 'a1',
+            role: 'model' as const,
+            text: 'Planning a tool call',
+            tool_calls: [
+              { id: 't1', name: 'search_books', args: { query: 'fantasy' } },
+            ],
+          },
+        ]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/1 Tool Call \[search_books\]/i)).toBeTruthy();
+  });
+
   it('shows regenerate button when there is a user message and generation is not active', () => {
     render(
       <Chat
