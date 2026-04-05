@@ -33,6 +33,8 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef, () => onResolve('stop'));
 
+  const isDarkMode = theme !== 'light';
+
   if (!isOpen) return null;
 
   return (
@@ -46,7 +48,7 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
     >
       <div
         className={`p-6 rounded-lg shadow-2xl max-w-sm w-full ${
-          theme === 'dark'
+          isDarkMode
             ? 'bg-brand-gray-900 text-white border border-brand-gray-700'
             : 'bg-white text-brand-gray-900 border border-brand-gray-200'
         }`}
