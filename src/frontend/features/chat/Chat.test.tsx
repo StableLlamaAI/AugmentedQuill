@@ -121,7 +121,7 @@ describe('Chat', () => {
     expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
   });
 
-  it('allows file attachments to be added, previewed, and sent', () => {
+  it('allows file attachments to be added, previewed, and sent', async () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
 
@@ -142,7 +142,9 @@ describe('Chat', () => {
       target: { files: [file] },
     });
 
-    expect(screen.getByTitle(/Click to remove example.txt/i)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTitle(/Click to remove example.txt/i)).toBeTruthy();
+    });
 
     const input = screen.getByRole('textbox', { name: /Chat message/i });
     fireEvent.change(input, { target: { value: 'Please review this file' } });
@@ -153,7 +155,7 @@ describe('Chat', () => {
     ]);
   });
 
-  it('allows file attachments to be added by dropping on the message input', () => {
+  it('allows file attachments to be added by dropping on the message input', async () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'drop-example.txt', { type: 'text/plain' });
     const dataTransfer = {
@@ -178,7 +180,9 @@ describe('Chat', () => {
       dataTransfer,
     });
 
-    expect(screen.getByTitle(/Click to remove drop-example.txt/i)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTitle(/Click to remove drop-example.txt/i)).toBeTruthy();
+    });
 
     fireEvent.change(input, { target: { value: 'Please handle this dropped file' } });
     fireEvent.click(screen.getByRole('button', { name: /Send Message/i }));
@@ -206,6 +210,10 @@ describe('Chat', () => {
     fireEvent.click(screen.getByRole('button', { name: /Attach files/i }));
     fireEvent.change(screen.getByTestId('chat-attachment-input'), {
       target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTitle(/Click to remove example.txt/i)).toBeTruthy();
     });
 
     fireEvent.click(screen.getByTitle(/Click to remove example.txt/i));
