@@ -86,4 +86,32 @@ describe('MetadataEditorDialog', () => {
     );
     expect(screen.getByText('from Story Draft')).toBeTruthy();
   });
+
+  it('sets the story language on editable metadata text inputs', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="story"
+        title="Edit Story Metadata"
+        initialData={{ ...baseData, language: 'de' }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const titleInputs = screen.getAllByDisplayValue('Chapter 1');
+    const tagsInputs = screen.getAllByDisplayValue('tag1');
+
+    expect(titleInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
+    expect(tagsInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
+    const summaryTextareas = screen.getAllByPlaceholderText(
+      'Write a public summary...'
+    );
+    expect(
+      summaryTextareas.some((textarea) => textarea.getAttribute('lang') === 'de')
+    ).toBe(true);
+  });
 });

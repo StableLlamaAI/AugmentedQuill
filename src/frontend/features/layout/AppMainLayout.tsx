@@ -487,6 +487,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onUpdate={updateStoryMetadata}
             theme={currentTheme}
             languages={instructionLanguages}
+            spellCheck={true}
           />
         </CollapsibleSection>
 
@@ -519,6 +520,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               onOpenImages={handleOpenImages}
               languages={instructionLanguages}
               baselineChapters={sidebarControls.baselineState?.chapters}
+              language={story.language}
+              spellCheck={true}
             />
           </CollapsibleSection>
         )}
@@ -577,6 +580,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               showWhitespace={showWhitespace}
               onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
               baselineContent={editorControls.baselineContent}
+              language={story.language}
+              spellCheck={true}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
@@ -630,6 +635,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             scratchpad={scratchpad}
             onUpdateScratchpad={onUpdateScratchpad}
             onDeleteScratchpad={onDeleteScratchpad}
+            storyLanguage={story.language}
           />
         </aside>
       )}

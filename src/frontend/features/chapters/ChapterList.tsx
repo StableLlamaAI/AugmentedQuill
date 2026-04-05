@@ -57,7 +57,9 @@ interface ChapterListProps {
   theme?: AppTheme;
   onOpenImages?: () => void;
   languages?: string[];
+  language?: string;
   baselineChapters?: Chapter[];
+  spellCheck?: boolean;
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -79,7 +81,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   theme = 'mixed',
   onOpenImages,
   languages = [],
+  language,
   baselineChapters = [],
+  spellCheck = true,
 }) => {
   const { isLight } = useThemeClasses();
   const confirm = useConfirm();
@@ -666,6 +670,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 <div className="flex flex-col gap-2 p-2">
                   <input
                     className="bg-transparent border rounded p-1 text-sm outline-none focus:border-brand-500"
+                    lang={language || undefined}
+                    spellCheck={spellCheck}
                     placeholder="Book Title"
                     value={newBookTitle}
                     onChange={(e) => setNewBookTitle(e.target.value)}

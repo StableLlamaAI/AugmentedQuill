@@ -23,6 +23,7 @@ type ChatComposerProps = {
   disabledReason?: string;
   inputBg: string;
   attachments: ChatAttachment[];
+  language?: string;
   onAttachmentsChange: (next: ChatAttachment[]) => void;
   onSubmit: (text: string, attachments?: ChatAttachment[]) => void;
 };
@@ -35,6 +36,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   disabledReason,
   inputBg,
   attachments,
+  language,
   onAttachmentsChange,
   onSubmit,
 }) => {
@@ -263,6 +265,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         ref={textareaRef}
         rows={1}
         value={input}
+        lang={language || undefined}
+        spellCheck={true}
         onChange={(e) => {
           setInput(e.target.value);
           adjustTextareaHeight();

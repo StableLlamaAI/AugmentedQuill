@@ -66,28 +66,62 @@ describe('Chat', () => {
     const messages = [
       {
         id: 'm1',
-        role: 'model',
+        role: 'model' as const,
         text: 'Hello',
         thinking: 'first streaming content',
       },
     ];
 
     const { rerender } = render(
-      <Chat messages={messages} isLoading={true} {...defaultProps} />
+      <Chat
+        messages={messages}
+        isLoading={true}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
     );
 
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
-    rerender(<Chat messages={messages} isLoading={false} {...defaultProps} />);
+    rerender(
+      <Chat
+        messages={messages}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
+    );
     expect(screen.queryByText('first streaming content')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Thinking Process/i }));
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
-    rerender(<Chat messages={messages} isLoading={true} {...defaultProps} />);
+    rerender(
+      <Chat
+        messages={messages}
+        isLoading={true}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
+    );
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
-    rerender(<Chat messages={messages} isLoading={false} {...defaultProps} />);
+    rerender(
+      <Chat
+        messages={messages}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        {...defaultProps}
+      />
+    );
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
 
@@ -249,7 +283,7 @@ describe('Chat', () => {
     render(
       <Chat
         {...defaultProps}
-        messages={[{ id: 'u1', role: 'user', text: 'Hello' }]}
+        messages={[{ id: 'u1', role: 'user' as const, text: 'Hello' }]}
         isLoading={false}
         scratchpad=""
         onUpdateScratchpad={vi.fn()}
@@ -263,5 +297,36 @@ describe('Chat', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Regenerate last response/i }));
     expect(defaultProps.onRegenerate).toHaveBeenCalled();
+  });
+
+  it('applies story language to chat inputs and dialog textareas', () => {
+    render(
+      <Chat
+        {...defaultProps}
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        storyLanguage="fr"
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    const composer = screen.getByRole('textbox', { name: /Chat message/i });
+    expect(composer.getAttribute('lang')).toBe('fr');
+
+    fireEvent.click(screen.getByTitle('Chat Settings'));
+    expect(
+      screen
+        .getByPlaceholderText("Define the AI's persona and rules...")
+        .getAttribute('lang')
+    ).toBe('fr');
+
+    fireEvent.click(screen.getByTitle('Open Scratchpad'));
+    expect(
+      screen
+        .getByPlaceholderText('Current internal notes of the chat LLM...')
+        .getAttribute('lang')
+    ).toBe('fr');
   });
 });

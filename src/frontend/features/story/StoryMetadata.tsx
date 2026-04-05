@@ -49,6 +49,7 @@ interface StoryMetadataProps {
   summaryAiDisabledReason?: string;
   theme?: AppTheme;
   baselineSummary?: string;
+  spellCheck?: boolean;
 }
 
 export const StoryMetadata: React.FC<StoryMetadataProps> = ({
@@ -66,6 +67,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   summaryAiDisabledReason,
   theme = 'mixed',
   baselineSummary = '',
+  spellCheck = true,
 }) => {
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
 
@@ -163,7 +165,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       <div className="text-sm text-brand-gray-500 mb-4 leading-relaxed">
         {summary ? (
           <div className="flex flex-col gap-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-            <MarkdownView content={summary} simple baseline={baselineSummary} />
+            <MarkdownView
+              content={summary}
+              simple
+              baseline={baselineSummary}
+              language={language}
+            />
             {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
           </div>
         ) : (
@@ -176,7 +183,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             Notes (LLM Visible)
           </span>
           <div className="max-h-24 overflow-y-auto custom-scrollbar">
-            <MarkdownView content={notes} simple />
+            <MarkdownView content={notes} simple language={language} />
           </div>
         </div>
       )}

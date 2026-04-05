@@ -27,6 +27,7 @@ interface MarkdownViewProps {
   className?: string;
   simple?: boolean;
   baseline?: string;
+  language?: string;
 }
 
 // Configure markdown rendering once to keep parsing behavior stable.
@@ -54,6 +55,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   className = '',
   simple = false,
   baseline = '',
+  language,
 }) => {
   const safeContent = typeof content === 'string' ? content : '';
 
@@ -99,14 +101,15 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
       <div
         className={`prose-editor whitespace-normal ${className}`}
         dangerouslySetInnerHTML={{ __html: cleanHtml }}
+        lang={language}
       />
     );
   }
 
-  const renderLine = (line: string, i: number) => {
+  const renderLine = (line: string, i: number, la?: string) => {
     // Simple mode preserves source for complex markdown to avoid misleading preview fidelity.
     return (
-      <div key={i} className="min-h-[1.5em]">
+      <div key={i} className="min-h-[1.5em]" lang={la}>
         {renderInline(line)}
       </div>
     );
@@ -163,7 +166,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   };
 
   return (
-    <div className={`whitespace-pre-wrap break-words ${className}`}>
+    <div className={className} lang={language}>
       {simpleDiff
         ? simpleDiff.map(([op, text], i) => {
             if (op === 0) return <React.Fragment key={i}>{text}</React.Fragment>;
@@ -175,7 +178,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
               );
             return null; // deletions: not shown
           })
-        : safeContent.split('\n').map((line, i) => renderLine(line, i))}
+        : safeContent.split('\n').map((line, i) => renderLine(line, i, language))}
     </div>
   );
 };

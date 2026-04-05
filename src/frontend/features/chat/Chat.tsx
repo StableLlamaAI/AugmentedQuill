@@ -69,6 +69,7 @@ interface ChatProps {
   scratchpad?: string;
   onUpdateScratchpad: (newContent: string) => void;
   onDeleteScratchpad: () => void;
+  storyLanguage?: string;
 }
 
 type ToolCallArgumentsProps = {
@@ -120,6 +121,7 @@ export const Chat: React.FC<ChatProps> = ({
   scratchpad = '',
   onUpdateScratchpad,
   onDeleteScratchpad,
+  storyLanguage,
 }) => {
   const chatDisabledReason =
     'Chat is unavailable because no working CHAT model is configured.';
@@ -337,6 +339,7 @@ export const Chat: React.FC<ChatProps> = ({
             </div>
             <textarea
               value={scratchpadDraft}
+              lang={storyLanguage || undefined}
               onChange={(e) => setScratchpadDraft(e.target.value)}
               className={`w-full min-h-[220px] rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${isLight ? 'bg-white border-brand-gray-300 text-brand-gray-900' : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-100'}`}
               placeholder="Current internal notes of the chat LLM..."
@@ -391,6 +394,8 @@ export const Chat: React.FC<ChatProps> = ({
           </label>
           <textarea
             value={tempSystemPrompt}
+            lang={storyLanguage || undefined}
+            spellCheck={true}
             onChange={(e) => setTempSystemPrompt(e.target.value)}
             className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
             placeholder="Define the AI's persona and rules..."
@@ -489,6 +494,8 @@ export const Chat: React.FC<ChatProps> = ({
                 >
                   <textarea
                     value={editContent}
+                    lang={storyLanguage || undefined}
+                    spellCheck={true}
                     onChange={(e) => setEditContent(e.target.value)}
                     className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
                   />
@@ -786,6 +793,7 @@ export const Chat: React.FC<ChatProps> = ({
           disabledReason={chatDisabledReason}
           inputBg={inputBg}
           attachments={attachments}
+          language={storyLanguage}
           onAttachmentsChange={setAttachments}
           onSubmit={handleSubmit}
         />
