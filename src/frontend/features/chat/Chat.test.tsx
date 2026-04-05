@@ -244,4 +244,24 @@ describe('Chat', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByText('System Instruction')).toBeNull();
   });
+
+  it('shows regenerate button when there is a user message and generation is not active', () => {
+    render(
+      <Chat
+        {...defaultProps}
+        messages={[{ id: 'u1', role: 'user', text: 'Hello' }]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole('button', { name: /Regenerate last response/i })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate last response/i }));
+    expect(defaultProps.onRegenerate).toHaveBeenCalled();
+  });
 });

@@ -456,14 +456,9 @@ export function useChatExecution({
 
   const handleRegenerate = async () => {
     if (!isChatAvailable) return;
-    const lastMessageIndex = chatMessages.length - 1;
-    if (lastMessageIndex < 0) return;
-
-    const lastMessage = chatMessages[lastMessageIndex];
-    if (lastMessage.role !== 'model') return;
 
     let userMessageIndex = -1;
-    for (let index = lastMessageIndex; index >= 0; index--) {
+    for (let index = chatMessages.length - 1; index >= 0; index--) {
       if (chatMessages[index].role === 'user') {
         userMessageIndex = index;
         break;

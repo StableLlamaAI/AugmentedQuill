@@ -255,7 +255,8 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const lastMessage = messages[messages.length - 1];
-  const canRegenerate = !isLoading && isModelAvailable && lastMessage?.role === 'model';
+  const hasUserMessage = messages.some((msg) => msg.role === 'user');
+  const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
   const contextUsage = useMemo(
     () =>
       estimateChatContextUsage({
