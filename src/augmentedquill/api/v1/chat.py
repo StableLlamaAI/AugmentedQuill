@@ -32,6 +32,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     get_registered_tool_schemas,
 )
 from augmentedquill.services.chat.chat_api_helpers import (
+    inject_chat_attachments,
     inject_project_images,
     normalize_chat_messages,
 )
@@ -404,6 +405,11 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     req_messages = normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
         raise HTTPException(status_code=400, detail="messages array is required")
+
+    try:
+        inject_chat_attachments(req_messages, (payload or {}).get("attachments"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Load config to determine model capabilities and overrides
     machine = load_machine_config() or {}

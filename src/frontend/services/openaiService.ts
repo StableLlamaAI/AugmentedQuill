@@ -9,7 +9,7 @@
  * Defines the openai service unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { LLMConfig } from '../types';
+import { ChatAttachment, LLMConfig } from '../types';
 import { applySmartQuotes } from '../utils/textUtils';
 import {
   ChatContextUsage,
@@ -18,7 +18,7 @@ import {
 } from '../features/chat/chatContextBudget';
 type ErrorData = string | Record<string, unknown> | unknown[];
 
-type UserMessageInput = string | { message: string };
+type UserMessageInput = string | { message: string; attachments?: ChatAttachment[] };
 
 type ToolCallChunk = {
   index?: number;
@@ -229,6 +229,7 @@ export const createChatSession = (
             model_name: config.name || config.id,
             allow_web_search: options?.allowWebSearch,
             current_chapter: options?.currentChapter,
+            attachments: typeof msg === 'object' ? msg.attachments : undefined,
           }),
         });
 

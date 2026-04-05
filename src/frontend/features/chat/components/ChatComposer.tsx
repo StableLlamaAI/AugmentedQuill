@@ -13,13 +13,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Paperclip, FileText } from 'lucide-react';
 import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
-
-type ChatAttachment = {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-};
+import { ChatAttachment } from '../../../types';
 
 type ChatComposerProps = {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -60,34 +54,84 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const addFiles = (files: FileList | null) => {
+  const isTextLikeFile = (file: File): boolean => {
+    const textTypes = [
+      'text/plain',
+      'text/markdown',
+      'application/json',
+      'application/xml',
+      'application/javascript',
+      'application/ecmascript',
+      'application/xhtml+xml',
+    ];
+    return (
+      file.type.startsWith('text/') ||
+      textTypes.includes(file.type) ||
+      /\.(md|markdown|json|xml|csv|yml|yaml|txt)$/i.test(file.name)
+    );
+  };
+
+  const toBase64 = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
+  };
+
+  const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
-    const nextAttachments: ChatAttachment[] = Array.from(files).map((file) => ({
-      id: `${file.name}-${file.size}-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`,
-      name: file.name,
-      size: file.size,
-      type: file.type || 'application/octet-stream',
-    }));
+    const nextAttachments: ChatAttachment[] = await Promise.all(
+      Array.from(files).map(async (file) => {
+        const attachment: ChatAttachment = {
+          id: `${file.name}-${file.size}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+        };
+
+        try {
+          if (isTextLikeFile(file)) {
+            attachment.content = await file.text();
+            attachment.encoding = 'utf-8';
+          } else {
+            attachment.content = await toBase64(file);
+            attachment.encoding = 'base64';
+          }
+        } catch {
+          attachment.content = undefined;
+          attachment.encoding = undefined;
+        }
+
+        return attachment;
+      })
+    );
 
     onAttachmentsChange([...attachments, ...nextAttachments]);
   };
 
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    addFiles(e.target.files);
+  const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await addFiles(e.target.files);
     e.target.value = '';
   };
 
-  const handleDragEnter = (e: React.DragEvent<HTMLFormElement>) => {
+  const handleDragEnter = (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     if (!isDisabled) {
       setIsDragActive(true);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLFormElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     if (!isDisabled) {
       e.dataTransfer.dropEffect = 'copy';
@@ -95,15 +139,15 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     }
   };
 
-  const handleDragLeave = (e: React.DragEvent<HTMLFormElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     setIsDragActive(false);
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLFormElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     setIsDragActive(false);
-    addFiles(e.dataTransfer.files);
+    await addFiles(e.dataTransfer.files);
   };
 
   const handleRemoveAttachment = async (attachmentId: string) => {
@@ -167,10 +211,6 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   return (
     <form
       onSubmit={handleSubmit}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
       className={`relative ${isDragActive ? 'ring-2 ring-brand-500/50 bg-brand-gray-100 dark:bg-brand-gray-800' : ''}`}
     >
       {attachments.length > 0 && (
@@ -228,6 +268,10 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           adjustTextareaHeight();
         }}
         onKeyDown={handleKeyDown}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         placeholder="Ask CHAT to plan, update metadata, or delegate writing/editing..."
         className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border resize-none overflow-y-auto disabled:cursor-not-allowed ${inputBg}`}
         disabled={isDisabled}

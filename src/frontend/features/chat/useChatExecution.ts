@@ -185,6 +185,7 @@ export function useChatExecution({
   const executeChatRequest = async (
     userText: string,
     history: ChatMessage[],
+    attachments?: ChatAttachment[],
     userMsgId?: string
   ) => {
     setIsChatLoading(true);
@@ -215,8 +216,9 @@ export function useChatExecution({
       };
 
       let currentMsgId = uuidv4();
-      let result = await session.sendMessage({ message: userText }, (update) =>
-        updateMessage(currentMsgId, update)
+      let result = await session.sendMessage(
+        { message: userText, attachments },
+        (update) => updateMessage(currentMsgId, update)
       );
 
       const effectiveUserMsgId = userMsgId || uuidv4();
@@ -225,6 +227,7 @@ export function useChatExecution({
           id: effectiveUserMsgId,
           role: 'user',
           text: userText,
+          attachments,
         });
       }
 
@@ -443,13 +446,7 @@ export function useChatExecution({
       { id: userMsgId, role: 'user', text, attachments },
     ]);
 
-    const textForBackend =
-      text +
-      (attachments && attachments.length > 0
-        ? `\n\n[Attached files: ${attachments.map((a) => a.name).join(', ')}]`
-        : '');
-
-    await executeChatRequest(textForBackend, historyWithContext, userMsgId);
+    await executeChatRequest(text, historyWithContext, attachments, userMsgId);
   };
 
   const handleStopChat = () => {
@@ -478,7 +475,12 @@ export function useChatExecution({
     const userMessage = chatMessages[userMessageIndex];
     const newHistory = chatMessages.slice(0, userMessageIndex);
     setChatMessages([...newHistory, userMessage]);
-    await executeChatRequest(userMessage.text, newHistory, userMessage.id);
+    await executeChatRequest(
+      userMessage.text,
+      newHistory,
+      userMessage.attachments,
+      userMessage.id
+    );
   };
 
   return {

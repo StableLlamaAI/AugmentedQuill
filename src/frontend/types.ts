@@ -101,6 +101,8 @@ export interface ChatAttachment {
   name: string;
   size: number;
   type: string;
+  content?: string;
+  encoding?: 'utf-8' | 'base64';
 }
 
 export interface ChatMessage {
