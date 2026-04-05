@@ -240,7 +240,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
           onMouseDown={(e) => {
             e.preventDefault();
-            startResizing();
+            startResizing(e);
           }}
           onKeyDown={handleResizerKeyDown}
           tabIndex={0}
