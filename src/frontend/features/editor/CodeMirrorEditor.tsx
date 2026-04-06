@@ -379,6 +379,8 @@ export interface CodeMirrorEditorProps {
   onSelectionChange?: (anchor: number, head: number) => void;
   /** Text state to compare against for change highlighting (AI additions) */
   baselineValue?: string;
+  /** Enable inline diff highlighting in the editor */
+  showDiff?: boolean;
   /** BCP 47 language tag for spellcheck and hyphenation */
   language?: string;
   /** Whether to enable browser-native spellcheck */
@@ -403,6 +405,7 @@ export const CodeMirrorEditor = React.forwardRef<
       style,
       onSelectionChange,
       baselineValue = '',
+      showDiff = true,
       language = 'en',
       spellCheck = false,
     },
@@ -458,8 +461,8 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildWsExtension = (ws: boolean): Extension =>
       ws ? buildWhitespacePlugin() : [];
 
-    const buildDiffExtension = (bv: string): Extension =>
-      bv ? buildDiffPlugin(bv) : [];
+    const buildDiffExtension = (bv: string, enabled: boolean): Extension =>
+      enabled && bv ? buildDiffPlugin(bv) : [];
 
     const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
       if (eb === 'ignore') {
@@ -554,7 +557,7 @@ export const CodeMirrorEditor = React.forwardRef<
         // Tab keymap for Raw/Markdown modes
         Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
-        diffCompartment.current.of(buildDiffExtension(baselineValue)),
+        diffCompartment.current.of(buildDiffExtension(baselineValue, showDiff)),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
         wsCompartment.current.of(buildWsExtension(showWhitespace)),
@@ -641,9 +644,11 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       viewRef.current?.dispatch({
-        effects: diffCompartment.current.reconfigure(buildDiffExtension(baselineValue)),
+        effects: diffCompartment.current.reconfigure(
+          buildDiffExtension(baselineValue, showDiff)
+        ),
       });
-    }, [baselineValue]);
+    }, [baselineValue, showDiff]);
 
     // ── External value sync ─────────────────────────────────────────────────
     // Update the CodeMirror document when the value prop changes due to an

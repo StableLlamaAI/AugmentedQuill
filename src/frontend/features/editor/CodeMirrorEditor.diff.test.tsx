@@ -95,4 +95,20 @@ describe('CodeMirrorEditor Diff Highlighting', () => {
 
     expect(ref.current!.contentDOM.innerHTML).not.toContain('diff-inserted');
   });
+
+  it('does not show diff decorations when showDiff is disabled', async () => {
+    const ref = React.createRef<EditorView | null>();
+
+    render(
+      <CodeMirrorEditor
+        ref={ref}
+        value="The quick red brown fox"
+        baselineValue="The quick brown fox"
+        showDiff={false}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(ref.current!.contentDOM.innerHTML).not.toContain('diff-inserted');
+  });
 });

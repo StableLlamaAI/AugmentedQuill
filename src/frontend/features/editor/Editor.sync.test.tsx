@@ -52,6 +52,7 @@ const defaultProps = {
     fontSize: 16,
     maxWidth: 800,
     sidebarWidth: 320,
+    showDiff: true,
   },
   viewMode: 'raw' as const,
   showWhitespace: false,

@@ -157,6 +157,7 @@ export interface EditorSettings {
   contrast: number; // 0.5 - 1.0
   theme: AppTheme;
   sidebarWidth: number;
+  showDiff: boolean;
   sidebar?: SidebarSettings;
 }
 

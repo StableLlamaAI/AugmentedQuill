@@ -39,7 +39,15 @@ describe('HeaderAppearanceControls', () => {
           buttonActive="bg-blue-500 text-white"
           currentTheme="light"
           setAppTheme={() => {}}
-          editorSettings={{ brightness: 1, contrast: 1, fontSize: 16, maxWidth: 80 }}
+          editorSettings={{
+            brightness: 1,
+            contrast: 1,
+            fontSize: 16,
+            maxWidth: 80,
+            sidebarWidth: 320,
+            theme: 'light',
+            showDiff: true,
+          }}
           setEditorSettings={() => {}}
           sliderClass=""
           setIsDebugLogsOpen={() => {}}

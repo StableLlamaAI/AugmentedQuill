@@ -590,7 +590,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         // We sync if not focused OR if we are actively streaming from AI
         if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
           let contentToRender = chapter.content;
-          if (localBaseline && localBaseline !== chapter.content) {
+          if (settings.showDiff && localBaseline && localBaseline !== chapter.content) {
             const diffs = new diff_match_patch().diff_main(
               localBaseline,
               chapter.content
@@ -1619,7 +1619,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     onSelectionChange={checkContext}
                     mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
-                    baselineValue={localBaseline}
+                    showDiff={settings.showDiff}
+                    baselineValue={settings.showDiff ? localBaseline : ''}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'

@@ -24,6 +24,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     contrast: 0.9,
     theme: 'mixed',
     sidebarWidth: 320,
+    showDiff: true,
   },
   sidebarOpen: false,
   activeTab: 'chat',
