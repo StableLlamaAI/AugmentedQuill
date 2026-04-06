@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import {
   Settings,
@@ -35,12 +36,12 @@ import { SettingsProjects } from './settings/SettingsProjects';
 import SettingsMachine from './settings/SettingsMachine';
 import { useThemeClasses } from '../layout/ThemeContext';
 
-const GUI_LANGUAGE_OPTIONS: Array<{ code: string; label: string }> = [
-  { code: '', label: 'System Default' },
-  { code: 'en', label: 'English' },
-  { code: 'de', label: 'German' },
-  { code: 'fr', label: 'Français' },
-  { code: 'es', label: 'Español' },
+const GUI_LANGUAGE_OPTIONS: Array<{ code: string; labelKey: string }> = [
+  { code: '', labelKey: 'System Default' },
+  { code: 'en', labelKey: 'English' },
+  { code: 'de', labelKey: 'German' },
+  { code: 'fr', labelKey: 'French' },
+  { code: 'es', labelKey: 'Spanish' },
 ];
 
 interface SettingsDialogProps {
@@ -112,6 +113,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
+  const { t } = useTranslation();
   const { isLight } = useThemeClasses();
   const currentYear = new Date().getFullYear();
   const browserVersion =
@@ -594,10 +596,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 : 'border-brand-gray-800 bg-brand-gray-950'
             }`}
           >
-            {renderTab('projects', <HardDrive size={18} />, 'Projects')}
-            {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
-            {renderTab('general', <Settings size={18} />, 'General')}
-            {renderTab('about', <Info size={18} />, 'About')}
+            {renderTab('projects', <HardDrive size={18} />, t('Projects'))}
+            {renderTab('machine', <Cpu size={18} />, t('Machine Settings'))}
+            {renderTab('general', <Settings size={18} />, t('General'))}
+            {renderTab('about', <Info size={18} />, t('About'))}
           </div>
 
           {/* Tab Content */}
@@ -635,7 +637,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         : 'text-brand-gray-100 border-brand-gray-800'
                     }`}
                   >
-                    General Settings
+                    {t('General Settings')}
                   </h3>
                   <div className="space-y-4">
                     <div className="w-full md:w-1/2 lg:w-1/3">
@@ -643,7 +645,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         htmlFor="guiLanguage"
                         className="block text-sm font-medium text-brand-gray-500 uppercase mb-1"
                       >
-                        GUI Language
+                        {t('GUI Language')}
                       </label>
                       <select
                         id="guiLanguage"
@@ -662,7 +664,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       >
                         {GUI_LANGUAGE_OPTIONS.map((option) => (
                           <option key={option.code} value={option.code}>
-                            {option.label}
+                            {t(option.labelKey)}
                           </option>
                         ))}
                       </select>
@@ -671,8 +673,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'
                         }`}
                       >
-                        Select the interface language. Story writing language is set in
-                        Project Settings.
+                        {t(
+                          'Select the interface language. Story writing language is set in Project Settings.'
+                        )}
                       </p>
                     </div>
                   </div>
