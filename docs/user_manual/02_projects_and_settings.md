@@ -1,6 +1,6 @@
 # Projects and Settings
 
-To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has three main tabs: **Projects**, **Machine Settings**, and **About**.
+To access your projects and configure the application, click the <img src="assets/settings.svg" alt="Settings icon" width="20" height="20" style="vertical-align:text-bottom;" /> **Settings** icon (or the logo/title area) in the top navigation bar. This opens the Settings Dialog, which has four main tabs: **Projects**, **Machine Settings**, **General**, and **About**.
 
 ## The About Tab
 
@@ -252,3 +252,22 @@ Click **Save & Close** at the bottom of the Settings dialog to write your machin
 ---
 
 Next up: Explore [The Writing Interface](03_writing_interface.md).
+
+---
+
+## Multiple Languages (GUI vs Project)
+
+AugmentedQuill supports distinct languages for its interface (GUI) and your story content.
+
+**Changing the Application Language:**
+
+1. Open the **Settings** dialog by clicking the gear icon in the top right.
+2. Select the **General** tab.
+3. Set your preferred **GUI Language** to modify the interface text. By default, AugmentedQuill uses your browser's standard language.
+
+**Changing the Story Language:**
+The story language dictates the spellchecking and grammar tools used by your chosen browser when typing. You can write a story in French while using an English interface, for example.
+
+1. When creating a **New Project**, select the language in the project dialog.
+2. OR, open the **Project Settings** (by clicking your story title in the corner or typing in the Project tab) and change the language dropdown.
+3. Chat fields, Editors, and Images will automatically adapt their spellchecker to the project's saved language.

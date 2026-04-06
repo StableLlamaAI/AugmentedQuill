@@ -154,3 +154,9 @@ async def my_tool(params: MyParams, payload: dict, mutations: dict):
 ```
 
 Tool files: `src/augmentedquill/services/chat/chat_tools/{project,story,chapter,sourcebook,image,order}_tools.py`
+
+## Internationalization (i18n)
+
+- The application is multilingual. Never hardcode English strings in the GUI.
+- Always use the translation keys via react-i18next in the frontend.
+- The project's language is separate from the GUI language. Any text input modifying story text MUST have the `lang` attribute set to the project's language to ensure correct browser spellchecking.

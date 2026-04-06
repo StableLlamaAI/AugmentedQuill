@@ -116,6 +116,10 @@
         }
       },
       "required": ["models", "selected"]
+    },
+    "gui_language": {
+      "type": ["string", "null"],
+      "description": "The selected language for the GUI"
     }
   },
   "required": ["openai"]

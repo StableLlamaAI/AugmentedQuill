@@ -212,6 +212,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
 };
 
 export interface AppSettings {
+  guiLanguage?: string;
   providers: LLMConfig[];
   activeWritingProviderId: string;
   activeChatProviderId: string;

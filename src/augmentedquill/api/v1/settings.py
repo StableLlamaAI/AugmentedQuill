@@ -280,6 +280,11 @@ async def api_machine_put(request: Request) -> JSONResponse:
 
     machine_cfg["openai"] = cleaned_openai_cfg["openai"]
 
+    if "gui_language" in machine_cfg:
+        gui_lang = machine_cfg.get("gui_language")
+        if isinstance(gui_lang, str) and len(gui_lang.strip()) > 0:
+            machine_cfg["gui_language"] = gui_lang.strip()
+
     try:
         machine_path = DEFAULT_MACHINE_CONFIG_PATH
         machine_path.parent.mkdir(parents=True, exist_ok=True)

@@ -537,6 +537,7 @@ const App: React.FC = () => {
               currentChapter,
               editorRef,
               editorSettings,
+              storyLanguage: story.language || 'en',
               setEditorSettings,
               viewMode,
               updateChapter: (id, partial) =>

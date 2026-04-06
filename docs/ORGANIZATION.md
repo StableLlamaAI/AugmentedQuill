@@ -92,3 +92,20 @@ All `*.py`, `*.ts`, `*.tsx`, and `*.js` files are expected to start with:
 2. A one-line `Purpose:` header describing why the file exists.
 
 Use `python tools/enforce_code_hygiene.py .` to normalize headers and validate compliance.
+
+## Internationalization (i18n)
+
+The application uses `react-i18next` for GUI internationalization and standard HTML `lang` attributes for project-specific language routing (like browser spellchecking).
+
+**GUI Language:**
+The GUI locale defines the language of the application interface. It defaults to the browser's `navigator.language` and can be manually set via `Settings > General > GUI Language`. State lives in `AppSettings.guiLanguage`.
+To add new GUI languages:
+
+1. Update `src/frontend/features/app/i18n.ts` and add a new dictionary under `resources`.
+2. Add the language to the `<select id="guiLanguage">` options in `src/frontend/features/settings/settings/SettingsMachine.tsx`.
+
+**Project Language:**
+Individual projects (stories) dictate their own language, separate from the GUI language (for example, writing a Spanish story within an English GUI).
+
+1. `story.language` is read by the frontend.
+2. Any `<textarea>` or input element interacting with story content must include `lang={storyLanguage || 'en'}` and `spellCheck={true}`.

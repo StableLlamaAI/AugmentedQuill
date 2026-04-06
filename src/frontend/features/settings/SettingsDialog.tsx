@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import {
   Settings,
@@ -32,8 +33,16 @@ import { api } from '../../services/api';
 import { MachineModelConfig, ModelPresetEntry } from '../../services/apiTypes';
 import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
-import { SettingsMachine } from './settings/SettingsMachine';
+import SettingsMachine from './settings/SettingsMachine';
 import { useThemeClasses } from '../layout/ThemeContext';
+
+const GUI_LANGUAGE_OPTIONS: Array<{ code: string; labelKey: string }> = [
+  { code: '', labelKey: 'System Default' },
+  { code: 'en', labelKey: 'English' },
+  { code: 'de', labelKey: 'German' },
+  { code: 'fr', labelKey: 'French' },
+  { code: 'es', labelKey: 'Spanish' },
+];
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -82,9 +91,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   defaultPrompts = { system_messages: {}, user_prompts: {} },
   projectLanguages,
 }) => {
-  const [activeTab, setActiveTab] = useState<'projects' | 'machine' | 'about'>(
-    'projects'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'projects' | 'machine' | 'about'
+  >('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{
@@ -104,6 +113,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
 
+  const { t } = useTranslation();
   const { isLight } = useThemeClasses();
   const currentYear = new Date().getFullYear();
   const browserVersion =
@@ -497,7 +507,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   const renderTab = (
-    id: 'projects' | 'machine' | 'about',
+    id: 'general' | 'projects' | 'machine' | 'about',
     icon: React.ReactNode,
     label: string
   ) => (
@@ -586,9 +596,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 : 'border-brand-gray-800 bg-brand-gray-950'
             }`}
           >
-            {renderTab('projects', <HardDrive size={18} />, 'Projects')}
-            {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
-            {renderTab('about', <Info size={18} />, 'About')}
+            {renderTab('projects', <HardDrive size={18} />, t('Projects'))}
+            {renderTab('machine', <Cpu size={18} />, t('Machine Settings'))}
+            {renderTab('general', <Settings size={18} />, t('General'))}
+            {renderTab('about', <Info size={18} />, t('About'))}
           </div>
 
           {/* Tab Content */}
@@ -614,6 +625,62 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 theme={theme}
                 languages={projectLanguages}
               />
+            )}
+
+            {activeTab === 'general' && (
+              <div className="flex flex-col space-y-6">
+                <div>
+                  <h3
+                    className={`text-xl font-semibold mb-4 border-b pb-2 ${
+                      isLight
+                        ? 'text-brand-gray-900 border-brand-gray-200'
+                        : 'text-brand-gray-100 border-brand-gray-800'
+                    }`}
+                  >
+                    {t('General Settings')}
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="w-full md:w-1/2 lg:w-1/3">
+                      <label
+                        htmlFor="guiLanguage"
+                        className="block text-sm font-medium text-brand-gray-500 uppercase mb-1"
+                      >
+                        {t('GUI Language')}
+                      </label>
+                      <select
+                        id="guiLanguage"
+                        value={localSettings.guiLanguage || ''}
+                        onChange={(e) =>
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            guiLanguage: e.target.value,
+                          }))
+                        }
+                        className={`w-full px-3 py-2 text-sm rounded ${
+                          isLight
+                            ? 'bg-brand-gray-100 text-brand-gray-900 border-brand-gray-200'
+                            : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'
+                        } border focus:outline-none focus:ring-1 focus:ring-brand-gray-400`}
+                      >
+                        {GUI_LANGUAGE_OPTIONS.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {t(option.labelKey)}
+                          </option>
+                        ))}
+                      </select>
+                      <p
+                        className={`mt-1 text-xs ${
+                          isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'
+                        }`}
+                      >
+                        {t(
+                          'Select the interface language. Story writing language is set in Project Settings.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {activeTab === 'machine' && (

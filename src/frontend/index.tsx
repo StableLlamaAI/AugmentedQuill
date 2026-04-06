@@ -11,6 +11,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './features/app/i18n';
 import App from './App';
 import './index.css';
 import { AppErrorBoundary } from './features/layout/AppErrorBoundary';

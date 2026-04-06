@@ -145,3 +145,7 @@ Model endpoint variables:
 
 - No multi-user access controls.
 - No real-time external editor sync.
+
+## Multiple Languages
+
+AugmentedQuill natively supports multiple languages for both the application interface (GUI) and your story formatting. Use `Settings > General > GUI Language` to configure the application locale, and the language will automatically be respected.

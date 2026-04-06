@@ -558,6 +558,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               ref={editorRef}
               chapter={currentChapter}
               settings={editorSettings}
+              language={editorControls.storyLanguage || 'en'}
               viewMode={viewMode}
               onChange={editorControls.updateChapter}
               suggestionControls={{
