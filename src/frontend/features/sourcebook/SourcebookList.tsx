@@ -57,6 +57,7 @@ interface SourcebookListProps {
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
   }) => void;
+  selectedSourcebookEntryId?: string | null;
   language?: string;
 }
 
@@ -133,6 +134,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   isAutoSelectionRunning = false,
   onToggleAutoSelection,
   onMutated,
+  selectedSourcebookEntryId,
   language = 'en',
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>(
@@ -183,6 +185,42 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       }
     };
   }, [externalEntries, search]);
+
+  useEffect(() => {
+    if (!selectedSourcebookEntryId) return;
+
+    let cancelled = false;
+
+    const openSelectedEntry = async () => {
+      const findEntry = (entriesToSearch: SourcebookEntry[]) =>
+        entriesToSearch.find((entry) => entry.id === selectedSourcebookEntryId);
+
+      const existing = findEntry(entries);
+      if (existing) {
+        setSelectedEntry(existing);
+        setIsDialogOpen(true);
+        return;
+      }
+
+      try {
+        const all = await api.sourcebook.list();
+        if (cancelled) return;
+        setEntries(all);
+        const target = findEntry(all);
+        if (target) {
+          setSelectedEntry(target);
+          setIsDialogOpen(true);
+        }
+      } catch (e) {
+        console.error('Failed to load sourcebook entry for selection', e);
+      }
+    };
+
+    openSelectedEntry();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSourcebookEntryId, entries]);
 
   const syncEntries = async (
     updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]

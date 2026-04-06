@@ -25,6 +25,7 @@ import type {
 } from '../../types';
 import type { ModelSelector } from '../chat/ModelSelector';
 import type { EditorHandle } from '../editor/Editor';
+import type { SessionMutation } from '../chat/components/MutationTags';
 
 export type HeaderSidebarControls = {
   isSidebarOpen: boolean;
@@ -116,7 +117,7 @@ export type MainSidebarControls = {
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
   story: StoryState;
   currentChapterId: string | null;
-  handleChapterSelect: (id: string) => void;
+  handleChapterSelect: (id: string | null) => void;
   deleteChapter: (id: string) => Promise<void>;
   updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
   updateBook: (
@@ -161,6 +162,8 @@ export type MainSidebarControls = {
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
   }) => void;
+  selectedSourcebookEntryId?: string | null;
+  metadataDialogTrigger?: number;
 };
 
 export type MainEditorSuggestionControls = {
@@ -171,7 +174,7 @@ export type MainEditorSuggestionControls = {
     contentOverride?: string,
     enableSuggestionMode?: boolean
   ) => Promise<void>;
-  handleCancelSuggestions?: () => void;
+  handleCancelSuggestions: () => void;
   handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: (
@@ -188,7 +191,8 @@ export type MainEditorAiControls = {
   ) => Promise<void>;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
-  cancelAiAction?: () => void;
+  cancelAiAction: () => void;
+  isChapterEmpty?: boolean;
   /** True whenever any LLM is writing prose into the editor (direct AI action or chat-tool streaming). */
   isProseStreaming?: boolean;
 };
@@ -228,7 +232,7 @@ export type MainChatControls = {
   currentChatId: string | null;
   isIncognito: boolean;
   handleSelectChat: (chatId: string) => Promise<void>;
-  handleNewChat: () => Promise<void>;
+  handleNewChat: (incognito?: boolean) => void;
   handleDeleteChat: (chatId: string) => Promise<void>;
   handleDeleteAllChats: () => Promise<void>;
   setIsIncognito: Dispatch<SetStateAction<boolean>>;
@@ -237,4 +241,6 @@ export type MainChatControls = {
   scratchpad: string;
   onUpdateScratchpad: (content: string) => void;
   onDeleteScratchpad: () => void;
+  sessionMutations: SessionMutation[];
+  onMutationClick: (m: SessionMutation) => void;
 };

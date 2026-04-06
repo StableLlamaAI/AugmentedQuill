@@ -37,6 +37,7 @@ import { Button } from '../../components/ui/Button';
 import { MarkdownView } from '../editor/MarkdownView';
 import { CollapsibleToolSection } from './components/CollapsibleToolSection';
 import { WebSearchResults, VisitPageResult } from './components/ToolResultViews';
+import { MutationTags, SessionMutation } from './components/MutationTags';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatHistoryPanel } from './components/ChatHistoryPanel';
 import { ChatComposer } from './components/ChatComposer';
@@ -69,6 +70,8 @@ interface ChatProps {
   scratchpad?: string;
   onUpdateScratchpad: (newContent: string) => void;
   onDeleteScratchpad: () => void;
+  sessionMutations?: SessionMutation[];
+  onMutationClick?: (m: SessionMutation) => void;
   storyLanguage?: string;
 }
 
@@ -121,6 +124,8 @@ export const Chat: React.FC<ChatProps> = ({
   scratchpad = '',
   onUpdateScratchpad,
   onDeleteScratchpad,
+  sessionMutations = [],
+  onMutationClick = () => {},
   storyLanguage,
 }) => {
   const chatDisabledReason =
@@ -733,6 +738,14 @@ export const Chat: React.FC<ChatProps> = ({
       </div>
 
       <div className={`p-4 border-t ${bgMain} ${borderMain}`}>
+        {sessionMutations.length > 0 && (
+          <div className="mb-3">
+            <MutationTags
+              mutations={sessionMutations}
+              onMutationClick={onMutationClick}
+            />
+          </div>
+        )}
         {(canRegenerate || isLoading || attachments.length === 0) && (
           <div className="relative mb-3 min-h-[2.75rem] py-1">
             <div className="absolute inset-x-0 flex justify-center">

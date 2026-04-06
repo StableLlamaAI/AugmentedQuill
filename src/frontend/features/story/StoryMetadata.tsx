@@ -40,6 +40,7 @@ interface StoryMetadataProps {
     conflicts?: Conflict[],
     language?: string
   ) => Promise<void>;
+  metadataDialogTrigger?: number;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -63,6 +64,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   projectType = 'novel',
   languages,
   onUpdate,
+  metadataDialogTrigger,
   onAiGenerateSummary,
   summaryAiDisabledReason,
   theme = 'mixed',
@@ -70,6 +72,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   spellCheck = true,
 }) => {
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (metadataDialogTrigger !== null) {
+      setMetadataModalOpen(true);
+    }
+  }, [metadataDialogTrigger]);
 
   const { isLight } = useThemeClasses();
   const containerClass = isLight

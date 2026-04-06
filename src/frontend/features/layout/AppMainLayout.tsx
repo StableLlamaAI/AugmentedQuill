@@ -317,6 +317,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     onToggleAutoSourcebookSelection,
     isSourcebookSelectionRunning,
     onSourcebookMutated,
+    selectedSourcebookEntryId,
+    metadataDialogTrigger,
   } = sidebarControls;
 
   const { editorSettings, setEditorSettings } = editorControls;
@@ -428,6 +430,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     scratchpad,
     onUpdateScratchpad,
     onDeleteScratchpad,
+    sessionMutations,
+    onMutationClick,
   } = chatControls;
 
   return (
@@ -486,6 +490,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
                 : undefined
             }
             onUpdate={updateStoryMetadata}
+            metadataDialogTrigger={metadataDialogTrigger}
             theme={currentTheme}
             languages={instructionLanguages}
             spellCheck={true}
@@ -544,6 +549,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onToggleAutoSelection={onToggleAutoSourcebookSelection}
             isAutoSelectionRunning={isSourcebookSelectionRunning}
             onMutated={onSourcebookMutated}
+            selectedSourcebookEntryId={selectedSourcebookEntryId}
           />
         </CollapsibleSection>
       </nav>
@@ -637,6 +643,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             scratchpad={scratchpad}
             onUpdateScratchpad={onUpdateScratchpad}
             onDeleteScratchpad={onDeleteScratchpad}
+            sessionMutations={sessionMutations}
+            onMutationClick={onMutationClick}
             storyLanguage={story.language}
           />
         </aside>

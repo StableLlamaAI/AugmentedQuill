@@ -50,9 +50,7 @@ type AppDialogsProps = {
 
   isCreateProjectOpen: boolean;
   setIsCreateProjectOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  handleCreateProjectConfirm: React.ComponentProps<
-    typeof CreateProjectDialog
-  >['onCreate'];
+  handleCreateProjectConfirm: (name: string, type: any, language?: string) => void;
 };
 
 export const AppDialogs: React.FC<AppDialogsProps> = ({
