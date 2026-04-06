@@ -33,10 +33,12 @@ import {
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
+import { MarkdownView } from '../editor/MarkdownView';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
   initialData: MetadataParams;
+  baseline?: MetadataParams;
   onSave: (data: MetadataParams) => Promise<void>;
   onClose: () => void;
   title: string;
@@ -47,6 +49,7 @@ interface Props {
   allowConflicts?: boolean;
   primarySourceLabel?: string;
   primarySourceAvailable?: boolean;
+  initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   onAiGenerate?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -60,6 +63,7 @@ interface Props {
 export function MetadataEditorDialog({
   type,
   initialData,
+  baseline,
   onSave,
   onClose,
   title,
@@ -70,6 +74,7 @@ export function MetadataEditorDialog({
   allowConflicts = false,
   primarySourceLabel = 'Chapters',
   primarySourceAvailable = true,
+  initialTab,
   onAiGenerate,
   aiDisabledReason,
 }: Props) {
@@ -77,7 +82,7 @@ export function MetadataEditorDialog({
   const effectiveLanguage = data.language || language || 'en';
   const [activeTab, setActiveTab] = useState<
     'summary' | 'notes' | 'private' | 'conflicts'
-  >('summary');
+  >(initialTab || 'summary');
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(true, dialogRef, onClose);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -86,11 +91,6 @@ export function MetadataEditorDialog({
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
 
-  // Store the latest callback reference so debounced saves use current props.
-  const onSaveRef = useRef(onSave);
-  const isFirstRun = useRef(true);
-  const lastSavedDataRef = useRef<MetadataParams>(initialData);
-
   const normalizeConflict = (value: any): Conflict => {
     return {
       id: value.id || crypto.randomUUID(),
@@ -98,6 +98,59 @@ export function MetadataEditorDialog({
       resolution: value.resolution || 'TBD',
     };
   };
+
+  const [baselineData, setBaselineData] = useState<MetadataParams>(() => {
+    const raw = baseline || initialData;
+    return {
+      ...raw,
+      conflicts: (raw.conflicts || []).map((c) => normalizeConflict(c)),
+    };
+  });
+
+  useEffect(() => {
+    // If a baseline was explicitly provided, we prefer it.
+    if (baseline) {
+      setBaselineData({
+        ...baseline,
+        conflicts: (baseline.conflicts || []).map((c) => normalizeConflict(c)),
+      });
+      return;
+    }
+
+    setBaselineData((prev) => {
+      // If the user has explicitly cleared a diff in this session, we don't
+      // want to immediately restore the baseline when initialData updates
+      // (e.g. from an autosave).
+
+      const next: MetadataParams = {
+        ...initialData,
+        conflicts: (initialData.conflicts || []).map((c) => normalizeConflict(c)),
+      };
+
+      // Update baseline fields only if they haven't been "modified" away from
+      // the baseline (i.e., if no diff is currently being shown).
+      return {
+        ...next,
+        summary: prev.summary !== data.summary ? prev.summary : next.summary,
+        notes: prev.notes !== data.notes ? prev.notes : next.notes,
+        private_notes:
+          prev.private_notes !== data.private_notes
+            ? prev.private_notes
+            : next.private_notes,
+        // Conflicts diffing is more complex, but we basically want to preserve the
+        // diff state if the current view doesn't match the current baseline.
+        conflicts:
+          JSON.stringify(prev.conflicts) !== JSON.stringify(data.conflicts)
+            ? prev.conflicts
+            : next.conflicts,
+      };
+    });
+  }, [initialData, baseline]);
+
+  // Store the latest callback reference so debounced saves use current props.
+  const onSaveRef = useRef(onSave);
+  const isFirstRun = useRef(true);
+  const lastSavedDataRef = useRef<MetadataParams>(initialData);
 
   const [conflicts, setConflicts] = useState<Conflict[]>(
     (initialData.conflicts || []).map((c) => normalizeConflict(c))
@@ -777,14 +830,29 @@ export function MetadataEditorDialog({
                       </div>
                     </div>
                   )}
-                  <textarea
-                    value={data.summary || ''}
-                    lang={effectiveLanguage}
-                    spellCheck={spellCheck}
-                    onChange={(e) => setData({ ...data, summary: e.target.value })}
-                    className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
-                    placeholder="Write a public summary..."
-                  />
+                  {baselineData.summary && baselineData.summary !== data.summary ? (
+                    <div className="flex-1 overflow-y-auto w-full p-4 border rounded-lg bg-white dark:bg-brand-gray-800/40 dark:border-brand-gray-700">
+                      <MarkdownView
+                        content={data.summary}
+                        baseline={baselineData.summary}
+                      />
+                      <button
+                        onClick={() => setBaselineData(data)}
+                        className="mt-2 text-xs text-brand-500 hover:underline"
+                      >
+                        Clear highlights
+                      </button>
+                    </div>
+                  ) : (
+                    <textarea
+                      value={data.summary || ''}
+                      lang={effectiveLanguage}
+                      spellCheck={spellCheck}
+                      onChange={(e) => setData({ ...data, summary: e.target.value })}
+                      className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
+                      placeholder="Write a public summary..."
+                    />
+                  )}
                 </div>
               )}
               {activeTab === 'notes' && (
@@ -799,11 +867,22 @@ export function MetadataEditorDialog({
                     onChange={(val) => setData({ ...data, notes: val })}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
+                    baselineValue={baselineData.notes}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
                     style={{ minHeight: '300px' }}
                   />
+                  {baselineData.notes && baselineData.notes !== data.notes && (
+                    <button
+                      onClick={() =>
+                        setBaselineData((prev) => ({ ...prev, notes: data.notes }))
+                      }
+                      className="mt-2 text-xs text-brand-500 hover:underline text-left"
+                    >
+                      Clear highlights
+                    </button>
+                  )}
                 </div>
               )}
               {activeTab === 'private' && (
@@ -820,11 +899,26 @@ export function MetadataEditorDialog({
                     onChange={(val) => setData({ ...data, private_notes: val })}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
+                    baselineValue={baselineData.private_notes}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
                     style={{ minHeight: '300px' }}
                   />
+                  {baselineData.private_notes &&
+                    baselineData.private_notes !== data.private_notes && (
+                      <button
+                        onClick={() =>
+                          setBaselineData((prev) => ({
+                            ...prev,
+                            private_notes: data.private_notes,
+                          }))
+                        }
+                        className="mt-2 text-xs text-brand-500 hover:underline text-left"
+                      >
+                        Clear highlights
+                      </button>
+                    )}
                 </div>
               )}
               {activeTab === 'conflicts' && (
@@ -838,77 +932,122 @@ export function MetadataEditorDialog({
                     + Add Conflict
                   </Button>
                   <div className="space-y-4">
-                    {conflicts.map((c, idx) => (
-                      <div
-                        key={c.id}
-                        className="border rounded-lg p-4 bg-gray-50 dark:bg-brand-gray-800/50 dark:border-brand-gray-700 shadow-sm"
-                      >
-                        <div className="flex justify-between mb-2">
-                          <span className="font-semibold text-sm dark:text-brand-gray-300">
-                            Conflict #{idx + 1}
-                          </span>
-                          <div className="space-x-2 flex items-center">
-                            <button
-                              onClick={() => moveConflict(idx, 'up')}
-                              disabled={idx === 0}
-                              className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              onClick={() => moveConflict(idx, 'down')}
-                              disabled={idx === conflicts.length - 1}
-                              className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
-                            >
-                              ↓
-                            </button>
-                            <button
-                              onClick={() => deleteConflict(c.id)}
-                              className="text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
-                              title="Delete Conflict"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
+                    {conflicts.map((c, idx) => {
+                      const baselineConflict = (baselineData.conflicts || []).find(
+                        (bc) => bc.id === c.id
+                      );
+                      const hasDescChanged =
+                        baselineConflict &&
+                        baselineConflict.description !== c.description;
+                      const hasResChanged =
+                        baselineConflict &&
+                        baselineConflict.resolution !== c.resolution;
+
+                      return (
                         <div
-                          className={`grid gap-4 ${isFullscreen ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}
+                          key={c.id}
+                          className="border rounded-lg p-4 bg-gray-50 dark:bg-brand-gray-800/50 dark:border-brand-gray-700 shadow-sm"
                         >
-                          <div>
-                            <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
-                              Conflict Description
-                            </label>
-                            <textarea
-                              value={c.description}
-                              lang={effectiveLanguage}
-                              spellCheck={spellCheck}
-                              rows={2}
-                              onChange={(e) =>
-                                updateConflict(c.id, 'description', e.target.value)
-                              }
-                              className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
-                              placeholder="Describe the conflict..."
-                            />
+                          <div className="flex justify-between mb-2">
+                            <span className="font-semibold text-sm dark:text-brand-gray-300">
+                              Conflict #{idx + 1}
+                            </span>
+                            <div className="space-x-2 flex items-center">
+                              <button
+                                onClick={() => moveConflict(idx, 'up')}
+                                disabled={idx === 0}
+                                className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                onClick={() => moveConflict(idx, 'down')}
+                                disabled={idx === conflicts.length - 1}
+                                className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                onClick={() => deleteConflict(c.id)}
+                                className="text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
+                                title="Delete Conflict"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
-                              Resolution Plan
-                            </label>
-                            <textarea
-                              value={c.resolution}
-                              lang={effectiveLanguage}
-                              spellCheck={spellCheck}
-                              rows={3}
-                              onChange={(e) =>
-                                updateConflict(c.id, 'resolution', e.target.value)
-                              }
-                              className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
-                              placeholder="How will this conflict be resolved?"
-                            />
+                          <div
+                            className={`grid gap-4 ${isFullscreen ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}
+                          >
+                            <div>
+                              <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
+                                Description
+                              </label>
+                              {hasDescChanged ? (
+                                <div className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 text-sm font-sans">
+                                  <MarkdownView
+                                    content={c.description}
+                                    baseline={baselineConflict?.description}
+                                  />
+                                </div>
+                              ) : (
+                                <textarea
+                                  value={c.description}
+                                  lang={effectiveLanguage}
+                                  spellCheck={spellCheck}
+                                  rows={2}
+                                  onChange={(e) =>
+                                    updateConflict(c.id, 'description', e.target.value)
+                                  }
+                                  className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
+                                  placeholder="Describe the conflict..."
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
+                                Resolution Plan
+                              </label>
+                              {hasResChanged ? (
+                                <div className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 text-sm font-sans">
+                                  <MarkdownView
+                                    content={c.resolution}
+                                    baseline={baselineConflict?.resolution}
+                                  />
+                                </div>
+                              ) : (
+                                <textarea
+                                  value={c.resolution}
+                                  lang={effectiveLanguage}
+                                  spellCheck={spellCheck}
+                                  rows={3}
+                                  onChange={(e) =>
+                                    updateConflict(c.id, 'resolution', e.target.value)
+                                  }
+                                  className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
+                                  placeholder="How will this conflict be resolved?"
+                                />
+                              )}
+                            </div>
                           </div>
+                          {(hasDescChanged || hasResChanged) && (
+                            <button
+                              onClick={() => {
+                                setBaselineData((prev) => ({
+                                  ...prev,
+                                  conflicts: (prev.conflicts || []).map((bc) =>
+                                    bc.id === c.id ? { ...c } : bc
+                                  ),
+                                }));
+                              }}
+                              className="mt-2 text-[10px] text-brand-500 hover:underline"
+                            >
+                              Clear highlights
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

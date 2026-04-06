@@ -40,7 +40,10 @@ interface StoryMetadataProps {
     conflicts?: Conflict[],
     language?: string
   ) => Promise<void>;
-  metadataDialogTrigger?: number;
+  metadataDialogTrigger?: {
+    id: number;
+    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
+  } | null;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -48,8 +51,12 @@ interface StoryMetadataProps {
     onThinking?: (thinking: string) => void
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
+  initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   theme?: AppTheme;
   baselineSummary?: string;
+  baselineNotes?: string;
+  baselinePrivateNotes?: string;
+  baselineConflicts?: Conflict[];
   spellCheck?: boolean;
 }
 
@@ -67,14 +74,18 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   metadataDialogTrigger,
   onAiGenerateSummary,
   summaryAiDisabledReason,
+  initialTab,
   theme = 'mixed',
   baselineSummary = '',
+  baselineNotes = '',
+  baselinePrivateNotes = '',
+  baselineConflicts = [],
   spellCheck = true,
 }) => {
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
 
   React.useEffect(() => {
-    if (metadataDialogTrigger !== null) {
+    if (metadataDialogTrigger) {
       setMetadataModalOpen(true);
     }
   }, [metadataDialogTrigger]);
@@ -133,11 +144,20 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             conflicts,
             language,
           }}
+          baseline={{
+            title,
+            summary: baselineSummary,
+            notes: baselineNotes,
+            private_notes: baselinePrivateNotes,
+            conflicts: baselineConflicts,
+            language,
+          }}
           languages={languages}
           onSave={handleMetadataSave}
           onClose={() => setMetadataModalOpen(false)}
           allowConflicts={usesStoryDraftSource}
           primarySourceLabel={primarySourceLabel}
+          initialTab={initialTab}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
           theme={theme}

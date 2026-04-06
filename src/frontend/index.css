@@ -68,6 +68,14 @@ body.light ::-webkit-scrollbar-thumb:hover {
   border-radius: 2px;
 }
 
+.diff-deleted {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.4);
+  text-decoration: line-through;
+  opacity: 0.8;
+  border-radius: 2px;
+}
+
 .prose-editor:focus,
 .prose-editor:focus-visible {
   outline: none !important;

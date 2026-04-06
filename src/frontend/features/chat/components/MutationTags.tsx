@@ -18,6 +18,7 @@ export type SessionMutation = {
   type: 'story' | 'chapter' | 'sourcebook' | 'metadata' | 'book';
   label: string;
   targetId?: string; // chapter ID, entry ID, etc.
+  subType?: string; // further field detail if applicable (e.g. metadata tab)
 };
 
 interface MutationTagsProps {

@@ -163,7 +163,10 @@ export type MainSidebarControls = {
     onRedo?: () => Promise<void>;
   }) => void;
   selectedSourcebookEntryId?: string | null;
-  metadataDialogTrigger?: number;
+  metadataDialogTrigger?: {
+    id: number;
+    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
+  } | null;
 };
 
 export type MainEditorSuggestionControls = {

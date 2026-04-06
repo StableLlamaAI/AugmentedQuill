@@ -39,6 +39,22 @@ const diffMark = Decoration.mark({
   class: 'cm-diff-inserted',
 });
 
+const deletedMark = Decoration.mark({
+  class: 'cm-diff-deleted',
+});
+
+class DeletedWidget extends WidgetType {
+  constructor(readonly text: string) {
+    super();
+  }
+  toDOM() {
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-diff-deleted';
+    wrap.textContent = this.text;
+    return wrap;
+  }
+}
+
 const buildDiffPlugin = (baseline: string) =>
   ViewPlugin.fromClass(
     class {
@@ -69,8 +85,15 @@ const buildDiffPlugin = (baseline: string) =>
             // INSERTED — decorate the added range in the current document.
             decs.push(diffMark.range(pos, pos + text.length));
             pos += text.length;
+          } else if (op === -1) {
+            // DELETED — exists in baseline only, inject as a widget in the current doc.
+            decs.push(
+              Decoration.widget({
+                widget: new DeletedWidget(text),
+                side: 0,
+              }).range(pos)
+            );
           }
-          // DELETED (op === -1): exists in baseline only, no position in current doc.
         }
 
         return Decoration.set(decs, true);
@@ -311,6 +334,14 @@ const baseTheme = EditorView.theme({
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+  },
+  '.cm-diff-deleted': {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)', // Light red
+    textDecoration: 'line-through',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    opacity: '0.8',
   },
 });
 

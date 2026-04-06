@@ -56,7 +56,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [minHeaderHeight, setMinHeaderHeight] = useState(50);
   const sectionRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLButtonElement>(null);
   const heightRef = useRef<number | undefined>(height);
   const startTopRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -174,14 +174,14 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const sectionId = useId();
   const contentId = `${sectionId}-content`;
 
-  const handleHeaderKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleHeaderKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onToggle();
     }
   };
 
-  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!sectionRef.current) return;
     let currentHeight = sectionRef.current.getBoundingClientRect().height;
     const step = 10;
@@ -474,6 +474,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             conflicts={story.conflicts}
             projectType={story.projectType}
             baselineSummary={sidebarControls.baselineState?.summary}
+            baselineNotes={sidebarControls.baselineState?.notes}
+            baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
+            baselineConflicts={sidebarControls.baselineState?.conflicts}
             onAiGenerateSummary={(action, onProgress, currentText, onThinking) =>
               handleSidebarAiAction(
                 'story',
@@ -491,6 +494,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             }
             onUpdate={updateStoryMetadata}
             metadataDialogTrigger={metadataDialogTrigger}
+            initialTab={metadataDialogTrigger?.initialTab}
             theme={currentTheme}
             languages={instructionLanguages}
             spellCheck={true}
@@ -572,7 +576,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
                 continuations: suggestionControls.continuations,
                 isSuggesting: suggestionControls.isSuggesting,
                 onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
-                onCancelSuggestion: suggestionControls.cancelSuggestions,
+                onCancelSuggestion: suggestionControls.handleCancelSuggestions,
                 onAcceptContinuation: suggestionControls.handleAcceptContinuation,
                 isSuggestionMode: suggestionControls.isSuggestionMode,
                 onKeyboardSuggestionAction:

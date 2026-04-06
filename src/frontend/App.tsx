@@ -140,9 +140,10 @@ const App: React.FC = () => {
   const [selectedSourcebookEntryId, setSelectedSourcebookEntryId] = useState<
     string | null
   >(null);
-  const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<number | null>(
-    null
-  );
+  const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<{
+    id: number;
+    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
+  } | null>(null);
 
   const {
     isChatOpen,
@@ -252,10 +253,33 @@ const App: React.FC = () => {
         name === 'sync_story_summary' ||
         name === 'write_story_summary'
       ) {
-        newMuts.push({
-          id: `meta-${Date.now()}-${Math.random()}`,
-          type: 'metadata',
-          label: 'Metadata',
+        // Collect all changed fields. If a single tool call updates multiple fields
+        // (e.g. LLM updates both Summary and Conflicts), we generate tags for each.
+        const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
+        if (
+          args.summary !== undefined ||
+          name === 'set_story_summary' ||
+          name === 'sync_story_summary' ||
+          name === 'write_story_summary'
+        ) {
+          changedFields.push('summary');
+        }
+        if (args.notes !== undefined) changedFields.push('notes');
+        if (args.private_notes !== undefined) changedFields.push('private');
+        if (args.conflicts !== undefined) changedFields.push('conflicts');
+
+        // Defaults to 'summary' if no known field was passed in args (e.g. title changes).
+        if (changedFields.length === 0) {
+          changedFields.push('summary');
+        }
+
+        changedFields.forEach((subType) => {
+          newMuts.push({
+            id: `meta-${Date.now()}-${Math.random()}`,
+            type: 'metadata',
+            label: subType.charAt(0).toUpperCase() + subType.slice(1),
+            subType,
+          });
         });
         return;
       }
@@ -435,7 +459,10 @@ const App: React.FC = () => {
         handleChapterSelect(null);
       } else if (m.type === 'metadata') {
         setIsSidebarOpen(true);
-        setMetadataDialogTrigger((prev) => (prev === null ? 1 : prev + 1));
+        setMetadataDialogTrigger((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          initialTab: m.subType as any,
+        }));
         setEditorSettings((prev) => ({
           ...prev,
           sidebar: { ...prev.sidebar, isStoryCollapsed: false },

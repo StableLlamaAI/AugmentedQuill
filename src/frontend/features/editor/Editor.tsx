@@ -267,12 +267,24 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
 
-    // Local copy of the diff baseline: shadows the prop so we can clear the
-    // highlight *immediately* on the first keystroke, before the debounce fires.
     const [localBaseline, setLocalBaseline] = useState<string>(baselineContent);
+    const [localNotesBaseline, setLocalNotesBaseline] = useState<string>(
+      chapter.notes || ''
+    );
+    const [localPrivateNotesBaseline, setLocalPrivateNotesBaseline] = useState<string>(
+      chapter.private_notes || ''
+    );
+
     useEffect(() => {
       setLocalBaseline(baselineContent);
     }, [baselineContent]);
+
+    useEffect(() => {
+      // Advance baselines for notes when switching chapters or when baselineState changes
+      setLocalNotesBaseline(chapter.notes || '');
+      setLocalPrivateNotesBaseline(chapter.private_notes || '');
+    }, [chapter.id, baselineContent]);
+
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
     // Keep local state in sync when the chapter changes externally (chapter
@@ -590,6 +602,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 highlightedMd += text;
               } else if (op === 1) {
                 highlightedMd += `<span class="diff-inserted">${text}</span>`;
+              } else if (op === -1) {
+                highlightedMd += `<span class="diff-deleted">${text}</span>`;
               }
             }
             contentToRender = highlightedMd;
@@ -608,6 +622,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             const htmlSpan = span as HTMLElement;
             htmlSpan.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
             htmlSpan.style.borderBottom = '1px solid rgba(34, 197, 94, 0.4)';
+          });
+
+          const deletedSpans = wysiwygRef.current.querySelectorAll('.diff-deleted');
+          deletedSpans.forEach((span) => {
+            const htmlSpan = span as HTMLElement;
+            htmlSpan.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+            htmlSpan.style.borderBottom = '1px solid rgba(239, 68, 68, 0.4)';
+            htmlSpan.style.textDecoration = 'line-through';
+            htmlSpan.style.opacity = '0.7';
           });
         }
       }
