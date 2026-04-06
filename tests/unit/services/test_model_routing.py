@@ -28,6 +28,10 @@ class ModelRoutingTest(TestCase):
         cls.config_dir.mkdir(parents=True, exist_ok=True)
         cls.machine_config_path = cls.config_dir / "machine.json"
 
+        cls._orig_projects_root = os.environ.get("AUGQ_PROJECTS_ROOT")
+        cls._orig_projects_registry = os.environ.get("AUGQ_PROJECTS_REGISTRY")
+        cls._orig_machine_config_path = os.environ.get("AUGQ_MACHINE_CONFIG_PATH")
+
         os.environ["AUGQ_PROJECTS_ROOT"] = str(cls.projects_root)
         os.environ["AUGQ_PROJECTS_REGISTRY"] = str(cls.registry_path)
         os.environ["AUGQ_MACHINE_CONFIG_PATH"] = str(cls.machine_config_path)
@@ -75,9 +79,21 @@ class ModelRoutingTest(TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.environ.pop("AUGQ_PROJECTS_ROOT", None)
-        os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
-        os.environ.pop("AUGQ_MACHINE_CONFIG_PATH", None)
+        if cls._orig_projects_root is not None:
+            os.environ["AUGQ_PROJECTS_ROOT"] = cls._orig_projects_root
+        else:
+            os.environ.pop("AUGQ_PROJECTS_ROOT", None)
+
+        if cls._orig_projects_registry is not None:
+            os.environ["AUGQ_PROJECTS_REGISTRY"] = cls._orig_projects_registry
+        else:
+            os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
+
+        if cls._orig_machine_config_path is not None:
+            os.environ["AUGQ_MACHINE_CONFIG_PATH"] = cls._orig_machine_config_path
+        else:
+            os.environ.pop("AUGQ_MACHINE_CONFIG_PATH", None)
+
         cls.td.cleanup()
 
     def setUp(self):
