@@ -110,6 +110,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
 
       <ProjectImages
         isOpen={isImagesOpen}
+        projectLanguage={story.language || 'en'}
         onClose={() => setIsImagesOpen(false)}
         theme={currentTheme}
         settings={appSettings}

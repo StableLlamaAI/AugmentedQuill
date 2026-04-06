@@ -197,6 +197,7 @@ export type MainEditorControls = {
   currentChapter?: WritingUnit | null;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
+  storyLanguage?: string;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   viewMode: ViewMode;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;

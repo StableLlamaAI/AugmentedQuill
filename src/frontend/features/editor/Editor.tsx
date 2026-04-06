@@ -1525,7 +1525,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   placeholder={
                     chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
                   }
-                  lang={language}
+                  lang={language || 'en'}
                   spellCheck={spellCheck}
                   style={{
                     ...commonTextStyle,
@@ -1564,7 +1564,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 onKeyUp={(e) => {
                   checkContext();
                 }}
-                lang={language}
+                lang={language || 'en'}
                 spellCheck={spellCheck}
                 className={`prose-editor outline-none w-full ${
                   viewMode === 'wysiwyg' ? 'block' : 'hidden'

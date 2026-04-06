@@ -32,7 +32,7 @@ import { api } from '../../services/api';
 import { MachineModelConfig, ModelPresetEntry } from '../../services/apiTypes';
 import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
-import { SettingsMachine } from './settings/SettingsMachine';
+import SettingsMachine from './settings/SettingsMachine';
 import { useThemeClasses } from '../layout/ThemeContext';
 
 interface SettingsDialogProps {
@@ -82,9 +82,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   defaultPrompts = { system_messages: {}, user_prompts: {} },
   projectLanguages,
 }) => {
-  const [activeTab, setActiveTab] = useState<'projects' | 'machine' | 'about'>(
-    'projects'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'projects' | 'machine' | 'about'
+  >('projects');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{
@@ -497,7 +497,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   const renderTab = (
-    id: 'projects' | 'machine' | 'about',
+    id: 'general' | 'projects' | 'machine' | 'about',
     icon: React.ReactNode,
     label: string
   ) => (
@@ -588,6 +588,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           >
             {renderTab('projects', <HardDrive size={18} />, 'Projects')}
             {renderTab('machine', <Cpu size={18} />, 'Machine Settings')}
+            {renderTab('general', <Settings size={18} />, 'General')}
             {renderTab('about', <Info size={18} />, 'About')}
           </div>
 
@@ -614,6 +615,59 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 theme={theme}
                 languages={projectLanguages}
               />
+            )}
+
+            {activeTab === 'general' && (
+              <div className="flex flex-col space-y-6">
+                <div>
+                  <h3
+                    className={`text-xl font-semibold mb-4 border-b pb-2 ${
+                      isLight
+                        ? 'text-brand-gray-900 border-brand-gray-200'
+                        : 'text-brand-gray-100 border-brand-gray-800'
+                    }`}
+                  >
+                    General Settings
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="w-full md:w-1/2 lg:w-1/3">
+                      <label
+                        htmlFor="guiLanguage"
+                        className="block text-sm font-medium text-brand-gray-500 uppercase mb-1"
+                      >
+                        GUI Language
+                      </label>
+                      <select
+                        id="guiLanguage"
+                        value={localSettings.guiLanguage || ''}
+                        onChange={(e) =>
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            guiLanguage: e.target.value,
+                          }))
+                        }
+                        className={`w-full px-3 py-2 text-sm rounded ${
+                          isLight
+                            ? 'bg-brand-gray-100 text-brand-gray-900 border-brand-gray-200'
+                            : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'
+                        } border focus:outline-none focus:ring-1 focus:ring-brand-gray-400`}
+                      >
+                        <option value="">System Default</option>
+                        <option value="en">English</option>
+                        <option value="de">German</option>
+                      </select>
+                      <p
+                        className={`mt-1 text-xs ${
+                          isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'
+                        }`}
+                      >
+                        Select the interface language. Story writing language is set in
+                        Project Settings.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {activeTab === 'machine' && (

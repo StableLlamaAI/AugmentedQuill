@@ -61,6 +61,7 @@ export interface MachinePresetsResponse {
 }
 
 export interface MachineConfigResponse {
+  gui_language?: string;
   openai?: MachineOpenAIConfig;
 }
 

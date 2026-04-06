@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import i18n from '../app/i18n';
 import { AppSettings, LLMConfig } from '../../types';
 import { api } from '../../services/api';
 import { MachineModelConfig } from '../../services/apiTypes';
@@ -143,6 +144,10 @@ export function useAppSettings(defaultSettings: AppSettings) {
               if (selectedEditing) next.activeEditingProviderId = selectedEditing;
             }
 
+            if (machine?.gui_language) {
+              next.guiLanguage = machine.gui_language;
+            }
+
             const exists = (id: string) =>
               providers.some((provider) => provider.id === id);
             if (!exists(next.activeChatProviderId)) {
@@ -168,6 +173,9 @@ export function useAppSettings(defaultSettings: AppSettings) {
 
   useEffect(() => {
     localStorage.setItem('augmentedquill_settings', JSON.stringify(appSettings));
+    if (appSettings.guiLanguage && i18n.language !== appSettings.guiLanguage) {
+      i18n.changeLanguage(appSettings.guiLanguage);
+    }
   }, [appSettings]);
 
   return { appSettings, setAppSettings };

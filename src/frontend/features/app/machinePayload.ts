@@ -25,6 +25,7 @@ export function buildMachinePayload(settings: AppSettings) {
     providers[0];
 
   return {
+    gui_language: settings.guiLanguage,
     openai: {
       selected: activeChat?.name || '',
       selected_chat: activeChat?.name || '',

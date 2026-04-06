@@ -45,6 +45,7 @@ interface ImageEntry {
 }
 
 interface ProjectImagesProps {
+  projectLanguage?: string;
   isOpen: boolean;
   onClose: () => void;
   theme: AppTheme;
@@ -66,6 +67,7 @@ interface ProjectImagesProps {
 }
 
 export const ProjectImages: React.FC<ProjectImagesProps> = ({
+  projectLanguage = 'en',
   isOpen,
   onClose,
   theme = 'mixed',
@@ -597,6 +599,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     prompts)
                   </label>
                   <textarea
+                    lang={projectLanguage}
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500 min-h-[60px] resize-y`}
                     placeholder="Extra details passed to the prompt generator..."
                     value={imageAdditionalInfo}
@@ -750,6 +753,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       }
                     />
                     <textarea
+                      lang={projectLanguage}
                       className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent resize-y min-h-[80px] focus:ring-1 ring-brand-blue-500 outline-none`}
                       placeholder="Image description..."
                       value={
@@ -905,6 +909,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             <div className="p-4 flex-1 flex flex-col min-h-0">
               <div className="relative flex-1 flex flex-col min-h-0">
                 <textarea
+                  lang={projectLanguage}
                   readOnly
                   className={`w-full flex-1 p-3 text-sm rounded border ${borderClass} bg-black/5 dark:bg-white/5 resize-none focus:outline-none font-mono tracking-tight`}
                   value={promptPopup.content}
