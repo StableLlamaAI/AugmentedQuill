@@ -133,8 +133,12 @@ describe('MetadataEditorDialog', () => {
       />
     );
 
-    const chapterButton = screen.getByRole('button', { name: /from Chapter/i });
-    const notesButton = screen.getByRole('button', { name: /from Notes/i });
+    const chapterButton = screen.getByRole('button', {
+      name: 'Generate summary from Chapter',
+    });
+    const notesButton = screen.getByRole('button', {
+      name: 'Generate summary from Notes',
+    });
 
     expect((chapterButton as HTMLButtonElement).disabled).toBe(true);
     expect((notesButton as HTMLButtonElement).disabled).toBe(false);

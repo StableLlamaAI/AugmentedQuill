@@ -101,7 +101,7 @@ class TestChatStreamRoleAndSanitization(ChatStreamTestBase):
         }
         self.assertIn("replace_text_in_chapter", tool_names)
         self.assertIn("recommend_metadata_updates", tool_names)
-        self.assertNotIn("update_story_metadata", tool_names)
+        self.assertIn("update_story_metadata", tool_names)
         self.assertNotIn("create_sourcebook_entry", tool_names)
 
     def test_writing_stream_has_no_tools(self):
