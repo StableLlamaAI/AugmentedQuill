@@ -27,6 +27,7 @@ from augmentedquill.services.story.story_api_state_ops import (
 )
 from augmentedquill.services.projects.projects import read_story_content
 from augmentedquill.services.story.story_generation_common import (
+    _restore_summary_for_rewrite,
     gather_writing_context,
     prepare_ai_action_generation,
     prepare_chapter_summary_generation,
@@ -100,6 +101,12 @@ async def _create_gen_source(prepared: dict):
     except Exception as e:
         # Include the underlying reason so users can troubleshoot provider issues.
         yield f"data: {json.dumps({'error': f'An internal error occurred during generation. {e}'})}\n\n"
+    finally:
+        try:
+            _restore_summary_for_rewrite(prepared)
+        except Exception:
+            # Do not fail the stream cleanup because of restore errors.
+            pass
 
 
 def _as_streaming_response(gen_factory, media_type: str = "text/event-stream"):

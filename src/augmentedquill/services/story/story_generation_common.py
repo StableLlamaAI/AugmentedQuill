@@ -11,10 +11,11 @@ story flows."""
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from augmentedquill.services.exceptions import BadRequestError
 
-from augmentedquill.core.config import BASE_DIR
+from augmentedquill.core.config import BASE_DIR, save_story_config
 from augmentedquill.services.story.story_api_prompt_ops import (
     _get_read_only_tool_schemas,
     build_ai_action_messages,
@@ -24,6 +25,9 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_write_chapter_messages,
     get_system_message,
     resolve_model_runtime,
+)
+from augmentedquill.services.projects.project_chapter_ops import (
+    update_chapter_metadata_in_project,
 )
 from augmentedquill.services.story.story_api_state_ops import (
     collect_book_summaries,
@@ -193,6 +197,64 @@ def gather_writing_context(
         "chapter_conflicts": conflicts_text,
         "chapter_notes": chapter_notes,
     }
+
+
+def _clear_summary_for_rewrite(prepared: dict, active: Path) -> None:
+    target = prepared.get("target")
+    action = prepared.get("action")
+    if action != "rewrite" or target not in (
+        "summary",
+        "story_summary",
+        "book_summary",
+    ):
+        return
+
+    prepared["_summary_rewrite_backup"] = None
+
+    if target == "summary":
+        chap_id = prepared.get("chap_id")
+        if isinstance(chap_id, int):
+            current_summary = (
+                prepared["chapters_data"][prepared["pos"]].get("summary", "")
+                if prepared.get("pos") is not None
+                else ""
+            )
+            if current_summary:
+                prepared["_summary_rewrite_backup"] = {
+                    "target": "summary",
+                    "chap_id": chap_id,
+                    "summary": current_summary,
+                }
+                update_chapter_metadata_in_project(
+                    active=active,
+                    chap_id=chap_id,
+                    summary="",
+                )
+    else:
+        current_summary = str(prepared["story"].get("story_summary", "") or "")
+        if current_summary:
+            prepared["_summary_rewrite_backup"] = {
+                "target": "story_summary",
+                "summary": current_summary,
+            }
+            prepared["story"]["story_summary"] = ""
+            save_story_config(prepared["story_path"], prepared["story"])
+
+
+def _restore_summary_for_rewrite(prepared: dict) -> None:
+    backup = prepared.get("_summary_rewrite_backup")
+    if not backup:
+        return
+
+    if backup.get("target") == "summary":
+        update_chapter_metadata_in_project(
+            active=prepared["active"],
+            chap_id=backup["chap_id"],
+            summary=backup["summary"],
+        )
+    else:
+        prepared["story"]["story_summary"] = backup["summary"]
+        save_story_config(prepared["story_path"], prepared["story"])
 
 
 def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
@@ -536,6 +598,19 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         chapter_summary = ""
         chapter_title = ""
 
+    prepared = {
+        "target": target,
+        "action": action,
+        "chap_id": chap_id,
+        "path": path,
+        "pos": pos,
+        "story": story,
+        "story_path": story_path,
+        "chapters_data": chapters_data,
+        "existing_content": existing_content,
+    }
+    _clear_summary_for_rewrite(prepared, active)
+
     chapter_summaries_list = collect_chapter_summaries(chapters_data)
     chapter_summaries_text = "\n\n".join(chapter_summaries_list)
 
@@ -603,6 +678,8 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "story_path": story_path,
         "chapters_data": chapters_data,
         "existing_content": existing_content,
+        "active": active,
+        "_summary_rewrite_backup": prepared.get("_summary_rewrite_backup"),
         "messages": messages,
         "base_url": base_url,
         "api_key": api_key,
