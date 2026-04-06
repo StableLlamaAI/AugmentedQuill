@@ -12,7 +12,7 @@
 import React, { RefObject } from 'react';
 
 import { CreateProjectDialog } from '../projects/CreateProjectDialog';
-import { SettingsDialog } from '../settings/SettingsDialog';
+import { SettingsDialog } from '../settings';
 import { ProjectImages } from '../projects/ProjectImages';
 import { AppTheme, Story } from '../../types';
 import { EditorHandle } from '../editor/Editor';

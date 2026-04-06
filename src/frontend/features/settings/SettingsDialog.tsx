@@ -722,3 +722,5 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     </div>
   );
 };
+
+export default SettingsDialog;

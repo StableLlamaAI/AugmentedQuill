@@ -69,6 +69,14 @@ export const resolveExternalSourcebookEntries = (
   return currentEntries;
 };
 
+export const updateSourcebookEntryInList = (
+  entries: SourcebookEntry[],
+  previousId: string,
+  updated: SourcebookEntry
+): SourcebookEntry[] => {
+  return entries.map((value) => (value.id === previousId ? updated : value));
+};
+
 export const filterSourcebookEntries = (
   entries: SourcebookEntry[],
   query: string
@@ -215,11 +223,10 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
 
   const handleUpdate = async (entry: SourcebookUpsertPayload) => {
     const previous = entries.find((value) => value.id === entry.id);
+    const previousId = entry.id;
     const updated = await api.sourcebook.update(entry.id, entry);
-    await syncEntries((prev) =>
-      prev.map((value) => (value.id === updated.id ? updated : value))
-    );
-    if (selectedEntry?.id === updated.id) {
+    await syncEntries((prev) => updateSourcebookEntryInList(prev, previousId, updated));
+    if (selectedEntry?.id === previousId) {
       setSelectedEntry(updated);
     }
     if (!previous) return;
