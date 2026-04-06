@@ -490,6 +490,7 @@ const App: React.FC = () => {
             modelControls={{
               appSettings,
               setAppSettings,
+              saveSettings: handleSaveSettings,
               modelConnectionStatus,
               detectedCapabilities,
               recheckUnavailableProviderIfStale,

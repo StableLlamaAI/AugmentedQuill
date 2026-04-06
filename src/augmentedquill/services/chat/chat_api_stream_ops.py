@@ -24,16 +24,51 @@ from augmentedquill.core.prompts import (
 )
 from augmentedquill.services.llm.llm_request_helpers import find_model_in_list
 
+_PROVIDERS = ("openai", "anthropic", "google")
+
+
+def _normalize_model_type(model_type: str | None) -> str:
+    """Normalize model_type values to supported uppercase roles."""
+    if model_type is None:
+        return None
+    value = str(model_type).strip().upper()
+    return value if value in ("CHAT", "WRITING", "EDITING") else None
+
+
+def _resolve_stream_selected_name(
+    payload: dict, machine: dict, model_type: str
+) -> str | None:
+    selected_name = (payload or {}).get("model_name")
+    if selected_name:
+        return selected_name
+
+    normalized_type = _normalize_model_type(model_type)
+    if normalized_type:
+        for provider in _PROVIDERS:
+            provider_cfg = machine.get(provider) or {}
+            if not isinstance(provider_cfg, dict):
+                continue
+            selected_name = provider_cfg.get(f"selected_{normalized_type.lower()}")
+            if selected_name:
+                return selected_name
+
+    for provider in _PROVIDERS:
+        provider_cfg = machine.get(provider) or {}
+        if not isinstance(provider_cfg, dict):
+            continue
+        selected_name = provider_cfg.get("selected")
+        if selected_name:
+            return selected_name
+    return None
+
 
 def resolve_stream_model_context(payload: dict, machine: dict) -> dict:
     """Resolve Stream Model Context."""
     openai_cfg: Dict[str, Any] = machine.get("openai") or {}
-    model_type = (payload or {}).get("model_type") or "CHAT"
-    selected_name = (
-        (payload or {}).get("model_name")
-        or openai_cfg.get(f"selected_{model_type.lower()}")
-        or openai_cfg.get("selected")
-    )
+    model_type = str((payload or {}).get("model_type") or "CHAT").strip().upper()
+    if model_type not in ("CHAT", "WRITING", "EDITING"):
+        model_type = "CHAT"
+    selected_name = _resolve_stream_selected_name(payload, machine, model_type)
 
     base_url = (payload or {}).get("base_url")
     api_key = (payload or {}).get("api_key")
@@ -41,14 +76,34 @@ def resolve_stream_model_context(payload: dict, machine: dict) -> dict:
     timeout_s = (payload or {}).get("timeout_s")
 
     chosen = None
-    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
-    if isinstance(models, list) and models:
-        chosen = find_model_in_list(models, selected_name) or models[0]
+    default_model = None
+    for provider in _PROVIDERS:
+        provider_cfg = machine.get(provider) or {}
+        models = provider_cfg.get("models") if isinstance(provider_cfg, dict) else None
+        if not (isinstance(models, list) and models):
+            continue
 
-        base_url = chosen.get("base_url") or base_url
-        api_key = chosen.get("api_key") or api_key
-        model_id = chosen.get("model") or model_id
-        timeout_s = chosen.get("timeout_s", 60) or timeout_s
+        if default_model is None:
+            default_model = models[0]
+
+        if selected_name:
+            found = find_model_in_list(models, selected_name)
+            if found:
+                chosen = found
+                break
+
+    if chosen is None:
+        chosen = default_model
+
+    if isinstance(chosen, dict):
+        base_url = base_url or chosen.get("base_url")
+        api_key = api_key or chosen.get("api_key")
+        model_id = model_id or chosen.get("model")
+        timeout_s = (
+            timeout_s
+            if timeout_s not in (None, "")
+            else chosen.get("timeout_s", 60) or timeout_s
+        )
 
     is_multimodal = True
     supports_function_calling = True

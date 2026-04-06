@@ -158,6 +158,73 @@ class MachinTestEndpointsTest(ApiTestCase):
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
+    def test_machine_put_preserves_other_provider_sections(self):
+        from augmentedquill.core.config import DEFAULT_MACHINE_CONFIG_PATH
+
+        payload = {
+            "openai": {
+                "models": [
+                    {
+                        "name": "My GPT",
+                        "base_url": "https://api.openai.com/v1",
+                        "model": "gpt-4o",
+                    }
+                ]
+            },
+            "google": {
+                "models": [
+                    {
+                        "name": "Gemini",
+                        "base_url": "https://api.generative.google/v1",
+                        "model": "gemini-2",
+                    }
+                ]
+            },
+        }
+        resp = self.client.put("/api/v1/machine", json=payload)
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        written = DEFAULT_MACHINE_CONFIG_PATH.read_text(encoding="utf-8")
+        assert "google" in written
+        assert "Gemini" in written
+        assert "gpt-4o" in written
+
+    def test_settings_post_preserves_other_provider_sections(self):
+        from augmentedquill.core.config import DEFAULT_MACHINE_CONFIG_PATH
+
+        payload = {
+            "story": {},
+            "machine": {
+                "openai": {
+                    "models": [
+                        {
+                            "name": "My GPT",
+                            "base_url": "https://api.openai.com/v1",
+                            "model": "gpt-4o",
+                        }
+                    ]
+                },
+                "anthropic": {
+                    "models": [
+                        {
+                            "name": "Claude",
+                            "base_url": "https://api.anthropic.com/v1",
+                            "model": "claude-3",
+                        }
+                    ]
+                },
+            },
+        }
+        resp = self.client.post("/api/v1/settings", json=payload)
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        written = DEFAULT_MACHINE_CONFIG_PATH.read_text(encoding="utf-8")
+        assert "anthropic" in written
+        assert "Claude" in written
+        assert "gpt-4o" in written
+
     def test_machine_put_empty_body_still_ok(self):
         resp = self.client.put("/api/v1/machine", json={})
         # Empty body is legitimately invalid (400) — must not be a 500

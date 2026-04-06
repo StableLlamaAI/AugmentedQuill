@@ -33,12 +33,13 @@ export function useSettingsPersistence({
   refreshHealth,
 }: UseSettingsPersistenceParams) {
   const handleSaveSettings = useCallback(
-    (nextSettings: AppSettings) => {
+    async (nextSettings: AppSettings) => {
       const previousSettings = structuredClone(appSettings);
       const nextSettingsSnapshot = structuredClone(nextSettings);
       const previousPayload = buildMachinePayload(previousSettings);
       const nextPayload = buildMachinePayload(nextSettingsSnapshot);
 
+      await api.machine.save(nextPayload);
       setAppSettings(nextSettingsSnapshot);
       refreshHealth();
 

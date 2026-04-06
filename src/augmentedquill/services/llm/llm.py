@@ -35,25 +35,52 @@ parse_tool_calls_from_content = _llm_parsing.parse_tool_calls_from_content
 strip_thinking_tags = _llm_parsing.strip_thinking_tags
 
 
+def _normalize_model_type(model_type: str | None) -> str | None:
+    """Normalize model_type values to supported uppercase roles."""
+    if model_type is None:
+        return None
+    value = str(model_type).strip().upper()
+    return value if value in ("WRITING", "CHAT", "EDITING") else None
+
+
+_PROVIDERS = ("openai", "anthropic", "google")
+
+
+def _find_selected_model_name(
+    payload: Dict[str, Any], machine: Dict[str, Any], model_type: str | None = None
+) -> str | None:
+    """Resolve the selected model name from payload or provider-specific selections."""
+    selected_name = payload.get("model_name")
+    if selected_name:
+        return selected_name
+
+    normalized_type = _normalize_model_type(model_type)
+    if normalized_type:
+        for provider in _PROVIDERS:
+            provider_cfg = machine.get(provider) or {}
+            if not isinstance(provider_cfg, dict):
+                continue
+            selected_name = provider_cfg.get(f"selected_{normalized_type.lower()}")
+            if selected_name:
+                return selected_name
+
+    for provider in _PROVIDERS:
+        provider_cfg = machine.get(provider) or {}
+        if not isinstance(provider_cfg, dict):
+            continue
+        selected_name = provider_cfg.get("selected")
+        if selected_name:
+            return selected_name
+
+    return None
+
+
 def get_selected_model_name(
     payload: Dict[str, Any], model_type: str | None = None
 ) -> str | None:
     """Get the selected model name based on payload and model_type."""
     machine = load_machine_config() or {}
-    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
-
-    selected_name = payload.get("model_name")
-    if not selected_name and model_type:
-        if model_type == "WRITING":
-            selected_name = openai_cfg.get("selected_writing")
-        elif model_type == "CHAT":
-            selected_name = openai_cfg.get("selected_chat")
-        elif model_type == "EDITING":
-            selected_name = openai_cfg.get("selected_editing")
-
-    if not selected_name:
-        selected_name = openai_cfg.get("selected")
-    return selected_name
+    return _find_selected_model_name(payload, machine, model_type)
 
 
 def resolve_openai_credentials(
@@ -68,7 +95,6 @@ def resolve_openai_credentials(
     3. machine.json -> openai.models[] (selected by name based on model_type)
     """
     machine = load_machine_config() or {}
-    openai_cfg: Dict[str, Any] = machine.get("openai") or {}
 
     selected_name = get_selected_model_name(payload, model_type)
 
@@ -77,20 +103,41 @@ def resolve_openai_credentials(
     model_id = payload.get("model")
     timeout_s = payload.get("timeout_s")
 
-    models = openai_cfg.get("models") if isinstance(openai_cfg, dict) else None
-    if not (isinstance(models, list) and models):
+    chosen: dict | None = None
+    default_model: dict | None = None
+    for provider in _PROVIDERS:
+        provider_cfg = machine.get(provider) or {}
+        models = provider_cfg.get("models") if isinstance(provider_cfg, dict) else None
+        if not (isinstance(models, list) and models):
+            continue
+
+        if default_model is None:
+            default_model = models[0]
+
+        if selected_name:
+            found = find_model_in_list(models, selected_name)
+            if found:
+                chosen = found
+                break
+
+    if chosen is None:
+        chosen = default_model
+
+    if not isinstance(chosen, dict):
         from augmentedquill.services.exceptions import ConfigurationError
 
         raise ConfigurationError(
-            "No OpenAI models configured. Configure openai.models[] in machine.json.",
+            "No OpenAI-compatible models configured. Configure openai.models[] in machine.json.",
         )
 
-    chosen = find_model_in_list(models, selected_name) or models[0]
-
-    base_url = chosen.get("base_url") or base_url
-    api_key = chosen.get("api_key") or api_key
-    model_id = chosen.get("model") or model_id
-    timeout_s = chosen.get("timeout_s", 60) or timeout_s
+    base_url = payload.get("base_url") or chosen.get("base_url") or base_url
+    api_key = payload.get("api_key") or chosen.get("api_key") or api_key
+    model_id = payload.get("model") or chosen.get("model") or model_id
+    timeout_s = (
+        timeout_s
+        if timeout_s not in (None, "")
+        else chosen.get("timeout_s", 60) or timeout_s
+    )
 
     env_base = os.getenv("OPENAI_BASE_URL")
     env_key = os.getenv("OPENAI_API_KEY")
