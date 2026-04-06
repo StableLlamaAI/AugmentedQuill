@@ -129,19 +129,19 @@ class SourcebookRelation(BaseModel):
     )
     start_chapter: str | None = Field(
         None,
-        description="Optional start chapter for the relation (novel/series projects).",
+        description="Optional start chapter for the relation.",
     )
     end_chapter: str | None = Field(
         None,
-        description="Optional end chapter for the relation (novel/series projects).",
+        description="Optional end chapter for the relation.",
     )
     start_book: str | None = Field(
         None,
-        description="Optional start book for the relation (series projects).",
+        description="Optional start book for the relation.",
     )
     end_book: str | None = Field(
         None,
-        description="Optional end book for the relation (series projects).",
+        description="Optional end book for the relation.",
     )
 
 
@@ -382,10 +382,10 @@ class AddSourcebookRelationParams(BaseModel):
         None, description="Optional chapter where the relation ends."
     )
     start_book: str | None = Field(
-        None, description="Optional book where the relation begins (series only)."
+        None, description="Optional book where the relation begins."
     )
     end_book: str | None = Field(
-        None, description="Optional book where the relation ends (series only)."
+        None, description="Optional book where the relation ends."
     )
 
 

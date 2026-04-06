@@ -43,8 +43,12 @@ export function useEditorPreferences() {
   const isLight = currentTheme === 'light';
 
   useEffect(() => {
-    document.body.className = currentTheme;
-  }, [currentTheme]);
+    // Tailwind `dark:` utilities are activated by the `dark` class.
+    // Mixed mode should behave like dark mode in the UI, so we map
+    // both `dark` and `mixed` to the same body class while preserving
+    // the raw theme value in the hook return value.
+    document.body.className = isLight ? 'light' : 'dark';
+  }, [isLight]);
 
   return { editorSettings, setEditorSettings, currentTheme, isLight };
 }

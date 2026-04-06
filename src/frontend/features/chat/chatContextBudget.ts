@@ -9,7 +9,7 @@
  * Defines chat context budgeting helpers so oversized histories are compacted before they hit upstream LLM limits.
  */
 
-import { ChatMessage, ChatToolCall, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, ChatToolCall, LLMConfig } from '../../types';
 
 export type ChatHistoryMessage = {
   role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
@@ -22,6 +22,7 @@ export type ChatHistoryMessage = {
     name: string;
     args: string | Record<string, unknown>;
   }>;
+  attachments?: ChatAttachment[];
 };
 
 export type ChatApiPreparedMessage = {
@@ -319,6 +320,26 @@ function summarizeConversationMessage(message: MutablePreparedMessage): string |
   return `[Earlier ${roleLabel} message] ${content}`;
 }
 
+function renderAttachmentAsText(attachment: ChatAttachment): string {
+  const name = attachment.name || 'unknown file';
+  const type = attachment.type || 'application/octet-stream';
+  const size = Number.isFinite(attachment.size) ? attachment.size : 0;
+  const encoding = attachment.encoding || 'utf-8';
+  const headerLines = [
+    `[Attached file: ${name}]`,
+    `Content-Type: ${type}`,
+    `Size: ${size} bytes`,
+    `Encoding: ${encoding}`,
+  ];
+
+  if (encoding === 'base64') {
+    headerLines.push('Content is base64 encoded');
+  }
+
+  const body = attachment.content ?? '[Attachment content not available]';
+  return `${headerLines.join('\n')}\n\n${body}`;
+}
+
 function buildPreparedMessages(
   systemInstruction: string,
   history: ChatHistoryMessage[],
@@ -350,6 +371,16 @@ function buildPreparedMessages(
                 : JSON.stringify(toolCall.args),
           },
         }));
+      }
+
+      if (historyMessage.attachments && historyMessage.attachments.length > 0) {
+        const attachmentContent = historyMessage.attachments
+          .map(renderAttachmentAsText)
+          .join('\n\n');
+        prepared.content =
+          prepared.content || ''
+            ? `${prepared.content}\n\n${attachmentContent}`
+            : attachmentContent;
       }
 
       return prepared;

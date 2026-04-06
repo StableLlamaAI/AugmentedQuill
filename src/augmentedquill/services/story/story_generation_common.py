@@ -16,6 +16,7 @@ from augmentedquill.services.exceptions import BadRequestError
 
 from augmentedquill.core.config import BASE_DIR
 from augmentedquill.services.story.story_api_prompt_ops import (
+    _get_read_only_tool_schemas,
     build_ai_action_messages,
     build_chapter_summary_messages,
     build_continue_chapter_messages,
@@ -23,10 +24,6 @@ from augmentedquill.services.story.story_api_prompt_ops import (
     build_write_chapter_messages,
     get_system_message,
     resolve_model_runtime,
-)
-from augmentedquill.services.chat.chat_tool_decorator import (
-    EDITING_ROLE,
-    get_tool_schemas,
 )
 from augmentedquill.services.story.story_api_state_ops import (
     collect_book_summaries,
@@ -249,7 +246,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
             "model_type": model_type,
             "timeout_s": timeout_s,
             "tools": (
-                get_tool_schemas(EDITING_ROLE, project_type="short-story")
+                _get_read_only_tool_schemas(project_type="short-story")
                 if model_type == "EDITING"
                 else None
             ),
@@ -296,7 +293,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "model_type": model_type,
         "timeout_s": timeout_s,
         "tools": (
-            get_tool_schemas(EDITING_ROLE, project_type=story.get("project_type"))
+            _get_read_only_tool_schemas(project_type=story.get("project_type"))
             if model_type == "EDITING"
             else None
         ),
@@ -358,7 +355,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "model_type": model_type,
         "timeout_s": timeout_s,
         "tools": (
-            get_tool_schemas(EDITING_ROLE, project_type=story.get("project_type"))
+            _get_read_only_tool_schemas(project_type=story.get("project_type"))
             if model_type == "EDITING"
             else None
         ),
@@ -614,7 +611,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "model_type": model_type,
         "timeout_s": timeout_s,
         "tools": (
-            get_tool_schemas(EDITING_ROLE, project_type=project_type)
+            _get_read_only_tool_schemas(project_type=project_type)
             if model_type == "EDITING"
             else None
         ),

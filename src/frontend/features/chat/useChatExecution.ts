@@ -26,7 +26,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
-import { ChatMessage, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
 
 type ToolLoopChoice = 'stop' | 'continue' | 'unlimited';
 
@@ -185,6 +185,7 @@ export function useChatExecution({
   const executeChatRequest = async (
     userText: string,
     history: ChatMessage[],
+    attachments?: ChatAttachment[],
     userMsgId?: string
   ) => {
     setIsChatLoading(true);
@@ -215,8 +216,9 @@ export function useChatExecution({
       };
 
       let currentMsgId = uuidv4();
-      let result = await session.sendMessage({ message: userText }, (update) =>
-        updateMessage(currentMsgId, update)
+      let result = await session.sendMessage(
+        { message: userText, attachments },
+        (update) => updateMessage(currentMsgId, update)
       );
 
       const effectiveUserMsgId = userMsgId || uuidv4();
@@ -225,6 +227,7 @@ export function useChatExecution({
           id: effectiveUserMsgId,
           role: 'user',
           text: userText,
+          attachments,
         });
       }
 
@@ -423,7 +426,7 @@ export function useChatExecution({
     };
   };
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, attachments?: ChatAttachment[]) => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const historyBefore = [...chatMessages];
@@ -440,9 +443,10 @@ export function useChatExecution({
     setChatMessages((prev) => [
       ...prev,
       ...(contextMsg ? [contextMsg] : []),
-      { id: userMsgId, role: 'user', text },
+      { id: userMsgId, role: 'user', text, attachments },
     ]);
-    await executeChatRequest(text, historyWithContext, userMsgId);
+
+    await executeChatRequest(text, historyWithContext, attachments, userMsgId);
   };
 
   const handleStopChat = () => {
@@ -452,14 +456,9 @@ export function useChatExecution({
 
   const handleRegenerate = async () => {
     if (!isChatAvailable) return;
-    const lastMessageIndex = chatMessages.length - 1;
-    if (lastMessageIndex < 0) return;
-
-    const lastMessage = chatMessages[lastMessageIndex];
-    if (lastMessage.role !== 'model') return;
 
     let userMessageIndex = -1;
-    for (let index = lastMessageIndex; index >= 0; index--) {
+    for (let index = chatMessages.length - 1; index >= 0; index--) {
       if (chatMessages[index].role === 'user') {
         userMessageIndex = index;
         break;
@@ -471,7 +470,12 @@ export function useChatExecution({
     const userMessage = chatMessages[userMessageIndex];
     const newHistory = chatMessages.slice(0, userMessageIndex);
     setChatMessages([...newHistory, userMessage]);
-    await executeChatRequest(userMessage.text, newHistory, userMessage.id);
+    await executeChatRequest(
+      userMessage.text,
+      newHistory,
+      userMessage.attachments,
+      userMessage.id
+    );
   };
 
   return {

@@ -14,7 +14,6 @@ import { Save, ChevronDown, Download, Trash2, Plus } from 'lucide-react';
 import { useTheme } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
-import { useConfirmDialog } from '../layout/useConfirmDialog';
 import { CheckpointInfo } from '../../services/apiClients/checkpoints';
 
 interface CheckpointsMenuProps {

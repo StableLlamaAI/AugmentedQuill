@@ -96,6 +96,15 @@ export interface StoryState extends Story {
   conflicts?: Conflict[];
 }
 
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  content?: string;
+  encoding?: 'utf-8' | 'base64';
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'tool';
@@ -106,6 +115,7 @@ export interface ChatMessage {
   tool_call_id?: string;
   tool_calls?: ChatToolCall[];
   traceback?: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatToolCall {

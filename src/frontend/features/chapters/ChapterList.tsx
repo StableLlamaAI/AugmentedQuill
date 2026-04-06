@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
+import { useConfirm } from '../layout/ConfirmDialogContext';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
 import { api } from '../../services/api';
@@ -56,7 +57,9 @@ interface ChapterListProps {
   theme?: AppTheme;
   onOpenImages?: () => void;
   languages?: string[];
+  language?: string;
   baselineChapters?: Chapter[];
+  spellCheck?: boolean;
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -78,9 +81,12 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   theme = 'mixed',
   onOpenImages,
   languages = [],
+  language,
   baselineChapters = [],
+  spellCheck = true,
 }) => {
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
   const [newBookTitle, setNewBookTitle] = useState('');
   const [isCreatingBook, setIsCreatingBook] = useState(false);
@@ -614,9 +620,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                             <Plus size={14} />
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (window.confirm('Delete Book and all its chapters?')) {
+                              if (await confirm('Delete Book and all its chapters?')) {
                                 onBookDelete?.(book.id);
                               }
                             }}
@@ -664,6 +670,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 <div className="flex flex-col gap-2 p-2">
                   <input
                     className="bg-transparent border rounded p-1 text-sm outline-none focus:border-brand-500"
+                    lang={language || undefined}
+                    spellCheck={spellCheck}
                     placeholder="Book Title"
                     value={newBookTitle}
                     onChange={(e) => setNewBookTitle(e.target.value)}

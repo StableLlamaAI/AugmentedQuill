@@ -144,4 +144,58 @@ describe('useChatExecution', () => {
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(1, 'batch1');
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(2, 'batch2');
   });
+
+  it('passes attachments through to the chat session payload', async () => {
+    const setChatMessages = vi.fn();
+    const refreshProjects = vi.fn().mockResolvedValue(undefined);
+    const refreshStory = vi.fn().mockResolvedValue(undefined);
+    const sendMessageMock = vi
+      .fn()
+      .mockResolvedValue({ text: 'OK', functionCalls: [] });
+
+    vi.mocked(createChatSession).mockReturnValue({
+      sendMessage: sendMessageMock,
+    } as any);
+
+    const { result } = renderHook(() =>
+      useChatExecution({
+        systemPrompt: 'system',
+        activeChatConfig: { model: 'test', temperature: 0.5 },
+        isChatAvailable: true,
+        allowWebSearch: false,
+        currentChapterId: '1',
+        currentChatId: 'chat-1',
+        currentChapter: { id: '1', title: 'Intro' },
+        chatMessages: [],
+        setChatMessages,
+        isChatLoading: false,
+        setIsChatLoading: vi.fn(),
+        refreshProjects,
+        refreshStory,
+        pushExternalHistoryEntry: undefined,
+        requestToolCallLoopAccess: vi.fn().mockResolvedValue('unlimited'),
+      })
+    );
+
+    const attachments = [
+      {
+        id: 'a1',
+        name: 'monika_01.txt',
+        size: 11,
+        type: 'text/plain',
+        content: 'Hello world',
+        encoding: 'utf-8',
+      },
+    ];
+
+    await act(async () => {
+      await result.current.handleSendMessage('Read this file', attachments);
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageMock.mock.calls[0][0]).toEqual({
+      message: 'Read this file',
+      attachments,
+    });
+  });
 });

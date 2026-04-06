@@ -33,6 +33,24 @@ def _ensure_tools_loaded():
     import augmentedquill.services.chat.chat_tools.sourcebook_tools  # noqa: F401
 
 
+def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
+    """Return a filtered tool schema list with only read-only story/chapter context tools."""
+    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type) or []
+    relevant_names = {
+        "get_project_overview",
+        "get_story_metadata",
+        "get_story_summary",
+        "get_story_tags",
+        "get_chapter_metadata",
+        "get_chapter_content",
+        "get_chapter_summary",
+        "get_chapter_summaries",
+        "search_sourcebook",
+        "get_sourcebook_entry",
+    }
+    return [t for t in tools if t.get("function", {}).get("name") in relevant_names]
+
+
 def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
     """Resolve runtime model credentials and prompt overrides for a request."""
     base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
@@ -109,26 +127,12 @@ def build_chapter_summary_messages(
             )
         )
 
-    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+    tools = _get_read_only_tool_schemas(project_type=project_type)
     if tools:
-        # Only expose read-only tools that provide facts and story context.
-        relevant_names = {
-            "get_project_overview",
-            "get_story_metadata",
-            "get_story_summary",
-            "get_story_tags",
-            "get_chapter_metadata",
-            "get_chapter_content",
-            "get_chapter_summary",
-            "get_chapter_summaries",
-            "search_sourcebook",
-            "get_sourcebook_entry",
-        }
-
         tool_lines: list[str] = []
         for t in tools:
             fn = t.get("function", {}).get("name")
-            if not fn or fn not in relevant_names:
+            if not fn:
                 continue
             desc = t.get("function", {}).get("description", "")
             if desc:
@@ -185,25 +189,12 @@ def build_story_summary_messages(
         get_system_message("story_summarizer", model_overrides, language=language)
     ]
 
-    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+    tools = _get_read_only_tool_schemas(project_type=project_type)
     if tools:
-        # Only expose read-only tools relevant for understanding the story state.
-        relevant_names = {
-            "get_project_overview",
-            "get_story_metadata",
-            "get_story_summary",
-            "get_story_tags",
-            "get_chapter_metadata",
-            "get_chapter_content",
-            "get_chapter_summary",
-            "get_chapter_summaries",
-            "search_sourcebook",
-            "get_sourcebook_entry",
-        }
         tool_lines: list[str] = []
         for t in tools:
             fn = t.get("function", {}).get("name")
-            if not fn or fn not in relevant_names:
+            if not fn:
                 continue
             desc = t.get("function", {}).get("description", "")
             if desc:
@@ -378,26 +369,12 @@ def build_ai_action_messages(
                 story_tags=story_tags,
             )
 
-        tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+        tools = _get_read_only_tool_schemas(project_type=project_type)
         if tools:
-            # Only expose read-only tools that provide facts and story context.
-            relevant_names = {
-                "get_project_overview",
-                "get_story_metadata",
-                "get_story_summary",
-                "get_story_tags",
-                "get_chapter_metadata",
-                "get_chapter_content",
-                "get_chapter_summary",
-                "get_chapter_summaries",
-                "search_sourcebook",
-                "get_sourcebook_entry",
-            }
-
             tool_lines: list[str] = []
             for t in tools:
                 fn = t.get("function", {}).get("name")
-                if not fn or fn not in relevant_names:
+                if not fn:
                     continue
                 desc = t.get("function", {}).get("description", "")
                 if desc:

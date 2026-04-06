@@ -126,6 +126,8 @@ interface EditorProps {
   onToggleShowWhitespace?: () => void;
   onChange: (id: string, updates: Partial<WritingUnit>) => void;
   baselineContent?: string;
+  language?: string;
+  spellCheck?: boolean;
   suggestionControls: {
     continuations: string[];
     isSuggesting: boolean;
@@ -232,6 +234,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       baselineContent = '',
       suggestionControls,
       aiControls,
+      language,
+      spellCheck,
       onContextChange,
     },
     ref
@@ -1521,7 +1525,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   placeholder={
                     chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
                   }
-                  spellCheck={false}
+                  lang={language}
+                  spellCheck={spellCheck}
                   style={{
                     ...commonTextStyle,
                     fontSize: '1.8em',
@@ -1559,6 +1564,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 onKeyUp={(e) => {
                   checkContext();
                 }}
+                lang={language}
+                spellCheck={spellCheck}
                 className={`prose-editor outline-none w-full ${
                   viewMode === 'wysiwyg' ? 'block' : 'hidden'
                 }${showWhitespace ? ' prose-editor-ws' : ''}`}
@@ -1574,6 +1581,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   <CodeMirrorEditor
                     ref={editorViewRef}
                     value={localContent}
+                    language={language}
+                    spellCheck={spellCheck}
                     onChange={(val: string) => {
                       setLocalContent(val);
                       setLocalBaseline(''); // clear diff immediately on user input

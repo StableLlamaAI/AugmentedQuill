@@ -12,6 +12,7 @@
 import React, { useRef } from 'react';
 import { Ghost, Trash2, X } from 'lucide-react';
 import { ChatSession } from '../../../types';
+import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
 import { useFocusTrap } from '../../layout/useFocusTrap';
 
@@ -37,6 +38,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
   onClose,
 }) => {
   const { isLight } = useTheme();
+  const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(true, panelRef, onClose);
 
@@ -140,10 +142,10 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 </span>
               </button>
               <button
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
                   if (isDisabled) return;
-                  if (confirm('Delete this chat?')) {
+                  if (await confirm('Delete this chat?')) {
                     onDeleteSession(session.id);
                   }
                 }}

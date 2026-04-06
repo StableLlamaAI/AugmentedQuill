@@ -73,5 +73,8 @@ class PromptsTest(TestCase):
         self.assertIn(
             "Only use tools that are actually available in this session", chat_msg
         )
-        self.assertIn("a short story has one story draft", chat_msg)
+        self.assertIn(
+            "The active project structure is determined by the tools available in this session",
+            chat_msg,
+        )
         self.assertIn("write_story_content", editing_msg)

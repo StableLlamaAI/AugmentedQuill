@@ -348,6 +348,10 @@ export interface CodeMirrorEditorProps {
   onSelectionChange?: (anchor: number, head: number) => void;
   /** Text state to compare against for change highlighting (AI additions) */
   baselineValue?: string;
+  /** BCP 47 language tag for spellcheck and hyphenation */
+  language?: string;
+  /** Whether to enable browser-native spellcheck */
+  spellCheck?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -368,6 +372,8 @@ export const CodeMirrorEditor = React.forwardRef<
       style,
       onSelectionChange,
       baselineValue = '',
+      language = 'en',
+      spellCheck = false,
     },
     ref
   ) => {
@@ -391,8 +397,27 @@ export const CodeMirrorEditor = React.forwardRef<
     const diffCompartment = useRef(new Compartment());
     const enterCompartment = useRef(new Compartment());
     const placeholderCompartment = useRef(new Compartment());
+    const attributesCompartment = useRef(new Compartment());
 
     // ── Extension builders ──────────────────────────────────────────────────
+
+    const buildAttributesExtension = (
+      la: string | undefined,
+      sc: boolean,
+      ph: string | undefined
+    ): Extension => {
+      const editorAriaLabel = ph ?? 'Story content';
+      return EditorView.contentAttributes.of({
+        lang: la,
+        spellcheck: sc ? 'true' : 'false',
+        autocomplete: 'off',
+        autocorrect: sc ? 'on' : 'off',
+        autocapitalize: sc ? 'sentences' : 'off',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': editorAriaLabel,
+      });
+    };
 
     const buildLanguageExtension = (m: typeof mode): Extension =>
       m === 'markdown'
@@ -486,16 +511,10 @@ export const CodeMirrorEditor = React.forwardRef<
       const extensions: Extension[] = [
         baseTheme,
         EditorView.lineWrapping,
-        // Disable spellcheck / autocorrect on the editable surface
-        EditorView.contentAttributes.of({
-          spellcheck: 'false',
-          autocomplete: 'off',
-          autocorrect: 'off',
-          autocapitalize: 'off',
-          role: 'textbox',
-          'aria-multiline': 'true',
-          'aria-label': editorAriaLabel,
-        }),
+        // Spellcheck / autocorrect / platform-native behavior in its own compartment
+        attributesCompartment.current.of(
+          buildAttributesExtension(language, spellCheck, placeholder)
+        ),
         history(),
         // Enter/history keymaps take precedence over defaultKeymap
         Prec.high(keymap.of(historyKeymap)),
@@ -580,6 +599,14 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [placeholder]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: attributesCompartment.current.reconfigure(
+          buildAttributesExtension(language, spellCheck, placeholder)
+        ),
+      });
+    }, [language, spellCheck, placeholder]);
 
     useEffect(() => {
       viewRef.current?.dispatch({

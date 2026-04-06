@@ -347,6 +347,8 @@ export function MetadataEditorDialog({
               </label>
               <input
                 value={data.title || ''}
+                lang={data.language || 'en'}
+                spellCheck={true}
                 onChange={(e) => setData({ ...data, title: e.target.value })}
                 className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
               />
@@ -360,6 +362,8 @@ export function MetadataEditorDialog({
                       </label>
                       <input
                         value={data.tags ? data.tags.join(', ') : ''}
+                        lang={data.language || 'en'}
+                        spellCheck={true}
                         onChange={(e) => {
                           const val = e.target.value;
                           // Preserve user-entered ordering; normalization happens server-side.
@@ -675,6 +679,8 @@ export function MetadataEditorDialog({
                   )}
                   <textarea
                     value={data.summary || ''}
+                    lang={data.language || 'en'}
+                    spellCheck={true}
                     onChange={(e) => setData({ ...data, summary: e.target.value })}
                     className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
                     placeholder="Write a public summary..."
@@ -770,6 +776,8 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.description}
+                              lang={data.language || 'en'}
+                              spellCheck={true}
                               rows={2}
                               onChange={(e) =>
                                 updateConflict(c.id, 'description', e.target.value)
@@ -784,6 +792,8 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.resolution}
+                              lang={data.language || 'en'}
+                              spellCheck={true}
                               rows={3}
                               onChange={(e) =>
                                 updateConflict(c.id, 'resolution', e.target.value)
