@@ -67,6 +67,12 @@ export function createEditorTurndownService(): TurndownService {
     replacement: () => '\n',
   });
 
+  td.addRule('tabMarker', {
+    filter: (node: any) =>
+      node.nodeName === 'SPAN' && node.getAttribute('data-ws-tab') === '1',
+    replacement: () => '\t',
+  });
+
   td.addRule('wsMarker', {
     filter: (node: any) =>
       node.nodeName === 'SPAN' && node.getAttribute('data-ws-marker') === '1',

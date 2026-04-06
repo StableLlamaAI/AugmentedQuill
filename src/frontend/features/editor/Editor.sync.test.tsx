@@ -177,9 +177,10 @@ describe('Editor diff highlighting', () => {
 
     await act(async () => {});
 
-    const marker = container.querySelector('#wysiwyg-editor .cm-ws-marker');
+    const marker = Array.from(
+      container.querySelectorAll('#wysiwyg-editor .cm-ws-marker')
+    ).find((el) => el.textContent === '→');
     expect(marker).toBeDefined();
-    expect(marker?.textContent).toBe('→');
   });
 
   it('uses pre-wrap whitespace handling in wysiwyg whitespace mode', async () => {

@@ -115,6 +115,8 @@ export const escapeHtmlAttribute = (value: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+const TAB_PLACEHOLDER = '\uF000';
+
 // Configure marked extensions once (subscript, superscript, footnotes).
 configureMarked();
 
@@ -201,9 +203,12 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
         if (j < text.length) {
           const span = document.createElement('span');
           span.dataset.wsMarker = '1';
+          const isTab = text[j] === '\t';
+          if (isTab) {
+            span.dataset.wsTab = '1';
+          }
           span.setAttribute('aria-hidden', 'true');
           span.className = 'cm-ws-marker';
-          const isTab = text[j] === '\t';
           span.textContent = isTab ? '→' : '\u00b7';
           span.style.display = 'inline-block';
           span.style.minWidth = '1ch';
@@ -609,9 +614,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             contentToRender = highlightedMd;
           }
 
-          wysiwygRef.current.innerHTML = marked.parse(contentToRender, {
-            breaks: true,
-          }) as string;
+          const parsedHtml = marked.parse(
+            contentToRender.replace(/\t/g, TAB_PLACEHOLDER),
+            {
+              breaks: true,
+            }
+          ) as string;
+          wysiwygRef.current.innerHTML = parsedHtml.replaceAll(TAB_PLACEHOLDER, '&#9;');
           if (showWhitespace) {
             injectWsMarkersWysiwyg(wysiwygRef.current);
           }
