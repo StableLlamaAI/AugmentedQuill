@@ -82,6 +82,7 @@ async def _create_gen_source_pure(prepared: dict):
         model_name=prepared.get("model_name"),
         model_type=prepared.get("model_type"),
         tools=prepared.get("tools"),
+        max_rounds=prepared.get("max_rounds") or 4,
     ):
         yield chunk_dict
 

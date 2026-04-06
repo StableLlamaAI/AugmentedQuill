@@ -262,7 +262,7 @@ async def get_sourcebook_entry(
 
 @chat_tool(
     description="Create a new sourcebook entry. Always provide name, description, and category. Allowed categories: Character, Location, Organization, Item, Event, Lore, Other. Synonyms and images are optional. For better lookup, set useful synonyms and relations (e.g., related characters/locations/organizations) when creating the entry.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="sourcebook-write",
 )
 async def create_sourcebook_entry(
@@ -286,7 +286,7 @@ async def create_sourcebook_entry(
 
 @chat_tool(
     description="Update an existing sourcebook entry. Provide only the fields you want to change. If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="sourcebook-write",
 )
 async def update_sourcebook_entry(

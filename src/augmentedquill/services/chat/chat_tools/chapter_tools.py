@@ -349,11 +349,9 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description=(
-        "Update metadata for a specific chapter (title, summary, notes, conflicts). "
-        "Chapter conflicts are treated as active story arcs; include any resolved status changes."
-    ),
-    allowed_roles=(CHAT_ROLE,),
+    description="Update metadata for a specific chapter (title, summary, notes, conflicts). "
+    "Chapter conflicts are treated as active story arcs; include any resolved status changes.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
 async def update_chapter_metadata(
@@ -375,7 +373,7 @@ async def update_chapter_metadata(
         conflicts=conflicts,
     )
     mutations["story_changed"] = True
-    return {"ok": True}
+    return {"ok": True, "message": f"Metadata updated for chapter {params.chap_id}"}
 
 
 @chat_tool(
@@ -600,7 +598,7 @@ async def apply_chapter_replacements(
 
 @chat_tool(
     description="Write summary to a specific chapter.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
 async def write_chapter_summary(
@@ -608,7 +606,10 @@ async def write_chapter_summary(
 ):
     _write_chapter_summary(params.chap_id, params.summary)
     mutations["story_changed"] = True
-    return {"message": f"Summary written to chapter {params.chap_id} successfully"}
+    return {
+        "ok": True,
+        "message": f"Summary written to chapter {params.chap_id} successfully",
+    }
 
 
 @chat_tool(
