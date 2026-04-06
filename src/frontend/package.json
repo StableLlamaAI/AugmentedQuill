@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
-    "@google/genai": "^1.47.0",
+    "@google/genai": "^1.48.0",
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@testing-library/dom": "^10.4.1",
