@@ -274,14 +274,12 @@ export function MetadataEditorDialog({
   const hasPrimarySource = !!primarySourceAvailable;
 
   useEffect(() => {
-    if (data.summary) return;
-
     if (!hasPrimarySource && hasNotesSource && aiWriteSource !== 'notes') {
       setAiWriteSource('notes');
     } else if (!hasNotesSource && hasPrimarySource && aiWriteSource !== 'chapter') {
       setAiWriteSource('chapter');
     }
-  }, [data.summary, hasPrimarySource, hasNotesSource, aiWriteSource]);
+  }, [hasPrimarySource, hasNotesSource, aiWriteSource]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
