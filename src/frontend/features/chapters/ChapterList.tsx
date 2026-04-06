@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { Chapter, Book, AppTheme } from '../../types';
+import { MetadataParams } from '../story/metadataSync';
 import { useConfirm } from '../layout/ConfirmDialogContext';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
@@ -395,18 +396,6 @@ export const ChapterList: React.FC<ChapterListProps> = ({
     return (
       <div
         key={chapter.id}
-        draggable
-        onDragStart={(e) =>
-          handleDragStart(e, 'chapter', chapter.id, index, chapter.book_id)
-        }
-        onDragEnter={() => {
-          if (draggedItem?.type === 'chapter' && !isDragging) {
-            handleDragEnter(index, chapter.book_id);
-          }
-        }}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onDragEnd={handleDragEnd}
         className={`group relative p-3 rounded-lg transition-all duration-150 border ${
           currentChapterId === chapter.id ? itemActive : itemInactive
         } ${
@@ -417,6 +406,18 @@ export const ChapterList: React.FC<ChapterListProps> = ({
       >
         <button
           className="flex flex-col w-full text-left cursor-pointer"
+          draggable
+          onDragStart={(e) =>
+            handleDragStart(e, 'chapter', chapter.id, index, chapter.book_id)
+          }
+          onDragEnter={() => {
+            if (draggedItem?.type === 'chapter' && !isDragging) {
+              handleDragEnter(index, chapter.book_id);
+            }
+          }}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
           onClick={() => onSelect(chapter.id)}
           aria-current={currentChapterId === chapter.id ? 'true' : undefined}
         >
@@ -475,7 +476,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             editingMetadata.type === 'chapter' ? 'Chapter' : 'Book'
           }: ${activeEditingData.title}`}
           initialData={activeEditingData}
-          onSave={saveMetadata}
+          onSave={saveMetadata as (data: MetadataParams) => Promise<void>}
           onClose={() => {
             if (
               pendingMetadataUpdate &&
@@ -510,6 +511,16 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           aiDisabledReason={
             !isAiAvailable
               ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              : undefined
+          }
+          primarySourceLabel={
+            editingMetadata.type === 'chapter' ? 'Chapter' : undefined
+          }
+          primarySourceAvailable={
+            editingMetadata.type === 'chapter' &&
+            activeEditingData &&
+            'content' in activeEditingData
+              ? !!activeEditingData.content?.trim()
               : undefined
           }
           onAiGenerate={
@@ -564,18 +575,6 @@ export const ChapterList: React.FC<ChapterListProps> = ({
               return (
                 <div key={book.id} className="space-y-1">
                   <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, 'book', book.id, bIdx)}
-                    onDragEnter={() => {
-                      if (draggedItem?.type === 'book' && !isBookDragging) {
-                        handleDragEnter(bIdx);
-                      } else if (draggedItem?.type === 'chapter') {
-                        handleDragEnter(0, book.id);
-                      }
-                    }}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onDragEnd={handleDragEnd}
                     className={`flex flex-col p-2 rounded transition-all duration-150 group ${
                       isLight
                         ? 'hover:bg-brand-gray-200/50'
@@ -589,8 +588,21 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     <div className="flex items-center justify-between w-full text-left">
                       <button
                         className="flex items-center space-x-2 font-bold text-sm cursor-pointer"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, 'book', book.id, bIdx)}
+                        onDragEnter={() => {
+                          if (draggedItem?.type === 'book' && !isBookDragging) {
+                            handleDragEnter(bIdx);
+                          } else if (draggedItem?.type === 'chapter') {
+                            handleDragEnter(0, book.id);
+                          }
+                        }}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        onDragEnd={handleDragEnd}
                         onClick={() => toggleBook(book.id)}
                         aria-expanded={isExpanded}
+                        aria-label={`Toggle book ${book.title}`}
                       >
                         <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
                           {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}

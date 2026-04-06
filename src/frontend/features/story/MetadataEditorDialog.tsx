@@ -44,6 +44,7 @@ interface Props {
   languages?: string[];
   allowConflicts?: boolean;
   primarySourceLabel?: string;
+  primarySourceAvailable?: boolean;
   onAiGenerate?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -64,6 +65,7 @@ export function MetadataEditorDialog({
   languages = [],
   allowConflicts = false,
   primarySourceLabel = 'Chapters',
+  primarySourceAvailable = true,
   onAiGenerate,
   aiDisabledReason,
 }: Props) {
@@ -239,7 +241,8 @@ export function MetadataEditorDialog({
         sourceText,
         (thinking) => {
           setAiThinking(thinking);
-        }
+        },
+        source
       );
       if (result) {
         setData((prev) => ({ ...prev, summary: result }));
@@ -262,6 +265,30 @@ export function MetadataEditorDialog({
   const regeneratePrimaryTitle = `Regenerate summary from ${primarySourceLabel}`;
   const updatePrimaryTitle = `Update existing summary with facts from ${primarySourceLabel}`;
   const rewritePrimaryTitle = `Rewrite existing summary using ${primarySourceLabel} style`;
+  const hasNotesSource = !!data.notes?.trim();
+  const hasPrimarySource = !!primarySourceAvailable;
+
+  useEffect(() => {
+    if (data.summary) return;
+
+    if (!hasPrimarySource && hasNotesSource && aiWriteSource !== 'notes') {
+      setAiWriteSource('notes');
+    } else if (!hasNotesSource && hasPrimarySource && aiWriteSource !== 'chapter') {
+      setAiWriteSource('chapter');
+    }
+  }, [data.summary, hasPrimarySource, hasNotesSource, aiWriteSource]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [handleClose]);
 
   const modalContent = (
     <div ref={dialogRef} role="none" className={isDarkMode ? 'dark' : ''}>
@@ -276,12 +303,6 @@ export function MetadataEditorDialog({
             : 'fixed top-14 bottom-0 z-[60] bg-white dark:bg-brand-gray-900 border-r dark:border-brand-gray-800 flex flex-col'
         }`}
         style={!isFullscreen ? { width: 'var(--sidebar-width)', left: 0 } : {}}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            handleClose();
-          }
-        }}
       >
         <div
           className={`flex flex-col pointer-events-auto ${
@@ -519,26 +540,60 @@ export function MetadataEditorDialog({
                                     : 'bg-brand-gray-700'
                                 }`}
                               />
-                              <span
-                                className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
-                                  aiWriteSource === 'chapter'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'text-brand-gray-500'
-                                }`}
+                              <Button
+                                theme={theme}
+                                variant={
+                                  aiWriteSource === 'chapter' && hasPrimarySource
+                                    ? 'secondary'
+                                    : 'ghost'
+                                }
+                                size="sm"
+                                icon={<Wand2 size={12} />}
+                                onClick={() => {
+                                  setAiWriteSource('chapter');
+                                  handleAiGenerate('write', 'chapter');
+                                }}
+                                disabled={
+                                  !hasPrimarySource ||
+                                  isAiGenerating ||
+                                  !!aiDisabledReason
+                                }
+                                className="text-xs h-6 uppercase font-bold"
+                                title={
+                                  hasPrimarySource
+                                    ? `Generate summary ${primarySourceTitle}`
+                                    : 'Primary source not available'
+                                }
                               >
-                                <Wand2 size={12} className="mr-2" />
                                 {primarySourceTitle}
-                              </span>
-                              <span
-                                className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
-                                  aiWriteSource === 'notes'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'text-brand-gray-500'
-                                }`}
+                              </Button>
+                              <Button
+                                theme={theme}
+                                variant={
+                                  aiWriteSource === 'notes' && hasNotesSource
+                                    ? 'secondary'
+                                    : 'ghost'
+                                }
+                                size="sm"
+                                icon={<StickyNote size={12} />}
+                                onClick={() => {
+                                  setAiWriteSource('notes');
+                                  handleAiGenerate('write', 'notes');
+                                }}
+                                disabled={
+                                  !hasNotesSource ||
+                                  isAiGenerating ||
+                                  !!aiDisabledReason
+                                }
+                                className="text-xs h-6 uppercase font-bold"
+                                title={
+                                  hasNotesSource
+                                    ? 'Generate summary from Notes'
+                                    : 'Add notes to enable this source'
+                                }
                               >
-                                <StickyNote size={12} className="mr-2" />
                                 from Notes
-                              </span>
+                              </Button>
                             </div>
                           ) : (
                             <>
