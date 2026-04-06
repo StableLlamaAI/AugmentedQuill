@@ -140,7 +140,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       document.addEventListener('mousemove', resize);
       document.addEventListener('mouseup', stopResizing);
       // Prevent text selection while resizing
-      document.body.style.cursor = 'ns-resize';
+      document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
     } else {
       document.removeEventListener('mousemove', resize);
@@ -237,7 +237,8 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       {!isLast && !isCollapsed && (
         <button
           type="button"
-          className={`h-1.5 w-full cursor-ns-resize flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
+          className={`h-1.5 w-full flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
+          style={{ cursor: 'row-resize' }}
           onMouseDown={(e) => {
             e.preventDefault();
             startResizing(e);

@@ -405,7 +405,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
         }`}
       >
         <button
-          className="flex flex-col w-full text-left cursor-pointer"
+          className="flex flex-col w-full text-left cursor-row-resize"
+          style={{ cursor: 'row-resize' }}
           draggable
           onDragStart={(e) =>
             handleDragStart(e, 'chapter', chapter.id, index, chapter.book_id)
@@ -587,7 +588,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   >
                     <div className="flex items-center justify-between w-full text-left">
                       <button
-                        className="flex items-center space-x-2 font-bold text-sm cursor-pointer"
+                        className="flex items-center space-x-2 font-bold text-sm cursor-row-resize"
+                        style={{ cursor: 'row-resize' }}
                         draggable
                         onDragStart={(e) => handleDragStart(e, 'book', book.id, bIdx)}
                         onDragEnter={() => {
