@@ -286,6 +286,15 @@ const App: React.FC = () => {
         return;
       }
 
+      if (name === 'call_editing_assistant' || name === 'call_writing_llm') {
+        newMuts.push({
+          id: `story-${Date.now()}-${Math.random()}`,
+          type: 'story',
+          label: 'Story prose',
+        });
+        return;
+      }
+
       if (name === 'write_book_content') {
         const bookId = result.book_id || args.book_id;
         newMuts.push({

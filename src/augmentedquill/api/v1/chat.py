@@ -30,6 +30,7 @@ from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
 from augmentedquill.services.chat.chat_tool_decorator import (
     execute_registered_tool,
     get_registered_tool_schemas,
+    tool_message,
 )
 from augmentedquill.services.chat.chat_api_helpers import (
     inject_chat_attachments,
@@ -119,6 +120,8 @@ async def _run_tool_calls(
             mutations,
             tool_role=model_type,
         )
+        if isinstance(msg, dict) and "role" not in msg:
+            msg = tool_message(name, call_id, msg)
         appended.append(msg)
 
     return appended, mutations, tool_names
