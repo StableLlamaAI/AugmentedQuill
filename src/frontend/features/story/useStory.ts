@@ -203,7 +203,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   }, [story]);
 
   const pushState = useCallback(
-    (newState: StoryState, label: string, isUserEdit: boolean = false) => {
+    (newState: StoryState, label: string, isUserEdit: boolean = true) => {
       const updatedState = { ...newState, lastUpdated: Date.now() };
       const currentEntry = history[currentIndex];
       if (
@@ -326,7 +326,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
           lastLoadedChapterId.current = null;
           if (historyLabel) {
-            pushState(newStory, historyLabel);
+            pushState(newStory, historyLabel, false);
           } else {
             setStory(newStory);
             latestStoryRef.current = newStory;

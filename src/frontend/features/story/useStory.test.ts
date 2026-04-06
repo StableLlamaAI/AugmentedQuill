@@ -449,6 +449,27 @@ describe('buildInitialStoryState', () => {
       expect.objectContaining({ conflicts })
     );
   });
+
+  it('advances diff baseline on manual metadata updates so no diff is shown', async () => {
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({ ok: true } as any);
+
+    const { result } = await hookWithStory('Original summary');
+
+    await act(async () => {
+      await result.current.updateStoryMetadata(
+        'Demo',
+        'Edited summary',
+        [],
+        'Notes',
+        'Private notes',
+        [],
+        'en'
+      );
+    });
+
+    expect(result.current.story.summary).toBe('Edited summary');
+    expect(result.current.baselineState.summary).toBe('Edited summary');
+  });
 });
 
 // ─── baselineState diff highlighting ─────────────────────────────────────────
