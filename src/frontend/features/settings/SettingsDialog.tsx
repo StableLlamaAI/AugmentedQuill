@@ -35,6 +35,14 @@ import { SettingsProjects } from './settings/SettingsProjects';
 import SettingsMachine from './settings/SettingsMachine';
 import { useThemeClasses } from '../layout/ThemeContext';
 
+const GUI_LANGUAGE_OPTIONS: Array<{ code: string; label: string }> = [
+  { code: '', label: 'System Default' },
+  { code: 'en', label: 'English' },
+  { code: 'de', label: 'German' },
+  { code: 'fr', label: 'Français' },
+  { code: 'es', label: 'Español' },
+];
+
 interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -652,9 +660,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'
                         } border focus:outline-none focus:ring-1 focus:ring-brand-gray-400`}
                       >
-                        <option value="">System Default</option>
-                        <option value="en">English</option>
-                        <option value="de">German</option>
+                        {GUI_LANGUAGE_OPTIONS.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                       <p
                         className={`mt-1 text-xs ${
