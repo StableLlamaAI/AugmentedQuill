@@ -42,6 +42,8 @@ interface Props {
   title: string;
   theme?: AppTheme;
   languages?: string[];
+  language?: string;
+  spellCheck?: boolean;
   allowConflicts?: boolean;
   primarySourceLabel?: string;
   primarySourceAvailable?: boolean;
@@ -63,6 +65,8 @@ export function MetadataEditorDialog({
   title,
   theme = 'mixed',
   languages = [],
+  language,
+  spellCheck = true,
   allowConflicts = false,
   primarySourceLabel = 'Chapters',
   primarySourceAvailable = true,
@@ -70,6 +74,7 @@ export function MetadataEditorDialog({
   aiDisabledReason,
 }: Props) {
   const [data, setData] = useState<MetadataParams>(initialData);
+  const effectiveLanguage = data.language || language || 'en';
   const [activeTab, setActiveTab] = useState<
     'summary' | 'notes' | 'private' | 'conflicts'
   >('summary');
@@ -776,8 +781,8 @@ export function MetadataEditorDialog({
                   )}
                   <textarea
                     value={data.summary || ''}
-                    lang={data.language || 'en'}
-                    spellCheck={true}
+                    lang={effectiveLanguage}
+                    spellCheck={spellCheck}
                     onChange={(e) => setData({ ...data, summary: e.target.value })}
                     className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
                     placeholder="Write a public summary..."
@@ -794,6 +799,8 @@ export function MetadataEditorDialog({
                   <CodeMirrorEditor
                     value={data.notes || ''}
                     onChange={(val) => setData({ ...data, notes: val })}
+                    language={effectiveLanguage}
+                    spellCheck={spellCheck}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
@@ -813,6 +820,8 @@ export function MetadataEditorDialog({
                   <CodeMirrorEditor
                     value={data.private_notes || ''}
                     onChange={(val) => setData({ ...data, private_notes: val })}
+                    language={effectiveLanguage}
+                    spellCheck={spellCheck}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
@@ -873,8 +882,8 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.description}
-                              lang={data.language || 'en'}
-                              spellCheck={true}
+                              lang={effectiveLanguage}
+                              spellCheck={spellCheck}
                               rows={2}
                               onChange={(e) =>
                                 updateConflict(c.id, 'description', e.target.value)
@@ -889,8 +898,8 @@ export function MetadataEditorDialog({
                             </label>
                             <textarea
                               value={c.resolution}
-                              lang={data.language || 'en'}
-                              spellCheck={true}
+                              lang={effectiveLanguage}
+                              spellCheck={spellCheck}
                               rows={3}
                               onChange={(e) =>
                                 updateConflict(c.id, 'resolution', e.target.value)

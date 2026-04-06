@@ -57,6 +57,7 @@ interface SourcebookListProps {
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
   }) => void;
+  language?: string;
 }
 
 export const resolveExternalSourcebookEntries = (
@@ -132,6 +133,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   isAutoSelectionRunning = false,
   onToggleAutoSelection,
   onMutated,
+  language = 'en',
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>(
     resolveExternalSourcebookEntries(externalEntries, [])
@@ -488,6 +490,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         onClose={() => setIsDialogOpen(false)}
         entry={selectedEntry}
         allEntries={entries}
+        language={language}
         onSave={selectedEntry ? handleUpdate : handleCreate}
         onDelete={selectedEntry ? handleDelete : undefined}
         theme={theme}

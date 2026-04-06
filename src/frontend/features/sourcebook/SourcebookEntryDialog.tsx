@@ -86,6 +86,7 @@ interface SourcebookEntryDialogProps {
   onSave: (entry: SourcebookUpsertPayload) => Promise<void>;
   onDelete?: (id: string) => void;
   theme?: AppTheme;
+  language?: string;
 }
 
 export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
@@ -96,6 +97,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   onSave,
   onDelete,
   theme = 'mixed',
+  language = 'en',
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -365,6 +367,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    lang={language}
+                    spellCheck={true}
                     className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
                     placeholder="E.g. Captain Ahab"
                   />
@@ -442,6 +446,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                       type="text"
                       value={newSynonym}
                       onChange={(e) => setNewSynonym(e.target.value)}
+                      lang={language}
+                      spellCheck={true}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -717,6 +723,8 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 <CodeMirrorEditor
                   value={description}
                   onChange={setDescription}
+                  language={language}
+                  spellCheck={true}
                   mode="markdown"
                   className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass}`}
                   placeholder="Detailed description, personality traits, history, rules, and constraints the AI should remember..."

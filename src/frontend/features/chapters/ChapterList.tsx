@@ -473,6 +473,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
       {editingMetadata && activeEditingData && (
         <MetadataEditorDialog
           type={editingMetadata.type}
+          language={language}
+          spellCheck={spellCheck}
           title={`Edit ${
             editingMetadata.type === 'chapter' ? 'Chapter' : 'Book'
           }: ${activeEditingData.title}`}

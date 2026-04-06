@@ -114,6 +114,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         <MetadataEditorDialog
           type="story"
           title="Edit Story Metadata"
+          language={language}
+          spellCheck={spellCheck}
           initialData={{
             title,
             summary,
