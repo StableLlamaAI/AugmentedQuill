@@ -53,7 +53,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
