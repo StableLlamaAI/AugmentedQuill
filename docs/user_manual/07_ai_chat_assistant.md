@@ -108,6 +108,17 @@ When **Web Search** is enabled and the AI performs a search, the response includ
 
 If the AI visits a specific page, a **Visit Page result** card appears with the URL, the extracted page text (scrollable), and the size of the fetched content.
 
+### Tracking AI-made changes
+
+When the chat assistant performs a tool-enabled action, a row of change tags appears below the message composer. These tags summarize what the AI changed during the current session, such as story prose updates, chapter edits, metadata changes, or Sourcebook entries.
+
+- **Story prose / Chapter prose** appears when the AI writes or updates text in your story or chapter.
+- **Metadata** appears when the AI updates summaries, notes, private notes, or conflict information.
+- **Sourcebook** appears when the AI creates or edits a Sourcebook entry.
+- **Book** appears when the AI changes book-level metadata or structure.
+
+Click a tag to jump directly to the changed item: it opens the metadata dialog for story or chapter updates, or opens the relevant Sourcebook entry for review. The tags stay visible for the current chat session and clear when you start a new chat.
+
 ### AI Actions and Project Changes
 
 The <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Chat model can take actions directly inside your project (create characters, update summaries, manage chapters, generate images). When the AI creates a new project or switches context, a **Switch to New Project** button may appear inside the response, letting you load the changed project with one click.
