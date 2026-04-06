@@ -360,6 +360,68 @@ class ToolParityTest(TestCase):
             self.assertTrue("summary" in res, f"response lacked summary: {res}")
             self.assertEqual(res["summary"], "Synced summary")
 
+    def test_sync_summary_with_tool_call(self):
+        from unittest.mock import patch, AsyncMock
+
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
+        first_response = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_get_story_metadata",
+                    "type": "function",
+                    "function": {
+                        "name": "get_story_metadata",
+                        "arguments": "{}",
+                    },
+                }
+            ],
+            "thinking": "",
+        }
+        second_response = {
+            "content": "Synced summary after tool",
+            "tool_calls": [],
+            "thinking": "",
+        }
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_llm,
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=_dummy_runtime[:5],
+            ),
+            patch(
+                "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
+                return_value=_dummy_runtime,
+            ),
+            patch(
+                "augmentedquill.services.story.story_generation_ops.execute_registered_tool",
+                new_callable=AsyncMock,
+            ) as mock_tool,
+        ):
+            mock_llm.side_effect = [first_response, second_response]
+            mock_tool.return_value = {
+                "role": "tool",
+                "tool_call_id": "call_get_story_metadata",
+                "name": "get_story_metadata",
+                "content": '{"title": "Test Series"}',
+            }
+
+            res = self._call_tool("sync_summary", {"chap_id": 1})
+            self.assertTrue("summary" in res, f"response lacked summary: {res}")
+            self.assertEqual(res["summary"], "Synced summary after tool")
+            mock_tool.assert_called_once()
+
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
 

@@ -11,6 +11,7 @@ from unittest import TestCase
 
 from augmentedquill.core.prompts import get_system_message
 from augmentedquill.services.story.story_api_prompt_ops import (
+    _get_read_only_tool_schemas,
     build_ai_action_messages,
     build_story_summary_messages,
 )
@@ -72,6 +73,14 @@ class StoryApiPromptOpsTest(TestCase):
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         self.assertIsNotNone(user_msg)
         self.assertIn("current draft", user_msg["content"].lower())
+
+    def test_read_only_tool_schema_filter_excludes_editing_functions(self):
+        tools = _get_read_only_tool_schemas(project_type="series")
+        names = {t["function"]["name"] for t in tools}
+        self.assertIn("get_story_metadata", names)
+        self.assertNotIn("sync_story_summary", names)
+        self.assertNotIn("write_story_content", names)
+        self.assertNotIn("replace_text_in_chapter", names)
 
     def test_story_summary_messages_use_book_heading_for_series(self):
         messages = build_story_summary_messages(
