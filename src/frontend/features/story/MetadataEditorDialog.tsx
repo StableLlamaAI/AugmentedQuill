@@ -523,13 +523,16 @@ export function MetadataEditorDialog({
                                   ? 'bg-brand-gray-100 border-brand-gray-200'
                                   : 'bg-brand-gray-800 border-brand-gray-700'
                               }`}
+                              role="group"
+                              aria-label="AI summary generation"
                             >
                               <span
-                                className={`text-[10px] font-bold uppercase px-2 ${
-                                  theme === 'light'
-                                    ? 'text-brand-gray-500'
-                                    : 'text-brand-gray-400'
+                                className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
+                                  aiWriteSource === 'chapter'
+                                    ? 'bg-primary/20 text-primary'
+                                    : 'text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300'
                                 }`}
+                                aria-hidden="true"
                               >
                                 AI Write
                               </span>
@@ -539,14 +542,11 @@ export function MetadataEditorDialog({
                                     ? 'bg-brand-gray-300'
                                     : 'bg-brand-gray-700'
                                 }`}
+                                role="presentation"
                               />
                               <Button
                                 theme={theme}
-                                variant={
-                                  aiWriteSource === 'chapter' && hasPrimarySource
-                                    ? 'secondary'
-                                    : 'ghost'
-                                }
+                                variant="ghost"
                                 size="sm"
                                 icon={<Wand2 size={12} />}
                                 onClick={() => {
@@ -558,22 +558,19 @@ export function MetadataEditorDialog({
                                   isAiGenerating ||
                                   !!aiDisabledReason
                                 }
-                                className="text-xs h-6 uppercase font-bold"
+                                className="text-xs h-6"
                                 title={
                                   hasPrimarySource
                                     ? `Generate summary ${primarySourceTitle}`
-                                    : 'Primary source not available'
+                                    : `${primarySourceLabel} text not available`
                                 }
+                                aria-label={`Generate summary ${primarySourceTitle}`}
                               >
                                 {primarySourceTitle}
                               </Button>
                               <Button
                                 theme={theme}
-                                variant={
-                                  aiWriteSource === 'notes' && hasNotesSource
-                                    ? 'secondary'
-                                    : 'ghost'
-                                }
+                                variant="ghost"
                                 size="sm"
                                 icon={<StickyNote size={12} />}
                                 onClick={() => {
@@ -585,12 +582,13 @@ export function MetadataEditorDialog({
                                   isAiGenerating ||
                                   !!aiDisabledReason
                                 }
-                                className="text-xs h-6 uppercase font-bold"
+                                className="text-xs h-6"
                                 title={
                                   hasNotesSource
                                     ? 'Generate summary from Notes'
                                     : 'Add notes to enable this source'
                                 }
+                                aria-label="Generate summary from Notes"
                               >
                                 from Notes
                               </Button>
@@ -604,13 +602,16 @@ export function MetadataEditorDialog({
                                     ? 'bg-brand-gray-100 border-brand-gray-200'
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
+                                role="group"
+                                aria-label={`${primarySourceLabel} summary actions`}
                               >
                                 <span
-                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
+                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
                                     aiWriteSource === 'chapter'
                                       ? 'bg-primary/20 text-primary'
                                       : 'text-brand-gray-500'
                                   }`}
+                                  aria-hidden="true"
                                   title={regeneratePrimaryTitle}
                                 >
                                   <Wand2 size={12} className="mr-2" />
@@ -622,6 +623,7 @@ export function MetadataEditorDialog({
                                       ? 'bg-brand-gray-300'
                                       : 'bg-brand-gray-700'
                                   }`}
+                                  role="presentation"
                                 />
                                 <Button
                                   theme={theme}
@@ -632,9 +634,18 @@ export function MetadataEditorDialog({
                                     setAiWriteSource('chapter');
                                     handleAiGenerate('update', 'chapter');
                                   }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
+                                  disabled={
+                                    !hasPrimarySource ||
+                                    isAiGenerating ||
+                                    !!aiDisabledReason
+                                  }
                                   className="text-xs h-6"
-                                  title={updatePrimaryTitle}
+                                  title={
+                                    hasPrimarySource
+                                      ? updatePrimaryTitle
+                                      : `${primarySourceLabel} text not available`
+                                  }
+                                  aria-label={`Update summary ${primarySourceTitle}`}
                                 >
                                   Update
                                 </Button>
@@ -647,9 +658,18 @@ export function MetadataEditorDialog({
                                     setAiWriteSource('chapter');
                                     handleAiGenerate('rewrite', 'chapter');
                                   }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
+                                  disabled={
+                                    !hasPrimarySource ||
+                                    isAiGenerating ||
+                                    !!aiDisabledReason
+                                  }
                                   className="text-xs h-6"
-                                  title={rewritePrimaryTitle}
+                                  title={
+                                    hasPrimarySource
+                                      ? rewritePrimaryTitle
+                                      : `${primarySourceLabel} text not available`
+                                  }
+                                  aria-label={`Rewrite summary ${primarySourceTitle}`}
                                 >
                                   Rewrite
                                 </Button>
@@ -662,13 +682,16 @@ export function MetadataEditorDialog({
                                     ? 'bg-brand-gray-100 border-brand-gray-200'
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
+                                role="group"
+                                aria-label="Notes summary actions"
                               >
                                 <span
-                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default ${
+                                  className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
                                     aiWriteSource === 'notes'
                                       ? 'bg-primary/20 text-primary'
                                       : 'text-brand-gray-500'
                                   }`}
+                                  aria-hidden="true"
                                   title="Regenerate summary from Notes"
                                 >
                                   <StickyNote size={12} className="mr-2" />
@@ -680,6 +703,7 @@ export function MetadataEditorDialog({
                                       ? 'bg-brand-gray-300'
                                       : 'bg-brand-gray-700'
                                   }`}
+                                  role="presentation"
                                 />
                                 <Button
                                   theme={theme}
@@ -690,9 +714,18 @@ export function MetadataEditorDialog({
                                     setAiWriteSource('notes');
                                     handleAiGenerate('update', 'notes');
                                   }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
+                                  disabled={
+                                    !hasNotesSource ||
+                                    isAiGenerating ||
+                                    !!aiDisabledReason
+                                  }
                                   className="text-xs h-6"
-                                  title="Update existing summary with facts from Notes"
+                                  title={
+                                    hasNotesSource
+                                      ? 'Update existing summary with facts from Notes'
+                                      : 'Add notes to enable this source'
+                                  }
+                                  aria-label="Update summary from Notes"
                                 >
                                   Update
                                 </Button>
@@ -705,9 +738,18 @@ export function MetadataEditorDialog({
                                     setAiWriteSource('notes');
                                     handleAiGenerate('rewrite', 'notes');
                                   }}
-                                  disabled={isAiGenerating || !!aiDisabledReason}
+                                  disabled={
+                                    !hasNotesSource ||
+                                    isAiGenerating ||
+                                    !!aiDisabledReason
+                                  }
                                   className="text-xs h-6"
-                                  title="Rewrite existing summary using Notes style"
+                                  title={
+                                    hasNotesSource
+                                      ? 'Rewrite existing summary using Notes style'
+                                      : 'Add notes to enable this source'
+                                  }
+                                  aria-label="Rewrite summary from Notes"
                                 >
                                   Rewrite
                                 </Button>
