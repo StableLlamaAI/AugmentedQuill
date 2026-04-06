@@ -39,7 +39,7 @@ interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   settings: AppSettings;
-  onSaveSettings: (settings: AppSettings) => void;
+  onSaveSettings: (settings: AppSettings) => Promise<void>;
   projects: ProjectMetadata[];
   activeProjectId: string;
   onLoadProject: (id: string) => void;
@@ -422,42 +422,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         prompts: cleanPromptOverrides(p.prompts),
       }));
 
-      const machinePayload = {
-        openai: {
-          selected: activeChat?.name || '',
-          selected_chat: activeChat?.name || '',
-          selected_writing: activeWriting?.name || '',
-          selected_editing: activeEditing?.name || '',
-          models: cleanedProviders.map((p) => ({
-            name: (p.name || '').trim(),
-            base_url: (p.baseUrl || '').trim(),
-            api_key: p.apiKey || '',
-            timeout_s: Math.max(1, Math.round((p.timeout || 10000) / 1000)),
-            model: (p.modelId || '').trim(),
-            context_window_tokens: p.contextWindowTokens,
-            temperature: p.temperature,
-            top_p: p.topP,
-            max_tokens: p.maxTokens,
-            presence_penalty: p.presencePenalty,
-            frequency_penalty: p.frequencyPenalty,
-            stop: p.stop || [],
-            seed: p.seed,
-            top_k: p.topK,
-            min_p: p.minP,
-            extra_body: p.extraBody || '',
-            preset_id: p.presetId || null,
-            writing_warning: p.writingWarning || null,
-            is_multimodal: p.isMultimodal,
-            supports_function_calling: p.supportsFunctionCalling,
-            prompt_overrides: p.prompts || {},
-          })),
-        },
-      };
-
       const cleanedSettings = { ...localSettings, providers: cleanedProviders };
 
-      await api.machine.save(machinePayload);
-      onSaveSettings(cleanedSettings);
+      await onSaveSettings(cleanedSettings);
       onClose();
     } catch (e: unknown) {
       console.error('Failed to save machine settings', e);
@@ -755,3 +722,5 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     </div>
   );
 };
+
+export default SettingsDialog;

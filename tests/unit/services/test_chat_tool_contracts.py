@@ -552,7 +552,7 @@ class ChatToolContractsTest(TestCase):
         self.assertNotIn("replace_text_in_chapter", chat_tools)
         self.assertIn("replace_text_in_chapter", editing_tools)
         self.assertIn("recommend_metadata_updates", editing_tools)
-        self.assertNotIn("update_story_metadata", editing_tools)
+        self.assertIn("update_story_metadata", editing_tools)
         self.assertNotIn("create_sourcebook_entry", editing_tools)
 
     def test_project_tool_descriptions_cover_all_project_types(self):
@@ -573,8 +573,12 @@ class ChatToolContractsTest(TestCase):
 
     def test_tools_reject_wrong_model_role(self):
         content = self._call_tool(
-            "update_story_metadata",
-            {"title": "Should fail"},
+            "create_sourcebook_entry",
+            {
+                "name": "Test Entry",
+                "description": "A test entry",
+                "category": "Other",
+            },
             model_type="EDITING",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")

@@ -206,7 +206,7 @@ async def get_story_metadata(
 
 @chat_tool(
     description="Update story-level metadata such as title, summary, notes, or tags. Provide only the fields you want to change.",
-    allowed_roles=(CHAT_ROLE,),
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
 async def update_story_metadata(
@@ -221,7 +221,7 @@ async def update_story_metadata(
         conflicts=params.conflicts,
     )
     mutations["story_changed"] = True
-    return {"ok": True}
+    return {"ok": True, "message": "Story metadata updated successfully"}
 
 
 @chat_tool(

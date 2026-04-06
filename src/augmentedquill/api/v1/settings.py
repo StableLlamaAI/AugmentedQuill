@@ -80,7 +80,8 @@ async def api_settings_post(request: Request) -> JSONResponse:
             content={"ok": False, "detail": error_detail},
         )
 
-    machine_cfg = {"openai": openai_cfg}
+    machine_cfg = dict(machine or {})
+    machine_cfg["openai"] = openai_cfg
 
     try:
         story_path = _resolve_story_path()
@@ -265,13 +266,19 @@ async def api_machine_put(request: Request) -> JSONResponse:
     """
     payload = await parse_json_object_body(request)
 
-    machine = payload or {}
-    openai_cfg = (machine.get("openai") or {}) if isinstance(machine, dict) else {}
-    machine_cfg, selected, error_detail = clean_machine_openai_cfg_for_put(openai_cfg)
+    machine_cfg = dict(payload or {})
+    openai_cfg = (
+        (machine_cfg.get("openai") or {}) if isinstance(machine_cfg, dict) else {}
+    )
+    cleaned_openai_cfg, selected, error_detail = clean_machine_openai_cfg_for_put(
+        openai_cfg
+    )
     if error_detail:
         return JSONResponse(
             status_code=400, content={"ok": False, "detail": error_detail}
         )
+
+    machine_cfg["openai"] = cleaned_openai_cfg["openai"]
 
     try:
         machine_path = DEFAULT_MACHINE_CONFIG_PATH

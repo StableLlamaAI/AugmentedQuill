@@ -128,11 +128,33 @@ body.light ::-webkit-scrollbar-thumb:hover {
   outline-offset: 2px;
 }
 
+button,
+a,
+[role='button'],
+[role='link'],
+input[type='button'],
+input[type='submit'],
+input[type='reset'] {
+  cursor: pointer;
+}
+
+button:disabled,
+button[disabled],
+input[type='button'][disabled],
+input[type='submit'][disabled],
+input[type='reset'][disabled],
+[role='button'][aria-disabled='true'],
+[role='link'][aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
+a:focus-visible,
 [role='button']:focus-visible,
+[role='link']:focus-visible,
 [tabindex='0']:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;

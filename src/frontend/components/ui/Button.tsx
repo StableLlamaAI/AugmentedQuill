@@ -36,7 +36,7 @@ export const Button: React.FC<ButtonProps> = ({
     (!children ? 'Action' : undefined);
 
   const baseStyles =
-    'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border';
+    'inline-flex items-center justify-center rounded-md font-medium transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border';
 
   const isLight = theme === 'light';
 

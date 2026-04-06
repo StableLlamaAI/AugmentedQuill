@@ -114,4 +114,42 @@ describe('MetadataEditorDialog', () => {
       summaryTextareas.some((textarea) => textarea.getAttribute('lang') === 'de')
     ).toBe(true);
   });
+
+  it('shows actionable source buttons for empty summaries and selects notes when available', async () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+    const onAiGenerate = vi.fn(async () => 'Generated summary');
+
+    render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, summary: '', notes: 'Chapter notes' }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={onAiGenerate}
+        primarySourceLabel="Chapter"
+        primarySourceAvailable={false}
+      />
+    );
+
+    const chapterButton = screen.getByRole('button', {
+      name: 'Generate summary from Chapter',
+    });
+    const notesButton = screen.getByRole('button', {
+      name: 'Generate summary from Notes',
+    });
+
+    expect((chapterButton as HTMLButtonElement).disabled).toBe(true);
+    expect((notesButton as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(notesButton);
+    expect(onAiGenerate).toHaveBeenCalledWith(
+      'write',
+      expect.any(Function),
+      'Chapter notes',
+      expect.any(Function),
+      'notes'
+    );
+  });
 });

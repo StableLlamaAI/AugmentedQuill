@@ -100,16 +100,31 @@ async def generate_story_summary(
     payload = payload or {}
     prepared = prepare_story_summary_generation(payload, mode)
 
-    data = await _complete_with_tool_calls(
-        caller_id="story_generation.generate_story_summary",
-        messages=prepared["messages"],
-        base_url=prepared["base_url"],
-        api_key=prepared["api_key"],
-        model_id=prepared["model_id"],
-        timeout_s=prepared["timeout_s"],
-        model_name=prepared.get("model_name"),
-        tools=prepared.get("tools"),
-    )
+    # When rewriting an existing summary, clear the current story summary first.
+    # This avoids a race where the model calls tools like get_project_overview
+    # and receives the stale summary that should be rewritten.
+    backup_summary = None
+    if mode.lower() == "discard":
+        backup_summary = prepared["story"].get("story_summary", "")
+        prepared["story"]["story_summary"] = ""
+        save_story_config(prepared["story_path"], prepared["story"])
+
+    try:
+        data = await _complete_with_tool_calls(
+            caller_id="story_generation.generate_story_summary",
+            messages=prepared["messages"],
+            base_url=prepared["base_url"],
+            api_key=prepared["api_key"],
+            model_id=prepared["model_id"],
+            timeout_s=prepared["timeout_s"],
+            model_name=prepared.get("model_name"),
+            tools=prepared.get("tools"),
+        )
+    except Exception:
+        if mode.lower() == "discard":
+            prepared["story"]["story_summary"] = backup_summary or ""
+            save_story_config(prepared["story_path"], prepared["story"])
+        raise
 
     new_summary = data.get("content", "")
     prepared["story"]["story_summary"] = new_summary
@@ -124,16 +139,30 @@ async def generate_chapter_summary(
     payload = payload or {}
     prepared = prepare_chapter_summary_generation(payload, chap_id, mode)
 
-    data = await _complete_with_tool_calls(
-        caller_id="story_generation.generate_chapter_summary",
-        messages=prepared["messages"],
-        base_url=prepared["base_url"],
-        api_key=prepared["api_key"],
-        model_id=prepared["model_id"],
-        timeout_s=prepared["timeout_s"],
-        model_name=prepared.get("model_name"),
-        tools=prepared.get("tools"),
-    )
+    backup_summary = None
+    if mode.lower() == "discard":
+        backup_summary = prepared["chapters_data"][prepared["pos"]].get("summary", "")
+        prepared["chapters_data"][prepared["pos"]]["summary"] = ""
+        prepared["story"]["chapters"] = prepared["chapters_data"]
+        save_story_config(prepared["story_path"], prepared["story"])
+
+    try:
+        data = await _complete_with_tool_calls(
+            caller_id="story_generation.generate_chapter_summary",
+            messages=prepared["messages"],
+            base_url=prepared["base_url"],
+            api_key=prepared["api_key"],
+            model_id=prepared["model_id"],
+            timeout_s=prepared["timeout_s"],
+            model_name=prepared.get("model_name"),
+            tools=prepared.get("tools"),
+        )
+    except Exception:
+        if mode.lower() == "discard":
+            prepared["chapters_data"][prepared["pos"]]["summary"] = backup_summary or ""
+            prepared["story"]["chapters"] = prepared["chapters_data"]
+            save_story_config(prepared["story_path"], prepared["story"])
+        raise
 
     new_summary = data.get("content", "")
     prepared["chapters_data"][prepared["pos"]]["summary"] = new_summary

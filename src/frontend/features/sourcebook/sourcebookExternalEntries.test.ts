@@ -15,6 +15,7 @@ import { SourcebookEntry } from '../../types';
 import {
   filterSourcebookEntries,
   resolveExternalSourcebookEntries,
+  updateSourcebookEntryInList,
 } from './SourcebookList';
 
 const entry = (id: string, name: string): SourcebookEntry => ({
@@ -33,6 +34,14 @@ describe('sourcebook external entry sync', () => {
 
     const resolved = resolveExternalSourcebookEntries(refreshedStory, staleLocal);
     expect(resolved).toEqual(refreshedStory);
+  });
+
+  it('replaces renamed entries using the original id', () => {
+    const staleLocal = [entry('a', 'Old Entry')];
+    const updated = { ...staleLocal[0], id: 'new-name', name: 'New Entry' };
+
+    const resolved = updateSourcebookEntryInList(staleLocal, 'a', updated);
+    expect(resolved).toEqual([updated]);
   });
 
   it('keeps current entries when no external sourcebook is provided', () => {

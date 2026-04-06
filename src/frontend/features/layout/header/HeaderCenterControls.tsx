@@ -86,12 +86,22 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const {
     appSettings,
     setAppSettings,
+    saveSettings,
     modelConnectionStatus,
     detectedCapabilities,
     recheckUnavailableProviderIfStale,
   } = modelControls;
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
     themeTokens;
+
+  const updateAppSettings = (nextSettings: typeof appSettings) => {
+    setAppSettings(nextSettings);
+    if (saveSettings) {
+      void saveSettings(nextSettings).catch((error) => {
+        console.error('Failed to persist model selection', error);
+      });
+    }
+  };
 
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -591,10 +601,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                     );
                   }}
                   onChange={(value) =>
-                    setAppSettings((previous) => ({
-                      ...previous,
+                    updateAppSettings({
+                      ...appSettings,
                       activeWritingProviderId: value,
-                    }))
+                    })
                   }
                   options={appSettings.providers}
                   theme={currentTheme}
@@ -611,10 +621,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                     );
                   }}
                   onChange={(value) =>
-                    setAppSettings((previous) => ({
-                      ...previous,
+                    updateAppSettings({
+                      ...appSettings,
                       activeEditingProviderId: value,
-                    }))
+                    })
                   }
                   options={appSettings.providers}
                   theme={currentTheme}
@@ -631,10 +641,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                     );
                   }}
                   onChange={(value) =>
-                    setAppSettings((previous) => ({
-                      ...previous,
+                    updateAppSettings({
+                      ...appSettings,
                       activeChatProviderId: value,
-                    }))
+                    })
                   }
                   options={appSettings.providers}
                   theme={currentTheme}
@@ -658,10 +668,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               );
             }}
             onChange={(value) =>
-              setAppSettings((previous) => ({
-                ...previous,
+              updateAppSettings({
+                ...appSettings,
                 activeWritingProviderId: value,
-              }))
+              })
             }
             options={appSettings.providers}
             theme={currentTheme}
@@ -678,10 +688,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               );
             }}
             onChange={(value) =>
-              setAppSettings((previous) => ({
-                ...previous,
+              updateAppSettings({
+                ...appSettings,
                 activeEditingProviderId: value,
-              }))
+              })
             }
             options={appSettings.providers}
             theme={currentTheme}
@@ -696,10 +706,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
             }}
             onChange={(value) =>
-              setAppSettings((previous) => ({
-                ...previous,
+              updateAppSettings({
+                ...appSettings,
                 activeChatProviderId: value,
-              }))
+              })
             }
             options={appSettings.providers}
             theme={currentTheme}

@@ -82,6 +82,7 @@ export type HeaderAiControls = {
 export type HeaderModelControls = {
   appSettings: AppSettings;
   setAppSettings: Dispatch<SetStateAction<AppSettings>>;
+  saveSettings?: (settings: AppSettings) => Promise<void>;
   modelConnectionStatus: ComponentProps<typeof ModelSelector>['connectionStatus'];
   detectedCapabilities: ComponentProps<typeof ModelSelector>['detectedCapabilities'];
   recheckUnavailableProviderIfStale: (providerId: string, minAgeMs?: number) => void;
