@@ -408,7 +408,7 @@ export const CodeMirrorEditor = React.forwardRef<
     ): Extension => {
       const editorAriaLabel = ph ?? 'Story content';
       return EditorView.contentAttributes.of({
-        lang: la,
+        lang: la || 'en',
         spellcheck: sc ? 'true' : 'false',
         autocomplete: 'off',
         autocorrect: sc ? 'on' : 'off',

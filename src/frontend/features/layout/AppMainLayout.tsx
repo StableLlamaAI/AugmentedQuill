@@ -536,6 +536,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         >
           <SourcebookList
             theme={currentTheme}
+            language={story.language}
             externalEntries={story.sourcebook || []}
             checkedIds={checkedSourcebookIds || []}
             onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
@@ -582,7 +583,6 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               showWhitespace={showWhitespace}
               onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
               baselineContent={editorControls.baselineContent}
-              language={story.language}
               spellCheck={true}
             />
           ) : (
