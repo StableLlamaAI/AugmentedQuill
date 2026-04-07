@@ -285,7 +285,12 @@ async def create_sourcebook_entry(
 
 
 @chat_tool(
-    description="Update an existing sourcebook entry. Provide only the fields you want to change. If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable.",
+    description=(
+        "Update an existing sourcebook entry. Provide only the fields you want to change; this is a partial replacement. "
+        "At least one of name, description, category, synonyms, or images must be provided. "
+        "If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. "
+        "For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="sourcebook-write",
 )
@@ -293,6 +298,17 @@ async def update_sourcebook_entry(
     params: UpdateSourcebookEntryParams, payload: dict, mutations: dict
 ):
     """Update Sourcebook Entry."""
+    if (
+        params.name is None
+        and params.description is None
+        and params.category is None
+        and params.synonyms is None
+        and params.images is None
+    ):
+        return {
+            "error": "No update fields provided. Provide at least one of name, description, category, synonyms, or images with replacement values to update the entry."
+        }
+
     result = sourcebook_update_entry(
         name_or_id=params.name_or_id,
         name=params.name,
