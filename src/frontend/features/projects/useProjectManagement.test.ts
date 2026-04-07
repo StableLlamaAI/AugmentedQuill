@@ -143,4 +143,46 @@ describe('useProjectManagement', () => {
     expect(persisted.title).toBe('Renamed');
     expect(persisted.language).toBe('de');
   });
+
+  it('syncs active project language when story metadata updates', async () => {
+    const initialStory = {
+      ...baseStory,
+      language: 'en',
+    };
+    const { result, rerender } = renderHook(
+      ({ story }) =>
+        useProjectManagement({
+          story,
+          refreshStory: vi.fn().mockResolvedValue(undefined),
+          loadStory: vi.fn(),
+          updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
+          handleSelectChat: vi.fn().mockResolvedValue(undefined),
+          handleNewChat: vi.fn(),
+          setChatHistoryList: vi.fn(),
+          getErrorMessage: () => 'error',
+          isSettingsOpen: false,
+          setIsSettingsOpen: vi.fn(),
+        }),
+      { initialProps: { story: initialStory } }
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.projects.some((project) => project.id === 'active-story')
+      ).toBe(true);
+    });
+
+    act(() => {
+      rerender({
+        story: {
+          ...initialStory,
+          language: 'de',
+        },
+      });
+    });
+
+    expect(
+      result.current.projects.find((project) => project.id === 'active-story')?.language
+    ).toBe('de');
+  });
 });
