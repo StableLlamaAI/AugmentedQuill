@@ -27,6 +27,9 @@ class ChannelFilter:
             r"(<\|channel\|>(.*?)<\|message\|>|"
             r"<\|start\|>assistant.*?<\|message\|>|"
             r"<\|end\|>|"
+            r"<\|tool_call\>|"
+            r"<\|tool_call\|>|"
+            r"<tool_call\|>|"
             r"<(thought|thinking)>|"
             r"</(thought|thinking)>|"
             r"\[TOOL_CALL\]\s*|"
@@ -100,9 +103,17 @@ class ChannelFilter:
                     self.current_channel = "thought"
                 elif re.match(r"</(thought|thinking)>", tag_text, re.IGNORECASE):
                     self.current_channel = "final"
-                elif re.match(r"\[TOOL_CALL\]\s*|<tool_call>", tag_text, re.IGNORECASE):
+                elif re.match(
+                    r"\[TOOL_CALL\]\s*|<tool_call>|<\|tool_call\>",
+                    tag_text,
+                    re.IGNORECASE,
+                ):
                     self.current_channel = "tool_def"
-                elif re.match(r"\[/TOOL_CALL\]|</tool_call>", tag_text, re.IGNORECASE):
+                elif re.match(
+                    r"\[/TOOL_CALL\]|</tool_call>|<\|tool_call\|>|<tool_call\|>",
+                    tag_text,
+                    re.IGNORECASE,
+                ):
                     self.current_channel = "final"
                 elif tag_text.startswith("<|channel|>"):
                     channel_name = match.group(2)
