@@ -45,6 +45,7 @@ type UseChatExecutionParams = {
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
+  onMutations?: (mutations: any) => void;
   pushExternalHistoryEntry?: (params: {
     label: string;
     onUndo?: () => Promise<void>;
@@ -68,6 +69,7 @@ export function useChatExecution({
   refreshProjects,
   refreshStory,
   onProseChunk,
+  onMutations,
   pushExternalHistoryEntry,
   requestToolCallLoopAccess,
 }: UseChatExecutionParams) {
@@ -285,7 +287,25 @@ export function useChatExecution({
 
         if (!toolResponse.ok) break;
 
+        const callResults: Array<{ name: string; args: any; result: any }> = [];
         for (const message of toolResponse.appended_messages) {
+          const toolCall = assistantMessage.tool_calls?.find(
+            (tc) => tc.id === message.tool_call_id
+          );
+          if (toolCall) {
+            let parsedResult = {};
+            try {
+              parsedResult = JSON.parse(message.content);
+            } catch {
+              /* ignore */
+            }
+            callResults.push({
+              name: toolCall.name,
+              args: toolCall.args,
+              result: parsedResult,
+            });
+          }
+
           currentHistory.push({
             id: uuidv4(),
             role: 'tool',
@@ -299,6 +319,10 @@ export function useChatExecution({
         if (toolResponse.mutations?.story_changed) {
           await refreshProjects();
           await refreshStory();
+        }
+
+        if (onMutations && toolResponse.mutations) {
+          onMutations({ ...toolResponse.mutations, _call_results: callResults });
         }
 
         const toolBatch = toolResponse.mutations?.tool_batch;

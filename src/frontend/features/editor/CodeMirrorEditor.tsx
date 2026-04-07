@@ -39,6 +39,22 @@ const diffMark = Decoration.mark({
   class: 'cm-diff-inserted',
 });
 
+const deletedMark = Decoration.mark({
+  class: 'cm-diff-deleted',
+});
+
+class DeletedWidget extends WidgetType {
+  constructor(readonly text: string) {
+    super();
+  }
+  toDOM() {
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-diff-deleted';
+    wrap.textContent = this.text;
+    return wrap;
+  }
+}
+
 const buildDiffPlugin = (baseline: string) =>
   ViewPlugin.fromClass(
     class {
@@ -69,8 +85,15 @@ const buildDiffPlugin = (baseline: string) =>
             // INSERTED — decorate the added range in the current document.
             decs.push(diffMark.range(pos, pos + text.length));
             pos += text.length;
+          } else if (op === -1) {
+            // DELETED — exists in baseline only, inject as a widget in the current doc.
+            decs.push(
+              Decoration.widget({
+                widget: new DeletedWidget(text),
+                side: 0,
+              }).range(pos)
+            );
           }
-          // DELETED (op === -1): exists in baseline only, no position in current doc.
         }
 
         return Decoration.set(decs, true);
@@ -312,6 +335,14 @@ const baseTheme = EditorView.theme({
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
   },
+  '.cm-diff-deleted': {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)', // Light red
+    textDecoration: 'line-through',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    opacity: '0.8',
+  },
 });
 
 // Marks transactions that mirror external prop updates so updateListener
@@ -348,6 +379,8 @@ export interface CodeMirrorEditorProps {
   onSelectionChange?: (anchor: number, head: number) => void;
   /** Text state to compare against for change highlighting (AI additions) */
   baselineValue?: string;
+  /** Enable inline diff highlighting in the editor */
+  showDiff?: boolean;
   /** BCP 47 language tag for spellcheck and hyphenation */
   language?: string;
   /** Whether to enable browser-native spellcheck */
@@ -372,6 +405,7 @@ export const CodeMirrorEditor = React.forwardRef<
       style,
       onSelectionChange,
       baselineValue = '',
+      showDiff = true,
       language = 'en',
       spellCheck = false,
     },
@@ -427,8 +461,8 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildWsExtension = (ws: boolean): Extension =>
       ws ? buildWhitespacePlugin() : [];
 
-    const buildDiffExtension = (bv: string): Extension =>
-      bv ? buildDiffPlugin(bv) : [];
+    const buildDiffExtension = (bv: string, enabled: boolean): Extension =>
+      enabled && bv ? buildDiffPlugin(bv) : [];
 
     const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
       if (eb === 'ignore') {
@@ -523,7 +557,7 @@ export const CodeMirrorEditor = React.forwardRef<
         // Tab keymap for Raw/Markdown modes
         Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
-        diffCompartment.current.of(buildDiffExtension(baselineValue)),
+        diffCompartment.current.of(buildDiffExtension(baselineValue, showDiff)),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
         wsCompartment.current.of(buildWsExtension(showWhitespace)),
@@ -610,9 +644,11 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       viewRef.current?.dispatch({
-        effects: diffCompartment.current.reconfigure(buildDiffExtension(baselineValue)),
+        effects: diffCompartment.current.reconfigure(
+          buildDiffExtension(baselineValue, showDiff)
+        ),
       });
-    }, [baselineValue]);
+    }, [baselineValue, showDiff]);
 
     // ── External value sync ─────────────────────────────────────────────────
     // Update the CodeMirror document when the value prop changes due to an

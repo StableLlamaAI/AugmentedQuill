@@ -88,6 +88,42 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
     </div>
   );
 
+  const renderToggle = (
+    label: string,
+    enabled: boolean,
+    onChange: (enabled: boolean) => void
+  ) => (
+    <div className="space-y-2">
+      <div className={`flex justify-between items-center text-sm ${textMain}`}>
+        <span>{label}</span>
+      </div>
+      <div className="flex rounded-lg overflow-hidden border border-brand-gray-700">
+        <button
+          type="button"
+          onClick={() => onChange(true)}
+          className={`flex-1 py-1.5 text-xs font-medium ${
+            enabled
+              ? buttonActive
+              : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
+          }`}
+        >
+          Enabled
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className={`flex-1 py-1.5 text-xs font-medium ${
+            !enabled
+              ? buttonActive
+              : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
+          }`}
+        >
+          Disabled
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="relative" ref={appearanceRef}>
       <Button
@@ -219,6 +255,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '10',
               editorSettings.sidebarWidth,
               (val) => setEditorSettings({ ...editorSettings, sidebarWidth: val })
+            )}
+            {renderToggle('Diff View', editorSettings.showDiff, (enabled) =>
+              setEditorSettings({ ...editorSettings, showDiff: enabled })
             )}
           </div>
         </div>

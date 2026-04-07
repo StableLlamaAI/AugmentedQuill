@@ -19,6 +19,7 @@ const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   contrast: 0.9,
   theme: 'mixed',
   sidebarWidth: 320,
+  showDiff: true,
 };
 
 export function useEditorPreferences() {

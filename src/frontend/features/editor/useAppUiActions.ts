@@ -60,7 +60,7 @@ export function useAppUiActions({
     }
   };
 
-  const handleChapterSelect = (id: string) => {
+  const handleChapterSelect = (id: string | null) => {
     selectChapter(id);
     setIsSidebarOpen(false);
   };

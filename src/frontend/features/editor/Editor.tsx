@@ -115,6 +115,8 @@ export const escapeHtmlAttribute = (value: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+const TAB_PLACEHOLDER = '\uF000';
+
 // Configure marked extensions once (subscript, superscript, footnotes).
 configureMarked();
 
@@ -201,9 +203,12 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
         if (j < text.length) {
           const span = document.createElement('span');
           span.dataset.wsMarker = '1';
+          const isTab = text[j] === '\t';
+          if (isTab) {
+            span.dataset.wsTab = '1';
+          }
           span.setAttribute('aria-hidden', 'true');
           span.className = 'cm-ws-marker';
-          const isTab = text[j] === '\t';
           span.textContent = isTab ? '→' : '\u00b7';
           span.style.display = 'inline-block';
           span.style.minWidth = '1ch';
@@ -267,12 +272,24 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
 
-    // Local copy of the diff baseline: shadows the prop so we can clear the
-    // highlight *immediately* on the first keystroke, before the debounce fires.
     const [localBaseline, setLocalBaseline] = useState<string>(baselineContent);
+    const [localNotesBaseline, setLocalNotesBaseline] = useState<string>(
+      chapter.notes || ''
+    );
+    const [localPrivateNotesBaseline, setLocalPrivateNotesBaseline] = useState<string>(
+      chapter.private_notes || ''
+    );
+
     useEffect(() => {
       setLocalBaseline(baselineContent);
     }, [baselineContent]);
+
+    useEffect(() => {
+      // Advance baselines for notes when switching chapters or when baselineState changes
+      setLocalNotesBaseline(chapter.notes || '');
+      setLocalPrivateNotesBaseline(chapter.private_notes || '');
+    }, [chapter.id, baselineContent]);
+
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
     // Keep local state in sync when the chapter changes externally (chapter
@@ -578,7 +595,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         // We sync if not focused OR if we are actively streaming from AI
         if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
           let contentToRender = chapter.content;
-          if (localBaseline && localBaseline !== chapter.content) {
+          if (settings.showDiff && localBaseline && localBaseline !== chapter.content) {
             const diffs = new diff_match_patch().diff_main(
               localBaseline,
               chapter.content
@@ -590,14 +607,20 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 highlightedMd += text;
               } else if (op === 1) {
                 highlightedMd += `<span class="diff-inserted">${text}</span>`;
+              } else if (op === -1) {
+                highlightedMd += `<span class="diff-deleted">${text}</span>`;
               }
             }
             contentToRender = highlightedMd;
           }
 
-          wysiwygRef.current.innerHTML = marked.parse(contentToRender, {
-            breaks: true,
-          }) as string;
+          const parsedHtml = marked.parse(
+            contentToRender.replace(/\t/g, TAB_PLACEHOLDER),
+            {
+              breaks: true,
+            }
+          ) as string;
+          wysiwygRef.current.innerHTML = parsedHtml.replaceAll(TAB_PLACEHOLDER, '&#9;');
           if (showWhitespace) {
             injectWsMarkersWysiwyg(wysiwygRef.current);
           }
@@ -608,6 +631,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             const htmlSpan = span as HTMLElement;
             htmlSpan.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
             htmlSpan.style.borderBottom = '1px solid rgba(34, 197, 94, 0.4)';
+          });
+
+          const deletedSpans = wysiwygRef.current.querySelectorAll('.diff-deleted');
+          deletedSpans.forEach((span) => {
+            const htmlSpan = span as HTMLElement;
+            htmlSpan.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+            htmlSpan.style.borderBottom = '1px solid rgba(239, 68, 68, 0.4)';
+            htmlSpan.style.textDecoration = 'line-through';
+            htmlSpan.style.opacity = '0.7';
           });
         }
       }
@@ -1596,7 +1628,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     onSelectionChange={checkContext}
                     mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
-                    baselineValue={localBaseline}
+                    showDiff={settings.showDiff}
+                    baselineValue={settings.showDiff ? localBaseline : ''}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'

@@ -36,6 +36,7 @@ import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
 import { ChatMessage } from './types';
+import { SessionMutation } from './features/chat';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
 import { useEditorUIState } from './features/app/useEditorUIState';
@@ -135,6 +136,14 @@ const App: React.FC = () => {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [sessionMutations, setSessionMutations] = useState<SessionMutation[]>([]);
+  const [selectedSourcebookEntryId, setSelectedSourcebookEntryId] = useState<
+    string | null
+  >(null);
+  const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<{
+    id: number;
+    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
+  } | null>(null);
 
   const {
     isChatOpen,
@@ -200,6 +209,146 @@ const App: React.FC = () => {
     setChatMessages,
     isChatLoading,
   });
+
+  const onChatNewMessageBegin = useCallback(() => {
+    setSessionMutations([]);
+  }, []);
+
+  const onToolMutations = useCallback((muts: any) => {
+    if (!muts) return;
+    const newMuts: SessionMutation[] = [];
+    const callResults =
+      (muts._call_results as Array<{ name: string; args: any; result: any }>) || [];
+
+    // Map individual tool calls to granular tags, but only for write/update actions.
+    callResults.forEach((res) => {
+      const name = res.name;
+      const args = res.args || {};
+      const result = res.result || {};
+
+      if (
+        name === 'create_sourcebook_entry' ||
+        name === 'update_sourcebook_entry' ||
+        name === 'delete_sourcebook_entry' ||
+        name === 'add_sourcebook_relation' ||
+        name === 'remove_sourcebook_relation'
+      ) {
+        const id = result.id || args.name_or_id || args.name;
+        const label = result.name || args.name || (id ? `SB: ${id}` : 'Sourcebook');
+        newMuts.push({
+          id: `sb-${Date.now()}-${Math.random()}`,
+          type: 'sourcebook',
+          label,
+          targetId: id,
+        });
+        return;
+      }
+
+      if (
+        name === 'update_story_metadata' ||
+        name === 'update_chapter_metadata' ||
+        name === 'update_book_metadata' ||
+        name === 'set_story_tags' ||
+        name === 'set_story_summary' ||
+        name === 'sync_story_summary' ||
+        name === 'write_story_summary'
+      ) {
+        // Collect all changed fields. If a single tool call updates multiple fields
+        // (e.g. LLM updates both Summary and Conflicts), we generate tags for each.
+        const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
+        if (
+          args.summary !== undefined ||
+          name === 'set_story_summary' ||
+          name === 'sync_story_summary' ||
+          name === 'write_story_summary'
+        ) {
+          changedFields.push('summary');
+        }
+        if (args.notes !== undefined) changedFields.push('notes');
+        if (args.private_notes !== undefined) changedFields.push('private');
+        if (args.conflicts !== undefined) changedFields.push('conflicts');
+
+        // Defaults to 'summary' if no known field was passed in args (e.g. title changes).
+        if (changedFields.length === 0) {
+          changedFields.push('summary');
+        }
+
+        changedFields.forEach((subType) => {
+          newMuts.push({
+            id: `meta-${Date.now()}-${Math.random()}`,
+            type: 'metadata',
+            label: subType.charAt(0).toUpperCase() + subType.slice(1),
+            subType,
+          });
+        });
+        return;
+      }
+
+      if (
+        name === 'write_chapter_content' ||
+        name === 'replace_text_in_chapter' ||
+        name === 'apply_chapter_replacements' ||
+        name === 'write_chapter'
+      ) {
+        const chapId = result.chap_id || args.chap_id;
+        const label = chapId ? `Chapter ${chapId}` : 'Chapter prose';
+        newMuts.push({
+          id: `chap-${Date.now()}-${Math.random()}`,
+          type: 'chapter',
+          label,
+          targetId: chapId ? String(chapId) : undefined,
+        });
+        return;
+      }
+
+      if (name === 'write_story_content') {
+        newMuts.push({
+          id: `story-${Date.now()}-${Math.random()}`,
+          type: 'story',
+          label: 'Story prose',
+        });
+        return;
+      }
+
+      if (name === 'call_editing_assistant' || name === 'call_writing_llm') {
+        newMuts.push({
+          id: `story-${Date.now()}-${Math.random()}`,
+          type: 'story',
+          label: 'Story prose',
+        });
+        return;
+      }
+
+      if (name === 'write_book_content') {
+        const bookId = result.book_id || args.book_id;
+        newMuts.push({
+          id: `book-${Date.now()}-${Math.random()}`,
+          type: 'book',
+          label: 'Book',
+          targetId: bookId,
+        });
+        return;
+      }
+    });
+
+    if (newMuts.length > 0) {
+      setSessionMutations((prev) => {
+        const combined = [...prev];
+        newMuts.forEach((m) => {
+          // Avoid exact duplicates in the same session
+          if (
+            !combined.some(
+              (x) =>
+                x.type === m.type && x.label === m.label && x.targetId === m.targetId
+            )
+          ) {
+            combined.push(m);
+          }
+        });
+        return combined;
+      });
+    }
+  }, []);
 
   const {
     projects,
@@ -300,6 +449,42 @@ const App: React.FC = () => {
     recordHistoryEntry: pushExternalHistoryEntry,
   });
 
+  const onMutationClick = useCallback(
+    (m: SessionMutation) => {
+      if (m.type === 'chapter') {
+        if (m.targetId) {
+          handleChapterSelect(m.targetId);
+        }
+      } else if (m.type === 'story') {
+        handleChapterSelect(null);
+      } else if (m.type === 'metadata') {
+        setIsSidebarOpen(true);
+        setMetadataDialogTrigger((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          initialTab: m.subType as any,
+        }));
+        setEditorSettings((prev) => ({
+          ...prev,
+          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+        }));
+      } else if (m.type === 'sourcebook') {
+        setIsSidebarOpen(true);
+        setSelectedSourcebookEntryId(m.targetId ?? null);
+        setEditorSettings((prev) => ({
+          ...prev,
+          sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+        }));
+      } else if (m.type === 'book') {
+        setIsSidebarOpen(true);
+        setEditorSettings((prev) => ({
+          ...prev,
+          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+        }));
+      }
+    },
+    [handleChapterSelect, setIsSidebarOpen, setEditorSettings]
+  );
+
   // Keep a stable base snapshot per prose stream so append-mode previews are
   // composed from the original chapter text, not from already preview-mutated
   // text (which would duplicate prior chunks and cause heavy flicker/jumps).
@@ -383,9 +568,25 @@ const App: React.FC = () => {
       },
       [story.projectType, story.draft, story.chapters, updateChapter]
     ),
-    pushExternalHistoryEntry,
+    onMutations: onToolMutations,
+    pushExternalHistoryEntry: (params) => {
+      pushExternalHistoryEntry?.(params);
+    },
     requestToolCallLoopAccess,
   });
+
+  const handleSendMessageWithReset = useCallback(
+    async (text: string) => {
+      onChatNewMessageBegin();
+      await handleSendMessage(text);
+    },
+    [handleSendMessage, onChatNewMessageBegin]
+  );
+
+  const handleRegenerateWithReset = useCallback(async () => {
+    onChatNewMessageBegin();
+    await handleRegenerate();
+  }, [handleRegenerate, onChatNewMessageBegin]);
 
   // Minimal theme values needed by the outer wrapper div.
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
@@ -531,6 +732,8 @@ const App: React.FC = () => {
               onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
               isSourcebookSelectionRunning,
               onSourcebookMutated: pushExternalHistoryEntry,
+              selectedSourcebookEntryId,
+              metadataDialogTrigger,
               baselineState,
             }}
             editorControls={{
@@ -546,7 +749,7 @@ const App: React.FC = () => {
                 continuations,
                 isSuggesting,
                 handleTriggerSuggestions,
-                cancelSuggestions,
+                handleCancelSuggestions: cancelSuggestions,
                 handleAcceptContinuation,
                 isSuggestionMode,
                 handleKeyboardSuggestionAction,
@@ -578,9 +781,9 @@ const App: React.FC = () => {
               isChatAvailable: roleAvailability.chat,
               activeChatConfig,
               systemPrompt,
-              handleSendMessage,
+              handleSendMessage: handleSendMessageWithReset,
               handleStopChat,
-              handleRegenerate,
+              handleRegenerate: handleRegenerateWithReset,
               handleEditMessage,
               handleDeleteMessage,
               setSystemPrompt,
@@ -596,6 +799,11 @@ const App: React.FC = () => {
               setIsIncognito,
               allowWebSearch,
               setAllowWebSearch,
+              scratchpad,
+              onUpdateScratchpad,
+              onDeleteScratchpad,
+              sessionMutations,
+              onMutationClick,
             }}
             instructionLanguages={instructionLanguages}
           />

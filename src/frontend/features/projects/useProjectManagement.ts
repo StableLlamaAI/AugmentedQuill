@@ -100,7 +100,13 @@ export function useProjectManagement({
     localStorage.setItem(`project_${story.id}`, JSON.stringify(story));
     setProjects((prev) => {
       const exists = prev.find((project) => project.id === story.id);
-      if (exists && exists.title === story.title && exists.type === story.projectType) {
+      const language = story.language || 'en';
+      if (
+        exists &&
+        exists.title === story.title &&
+        exists.type === story.projectType &&
+        exists.language === language
+      ) {
         return prev.map((project) =>
           project.id === story.id ? { ...project, updatedAt: Date.now() } : project
         );
@@ -112,6 +118,7 @@ export function useProjectManagement({
                 ...project,
                 title: story.title,
                 type: story.projectType,
+                language,
                 updatedAt: Date.now(),
               }
             : project
@@ -123,6 +130,7 @@ export function useProjectManagement({
           id: story.id,
           title: story.title,
           type: story.projectType,
+          language,
           updatedAt: Date.now(),
         },
       ];
@@ -131,6 +139,7 @@ export function useProjectManagement({
     story.id,
     story.title,
     story.projectType,
+    story.language,
     story.chapters,
     story.summary,
     story.styleTags,

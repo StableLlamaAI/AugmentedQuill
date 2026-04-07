@@ -68,19 +68,31 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
       const diffs = dmp.diff_main(baseline, safeContent);
       dmp.diff_cleanupSemantic(diffs);
 
+      // We need to be careful with HTML injection inside Markdown.
+      // We use a custom escaping strategy for the diff segments.
       let highlightedMd = '';
       for (const [op, text] of diffs) {
+        // Escape standard HTML characters within the diff segment text
+        const escaped = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+
         if (op === 0) {
-          highlightedMd += text;
+          highlightedMd += text; // Unchanged text remains raw Markdown
         } else if (op === 1) {
-          // Wrap inserted text in a span with a class that can be styled.
-          // Since marked parses MD, we should ensure the HTML is valid.
-          highlightedMd += `<span class="diff-inserted">${text}</span>`;
+          highlightedMd += `<span class="diff-inserted">${escaped}</span>`;
+        } else if (op === -1) {
+          highlightedMd += `<span class="diff-deleted">${escaped}</span>`;
         }
       }
       contentToParse = highlightedMd;
     }
 
+    // Since we've already injected HTML spans, we need to ensure marked
+    // doesn't double-escape them if they are at the top level.
     const rawHtml = marked.parse(contentToParse) as string;
     return DOMPurify.sanitize(rawHtml, {
       ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code', 'span'],

@@ -13,7 +13,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 
@@ -151,5 +151,46 @@ describe('MetadataEditorDialog', () => {
       expect.any(Function),
       'notes'
     );
+  });
+
+  it('activates the notes source label when chapter source is unavailable', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="story"
+        title="Edit Story Metadata"
+        initialData={{
+          ...baseData,
+          summary: 'Existing summary',
+          notes: 'Story notes available',
+        }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={vi.fn(async () => undefined)}
+        primarySourceLabel="Chapter"
+        primarySourceAvailable={false}
+      />
+    );
+
+    const chapterGroups = screen.getAllByRole('group', {
+      name: 'Chapter summary actions',
+    });
+    const notesGroups = screen.getAllByRole('group', {
+      name: 'Notes summary actions',
+    });
+
+    const chapterLabelActive = chapterGroups.some((group) => {
+      const label = within(group).getByText('from Chapter');
+      return label.className.includes('text-brand-gray-500');
+    });
+    const notesLabelActive = notesGroups.some((group) => {
+      const label = within(group).getByText('from Notes');
+      return label.className.includes('bg-primary/20');
+    });
+
+    expect(chapterLabelActive).toBe(true);
+    expect(notesLabelActive).toBe(true);
   });
 });
