@@ -213,7 +213,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             Notes (LLM Visible)
           </span>
           <div className="max-h-24 overflow-y-auto custom-scrollbar">
-            <MarkdownView content={notes} simple language={language} />
+            <MarkdownView
+              content={notes}
+              simple
+              baseline={baselineNotes}
+              language={language}
+            />
           </div>
         </div>
       )}
