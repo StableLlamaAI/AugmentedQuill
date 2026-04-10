@@ -115,6 +115,45 @@ describe('MetadataEditorDialog', () => {
     ).toBe(true);
   });
 
+  it('supports undo and redo via metadata dialog header buttons', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    expect(titleInput.value).toBe('Chapter 1 Revised');
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Undo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1'
+    );
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Redo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1 Revised'
+    );
+  });
+
   it('shows actionable source buttons for empty summaries and selects notes when available', async () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();

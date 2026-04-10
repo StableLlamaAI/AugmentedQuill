@@ -28,6 +28,8 @@ import {
   PenLine,
   ChevronDown,
   ChevronRight,
+  Undo,
+  Redo,
   Brain,
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
@@ -90,6 +92,10 @@ export function MetadataEditorDialog({
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
+
+  const [history, setHistory] = useState<MetadataParams[]>([initialData]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const isRestoringRef = useRef(false);
 
   const normalizeConflict = (value: any): Conflict => {
     return {
@@ -163,6 +169,11 @@ export function MetadataEditorDialog({
   const prevInitialRef = useRef<MetadataParams>(initialData);
 
   useEffect(() => {
+    setHistory([initialData]);
+    setHistoryIndex(0);
+  }, [initialData]);
+
+  useEffect(() => {
     const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
     prevInitialRef.current = initialData;
 
@@ -181,6 +192,43 @@ export function MetadataEditorDialog({
   useEffect(() => {
     setData((prev) => ({ ...prev, conflicts }));
   }, [conflicts]);
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      return;
+    }
+
+    const snapshot = JSON.parse(JSON.stringify(data)) as MetadataParams;
+    const existing = history[historyIndex];
+    if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
+      return;
+    }
+
+    setHistory((prev) => {
+      const next = [...prev.slice(0, historyIndex + 1), snapshot];
+      return next.length > 100 ? next.slice(next.length - 100) : next;
+    });
+    setHistoryIndex((prev) => Math.min(prev + 1, 99));
+  }, [data, historyIndex, history]);
+
+  const restoreMetadataHistory = (index: number) => {
+    if (index < 0 || index >= history.length) {
+      return;
+    }
+
+    const entry = history[index];
+    if (!entry) {
+      return;
+    }
+
+    isRestoringRef.current = true;
+    setData(JSON.parse(JSON.stringify(entry)));
+    setConflicts(JSON.parse(JSON.stringify(entry.conflicts || [])));
+    setHistoryIndex(index);
+    setTimeout(() => {
+      isRestoringRef.current = false;
+    }, 0);
+  };
 
   // Debounced autosave reduces write pressure while preserving quick feedback.
   useEffect(() => {
@@ -394,6 +442,29 @@ export function MetadataEditorDialog({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() =>
+                  historyIndex > 0 && restoreMetadataHistory(historyIndex - 1)
+                }
+                disabled={historyIndex === 0}
+                className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Undo"
+                aria-label="Undo metadata editor changes"
+              >
+                <Undo size={16} />
+              </button>
+              <button
+                onClick={() =>
+                  historyIndex < history.length - 1 &&
+                  restoreMetadataHistory(historyIndex + 1)
+                }
+                disabled={historyIndex >= history.length - 1}
+                className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Redo"
+                aria-label="Redo metadata editor changes"
+              >
+                <Redo size={16} />
+              </button>
+              <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
@@ -419,10 +490,14 @@ export function MetadataEditorDialog({
           <div className="flex-1 overflow-y-auto flex flex-col">
             {/* Title Editor */}
             <div className="p-4 border-b dark:border-brand-gray-800 space-y-2 flex-shrink-0">
-              <label className="block text-sm font-medium dark:text-brand-gray-400">
+              <label
+                htmlFor="metadata-dialog-title-input"
+                className="block text-sm font-medium dark:text-brand-gray-400"
+              >
                 Title
               </label>
               <input
+                id="metadata-dialog-title-input"
                 value={data.title || ''}
                 lang={data.language || 'en'}
                 spellCheck={true}
