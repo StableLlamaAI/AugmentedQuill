@@ -13,7 +13,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 
@@ -152,6 +152,137 @@ describe('MetadataEditorDialog', () => {
     expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
       'Chapter 1 Revised'
     );
+  });
+
+  it('preserves undo history when autosave updates initialData', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    expect(titleInput.value).toBe('Chapter 1 Revised');
+
+    rerender(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, title: 'Chapter 1 Revised' }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Undo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1'
+    );
+  });
+
+  it('reuses existing history entries when external edits revert to an earlier state', async () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Final' } });
+    expect(titleInput.value).toBe('Chapter 1 Final');
+
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1' } });
+
+    const undoButton = within(dialog!).getByRole('button', {
+      name: /Undo metadata editor changes/i,
+    }) as HTMLButtonElement;
+    const redoButton = within(dialog!).getByRole('button', {
+      name: /Redo metadata editor changes/i,
+    }) as HTMLButtonElement;
+
+    await waitFor(() => {
+      expect(redoButton.disabled).toBe(false);
+    });
+
+    expect(undoButton.disabled).toBe(true);
+  });
+
+  it('keeps diff highlights when explicit baseline advances to the current data', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        baseline={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const summaryInput = within(dialog!).getByPlaceholderText(
+      'Write a public summary...'
+    ) as HTMLTextAreaElement;
+    fireEvent.change(summaryInput, { target: { value: 'Updated summary' } });
+
+    rerender(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        baseline={{
+          ...baseData,
+          title: 'Updated Title',
+          summary: 'Updated summary',
+        }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    expect(
+      within(dialog!).getByRole('button', { name: /Clear highlights/i })
+    ).toBeTruthy();
   });
 
   it('shows actionable source buttons for empty summaries and selects notes when available', async () => {

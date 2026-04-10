@@ -93,10 +93,6 @@ export function MetadataEditorDialog({
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
 
-  const [history, setHistory] = useState<MetadataParams[]>([initialData]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const isRestoringRef = useRef(false);
-
   const normalizeConflict = (value: any): Conflict => {
     return {
       id: value.id || crypto.randomUUID(),
@@ -104,6 +100,23 @@ export function MetadataEditorDialog({
       resolution: value.resolution || 'TBD',
     };
   };
+
+  const normalizeMetadataParams = (value: MetadataParams): MetadataParams => ({
+    ...value,
+    conflicts: (value.conflicts || []).map((c) => normalizeConflict(c)),
+  });
+
+  const diffFieldsEqual = (a: MetadataParams, b: MetadataParams): boolean =>
+    (a.summary || '') === (b.summary || '') &&
+    (a.notes || '') === (b.notes || '') &&
+    (a.private_notes || '') === (b.private_notes || '') &&
+    JSON.stringify(a.conflicts || []) === JSON.stringify(b.conflicts || []);
+
+  const [history, setHistory] = useState<MetadataParams[]>([
+    normalizeMetadataParams(initialData),
+  ]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const isRestoringRef = useRef(false);
 
   const [baselineData, setBaselineData] = useState<MetadataParams>(() => {
     const raw = baseline || initialData;
@@ -114,11 +127,27 @@ export function MetadataEditorDialog({
   });
 
   useEffect(() => {
-    // If a baseline was explicitly provided, we prefer it.
-    if (baseline) {
-      setBaselineData({
-        ...baseline,
-        conflicts: (baseline.conflicts || []).map((c) => normalizeConflict(c)),
+    const normalizedBaseline = baseline
+      ? {
+          ...baseline,
+          conflicts: (baseline.conflicts || []).map((c) => normalizeConflict(c)),
+        }
+      : null;
+
+    if (normalizedBaseline) {
+      setBaselineData((prev) => {
+        const isSaveRoundTrip =
+          diffFieldsEqual(normalizedBaseline, data) && !diffFieldsEqual(prev, data);
+
+        if (isSaveRoundTrip) {
+          return prev;
+        }
+
+        if (diffFieldsEqual(prev, normalizedBaseline)) {
+          return prev;
+        }
+
+        return normalizedBaseline;
       });
       return;
     }
@@ -151,7 +180,7 @@ export function MetadataEditorDialog({
             : next.conflicts,
       };
     });
-  }, [initialData, baseline]);
+  }, [initialData, baseline, data]);
 
   // Store the latest callback reference so debounced saves use current props.
   const onSaveRef = useRef(onSave);
@@ -167,11 +196,26 @@ export function MetadataEditorDialog({
   }, [onSave]);
 
   const prevInitialRef = useRef<MetadataParams>(initialData);
+  const prevResetInitialRef = useRef<MetadataParams>(initialData);
 
   useEffect(() => {
-    setHistory([initialData]);
+    if (JSON.stringify(prevResetInitialRef.current) === JSON.stringify(initialData)) {
+      return;
+    }
+
+    prevResetInitialRef.current = initialData;
+
+    const isAutosaveRoundTrip =
+      JSON.stringify(initialData) === JSON.stringify(data) ||
+      JSON.stringify(initialData) === JSON.stringify(lastSavedDataRef.current);
+
+    if (isAutosaveRoundTrip) {
+      return;
+    }
+
+    setHistory([normalizeMetadataParams(initialData)]);
     setHistoryIndex(0);
-  }, [initialData]);
+  }, [initialData, data]);
 
   useEffect(() => {
     const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
@@ -198,9 +242,21 @@ export function MetadataEditorDialog({
       return;
     }
 
-    const snapshot = JSON.parse(JSON.stringify(data)) as MetadataParams;
+    const snapshot = normalizeMetadataParams(
+      JSON.parse(JSON.stringify(data)) as MetadataParams
+    );
     const existing = history[historyIndex];
     if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
+      return;
+    }
+
+    const snapshotJson = JSON.stringify(snapshot);
+    const historyJson = history.map((entry) => JSON.stringify(entry));
+    const matchedIndex = historyJson.findIndex(
+      (entryJson) => entryJson === snapshotJson
+    );
+    if (matchedIndex !== -1) {
+      setHistoryIndex(matchedIndex);
       return;
     }
 
