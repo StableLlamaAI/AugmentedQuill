@@ -271,8 +271,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    // Start with data already diverged from baseline (simulates an AI write)
-    // so the "Clear highlights" button is visible immediately.
+    // Start with data already diverged from baseline (simulates an AI write).
     const { rerender } = render(
       <MetadataEditorDialog
         type="chapter"
@@ -290,10 +289,12 @@ describe('MetadataEditorDialog', () => {
       .find((node) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
-    // Diff should be active: baseline.summary='Initial summary', data.summary='Updated summary'
-    expect(
-      within(dialog!).getByRole('button', { name: /Clear highlights/i })
-    ).toBeTruthy();
+    // Diff toggle button should be present and active (diff view on by default).
+    const toggleBtn = within(dialog!).getByRole('button', {
+      name: /Toggle diff view/i,
+    });
+    expect(toggleBtn).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
 
     // Simulate a save round-trip: baseline advances to match current data.
     // isSaveRoundTrip guard must keep the previous baseline so the diff stays visible.
@@ -313,9 +314,11 @@ describe('MetadataEditorDialog', () => {
       />
     );
 
+    // Toggle button still present and still active after save round-trip.
     expect(
-      within(dialog!).getByRole('button', { name: /Clear highlights/i })
+      within(dialog!).getByRole('button', { name: /Toggle diff view/i })
     ).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows actionable source buttons for empty summaries and selects notes when available', async () => {

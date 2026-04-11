@@ -34,6 +34,7 @@ import {
   ChevronRight,
   Undo,
   Redo,
+  MessageSquareDiff,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
@@ -118,6 +119,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const [descriptionBaseline, setDescriptionBaseline] = useState<string | undefined>(
     undefined
   );
+  const [showDiff, setShowDiff] = useState(true);
   const [category, setCategory] = useState(Object.keys(CATEGORY_DETAILS)[0]);
   const [synonyms, setSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState('');
@@ -464,6 +466,23 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 }`}
               >
                 <Redo size={18} />
+              </button>
+              <button
+                onClick={() => setShowDiff(!showDiff)}
+                aria-label="Toggle diff view"
+                aria-pressed={showDiff}
+                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
+                className={`p-1 rounded-md transition-colors ${
+                  showDiff
+                    ? isLight
+                      ? 'text-brand-500 hover:text-brand-600'
+                      : 'text-brand-400 hover:text-brand-300'
+                    : isLight
+                      ? 'text-brand-gray-400 hover:text-brand-gray-600'
+                      : 'text-brand-gray-600 hover:text-brand-gray-400'
+                }`}
+              >
+                <MessageSquareDiff size={18} />
               </button>
               <button
                 onClick={onClose}
@@ -858,6 +877,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     setDescription(val);
                   }}
                   baselineValue={descriptionBaseline}
+                  showDiff={showDiff}
                   language={language}
                   spellCheck={true}
                   mode="markdown"

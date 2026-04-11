@@ -31,6 +31,7 @@ import {
   Undo,
   Redo,
   Brain,
+  MessageSquareDiff,
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
@@ -88,6 +89,7 @@ export function MetadataEditorDialog({
   useFocusTrap(true, dialogRef, onClose);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [showDiff, setShowDiff] = useState(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -571,6 +573,15 @@ export function MetadataEditorDialog({
                 <Redo size={16} />
               </button>
               <button
+                onClick={() => setShowDiff(!showDiff)}
+                className={`${showDiff ? 'text-brand-500 hover:text-brand-600' : 'text-gray-400 hover:text-gray-600 dark:text-brand-gray-600 dark:hover:text-brand-gray-400'}`}
+                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
+                aria-label="Toggle diff view"
+                aria-pressed={showDiff}
+              >
+                <MessageSquareDiff size={16} />
+              </button>
+              <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
@@ -1020,25 +1031,12 @@ export function MetadataEditorDialog({
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
                     baselineValue={baselineData.summary}
+                    showDiff={showDiff}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write a public summary..."
                     style={{ minHeight: '300px' }}
                   />
-                  {baselineData.summary != null &&
-                    baselineData.summary !== data.summary && (
-                      <button
-                        onClick={() =>
-                          setBaselineData((prev) => ({
-                            ...prev,
-                            summary: data.summary,
-                          }))
-                        }
-                        className="mt-2 text-xs text-brand-500 hover:underline text-left"
-                      >
-                        Clear highlights
-                      </button>
-                    )}
                 </div>
               )}
               {activeTab === 'notes' && (
@@ -1057,21 +1055,12 @@ export function MetadataEditorDialog({
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
                     baselineValue={baselineData.notes}
+                    showDiff={showDiff}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
                     style={{ minHeight: '300px' }}
                   />
-                  {baselineData.notes != null && baselineData.notes !== data.notes && (
-                    <button
-                      onClick={() =>
-                        setBaselineData((prev) => ({ ...prev, notes: data.notes }))
-                      }
-                      className="mt-2 text-xs text-brand-500 hover:underline text-left"
-                    >
-                      Clear highlights
-                    </button>
-                  )}
                 </div>
               )}
               {activeTab === 'private' && (
@@ -1092,25 +1081,12 @@ export function MetadataEditorDialog({
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
                     baselineValue={baselineData.private_notes}
+                    showDiff={showDiff}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
                     style={{ minHeight: '300px' }}
                   />
-                  {baselineData.private_notes != null &&
-                    baselineData.private_notes !== data.private_notes && (
-                      <button
-                        onClick={() =>
-                          setBaselineData((prev) => ({
-                            ...prev,
-                            private_notes: data.private_notes,
-                          }))
-                        }
-                        className="mt-2 text-xs text-brand-500 hover:underline text-left"
-                      >
-                        Clear highlights
-                      </button>
-                    )}
                 </div>
               )}
               {activeTab === 'conflicts' && (
@@ -1128,12 +1104,6 @@ export function MetadataEditorDialog({
                       const baselineConflict = (baselineData.conflicts || []).find(
                         (bc) => bc.id === c.id
                       );
-                      const hasDescChanged =
-                        baselineConflict &&
-                        baselineConflict.description !== c.description;
-                      const hasResChanged =
-                        baselineConflict &&
-                        baselineConflict.resolution !== c.resolution;
 
                       return (
                         <div
@@ -1189,6 +1159,7 @@ export function MetadataEditorDialog({
                                 language={effectiveLanguage}
                                 spellCheck={spellCheck}
                                 baselineValue={baselineConflict?.description}
+                                showDiff={showDiff}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="Describe the conflict..."
@@ -1213,6 +1184,7 @@ export function MetadataEditorDialog({
                                 language={effectiveLanguage}
                                 spellCheck={spellCheck}
                                 baselineValue={baselineConflict?.resolution}
+                                showDiff={showDiff}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="How will this conflict be resolved?"
@@ -1220,21 +1192,6 @@ export function MetadataEditorDialog({
                               />
                             </div>
                           </div>
-                          {(hasDescChanged || hasResChanged) && (
-                            <button
-                              onClick={() => {
-                                setBaselineData((prev) => ({
-                                  ...prev,
-                                  conflicts: (prev.conflicts || []).map((bc) =>
-                                    bc.id === c.id ? { ...c } : bc
-                                  ),
-                                }));
-                              }}
-                              className="mt-2 text-[10px] text-brand-500 hover:underline"
-                            >
-                              Clear highlights
-                            </button>
-                          )}
                         </div>
                       );
                     })}
