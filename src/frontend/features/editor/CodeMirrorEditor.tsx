@@ -23,7 +23,14 @@ import {
   ViewUpdate,
   DecorationSet,
 } from '@codemirror/view';
-import { EditorState, Compartment, Prec, Annotation, Range } from '@codemirror/state';
+import {
+  EditorState,
+  Compartment,
+  Prec,
+  Annotation,
+  Range,
+  Transaction,
+} from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -667,7 +674,14 @@ export const CodeMirrorEditor = React.forwardRef<
 
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
-        annotations: externalValueSyncAnnotation.of(true),
+        annotations: [
+          externalValueSyncAnnotation.of(true),
+          // External prop changes (LLM updates, dialog restores) must not enter
+          // CodeMirror's own undo history.  Without this, Ctrl+Z inside the
+          // field would undo the LLM text instead of triggering the dialog-level
+          // undo, corrupting the undo/redo button state.
+          Transaction.addToHistory.of(false),
+        ],
         selection: {
           anchor: Math.min(anchor, maxPos),
           head: Math.min(head, maxPos),

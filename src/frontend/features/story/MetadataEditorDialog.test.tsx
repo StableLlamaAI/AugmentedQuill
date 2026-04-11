@@ -399,4 +399,113 @@ describe('MetadataEditorDialog', () => {
     expect(chapterLabelActive).toBe(true);
     expect(notesLabelActive).toBe(true);
   });
+
+  it('preserves undo/redo history when the LLM adds a conflict while the dialog is open', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    const conflictA = { id: 'c1', description: 'Conflict A', resolution: 'Resolve A' };
+    const conflictB = { id: 'c2', description: 'Conflict B', resolution: 'Resolve B' };
+
+    const { rerender } = render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, conflicts: [conflictA] }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    // Advance past the debounce so the initial state is committed to history.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    // Simulate the LLM adding a second conflict while the dialog is open.
+    rerender(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, conflicts: [conflictA, conflictB] }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    // Advance past the debounce so the LLM update is committed to history.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const undoButton = within(dialog!).getByRole('button', {
+      name: /Undo metadata editor changes/i,
+    }) as HTMLButtonElement;
+    const redoButton = within(dialog!).getByRole('button', {
+      name: /Redo metadata editor changes/i,
+    }) as HTMLButtonElement;
+
+    // After the LLM update, undo should be available (to go back to pre-LLM state).
+    expect(undoButton.disabled).toBe(false);
+
+    // Undo removes the LLM-added conflict.
+    fireEvent.click(undoButton);
+
+    // Redo must immediately become available so the user can bring the conflict back.
+    expect(redoButton.disabled).toBe(false);
+  });
+
+  it('highlights LLM-added conflicts as new in diff view and does not mark user-added conflicts', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    const conflictA = { id: 'c1', description: 'Pre-existing', resolution: 'Known' };
+    const conflictB = { id: 'c2', description: 'LLM added', resolution: 'TBD' };
+
+    // Open dialog with a baseline that only has conflictA; initialData already
+    // includes conflictB (added by the LLM before the dialog opened).
+    render(
+      <MetadataEditorDialog
+        type="story"
+        title="Edit Story Metadata"
+        initialData={{ ...baseData, conflicts: [conflictA, conflictB] }}
+        baseline={{ ...baseData, conflicts: [conflictA] }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+        allowConflicts
+      />
+    );
+
+    // Switch to the Conflicts tab.
+    fireEvent.click(screen.getByRole('button', { name: 'Conflicts' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // conflictB should have a "New" badge because it is absent from the baseline.
+    const newBadges = screen.getAllByText('New');
+    expect(newBadges.length).toBe(1);
+
+    // Clicking "Add Conflict" should NOT produce a spurious "New" badge for the
+    // manually added entry (it is anchored to baselineData immediately).
+    fireEvent.click(screen.getByRole('button', { name: /Add Conflict/i }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // Still only the one "New" badge from the LLM-added conflict.
+    expect(screen.getAllByText('New').length).toBe(1);
+  });
 });
