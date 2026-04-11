@@ -554,6 +554,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             isAutoSelectionRunning={isSourcebookSelectionRunning}
             onMutated={onSourcebookMutated}
             selectedSourcebookEntryId={selectedSourcebookEntryId}
+            baselineEntries={sidebarControls.baselineState?.sourcebook}
           />
         </CollapsibleSection>
       </nav>

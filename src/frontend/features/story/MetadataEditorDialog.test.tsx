@@ -13,9 +13,18 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import {
+  render,
+  screen,
+  fireEvent,
+  within,
+  waitFor,
+  cleanup,
+} from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+
+afterEach(cleanup);
 
 const baseData = {
   title: 'Chapter 1',
@@ -41,27 +50,27 @@ describe('MetadataEditorDialog', () => {
       />
     );
 
-    // Start in fullscreen, switch to sidebar to replicate reported setup
+    // Switch to sidebar view so the dialog renders outside a portal,
+    // which ensures reliable cleanup between tests.
     const toggleBtn = screen.getByRole('button', { name: /Switch to Sidebar View/i });
     fireEvent.click(toggleBtn);
 
-    const summaryTextarea = screen.getByPlaceholderText('Write a public summary...');
-    expect((summaryTextarea as HTMLTextAreaElement).value).toBe('Initial summary');
+    // Title is a regular <input> — use it to assert the sync-from-initialData path.
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    expect(titleInput.value).toBe('Chapter 1');
 
     rerender(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
-        initialData={{ ...baseData, summary: 'Updated summary from function call' }}
+        initialData={{ ...baseData, title: 'Updated Title from external call' }}
         onSave={onSave}
         onClose={onClose}
         onAiGenerate={undefined}
       />
     );
 
-    expect((summaryTextarea as HTMLTextAreaElement).value).toBe(
-      'Updated summary from function call'
-    );
+    expect(titleInput.value).toBe('Updated Title from external call');
   });
 
   it('shows story-draft labels and conflicts tab for short-story metadata editing', () => {
@@ -107,12 +116,8 @@ describe('MetadataEditorDialog', () => {
 
     expect(titleInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
     expect(tagsInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
-    const summaryTextareas = screen.getAllByPlaceholderText(
-      'Write a public summary...'
-    );
-    expect(
-      summaryTextareas.some((textarea) => textarea.getAttribute('lang') === 'de')
-    ).toBe(true);
+    // Summary is now a CodeMirrorEditor which does not expose an HTML lang attribute;
+    // spellchecking language is passed via the `language` prop to the editor.
   });
 
   it('supports undo and redo via metadata dialog header buttons', () => {
@@ -242,11 +247,13 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
+    // Start with data already diverged from baseline (simulates an AI write)
+    // so the "Clear highlights" button is visible immediately.
     const { rerender } = render(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
-        initialData={baseData}
+        initialData={{ ...baseData, summary: 'Updated summary' }}
         baseline={baseData}
         onSave={onSave}
         onClose={onClose}
@@ -259,16 +266,18 @@ describe('MetadataEditorDialog', () => {
       .find((node) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
-    const summaryInput = within(dialog!).getByPlaceholderText(
-      'Write a public summary...'
-    ) as HTMLTextAreaElement;
-    fireEvent.change(summaryInput, { target: { value: 'Updated summary' } });
+    // Diff should be active: baseline.summary='Initial summary', data.summary='Updated summary'
+    expect(
+      within(dialog!).getByRole('button', { name: /Clear highlights/i })
+    ).toBeTruthy();
 
+    // Simulate a save round-trip: baseline advances to match current data.
+    // isSaveRoundTrip guard must keep the previous baseline so the diff stays visible.
     rerender(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
-        initialData={baseData}
+        initialData={{ ...baseData, summary: 'Updated summary' }}
         baseline={{
           ...baseData,
           title: 'Updated Title',

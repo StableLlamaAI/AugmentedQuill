@@ -408,6 +408,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           latestStoryRef.current = newStory;
           setHistory([createHistoryEntry(newStory, 'Load story')]);
           setCurrentIndex(0);
+          setBaselineState(newStory); // no highlight after a fresh project load
 
           setCurrentChapterId(newStory.currentChapterId);
         }

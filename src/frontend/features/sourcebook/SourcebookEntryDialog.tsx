@@ -89,6 +89,7 @@ interface SourcebookEntryDialogProps {
   onDelete?: (id: string) => void;
   theme?: AppTheme;
   language?: string;
+  baselineEntry?: SourcebookEntry | null;
 }
 
 type SourcebookEntryHistoryState = {
@@ -110,9 +111,13 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   onDelete,
   theme = 'mixed',
   language = 'en',
+  baselineEntry = null,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionBaseline, setDescriptionBaseline] = useState<string | undefined>(
+    undefined
+  );
   const [category, setCategory] = useState(Object.keys(CATEGORY_DETAILS)[0]);
   const [synonyms, setSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState('');
@@ -167,6 +172,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     if (entry) {
       setName(initialState.name);
       setDescription(initialState.description);
+      setDescriptionBaseline(baselineEntry?.description);
       setCategory(initialState.category);
       setSynonyms(initialState.synonyms);
       setImages(initialState.images);
@@ -177,6 +183,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     } else {
       setName('');
       setDescription('');
+      setDescriptionBaseline(undefined);
       setCategory(Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms([]);
       setImages([]);
@@ -846,7 +853,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               >
                 <CodeMirrorEditor
                   value={description}
-                  onChange={setDescription}
+                  onChange={(val) => {
+                    setDescriptionBaseline(val);
+                    setDescription(val);
+                  }}
+                  baselineValue={descriptionBaseline}
                   language={language}
                   spellCheck={true}
                   mode="markdown"
