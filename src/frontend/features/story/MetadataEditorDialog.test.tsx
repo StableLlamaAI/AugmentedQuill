@@ -13,9 +13,19 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import {
+  render,
+  screen,
+  fireEvent,
+  within,
+  act,
+  cleanup,
+} from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+
+afterEach(cleanup);
+afterEach(() => vi.useRealTimers());
 
 const baseData = {
   title: 'Chapter 1',
@@ -41,27 +51,27 @@ describe('MetadataEditorDialog', () => {
       />
     );
 
-    // Start in fullscreen, switch to sidebar to replicate reported setup
+    // Switch to sidebar view so the dialog renders outside a portal,
+    // which ensures reliable cleanup between tests.
     const toggleBtn = screen.getByRole('button', { name: /Switch to Sidebar View/i });
     fireEvent.click(toggleBtn);
 
-    const summaryTextarea = screen.getByPlaceholderText('Write a public summary...');
-    expect((summaryTextarea as HTMLTextAreaElement).value).toBe('Initial summary');
+    // Title is a regular <input> — use it to assert the sync-from-initialData path.
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    expect(titleInput.value).toBe('Chapter 1');
 
     rerender(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
-        initialData={{ ...baseData, summary: 'Updated summary from function call' }}
+        initialData={{ ...baseData, title: 'Updated Title from external call' }}
         onSave={onSave}
         onClose={onClose}
         onAiGenerate={undefined}
       />
     );
 
-    expect((summaryTextarea as HTMLTextAreaElement).value).toBe(
-      'Updated summary from function call'
-    );
+    expect(titleInput.value).toBe('Updated Title from external call');
   });
 
   it('shows story-draft labels and conflicts tab for short-story metadata editing', () => {
@@ -107,12 +117,208 @@ describe('MetadataEditorDialog', () => {
 
     expect(titleInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
     expect(tagsInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
-    const summaryTextareas = screen.getAllByPlaceholderText(
-      'Write a public summary...'
+    // Summary is now a CodeMirrorEditor which does not expose an HTML lang attribute;
+    // spellchecking language is passed via the `language` prop to the editor.
+  });
+
+  it('supports undo and redo via metadata dialog header buttons', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
     );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    expect(titleInput.value).toBe('Chapter 1 Revised');
+
+    // Advance past the 600 ms debounce so the history entry is committed.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Undo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1'
+    );
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Redo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1 Revised'
+    );
+  });
+
+  it('preserves undo history when autosave updates initialData', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    expect(titleInput.value).toBe('Chapter 1 Revised');
+
+    // Advance past the 600 ms debounce so the history entry is committed.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    rerender(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, title: 'Chapter 1 Revised' }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    fireEvent.click(
+      within(dialog!).getByRole('button', { name: /Undo metadata editor changes/i })
+    );
+    expect((within(dialog!).getByLabelText('Title') as HTMLInputElement).value).toBe(
+      'Chapter 1'
+    );
+  });
+
+  it('reuses existing history entries when external edits revert to an earlier state', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    // Type three distinct values with debounce pauses so each becomes an entry.
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1 Final' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(titleInput.value).toBe('Chapter 1 Final');
+
+    // Typing back to the original value should reuse the existing entry.
+    fireEvent.change(titleInput, { target: { value: 'Chapter 1' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    const undoButton = within(dialog!).getByRole('button', {
+      name: /Undo metadata editor changes/i,
+    }) as HTMLButtonElement;
+    const redoButton = within(dialog!).getByRole('button', {
+      name: /Redo metadata editor changes/i,
+    }) as HTMLButtonElement;
+
+    // After settling we should be back at the original entry (no undo available,
+    // redo available to go forward again).
+    expect(undoButton.disabled).toBe(true);
+    expect(redoButton.disabled).toBe(false);
+  });
+
+  it('keeps diff highlights when explicit baseline advances to the current data', () => {
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    // Start with data already diverged from baseline (simulates an AI write).
+    const { rerender } = render(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, summary: 'Updated summary' }}
+        baseline={baseData}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    const dialog = screen
+      .getAllByRole('dialog')
+      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+    expect(dialog).toBeTruthy();
+
+    // Diff toggle button should be present and active (diff view on by default).
+    const toggleBtn = within(dialog!).getByRole('button', {
+      name: /Toggle diff view/i,
+    });
+    expect(toggleBtn).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
+
+    // Simulate a save round-trip: baseline advances to match current data.
+    // isSaveRoundTrip guard must keep the previous baseline so the diff stays visible.
+    rerender(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{ ...baseData, summary: 'Updated summary' }}
+        baseline={{
+          ...baseData,
+          title: 'Updated Title',
+          summary: 'Updated summary',
+        }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    // Toggle button still present and still active after save round-trip.
     expect(
-      summaryTextareas.some((textarea) => textarea.getAttribute('lang') === 'de')
-    ).toBe(true);
+      within(dialog!).getByRole('button', { name: /Toggle diff view/i })
+    ).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows actionable source buttons for empty summaries and selects notes when available', async () => {

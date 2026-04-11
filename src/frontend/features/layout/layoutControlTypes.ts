@@ -135,7 +135,8 @@ export type MainSidebarControls = {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
     currentText?: string,
-    onThinking?: (thinking: string) => void
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
   ) => Promise<string | undefined>;
   isEditingAvailable: boolean;
   handleOpenImages: () => void;

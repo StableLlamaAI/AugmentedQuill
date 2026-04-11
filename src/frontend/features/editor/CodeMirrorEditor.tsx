@@ -69,7 +69,7 @@ const buildDiffPlugin = (baseline: string) =>
       }
       build(view: EditorView): DecorationSet {
         const currentText = view.state.doc.toString();
-        if (!baseline || baseline === currentText) return Decoration.none;
+        if (baseline === currentText) return Decoration.none;
 
         const diffs = dmp.diff_main(baseline, currentText);
         dmp.diff_cleanupSemantic(diffs);
@@ -404,7 +404,7 @@ export const CodeMirrorEditor = React.forwardRef<
       className,
       style,
       onSelectionChange,
-      baselineValue = '',
+      baselineValue,
       showDiff = true,
       language = 'en',
       spellCheck = false,
@@ -461,8 +461,8 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildWsExtension = (ws: boolean): Extension =>
       ws ? buildWhitespacePlugin() : [];
 
-    const buildDiffExtension = (bv: string, enabled: boolean): Extension =>
-      enabled && bv ? buildDiffPlugin(bv) : [];
+    const buildDiffExtension = (bv: string | undefined, enabled: boolean): Extension =>
+      enabled && bv != null ? buildDiffPlugin(bv) : [];
 
     const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
       if (eb === 'ignore') {

@@ -28,12 +28,14 @@ import {
   PenLine,
   ChevronDown,
   ChevronRight,
+  Undo,
+  Redo,
   Brain,
+  MessageSquareDiff,
 } from 'lucide-react';
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
-import { MarkdownView } from '../editor/MarkdownView';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -87,6 +89,7 @@ export function MetadataEditorDialog({
   useFocusTrap(true, dialogRef, onClose);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [showDiff, setShowDiff] = useState(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -99,6 +102,47 @@ export function MetadataEditorDialog({
     };
   };
 
+  const normalizeMetadataParams = (value: MetadataParams): MetadataParams => ({
+    ...value,
+    conflicts: (value.conflicts || []).map((c) => normalizeConflict(c)),
+  });
+
+  const diffFieldsEqual = (a: MetadataParams, b: MetadataParams): boolean =>
+    (a.summary || '') === (b.summary || '') &&
+    (a.notes || '') === (b.notes || '') &&
+    (a.private_notes || '') === (b.private_notes || '') &&
+    JSON.stringify(a.conflicts || []) === JSON.stringify(b.conflicts || []);
+
+  const [history, setHistory] = useState<MetadataParams[]>(() => {
+    const current = normalizeMetadataParams(initialData);
+    if (baseline) {
+      const base = normalizeMetadataParams(baseline);
+      if (!diffFieldsEqual(base, current)) {
+        return [base, current];
+      }
+    }
+    return [current];
+  });
+  const [historyIndex, setHistoryIndex] = useState(() => {
+    if (baseline) {
+      const base = normalizeMetadataParams(baseline);
+      const current = normalizeMetadataParams(initialData);
+      if (!diffFieldsEqual(base, current)) {
+        return 1;
+      }
+    }
+    return 0;
+  });
+  const isRestoringRef = useRef(false);
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track latest data in a ref so the baselineData effect can read it
+  // without adding `data` to its dependency array (which would cause the
+  // effect to re-run on every keystroke and reset diff highlights).
+  const dataRef = useRef<MetadataParams>(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
   const [baselineData, setBaselineData] = useState<MetadataParams>(() => {
     const raw = baseline || initialData;
     return {
@@ -108,11 +152,29 @@ export function MetadataEditorDialog({
   });
 
   useEffect(() => {
-    // If a baseline was explicitly provided, we prefer it.
-    if (baseline) {
-      setBaselineData({
-        ...baseline,
-        conflicts: (baseline.conflicts || []).map((c) => normalizeConflict(c)),
+    const normalizedBaseline = baseline
+      ? {
+          ...baseline,
+          conflicts: (baseline.conflicts || []).map((c) => normalizeConflict(c)),
+        }
+      : null;
+
+    if (normalizedBaseline) {
+      setBaselineData((prev) => {
+        const currentData = dataRef.current;
+        const isSaveRoundTrip =
+          diffFieldsEqual(normalizedBaseline, currentData) &&
+          !diffFieldsEqual(prev, currentData);
+
+        if (isSaveRoundTrip) {
+          return prev;
+        }
+
+        if (diffFieldsEqual(prev, normalizedBaseline)) {
+          return prev;
+        }
+
+        return normalizedBaseline;
       });
       return;
     }
@@ -121,7 +183,7 @@ export function MetadataEditorDialog({
       // If the user has explicitly cleared a diff in this session, we don't
       // want to immediately restore the baseline when initialData updates
       // (e.g. from an autosave).
-
+      const currentData = dataRef.current;
       const next: MetadataParams = {
         ...initialData,
         conflicts: (initialData.conflicts || []).map((c) => normalizeConflict(c)),
@@ -131,16 +193,16 @@ export function MetadataEditorDialog({
       // the baseline (i.e., if no diff is currently being shown).
       return {
         ...next,
-        summary: prev.summary !== data.summary ? prev.summary : next.summary,
-        notes: prev.notes !== data.notes ? prev.notes : next.notes,
+        summary: prev.summary !== currentData.summary ? prev.summary : next.summary,
+        notes: prev.notes !== currentData.notes ? prev.notes : next.notes,
         private_notes:
-          prev.private_notes !== data.private_notes
+          prev.private_notes !== currentData.private_notes
             ? prev.private_notes
             : next.private_notes,
         // Conflicts diffing is more complex, but we basically want to preserve the
         // diff state if the current view doesn't match the current baseline.
         conflicts:
-          JSON.stringify(prev.conflicts) !== JSON.stringify(data.conflicts)
+          JSON.stringify(prev.conflicts) !== JSON.stringify(currentData.conflicts)
             ? prev.conflicts
             : next.conflicts,
       };
@@ -161,6 +223,28 @@ export function MetadataEditorDialog({
   }, [onSave]);
 
   const prevInitialRef = useRef<MetadataParams>(initialData);
+  const prevResetInitialRef = useRef<MetadataParams>(initialData);
+
+  useEffect(() => {
+    if (JSON.stringify(prevResetInitialRef.current) === JSON.stringify(initialData)) {
+      return;
+    }
+
+    prevResetInitialRef.current = initialData;
+
+    const isAutosaveRoundTrip =
+      JSON.stringify(normalizeMetadataParams(initialData)) ===
+        JSON.stringify(normalizeMetadataParams(data)) ||
+      JSON.stringify(normalizeMetadataParams(initialData)) ===
+        JSON.stringify(normalizeMetadataParams(lastSavedDataRef.current));
+
+    if (isAutosaveRoundTrip) {
+      return;
+    }
+
+    setHistory([normalizeMetadataParams(initialData)]);
+    setHistoryIndex(0);
+  }, [initialData, data]);
 
   useEffect(() => {
     const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
@@ -181,6 +265,78 @@ export function MetadataEditorDialog({
   useEffect(() => {
     setData((prev) => ({ ...prev, conflicts }));
   }, [conflicts]);
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      return;
+    }
+
+    const DEBOUNCE_MS = 600;
+
+    const pushNow = (
+      currentData: MetadataParams,
+      currentHistory: MetadataParams[],
+      currentIndex: number
+    ) => {
+      const snapshot = normalizeMetadataParams(
+        JSON.parse(JSON.stringify(currentData)) as MetadataParams
+      );
+      const existing = currentHistory[currentIndex];
+      if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
+        return;
+      }
+
+      const snapshotJson = JSON.stringify(snapshot);
+      const historyJson = currentHistory.map((entry) => JSON.stringify(entry));
+      const matchedIndex = historyJson.findIndex(
+        (entryJson) => entryJson === snapshotJson
+      );
+      if (matchedIndex !== -1) {
+        setHistoryIndex(matchedIndex);
+        return;
+      }
+
+      setHistory((prev) => {
+        const next = [...prev.slice(0, currentIndex + 1), snapshot];
+        return next.length > 100 ? next.slice(next.length - 100) : next;
+      });
+      setHistoryIndex((prev) => Math.min(prev + 1, 99));
+    };
+
+    if (historyDebounceRef.current) {
+      clearTimeout(historyDebounceRef.current);
+    }
+    historyDebounceRef.current = setTimeout(() => {
+      historyDebounceRef.current = null;
+      pushNow(data, history, historyIndex);
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (historyDebounceRef.current) {
+        clearTimeout(historyDebounceRef.current);
+        historyDebounceRef.current = null;
+      }
+    };
+  }, [data, historyIndex, history]);
+
+  const restoreMetadataHistory = (index: number) => {
+    if (index < 0 || index >= history.length) {
+      return;
+    }
+
+    const entry = history[index];
+    if (!entry) {
+      return;
+    }
+
+    isRestoringRef.current = true;
+    setData(JSON.parse(JSON.stringify(entry)));
+    setConflicts(JSON.parse(JSON.stringify(entry.conflicts || [])));
+    setHistoryIndex(index);
+    setTimeout(() => {
+      isRestoringRef.current = false;
+    }, 0);
+  };
 
   // Debounced autosave reduces write pressure while preserving quick feedback.
   useEffect(() => {
@@ -394,6 +550,38 @@ export function MetadataEditorDialog({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() =>
+                  historyIndex > 0 && restoreMetadataHistory(historyIndex - 1)
+                }
+                disabled={historyIndex === 0}
+                className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Undo"
+                aria-label="Undo metadata editor changes"
+              >
+                <Undo size={16} />
+              </button>
+              <button
+                onClick={() =>
+                  historyIndex < history.length - 1 &&
+                  restoreMetadataHistory(historyIndex + 1)
+                }
+                disabled={historyIndex >= history.length - 1}
+                className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
+                title="Redo"
+                aria-label="Redo metadata editor changes"
+              >
+                <Redo size={16} />
+              </button>
+              <button
+                onClick={() => setShowDiff(!showDiff)}
+                className={`${showDiff ? 'text-brand-500 hover:text-brand-600' : 'text-gray-400 hover:text-gray-600 dark:text-brand-gray-600 dark:hover:text-brand-gray-400'}`}
+                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
+                aria-label="Toggle diff view"
+                aria-pressed={showDiff}
+              >
+                <MessageSquareDiff size={16} />
+              </button>
+              <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
@@ -419,10 +607,14 @@ export function MetadataEditorDialog({
           <div className="flex-1 overflow-y-auto flex flex-col">
             {/* Title Editor */}
             <div className="p-4 border-b dark:border-brand-gray-800 space-y-2 flex-shrink-0">
-              <label className="block text-sm font-medium dark:text-brand-gray-400">
+              <label
+                htmlFor="metadata-dialog-title-input"
+                className="block text-sm font-medium dark:text-brand-gray-400"
+              >
                 Title
               </label>
               <input
+                id="metadata-dialog-title-input"
                 value={data.title || ''}
                 lang={data.language || 'en'}
                 spellCheck={true}
@@ -830,29 +1022,21 @@ export function MetadataEditorDialog({
                       </div>
                     </div>
                   )}
-                  {baselineData.summary && baselineData.summary !== data.summary ? (
-                    <div className="flex-1 overflow-y-auto w-full p-4 border rounded-lg bg-white dark:bg-brand-gray-800/40 dark:border-brand-gray-700">
-                      <MarkdownView
-                        content={data.summary}
-                        baseline={baselineData.summary}
-                      />
-                      <button
-                        onClick={() => setBaselineData(data)}
-                        className="mt-2 text-xs text-brand-500 hover:underline"
-                      >
-                        Clear highlights
-                      </button>
-                    </div>
-                  ) : (
-                    <textarea
-                      value={data.summary || ''}
-                      lang={effectiveLanguage}
-                      spellCheck={spellCheck}
-                      onChange={(e) => setData({ ...data, summary: e.target.value })}
-                      className="w-full h-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 placeholder-brand-gray-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 font-sans text-sm md:text-base leading-relaxed transition-all"
-                      placeholder="Write a public summary..."
-                    />
-                  )}
+                  <CodeMirrorEditor
+                    value={data.summary || ''}
+                    onChange={(val) => {
+                      setBaselineData((prev) => ({ ...prev, summary: val }));
+                      setData((prev) => ({ ...prev, summary: val }));
+                    }}
+                    language={effectiveLanguage}
+                    spellCheck={spellCheck}
+                    baselineValue={baselineData.summary}
+                    showDiff={showDiff}
+                    mode="markdown"
+                    className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
+                    placeholder="Write a public summary..."
+                    style={{ minHeight: '300px' }}
+                  />
                 </div>
               )}
               {activeTab === 'notes' && (
@@ -864,25 +1048,19 @@ export function MetadataEditorDialog({
                   </div>
                   <CodeMirrorEditor
                     value={data.notes || ''}
-                    onChange={(val) => setData({ ...data, notes: val })}
+                    onChange={(val) => {
+                      setBaselineData((prev) => ({ ...prev, notes: val }));
+                      setData((prev) => ({ ...prev, notes: val }));
+                    }}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
                     baselineValue={baselineData.notes}
+                    showDiff={showDiff}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
                     style={{ minHeight: '300px' }}
                   />
-                  {baselineData.notes && baselineData.notes !== data.notes && (
-                    <button
-                      onClick={() =>
-                        setBaselineData((prev) => ({ ...prev, notes: data.notes }))
-                      }
-                      className="mt-2 text-xs text-brand-500 hover:underline text-left"
-                    >
-                      Clear highlights
-                    </button>
-                  )}
                 </div>
               )}
               {activeTab === 'private' && (
@@ -896,29 +1074,19 @@ export function MetadataEditorDialog({
                   </div>
                   <CodeMirrorEditor
                     value={data.private_notes || ''}
-                    onChange={(val) => setData({ ...data, private_notes: val })}
+                    onChange={(val) => {
+                      setBaselineData((prev) => ({ ...prev, private_notes: val }));
+                      setData((prev) => ({ ...prev, private_notes: val }));
+                    }}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
                     baselineValue={baselineData.private_notes}
+                    showDiff={showDiff}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
                     style={{ minHeight: '300px' }}
                   />
-                  {baselineData.private_notes &&
-                    baselineData.private_notes !== data.private_notes && (
-                      <button
-                        onClick={() =>
-                          setBaselineData((prev) => ({
-                            ...prev,
-                            private_notes: data.private_notes,
-                          }))
-                        }
-                        className="mt-2 text-xs text-brand-500 hover:underline text-left"
-                      >
-                        Clear highlights
-                      </button>
-                    )}
                 </div>
               )}
               {activeTab === 'conflicts' && (
@@ -936,12 +1104,6 @@ export function MetadataEditorDialog({
                       const baselineConflict = (baselineData.conflicts || []).find(
                         (bc) => bc.id === c.id
                       );
-                      const hasDescChanged =
-                        baselineConflict &&
-                        baselineConflict.description !== c.description;
-                      const hasResChanged =
-                        baselineConflict &&
-                        baselineConflict.resolution !== c.resolution;
 
                       return (
                         <div
@@ -983,68 +1145,53 @@ export function MetadataEditorDialog({
                               <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
                                 Description
                               </label>
-                              {hasDescChanged ? (
-                                <div className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 text-sm font-sans">
-                                  <MarkdownView
-                                    content={c.description}
-                                    baseline={baselineConflict?.description}
-                                  />
-                                </div>
-                              ) : (
-                                <textarea
-                                  value={c.description}
-                                  lang={effectiveLanguage}
-                                  spellCheck={spellCheck}
-                                  rows={2}
-                                  onChange={(e) =>
-                                    updateConflict(c.id, 'description', e.target.value)
-                                  }
-                                  className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
-                                  placeholder="Describe the conflict..."
-                                />
-                              )}
+                              <CodeMirrorEditor
+                                value={c.description}
+                                onChange={(val) => {
+                                  updateConflict(c.id, 'description', val);
+                                  setBaselineData((prev) => ({
+                                    ...prev,
+                                    conflicts: (prev.conflicts || []).map((bc) =>
+                                      bc.id === c.id ? { ...bc, description: val } : bc
+                                    ),
+                                  }));
+                                }}
+                                language={effectiveLanguage}
+                                spellCheck={spellCheck}
+                                baselineValue={baselineConflict?.description}
+                                showDiff={showDiff}
+                                mode="markdown"
+                                className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
+                                placeholder="Describe the conflict..."
+                                style={{ minHeight: '60px' }}
+                              />
                             </div>
                             <div>
                               <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
                                 Resolution Plan
                               </label>
-                              {hasResChanged ? (
-                                <div className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 text-sm font-sans">
-                                  <MarkdownView
-                                    content={c.resolution}
-                                    baseline={baselineConflict?.resolution}
-                                  />
-                                </div>
-                              ) : (
-                                <textarea
-                                  value={c.resolution}
-                                  lang={effectiveLanguage}
-                                  spellCheck={spellCheck}
-                                  rows={3}
-                                  onChange={(e) =>
-                                    updateConflict(c.id, 'resolution', e.target.value)
-                                  }
-                                  className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 placeholder-brand-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-500/40 text-sm font-sans transition-all resize-none"
-                                  placeholder="How will this conflict be resolved?"
-                                />
-                              )}
+                              <CodeMirrorEditor
+                                value={c.resolution}
+                                onChange={(val) => {
+                                  updateConflict(c.id, 'resolution', val);
+                                  setBaselineData((prev) => ({
+                                    ...prev,
+                                    conflicts: (prev.conflicts || []).map((bc) =>
+                                      bc.id === c.id ? { ...bc, resolution: val } : bc
+                                    ),
+                                  }));
+                                }}
+                                language={effectiveLanguage}
+                                spellCheck={spellCheck}
+                                baselineValue={baselineConflict?.resolution}
+                                showDiff={showDiff}
+                                mode="markdown"
+                                className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
+                                placeholder="How will this conflict be resolved?"
+                                style={{ minHeight: '80px' }}
+                              />
                             </div>
                           </div>
-                          {(hasDescChanged || hasResChanged) && (
-                            <button
-                              onClick={() => {
-                                setBaselineData((prev) => ({
-                                  ...prev,
-                                  conflicts: (prev.conflicts || []).map((bc) =>
-                                    bc.id === c.id ? { ...c } : bc
-                                  ),
-                                }));
-                              }}
-                              className="mt-2 text-[10px] text-brand-500 hover:underline"
-                            >
-                              Clear highlights
-                            </button>
-                          )}
                         </div>
                       );
                     })}

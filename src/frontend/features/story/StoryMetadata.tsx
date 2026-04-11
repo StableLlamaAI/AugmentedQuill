@@ -48,9 +48,11 @@ interface StoryMetadataProps {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
     currentText?: string,
-    onThinking?: (thinking: string) => void
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
+  primarySourceAvailable?: boolean;
   initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   theme?: AppTheme;
   baselineSummary?: string;
@@ -74,6 +76,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   metadataDialogTrigger,
   onAiGenerateSummary,
   summaryAiDisabledReason,
+  primarySourceAvailable,
   initialTab,
   theme = 'mixed',
   baselineSummary = '',
@@ -160,6 +163,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           initialTab={initialTab}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
+          primarySourceAvailable={primarySourceAvailable}
           theme={theme}
         />
       )}
@@ -213,7 +217,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             Notes (LLM Visible)
           </span>
           <div className="max-h-24 overflow-y-auto custom-scrollbar">
-            <MarkdownView content={notes} simple language={language} />
+            <MarkdownView
+              content={notes}
+              simple
+              baseline={baselineNotes}
+              language={language}
+            />
           </div>
         </div>
       )}

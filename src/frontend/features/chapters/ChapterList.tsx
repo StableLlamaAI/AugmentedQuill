@@ -389,7 +389,17 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             </span>
           );
         }
-        return null;
+        return (
+          <span
+            key={i}
+            style={{
+              textDecoration: 'line-through',
+              opacity: 0.5,
+            }}
+          >
+            {text}
+          </span>
+        );
       });
     };
 
@@ -479,6 +489,13 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             editingMetadata.type === 'chapter' ? 'Chapter' : 'Book'
           }: ${activeEditingData.title}`}
           initialData={activeEditingData}
+          baseline={
+            editingMetadata.type === 'chapter'
+              ? baselineChapters.find(
+                  (c) => String(c.id) === String(editingMetadata.id)
+                )
+              : undefined
+          }
           onSave={saveMetadata as (data: MetadataParams) => Promise<void>}
           onClose={() => {
             if (

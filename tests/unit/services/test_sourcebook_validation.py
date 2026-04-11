@@ -19,6 +19,10 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_refresh_entry_keywords,
     sourcebook_update_entry,
 )
+from augmentedquill.services.chat.chat_tool_decorator import (
+    ensure_tool_registry_loaded,
+    get_tool_function,
+)
 from augmentedquill.services.projects.projects import select_project
 
 
@@ -287,6 +291,29 @@ class SourcebookValidationTest(TestCase):
         # Invalid
         with self.assertRaises(ValidationError):
             UpdateSourcebookEntryParams(name_or_id="id1", images="not a list")
+
+    def test_chat_tool_update_without_fields_returns_error(self):
+        ensure_tool_registry_loaded()
+        tool = get_tool_function("update_sourcebook_entry")
+        self.assertIsNotNone(tool)
+
+        response = self._run_async(
+            tool(
+                {"name_or_id": "id1"},
+                "call_test",
+                payload={},
+                mutations={},
+            )
+        )
+
+        self.assertIsInstance(response, dict)
+        self.assertEqual(response.get("name"), "update_sourcebook_entry")
+        self.assertEqual(response.get("tool_call_id"), "call_test")
+
+        content = response.get("content")
+        self.assertIsInstance(content, str)
+        self.assertIn("error", content)
+        self.assertIn("at least one", content.lower())
 
     def test_keywords_stay_empty_without_editing_model(self):
         description = (

@@ -59,6 +59,7 @@ interface SourcebookListProps {
   }) => void;
   selectedSourcebookEntryId?: string | null;
   language?: string;
+  baselineEntries?: SourcebookEntry[];
 }
 
 export const resolveExternalSourcebookEntries = (
@@ -136,6 +137,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   onMutated,
   selectedSourcebookEntryId,
   language = 'en',
+  baselineEntries,
 }) => {
   const [entries, setEntries] = useState<SourcebookEntry[]>(
     resolveExternalSourcebookEntries(externalEntries, [])
@@ -532,6 +534,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         onSave={selectedEntry ? handleUpdate : handleCreate}
         onDelete={selectedEntry ? handleDelete : undefined}
         theme={theme}
+        baselineEntry={baselineEntries?.find((e) => e.id === selectedEntry?.id) ?? null}
       />
 
       {/* Portal Tooltip */}

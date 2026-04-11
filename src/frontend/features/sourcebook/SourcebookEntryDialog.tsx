@@ -32,6 +32,9 @@ import {
   LoaderCircle,
   ChevronDown,
   ChevronRight,
+  Undo,
+  Redo,
+  MessageSquareDiff,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
@@ -87,7 +90,18 @@ interface SourcebookEntryDialogProps {
   onDelete?: (id: string) => void;
   theme?: AppTheme;
   language?: string;
+  baselineEntry?: SourcebookEntry | null;
 }
+
+type SourcebookEntryHistoryState = {
+  name: string;
+  description: string;
+  category: string;
+  synonyms: string[];
+  images: string[];
+  relations: SourcebookRelation[];
+  keywords: string[];
+};
 
 export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   entry,
@@ -98,9 +112,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   onDelete,
   theme = 'mixed',
   language = 'en',
+  baselineEntry = null,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionBaseline, setDescriptionBaseline] = useState<string | undefined>(
+    undefined
+  );
+  const [showDiff, setShowDiff] = useState(true);
   const [category, setCategory] = useState(Object.keys(CATEGORY_DETAILS)[0]);
   const [synonyms, setSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState('');
@@ -142,29 +161,52 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     const hasImages = (entry?.images?.length ?? 0) > 0;
     const hasRelations = (entry?.relations?.length ?? 0) > 0;
 
+    const initialState: SourcebookEntryHistoryState = {
+      name: entry?.name || '',
+      description: entry?.description || '',
+      category: entry?.category || Object.keys(CATEGORY_DETAILS)[0],
+      synonyms: entry?.synonyms || [],
+      images: entry?.images || [],
+      relations: entry?.relations || [],
+      keywords: entry?.keywords || [],
+    };
+
     if (entry) {
-      setName(entry.name || '');
-      setDescription(entry.description || '');
-      setCategory(entry.category || Object.keys(CATEGORY_DETAILS)[0]);
-      setSynonyms(entry.synonyms || []);
-      setImages(entry.images || []);
-      setRelations(entry.relations || []);
+      setName(initialState.name);
+      setDescription(initialState.description);
+      setDescriptionBaseline(baselineEntry?.description);
+      setCategory(initialState.category);
+      setSynonyms(initialState.synonyms);
+      setImages(initialState.images);
+      setRelations(initialState.relations);
+      setKeywords(initialState.keywords);
       setNewSynonym('');
       setShowKeywordsPanel(false);
     } else {
       setName('');
       setDescription('');
+      setDescriptionBaseline(undefined);
       setCategory(Object.keys(CATEGORY_DETAILS)[0]);
       setSynonyms([]);
       setImages([]);
       setRelations([]);
       setNewSynonym('');
+      setKeywords([]);
       setShowKeywordsPanel(false);
     }
 
+    setHistory([initialState]);
+    setHistoryIndex(0);
     setIsImagesExpanded(hasImages);
     setIsRelationsExpanded(hasRelations);
   }, [entry?.id, isOpen]);
+
+  const [keywords, setKeywords] = useState<string[]>(entry?.keywords || []);
+  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const [showKeywordsPanel, setShowKeywordsPanel] = useState(false);
+  const [history, setHistory] = useState<SourcebookEntryHistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const isRestoringRef = useRef(false);
 
   // No automatic syncing; rely on parent to provide a fully-loaded entry.
 
@@ -175,6 +217,67 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setIsRelationsExpanded(true);
     }
   }, [relations]);
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      return;
+    }
+
+    const snapshot: SourcebookEntryHistoryState = {
+      name,
+      description,
+      category,
+      synonyms,
+      images,
+      relations,
+      keywords,
+    };
+
+    const current = history[historyIndex];
+    if (current && JSON.stringify(current) === JSON.stringify(snapshot)) {
+      return;
+    }
+
+    setHistory((prev) => {
+      const next = [...prev.slice(0, historyIndex + 1), snapshot];
+      return next.length > 100 ? next.slice(next.length - 100) : next;
+    });
+    setHistoryIndex((prev) => Math.min(prev + 1, 99));
+  }, [
+    name,
+    description,
+    category,
+    synonyms,
+    images,
+    relations,
+    keywords,
+    historyIndex,
+    history,
+  ]);
+
+  const restoreSourcebookHistory = (index: number) => {
+    if (index < 0 || index >= history.length) {
+      return;
+    }
+
+    const snapshot = history[index];
+    if (!snapshot) {
+      return;
+    }
+
+    isRestoringRef.current = true;
+    setName(snapshot.name);
+    setDescription(snapshot.description);
+    setCategory(snapshot.category);
+    setSynonyms(snapshot.synonyms);
+    setImages(snapshot.images);
+    setRelations(snapshot.relations);
+    setKeywords(snapshot.keywords);
+    setHistoryIndex(index);
+    setTimeout(() => {
+      isRestoringRef.current = false;
+    }, 0);
+  };
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -230,9 +333,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     ? 'placeholder-brand-gray-400'
     : 'placeholder-brand-gray-500';
 
-  const [keywords, setKeywords] = useState<string[]>(entry?.keywords || []);
-  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
-  const [showKeywordsPanel, setShowKeywordsPanel] = useState(false);
   const keywordsTooltip = isGeneratingKeywords
     ? '...generating...'
     : keywords.length > 0
@@ -335,17 +435,67 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 {entry ? 'Edit Entry' : 'New Sourcebook Entry'}
               </h2>
             </div>
-            <button
-              onClick={onClose}
-              aria-label="Close sourcebook entry"
-              className={`p-1 rounded-md transition-colors ${
-                isLight
-                  ? 'hover:bg-brand-gray-100 text-brand-gray-500'
-                  : 'hover:bg-brand-gray-800 text-brand-gray-400'
-              }`}
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  historyIndex > 0 && restoreSourcebookHistory(historyIndex - 1)
+                }
+                disabled={historyIndex === 0}
+                aria-label="Undo sourcebook entry changes"
+                title="Undo"
+                className={`p-1 rounded-md transition-colors ${
+                  isLight
+                    ? 'hover:bg-brand-gray-100 text-brand-gray-500 disabled:opacity-40 disabled:cursor-not-allowed'
+                    : 'hover:bg-brand-gray-800 text-brand-gray-400 disabled:opacity-40 disabled:cursor-not-allowed'
+                }`}
+              >
+                <Undo size={18} />
+              </button>
+              <button
+                onClick={() =>
+                  historyIndex < history.length - 1 &&
+                  restoreSourcebookHistory(historyIndex + 1)
+                }
+                disabled={historyIndex >= history.length - 1}
+                aria-label="Redo sourcebook entry changes"
+                title="Redo"
+                className={`p-1 rounded-md transition-colors ${
+                  isLight
+                    ? 'hover:bg-brand-gray-100 text-brand-gray-500 disabled:opacity-40 disabled:cursor-not-allowed'
+                    : 'hover:bg-brand-gray-800 text-brand-gray-400 disabled:opacity-40 disabled:cursor-not-allowed'
+                }`}
+              >
+                <Redo size={18} />
+              </button>
+              <button
+                onClick={() => setShowDiff(!showDiff)}
+                aria-label="Toggle diff view"
+                aria-pressed={showDiff}
+                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
+                className={`p-1 rounded-md transition-colors ${
+                  showDiff
+                    ? isLight
+                      ? 'text-brand-500 hover:text-brand-600'
+                      : 'text-brand-400 hover:text-brand-300'
+                    : isLight
+                      ? 'text-brand-gray-400 hover:text-brand-gray-600'
+                      : 'text-brand-gray-600 hover:text-brand-gray-400'
+                }`}
+              >
+                <MessageSquareDiff size={18} />
+              </button>
+              <button
+                onClick={onClose}
+                aria-label="Close sourcebook entry"
+                className={`p-1 rounded-md transition-colors ${
+                  isLight
+                    ? 'hover:bg-brand-gray-100 text-brand-gray-500'
+                    : 'hover:bg-brand-gray-800 text-brand-gray-400'
+                }`}
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
@@ -722,7 +872,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               >
                 <CodeMirrorEditor
                   value={description}
-                  onChange={setDescription}
+                  onChange={(val) => {
+                    setDescriptionBaseline(val);
+                    setDescription(val);
+                  }}
+                  baselineValue={descriptionBaseline}
+                  showDiff={showDiff}
                   language={language}
                   spellCheck={true}
                   mode="markdown"

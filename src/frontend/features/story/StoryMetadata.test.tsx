@@ -36,4 +36,20 @@ describe('StoryMetadata', () => {
 
     expect(screen.getByLabelText('2 active conflicts')).toBeTruthy();
   });
+
+  it('shows note diffs when baselineNotes differs from current notes', () => {
+    const { container } = render(
+      <StoryMetadata
+        title="Short Story"
+        summary="Summary"
+        tags={[]}
+        notes="New story notes"
+        baselineNotes="Old story notes"
+        projectType="novel"
+        onUpdate={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect(container.querySelector('.diff-inserted')).toBeTruthy();
+  });
 });

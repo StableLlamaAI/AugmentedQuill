@@ -45,6 +45,27 @@ class TestChannelFilter(unittest.TestCase):
         self.assertEqual(len(res5), 1)
         self.assertEqual(res5[0]["channel"], "final")
 
+    def test_tool_call_gemini_wrapper_tags(self):
+        """Test Gemini-style <|tool_call> wrappers change the channel correctly."""
+        cf = ChannelFilter()
+
+        res1 = cf.feed("Something before.\n")
+        self.assertEqual(res1[0]["channel"], "final")
+
+        cf.feed("<|tool_call>")
+        self.assertEqual(cf.current_channel, "tool_def")
+
+        res3 = cf.feed('call:search_sourcebook{"query":"Clara"}')
+        self.assertEqual(len(res3), 1)
+        self.assertEqual(res3[0]["channel"], "tool_def")
+        self.assertEqual(res3[0]["content"], 'call:search_sourcebook{"query":"Clara"}')
+
+        cf.feed("<|tool_call|>")
+        self.assertEqual(cf.current_channel, "final")
+
+        res4 = cf.feed("\nFinished.")
+        self.assertEqual(res4[0]["channel"], "final")
+
     def test_tool_call_xml_tags_partial_feed(self):
         """Test split chunks handling for xml tags."""
         cf = ChannelFilter()

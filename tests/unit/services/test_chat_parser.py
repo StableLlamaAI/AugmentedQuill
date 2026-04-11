@@ -210,6 +210,24 @@ class TestChatParser(unittest.TestCase):
         )
         self.assertEqual(strip_tool_call_tags(content), "Intro   Outro")
 
+    def test_strip_tool_call_tags_removes_gemini_wrapper_markup(self):
+        content = (
+            'Intro <|tool_call>call:search_sourcebook{"query":"Clara"}<tool_call|> '
+            "Outro"
+        )
+        self.assertEqual(strip_tool_call_tags(content), "Intro  Outro")
+
+    def test_parse_gemini_call_wrapper_format(self):
+        content = (
+            "<|tool_call>call:search_sourcebook{query:<|“|>Clara<|“|>}<tool_call|>"
+        )
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["function"]["name"], "search_sourcebook")
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["query"], "Clara")
+
     def test_extract_thinking_from_content_returns_first_block(self):
         content = "<thought>internal note</thought> final"
         self.assertEqual(extract_thinking_from_content(content), "internal note")

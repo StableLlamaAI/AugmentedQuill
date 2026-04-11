@@ -29,6 +29,18 @@ def _parse_tool_argument_value(raw_value: str) -> Any:
         return text
 
 
+def _normalize_gemini_tokens(value: str) -> str:
+    """Normalize Gemini-style token markers to standard punctuation."""
+    if not value:
+        return value
+    return (
+        value.replace("<|“|>", '"')
+        .replace("<|”|>", '"')
+        .replace("<|‘|>", "'")
+        .replace("<|’|>", "'")
+    )
+
+
 def _parse_xml_style_tool_call(content_inner: str) -> tuple[str, dict[str, Any]] | None:
     """Parse legacy XML-like tool call bodies with optional parameter tags."""
     xml_match = re.search(
@@ -86,8 +98,8 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
 
     calls = []
 
-    # 1. Look for <tool_call> tags
-    pattern1 = r"<tool_call>(.*?)</tool_call>"
+    # 1. Look for <tool_call> tags and Gemini-style <|tool_call|> wrappers
+    pattern1 = r"(?:<tool_call>|<\|tool_call\>)(.*?)(?:</tool_call>|<\|tool_call\|>|<tool_call\|>)"
     matches1 = re.finditer(pattern1, content, re.IGNORECASE | re.DOTALL)
 
     for m in matches1:
@@ -127,6 +139,43 @@ def parse_tool_calls_from_content(content: str) -> list[dict] | None:
 
             call_id = f"call_{name}"
             # Ensure unique ID if multiple calls to same tool
+            if any(c["id"] == call_id for c in calls):
+                call_id = f"{call_id}_{len(calls)}"
+
+            calls.append(
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": _json.dumps(args_obj)},
+                    "original_text": m.group(0),
+                }
+            )
+            continue
+
+        # Try call:NAME{ARGS} format
+        normalized_content = _normalize_gemini_tokens(content_inner)
+        call_match = re.match(
+            r"^call:(\w+)\s*\{(.*)\}\s*$", normalized_content, re.DOTALL
+        )
+        if call_match:
+            name = call_match.group(1)
+            args_str = call_match.group(2).strip()
+            args_obj: dict[str, Any] = {}
+            if args_str:
+                try:
+                    args_obj = try_parse_json_robust(f"{{{args_str}}}")
+                    if not isinstance(args_obj, dict):
+                        args_obj = {}
+                except Exception:
+                    try:
+                        quoted_args = re.sub(r"([A-Za-z0-9_]+)\s*:", r'"\1":', args_str)
+                        args_obj = try_parse_json_robust(f"{{{quoted_args}}}")
+                        if not isinstance(args_obj, dict):
+                            args_obj = {}
+                    except Exception:
+                        args_obj = {}
+
+            call_id = f"call_{name}"
             if any(c["id"] == call_id for c in calls):
                 call_id = f"{call_id}_{len(calls)}"
 
@@ -282,6 +331,12 @@ def strip_tool_call_tags(content: str) -> str:
         return content
     content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL)
     content = re.sub(
+        r"<\|tool_call\>.*?(?:<\|tool_call\|>|<tool_call\|>)",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+    content = re.sub(
         r"\[TOOL_CALL\]\s*.*?\s*\[/TOOL_CALL\]",
         "",
         content,
@@ -405,8 +460,10 @@ def parse_stream_channel_fragments(
         piece_lower = piece.lower()
         has_tool_syntax = (
             "<tool_call" in piece_lower
+            or "<|tool_call" in piece_lower
             or "[tool_call" in piece_lower
             or piece_lower.strip().startswith("tool:")
+            or piece_lower.strip().startswith("call:")
         )
         if has_tool_syntax:
             parsed_calls = parse_tool_calls_from_content(piece) or []

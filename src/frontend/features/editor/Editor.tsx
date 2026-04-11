@@ -236,7 +236,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       showWhitespace,
       onToggleShowWhitespace,
       onChange,
-      baselineContent = '',
+      baselineContent = undefined,
       suggestionControls,
       aiControls,
       language,
@@ -272,23 +272,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
 
-    const [localBaseline, setLocalBaseline] = useState<string>(baselineContent);
-    const [localNotesBaseline, setLocalNotesBaseline] = useState<string>(
-      chapter.notes || ''
-    );
-    const [localPrivateNotesBaseline, setLocalPrivateNotesBaseline] = useState<string>(
-      chapter.private_notes || ''
+    const [localBaseline, setLocalBaseline] = useState<string | undefined>(
+      baselineContent
     );
 
     useEffect(() => {
       setLocalBaseline(baselineContent);
     }, [baselineContent]);
-
-    useEffect(() => {
-      // Advance baselines for notes when switching chapters or when baselineState changes
-      setLocalNotesBaseline(chapter.notes || '');
-      setLocalPrivateNotesBaseline(chapter.private_notes || '');
-    }, [chapter.id, baselineContent]);
 
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
@@ -595,7 +585,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         // We sync if not focused OR if we are actively streaming from AI
         if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
           let contentToRender = chapter.content;
-          if (settings.showDiff && localBaseline && localBaseline !== chapter.content) {
+          if (
+            settings.showDiff &&
+            localBaseline != null &&
+            localBaseline !== chapter.content
+          ) {
             const diffs = new diff_match_patch().diff_main(
               localBaseline,
               chapter.content
@@ -654,7 +648,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
       if (e && !e.nativeEvent.isTrusted) return;
-      setLocalBaseline(''); // clear diff immediately on user input
+      setLocalBaseline(undefined); // clear diff immediately on user input
       if (wysiwygRef.current) {
         const html = wysiwygRef.current.innerHTML;
         const md = turndownService.current.turndown(html);
@@ -1617,7 +1611,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     spellCheck={spellCheck}
                     onChange={(val: string) => {
                       setLocalContent(val);
-                      setLocalBaseline(''); // clear diff immediately on user input
+                      setLocalBaseline(undefined); // clear diff immediately on user input
                       checkContext();
                       if (contentDebounceRef.current)
                         clearTimeout(contentDebounceRef.current);
@@ -1629,7 +1623,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
                     showWhitespace={showWhitespace}
                     showDiff={settings.showDiff}
-                    baselineValue={settings.showDiff ? localBaseline : ''}
+                    baselineValue={localBaseline}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'
