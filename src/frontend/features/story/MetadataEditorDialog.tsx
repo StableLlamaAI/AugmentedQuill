@@ -447,9 +447,16 @@ export function MetadataEditorDialog({
     try {
       // Stream partial text into the editor so users can intervene early.
       const sourceText = source === 'notes' ? data.notes || '' : undefined;
+      // Throttle progress updates to avoid triggering React's maximum update
+      // depth limit (50 consecutive commits) when the LLM streams many tokens
+      // per second.
+      let lastProgressAt = 0;
       const result = await onAiGenerate(
         action,
         (partialText) => {
+          const now = Date.now();
+          if (now - lastProgressAt < 50) return;
+          lastProgressAt = now;
           setData((prev) => ({ ...prev, summary: partialText }));
         },
         sourceText,
