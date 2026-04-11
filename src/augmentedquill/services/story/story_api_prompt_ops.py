@@ -338,13 +338,27 @@ def build_ai_action_messages(
     elif target == "book_summary":
         sys_key = "ai_action_summary_rewrite"
         user_key = (
-            "story_summary_new" if action == "rewrite" else "story_summary_update"
+            "story_summary_new"
+            if action in ("write", "rewrite")
+            else "story_summary_update"
         )
     elif target == "story_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = (
-            "story_summary_new" if action == "rewrite" else "story_summary_update"
-        )
+        if project_type == "short-story":
+            # Short-story has no chapters; use the story draft text as the source
+            # (same template family as chapter summaries, with chapter_text = story draft).
+            user_key = (
+                "chapter_summary_new"
+                if action in ("write", "rewrite")
+                else "chapter_summary_update"
+            )
+        else:
+            # Novel/series: source material is chapter or book summaries.
+            user_key = (
+                "story_summary_new"
+                if action in ("write", "rewrite")
+                else "story_summary_update"
+            )
     else:
         sys_key = f"ai_action_chapter_{action}"
         user_key = f"ai_action_chapter_{action}_user"
@@ -399,6 +413,23 @@ def build_ai_action_messages(
             language=language,
         )
 
+    # Heading and canonical source alias used by story/book-level summary templates.
+    if target == "book_summary":
+        summary_heading = get_system_message(
+            "chapter_summaries_label", model_overrides, language=language
+        )
+    elif target == "story_summary":
+        label_key = (
+            "book_summaries_label"
+            if project_type == "series"
+            else "chapter_summaries_label"
+        )
+        summary_heading = get_system_message(
+            label_key, model_overrides, language=language
+        )
+    else:
+        summary_heading = ""
+
     return _build_messages(
         system_message_key=sys_key,
         user_prompt_key=user_key,
@@ -417,6 +448,8 @@ def build_ai_action_messages(
         existing_text=existing_content,
         existing_summary=chapter_summary,
         chapter_summaries=chapter_summaries,
+        source_summaries=chapter_summaries,
+        summary_heading=summary_heading,
         style_tags=style_tags,
         content_label=content_label,
         background=background,

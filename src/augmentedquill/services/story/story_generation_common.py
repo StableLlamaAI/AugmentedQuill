@@ -318,13 +318,11 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
 
     if story.get("project_type") == "series":
         source_summaries = collect_book_summaries(story.get("books", []))
-        summary_heading = "Book summaries"
         if not source_summaries:
             raise BadRequestError("No book summaries available")
     else:
         chapters_data = get_all_normalized_chapters(story)
         source_summaries = collect_chapter_summaries(chapters_data)
-        summary_heading = "Chapter summaries"
         if not source_summaries:
             raise BadRequestError("No chapter summaries available")
 
@@ -335,13 +333,22 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
             base_dir=BASE_DIR,
         )
     )
+    language = story.get("language", "en")
+    if story.get("project_type") == "series":
+        summary_heading = get_system_message(
+            "book_summaries_label", model_overrides, language=language
+        )
+    else:
+        summary_heading = get_system_message(
+            "chapter_summaries_label", model_overrides, language=language
+        )
     messages = build_story_summary_messages(
         mode=mode,
         current_story_summary=current_story_summary,
         source_summaries=source_summaries,
         summary_heading=summary_heading,
         model_overrides=model_overrides,
-        language=story.get("language", "en"),
+        language=language,
         project_type=story.get("project_type"),
     )
     return {
@@ -550,10 +557,18 @@ def prepare_ai_action_generation(payload: dict) -> dict:
 
     active, story_path, story = get_active_story_or_raise()
     project_type = story.get("project_type", "novel")
-    scope = str(
-        payload.get("scope")
-        or ("story" if project_type == "short-story" else "chapter")
-    ).lower()
+
+    # For story_summary the correct scope is determined entirely by project_type:
+    # short-story reads from the prose file; novel/series derives from
+    # chapter/book summaries and needs no file path.  Ignore whatever scope the
+    # frontend sent so the behaviour is correct for all project types.
+    if target == "story_summary":
+        scope = "story" if project_type == "short-story" else "chapter"
+    else:
+        scope = str(
+            payload.get("scope")
+            or ("story" if project_type == "short-story" else "chapter")
+        ).lower()
 
     if scope == "story":
         path = _resolve_story_draft_path(active, story)
@@ -576,6 +591,14 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     # Decide whether the provided text should be treated as notes.
     source_hint = payload.get("source")
     is_notes_source = source_hint == "notes"
+
+    # For short-story story-level summary the source is always the story draft on
+    # disk, not whatever current_text the frontend may have sent.  Mirror the
+    # validation done by prepare_story_summary_generation.
+    if target == "story_summary" and project_type == "short-story":
+        if not actual_chapter_text or not actual_chapter_text.strip():
+            raise BadRequestError("No story content available to generate summary from")
+        existing_content = actual_chapter_text
     if (
         not is_notes_source
         and isinstance(existing_content, str)
@@ -613,6 +636,13 @@ def prepare_ai_action_generation(payload: dict) -> dict:
 
     chapter_summaries_list = collect_chapter_summaries(chapters_data)
     chapter_summaries_text = "\n\n".join(chapter_summaries_list)
+
+    # For a series story-level summary the source material should be book summaries,
+    # not individual chapter summaries (mirrors prepare_story_summary_generation).
+    if target == "story_summary" and project_type == "series":
+        book_summaries_list = collect_book_summaries(story.get("books", []))
+        if book_summaries_list:
+            chapter_summaries_text = "\n\n".join(book_summaries_list)
 
     context = gather_writing_context(
         story=story,

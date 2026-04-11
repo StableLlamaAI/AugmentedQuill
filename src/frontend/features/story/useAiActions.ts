@@ -169,7 +169,7 @@ export function useAiActions({
       const result = await streamAiAction(
         target,
         action,
-        id,
+        type === 'story' ? 'story' : id,
         currentText ?? '',
         onProgress ? (partial) => onProgress(cleanText(partial)) : undefined,
         onThinking,

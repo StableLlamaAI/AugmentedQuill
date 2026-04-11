@@ -52,6 +52,14 @@
     "_use": "SYSTEM",
     "en": "Current draft notes"
   },
+  "chapter_summaries_label": {
+    "_use": "SYSTEM",
+    "en": "Chapter summaries"
+  },
+  "book_summaries_label": {
+    "_use": "SYSTEM",
+    "en": "Book summaries"
+  },
   "chapter_summarizer": {
     "_use": "EDITING",
     "en": [

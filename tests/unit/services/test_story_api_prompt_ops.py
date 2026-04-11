@@ -131,3 +131,192 @@ Story tags: cozy
         self.assertNotIn("Story description:", cleaned)
         self.assertIn("Story title: My Short Story", cleaned)
         self.assertIn("Story tags: cozy", cleaned)
+
+    # -----------------------------------------------------------------------
+    # story_summary target – template selection and placeholder filling
+    # -----------------------------------------------------------------------
+
+    def _build_story_summary_msgs(
+        self,
+        action: str,
+        project_type: str,
+        existing_summary: str = "",
+        chapter_summaries: str = "Ch1 summary\n\nCh2 summary",
+    ):
+        return build_ai_action_messages(
+            target="story_summary",
+            action=action,
+            project_type_label="Novel",
+            story_title="My Story",
+            story_summary=existing_summary,
+            story_tags="tag1",
+            chapter_title="My Story",
+            chapter_summary=existing_summary,
+            chapter_conflicts="",
+            existing_content="Story draft text here.",
+            chapter_summaries=chapter_summaries,
+            model_overrides={},
+            language="en",
+            project_type=project_type,
+        )
+
+    def test_story_summary_write_novel_uses_new_template(self):
+        """action='write' must use story_summary_new (no existing_summary block)."""
+        msgs = self._build_story_summary_msgs("write", "novel")
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertNotIn("Existing story summary", user_msg["content"])
+        self.assertIn("Chapter summaries", user_msg["content"])
+
+    def test_story_summary_rewrite_novel_uses_new_template(self):
+        """action='rewrite' must also use story_summary_new."""
+        msgs = self._build_story_summary_msgs(
+            "rewrite", "novel", existing_summary="Old summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertNotIn("Existing story summary", user_msg["content"])
+        self.assertIn("Chapter summaries", user_msg["content"])
+
+    def test_story_summary_update_novel_uses_update_template(self):
+        """action='update' must use story_summary_update (shows existing_summary block)."""
+        msgs = self._build_story_summary_msgs(
+            "update", "novel", existing_summary="Old summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertIn("Existing story summary", user_msg["content"])
+        self.assertIn("Old summary", user_msg["content"])
+        self.assertIn("Chapter summaries", user_msg["content"])
+        self.assertIn("Ch1 summary", user_msg["content"])
+
+    def test_story_summary_source_summaries_placeholder_is_filled(self):
+        """The {source_summaries} placeholder must be filled – never sent raw to the LLM."""
+        chapter_summaries = "Chapter One summary\n\nChapter Two summary"
+        msgs = self._build_story_summary_msgs(
+            "write", "novel", chapter_summaries=chapter_summaries
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{source_summaries}", user_msg["content"])
+        self.assertIn("Chapter One summary", user_msg["content"])
+
+    def test_story_summary_update_existing_summary_placeholder_is_filled(self):
+        """The {existing_summary} placeholder in the update template must be filled."""
+        msgs = self._build_story_summary_msgs(
+            "update", "novel", existing_summary="My existing summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{existing_summary}", user_msg["content"])
+        self.assertIn("My existing summary", user_msg["content"])
+
+    def test_story_summary_series_uses_book_summaries_heading(self):
+        """For series, the summary_heading should be 'Book summaries'."""
+        msgs = self._build_story_summary_msgs(
+            "write", "series", chapter_summaries="Book One summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertIn("Book summaries", user_msg["content"])
+
+    # -----------------------------------------------------------------------
+    # story_summary target – short-story project type
+    # -----------------------------------------------------------------------
+
+    def _build_short_story_summary_msgs(self, action: str, existing_summary: str = ""):
+        return build_ai_action_messages(
+            target="story_summary",
+            action=action,
+            project_type_label="Short Story",
+            story_title="My Short Story",
+            story_summary=existing_summary,
+            story_tags="cozy",
+            chapter_title="My Short Story",
+            chapter_summary=existing_summary,
+            chapter_conflicts="",
+            existing_content="Once upon a time the hero set out.",
+            chapter_summaries="",
+            model_overrides={},
+            language="en",
+            project_type="short-story",
+        )
+
+    def test_short_story_summary_write_uses_chapter_text_template(self):
+        """Short-story write should use chapter_summary_new (story draft as source)."""
+        msgs = self._build_short_story_summary_msgs("write")
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        # chapter_summary_new embeds the chapter/story text directly
+        self.assertIn("Once upon a time the hero set out.", user_msg["content"])
+        # Must NOT try to use chapter/book summaries (there are none)
+        self.assertNotIn("{source_summaries}", user_msg["content"])
+
+    def test_short_story_summary_rewrite_uses_chapter_text_template(self):
+        """Short-story rewrite should also use chapter_summary_new."""
+        msgs = self._build_short_story_summary_msgs(
+            "rewrite", existing_summary="Old summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertIn("Once upon a time the hero set out.", user_msg["content"])
+
+    def test_short_story_summary_update_uses_chapter_text_update_template(self):
+        """Short-story update should use chapter_summary_update (shows existing summary)."""
+        msgs = self._build_short_story_summary_msgs(
+            "update", existing_summary="Old summary"
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertIn("Old summary", user_msg["content"])
+        self.assertIn("Once upon a time the hero set out.", user_msg["content"])
+
+    def test_short_story_summary_empty_content_has_no_placeholders(self):
+        """When existing_content is '' (as the frontend sends before disk-read), the
+        template must not leave raw {…} placeholders in the output.  The server-side
+        guard in prepare_ai_action_generation must inject the story draft before
+        calling build_ai_action_messages; this test confirms the template itself
+        stays clean even in the degenerate empty case."""
+        msgs = build_ai_action_messages(
+            target="story_summary",
+            action="write",
+            project_type_label="Short Story",
+            story_title="My Story",
+            story_summary="",
+            story_tags="",
+            chapter_title="My Story",
+            chapter_summary="",
+            chapter_conflicts="",
+            existing_content="",  # empty – simulates what happens without the disk read
+            chapter_summaries="",
+            model_overrides={},
+            language="en",
+            project_type="short-story",
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"])
+
+    # -----------------------------------------------------------------------
+    # book_summary target
+    # -----------------------------------------------------------------------
+
+    def test_book_summary_write_uses_new_template(self):
+        """book_summary + write must use story_summary_new, not story_summary_update."""
+        msgs = build_ai_action_messages(
+            target="book_summary",
+            action="write",
+            project_type_label="Series",
+            story_title="My Series",
+            story_summary="",
+            story_tags="",
+            chapter_title="Book One",
+            chapter_summary="",
+            chapter_conflicts="",
+            existing_content="",
+            chapter_summaries="Ch1 summary\n\nCh2 summary",
+            model_overrides={},
+            language="en",
+            project_type="series",
+        )
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        self.assertNotIn("{", user_msg["content"], "Unfilled placeholder found")
+        self.assertNotIn("Existing story summary", user_msg["content"])
+        self.assertIn("Chapter summaries", user_msg["content"])

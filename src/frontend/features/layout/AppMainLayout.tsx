@@ -477,19 +477,31 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             baselineNotes={sidebarControls.baselineState?.notes}
             baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
             baselineConflicts={sidebarControls.baselineState?.conflicts}
-            onAiGenerateSummary={(action, onProgress, currentText, onThinking) =>
+            onAiGenerateSummary={(
+              action,
+              onProgress,
+              currentText,
+              onThinking,
+              source
+            ) =>
               handleSidebarAiAction(
                 'story',
                 story.id,
                 action,
                 onProgress,
                 currentText,
-                onThinking
+                onThinking,
+                source
               )
             }
             summaryAiDisabledReason={
               !isEditingAvailable
                 ? 'Summary AI is unavailable because no working EDITING model is configured.'
+                : undefined
+            }
+            primarySourceAvailable={
+              story.projectType === 'short-story'
+                ? !!story.draft?.content?.trim()
                 : undefined
             }
             onUpdate={updateStoryMetadata}
