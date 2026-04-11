@@ -132,6 +132,7 @@ export function MetadataEditorDialog({
     return 0;
   });
   const isRestoringRef = useRef(false);
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track latest data in a ref so the baselineData effect can read it
   // without adding `data` to its dependency array (which would cause the
   // effect to re-run on every keystroke and reset diff highlights).
@@ -268,29 +269,52 @@ export function MetadataEditorDialog({
       return;
     }
 
-    const snapshot = normalizeMetadataParams(
-      JSON.parse(JSON.stringify(data)) as MetadataParams
-    );
-    const existing = history[historyIndex];
-    if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
-      return;
-    }
+    const DEBOUNCE_MS = 600;
 
-    const snapshotJson = JSON.stringify(snapshot);
-    const historyJson = history.map((entry) => JSON.stringify(entry));
-    const matchedIndex = historyJson.findIndex(
-      (entryJson) => entryJson === snapshotJson
-    );
-    if (matchedIndex !== -1) {
-      setHistoryIndex(matchedIndex);
-      return;
-    }
+    const pushNow = (
+      currentData: MetadataParams,
+      currentHistory: MetadataParams[],
+      currentIndex: number
+    ) => {
+      const snapshot = normalizeMetadataParams(
+        JSON.parse(JSON.stringify(currentData)) as MetadataParams
+      );
+      const existing = currentHistory[currentIndex];
+      if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
+        return;
+      }
 
-    setHistory((prev) => {
-      const next = [...prev.slice(0, historyIndex + 1), snapshot];
-      return next.length > 100 ? next.slice(next.length - 100) : next;
-    });
-    setHistoryIndex((prev) => Math.min(prev + 1, 99));
+      const snapshotJson = JSON.stringify(snapshot);
+      const historyJson = currentHistory.map((entry) => JSON.stringify(entry));
+      const matchedIndex = historyJson.findIndex(
+        (entryJson) => entryJson === snapshotJson
+      );
+      if (matchedIndex !== -1) {
+        setHistoryIndex(matchedIndex);
+        return;
+      }
+
+      setHistory((prev) => {
+        const next = [...prev.slice(0, currentIndex + 1), snapshot];
+        return next.length > 100 ? next.slice(next.length - 100) : next;
+      });
+      setHistoryIndex((prev) => Math.min(prev + 1, 99));
+    };
+
+    if (historyDebounceRef.current) {
+      clearTimeout(historyDebounceRef.current);
+    }
+    historyDebounceRef.current = setTimeout(() => {
+      historyDebounceRef.current = null;
+      pushNow(data, history, historyIndex);
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (historyDebounceRef.current) {
+        clearTimeout(historyDebounceRef.current);
+        historyDebounceRef.current = null;
+      }
+    };
   }, [data, historyIndex, history]);
 
   const restoreMetadataHistory = (index: number) => {

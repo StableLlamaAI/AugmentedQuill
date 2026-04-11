@@ -18,13 +18,14 @@ import {
   screen,
   fireEvent,
   within,
-  waitFor,
+  act,
   cleanup,
 } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 
 afterEach(cleanup);
+afterEach(() => vi.useRealTimers());
 
 const baseData = {
   title: 'Chapter 1',
@@ -120,7 +121,8 @@ describe('MetadataEditorDialog', () => {
     // spellchecking language is passed via the `language` prop to the editor.
   });
 
-  it('supports undo and redo via metadata dialog header buttons', () => {
+  it('supports undo and redo via metadata dialog header buttons', async () => {
+    vi.useFakeTimers();
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
@@ -144,6 +146,11 @@ describe('MetadataEditorDialog', () => {
     fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
     expect(titleInput.value).toBe('Chapter 1 Revised');
 
+    // Advance past the 600 ms debounce so the history entry is committed.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
     fireEvent.click(
       within(dialog!).getByRole('button', { name: /Undo metadata editor changes/i })
     );
@@ -159,7 +166,8 @@ describe('MetadataEditorDialog', () => {
     );
   });
 
-  it('preserves undo history when autosave updates initialData', () => {
+  it('preserves undo history when autosave updates initialData', async () => {
+    vi.useFakeTimers();
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
@@ -183,6 +191,11 @@ describe('MetadataEditorDialog', () => {
     fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
     expect(titleInput.value).toBe('Chapter 1 Revised');
 
+    // Advance past the 600 ms debounce so the history entry is committed.
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
     rerender(
       <MetadataEditorDialog
         type="chapter"
@@ -203,6 +216,7 @@ describe('MetadataEditorDialog', () => {
   });
 
   it('reuses existing history entries when external edits revert to an earlier state', async () => {
+    vi.useFakeTimers();
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
@@ -223,11 +237,22 @@ describe('MetadataEditorDialog', () => {
     expect(dialog).toBeTruthy();
 
     const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
+    // Type three distinct values with debounce pauses so each becomes an entry.
     fireEvent.change(titleInput, { target: { value: 'Chapter 1 Revised' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
     fireEvent.change(titleInput, { target: { value: 'Chapter 1 Final' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
     expect(titleInput.value).toBe('Chapter 1 Final');
 
+    // Typing back to the original value should reuse the existing entry.
     fireEvent.change(titleInput, { target: { value: 'Chapter 1' } });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
 
     const undoButton = within(dialog!).getByRole('button', {
       name: /Undo metadata editor changes/i,
@@ -236,11 +261,10 @@ describe('MetadataEditorDialog', () => {
       name: /Redo metadata editor changes/i,
     }) as HTMLButtonElement;
 
-    await waitFor(() => {
-      expect(redoButton.disabled).toBe(false);
-    });
-
+    // After settling we should be back at the original entry (no undo available,
+    // redo available to go forward again).
     expect(undoButton.disabled).toBe(true);
+    expect(redoButton.disabled).toBe(false);
   });
 
   it('keeps diff highlights when explicit baseline advances to the current data', () => {
