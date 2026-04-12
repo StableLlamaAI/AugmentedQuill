@@ -760,6 +760,14 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   // Baseline is managed explicitly via setBaselineState — see pushState,
   // undoSteps, redoSteps, and loadStory above.
 
+  // Advance the baseline to the current story state.  Call this whenever
+  // the user starts a new action (e.g. sends a new chat message) so that
+  // the NEXT AI operation's diff is relative to the post-previous-turn state
+  // rather than the original load state.
+  const advanceBaselineToCurrentStory = useCallback(() => {
+    setBaselineState(latestStoryRef.current);
+  }, []);
+
   const undoOptions: StoryHistoryOption[] = [];
   for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
     undoOptions.push({
@@ -809,5 +817,6 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     canUndo: currentIndex > 0,
     canRedo: currentIndex < history.length - 1,
     baselineState,
+    advanceBaselineToCurrentStory,
   };
 };

@@ -317,7 +317,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     onToggleAutoSourcebookSelection,
     isSourcebookSelectionRunning,
     onSourcebookMutated,
-    selectedSourcebookEntryId,
+    onAppUndo,
+    onAppRedo,
+    canAppUndo,
+    canAppRedo,
+    sourcebookDialogTrigger,
     metadataDialogTrigger,
   } = sidebarControls;
 
@@ -565,7 +569,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             onToggleAutoSelection={onToggleAutoSourcebookSelection}
             isAutoSelectionRunning={isSourcebookSelectionRunning}
             onMutated={onSourcebookMutated}
-            selectedSourcebookEntryId={selectedSourcebookEntryId}
+            onAppUndo={onAppUndo}
+            onAppRedo={onAppRedo}
+            canAppUndo={canAppUndo}
+            canAppRedo={canAppRedo}
+            sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
             baselineEntries={sidebarControls.baselineState?.sourcebook}
           />
         </CollapsibleSection>

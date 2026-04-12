@@ -765,3 +765,87 @@ describe('baselineState diff highlighting', () => {
     );
   });
 });
+
+// ─── advanceBaselineToCurrentStory ───────────────────────────────────────────
+
+describe('advanceBaselineToCurrentStory', () => {
+  it('advances the baseline to the current story state so the next AI turn diffs correctly', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // Simulate an AI operation: add new sourcebook entry (via setStory directly,
+    // mimicking what refreshStory does when called without a historyLabel).
+    const storyWithSb = {
+      ...result.current.story,
+      sourcebook: [
+        {
+          id: 'hero',
+          name: 'Hero',
+          description: 'A brave hero',
+          synonyms: [],
+          images: [],
+          keywords: [],
+        },
+      ],
+    };
+    act(() => {
+      result.current.loadStory(storyWithSb);
+    });
+    // loadStory also advances baseline, so manually simulate just the
+    // setStory path by calling pushExternalHistoryEntry.
+    act(() => {
+      result.current.pushExternalHistoryEntry({ label: 'AI: Create Hero' });
+    });
+
+    // At this point baseline should reflect the state at load, which included
+    // the sourcebook entry.  Now advance baseline to simulate starting a new
+    // chat turn.
+    act(() => {
+      result.current.advanceBaselineToCurrentStory();
+    });
+
+    // After advancing, baseline matches current story — no diff should show.
+    expect(result.current.baselineState.sourcebook).toEqual(
+      result.current.story.sourcebook
+    );
+  });
+
+  it('after advancing baseline, a subsequent AI change shows the correct diff', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // First AI turn: updates chapter content.
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI turn 1' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Simulate what onChatNewMessageBegin does: advance baseline before next turn.
+    act(() => {
+      result.current.advanceBaselineToCurrentStory();
+    });
+
+    // Now baseline = 'AI turn 1'.
+    expect(result.current.baselineState.chapters[0]?.content).toBe('AI turn 1');
+
+    // Second AI turn: further changes.
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI turn 2' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Diff should be between 'AI turn 1' (baseline) and 'AI turn 2' (current).
+    expect(result.current.story.chapters[0]?.content).toBe('AI turn 2');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('AI turn 1');
+  });
+});

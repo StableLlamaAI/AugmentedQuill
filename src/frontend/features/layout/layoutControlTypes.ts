@@ -162,8 +162,13 @@ export type MainSidebarControls = {
     label: string;
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
-  }) => void;
+  }) => Promise<void>;
+  onAppUndo?: () => Promise<void>;
+  onAppRedo?: () => Promise<void>;
+  canAppUndo?: boolean;
+  canAppRedo?: boolean;
   selectedSourcebookEntryId?: string | null;
+  sourcebookDialogTrigger?: { id: number; entryId: string } | null;
   metadataDialogTrigger?: {
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';

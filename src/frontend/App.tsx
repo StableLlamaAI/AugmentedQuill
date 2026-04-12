@@ -79,6 +79,7 @@ const App: React.FC = () => {
     canUndo,
     canRedo,
     baselineState,
+    advanceBaselineToCurrentStory,
   } = useStory({ confirm, alert: window.alert });
 
   useBrowserHistory({
@@ -137,9 +138,10 @@ const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionMutations, setSessionMutations] = useState<SessionMutation[]>([]);
-  const [selectedSourcebookEntryId, setSelectedSourcebookEntryId] = useState<
-    string | null
-  >(null);
+  const [sourcebookDialogTrigger, setSourcebookDialogTrigger] = useState<{
+    id: number;
+    entryId: string;
+  } | null>(null);
   const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<{
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
@@ -212,7 +214,8 @@ const App: React.FC = () => {
 
   const onChatNewMessageBegin = useCallback(() => {
     setSessionMutations([]);
-  }, []);
+    advanceBaselineToCurrentStory();
+  }, [advanceBaselineToCurrentStory]);
 
   const onToolMutations = useCallback((muts: any) => {
     if (!muts) return;
@@ -469,7 +472,10 @@ const App: React.FC = () => {
         }));
       } else if (m.type === 'sourcebook') {
         setIsSidebarOpen(true);
-        setSelectedSourcebookEntryId(m.targetId ?? null);
+        setSourcebookDialogTrigger((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          entryId: m.targetId ?? '',
+        }));
         setEditorSettings((prev) => ({
           ...prev,
           sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
@@ -731,8 +737,24 @@ const App: React.FC = () => {
               isAutoSourcebookSelectionEnabled,
               onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
               isSourcebookSelectionRunning,
-              onSourcebookMutated: pushExternalHistoryEntry,
-              selectedSourcebookEntryId,
+              onSourcebookMutated: async (params) => {
+                // Advance baseline to the current story state BEFORE the save
+                // so that LLM-created entries transition from green (created)
+                // to amber (modified) after the user edits them.  This also
+                // clears stale LLM highlights for entries that the user is
+                // now explicitly accepting by saving.
+                advanceBaselineToCurrentStory();
+                // Refresh story so story.sourcebook reflects the mutation
+                // before we snapshot the state into the undo/redo history.
+                await refreshStory();
+                pushExternalHistoryEntry(params);
+              },
+              onAppUndo: undo,
+              onAppRedo: redo,
+              canAppUndo: canUndo,
+              canAppRedo: canRedo,
+              selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
+              sourcebookDialogTrigger,
               metadataDialogTrigger,
               baselineState,
             }}

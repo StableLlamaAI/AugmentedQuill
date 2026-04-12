@@ -87,10 +87,21 @@ interface SourcebookEntryDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (entry: SourcebookUpsertPayload) => Promise<void>;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string) => Promise<void>;
   theme?: AppTheme;
   language?: string;
   baselineEntry?: SourcebookEntry | null;
+  /** When true and the dialog is opened for an existing entry that has no
+   *  baseline counterpart, treat the entry as newly created by the AI and
+   *  display all content as "added" (green).  Default: false (no diff for
+   *  entries not in the baseline, e.g. when the user opens a recently
+   *  created entry manually). */
+  showDiffForNew?: boolean;
+  /** App-level undo/redo so the dialog buttons reflect global history. */
+  canAppUndo?: boolean;
+  canAppRedo?: boolean;
+  onAppUndo?: () => Promise<void>;
+  onAppRedo?: () => Promise<void>;
 }
 
 type SourcebookEntryHistoryState = {
@@ -113,6 +124,11 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   theme = 'mixed',
   language = 'en',
   baselineEntry = null,
+  showDiffForNew = false,
+  canAppUndo = false,
+  canAppRedo = false,
+  onAppUndo,
+  onAppRedo,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -174,7 +190,19 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     if (entry) {
       setName(initialState.name);
       setDescription(initialState.description);
-      setDescriptionBaseline(baselineEntry?.description);
+      // Choose the baseline description for diff display:
+      // • baselineEntry exists → use its description (covers AI updates)
+      // • no baselineEntry but showDiffForNew is true → entry was AI-created;
+      //   use '' so all content appears as "added" (green)
+      // • no baselineEntry and showDiffForNew is false → user-opened entry,
+      //   no diff needed
+      const baseline =
+        baselineEntry != null
+          ? baselineEntry.description
+          : showDiffForNew
+            ? ''
+            : undefined;
+      setDescriptionBaseline(baseline);
       setCategory(initialState.category);
       setSynonyms(initialState.synonyms);
       setImages(initialState.images);
@@ -437,10 +465,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  historyIndex > 0 && restoreSourcebookHistory(historyIndex - 1)
-                }
-                disabled={historyIndex === 0}
+                onClick={() => {
+                  if (historyIndex > 0) {
+                    restoreSourcebookHistory(historyIndex - 1);
+                  } else {
+                    onAppUndo?.();
+                  }
+                }}
+                disabled={historyIndex === 0 && !canAppUndo}
                 aria-label="Undo sourcebook entry changes"
                 title="Undo"
                 className={`p-1 rounded-md transition-colors ${
@@ -452,11 +484,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 <Undo size={18} />
               </button>
               <button
-                onClick={() =>
-                  historyIndex < history.length - 1 &&
-                  restoreSourcebookHistory(historyIndex + 1)
-                }
-                disabled={historyIndex >= history.length - 1}
+                onClick={() => {
+                  if (historyIndex < history.length - 1) {
+                    restoreSourcebookHistory(historyIndex + 1);
+                  } else {
+                    onAppRedo?.();
+                  }
+                }}
+                disabled={historyIndex >= history.length - 1 && !canAppRedo}
                 aria-label="Redo sourcebook entry changes"
                 title="Redo"
                 className={`p-1 rounded-md transition-colors ${
@@ -898,7 +933,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 <Button
                   onClick={async () => {
                     if (await confirm('Are you sure you want to delete this entry?')) {
-                      onDelete(entry.id);
+                      await onDelete(entry.id);
                       onClose();
                     }
                   }}
