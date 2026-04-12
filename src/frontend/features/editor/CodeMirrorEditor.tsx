@@ -70,7 +70,10 @@ const buildDiffPlugin = (baseline: string) =>
         this.decorations = this.build(view);
       }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged) {
+        // Diff decorations are computed over the whole document and do not
+        // depend on the current viewport. Recomputing on scroll is expensive
+        // for large documents and can block the UI.
+        if (u.docChanged) {
           this.decorations = this.build(u.view);
         }
       }
