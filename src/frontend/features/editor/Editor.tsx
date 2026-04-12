@@ -1560,15 +1560,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     fontFamily: titleFontFamily,
                   }}
                 />
-                {conflictCount > 0 && (
-                  <span
-                    className="mt-1 flex items-center gap-0.5 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold"
-                    aria-label={`${conflictCount} active conflicts`}
-                    title={`${conflictCount} active conflicts`}
-                  >
-                    {conflictCount}
-                  </span>
-                )}
               </div>
             )}
 

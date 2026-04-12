@@ -179,7 +179,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           </h1>
           {!!conflicts?.length && (
             <span
-              className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold"
+              className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold"
               aria-label={`${conflicts.length} active conflicts`}
               title={`${conflicts.length} active conflicts`}
             >
