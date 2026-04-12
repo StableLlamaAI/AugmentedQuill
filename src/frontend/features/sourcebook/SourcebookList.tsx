@@ -56,6 +56,8 @@ interface SourcebookListProps {
     label: string;
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
+    entryId?: string;
+    entryExistsInBaseline?: boolean;
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;
@@ -366,10 +368,13 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         createdId = recreated.id;
         await loadEntries();
       },
+      entryId: created.id,
+      entryExistsInBaseline: Boolean(baselineEntries?.some((b) => b.id === created.id)),
     });
   };
 
   const handleUpdate = async (entry: SourcebookUpsertPayload) => {
+    if (!entry.id) return;
     const previous = entries.find((value) => value.id === entry.id);
     const previousId = entry.id;
     const updated = await api.sourcebook.update(entry.id, entry);
@@ -379,6 +384,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     }
     if (!previous) return;
 
+    const entryExistsInBaseline = Boolean(
+      baselineEntries?.some((b) => b.id === entry.id)
+    );
     let activeId = updated.id;
     await onMutated?.({
       label: `Update sourcebook entry: ${entry.name}`,
@@ -404,6 +412,8 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         activeId = redone.id;
         await loadEntries();
       },
+      entryId: entry.id,
+      entryExistsInBaseline,
     });
   };
 
@@ -413,6 +423,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
     await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
     if (!deletedEntry) return;
 
+    const entryExistsInBaseline = Boolean(
+      baselineEntries?.some((b) => b.id === deletedEntry.id)
+    );
     let activeId = deletedEntry.id;
     await onMutated?.({
       label: `Delete sourcebook entry: ${deletedEntry.name}`,
@@ -432,6 +445,8 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         await api.sourcebook.delete(activeId);
         await loadEntries();
       },
+      entryId: deletedEntry.id,
+      entryExistsInBaseline,
     });
   };
 
@@ -510,7 +525,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
             <LoaderCircle
               size={12}
               className="animate-spin text-brand-500"
-              title="Automatic sourcebook selection is running"
+              aria-label="Automatic sourcebook selection is running"
             />
           )}
           <button

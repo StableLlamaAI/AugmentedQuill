@@ -735,6 +735,17 @@ describe('sourcebook baseline advance on manual save', () => {
     expect(computeModifiedIds(story, baseline)).toContain('hero');
   });
 
+  it('manual update of an existing baseline entry does not show a diff', () => {
+    const postSaveStory: HistoryEntry[] = [
+      { id: 'hero', description: 'User description' },
+    ];
+
+    // Manual save to an already-baselined entry should advance baseline to
+    // the new story state, so no diff is shown.
+    expect(computeCreatedIds(postSaveStory, postSaveStory)).not.toContain('hero');
+    expect(computeModifiedIds(postSaveStory, postSaveStory)).not.toContain('hero');
+  });
+
   it('baseline advance must happen BEFORE refreshStory to capture the pre-save LLM state', () => {
     // If baseline were advanced AFTER refreshStory (wrong order), it would be
     // set to the post-save state, producing no diff at all.

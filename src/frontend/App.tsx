@@ -738,15 +738,31 @@ const App: React.FC = () => {
               onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
               isSourcebookSelectionRunning,
               onSourcebookMutated: async (params) => {
-                // Advance baseline to the current story state BEFORE the save
-                // so that LLM-created entries transition from green (created)
-                // to amber (modified) after the user edits them.  This also
-                // clears stale LLM highlights for entries that the user is
-                // now explicitly accepting by saving.
-                advanceBaselineToCurrentStory();
+                const entryExistsInBaseline = Boolean(
+                  params.entryExistsInBaseline ??
+                  sidebarControls.baselineState?.sourcebook?.some(
+                    (entry) => entry.id === params.entryId
+                  )
+                );
+
+                if (!entryExistsInBaseline) {
+                  // For AI-created entries that are being edited by the user,
+                  // keep the pre-save baseline so the transition from created
+                  // (green) to modified (amber) is preserved.
+                  advanceBaselineToCurrentStory();
+                }
+
                 // Refresh story so story.sourcebook reflects the mutation
                 // before we snapshot the state into the undo/redo history.
                 await refreshStory();
+
+                if (entryExistsInBaseline) {
+                  // Manual edits to an already-baselined entry should not be
+                  // shown as an automatic diff; set the baseline to the new
+                  // post-save story state instead.
+                  advanceBaselineToCurrentStory();
+                }
+
                 pushExternalHistoryEntry(params);
               },
               onAppUndo: undo,
