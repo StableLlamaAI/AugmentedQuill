@@ -223,28 +223,6 @@ export function MetadataEditorDialog({
   }, [onSave]);
 
   const prevInitialRef = useRef<MetadataParams>(initialData);
-  const prevResetInitialRef = useRef<MetadataParams>(initialData);
-
-  useEffect(() => {
-    if (JSON.stringify(prevResetInitialRef.current) === JSON.stringify(initialData)) {
-      return;
-    }
-
-    prevResetInitialRef.current = initialData;
-
-    const isAutosaveRoundTrip =
-      JSON.stringify(normalizeMetadataParams(initialData)) ===
-        JSON.stringify(normalizeMetadataParams(data)) ||
-      JSON.stringify(normalizeMetadataParams(initialData)) ===
-        JSON.stringify(normalizeMetadataParams(lastSavedDataRef.current));
-
-    if (isAutosaveRoundTrip) {
-      return;
-    }
-
-    setHistory([normalizeMetadataParams(initialData)]);
-    setHistoryIndex(0);
-  }, [initialData, data]);
 
   useEffect(() => {
     const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
@@ -263,7 +241,13 @@ export function MetadataEditorDialog({
   }, [initialData]);
 
   useEffect(() => {
-    setData((prev) => ({ ...prev, conflicts }));
+    setData((prev) => {
+      // Avoid creating a new object reference (and thus a spurious debounce
+      // push) when the conflicts content is already in sync — e.g. right after
+      // restoreMetadataHistory sets both data and conflicts simultaneously.
+      if (JSON.stringify(prev.conflicts) === JSON.stringify(conflicts)) return prev;
+      return { ...prev, conflicts };
+    });
   }, [conflicts]);
 
   useEffect(() => {
@@ -397,14 +381,18 @@ export function MetadataEditorDialog({
   };
 
   const addConflict = () => {
-    setConflicts([
-      ...conflicts,
-      {
-        id: crypto.randomUUID(),
-        description: '',
-        resolution: '',
-      },
-    ]);
+    const newConflict: Conflict = {
+      id: crypto.randomUUID(),
+      description: '',
+      resolution: '',
+    };
+    setConflicts([...conflicts, newConflict]);
+    // Anchor the new conflict in baselineData immediately so it is NOT
+    // treated as an LLM-added "new" conflict in the diff view.
+    setBaselineData((prev) => ({
+      ...prev,
+      conflicts: [...(prev.conflicts || []), newConflict],
+    }));
   };
 
   const deleteConflict = (id: string) => {
@@ -447,9 +435,16 @@ export function MetadataEditorDialog({
     try {
       // Stream partial text into the editor so users can intervene early.
       const sourceText = source === 'notes' ? data.notes || '' : undefined;
+      // Throttle progress updates to avoid triggering React's maximum update
+      // depth limit (50 consecutive commits) when the LLM streams many tokens
+      // per second.
+      let lastProgressAt = 0;
       const result = await onAiGenerate(
         action,
         (partialText) => {
+          const now = Date.now();
+          if (now - lastProgressAt < 50) return;
+          lastProgressAt = now;
           setData((prev) => ({ ...prev, summary: partialText }));
         },
         sourceText,
@@ -503,7 +498,31 @@ export function MetadataEditorDialog({
   }, [handleClose]);
 
   const modalContent = (
-    <div ref={dialogRef} role="none" className={isDarkMode ? 'dark' : ''}>
+    <div
+      ref={dialogRef}
+      role="none"
+      className={isDarkMode ? 'dark' : ''}
+      onKeyDown={(e) => {
+        const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+        if (!isCtrlOrMeta) return;
+        const isUndo = !e.shiftKey && e.key === 'z';
+        const isRedo = (e.shiftKey && e.key === 'z') || e.key === 'y';
+        if (!isUndo && !isRedo) return;
+        // If a child handler (e.g. CodeMirror's historyKeymap) already handled
+        // the keystroke and called preventDefault, respect that and back off.
+        // This covers the case where the user has typed text inside a conflict
+        // field and wants to undo their own keystrokes via Ctrl+Z — CM handles
+        // those fine and we should not interfere.  But when CM has nothing left
+        // to undo (empty undo stack — the normal case for LLM-assigned values
+        // because we tag those dispatches with addToHistory=false), CM does NOT
+        // call preventDefault, so the event reaches here and we perform the
+        // dialog-level undo/redo as expected.
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        if (isUndo) restoreMetadataHistory(historyIndex - 1);
+        else restoreMetadataHistory(historyIndex + 1);
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -1104,15 +1123,28 @@ export function MetadataEditorDialog({
                       const baselineConflict = (baselineData.conflicts || []).find(
                         (bc) => bc.id === c.id
                       );
+                      // A conflict absent from the baseline was added by the LLM.
+                      // Pass '' rather than undefined so CodeMirrorEditor treats
+                      // its entire content as newly inserted in the diff view.
+                      const isNewConflict = showDiff && baselineConflict === undefined;
 
                       return (
                         <div
                           key={c.id}
-                          className="border rounded-lg p-4 bg-gray-50 dark:bg-brand-gray-800/50 dark:border-brand-gray-700 shadow-sm"
+                          className={`border rounded-lg p-4 bg-gray-50 dark:bg-brand-gray-800/50 shadow-sm ${
+                            isNewConflict
+                              ? 'border-green-400 dark:border-green-700'
+                              : 'dark:border-brand-gray-700'
+                          }`}
                         >
                           <div className="flex justify-between mb-2">
-                            <span className="font-semibold text-sm dark:text-brand-gray-300">
+                            <span className="font-semibold text-sm dark:text-brand-gray-300 flex items-center gap-2">
                               Conflict #{idx + 1}
+                              {isNewConflict && (
+                                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                                  New
+                                </span>
+                              )}
                             </span>
                             <div className="space-x-2 flex items-center">
                               <button
@@ -1158,7 +1190,9 @@ export function MetadataEditorDialog({
                                 }}
                                 language={effectiveLanguage}
                                 spellCheck={spellCheck}
-                                baselineValue={baselineConflict?.description}
+                                baselineValue={
+                                  isNewConflict ? '' : baselineConflict?.description
+                                }
                                 showDiff={showDiff}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
@@ -1183,7 +1217,9 @@ export function MetadataEditorDialog({
                                 }}
                                 language={effectiveLanguage}
                                 spellCheck={spellCheck}
-                                baselineValue={baselineConflict?.resolution}
+                                baselineValue={
+                                  isNewConflict ? '' : baselineConflict?.resolution
+                                }
                                 showDiff={showDiff}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"

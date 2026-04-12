@@ -79,6 +79,7 @@ const App: React.FC = () => {
     canUndo,
     canRedo,
     baselineState,
+    advanceBaselineToCurrentStory,
   } = useStory({ confirm, alert: window.alert });
 
   useBrowserHistory({
@@ -137,9 +138,10 @@ const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionMutations, setSessionMutations] = useState<SessionMutation[]>([]);
-  const [selectedSourcebookEntryId, setSelectedSourcebookEntryId] = useState<
-    string | null
-  >(null);
+  const [sourcebookDialogTrigger, setSourcebookDialogTrigger] = useState<{
+    id: number;
+    entryId: string;
+  } | null>(null);
   const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<{
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
@@ -212,7 +214,8 @@ const App: React.FC = () => {
 
   const onChatNewMessageBegin = useCallback(() => {
     setSessionMutations([]);
-  }, []);
+    advanceBaselineToCurrentStory();
+  }, [advanceBaselineToCurrentStory]);
 
   const onToolMutations = useCallback((muts: any) => {
     if (!muts) return;
@@ -469,7 +472,10 @@ const App: React.FC = () => {
         }));
       } else if (m.type === 'sourcebook') {
         setIsSidebarOpen(true);
-        setSelectedSourcebookEntryId(m.targetId ?? null);
+        setSourcebookDialogTrigger((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          entryId: m.targetId ?? '',
+        }));
         setEditorSettings((prev) => ({
           ...prev,
           sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
@@ -731,8 +737,40 @@ const App: React.FC = () => {
               isAutoSourcebookSelectionEnabled,
               onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
               isSourcebookSelectionRunning,
-              onSourcebookMutated: pushExternalHistoryEntry,
-              selectedSourcebookEntryId,
+              onSourcebookMutated: async (params) => {
+                const entryExistsInBaseline = Boolean(
+                  params.entryExistsInBaseline ??
+                  sidebarControls.baselineState?.sourcebook?.some(
+                    (entry) => entry.id === params.entryId
+                  )
+                );
+
+                if (!entryExistsInBaseline) {
+                  // For AI-created entries that are being edited by the user,
+                  // keep the pre-save baseline so the transition from created
+                  // (green) to modified (amber) is preserved.
+                  advanceBaselineToCurrentStory();
+                }
+
+                // Refresh story so story.sourcebook reflects the mutation
+                // before we snapshot the state into the undo/redo history.
+                await refreshStory();
+
+                if (entryExistsInBaseline) {
+                  // Manual edits to an already-baselined entry should not be
+                  // shown as an automatic diff; set the baseline to the new
+                  // post-save story state instead.
+                  advanceBaselineToCurrentStory();
+                }
+
+                pushExternalHistoryEntry(params);
+              },
+              onAppUndo: undo,
+              onAppRedo: redo,
+              canAppUndo: canUndo,
+              canAppRedo: canRedo,
+              selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
+              sourcebookDialogTrigger,
               metadataDialogTrigger,
               baselineState,
             }}

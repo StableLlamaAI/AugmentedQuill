@@ -442,7 +442,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 {chapter.title || 'Untitled Chapter'}
               </h3>
               {chapter.conflicts && chapter.conflicts.length > 0 && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold">
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
                   {chapter.conflicts.length}
                 </span>
               )}
