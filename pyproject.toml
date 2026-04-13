@@ -20,7 +20,7 @@ dependencies = [
     "python-multipart",
     "jsonschema>=4.0",
     "EbookLib>=0.18",
-    "beautifulsoup4>=4.12",
+    "beautifulsoup4>=4.14.3",
     "ddgs>=9.5",
     "Markdown>=3.6",
 ]
