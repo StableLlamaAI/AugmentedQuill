@@ -21,7 +21,7 @@ dependencies = [
     "jsonschema>=4.0",
     "EbookLib>=0.18",
     "beautifulsoup4>=4.12",
-    "ddgs>=9.5",
+    "ddgs>=9.13.0",
     "Markdown>=3.6",
 ]
 
