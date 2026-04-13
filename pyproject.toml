@@ -22,7 +22,7 @@ dependencies = [
     "EbookLib>=0.18",
     "beautifulsoup4>=4.12",
     "ddgs>=9.5",
-    "Markdown>=3.6",
+    "Markdown>=3.10.2",
 ]
 
 [project.optional-dependencies]
