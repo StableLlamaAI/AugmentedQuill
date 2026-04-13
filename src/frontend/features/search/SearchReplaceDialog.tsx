@@ -61,7 +61,8 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   onNavigateToStoryMetadata,
 }) => {
   const { t } = useTranslation();
-  const { isLight } = useThemeClasses();
+  const themeClasses = useThemeClasses();
+  const { isLight } = themeClasses;
   const dialogRef = useRef<HTMLDivElement>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -173,40 +174,35 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
 
   // Theme classes
   const overlayClass =
-    'fixed inset-0 z-[10002] flex items-center justify-center bg-black/50 p-4';
-  const dialogClass = isLight
-    ? 'bg-white border border-brand-gray-200 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col'
-    : 'bg-brand-gray-900 border border-brand-gray-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col';
-  const headerClass = isLight
-    ? 'flex items-center justify-between px-4 py-3 border-b border-brand-gray-200'
-    : 'flex items-center justify-between px-4 py-3 border-b border-brand-gray-700';
-  const titleClass = isLight
-    ? 'flex items-center gap-2 font-semibold text-brand-gray-800'
-    : 'flex items-center gap-2 font-semibold text-brand-gray-100';
-  const inputClass = isLight
-    ? 'flex-1 px-3 py-1.5 rounded border border-brand-gray-300 text-sm bg-white text-brand-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-blue-500'
-    : 'flex-1 px-3 py-1.5 rounded border border-brand-gray-600 text-sm bg-brand-gray-800 text-brand-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-blue-400';
+    'fixed inset-0 z-[10002] flex items-center justify-center bg-black/60 p-4';
+  const dialogClass = `border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col ${themeClasses.bg} ${themeClasses.border}`;
+  const headerClass = `flex items-center justify-between px-4 py-3 border-b ${themeClasses.border}`;
+  const titleClass = `flex items-center gap-2 font-semibold ${themeClasses.text}`;
+  const inputClass = `flex-1 px-3 py-2 rounded-md border ${themeClasses.border} text-sm ${themeClasses.text} ${themeClasses.input} focus:outline-none focus:ring-2 focus:ring-brand-500`;
   const btnPrimary = isLight
-    ? 'px-3 py-1.5 text-sm rounded bg-brand-blue-600 text-white hover:bg-brand-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'px-3 py-1.5 text-sm rounded bg-brand-blue-700 text-white hover:bg-brand-blue-600 disabled:opacity-50 disabled:cursor-not-allowed';
+    ? 'px-4 py-2 text-sm rounded-md border border-transparent bg-brand-700 text-white hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 text-sm rounded-md border border-brand-800/50 bg-brand-900/30 text-brand-300 hover:bg-brand-900/50 hover:text-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const btnSecondary = isLight
+    ? 'px-4 py-2 text-sm rounded-md border border-brand-gray-300 bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 text-sm rounded-md border border-brand-gray-700 bg-brand-gray-800 text-brand-gray-300 hover:bg-brand-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const btnGhost = isLight
-    ? 'px-3 py-1.5 text-sm rounded border border-brand-gray-300 text-brand-gray-700 hover:bg-brand-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'px-3 py-1.5 text-sm rounded border border-brand-gray-600 text-brand-gray-300 hover:bg-brand-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
+    ? 'px-4 py-2 text-sm rounded-md border border-transparent text-brand-gray-600 hover:bg-brand-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 text-sm rounded-md border border-transparent text-brand-gray-400 hover:bg-brand-gray-800 hover:text-brand-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const toggleActiveClass = isLight
-    ? 'px-2 py-1 text-xs rounded border bg-brand-blue-100 border-brand-blue-400 text-brand-blue-700 font-medium'
-    : 'px-2 py-1 text-xs rounded border bg-brand-blue-900 border-brand-blue-500 text-brand-blue-300 font-medium';
+    ? 'px-2 py-1 text-xs rounded border bg-brand-100 border-brand-300 text-brand-700 font-medium'
+    : 'px-2 py-1 text-xs rounded border bg-brand-900 border-brand-700 text-brand-300 font-medium';
   const toggleInactiveClass = isLight
-    ? 'px-2 py-1 text-xs rounded border border-brand-gray-300 text-brand-gray-600 hover:bg-brand-gray-100'
-    : 'px-2 py-1 text-xs rounded border border-brand-gray-600 text-brand-gray-400 hover:bg-brand-gray-800';
+    ? 'px-2 py-1 text-xs rounded border border-brand-gray-300 text-brand-gray-600 hover:bg-brand-gray-100 transition-colors'
+    : 'px-2 py-1 text-xs rounded border border-brand-gray-600 text-brand-gray-400 hover:bg-brand-gray-800 transition-colors';
   const radioLabelClass = isLight
     ? 'flex items-center gap-1 text-xs text-brand-gray-700 cursor-pointer'
     : 'flex items-center gap-1 text-xs text-brand-gray-300 cursor-pointer';
   const sectionHeaderClass = isLight
-    ? 'flex items-center gap-1 w-full text-left text-sm font-medium text-brand-gray-700 py-1 hover:text-brand-gray-900'
-    : 'flex items-center gap-1 w-full text-left text-sm font-medium text-brand-gray-300 py-1 hover:text-brand-gray-100';
+    ? 'flex items-center gap-1 w-full text-left text-sm font-medium text-brand-gray-700 py-1 hover:text-brand-gray-900 transition-colors'
+    : 'flex items-center gap-1 w-full text-left text-sm font-medium text-brand-gray-300 py-1 hover:text-brand-gray-100 transition-colors';
   const matchItemClass = isLight
-    ? 'text-xs text-brand-gray-600 py-0.5 pl-4 hover:bg-brand-gray-50 cursor-pointer rounded'
-    : 'text-xs text-brand-gray-400 py-0.5 pl-4 hover:bg-brand-gray-800 cursor-pointer rounded';
+    ? 'text-xs text-brand-gray-600 py-0.5 pl-4 hover:bg-brand-gray-50 cursor-pointer rounded transition-colors'
+    : 'text-xs text-brand-gray-400 py-0.5 pl-4 hover:bg-brand-gray-800 cursor-pointer rounded transition-colors';
   const errorClass = 'text-xs text-red-600 px-4 py-2';
   const statusClass = isLight
     ? 'text-xs text-brand-gray-500 flex-1'
@@ -215,8 +211,8 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
     ? 'text-xs text-brand-gray-600 font-medium'
     : 'text-xs text-brand-gray-300 font-medium';
   const closeClass = isLight
-    ? 'p-1 rounded text-brand-gray-500 hover:text-brand-gray-700 hover:bg-brand-gray-100'
-    : 'p-1 rounded text-brand-gray-400 hover:text-brand-gray-100 hover:bg-brand-gray-800';
+    ? 'p-1 rounded-md text-brand-gray-500 hover:text-brand-gray-700 hover:bg-brand-gray-100 transition-colors'
+    : 'p-1 rounded-md text-brand-gray-400 hover:text-brand-gray-100 hover:bg-brand-gray-800 transition-colors';
 
   const content = (
     <div className={overlayClass} role="presentation">
@@ -284,7 +280,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               type="button"
               onClick={handleReplaceCurrent}
               disabled={isLoading || currentMatchIndex === null || !query.trim()}
-              className={btnGhost}
+              className={btnSecondary}
             >
               {t('Replace')}
             </button>
@@ -292,7 +288,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               type="button"
               onClick={handleReplaceAll}
               disabled={isLoading || totalMatches === 0 || !query.trim()}
-              className={btnGhost}
+              className={btnSecondary}
             >
               {t('Replace All')}
             </button>
@@ -345,7 +341,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                   value={value}
                   checked={scope === value}
                   onChange={() => setScope(value)}
-                  className="text-brand-blue-600"
+                  className="accent-brand-600"
                 />
                 {t(labelKey)}
               </label>
@@ -457,8 +453,8 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                           className={
                             isCurrentMatch
                               ? isLight
-                                ? 'bg-brand-blue-50 border-l-2 border-brand-blue-500 pl-3 py-0.5 text-xs text-brand-gray-700 rounded-r cursor-pointer'
-                                : 'bg-brand-blue-950 border-l-2 border-brand-blue-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
+                                ? 'bg-brand-50 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-700 rounded-r cursor-pointer'
+                                : 'bg-brand-950 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
                               : matchItemClass
                           }
                           onClick={() =>
