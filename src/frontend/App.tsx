@@ -109,6 +109,11 @@ const App: React.FC = () => {
       }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
+  const pendingJumpRef = useRef<{
+    chapterId: string;
+    start: number;
+    end: number;
+  } | null>(null);
 
   const searchState = useSearchReplace();
   const openSearch = useCallback(() => searchState.open(), [searchState]);
@@ -129,6 +134,27 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [openSearch]);
+
+  // Apply a deferred jump-to-position once a chapter's content is loaded.
+  // This handles cross-chapter navigation from the search dialog where the
+  // chapter content is fetched asynchronously after chapter selection.
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending) return;
+    if (pending.chapterId !== currentChapterId) return;
+    const content = currentChapter?.content ?? '';
+    // Wait until the document is long enough to contain the target offset.
+    if (pending.end > 0 && content.length < pending.end) return;
+    pendingJumpRef.current = null;
+    const { start, end } = pending;
+    const doJump = () => editorRef.current?.jumpToPosition(start, end);
+    if (viewMode === 'wysiwyg') {
+      setViewMode('markdown');
+      setTimeout(doJump, 80);
+    } else {
+      setTimeout(doJump, 50);
+    }
+  }, [currentChapterId, currentChapter?.content]);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
 
@@ -168,6 +194,8 @@ const App: React.FC = () => {
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   } | null>(null);
+  const [metadataDialogCloseTrigger, setMetadataDialogCloseTrigger] = useState(0);
+  const [sourcebookDialogCloseTrigger, setSourcebookDialogCloseTrigger] = useState(0);
 
   const {
     isChatOpen,
@@ -794,7 +822,9 @@ const App: React.FC = () => {
               canAppRedo: canRedo,
               selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
               sourcebookDialogTrigger,
+              sourcebookDialogCloseTrigger,
               metadataDialogTrigger,
+              metadataDialogCloseTrigger,
               baselineState,
             }}
             editorControls={{
@@ -886,13 +916,64 @@ const App: React.FC = () => {
           <SearchReplaceDialog
             searchState={searchState}
             activeChapterId={
-              typeof currentChapterId === 'number' ? currentChapterId : null
+              currentChapterId !== null ? parseInt(currentChapterId, 10) : null
             }
             storyLanguage={story.language || 'en'}
             onJumpToPosition={(start, end) => {
-              editorRef.current?.jumpToPosition(start, end);
+              if (viewMode === 'wysiwyg') {
+                setViewMode('markdown');
+                setTimeout(() => editorRef.current?.jumpToPosition(start, end), 80);
+              } else {
+                editorRef.current?.jumpToPosition(start, end);
+              }
             }}
             onStoryChanged={() => void refreshStory()}
+            onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
+              setMetadataDialogCloseTrigger((c) => c + 1);
+              setSourcebookDialogCloseTrigger((c) => c + 1);
+              if (jumpStart !== undefined && jumpEnd !== undefined) {
+                pendingJumpRef.current = {
+                  chapterId: String(chapId),
+                  start: jumpStart,
+                  end: jumpEnd,
+                };
+              }
+              handleChapterSelect(String(chapId));
+            }}
+            onNavigateToSourcebookEntry={(entryId) => {
+              setMetadataDialogCloseTrigger((c) => c + 1);
+              setIsSidebarOpen(true);
+              setSourcebookDialogTrigger((prev) => ({
+                id: (prev?.id ?? 0) + 1,
+                entryId,
+              }));
+              setEditorSettings((prev) => ({
+                ...prev,
+                sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+              }));
+            }}
+            onNavigateToStoryMetadata={(field) => {
+              const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+                field === 'story_summary'
+                  ? 'summary'
+                  : field === 'notes'
+                    ? 'notes'
+                    : field === 'private_notes'
+                      ? 'private'
+                      : field.startsWith('conflicts')
+                        ? 'conflicts'
+                        : 'summary';
+              setSourcebookDialogCloseTrigger((c) => c + 1);
+              setIsSidebarOpen(true);
+              setMetadataDialogTrigger((prev) => ({
+                id: (prev?.id ?? 0) + 1,
+                initialTab: tab,
+              }));
+              setEditorSettings((prev) => ({
+                ...prev,
+                sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+              }));
+            }}
           />
         </div>
       </ThemeProvider>

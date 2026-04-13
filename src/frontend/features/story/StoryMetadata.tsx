@@ -54,6 +54,7 @@ interface StoryMetadataProps {
   summaryAiDisabledReason?: string;
   primarySourceAvailable?: boolean;
   initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
+  closeDialogTrigger?: number;
   theme?: AppTheme;
   baselineSummary?: string;
   baselineNotes?: string;
@@ -78,6 +79,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   summaryAiDisabledReason,
   primarySourceAvailable,
   initialTab,
+  closeDialogTrigger,
   theme = 'mixed',
   baselineSummary = '',
   baselineNotes = '',
@@ -92,6 +94,12 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       setMetadataModalOpen(true);
     }
   }, [metadataDialogTrigger]);
+
+  React.useEffect(() => {
+    if (closeDialogTrigger) {
+      setMetadataModalOpen(false);
+    }
+  }, [closeDialogTrigger]);
 
   const { isLight } = useThemeClasses();
   const containerClass = isLight
@@ -134,6 +142,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     >
       {metadataModalOpen && (
         <MetadataEditorDialog
+          key={metadataDialogTrigger?.id ?? 0}
           type="story"
           title="Edit Story Metadata"
           language={language}

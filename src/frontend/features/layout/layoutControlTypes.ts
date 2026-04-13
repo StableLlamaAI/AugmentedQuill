@@ -173,10 +173,12 @@ export type MainSidebarControls = {
   canAppRedo?: boolean;
   selectedSourcebookEntryId?: string | null;
   sourcebookDialogTrigger?: { id: number; entryId: string } | null;
+  sourcebookDialogCloseTrigger?: number;
   metadataDialogTrigger?: {
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   } | null;
+  metadataDialogCloseTrigger?: number;
 };
 
 export type MainEditorSuggestionControls = {

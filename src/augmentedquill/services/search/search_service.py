@@ -128,6 +128,16 @@ def _get_all_chapter_ids() -> list[int]:
     """Return all available chapter IDs for the active project."""
     try:
         from augmentedquill.services.chapters.chapter_helpers import _scan_chapter_files
+        from augmentedquill.services.projects.projects import get_active_project_dir
+        from augmentedquill.core.config import load_story_config
+
+        active = get_active_project_dir()
+        if active:
+            story = load_story_config(active / "story.json") or {}
+            if story.get("project_type") == "short-story":
+                # Short-story projects store all content in a single file,
+                # exposed as virtual chapter ID 1 by _chapter_by_id_or_404.
+                return [1]
 
         return [int(vid) for vid, _ in _scan_chapter_files()]
     except Exception:
@@ -343,7 +353,7 @@ def _search_sourcebook(
             sourcebook_list_entries,
         )
 
-        entries = sourcebook_list_entries(active) or []
+        entries = sourcebook_list_entries() or []
     except Exception:
         return []
 

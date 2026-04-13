@@ -33,6 +33,13 @@ interface SearchReplaceDialogProps {
   storyLanguage: string;
   onJumpToPosition: (start: number, end: number) => void;
   onStoryChanged: () => void;
+  onNavigateToChapter: (
+    chapterId: number,
+    jumpStart?: number,
+    jumpEnd?: number
+  ) => void;
+  onNavigateToSourcebookEntry: (entryId: string) => void;
+  onNavigateToStoryMetadata: (field: string) => void;
 }
 
 const SCOPES: { value: SearchScope; labelKey: string }[] = [
@@ -49,6 +56,9 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   storyLanguage,
   onJumpToPosition,
   onStoryChanged,
+  onNavigateToChapter,
+  onNavigateToSourcebookEntry,
+  onNavigateToStoryMetadata,
 }) => {
   const { t } = useTranslation();
   const { isLight } = useThemeClasses();
@@ -127,23 +137,43 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   }, []);
 
   const handleMatchClick = useCallback(
-    (sectionType: string, sectionId: string, start: number, end: number) => {
-      if (
-        sectionType === 'chapter_content' &&
-        activeChapterId !== null &&
-        sectionId === String(activeChapterId)
-      ) {
-        onJumpToPosition(start, end);
+    (
+      sectionType: string,
+      sectionId: string,
+      field: string,
+      start: number,
+      end: number
+    ) => {
+      if (sectionType === 'chapter_content') {
+        if (activeChapterId !== null && sectionId === String(activeChapterId)) {
+          onJumpToPosition(start, end);
+        } else {
+          const chapId = parseInt(sectionId, 10);
+          if (!isNaN(chapId)) onNavigateToChapter(chapId, start, end);
+        }
+      } else if (sectionType === 'chapter_metadata') {
+        const chapId = parseInt(sectionId, 10);
+        if (!isNaN(chapId)) onNavigateToChapter(chapId);
+      } else if (sectionType === 'story_metadata') {
+        onNavigateToStoryMetadata(field);
+      } else if (sectionType === 'sourcebook') {
+        onNavigateToSourcebookEntry(sectionId);
       }
     },
-    [activeChapterId, onJumpToPosition]
+    [
+      activeChapterId,
+      onJumpToPosition,
+      onNavigateToChapter,
+      onNavigateToSourcebookEntry,
+      onNavigateToStoryMetadata,
+    ]
   );
 
   if (!isOpen) return null;
 
   // Theme classes
   const overlayClass =
-    'fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4';
+    'fixed inset-0 z-[10002] flex items-center justify-center bg-black/50 p-4';
   const dialogClass = isLight
     ? 'bg-white border border-brand-gray-200 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col'
     : 'bg-brand-gray-900 border border-brand-gray-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col';
@@ -406,13 +436,24 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                     {section.matches.map((match, mi) => {
                       const flatIdx = firstFlatIdx + mi;
                       const isCurrentMatch = flatIdx === currentMatchIndex;
-                      const isClickable =
+                      const clickTitle =
                         section.section_type === 'chapter_content' &&
                         activeChapterId !== null &&
-                        section.section_id === String(activeChapterId);
+                        section.section_id === String(activeChapterId)
+                          ? t('Jump to match in editor')
+                          : section.section_type === 'chapter_content' ||
+                              section.section_type === 'chapter_metadata'
+                            ? t('Navigate to chapter')
+                            : section.section_type === 'story_metadata'
+                              ? t('Open story metadata')
+                              : section.section_type === 'sourcebook'
+                                ? t('Open sourcebook entry')
+                                : undefined;
                       return (
                         <li
                           key={mi}
+                          role="button"
+                          tabIndex={0}
                           className={
                             isCurrentMatch
                               ? isLight
@@ -424,13 +465,23 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                             handleMatchClick(
                               section.section_type,
                               section.section_id,
+                              section.field,
                               match.start,
                               match.end
                             )
                           }
-                          title={
-                            isClickable ? 'Click to jump to match in editor' : undefined
-                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              handleMatchClick(
+                                section.section_type,
+                                section.section_id,
+                                section.field,
+                                match.start,
+                                match.end
+                              );
+                            }
+                          }}
+                          title={clickTitle}
                         >
                           <span className="opacity-60">{match.context_before}</span>
                           <mark

@@ -322,7 +322,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     canAppUndo,
     canAppRedo,
     sourcebookDialogTrigger,
+    sourcebookDialogCloseTrigger,
     metadataDialogTrigger,
+    metadataDialogCloseTrigger,
   } = sidebarControls;
 
   const { editorSettings, setEditorSettings } = editorControls;
@@ -511,6 +513,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             }
             onUpdate={updateStoryMetadata}
             metadataDialogTrigger={metadataDialogTrigger}
+            closeDialogTrigger={metadataDialogCloseTrigger}
             initialTab={metadataDialogTrigger?.initialTab}
             theme={currentTheme}
             languages={instructionLanguages}
@@ -575,6 +578,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             canAppUndo={canAppUndo}
             canAppRedo={canAppRedo}
             sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
+            closeDialogTrigger={sourcebookDialogCloseTrigger}
             baselineEntries={sidebarControls.baselineState?.sourcebook}
           />
         </CollapsibleSection>
