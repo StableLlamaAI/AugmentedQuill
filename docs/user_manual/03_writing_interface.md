@@ -206,6 +206,7 @@ These controls update the planning layer around a chapter rather than the prose 
 - The suggestion pane always shows the last set of continuations, so you can keep requesting more or hit `Dismiss` once you are satisfied.
 - Even when AI actions are running, you can keep typing because the UI disables only the relevant button and leaves the rest of the editor responsive.
 - Switch between Raw, MD, and Visual modes freely — the underlying file is the same markdown source regardless of which view you use.
+- Press **Ctrl+F** (or **Cmd+F** on macOS) at any time — or click the **<img src="assets/search.svg" alt="Search icon" width="16" height="16" style="vertical-align:text-bottom;" /> Search** icon in the top-right header — to open the project-wide **Search and Replace** dialog. See [Search and Replace](12_search_and_replace.md) for the full guide.
 
 ---
 

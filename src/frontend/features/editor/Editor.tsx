@@ -155,6 +155,7 @@ interface EditorProps {
     isProseStreaming?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
+  onOpenSearch?: () => void;
 }
 
 interface TurndownServiceLike {
@@ -166,6 +167,7 @@ export interface EditorHandle {
   focus: () => void;
   format: (type: string) => void;
   openImageManager?: () => void;
+  jumpToPosition: (start: number, end: number) => void;
 }
 
 // Inject visible whitespace markers into the WYSIWYG contentEditable DOM.
@@ -242,6 +244,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       language,
       spellCheck,
       onContextChange,
+      onOpenSearch,
     },
     ref
   ) => {
@@ -1322,6 +1325,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         else editorViewRef.current?.focus();
       },
       format: (type: string) => format(type),
+      jumpToPosition: (start: number, end: number) => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        view.dispatch({
+          selection: { anchor: start, head: end },
+          scrollIntoView: true,
+        });
+        view.focus();
+      },
     }));
 
     // Styles & Theme Logic
@@ -1600,6 +1612,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     value={localContent}
                     language={language}
                     spellCheck={spellCheck}
+                    onOpenSearch={onOpenSearch}
                     onChange={(val: string) => {
                       setLocalContent(val);
                       setLocalBaseline(undefined); // clear diff immediately on user input

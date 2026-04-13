@@ -43,6 +43,8 @@ import { useEditorUIState } from './features/app/useEditorUIState';
 import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
+import { useSearchReplace } from './features/search/useSearchReplace';
+import { SearchReplaceDialog } from './features/search/SearchReplaceDialog';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -107,6 +109,26 @@ const App: React.FC = () => {
       }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
+
+  const searchState = useSearchReplace();
+  const openSearch = useCallback(() => searchState.open(), [searchState]);
+
+  // Global Ctrl+F / Cmd+F hotkey opens the search dialog
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        // Only intercept when no input/textarea has focus (editor intercepts internally)
+        const target = e.target as HTMLElement;
+        const isEditorFocused = target.closest('#raw-markdown-editor') !== null;
+        if (!isEditorFocused) {
+          e.preventDefault();
+          openSearch();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [openSearch]);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
 
@@ -711,6 +733,7 @@ const App: React.FC = () => {
               setEditorSettings,
             }}
             chatPanelControls={{ isChatOpen, setIsChatOpen }}
+            searchControls={{ onOpenSearch: openSearch }}
           />
 
           <AppMainLayout
@@ -811,6 +834,7 @@ const App: React.FC = () => {
                   ? baselineState.draft?.content
                   : baselineState.chapters.find((c) => c.id === currentChapter?.id)
                       ?.content,
+              onOpenSearch: openSearch,
             }}
             chatControls={{
               isChatOpen,
@@ -857,6 +881,18 @@ const App: React.FC = () => {
             count={toolCallLoopDialog?.count ?? 0}
             theme={currentTheme}
             onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
+          />
+
+          <SearchReplaceDialog
+            searchState={searchState}
+            activeChapterId={
+              typeof currentChapterId === 'number' ? currentChapterId : null
+            }
+            storyLanguage={story.language || 'en'}
+            onJumpToPosition={(start, end) => {
+              editorRef.current?.jumpToPosition(start, end);
+            }}
+            onStoryChanged={() => void refreshStory()}
           />
         </div>
       </ThemeProvider>

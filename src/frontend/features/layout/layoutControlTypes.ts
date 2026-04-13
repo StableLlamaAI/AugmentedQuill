@@ -98,6 +98,10 @@ export type HeaderAppearanceControlsState = {
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
 };
 
+export type HeaderSearchControls = {
+  onOpenSearch: () => void;
+};
+
 export type HeaderChatPanelControls = {
   isChatOpen: boolean;
   setIsChatOpen: Dispatch<SetStateAction<boolean>>;
@@ -220,6 +224,7 @@ export type MainEditorControls = {
   showWhitespace: boolean;
   setShowWhitespace: Dispatch<SetStateAction<boolean>>;
   baselineContent?: string;
+  onOpenSearch?: () => void;
 };
 
 export type MainChatControls = {

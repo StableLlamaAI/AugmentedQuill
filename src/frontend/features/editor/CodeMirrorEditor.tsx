@@ -395,6 +395,8 @@ export interface CodeMirrorEditorProps {
   language?: string;
   /** Whether to enable browser-native spellcheck */
   spellCheck?: boolean;
+  /** Called when the user presses Ctrl+F / Cmd+F inside the editor */
+  onOpenSearch?: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -418,6 +420,7 @@ export const CodeMirrorEditor = React.forwardRef<
       showDiff = true,
       language = 'en',
       spellCheck = false,
+      onOpenSearch,
     },
     ref
   ) => {
@@ -428,8 +431,10 @@ export const CodeMirrorEditor = React.forwardRef<
     // calls the latest version without needing the view to be recreated.
     const onChangeRef = useRef(onChange);
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onOpenSearchRef = useRef(onOpenSearch);
     onChangeRef.current = onChange;
     onSelectionChangeRef.current = onSelectionChange;
+    onOpenSearchRef.current = onOpenSearch;
 
     // Track the last value emitted by our own onChange so we can distinguish
     // externally-driven value changes from the echo of our own edits.
@@ -560,6 +565,19 @@ export const CodeMirrorEditor = React.forwardRef<
           buildAttributesExtension(language, spellCheck, placeholder)
         ),
         history(),
+        // Ctrl+F / Cmd+F opens the app search dialog instead of CodeMirror's built-in search
+        Prec.highest(
+          keymap.of([
+            {
+              key: 'Ctrl-f',
+              mac: 'Cmd-f',
+              run: () => {
+                onOpenSearchRef.current?.();
+                return true;
+              },
+            },
+          ])
+        ),
         // Enter/history keymaps take precedence over defaultKeymap
         Prec.high(keymap.of(historyKeymap)),
         // Enter-behavior keymap in its own compartment

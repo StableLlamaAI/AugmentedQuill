@@ -23,6 +23,7 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "ddgs>=9.5",
     "Markdown>=3.6",
+    "jellyfish>=0.11",
 ]
 
 [project.optional-dependencies]

@@ -405,6 +405,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     setActiveFormats,
     showWhitespace,
     setShowWhitespace,
+    onOpenSearch,
   } = editorControls;
 
   const {
@@ -615,6 +616,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
               baselineContent={editorControls.baselineContent}
               spellCheck={true}
+              onOpenSearch={onOpenSearch}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
