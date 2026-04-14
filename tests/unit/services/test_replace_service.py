@@ -229,6 +229,128 @@ class TestReplaceAll(TestCase):
         story_data = json.loads((active / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story_data["summary"], "A story about Elena.")
 
+    def test_replace_all_in_sourcebook_description(self):
+        active = self._make_and_select_project("replace_test_sourcebook")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Magic Sword": {
+                "description": "A legendary sword of fire.",
+                "category": "item",
+                "synonyms": ["Blade", "Flame Sword"],
+            }
+        }
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="sword",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="blade",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 3)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertNotIn("Magic Sword", story_data["sourcebook"])
+        self.assertIn("Magic blade", story_data["sourcebook"])
+        self.assertEqual(
+            story_data["sourcebook"]["Magic blade"]["description"],
+            "A legendary blade of fire.",
+        )
+        self.assertEqual(
+            story_data["sourcebook"]["Magic blade"]["synonyms"],
+            ["Blade", "Flame blade"],
+        )
+
+    def test_replace_all_in_sourcebook_relation(self):
+        active = self._make_and_select_project("replace_test_sourcebook_relations")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Hero": {
+                "description": "A brave character.",
+                "category": "character",
+                "synonyms": [],
+            },
+            "Dragon": {
+                "description": "A fierce beast.",
+                "category": "creature",
+                "synonyms": [],
+            },
+        }
+        story["sourcebook_relations"] = [
+            {
+                "source_id": "Hero",
+                "relation": "friend of",
+                "target_id": "Dragon",
+            }
+        ]
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="friend",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="ally",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 1)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            story_data["sourcebook_relations"][0]["relation"],
+            "ally of",
+        )
+
+    def test_replace_all_in_sourcebook_title_updates_relations(self):
+        active = self._make_and_select_project("replace_test_sourcebook_title")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Magic Sword": {
+                "description": "A legendary blade.",
+                "category": "item",
+                "synonyms": [],
+            },
+            "Dragon": {
+                "description": "A fierce beast.",
+                "category": "creature",
+                "synonyms": [],
+            },
+        }
+        story["sourcebook_relations"] = [
+            {
+                "source_id": "Magic Sword",
+                "relation": "owned by",
+                "target_id": "Dragon",
+            }
+        ]
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="Sword",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="Blade",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 2)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertNotIn("Magic Sword", story_data["sourcebook"])
+        self.assertIn("Magic Blade", story_data["sourcebook"])
+        self.assertEqual(
+            story_data["sourcebook_relations"][0]["source_id"],
+            "Magic Blade",
+        )
+
 
 class TestReplaceSingle(TestCase):
     def setUp(self):
@@ -294,3 +416,37 @@ class TestReplaceSingle(TestCase):
         self.assertEqual(resp.replacements_made, 1)
         content = (active / "chapters" / "0001.txt").read_text(encoding="utf-8")
         self.assertEqual(content, "cat and dog and cat")
+
+    def test_replace_single_in_sourcebook_description(self):
+        active = self._make_and_select_project("single_test_sourcebook")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Magic Sword": {
+                "description": "A legendary sword of fire.",
+                "category": "item",
+                "synonyms": ["Blade", "Flame Sword"],
+            }
+        }
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceSingleRequest(
+            query="sword",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="blade",
+            section_type="sourcebook",
+            section_id="Magic Sword",
+            field="description",
+            match_index=0,
+        )
+        resp = replace_single(req, active)
+        self.assertEqual(resp.replacements_made, 1)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            story_data["sourcebook"]["Magic Sword"]["description"],
+            "A legendary blade of fire.",
+        )

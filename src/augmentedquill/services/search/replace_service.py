@@ -397,27 +397,34 @@ def _replace_in_sourcebook(
     target_field: str | None = None,
     match_index: int | None = None,
 ) -> tuple[int, list[str]]:
-    """Replace text in sourcebook entries."""
-    import json as _json
+    """Replace text in sourcebook entries in story.json."""
+    from augmentedquill.core.config import load_story_config, save_story_config
 
-    sourcebook_path = active / "sourcebook" / "sourcebook.json"
-    if not sourcebook_path.exists():
-        return 0, []
-
+    story_path = active / "story.json"
     try:
-        data = _json.loads(sourcebook_path.read_text(encoding="utf-8"))
+        story = load_story_config(story_path) or {}
     except Exception:
         return 0, []
 
-    entries = data if isinstance(data, list) else data.get("entries", [])
+    sourcebook = story.get("sourcebook") or {}
+    if not isinstance(sourcebook, dict):
+        return 0, []
+
+    global_rels = story.get("sourcebook_relations") or []
+    if not isinstance(global_rels, list):
+        global_rels = []
+
     total = 0
     changed = []
+    rename_map: dict[str, str] = {}
 
-    for entry in entries:
-        entry_id = entry.get("id") or entry.get("name") or ""
+    for entry_key, entry_data in list(sourcebook.items()):
+        if not isinstance(entry_data, dict):
+            continue
+
+        entry_id = entry_key
         if target_section_id is not None and entry_id != target_section_id:
             continue
-        entry_name = entry.get("name") or entry_id
 
         for field_key, field_label in [
             ("description", "Description"),
@@ -425,9 +432,13 @@ def _replace_in_sourcebook(
         ]:
             if target_field is not None and field_key != target_field:
                 continue
-            value = entry.get(field_key) or ""
+
+            value = (
+                entry_key if field_key == "name" else entry_data.get(field_key) or ""
+            )
             if not value:
                 continue
+
             if match_index is not None:
                 new_val, count = _apply_replace_nth(
                     value,
@@ -442,15 +453,20 @@ def _replace_in_sourcebook(
                 new_val, count = _apply_replace(
                     value, query, replacement, case_sensitive, is_regex, is_phonetic
                 )
-            if count > 0:
-                entry[field_key] = new_val
-                total += count
-                changed.append(f"Sourcebook '{entry_name}' {field_label}")
 
-        # Synonyms list
+            if count > 0:
+                total += count
+                changed.append(f"Sourcebook '{entry_id}' {field_label}")
+                if field_key == "name":
+                    new_name = new_val
+                    if new_name != entry_key and new_name not in sourcebook:
+                        rename_map[entry_key] = new_name
+                else:
+                    entry_data[field_key] = new_val
+
         if target_field in (None, "synonyms"):
-            synonyms = entry.get("synonyms") or []
-            new_synonyms = []
+            synonyms = entry_data.get("synonyms") or []
+            new_synonyms: list[str] = []
             synonym_count = 0
             for syn in synonyms:
                 if match_index is not None:
@@ -470,15 +486,78 @@ def _replace_in_sourcebook(
                 new_synonyms.append(new_syn)
                 synonym_count += c
             if synonym_count > 0:
-                entry["synonyms"] = new_synonyms
+                entry_data["synonyms"] = new_synonyms
                 total += synonym_count
-                changed.append(f"Sourcebook '{entry_name}' synonyms")
+                changed.append(f"Sourcebook '{entry_id}' synonyms")
+
+        if target_field in (None, "relations") or (
+            target_field is not None and target_field.startswith("relations[")
+        ):
+            for rel_idx, rel in enumerate(global_rels):
+                if not isinstance(rel, dict):
+                    continue
+                if (
+                    rel.get("source_id") != entry_id
+                    and rel.get("target_id") != entry_id
+                ):
+                    continue
+
+                relation_fields = [
+                    ("relation", "Relation"),
+                    ("source_id", "Source ID"),
+                    ("target_id", "Target ID"),
+                    ("start_chapter", "Start Chapter"),
+                    ("end_chapter", "End Chapter"),
+                    ("start_book", "Start Book"),
+                    ("end_book", "End Book"),
+                ]
+                for rel_field, rel_label in relation_fields:
+                    field_path = f"relations[{rel_idx}].{rel_field}"
+                    if target_field is not None and target_field != field_path:
+                        continue
+
+                    value = rel.get(rel_field) or ""
+                    if not isinstance(value, str) or not value:
+                        continue
+
+                    if match_index is not None:
+                        new_val, count = _apply_replace_nth(
+                            value,
+                            query,
+                            replacement,
+                            case_sensitive,
+                            is_regex,
+                            is_phonetic,
+                            match_index,
+                        )
+                    else:
+                        new_val, count = _apply_replace(
+                            value,
+                            query,
+                            replacement,
+                            case_sensitive,
+                            is_regex,
+                            is_phonetic,
+                        )
+
+                    if count > 0:
+                        rel[rel_field] = new_val
+                        total += count
+                        changed.append(f"Sourcebook '{entry_id}' relation {rel_label}")
+
+    for old_name, new_name in rename_map.items():
+        if old_name in sourcebook and new_name not in sourcebook:
+            sourcebook[new_name] = sourcebook.pop(old_name)
+            for rel in global_rels:
+                if rel.get("source_id") == old_name:
+                    rel["source_id"] = new_name
+                if rel.get("target_id") == old_name:
+                    rel["target_id"] = new_name
 
     if total > 0:
-        out_data = data if isinstance(data, list) else {**data, "entries": entries}
-        sourcebook_path.write_text(
-            _json.dumps(out_data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        story["sourcebook"] = sourcebook
+        story["sourcebook_relations"] = global_rels
+        save_story_config(story_path, story)
 
     return total, changed
 

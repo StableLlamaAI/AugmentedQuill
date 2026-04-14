@@ -357,6 +357,11 @@ def _search_sourcebook(
     except Exception:
         return []
 
+    entry_name_map = {
+        (entry.get("id") or entry.get("name") or ""): entry.get("name") or ""
+        for entry in entries
+    }
+
     for entry in entries:
         entry_id = entry.get("id") or entry.get("name") or ""
         entry_name = entry.get("name") or entry_id
@@ -399,6 +404,58 @@ def _search_sourcebook(
                         matches=matches,
                     )
                 )
+
+        # Search relation metadata for this entry
+        relations = entry.get("relations") or []
+        if isinstance(relations, list):
+            relation_fields = [
+                ("relation", "Relation"),
+                ("source_id", "Source ID"),
+                ("target_id", "Target ID"),
+                ("direction", "Direction"),
+            ]
+            for ridx, rel in enumerate(relations):
+                if not isinstance(rel, dict):
+                    continue
+
+                target_id = rel.get("target_id") or ""
+                target_title = entry_name_map.get(target_id, target_id)
+                if rel.get("direction") == "reverse":
+                    relation_summary = f"{target_title} {rel.get('relation') or ''} {entry_name}".strip()
+                else:
+                    relation_summary = f"{entry_name} {rel.get('relation') or ''} {target_title}".strip()
+                display_label = (
+                    f"Relation: {target_title}" if target_title else "Relation"
+                )
+
+                for rel_field, rel_label in relation_fields:
+                    value = rel.get(rel_field) or ""
+                    if not isinstance(value, str) or not value:
+                        continue
+                    matches = _search_text(
+                        value, query, case_sensitive, is_regex, is_phonetic
+                    )
+                    if matches:
+                        summary_matches = _search_text(
+                            relation_summary,
+                            query,
+                            case_sensitive,
+                            is_regex,
+                            is_phonetic,
+                        )
+                        matches_to_show = (
+                            summary_matches if summary_matches else matches
+                        )
+                        sections.append(
+                            SearchResultSection(
+                                section_type="sourcebook",
+                                section_id=entry_id,
+                                section_title=entry_name,
+                                field=f"relations[{ridx}].{rel_field}",
+                                field_display=display_label,
+                                matches=matches_to_show,
+                            )
+                        )
 
     return sections
 

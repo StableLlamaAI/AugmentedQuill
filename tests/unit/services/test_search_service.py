@@ -270,6 +270,104 @@ class TestRunSearch(TestCase):
             "chapter_metadata" in section_types or "story_metadata" in section_types
         )
 
+    def test_sourcebook_relation_search_uses_readable_label(self):
+        active = self._make_and_select_project()
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Hero": {
+                "description": "A brave character.",
+                "category": "character",
+                "synonyms": [],
+            },
+            "Dragon": {
+                "description": "A fierce beast.",
+                "category": "creature",
+                "synonyms": [],
+            },
+        }
+        story["sourcebook_relations"] = [
+            {
+                "source_id": "Hero",
+                "relation": "friend of",
+                "target_id": "Dragon",
+            }
+        ]
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        opts = SearchOptions(
+            query="Dragon",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+        )
+        result = run_search(opts, active)
+        relation_sections = [
+            s
+            for s in result.results
+            if s.section_type == "sourcebook" and s.field_display == "Relation: Dragon"
+        ]
+        self.assertTrue(relation_sections)
+        self.assertTrue(
+            any(
+                "Hero friend of Dragon"
+                in (m.context_before + m.match_text + m.context_after)
+                for s in relation_sections
+                for m in s.matches
+            )
+        )
+
+    def test_sourcebook_reverse_relation_search_uses_readable_label(self):
+        active = self._make_and_select_project()
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Hero": {
+                "description": "A brave character.",
+                "category": "character",
+                "synonyms": [],
+            },
+            "Dragon": {
+                "description": "A fierce beast.",
+                "category": "creature",
+                "synonyms": [],
+            },
+        }
+        story["sourcebook_relations"] = [
+            {
+                "source_id": "Hero",
+                "relation": "friend of",
+                "target_id": "Dragon",
+            }
+        ]
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        opts = SearchOptions(
+            query="Hero",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+        )
+        result = run_search(opts, active)
+        relation_sections = [
+            s
+            for s in result.results
+            if s.section_type == "sourcebook" and s.field_display == "Relation: Hero"
+        ]
+        self.assertTrue(relation_sections)
+        self.assertTrue(
+            any(
+                "Hero friend of Dragon"
+                in (m.context_before + m.match_text + m.context_after)
+                for s in relation_sections
+                for m in s.matches
+            )
+        )
+
     def test_no_results_for_absent_query(self):
         active = self._make_and_select_project()
         opts = SearchOptions(
