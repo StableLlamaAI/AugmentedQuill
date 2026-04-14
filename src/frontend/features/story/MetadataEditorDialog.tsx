@@ -102,6 +102,8 @@ export function MetadataEditorDialog({
     'story',
     'private_notes'
   );
+  const getConflictRanges = (index: number, field: 'description' | 'resolution') =>
+    getRanges('story_metadata', 'story', `conflicts[${index}].${field}`);
 
   const normalizeConflict = (value: any): Conflict => {
     return {
@@ -1206,6 +1208,10 @@ export function MetadataEditorDialog({
                                   isNewConflict ? '' : baselineConflict?.description
                                 }
                                 showDiff={showDiff}
+                                searchHighlightRanges={getConflictRanges(
+                                  idx,
+                                  'description'
+                                )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="Describe the conflict..."
@@ -1233,6 +1239,10 @@ export function MetadataEditorDialog({
                                   isNewConflict ? '' : baselineConflict?.resolution
                                 }
                                 showDiff={showDiff}
+                                searchHighlightRanges={getConflictRanges(
+                                  idx,
+                                  'resolution'
+                                )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="How will this conflict be resolved?"
