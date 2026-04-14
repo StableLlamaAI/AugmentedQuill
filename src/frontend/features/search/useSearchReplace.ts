@@ -162,7 +162,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
       try {
         await api.search.replaceSingle({
           query,
-          scope: match.sectionType as SearchScope,
+          scope,
           case_sensitive: caseSensitive,
           is_regex: isRegex,
           is_phonetic: isPhonetic,
