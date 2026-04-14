@@ -842,8 +842,12 @@ const App: React.FC = () => {
                 storyLanguage: story.language || 'en',
                 setEditorSettings,
                 viewMode,
-                updateChapter: (id, partial) =>
-                  updateChapter(id, partial, true, true, true),
+                updateChapter: (id, partial) => {
+                  if ('content' in partial) {
+                    searchState.notifyContentChanged(parseInt(id, 10));
+                  }
+                  return updateChapter(id, partial, true, true, true);
+                },
                 suggestionControls: {
                   continuations,
                   isSuggesting,

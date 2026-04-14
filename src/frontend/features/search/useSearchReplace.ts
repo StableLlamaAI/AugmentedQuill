@@ -10,7 +10,7 @@
  * orchestrates API calls for the SearchReplaceDialog.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { api } from '../../services/api';
 import type {
   SearchScope,
@@ -75,6 +75,7 @@ export interface UseSearchReplaceResult {
     count: number;
     storyChanged: boolean;
   }>;
+  notifyContentChanged: (activeChapterId?: number | null) => void;
 }
 
 const buildFlatMatches = (results: SearchResultSection[]): FlatMatch[] => {
@@ -145,6 +146,14 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   const [highlightRanges, setHighlightRanges] = useState<SearchHighlightMap>({});
   const [highlightTexts, setHighlightTexts] = useState<SearchHighlightTextMap>({});
 
+  // Stable refs used by notifyContentChanged so the debounce callback always
+  // reads the latest values without becoming a new function reference on every render.
+  const highlightActiveRef = useRef(false);
+  highlightActiveRef.current = highlightActive;
+  const searchParamsRef = useRef({ query, scope, caseSensitive, isRegex, isPhonetic });
+  searchParamsRef.current = { query, scope, caseSensitive, isRegex, isPhonetic };
+  const contentRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback((keepHighlight = false) => {
     setIsOpen(false);
@@ -153,6 +162,11 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
       setHighlightActive(false);
       setHighlightRanges({});
       setHighlightTexts({});
+      setQuery('');
+      setResults([]);
+      setTotalMatches(0);
+      setFlatMatches([]);
+      setCurrentMatchIndex(null);
     }
   }, []);
 
@@ -342,6 +356,54 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     [query, replacement, scope, caseSensitive, isRegex, isPhonetic]
   );
 
+  const notifyContentChanged = useCallback(
+    (activeChapterId?: number | null) => {
+      if (!highlightActiveRef.current || !searchParamsRef.current.query.trim()) return;
+      if (contentRefreshDebounceRef.current) {
+        clearTimeout(contentRefreshDebounceRef.current);
+      }
+      contentRefreshDebounceRef.current = setTimeout(() => {
+        contentRefreshDebounceRef.current = null;
+        const {
+          query: q,
+          scope: s,
+          caseSensitive: cs,
+          isRegex: ir,
+          isPhonetic: ip,
+        } = searchParamsRef.current;
+        void (async () => {
+          try {
+            const resp = await api.search.search({
+              query: q,
+              scope: s,
+              case_sensitive: cs,
+              is_regex: ir,
+              is_phonetic: ip,
+              active_chapter_id: activeChapterId ?? null,
+            });
+            const flat = buildFlatMatches(resp.results);
+            const { ranges, texts } = buildHighlightMaps(resp.results);
+            setResults(resp.results);
+            setTotalMatches(resp.total_matches);
+            setFlatMatches(flat);
+            setCurrentMatchIndex((prev) =>
+              flat.length === 0
+                ? null
+                : prev === null
+                  ? null
+                  : Math.min(prev, flat.length - 1)
+            );
+            setHighlightRanges(ranges);
+            setHighlightTexts(texts);
+          } catch {
+            // Silently ignore errors on background highlight refresh
+          }
+        })();
+      }, 800);
+    },
+    [] // stable — all values read via refs
+  );
+
   return {
     isOpen,
     open,
@@ -373,5 +435,6 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     navigatePrev,
     replaceCurrent,
     replaceAllMatches,
+    notifyContentChanged,
   };
 };

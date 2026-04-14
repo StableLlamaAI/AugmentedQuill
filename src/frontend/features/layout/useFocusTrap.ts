@@ -59,6 +59,9 @@ export const useFocusTrap = (
       if (!dialogRef.current) return;
       if (event.key === 'Escape') {
         event.preventDefault();
+        // Stop other capture-phase handlers (e.g. stacked dialogs) from also
+        // receiving this event so only the outermost visible dialog closes.
+        event.stopImmediatePropagation();
         onDismiss?.();
         return;
       }
