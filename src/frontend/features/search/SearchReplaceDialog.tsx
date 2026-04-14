@@ -402,7 +402,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               section.section_type === 'chapter_metadata'
                 ? t('Chapter {{title}}', { title: section.section_title })
                 : section.section_type === 'sourcebook'
-                  ? t('Sourcebook')
+                  ? `${t('Sourcebook')}: ${section.section_title}`
                   : t('Story Metadata');
             const fieldLabel = section.field_display;
 
