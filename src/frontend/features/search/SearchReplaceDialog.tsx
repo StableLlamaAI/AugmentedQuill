@@ -89,6 +89,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
     isLoading,
     error,
     runSearch,
+    selectMatch,
     navigateNext,
     navigatePrev,
     replaceCurrent,
@@ -457,17 +458,19 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                                 : 'bg-brand-950 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
                               : matchItemClass
                           }
-                          onClick={() =>
+                          onClick={() => {
+                            selectMatch(flatIdx);
                             handleMatchClick(
                               section.section_type,
                               section.section_id,
                               section.field,
                               match.start,
                               match.end
-                            )
-                          }
+                            );
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
+                              selectMatch(flatIdx);
                               handleMatchClick(
                                 section.section_type,
                                 section.section_id,

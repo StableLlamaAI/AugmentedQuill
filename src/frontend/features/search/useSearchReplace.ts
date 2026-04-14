@@ -50,6 +50,7 @@ export interface UseSearchReplaceResult {
   isLoading: boolean;
   error: string | null;
   runSearch: (activeChapterId?: number | null) => Promise<void>;
+  selectMatch: (index: number) => void;
   navigateNext: () => void;
   navigatePrev: () => void;
   replaceCurrent: (activeChapterId?: number | null) => Promise<boolean>;
@@ -153,6 +154,15 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     });
   }, [flatMatches.length]);
 
+  const selectMatch = useCallback(
+    (index: number) => {
+      if (flatMatches.length === 0) return;
+      if (index < 0 || index >= flatMatches.length) return;
+      setCurrentMatchIndex(index);
+    },
+    [flatMatches.length]
+  );
+
   const replaceCurrent = useCallback(
     async (activeChapterId?: number | null): Promise<boolean> => {
       if (currentMatchIndex === null || flatMatches.length === 0) return false;
@@ -187,7 +197,9 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         const flat = buildFlatMatches(resp.results);
         setFlatMatches(flat);
         if (flat.length > 0) {
-          setCurrentMatchIndex(Math.min(currentMatchIndex, flat.length - 1));
+          setCurrentMatchIndex((prev) =>
+            prev === null ? 0 : Math.min(prev, flat.length - 1)
+          );
         } else {
           setCurrentMatchIndex(null);
         }
@@ -278,6 +290,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     isLoading,
     error,
     runSearch,
+    selectMatch,
     navigateNext,
     navigatePrev,
     replaceCurrent,
