@@ -16,6 +16,7 @@ import {
   hasUnsupportedSummaryMarkdown,
   SummaryWarning,
 } from '../editor/MarkdownView';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, Conflict } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
@@ -102,6 +103,15 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   }, [closeDialogTrigger]);
 
   const { isLight } = useThemeClasses();
+  const { getRanges } = useSearchHighlight();
+  const summaryHighlightRanges = getRanges('story_metadata', 'story', 'story_summary');
+  const notesHighlightRanges = getRanges('story_metadata', 'story', 'notes');
+  const privateNotesHighlightRanges = getRanges(
+    'story_metadata',
+    'story',
+    'private_notes'
+  );
+
   const containerClass = isLight
     ? 'bg-brand-gray-50 text-brand-gray-800 border-brand-gray-200'
     : 'bg-brand-gray-900 text-brand-gray-300 border-brand-gray-800';
@@ -213,6 +223,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
               simple
               baseline={baselineSummary}
               language={language}
+              searchHighlightRanges={summaryHighlightRanges}
             />
             {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
           </div>
@@ -231,6 +242,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
               simple
               baseline={baselineNotes}
               language={language}
+              searchHighlightRanges={notesHighlightRanges}
             />
           </div>
         </div>

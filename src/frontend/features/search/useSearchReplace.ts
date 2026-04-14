@@ -27,10 +27,24 @@ export interface FlatMatch {
   end: number;
 }
 
+export interface SearchHighlightRange {
+  start: number;
+  end: number;
+}
+
+export type SearchHighlightMap = Record<string, SearchHighlightRange[]>;
+export type SearchHighlightTextMap = Record<string, string[]>;
+
+export const buildSearchSectionKey = (
+  sectionType: string,
+  sectionId: string,
+  field: string
+): string => `${sectionType}:${sectionId}:${field}`;
+
 export interface UseSearchReplaceResult {
   isOpen: boolean;
   open: () => void;
-  close: () => void;
+  close: (keepHighlight?: boolean) => void;
   query: string;
   setQuery: (q: string) => void;
   replacement: string;
@@ -49,6 +63,9 @@ export interface UseSearchReplaceResult {
   flatMatches: FlatMatch[];
   isLoading: boolean;
   error: string | null;
+  highlightActive: boolean;
+  highlightRanges: SearchHighlightMap;
+  highlightTexts: SearchHighlightTextMap;
   runSearch: (activeChapterId?: number | null) => Promise<void>;
   selectMatch: (index: number) => void;
   navigateNext: () => void;
@@ -78,6 +95,38 @@ const buildFlatMatches = (results: SearchResultSection[]): FlatMatch[] => {
   return flat;
 };
 
+const buildHighlightMaps = (
+  results: SearchResultSection[]
+): {
+  ranges: SearchHighlightMap;
+  texts: SearchHighlightTextMap;
+} => {
+  const ranges: SearchHighlightMap = {};
+  const texts: SearchHighlightTextMap = {};
+
+  results.forEach((section) => {
+    const key = buildSearchSectionKey(
+      section.section_type,
+      section.section_id,
+      section.field
+    );
+    ranges[key] = section.matches.map((match) => ({
+      start: match.start,
+      end: match.end,
+    }));
+    const seen = new Set<string>();
+    texts[key] = section.matches.reduce<string[]>((acc, match) => {
+      if (!seen.has(match.match_text)) {
+        seen.add(match.match_text);
+        acc.push(match.match_text);
+      }
+      return acc;
+    }, []);
+  });
+
+  return { ranges, texts };
+};
+
 export const useSearchReplace = (): UseSearchReplaceResult => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -92,11 +141,19 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   const [flatMatches, setFlatMatches] = useState<FlatMatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlightActive, setHighlightActive] = useState(false);
+  const [highlightRanges, setHighlightRanges] = useState<SearchHighlightMap>({});
+  const [highlightTexts, setHighlightTexts] = useState<SearchHighlightTextMap>({});
 
   const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => {
+  const close = useCallback((keepHighlight = false) => {
     setIsOpen(false);
     setError(null);
+    if (!keepHighlight) {
+      setHighlightActive(false);
+      setHighlightRanges({});
+      setHighlightTexts({});
+    }
   }, []);
 
   const runSearch = useCallback(
@@ -106,6 +163,9 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         setTotalMatches(0);
         setFlatMatches([]);
         setCurrentMatchIndex(null);
+        setHighlightActive(false);
+        setHighlightRanges({});
+        setHighlightTexts({});
         return;
       }
       setIsLoading(true);
@@ -124,6 +184,10 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         const flat = buildFlatMatches(resp.results);
         setFlatMatches(flat);
         setCurrentMatchIndex(flat.length > 0 ? 0 : null);
+        const { ranges, texts } = buildHighlightMaps(resp.results);
+        setHighlightRanges(ranges);
+        setHighlightTexts(texts);
+        setHighlightActive(true);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
@@ -131,6 +195,9 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         setTotalMatches(0);
         setFlatMatches([]);
         setCurrentMatchIndex(null);
+        setHighlightActive(false);
+        setHighlightRanges({});
+        setHighlightTexts({});
       } finally {
         setIsLoading(false);
       }
@@ -203,6 +270,10 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         } else {
           setCurrentMatchIndex(null);
         }
+        const { ranges, texts } = buildHighlightMaps(resp.results);
+        setHighlightRanges(ranges);
+        setHighlightTexts(texts);
+        setHighlightActive(true);
         return true;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -252,6 +323,10 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         const flat = buildFlatMatches(searchResp.results);
         setFlatMatches(flat);
         setCurrentMatchIndex(flat.length > 0 ? 0 : null);
+        const { ranges, texts } = buildHighlightMaps(searchResp.results);
+        setHighlightRanges(ranges);
+        setHighlightTexts(texts);
+        setHighlightActive(true);
         return {
           count: resp.replacements_made,
           storyChanged: resp.replacements_made > 0,
@@ -289,6 +364,9 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     flatMatches,
     isLoading,
     error,
+    highlightActive,
+    highlightRanges,
+    highlightTexts,
     runSearch,
     selectMatch,
     navigateNext,

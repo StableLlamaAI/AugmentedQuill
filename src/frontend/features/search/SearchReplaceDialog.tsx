@@ -468,6 +468,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                               match.end
                             );
                           }}
+                          onDoubleClick={() => close(true)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               selectMatch(flatIdx);

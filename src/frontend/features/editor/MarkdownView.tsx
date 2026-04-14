@@ -28,6 +28,7 @@ interface MarkdownViewProps {
   simple?: boolean;
   baseline?: string;
   language?: string;
+  searchHighlightRanges?: Array<{ start: number; end: number }>;
 }
 
 // Configure markdown rendering once to keep parsing behavior stable.
@@ -56,6 +57,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   simple = false,
   baseline = '',
   language,
+  searchHighlightRanges,
 }) => {
   const safeContent = typeof content === 'string' ? content : '';
 
@@ -118,11 +120,71 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     );
   }
 
-  const renderLine = (line: string, i: number, la?: string) => {
+  const splitLineWithHighlights = (
+    line: string,
+    lineStart: number,
+    ranges?: Array<{ start: number; end: number }>
+  ) => {
+    if (!ranges || ranges.length === 0) return [{ text: line, highlight: false }];
+
+    const normalized = ranges
+      .map((range) => ({
+        start: Math.max(0, range.start - lineStart),
+        end: Math.max(0, range.end - lineStart),
+      }))
+      .filter((range) => range.start < range.end)
+      .sort((a, b) => a.start - b.start);
+
+    const fragments: Array<{ text: string; highlight: boolean }> = [];
+    let cursor = 0;
+
+    for (const range of normalized) {
+      if (range.start > cursor) {
+        fragments.push({ text: line.slice(cursor, range.start), highlight: false });
+      }
+      fragments.push({
+        text: line.slice(range.start, Math.min(range.end, line.length)),
+        highlight: true,
+      });
+      cursor = Math.min(range.end, line.length);
+      if (cursor >= line.length) break;
+    }
+
+    if (cursor < line.length) {
+      fragments.push({ text: line.slice(cursor), highlight: false });
+    }
+
+    return fragments;
+  };
+
+  const renderLine = (line: string, i: number, la?: string, lineStart = 0) => {
     // Simple mode preserves source for complex markdown to avoid misleading preview fidelity.
+    if (!searchHighlightRanges?.length) {
+      return (
+        <div key={i} className="min-h-[1.5em]" lang={la}>
+          {renderInline(line)}
+        </div>
+      );
+    }
+
+    const fragments = splitLineWithHighlights(line, lineStart, searchHighlightRanges);
+
     return (
       <div key={i} className="min-h-[1.5em]" lang={la}>
-        {renderInline(line)}
+        {fragments.map((fragment, idx) => {
+          const inline = renderInline(fragment.text);
+          return fragment.highlight ? (
+            <mark
+              key={idx}
+              className="search-highlight rounded"
+              style={{ backgroundColor: 'rgba(245, 158, 11, 0.25)' }}
+            >
+              {inline}
+            </mark>
+          ) : (
+            <React.Fragment key={idx}>{inline}</React.Fragment>
+          );
+        })}
       </div>
     );
   };
@@ -190,7 +252,13 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
               );
             return null; // deletions: not shown
           })
-        : safeContent.split('\n').map((line, i) => renderLine(line, i, language))}
+        : safeContent.split('\n').map((line, i, all) => {
+            const lineStart = safeContent
+              .split('\n')
+              .slice(0, i)
+              .reduce((sum, current) => sum + current.length + 1, 0);
+            return renderLine(line, i, language, lineStart);
+          })}
     </div>
   );
 };

@@ -62,10 +62,17 @@ body.light ::-webkit-scrollbar-thumb:hover {
 
 /* AI diff highlight — shows text added/changed since the last undo/redo point.
    Used in WYSIWYG mode and Markdown view renderings outside the CM editor. */
-.diff-inserted {
+..diff-inserted {
   background-color: rgba(34, 197, 94, 0.12);
   border-bottom: 1px solid rgba(34, 197, 94, 0.4);
   border-radius: 2px;
+}
+
+.search-highlight,
+mark.search-highlight {
+  background-color: rgba(245, 158, 11, 0.25);
+  border-radius: 2px;
+  color: inherit;
 }
 
 .diff-deleted {

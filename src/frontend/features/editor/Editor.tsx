@@ -36,6 +36,7 @@ import {
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 // @ts-ignore
 import { marked } from 'marked';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
@@ -229,6 +230,49 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
   }
 };
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const highlightTextNode = (textNode: Text, regex: RegExp, className: string): void => {
+  const text = textNode.nodeValue;
+  if (!text) return;
+  const match = regex.exec(text);
+  if (!match) return;
+
+  const before = document.createTextNode(text.slice(0, match.index));
+  const mark = document.createElement('span');
+  mark.className = className;
+  mark.textContent = match[0];
+  const after = document.createTextNode(text.slice(match.index + match[0].length));
+
+  const parent = textNode.parentNode;
+  if (!parent) return;
+  parent.insertBefore(before, textNode);
+  parent.insertBefore(mark, textNode);
+  parent.insertBefore(after, textNode);
+  parent.removeChild(textNode);
+
+  regex.lastIndex = 0;
+  highlightTextNode(after, regex, className);
+};
+
+const highlightWysiwygSearchMatches = (root: HTMLElement, terms: string[]): void => {
+  if (terms.length === 0) return;
+
+  const uniqueTerms = Array.from(new Set(terms.filter((t) => t.trim() !== '')));
+  if (uniqueTerms.length === 0) return;
+
+  const regex = new RegExp(uniqueTerms.map(escapeRegExp).join('|'), 'g');
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest('.search-highlight')) continue;
+    highlightTextNode(node as Text, regex, 'search-highlight');
+  }
+};
+
 export const Editor = React.forwardRef<EditorHandle, EditorProps>(
   (
     {
@@ -264,6 +308,17 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const prevScrollTopRef = useRef<number>(0);
     const autoScrollRafRef = useRef<number | null>(null);
     const autoScrollSettleRafRef = useRef<number | null>(null);
+    const { getRanges, getMatchTexts } = useSearchHighlight();
+    const chapterSearchHighlightRanges = getRanges(
+      'chapter_content',
+      String(chapter.id),
+      'content'
+    );
+    const chapterSearchHighlightTexts = getMatchTexts(
+      'chapter_content',
+      String(chapter.id),
+      'content'
+    );
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -620,6 +675,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           wysiwygRef.current.innerHTML = parsedHtml.replaceAll(TAB_PLACEHOLDER, '&#9;');
           if (showWhitespace) {
             injectWsMarkersWysiwyg(wysiwygRef.current);
+          }
+
+          if (chapterSearchHighlightTexts.length > 0) {
+            highlightWysiwygSearchMatches(
+              wysiwygRef.current,
+              chapterSearchHighlightTexts
+            );
           }
 
           // Apply diff background styles to the injected spans.
@@ -1628,6 +1690,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     showWhitespace={showWhitespace}
                     showDiff={settings.showDiff}
                     baselineValue={localBaseline}
+                    searchHighlightRanges={chapterSearchHighlightRanges}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'
