@@ -166,6 +166,8 @@ export type MainSidebarControls = {
     label: string;
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
+    entryId?: string;
+    entryExistsInBaseline?: boolean;
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;

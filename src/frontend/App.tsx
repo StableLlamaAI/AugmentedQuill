@@ -799,7 +799,7 @@ const App: React.FC = () => {
                 onSourcebookMutated: async (params) => {
                   const entryExistsInBaseline = Boolean(
                     params.entryExistsInBaseline ??
-                    sidebarControls.baselineState?.sourcebook?.some(
+                    baselineState.sourcebook?.some(
                       (entry) => entry.id === params.entryId
                     )
                   );

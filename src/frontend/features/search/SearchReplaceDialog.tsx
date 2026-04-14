@@ -232,7 +232,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
           </span>
           <button
             type="button"
-            onClick={close}
+            onClick={() => close()}
             aria-label={t('Close search')}
             className={closeClass}
           >

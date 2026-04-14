@@ -716,7 +716,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       setLocalBaseline(undefined); // clear diff immediately on user input
       if (wysiwygRef.current) {
         const html = wysiwygRef.current.innerHTML;
-        const md = turndownService.current.turndown(html);
+        const turndown = turndownService.current;
+        if (!turndown) return;
+        const md = turndown.turndown(html);
         if (md !== chapter.content) {
           onChange(chapter.id, { content: md });
         }
@@ -1592,8 +1594,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             </div>
           )}
           {/* The Paper - Grows infinitely */}
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
           <div
             ref={paperDivRef}
+            role="group"
+            aria-label="Editor workspace"
             className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
