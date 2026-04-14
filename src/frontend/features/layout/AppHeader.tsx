@@ -284,6 +284,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             )}
           </div>
           <CheckpointsMenu hasUnsavedChanges={canUndo} confirm={confirm} />
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={onOpenSearch}
+            title="Search and Replace (Ctrl+F)"
+            aria-label="Search and Replace"
+            className="ml-1"
+          >
+            <Search size={18} />
+          </Button>
         </div>
       </div>
 
@@ -312,17 +323,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           className="mr-1"
         >
           <SettingsIcon size={18} />
-        </Button>
-        <Button
-          theme={currentTheme}
-          variant="ghost"
-          size="sm"
-          onClick={onOpenSearch}
-          title="Search and Replace (Ctrl+F)"
-          aria-label="Search and Replace"
-          className="mr-1"
-        >
-          <Search size={18} />
         </Button>
         <HeaderAppearanceControls
           appearanceRef={appearanceRef}
