@@ -22,6 +22,7 @@ export const detectBrowserLanguage = () => {
 };
 
 i18n.use(initReactI18next).init({
+  initImmediate: false,
   resources: {
     en: {
       translation: {

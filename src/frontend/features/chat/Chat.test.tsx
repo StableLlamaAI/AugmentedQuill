@@ -13,8 +13,10 @@
 
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import i18n from '../app/i18n';
 import { Chat } from './Chat';
 import { LLMConfig } from '../../types';
 
@@ -50,6 +52,9 @@ const defaultProps = {
   onToggleWebSearch: vi.fn(),
 };
 
+const renderWithI18n = (ui: React.ReactElement) =>
+  render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
+
 describe('Chat', () => {
   beforeAll(() => {
     if (!(window.HTMLElement.prototype as any).scrollTo) {
@@ -72,7 +77,7 @@ describe('Chat', () => {
       },
     ];
 
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <Chat
         messages={messages}
         isLoading={true}
@@ -129,7 +134,7 @@ describe('Chat', () => {
     const onUpdateScratchpad = vi.fn();
     const onDeleteScratchpad = vi.fn();
 
-    render(
+    renderWithI18n(
       <Chat
         messages={[]}
         isLoading={false}
@@ -159,7 +164,7 @@ describe('Chat', () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
 
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         onSendMessage={onSendMessage}
@@ -197,7 +202,7 @@ describe('Chat', () => {
       types: ['Files'],
     } as unknown as DataTransfer;
 
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         onSendMessage={onSendMessage}
@@ -230,7 +235,7 @@ describe('Chat', () => {
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         messages={[]}
@@ -261,7 +266,7 @@ describe('Chat', () => {
   });
 
   it('closes system instruction panel on Escape', () => {
-    render(
+    renderWithI18n(
       <Chat
         messages={[]}
         isLoading={false}
@@ -280,7 +285,7 @@ describe('Chat', () => {
   });
 
   it('shows tool call names in the hidden tool call title', () => {
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         messages={[
@@ -304,7 +309,7 @@ describe('Chat', () => {
   });
 
   it('shows regenerate button when there is a user message and generation is not active', () => {
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         messages={[{ id: 'u1', role: 'user' as const, text: 'Hello' }]}
@@ -324,7 +329,7 @@ describe('Chat', () => {
   });
 
   it('applies story language to chat inputs and dialog textareas', () => {
-    render(
+    renderWithI18n(
       <Chat
         {...defaultProps}
         messages={[]}
