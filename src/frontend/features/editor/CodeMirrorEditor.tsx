@@ -333,6 +333,10 @@ const baseTheme = EditorView.theme({
     borderRadius: '2px',
     transition: 'background-color 0.2s ease',
   },
+  '.cm-search-highlight': {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: '2px',
+  },
   // Placeholder styling
   '.cm-placeholder': {
     color: 'inherit',
@@ -391,10 +395,14 @@ export interface CodeMirrorEditorProps {
   baselineValue?: string;
   /** Enable inline diff highlighting in the editor */
   showDiff?: boolean;
+  /** Active search highlights in document text offset coordinates */
+  searchHighlightRanges?: Array<{ start: number; end: number }>;
   /** BCP 47 language tag for spellcheck and hyphenation */
   language?: string;
   /** Whether to enable browser-native spellcheck */
   spellCheck?: boolean;
+  /** Called when the user presses Ctrl+F / Cmd+F inside the editor */
+  onOpenSearch?: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -416,8 +424,10 @@ export const CodeMirrorEditor = React.forwardRef<
       onSelectionChange,
       baselineValue,
       showDiff = true,
+      searchHighlightRanges,
       language = 'en',
       spellCheck = false,
+      onOpenSearch,
     },
     ref
   ) => {
@@ -428,8 +438,10 @@ export const CodeMirrorEditor = React.forwardRef<
     // calls the latest version without needing the view to be recreated.
     const onChangeRef = useRef(onChange);
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onOpenSearchRef = useRef(onOpenSearch);
     onChangeRef.current = onChange;
     onSelectionChangeRef.current = onSelectionChange;
+    onOpenSearchRef.current = onOpenSearch;
 
     // Track the last value emitted by our own onChange so we can distinguish
     // externally-driven value changes from the echo of our own edits.
@@ -439,6 +451,7 @@ export const CodeMirrorEditor = React.forwardRef<
     const languageCompartment = useRef(new Compartment());
     const wsCompartment = useRef(new Compartment());
     const diffCompartment = useRef(new Compartment());
+    const searchHighlightCompartment = useRef(new Compartment());
     const enterCompartment = useRef(new Compartment());
     const placeholderCompartment = useRef(new Compartment());
     const attributesCompartment = useRef(new Compartment());
@@ -470,6 +483,43 @@ export const CodeMirrorEditor = React.forwardRef<
 
     const buildWsExtension = (ws: boolean): Extension =>
       ws ? buildWhitespacePlugin() : [];
+
+    const buildSearchHighlightPlugin = (
+      ranges: Array<{ start: number; end: number }>
+    ): Extension =>
+      ViewPlugin.fromClass(
+        class {
+          decorations: DecorationSet;
+          constructor(view: EditorView) {
+            this.decorations = this.build(view);
+          }
+          update(u: ViewUpdate) {
+            if (u.docChanged || u.viewportChanged || u.geometryChanged) {
+              this.decorations = this.build(u.view);
+            }
+          }
+          build(view: EditorView): DecorationSet {
+            const decs: Range<Decoration>[] = [];
+            const length = view.state.doc.length;
+            for (const range of ranges) {
+              const from = Math.max(0, Math.min(range.start, length));
+              const to = Math.max(0, Math.min(range.end, length));
+              if (from < to) {
+                decs.push(
+                  Decoration.mark({ class: 'cm-search-highlight' }).range(from, to)
+                );
+              }
+            }
+            return Decoration.set(decs, true);
+          }
+        },
+        { decorations: (v) => v.decorations }
+      );
+
+    const buildSearchHighlightExtension = (
+      ranges: Array<{ start: number; end: number }> | undefined
+    ): Extension =>
+      ranges && ranges.length > 0 ? buildSearchHighlightPlugin(ranges) : [];
 
     const buildDiffExtension = (bv: string | undefined, enabled: boolean): Extension =>
       enabled && bv != null ? buildDiffPlugin(bv) : [];
@@ -560,6 +610,19 @@ export const CodeMirrorEditor = React.forwardRef<
           buildAttributesExtension(language, spellCheck, placeholder)
         ),
         history(),
+        // Ctrl+F / Cmd+F opens the app search dialog instead of CodeMirror's built-in search
+        Prec.highest(
+          keymap.of([
+            {
+              key: 'Ctrl-f',
+              mac: 'Cmd-f',
+              run: () => {
+                onOpenSearchRef.current?.();
+                return true;
+              },
+            },
+          ])
+        ),
         // Enter/history keymaps take precedence over defaultKeymap
         Prec.high(keymap.of(historyKeymap)),
         // Enter-behavior keymap in its own compartment
@@ -568,6 +631,9 @@ export const CodeMirrorEditor = React.forwardRef<
         Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
         diffCompartment.current.of(buildDiffExtension(baselineValue, showDiff)),
+        searchHighlightCompartment.current.of(
+          buildSearchHighlightExtension(searchHighlightRanges)
+        ),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
         wsCompartment.current.of(buildWsExtension(showWhitespace)),
@@ -659,6 +725,14 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [baselineValue, showDiff]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: searchHighlightCompartment.current.reconfigure(
+          buildSearchHighlightExtension(searchHighlightRanges)
+        ),
+      });
+    }, [searchHighlightRanges]);
 
     // ── External value sync ─────────────────────────────────────────────────
     // Update the CodeMirror document when the value prop changes due to an

@@ -47,4 +47,17 @@ describe('fetchJson', () => {
       'bad request'
     );
   });
+
+  it('stringifies non-string detail bodies for errors', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: { msg: 'bad request' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    await expect(fetchJson('/broken', undefined, 'fallback')).rejects.toThrow(
+      '{"msg":"bad request"}'
+    );
+  });
 });

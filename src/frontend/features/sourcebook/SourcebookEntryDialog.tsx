@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { SourcebookRelationDialog } from './SourcebookRelationDialog';
 import { useConfirm } from '../layout/ConfirmDialogContext';
@@ -155,6 +156,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
 
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
+  const { getRanges } = useSearchHighlight();
+  const descriptionHighlightRanges = getRanges(
+    'sourcebook',
+    entry?.id ?? '',
+    'description'
+  );
 
   const entryDialogRef = useRef<HTMLDivElement>(null);
   const imagePickerRef = useRef<HTMLDivElement>(null);
@@ -913,6 +920,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   }}
                   baselineValue={descriptionBaseline}
                   showDiff={showDiff}
+                  searchHighlightRanges={descriptionHighlightRanges}
                   language={language}
                   spellCheck={true}
                   mode="markdown"

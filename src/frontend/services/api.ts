@@ -19,6 +19,7 @@ import { chatApi } from './apiClients/chat';
 import { sourcebookApi } from './apiClients/sourcebook';
 import { debugApi } from './apiClients/debug';
 import { checkpointsApi } from './apiClients/checkpoints';
+import { searchApi } from './apiClients/search';
 
 export const api = {
   machine: machineApi,
@@ -31,4 +32,5 @@ export const api = {
   sourcebook: sourcebookApi,
   debug: debugApi,
   checkpoints: checkpointsApi,
+  search: searchApi,
 };

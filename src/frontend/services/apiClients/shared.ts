@@ -19,11 +19,14 @@ function endpoint(path: string): string {
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const data = (await response.json()) as {
-      detail?: string;
-      message?: string;
-      error?: string;
+      detail?: unknown;
+      message?: unknown;
+      error?: unknown;
     };
-    return data.detail || data.message || data.error || fallback;
+    const detail = data.detail ?? data.message ?? data.error;
+    if (typeof detail === 'string') return detail;
+    if (detail !== undefined) return JSON.stringify(detail);
+    return fallback;
   } catch {
     return fallback;
   }

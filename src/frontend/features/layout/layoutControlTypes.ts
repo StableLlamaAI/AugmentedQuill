@@ -98,6 +98,10 @@ export type HeaderAppearanceControlsState = {
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
 };
 
+export type HeaderSearchControls = {
+  onOpenSearch: () => void;
+};
+
 export type HeaderChatPanelControls = {
   isChatOpen: boolean;
   setIsChatOpen: Dispatch<SetStateAction<boolean>>;
@@ -162,6 +166,8 @@ export type MainSidebarControls = {
     label: string;
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
+    entryId?: string;
+    entryExistsInBaseline?: boolean;
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;
@@ -169,10 +175,12 @@ export type MainSidebarControls = {
   canAppRedo?: boolean;
   selectedSourcebookEntryId?: string | null;
   sourcebookDialogTrigger?: { id: number; entryId: string } | null;
+  sourcebookDialogCloseTrigger?: number;
   metadataDialogTrigger?: {
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   } | null;
+  metadataDialogCloseTrigger?: number;
 };
 
 export type MainEditorSuggestionControls = {
@@ -220,6 +228,7 @@ export type MainEditorControls = {
   showWhitespace: boolean;
   setShowWhitespace: Dispatch<SetStateAction<boolean>>;
   baselineContent?: string;
+  onOpenSearch?: () => void;
 };
 
 export type MainChatControls = {

@@ -322,7 +322,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     canAppUndo,
     canAppRedo,
     sourcebookDialogTrigger,
+    sourcebookDialogCloseTrigger,
     metadataDialogTrigger,
+    metadataDialogCloseTrigger,
   } = sidebarControls;
 
   const { editorSettings, setEditorSettings } = editorControls;
@@ -405,6 +407,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
     setActiveFormats,
     showWhitespace,
     setShowWhitespace,
+    onOpenSearch,
   } = editorControls;
 
   const {
@@ -510,6 +513,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             }
             onUpdate={updateStoryMetadata}
             metadataDialogTrigger={metadataDialogTrigger}
+            closeDialogTrigger={metadataDialogCloseTrigger}
             initialTab={metadataDialogTrigger?.initialTab}
             theme={currentTheme}
             languages={instructionLanguages}
@@ -574,6 +578,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             canAppUndo={canAppUndo}
             canAppRedo={canAppRedo}
             sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
+            closeDialogTrigger={sourcebookDialogCloseTrigger}
             baselineEntries={sidebarControls.baselineState?.sourcebook}
           />
         </CollapsibleSection>
@@ -615,6 +620,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
               onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
               baselineContent={editorControls.baselineContent}
               spellCheck={true}
+              onOpenSearch={onOpenSearch}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">

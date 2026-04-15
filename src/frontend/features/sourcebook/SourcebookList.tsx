@@ -67,6 +67,7 @@ interface SourcebookListProps {
    *  incrementing `id` so that clicking the same entry twice is always
    *  detected as a new click, even if the dialog was closed in between. */
   sourcebookDialogTrigger?: { id: number; entryId: string } | null;
+  closeDialogTrigger?: number;
   language?: string;
   baselineEntries?: SourcebookEntry[];
 }
@@ -176,6 +177,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   canAppUndo = false,
   canAppRedo = false,
   sourcebookDialogTrigger,
+  closeDialogTrigger,
   language = 'en',
   baselineEntries,
 }) => {
@@ -280,6 +282,13 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       cancelled = true;
     };
   }, [sourcebookDialogTrigger?.id]); // Only the trigger id matters; entries is read via closure (stale ok — falls back to API fetch)
+
+  // Close the dialog when an external navigation event requests it.
+  useEffect(() => {
+    if (closeDialogTrigger) {
+      setIsDialogOpen(false);
+    }
+  }, [closeDialogTrigger]);
 
   // When externalEntries change (e.g. after app-level undo/redo), either close
   // the dialog (entry was deleted) or refresh selectedEntry + force a dialog

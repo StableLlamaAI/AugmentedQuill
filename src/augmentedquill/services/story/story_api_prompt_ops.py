@@ -45,7 +45,7 @@ def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
         "get_chapter_content",
         "get_chapter_summary",
         "get_chapter_summaries",
-        "search_sourcebook",
+        "search_in_project",
         "get_sourcebook_entry",
     }
     return [t for t in tools if t.get("function", {}).get("name") in relevant_names]

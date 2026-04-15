@@ -62,7 +62,7 @@ class ChatToolContractsTest(TestCase):
         "read_editing_scratchpad",
         "read_story_content",
         "recommend_metadata_updates",
-        "search_sourcebook",
+        "search_in_project",
     }
 
     _EDITING_ONLY_TOOLS = {
@@ -716,6 +716,7 @@ class ChatToolContractsTest(TestCase):
             "read_scratchpad",
             "write_scratchpad",
             "write_editing_scratchpad",
+            "replace_in_project",
         }
 
         tool_names = set(self._tool_names())

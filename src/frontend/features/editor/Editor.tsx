@@ -36,6 +36,7 @@ import {
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 // @ts-ignore
 import { marked } from 'marked';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
@@ -155,6 +156,7 @@ interface EditorProps {
     isProseStreaming?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
+  onOpenSearch?: () => void;
 }
 
 interface TurndownServiceLike {
@@ -166,6 +168,7 @@ export interface EditorHandle {
   focus: () => void;
   format: (type: string) => void;
   openImageManager?: () => void;
+  jumpToPosition: (start: number, end: number) => void;
 }
 
 // Inject visible whitespace markers into the WYSIWYG contentEditable DOM.
@@ -227,6 +230,49 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
   }
 };
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const highlightTextNode = (textNode: Text, regex: RegExp, className: string): void => {
+  const text = textNode.nodeValue;
+  if (!text) return;
+  const match = regex.exec(text);
+  if (!match) return;
+
+  const before = document.createTextNode(text.slice(0, match.index));
+  const mark = document.createElement('span');
+  mark.className = className;
+  mark.textContent = match[0];
+  const after = document.createTextNode(text.slice(match.index + match[0].length));
+
+  const parent = textNode.parentNode;
+  if (!parent) return;
+  parent.insertBefore(before, textNode);
+  parent.insertBefore(mark, textNode);
+  parent.insertBefore(after, textNode);
+  parent.removeChild(textNode);
+
+  regex.lastIndex = 0;
+  highlightTextNode(after, regex, className);
+};
+
+const highlightWysiwygSearchMatches = (root: HTMLElement, terms: string[]): void => {
+  if (terms.length === 0) return;
+
+  const uniqueTerms = Array.from(new Set(terms.filter((t) => t.trim() !== '')));
+  if (uniqueTerms.length === 0) return;
+
+  const regex = new RegExp(uniqueTerms.map(escapeRegExp).join('|'), 'g');
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest('.search-highlight')) continue;
+    highlightTextNode(node as Text, regex, 'search-highlight');
+  }
+};
+
 export const Editor = React.forwardRef<EditorHandle, EditorProps>(
   (
     {
@@ -242,6 +288,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       language,
       spellCheck,
       onContextChange,
+      onOpenSearch,
     },
     ref
   ) => {
@@ -261,6 +308,17 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const prevScrollTopRef = useRef<number>(0);
     const autoScrollRafRef = useRef<number | null>(null);
     const autoScrollSettleRafRef = useRef<number | null>(null);
+    const { getRanges, getMatchTexts } = useSearchHighlight();
+    const chapterSearchHighlightRanges = getRanges(
+      'chapter_content',
+      String(chapter.id),
+      'content'
+    );
+    const chapterSearchHighlightTexts = getMatchTexts(
+      'chapter_content',
+      String(chapter.id),
+      'content'
+    );
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -619,6 +677,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             injectWsMarkersWysiwyg(wysiwygRef.current);
           }
 
+          if (chapterSearchHighlightTexts.length > 0) {
+            highlightWysiwygSearchMatches(
+              wysiwygRef.current,
+              chapterSearchHighlightTexts
+            );
+          }
+
           // Apply diff background styles to the injected spans.
           const diffSpans = wysiwygRef.current.querySelectorAll('.diff-inserted');
           diffSpans.forEach((span) => {
@@ -651,7 +716,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       setLocalBaseline(undefined); // clear diff immediately on user input
       if (wysiwygRef.current) {
         const html = wysiwygRef.current.innerHTML;
-        const md = turndownService.current.turndown(html);
+        const turndown = turndownService.current;
+        if (!turndown) return;
+        const md = turndown.turndown(html);
         if (md !== chapter.content) {
           onChange(chapter.id, { content: md });
         }
@@ -1322,6 +1389,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         else editorViewRef.current?.focus();
       },
       format: (type: string) => format(type),
+      jumpToPosition: (start: number, end: number) => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        view.dispatch({
+          selection: { anchor: start, head: end },
+          scrollIntoView: true,
+        });
+        view.focus();
+      },
     }));
 
     // Styles & Theme Logic
@@ -1518,8 +1594,11 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             </div>
           )}
           {/* The Paper - Grows infinitely */}
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
           <div
             ref={paperDivRef}
+            role="group"
+            aria-label="Editor workspace"
             className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
             style={{
               maxWidth: `${settings.maxWidth}ch`,
@@ -1600,6 +1679,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     value={localContent}
                     language={language}
                     spellCheck={spellCheck}
+                    onOpenSearch={onOpenSearch}
                     onChange={(val: string) => {
                       setLocalContent(val);
                       setLocalBaseline(undefined); // clear diff immediately on user input
@@ -1615,6 +1695,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                     showWhitespace={showWhitespace}
                     showDiff={settings.showDiff}
                     baselineValue={localBaseline}
+                    searchHighlightRanges={chapterSearchHighlightRanges}
                     enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
                     placeholder={
                       chapter.scope === 'story'

@@ -12,10 +12,12 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { ConfirmDialog } from './ConfirmDialog';
+
+afterEach(cleanup);
 
 describe('ConfirmDialog accessibility', () => {
   it('renders with appropriate aria attributes and labels', () => {
@@ -117,7 +119,8 @@ describe('ConfirmDialog accessibility', () => {
       />
     );
 
-    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
     expect(onCancel).toHaveBeenCalled();
   });
 });

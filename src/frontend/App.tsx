@@ -43,6 +43,9 @@ import { useEditorUIState } from './features/app/useEditorUIState';
 import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
+import { useSearchReplace } from './features/search/useSearchReplace';
+import { SearchReplaceDialog } from './features/search/SearchReplaceDialog';
+import { SearchHighlightProvider } from './features/search/SearchHighlightContext';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -107,6 +110,52 @@ const App: React.FC = () => {
       }
     : null;
   const editorRef = useRef<EditorHandle | null>(null);
+  const pendingJumpRef = useRef<{
+    chapterId: string;
+    start: number;
+    end: number;
+  } | null>(null);
+
+  const searchState = useSearchReplace();
+  const openSearch = useCallback(() => searchState.open(), [searchState]);
+
+  // Global Ctrl+F / Cmd+F hotkey opens the search dialog
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        // Only intercept when no input/textarea has focus (editor intercepts internally)
+        const target = e.target as HTMLElement;
+        const isEditorFocused = target.closest('#raw-markdown-editor') !== null;
+        if (!isEditorFocused) {
+          e.preventDefault();
+          openSearch();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [openSearch]);
+
+  // Apply a deferred jump-to-position once a chapter's content is loaded.
+  // This handles cross-chapter navigation from the search dialog where the
+  // chapter content is fetched asynchronously after chapter selection.
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending) return;
+    if (pending.chapterId !== currentChapterId) return;
+    const content = currentChapter?.content ?? '';
+    // Wait until the document is long enough to contain the target offset.
+    if (pending.end > 0 && content.length < pending.end) return;
+    pendingJumpRef.current = null;
+    const { start, end } = pending;
+    const doJump = () => editorRef.current?.jumpToPosition(start, end);
+    if (viewMode === 'wysiwyg') {
+      setViewMode('markdown');
+      setTimeout(doJump, 80);
+    } else {
+      setTimeout(doJump, 50);
+    }
+  }, [currentChapterId, currentChapter?.content]);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
 
@@ -146,6 +195,8 @@ const App: React.FC = () => {
     id: number;
     initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
   } | null>(null);
+  const [metadataDialogCloseTrigger, setMetadataDialogCloseTrigger] = useState(0);
+  const [sourcebookDialogCloseTrigger, setSourcebookDialogCloseTrigger] = useState(0);
 
   const {
     isChatOpen,
@@ -600,266 +651,345 @@ const App: React.FC = () => {
 
   return (
     <ConfirmDialogProvider value={confirm}>
-      <ThemeProvider currentTheme={currentTheme}>
-        <ConfirmDialog
-          isOpen={confirmDialogState.isOpen}
-          title={confirmDialogState.title}
-          message={confirmDialogState.message}
-          confirmLabel={confirmDialogState.confirmLabel}
-          cancelLabel={confirmDialogState.cancelLabel}
-          variant={confirmDialogState.variant as any}
-          onConfirm={handleConfirm}
-          onCancel={handleCancel}
-        />
-        <div
-          id="aq-app-root"
-          className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
-          style={
-            {
-              '--sidebar-width': `${editorSettings.sidebarWidth}px`,
-            } as React.CSSProperties
-          }
-        >
-          <AppDialogs
-            isSettingsOpen={isSettingsOpen}
-            setIsSettingsOpen={setIsSettingsOpen}
-            appSettings={appSettings}
-            setAppSettings={handleSaveSettings}
-            projects={projects}
-            story={story}
-            handleLoadProject={handleLoadProject}
-            handleCreateProject={handleCreateProject}
-            handleImportProject={handleImportProject}
-            handleDeleteProject={handleDeleteProject}
-            handleRenameProject={handleRenameProject}
-            handleConvertProject={handleConvertProject}
-            refreshProjects={refreshProjects}
-            currentTheme={currentTheme}
-            prompts={prompts}
-            instructionLanguages={instructionLanguages}
-            isImagesOpen={isImagesOpen}
-            setIsImagesOpen={setIsImagesOpen}
-            updateStoryImageSettings={updateStoryImageSettings}
-            imageActionsAvailable={imageActionsAvailable}
-            recordHistoryEntry={pushExternalHistoryEntry}
-            editorRef={editorRef}
-            isCreateProjectOpen={isCreateProjectOpen}
-            setIsCreateProjectOpen={setIsCreateProjectOpen}
-            handleCreateProjectConfirm={handleCreateProjectConfirm}
+      <SearchHighlightProvider
+        value={{
+          highlightActive: searchState.highlightActive,
+          ranges: searchState.highlightRanges,
+          texts: searchState.highlightTexts,
+        }}
+      >
+        <ThemeProvider currentTheme={currentTheme}>
+          <ConfirmDialog
+            isOpen={confirmDialogState.isOpen}
+            title={confirmDialogState.title}
+            message={confirmDialogState.message}
+            confirmLabel={confirmDialogState.confirmLabel}
+            cancelLabel={confirmDialogState.cancelLabel}
+            variant={confirmDialogState.variant as any}
+            onConfirm={handleConfirm}
+            onCancel={handleCancel}
           />
+          <div
+            id="aq-app-root"
+            className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
+            style={
+              {
+                '--sidebar-width': `${editorSettings.sidebarWidth}px`,
+              } as React.CSSProperties
+            }
+          >
+            <AppDialogs
+              isSettingsOpen={isSettingsOpen}
+              setIsSettingsOpen={setIsSettingsOpen}
+              appSettings={appSettings}
+              setAppSettings={handleSaveSettings}
+              projects={projects}
+              story={story}
+              handleLoadProject={handleLoadProject}
+              handleCreateProject={handleCreateProject}
+              handleImportProject={handleImportProject}
+              handleDeleteProject={handleDeleteProject}
+              handleRenameProject={handleRenameProject}
+              handleConvertProject={handleConvertProject}
+              refreshProjects={refreshProjects}
+              currentTheme={currentTheme}
+              prompts={prompts}
+              instructionLanguages={instructionLanguages}
+              isImagesOpen={isImagesOpen}
+              setIsImagesOpen={setIsImagesOpen}
+              updateStoryImageSettings={updateStoryImageSettings}
+              imageActionsAvailable={imageActionsAvailable}
+              recordHistoryEntry={pushExternalHistoryEntry}
+              editorRef={editorRef}
+              isCreateProjectOpen={isCreateProjectOpen}
+              setIsCreateProjectOpen={setIsCreateProjectOpen}
+              handleCreateProjectConfirm={handleCreateProjectConfirm}
+            />
 
-          <AppHeader
-            storyTitle={story.title}
-            sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
-            settingsControls={{
-              setIsSettingsOpen,
-              setIsImagesOpen,
-              setIsDebugLogsOpen,
-            }}
-            historyControls={{
-              undo,
-              redo,
-              undoSteps,
-              redoSteps,
-              undoOptions,
-              redoOptions,
-              nextUndoLabel,
-              nextRedoLabel,
-              canUndo,
-              canRedo,
-            }}
-            viewControls={{
-              viewMode,
-              setViewMode,
-              showWhitespace,
-              setShowWhitespace,
-              isViewMenuOpen,
-              setIsViewMenuOpen,
-            }}
-            formatControls={{
-              handleFormat,
-              getFormatButtonClass,
-              isFormatMenuOpen,
-              setIsFormatMenuOpen,
-              isMobileFormatMenuOpen,
-              setIsMobileFormatMenuOpen,
-              onOpenImages: () => setIsImagesOpen(true),
-            }}
-            aiControls={{
-              handleAiAction,
-              isAiActionLoading,
-              isWritingAvailable: roleAvailability.writing,
-              isChapterEmpty:
-                !currentChapter ||
-                !currentChapter.content ||
-                currentChapter.content.trim().length === 0,
-            }}
-            modelControls={{
-              appSettings,
-              setAppSettings,
-              saveSettings: handleSaveSettings,
-              modelConnectionStatus,
-              detectedCapabilities,
-              recheckUnavailableProviderIfStale,
-            }}
-            appearanceControls={{
-              appearanceRef,
-              isAppearanceOpen,
-              setIsAppearanceOpen,
-              setAppTheme,
-              editorSettings,
-              setEditorSettings,
-            }}
-            chatPanelControls={{ isChatOpen, setIsChatOpen }}
-          />
-
-          <AppMainLayout
-            sidebarControls={{
-              isSidebarOpen,
-              setIsSidebarOpen,
-              story,
-              currentChapterId,
-              handleChapterSelect,
-              deleteChapter,
-              updateChapter,
-              updateBook,
-              addChapter,
-              handleBookCreate,
-              handleBookDelete,
-              handleReorderChapters,
-              handleReorderBooks,
-              handleSidebarAiAction,
-              isEditingAvailable: roleAvailability.editing,
-              handleOpenImages,
-              updateStoryMetadata,
-              checkedSourcebookIds: Array.from(checkedEntries),
-              onToggleSourcebook: handleToggleEntry,
-              isAutoSourcebookSelectionEnabled,
-              onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
-              isSourcebookSelectionRunning,
-              onSourcebookMutated: async (params) => {
-                const entryExistsInBaseline = Boolean(
-                  params.entryExistsInBaseline ??
-                  sidebarControls.baselineState?.sourcebook?.some(
-                    (entry) => entry.id === params.entryId
-                  )
-                );
-
-                if (!entryExistsInBaseline) {
-                  // For AI-created entries that are being edited by the user,
-                  // keep the pre-save baseline so the transition from created
-                  // (green) to modified (amber) is preserved.
-                  advanceBaselineToCurrentStory();
-                }
-
-                // Refresh story so story.sourcebook reflects the mutation
-                // before we snapshot the state into the undo/redo history.
-                await refreshStory();
-
-                if (entryExistsInBaseline) {
-                  // Manual edits to an already-baselined entry should not be
-                  // shown as an automatic diff; set the baseline to the new
-                  // post-save story state instead.
-                  advanceBaselineToCurrentStory();
-                }
-
-                pushExternalHistoryEntry(params);
-              },
-              onAppUndo: undo,
-              onAppRedo: redo,
-              canAppUndo: canUndo,
-              canAppRedo: canRedo,
-              selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
-              sourcebookDialogTrigger,
-              metadataDialogTrigger,
-              baselineState,
-            }}
-            editorControls={{
-              currentChapter,
-              editorRef,
-              editorSettings,
-              storyLanguage: story.language || 'en',
-              setEditorSettings,
-              viewMode,
-              updateChapter: (id, partial) =>
-                updateChapter(id, partial, true, true, true),
-              suggestionControls: {
-                continuations,
-                isSuggesting,
-                handleTriggerSuggestions,
-                handleCancelSuggestions: cancelSuggestions,
-                handleAcceptContinuation,
-                isSuggestionMode,
-                handleKeyboardSuggestionAction,
-              },
-              aiControls: {
+            <AppHeader
+              storyTitle={story.title}
+              sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
+              settingsControls={{
+                setIsSettingsOpen,
+                setIsImagesOpen,
+                setIsDebugLogsOpen,
+              }}
+              historyControls={{
+                undo,
+                redo,
+                undoSteps,
+                redoSteps,
+                undoOptions,
+                redoOptions,
+                nextUndoLabel,
+                nextRedoLabel,
+                canUndo,
+                canRedo,
+              }}
+              viewControls={{
+                viewMode,
+                setViewMode,
+                showWhitespace,
+                setShowWhitespace,
+                isViewMenuOpen,
+                setIsViewMenuOpen,
+              }}
+              formatControls={{
+                handleFormat,
+                getFormatButtonClass,
+                isFormatMenuOpen,
+                setIsFormatMenuOpen,
+                isMobileFormatMenuOpen,
+                setIsMobileFormatMenuOpen,
+                onOpenImages: () => setIsImagesOpen(true),
+              }}
+              aiControls={{
                 handleAiAction,
-                cancelAiAction,
                 isAiActionLoading,
                 isWritingAvailable: roleAvailability.writing,
-                isProseStreaming: isChatLoading || isAiActionLoading,
                 isChapterEmpty:
                   !currentChapter ||
                   !currentChapter.content ||
                   currentChapter.content.trim().length === 0,
-              },
-              setActiveFormats,
-              showWhitespace,
-              setShowWhitespace,
-              baselineContent:
-                currentChapter?.scope === 'story'
-                  ? baselineState.draft?.content
-                  : baselineState.chapters.find((c) => c.id === currentChapter?.id)
-                      ?.content,
-            }}
-            chatControls={{
-              isChatOpen,
-              chatMessages,
-              isChatLoading,
-              isChatAvailable: roleAvailability.chat,
-              activeChatConfig,
-              systemPrompt,
-              handleSendMessage: handleSendMessageWithReset,
-              handleStopChat,
-              handleRegenerate: handleRegenerateWithReset,
-              handleEditMessage,
-              handleDeleteMessage,
-              setSystemPrompt,
-              handleLoadProject,
-              incognitoSessions,
-              chatHistoryList,
-              currentChatId,
-              isIncognito,
-              handleSelectChat,
-              handleNewChat,
-              handleDeleteChat,
-              handleDeleteAllChats,
-              setIsIncognito,
-              allowWebSearch,
-              setAllowWebSearch,
-              scratchpad,
-              onUpdateScratchpad,
-              onDeleteScratchpad,
-              sessionMutations,
-              onMutationClick,
-            }}
-            instructionLanguages={instructionLanguages}
-          />
+              }}
+              modelControls={{
+                appSettings,
+                setAppSettings,
+                saveSettings: handleSaveSettings,
+                modelConnectionStatus,
+                detectedCapabilities,
+                recheckUnavailableProviderIfStale,
+              }}
+              appearanceControls={{
+                appearanceRef,
+                isAppearanceOpen,
+                setIsAppearanceOpen,
+                setAppTheme,
+                editorSettings,
+                setEditorSettings,
+              }}
+              chatPanelControls={{ isChatOpen, setIsChatOpen }}
+              searchControls={{ onOpenSearch: openSearch }}
+            />
 
-          <DebugLogs
-            isOpen={isDebugLogsOpen}
-            onClose={() => setIsDebugLogsOpen(false)}
-            theme={currentTheme}
-          />
+            <AppMainLayout
+              sidebarControls={{
+                isSidebarOpen,
+                setIsSidebarOpen,
+                story,
+                currentChapterId,
+                handleChapterSelect,
+                deleteChapter,
+                updateChapter,
+                updateBook,
+                addChapter,
+                handleBookCreate,
+                handleBookDelete,
+                handleReorderChapters,
+                handleReorderBooks,
+                handleSidebarAiAction,
+                isEditingAvailable: roleAvailability.editing,
+                handleOpenImages,
+                updateStoryMetadata,
+                checkedSourcebookIds: Array.from(checkedEntries),
+                onToggleSourcebook: handleToggleEntry,
+                isAutoSourcebookSelectionEnabled,
+                onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+                isSourcebookSelectionRunning,
+                onSourcebookMutated: async (params) => {
+                  const entryExistsInBaseline = Boolean(
+                    params.entryExistsInBaseline ??
+                    baselineState.sourcebook?.some(
+                      (entry) => entry.id === params.entryId
+                    )
+                  );
 
-          <ToolCallLimitDialog
-            isOpen={!!toolCallLoopDialog}
-            count={toolCallLoopDialog?.count ?? 0}
-            theme={currentTheme}
-            onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-          />
-        </div>
-      </ThemeProvider>
+                  if (!entryExistsInBaseline) {
+                    // For AI-created entries that are being edited by the user,
+                    // keep the pre-save baseline so the transition from created
+                    // (green) to modified (amber) is preserved.
+                    advanceBaselineToCurrentStory();
+                  }
+
+                  // Refresh story so story.sourcebook reflects the mutation
+                  // before we snapshot the state into the undo/redo history.
+                  await refreshStory();
+
+                  if (entryExistsInBaseline) {
+                    // Manual edits to an already-baselined entry should not be
+                    // shown as an automatic diff; set the baseline to the new
+                    // post-save story state instead.
+                    advanceBaselineToCurrentStory();
+                  }
+
+                  pushExternalHistoryEntry(params);
+                },
+                onAppUndo: undo,
+                onAppRedo: redo,
+                canAppUndo: canUndo,
+                canAppRedo: canRedo,
+                selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
+                sourcebookDialogTrigger,
+                sourcebookDialogCloseTrigger,
+                metadataDialogTrigger,
+                metadataDialogCloseTrigger,
+                baselineState,
+              }}
+              editorControls={{
+                currentChapter,
+                editorRef,
+                editorSettings,
+                storyLanguage: story.language || 'en',
+                setEditorSettings,
+                viewMode,
+                updateChapter: (id, partial) => {
+                  if ('content' in partial) {
+                    searchState.notifyContentChanged(parseInt(id, 10));
+                  }
+                  return updateChapter(id, partial, true, true, true);
+                },
+                suggestionControls: {
+                  continuations,
+                  isSuggesting,
+                  handleTriggerSuggestions,
+                  handleCancelSuggestions: cancelSuggestions,
+                  handleAcceptContinuation,
+                  isSuggestionMode,
+                  handleKeyboardSuggestionAction,
+                },
+                aiControls: {
+                  handleAiAction,
+                  cancelAiAction,
+                  isAiActionLoading,
+                  isWritingAvailable: roleAvailability.writing,
+                  isProseStreaming: isChatLoading || isAiActionLoading,
+                  isChapterEmpty:
+                    !currentChapter ||
+                    !currentChapter.content ||
+                    currentChapter.content.trim().length === 0,
+                },
+                setActiveFormats,
+                showWhitespace,
+                setShowWhitespace,
+                baselineContent:
+                  currentChapter?.scope === 'story'
+                    ? baselineState.draft?.content
+                    : baselineState.chapters.find((c) => c.id === currentChapter?.id)
+                        ?.content,
+                onOpenSearch: openSearch,
+              }}
+              chatControls={{
+                isChatOpen,
+                chatMessages,
+                isChatLoading,
+                isChatAvailable: roleAvailability.chat,
+                activeChatConfig,
+                systemPrompt,
+                handleSendMessage: handleSendMessageWithReset,
+                handleStopChat,
+                handleRegenerate: handleRegenerateWithReset,
+                handleEditMessage,
+                handleDeleteMessage,
+                setSystemPrompt,
+                handleLoadProject,
+                incognitoSessions,
+                chatHistoryList,
+                currentChatId,
+                isIncognito,
+                handleSelectChat,
+                handleNewChat,
+                handleDeleteChat,
+                handleDeleteAllChats,
+                setIsIncognito,
+                allowWebSearch,
+                setAllowWebSearch,
+                scratchpad,
+                onUpdateScratchpad,
+                onDeleteScratchpad,
+                sessionMutations,
+                onMutationClick,
+              }}
+              instructionLanguages={instructionLanguages}
+            />
+
+            <DebugLogs
+              isOpen={isDebugLogsOpen}
+              onClose={() => setIsDebugLogsOpen(false)}
+              theme={currentTheme}
+            />
+
+            <ToolCallLimitDialog
+              isOpen={!!toolCallLoopDialog}
+              count={toolCallLoopDialog?.count ?? 0}
+              theme={currentTheme}
+              onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
+            />
+
+            <SearchReplaceDialog
+              searchState={searchState}
+              activeChapterId={
+                currentChapterId !== null ? parseInt(currentChapterId, 10) : null
+              }
+              storyLanguage={story.language || 'en'}
+              onJumpToPosition={(start, end) => {
+                if (viewMode === 'wysiwyg') {
+                  setViewMode('markdown');
+                  setTimeout(() => editorRef.current?.jumpToPosition(start, end), 80);
+                } else {
+                  editorRef.current?.jumpToPosition(start, end);
+                }
+              }}
+              onStoryChanged={() => void refreshStory()}
+              onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
+                setMetadataDialogCloseTrigger((c) => c + 1);
+                setSourcebookDialogCloseTrigger((c) => c + 1);
+                if (jumpStart !== undefined && jumpEnd !== undefined) {
+                  pendingJumpRef.current = {
+                    chapterId: String(chapId),
+                    start: jumpStart,
+                    end: jumpEnd,
+                  };
+                }
+                handleChapterSelect(String(chapId));
+              }}
+              onNavigateToSourcebookEntry={(entryId) => {
+                setMetadataDialogCloseTrigger((c) => c + 1);
+                setIsSidebarOpen(true);
+                setSourcebookDialogTrigger((prev) => ({
+                  id: (prev?.id ?? 0) + 1,
+                  entryId,
+                }));
+                setEditorSettings((prev) => ({
+                  ...prev,
+                  sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+                }));
+              }}
+              onNavigateToStoryMetadata={(field) => {
+                const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+                  field === 'story_summary'
+                    ? 'summary'
+                    : field === 'notes'
+                      ? 'notes'
+                      : field === 'private_notes'
+                        ? 'private'
+                        : field.startsWith('conflicts')
+                          ? 'conflicts'
+                          : 'summary';
+                setSourcebookDialogCloseTrigger((c) => c + 1);
+                setIsSidebarOpen(true);
+                setMetadataDialogTrigger((prev) => ({
+                  id: (prev?.id ?? 0) + 1,
+                  initialTab: tab,
+                }));
+                setEditorSettings((prev) => ({
+                  ...prev,
+                  sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+                }));
+              }}
+            />
+          </div>
+        </ThemeProvider>
+      </SearchHighlightProvider>
     </ConfirmDialogProvider>
   );
 };

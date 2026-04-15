@@ -36,6 +36,7 @@ import {
 import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -93,6 +94,16 @@ export function MetadataEditorDialog({
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
+  const { getRanges } = useSearchHighlight();
+  const summaryHighlightRanges = getRanges('story_metadata', 'story', 'story_summary');
+  const notesHighlightRanges = getRanges('story_metadata', 'story', 'notes');
+  const privateNotesHighlightRanges = getRanges(
+    'story_metadata',
+    'story',
+    'private_notes'
+  );
+  const getConflictRanges = (index: number, field: 'description' | 'resolution') =>
+    getRanges('story_metadata', 'story', `conflicts[${index}].${field}`);
 
   const normalizeConflict = (value: any): Conflict => {
     return {
@@ -1051,6 +1062,7 @@ export function MetadataEditorDialog({
                     spellCheck={spellCheck}
                     baselineValue={baselineData.summary}
                     showDiff={showDiff}
+                    searchHighlightRanges={summaryHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write a public summary..."
@@ -1075,6 +1087,7 @@ export function MetadataEditorDialog({
                     spellCheck={spellCheck}
                     baselineValue={baselineData.notes}
                     showDiff={showDiff}
+                    searchHighlightRanges={notesHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write notes (readable by LLM)..."
@@ -1101,6 +1114,7 @@ export function MetadataEditorDialog({
                     spellCheck={spellCheck}
                     baselineValue={baselineData.private_notes}
                     showDiff={showDiff}
+                    searchHighlightRanges={privateNotesHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
                     placeholder="Write private notes (hidden from LLM)..."
@@ -1194,6 +1208,10 @@ export function MetadataEditorDialog({
                                   isNewConflict ? '' : baselineConflict?.description
                                 }
                                 showDiff={showDiff}
+                                searchHighlightRanges={getConflictRanges(
+                                  idx,
+                                  'description'
+                                )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="Describe the conflict..."
@@ -1221,6 +1239,10 @@ export function MetadataEditorDialog({
                                   isNewConflict ? '' : baselineConflict?.resolution
                                 }
                                 showDiff={showDiff}
+                                searchHighlightRanges={getConflictRanges(
+                                  idx,
+                                  'resolution'
+                                )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
                                 placeholder="How will this conflict be resolved?"

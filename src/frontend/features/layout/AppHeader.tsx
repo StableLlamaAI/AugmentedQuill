@@ -17,6 +17,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Redo,
+  Search,
   Settings as SettingsIcon,
   Undo,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import {
   HeaderFormatControls,
   HeaderHistoryControls,
   HeaderModelControls,
+  HeaderSearchControls,
   HeaderSettingsControls,
   HeaderSidebarControls,
   HeaderViewControls,
@@ -49,6 +51,7 @@ type AppHeaderProps = {
   modelControls: HeaderModelControls;
   appearanceControls: HeaderAppearanceControlsState;
   chatPanelControls: HeaderChatPanelControls;
+  searchControls: HeaderSearchControls;
 };
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -62,6 +65,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   modelControls,
   appearanceControls,
   chatPanelControls,
+  searchControls,
 }) => {
   const {
     headerBg,
@@ -98,6 +102,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     setEditorSettings,
   } = appearanceControls;
   const { isChatOpen, setIsChatOpen } = chatPanelControls;
+  const { onOpenSearch } = searchControls;
   const [isUndoMenuOpen, setIsUndoMenuOpen] = useState(false);
   const [isRedoMenuOpen, setIsRedoMenuOpen] = useState(false);
   const undoMenuRef = useRef<HTMLDivElement | null>(null);
@@ -279,6 +284,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             )}
           </div>
           <CheckpointsMenu hasUnsavedChanges={canUndo} confirm={confirm} />
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={onOpenSearch}
+            title="Search and Replace (Ctrl+F)"
+            aria-label="Search and Replace"
+            className="ml-1"
+          >
+            <Search size={18} />
+          </Button>
         </div>
       </div>
 

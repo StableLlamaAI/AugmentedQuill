@@ -5,6 +5,8 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+"""Defines the test story generation ops unit so this responsibility stays isolated, testable, and easy to evolve."""
+
 import pytest
 from unittest.mock import patch
 
