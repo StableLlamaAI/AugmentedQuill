@@ -270,6 +270,47 @@ class TestRunSearch(TestCase):
             "chapter_metadata" in section_types or "story_metadata" in section_types
         )
 
+    def test_metadata_scope_finds_chapter_title(self):
+        active = self._make_and_select_project()
+        opts = SearchOptions(
+            query="Forest",
+            scope=SearchScope.metadata,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+        )
+        result = run_search(opts, active)
+        self.assertTrue(
+            any(
+                s.section_type == "chapter_metadata" and s.field == "title"
+                for s in result.results
+            )
+        )
+
+    def test_metadata_scope_finds_story_title(self):
+        active = self._make_and_select_project()
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_title"] = "Grand Adventure"
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        opts = SearchOptions(
+            query="Grand Adventure",
+            scope=SearchScope.metadata,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+        )
+        result = run_search(opts, active)
+        self.assertTrue(
+            any(
+                s.section_type == "story_metadata" and s.field == "project_title"
+                for s in result.results
+            )
+        )
+
     def test_sourcebook_relation_search_uses_readable_label(self):
         active = self._make_and_select_project()
         story_path = active / "story.json"

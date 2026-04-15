@@ -229,6 +229,57 @@ class TestReplaceAll(TestCase):
         story_data = json.loads((active / "story.json").read_text(encoding="utf-8"))
         self.assertEqual(story_data["summary"], "A story about Elena.")
 
+    def test_replace_all_in_chapter_title(self):
+        active = self._make_and_select_project("replace_test_title")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["chapters"] = [
+            {
+                "id": 1,
+                "title": "Chapter One",
+                "summary": "Elena is introduced.",
+                "notes": "",
+                "private_notes": "",
+                "conflicts": [],
+            }
+        ]
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="Chapter One",
+            scope=SearchScope.all,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="Chapter I",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 1)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(story_data["chapters"][0]["title"], "Chapter I")
+
+    def test_replace_all_in_story_title(self):
+        active = self._make_and_select_project("replace_test_story_title")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_title"] = "My Story"
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="My Story",
+            scope=SearchScope.metadata,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="Her Tale",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 1)
+        story_data = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(story_data["project_title"], "Her Tale")
+
     def test_replace_all_in_sourcebook_description(self):
         active = self._make_and_select_project("replace_test_sourcebook")
         story_path = active / "story.json"

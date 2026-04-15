@@ -203,7 +203,7 @@ def _replace_in_chapter_metadata(
             continue
 
         title_label = entry.get("title") or f"Chapter {chap_id}"
-        simple_fields = ["summary", "notes", "private_notes"]
+        simple_fields = ["title", "summary", "notes", "private_notes"]
 
         for field_key in simple_fields:
             if target_field is not None and field_key != target_field:
@@ -288,7 +288,7 @@ def _replace_in_story_metadata(
     total = 0
     changed = []
 
-    story_fields = ["story_summary", "notes", "private_notes"]
+    story_fields = ["project_title", "story_summary", "notes", "private_notes"]
     for field_key in story_fields:
         if target_field is not None and field_key != target_field:
             continue
@@ -352,7 +352,7 @@ def _replace_in_story_metadata(
         if target_section_id is not None and sec_id != target_section_id:
             continue
         book_title = book.get("title") or book_id
-        for field_key in ["summary", "notes"]:
+        for field_key in ["title", "summary", "notes"]:
             if target_field is not None and field_key != target_field:
                 continue
             value = book.get(field_key) or ""

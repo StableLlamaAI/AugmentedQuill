@@ -209,6 +209,7 @@ def _search_chapter_metadata(
         title_label = entry.get("title") or f"Chapter {chap_id}"
 
         fields = [
+            ("title", "Title"),
             ("summary", "Summary"),
             ("notes", "Notes"),
             ("private_notes", "Private Notes"),
@@ -274,6 +275,7 @@ def _search_story_metadata(
     project_title = story.get("project_title") or "Story"
 
     fields = [
+        ("project_title", "Story Title"),
         ("story_summary", "Story Summary"),
         ("notes", "Story Notes"),
         ("private_notes", "Story Private Notes"),
@@ -320,7 +322,11 @@ def _search_story_metadata(
     for book in story.get("books", []):
         book_id = book.get("id") or ""
         book_title = book.get("title") or book_id
-        for field_key, field_label in [("summary", "Summary"), ("notes", "Notes")]:
+        for field_key, field_label in [
+            ("title", "Title"),
+            ("summary", "Summary"),
+            ("notes", "Notes"),
+        ]:
             value = book.get(field_key) or ""
             if not value:
                 continue
