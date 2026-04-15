@@ -31,5 +31,13 @@ export function notifyError(message: string, error?: unknown): void {
   } else {
     console.error(message);
   }
-  _dispatch?.(message);
+
+  if (_dispatch) {
+    _dispatch(message);
+    return;
+  }
+
+  if (typeof globalThis.alert === 'function') {
+    globalThis.alert(message);
+  }
 }
