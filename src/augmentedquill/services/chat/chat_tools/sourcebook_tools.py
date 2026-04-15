@@ -25,7 +25,6 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_list_entries,
     sourcebook_refresh_entry_keywords,
     sourcebook_remove_relation,
-    sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
     _get_story_data,
 )
@@ -95,20 +94,6 @@ def _strip_internal_sourcebook_fields_list(entries: list[dict]) -> list[dict]:
 
 
 # Pydantic models for tool parameters
-
-
-class SearchSourcebookParams(BaseModel):
-    """Parameters for searching the sourcebook."""
-
-    query: str = Field(..., description="The search query string")
-    match_mode: str = Field(
-        default="direct",
-        description="Search mode: 'direct' returns only exact name/synonym match. 'extensive' matches name, synonym, and generated keywords.",
-    )
-    split_query_fallback: bool = Field(
-        default=True,
-        description="If true and no extensive match is found, split query into tokens and match each token individually.",
-    )
 
 
 class SourcebookRelation(BaseModel):
@@ -198,38 +183,6 @@ class DeleteSourcebookEntryParams(BaseModel):
 
 
 # Tool implementations with co-located schemas
-
-
-@chat_tool(
-    description=(
-        "Search the sourcebook for entries matching a query string. "
-        "Each returned entry includes its relations, where each relation is a 3-element list: "
-        "[source_id, relation_type, target_id]."
-    ),
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="sourcebook-read",
-)
-async def search_sourcebook(
-    params: SearchSourcebookParams, payload: dict, mutations: dict
-):
-    """Search the sourcebook for entries matching a query string."""
-    mode = (params.match_mode or "direct").strip().lower()
-    if mode not in ("direct", "extensive"):
-        return {
-            "error": "Invalid match_mode. Allowed values are 'direct' or 'extensive'."
-        }
-
-    entries = await sourcebook_search_entries_with_keyword_refresh(
-        params.query,
-        match_mode=mode,
-        split_query_fallback=params.split_query_fallback,
-        payload=payload,
-    )
-    if mode == "direct":
-        if not entries:
-            return []
-        return {"entry": _strip_internal_sourcebook_fields(entries[0])}
-    return _strip_internal_sourcebook_fields_list(entries)
 
 
 @chat_tool(

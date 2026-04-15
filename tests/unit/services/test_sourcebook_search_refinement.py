@@ -61,12 +61,7 @@ class SourcebookSearchRefinementTest(TestCase):
         os.environ.pop("AUGQ_PROJECTS_ROOT", None)
         os.environ.pop("AUGQ_PROJECTS_REGISTRY", None)
 
-    def _call_search_sourcebook(
-        self,
-        query: str,
-        match_mode: str = "direct",
-        split_query_fallback: bool = True,
-    ):
+    def _call_search_in_project(self, query: str, scope: str = "sourcebook"):
         body = {
             "model_type": "CHAT",
             "messages": [
@@ -78,12 +73,11 @@ class SourcebookSearchRefinementTest(TestCase):
                             "id": "c1",
                             "type": "function",
                             "function": {
-                                "name": "search_sourcebook",
+                                "name": "search_in_project",
                                 "arguments": json.dumps(
                                     {
                                         "query": query,
-                                        "match_mode": match_mode,
-                                        "split_query_fallback": split_query_fallback,
+                                        "scope": scope,
                                     }
                                 ),
                             },
@@ -99,61 +93,29 @@ class SourcebookSearchRefinementTest(TestCase):
         return json.loads(appended[0]["content"])
 
     def test_search_sourcebook_direct_match_name(self):
-        """Test that direct mode returns only exact name/synonym matches."""
-        content = self._call_search_sourcebook("Alaric")
+        """Search the sourcebook by name through the general project search tool."""
+        content = self._call_search_in_project("Alaric")
 
-        self.assertIn("entry", content)
-        self.assertEqual(content["entry"]["name"], "Alaric")
-        self.assertNotIn("keywords", content["entry"])
-        self.assertEqual(set(content.keys()), {"entry"})
+        self.assertIn("total_matches", content)
+        self.assertGreater(content["total_matches"], 0)
+        self.assertTrue(
+            any(result["section"] == "Alaric" for result in content["results"])
+        )
 
     def test_search_sourcebook_direct_match_synonym(self):
-        """Test that a direct synonym match also uses the same refinement."""
-        content = self._call_search_sourcebook("Knight of the Rose")
+        """Search the sourcebook by synonym through the general project search tool."""
+        content = self._call_search_in_project("Knight of the Rose")
 
-        self.assertIn("entry", content)
-        self.assertEqual(content["entry"]["name"], "Alaric")
-        # Should NOT be in list format if it matched a synonym directly
-        self.assertIsInstance(content, dict)
+        self.assertGreater(content["total_matches"], 0)
+        self.assertTrue(
+            any(result["section"] == "Alaric" for result in content["results"])
+        )
 
     def test_search_sourcebook_partial_matches_only(self):
-        """Test extensive mode partial matches without split fallback."""
-        # "Rose" matches:
-        # 1. Alaric (synonym: Knight of the Rose)
-        # 2. Rose Castle (name: Rose Castle)
-        # Both are partial matches for the query "Rose"
-        content = self._call_search_sourcebook(
-            "Rose", match_mode="extensive", split_query_fallback=False
-        )
+        """Search the sourcebook with a partial sourcebook term."""
+        content = self._call_search_in_project("Rose")
 
-        # Should return a list of matches
-        self.assertIsInstance(content, list)
-        self.assertEqual(len(content), 2)
-        names = [e["name"] for e in content]
-        self.assertIn("Alaric", names)
-        self.assertIn("Rose Castle", names)
-
-    def test_search_sourcebook_fuzzy_fallback(self):
-        """Test extensive mode split fallback when full query has no direct extensive hit."""
-        # Create an entry for Tom
-        sourcebook_create_entry("Tom", "A person who loves routine.", "Character")
-        sourcebook_create_entry(
-            "Daily Schedule",
-            "A list of daily activities.",
-            "Lore",
-            synonyms=["Daily Routine"],
-        )
-
-        # Search for "Tom schedule daily routine" - this exact string is NOT in name/synonyms/keywords of any single entry.
-        # But "Tom", "schedule", "daily", "routine" are present in different entries.
-        content = self._call_search_sourcebook(
-            "Tom schedule daily routine",
-            match_mode="extensive",
-            split_query_fallback=True,
-        )
-
-        self.assertIsInstance(content, list)
-        names = [e["name"] for e in content]
-        self.assertIn("Tom", names)
-        self.assertIn("Daily Schedule", names)
-        self.assertTrue(all("keywords" not in entry for entry in content))
+        self.assertGreaterEqual(content["total_matches"], 1)
+        section_titles = {result["section"] for result in content["results"]}
+        self.assertIn("Alaric", section_titles)
+        self.assertIn("Rose Castle", section_titles)

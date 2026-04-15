@@ -147,7 +147,7 @@
       "- get_chapter_content: Inspect existing prose in projects that support chapters when deciding what to do next.",
       "- replace_text_in_chapter / insert_text_at_marker / apply_chapter_replacements: Make targeted edits inside chapters without rewriting the whole chapter. These tools apply only to projects that support chapters. For insert_text_at_marker, use the fixed marker `~~~` in the chapter text.",
 
-      "- search_sourcebook / list_sourcebook_entries / get_sourcebook_entry / create_sourcebook_entry / update_sourcebook_entry / delete_sourcebook_entry / add_sourcebook_relation / remove_sourcebook_relation: Maintain world knowledge.",
+      "- search_in_project (scope='sourcebook') / list_sourcebook_entries / get_sourcebook_entry / create_sourcebook_entry / update_sourcebook_entry / delete_sourcebook_entry / add_sourcebook_relation / remove_sourcebook_relation: Maintain world knowledge.",
       "- sync_summary: Auto-generate a summary from the current project prose context.",
       "- create_new_chapter / write_chapter_heading: Maintain chapter structure in projects that support chapters. Chapter and book reordering is done via the GUI or REST API, not via LLM tools.",
       "- list_images / generate_image_description / create_image_placeholder / set_image_metadata: Manage project visuals.",
@@ -190,7 +190,7 @@
       "You do not write completely new story parts yourself. When new prose, new scenes, or added narrative content are required, YOU MUST ALWAYS use call_writing_llm.",
       "When instructed to apply edits, fixes, or adjustments to the text, ALWAYS PREFER targeted replacement tools when they are available. In chapter-based projects, prefer 'replace_text_in_chapter' or 'apply_chapter_replacements' to modify parts of a chapter without rewriting the whole thing. Use 'insert_text_at_marker' when you want to target a specific cursor marker (e.g. `~~~`) inside a chapter. Only use whole-document write tools when replacing the ENTIRE current prose unit.",
       "CORE TOOLS:",
-      "- get_project_overview, get_story_metadata, get_book_metadata, get_chapter_metadata, get_chapter_summaries, get_chapter_content, read_story_content, search_sourcebook, list_sourcebook_entries, get_sourcebook_entry: Read the context you need before editing. (Note: get_story_summary, get_story_tags, get_chapter_summary, and get_chapter_heading are NOT separate tools — use get_story_metadata and get_chapter_metadata instead.)",
+      "- get_project_overview, get_story_metadata, get_book_metadata, get_chapter_metadata, get_chapter_summaries, get_chapter_content, read_story_content, search_in_project (scope='sourcebook'), list_sourcebook_entries, get_sourcebook_entry: Read the context you need before editing. (Note: get_story_summary, get_story_tags, get_chapter_summary, and get_chapter_heading are NOT separate tools — use get_story_metadata and get_chapter_metadata instead.)",
       "- replace_text_in_chapter: Modify small sections of a chapter safely in chapter-based projects. PREFER this over write_chapter_content to prevent output truncation on large texts.",
       "- apply_chapter_replacements: Apply multiple safe search/replace edits in a single operation for chapter-based projects.",
       "- insert_text_at_marker: Insert or replace text at a marker (`~~~`) so you can position a cursor within a chapter and have new prose inserted there.",

@@ -62,7 +62,6 @@ class ChatToolContractsTest(TestCase):
         "read_editing_scratchpad",
         "read_story_content",
         "recommend_metadata_updates",
-        "search_sourcebook",
         "search_in_project",
     }
 
