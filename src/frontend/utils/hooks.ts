@@ -9,7 +9,8 @@
  * Custom hooks for AugmentedQuill frontend.
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 
 /**
  * A debounce hook that returns a debounced version of the provided function.
@@ -36,4 +37,33 @@ export function useDebounce<T extends (...args: any[]) => any>(
     },
     [callback, delay]
   );
+}
+
+/**
+ * Fires `callback` whenever a mousedown event occurs outside the given element.
+ *
+ * @param ref    Ref to the element that should be considered "inside"
+ * @param callback  Function to call when an outside click is detected
+ * @param enabled   Pass `false` to disable the listener (e.g. when the panel is closed)
+ */
+export function useClickOutside<T extends HTMLElement>(
+  ref: RefObject<T | null>,
+  callback: () => void,
+  enabled = true
+): void {
+  const callbackRef = useRef(callback);
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        callbackRef.current();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ref, enabled]);
 }

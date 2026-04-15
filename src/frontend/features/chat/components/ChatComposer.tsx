@@ -10,6 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Send, Paperclip, FileText } from 'lucide-react';
 import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
@@ -43,12 +44,13 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const [input, setInput] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
   const { isLight } = useTheme();
+  const { t } = useTranslation();
 
   const isDisabled = isLoading || !isModelAvailable;
   const disabledTitle = !isModelAvailable
     ? disabledReason ||
-      'Chat is unavailable because no working CHAT model is configured.'
-    : 'Send Message (CHAT model)';
+      t('Chat is unavailable because no working CHAT model is configured.')
+    : t('Send Message (CHAT model)');
 
   const formatFileSize = (size: number) => {
     if (size < 1024) return `${size} B`;
@@ -222,7 +224,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               key={attachment.id}
               type="button"
               onClick={() => handleRemoveAttachment(attachment.id)}
-              title={`Click to remove ${attachment.name}`}
+              title={t('Click to remove {{name}}', { name: attachment.name })}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition ${
                 isLight
                   ? 'border-brand-gray-200 bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200'
@@ -240,8 +242,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            title="Attach files"
-            aria-label="Attach files"
+            title={t('Attach files')}
+            aria-label={t('Attach files')}
             className={`ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition ${
               isLight
                 ? 'border-brand-gray-300 bg-white text-brand-gray-700 hover:bg-brand-gray-50'
@@ -276,18 +278,20 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        placeholder="Ask CHAT to plan, update metadata, or delegate writing/editing..."
+        placeholder={t(
+          'Ask CHAT to plan, update metadata, or delegate writing/editing...'
+        )}
         className={`w-full pl-4 pr-12 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm placeholder-brand-gray-400 border resize-none overflow-y-auto disabled:cursor-not-allowed ${inputBg}`}
         disabled={isDisabled}
         title={disabledTitle}
-        aria-label="Chat message"
+        aria-label={t('Chat message')}
       />
       <button
         type="submit"
         disabled={!(input.trim() || attachments.length > 0) || isDisabled}
         className="absolute right-2 bottom-2 p-2 text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-gray-200 dark:hover:bg-brand-gray-700 rounded-full transition-colors"
         title={disabledTitle}
-        aria-label="Send Message"
+        aria-label={t('Send Message')}
       >
         <Send size={18} aria-hidden="true" />
       </button>

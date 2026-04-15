@@ -10,6 +10,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Clipboard,
   Ghost,
@@ -64,6 +65,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const reason =
     disabledReason ||
     'Chat is unavailable because no working CHAT model is configured.';
+  const { t } = useTranslation();
   const usagePercent = Math.round(Math.min(contextUsage.usageRatio, 1) * 100);
   const usageTone =
     usagePercent >= 90
@@ -92,10 +94,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           {contextUsage.enabled && (
             <div
               className={`ml-1 inline-flex shrink-0 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] ${contextPillClasses}`}
-              title={`Context usage: ${usagePercent}%${contextUsage.compactionApplied ? ' (compacted)' : ''}`}
+              title={`${t('Context usage: {{percent}}%', { percent: usagePercent })}${contextUsage.compactionApplied ? ' (compacted)' : ''}`}
             >
               <span className="uppercase tracking-[0.14em] text-[10px] opacity-80">
-                ctx
+                {t('ctx')}
               </span>
               <div
                 className={`h-1.5 w-12 overflow-hidden rounded-full ${contextTrackClasses}`}
@@ -113,18 +115,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       <div className="flex items-center space-x-1 shrink-0">
         <button
           onClick={() => {
-            if (isDisabled) return;
             onNewSession(false);
           }}
           className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
-          title={isDisabled ? reason : 'New Chat'}
+          title={isDisabled ? reason : t('New Chat')}
           disabled={isDisabled}
         >
           <Plus size={16} />
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             if (currentSessionId) {
               onDeleteSession(currentSessionId);
             }
@@ -134,8 +134,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             isDisabled
               ? reason
               : !currentSessionId
-                ? 'No active chat to delete'
-                : 'Delete Current Chat'
+                ? t('No active chat to delete')
+                : t('Delete Current Chat')
           }
           disabled={isDisabled || !currentSessionId}
         >
@@ -143,20 +143,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             onNewSession(true);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
             isIncognito ? 'text-purple-500 bg-purple-500/10' : 'text-brand-gray-500'
           }`}
-          title={isDisabled ? reason : 'Incognito Chat (Not Saved)'}
+          title={isDisabled ? reason : t('Incognito Chat (Not Saved)')}
           disabled={isDisabled}
         >
           <Ghost size={16} />
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             onToggleWebSearch(!allowWebSearch);
           }}
           className={`p-1.5 rounded border transition-all ${
@@ -168,8 +166,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             isDisabled
               ? reason
               : allowWebSearch
-                ? 'Web Search Enabled'
-                : 'Enable Web Search'
+                ? t('Web Search Enabled')
+                : t('Enable Web Search')
           }
           disabled={isDisabled}
         >
@@ -177,18 +175,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             onScratchpadOpen();
           }}
           className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
-          title={isDisabled ? reason : 'Open Scratchpad'}
+          title={isDisabled ? reason : t('Open Scratchpad')}
           disabled={isDisabled}
         >
           <Clipboard size={16} />
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             setShowHistory(!showHistory);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
@@ -196,14 +192,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
               : 'text-brand-gray-500'
           }`}
-          title={isDisabled ? reason : 'Chat History'}
+          title={isDisabled ? reason : t('Chat History')}
           disabled={isDisabled}
         >
           <History size={16} />
         </button>
         <button
           onClick={() => {
-            if (isDisabled) return;
             setShowSystemPrompt(!showSystemPrompt);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
@@ -211,7 +206,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               ? 'bg-brand-gray-200 dark:bg-brand-gray-800 text-brand-600'
               : 'text-brand-gray-500'
           }`}
-          title={isDisabled ? reason : 'Chat Settings'}
+          title={isDisabled ? reason : t('Chat Settings')}
           disabled={isDisabled}
         >
           <Settings2 size={16} />

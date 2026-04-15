@@ -104,7 +104,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
           className={`flex-1 py-1.5 text-xs font-medium ${
             enabled
               ? buttonActive
-              : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
+              : isLight
+                ? 'bg-brand-gray-100 text-brand-gray-500 hover:text-brand-gray-700'
+                : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
           }`}
         >
           Enabled
@@ -115,7 +117,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
           className={`flex-1 py-1.5 text-xs font-medium ${
             !enabled
               ? buttonActive
-              : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
+              : isLight
+                ? 'bg-brand-gray-100 text-brand-gray-500 hover:text-brand-gray-700'
+                : 'bg-brand-gray-800 text-brand-gray-400 hover:text-brand-gray-300'
           }`}
         >
           Disabled
@@ -262,16 +266,18 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
           </div>
         </div>
       )}
-      <Button
-        theme={currentTheme}
-        variant="ghost"
-        size="sm"
-        onClick={() => setIsDebugLogsOpen(true)}
-        title="Debug Logs"
-        className="mr-1"
-      >
-        <Bug size={18} />
-      </Button>
+      {import.meta.env.DEV && (
+        <Button
+          theme={currentTheme}
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsDebugLogsOpen(true)}
+          title="Debug Logs"
+          className="mr-1"
+        >
+          <Bug size={18} />
+        </Button>
+      )}
     </div>
   );
 };

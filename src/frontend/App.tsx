@@ -52,10 +52,182 @@ import {
   resolveRoleAvailability,
   supportsImageActions,
 } from './features/app/appSelectors';
+import { useToast } from './components/ui/Toast';
+import { setErrorDispatcher } from './services/errorNotifier';
+
+// ---------------------------------------------------------------------------
+// Mutation tool dispatch registry
+// Maps tool names to a factory that produces a SessionMutation from { args, result }.
+// Add new mutation-producing tools here instead of growing the if-chain.
+// ---------------------------------------------------------------------------
+type MutCallResult = { args: Record<string, unknown>; result: Record<string, unknown> };
+
+type MutFactory = (res: MutCallResult) => SessionMutation | SessionMutation[] | null;
+
+const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
+  // Sourcebook tools
+  create_sourcebook_entry: ({ args, result }) => {
+    const id = result.id || args.name_or_id || args.name;
+    const label = (result.name ||
+      args.name ||
+      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    return {
+      id: `sb-${Date.now()}-${Math.random()}`,
+      type: 'sourcebook',
+      label,
+      targetId: id as string | undefined,
+    };
+  },
+  update_sourcebook_entry: ({ args, result }) => {
+    const id = result.id || args.name_or_id || args.name;
+    const label = (result.name ||
+      args.name ||
+      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    return {
+      id: `sb-${Date.now()}-${Math.random()}`,
+      type: 'sourcebook',
+      label,
+      targetId: id as string | undefined,
+    };
+  },
+  delete_sourcebook_entry: ({ args, result }) => {
+    const id = result.id || args.name_or_id || args.name;
+    const label = (result.name ||
+      args.name ||
+      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    return {
+      id: `sb-${Date.now()}-${Math.random()}`,
+      type: 'sourcebook',
+      label,
+      targetId: id as string | undefined,
+    };
+  },
+  add_sourcebook_relation: ({ args, result }) => {
+    const id = result.id || args.name_or_id || args.name;
+    const label = (result.name ||
+      args.name ||
+      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    return {
+      id: `sb-${Date.now()}-${Math.random()}`,
+      type: 'sourcebook',
+      label,
+      targetId: id as string | undefined,
+    };
+  },
+  remove_sourcebook_relation: ({ args, result }) => {
+    const id = result.id || args.name_or_id || args.name;
+    const label = (result.name ||
+      args.name ||
+      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    return {
+      id: `sb-${Date.now()}-${Math.random()}`,
+      type: 'sourcebook',
+      label,
+      targetId: id as string | undefined,
+    };
+  },
+  // Metadata tools – produce one tag per changed field
+  update_story_metadata: ({ args }) => {
+    const fields = buildMetadataFields(args, false);
+    return fields;
+  },
+  update_chapter_metadata: ({ args }) => buildMetadataFields(args, false),
+  update_book_metadata: ({ args }) => buildMetadataFields(args, false),
+  set_story_tags: () => buildMetadataFields({}, true),
+  set_story_summary: () => buildMetadataFields({}, true),
+  sync_story_summary: () => buildMetadataFields({}, true),
+  write_story_summary: () => buildMetadataFields({}, true),
+  // Chapter prose tools
+  write_chapter_content: ({ args, result }) => {
+    const chapId = result.chap_id || args.chap_id;
+    return {
+      id: `chap-${Date.now()}-${Math.random()}`,
+      type: 'chapter',
+      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
+      targetId: chapId ? String(chapId) : undefined,
+    };
+  },
+  replace_text_in_chapter: ({ args, result }) => {
+    const chapId = result.chap_id || args.chap_id;
+    return {
+      id: `chap-${Date.now()}-${Math.random()}`,
+      type: 'chapter',
+      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
+      targetId: chapId ? String(chapId) : undefined,
+    };
+  },
+  apply_chapter_replacements: ({ args, result }) => {
+    const chapId = result.chap_id || args.chap_id;
+    return {
+      id: `chap-${Date.now()}-${Math.random()}`,
+      type: 'chapter',
+      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
+      targetId: chapId ? String(chapId) : undefined,
+    };
+  },
+  write_chapter: ({ args, result }) => {
+    const chapId = result.chap_id || args.chap_id;
+    return {
+      id: `chap-${Date.now()}-${Math.random()}`,
+      type: 'chapter',
+      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
+      targetId: chapId ? String(chapId) : undefined,
+    };
+  },
+  // Story prose tools
+  write_story_content: () => ({
+    id: `story-${Date.now()}-${Math.random()}`,
+    type: 'story',
+    label: 'Story prose',
+  }),
+  call_editing_assistant: () => ({
+    id: `story-${Date.now()}-${Math.random()}`,
+    type: 'story',
+    label: 'Story prose',
+  }),
+  call_writing_llm: () => ({
+    id: `story-${Date.now()}-${Math.random()}`,
+    type: 'story',
+    label: 'Story prose',
+  }),
+  // Book tools
+  write_book_content: ({ args, result }) => {
+    const bookId = result.book_id || args.book_id;
+    return {
+      id: `book-${Date.now()}-${Math.random()}`,
+      type: 'book',
+      label: 'Book',
+      targetId: bookId as string | undefined,
+    };
+  },
+};
+
+function buildMetadataFields(
+  args: Record<string, unknown>,
+  forceSummary: boolean
+): SessionMutation[] {
+  const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
+  if (forceSummary || args.summary !== undefined) changedFields.push('summary');
+  if (args.notes !== undefined) changedFields.push('notes');
+  if (args.private_notes !== undefined) changedFields.push('private');
+  if (args.conflicts !== undefined) changedFields.push('conflicts');
+  if (changedFields.length === 0) changedFields.push('summary');
+  return changedFields.map((subType) => ({
+    id: `meta-${Date.now()}-${Math.random()}`,
+    type: 'metadata',
+    label: subType.charAt(0).toUpperCase() + subType.slice(1),
+    subType,
+  }));
+}
 
 const App: React.FC = () => {
-  const { confirm, confirmDialogState, handleConfirm, handleCancel } =
+  const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
     useConfirmDialog();
+
+  const addToast = useToast();
+  useEffect(() => {
+    setErrorDispatcher((msg) => addToast(msg, 'error'));
+  }, [addToast]);
 
   const {
     story,
@@ -83,7 +255,8 @@ const App: React.FC = () => {
     canRedo,
     baselineState,
     advanceBaselineToCurrentStory,
-  } = useStory({ confirm, alert: window.alert });
+    isChapterLoading,
+  } = useStory({ confirm, alert: (msg) => void alert(msg) });
 
   useBrowserHistory({
     historyIndex,
@@ -151,9 +324,9 @@ const App: React.FC = () => {
     const doJump = () => editorRef.current?.jumpToPosition(start, end);
     if (viewMode === 'wysiwyg') {
       setViewMode('markdown');
-      setTimeout(doJump, 80);
+      requestAnimationFrame(() => requestAnimationFrame(doJump));
     } else {
-      setTimeout(doJump, 50);
+      requestAnimationFrame(doJump);
     }
   }, [currentChapterId, currentChapter?.content]);
 
@@ -274,115 +447,13 @@ const App: React.FC = () => {
     const callResults =
       (muts._call_results as Array<{ name: string; args: any; result: any }>) || [];
 
-    // Map individual tool calls to granular tags, but only for write/update actions.
     callResults.forEach((res) => {
-      const name = res.name;
-      const args = res.args || {};
-      const result = res.result || {};
-
-      if (
-        name === 'create_sourcebook_entry' ||
-        name === 'update_sourcebook_entry' ||
-        name === 'delete_sourcebook_entry' ||
-        name === 'add_sourcebook_relation' ||
-        name === 'remove_sourcebook_relation'
-      ) {
-        const id = result.id || args.name_or_id || args.name;
-        const label = result.name || args.name || (id ? `SB: ${id}` : 'Sourcebook');
-        newMuts.push({
-          id: `sb-${Date.now()}-${Math.random()}`,
-          type: 'sourcebook',
-          label,
-          targetId: id,
-        });
-        return;
-      }
-
-      if (
-        name === 'update_story_metadata' ||
-        name === 'update_chapter_metadata' ||
-        name === 'update_book_metadata' ||
-        name === 'set_story_tags' ||
-        name === 'set_story_summary' ||
-        name === 'sync_story_summary' ||
-        name === 'write_story_summary'
-      ) {
-        // Collect all changed fields. If a single tool call updates multiple fields
-        // (e.g. LLM updates both Summary and Conflicts), we generate tags for each.
-        const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
-        if (
-          args.summary !== undefined ||
-          name === 'set_story_summary' ||
-          name === 'sync_story_summary' ||
-          name === 'write_story_summary'
-        ) {
-          changedFields.push('summary');
-        }
-        if (args.notes !== undefined) changedFields.push('notes');
-        if (args.private_notes !== undefined) changedFields.push('private');
-        if (args.conflicts !== undefined) changedFields.push('conflicts');
-
-        // Defaults to 'summary' if no known field was passed in args (e.g. title changes).
-        if (changedFields.length === 0) {
-          changedFields.push('summary');
-        }
-
-        changedFields.forEach((subType) => {
-          newMuts.push({
-            id: `meta-${Date.now()}-${Math.random()}`,
-            type: 'metadata',
-            label: subType.charAt(0).toUpperCase() + subType.slice(1),
-            subType,
-          });
-        });
-        return;
-      }
-
-      if (
-        name === 'write_chapter_content' ||
-        name === 'replace_text_in_chapter' ||
-        name === 'apply_chapter_replacements' ||
-        name === 'write_chapter'
-      ) {
-        const chapId = result.chap_id || args.chap_id;
-        const label = chapId ? `Chapter ${chapId}` : 'Chapter prose';
-        newMuts.push({
-          id: `chap-${Date.now()}-${Math.random()}`,
-          type: 'chapter',
-          label,
-          targetId: chapId ? String(chapId) : undefined,
-        });
-        return;
-      }
-
-      if (name === 'write_story_content') {
-        newMuts.push({
-          id: `story-${Date.now()}-${Math.random()}`,
-          type: 'story',
-          label: 'Story prose',
-        });
-        return;
-      }
-
-      if (name === 'call_editing_assistant' || name === 'call_writing_llm') {
-        newMuts.push({
-          id: `story-${Date.now()}-${Math.random()}`,
-          type: 'story',
-          label: 'Story prose',
-        });
-        return;
-      }
-
-      if (name === 'write_book_content') {
-        const bookId = result.book_id || args.book_id;
-        newMuts.push({
-          id: `book-${Date.now()}-${Math.random()}`,
-          type: 'book',
-          label: 'Book',
-          targetId: bookId,
-        });
-        return;
-      }
+      const factory = MUTATION_TOOL_REGISTRY[res.name];
+      if (!factory) return;
+      const produced = factory({ args: res.args || {}, result: res.result || {} });
+      if (!produced) return;
+      const items = Array.isArray(produced) ? produced : [produced];
+      newMuts.push(...items);
     });
 
     if (newMuts.length > 0) {
@@ -837,6 +908,7 @@ const App: React.FC = () => {
               }}
               editorControls={{
                 currentChapter,
+                isChapterLoading,
                 editorRef,
                 editorSettings,
                 storyLanguage: story.language || 'en',
@@ -934,7 +1006,11 @@ const App: React.FC = () => {
               onJumpToPosition={(start, end) => {
                 if (viewMode === 'wysiwyg') {
                   setViewMode('markdown');
-                  setTimeout(() => editorRef.current?.jumpToPosition(start, end), 80);
+                  requestAnimationFrame(() =>
+                    requestAnimationFrame(() =>
+                      editorRef.current?.jumpToPosition(start, end)
+                    )
+                  );
                 } else {
                   editorRef.current?.jumpToPosition(start, end);
                 }

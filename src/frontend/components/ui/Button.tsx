@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { AppTheme } from '../types';
+import { AppTheme } from '../../types';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';

@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Chapter, Book, AppTheme } from '../../types';
 import { MetadataParams } from '../story/metadataSync';
 import { useConfirm } from '../layout/ConfirmDialogContext';
@@ -87,6 +88,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   spellCheck = true,
 }) => {
   const { isLight } = useThemeClasses();
+  const { t } = useTranslation();
   const confirm = useConfirm();
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>({});
   const [newBookTitle, setNewBookTitle] = useState('');
@@ -366,7 +368,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
     const baselineSummary = baselineChapter?.summary || '';
 
     const renderSummary = () => {
-      const summary = chapter.summary || 'No summary available...';
+      const summary = chapter.summary || t('No summary available...');
       if (!baselineSummary || baselineSummary === summary) {
         return <Fragment>{summary}</Fragment>;
       }
@@ -439,7 +441,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   currentChapterId === chapter.id ? titleActive : titleInactive
                 }`}
               >
-                {chapter.title || 'Untitled Chapter'}
+                {chapter.title || t('Untitled Chapter')}
               </h3>
               {chapter.conflicts && chapter.conflicts.length > 0 && (
                 <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
@@ -453,7 +455,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           <button
             onClick={(e) => handleEditChapterMetadata(e, chapter)}
             className="p-1 text-brand-gray-400 hover:text-blue-500"
-            title="Edit Metadata"
+            title={t('Edit Metadata')}
           >
             <Edit size={14} />
           </button>
@@ -463,7 +465,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
               onDelete(chapter.id);
             }}
             className="p-1 text-brand-gray-400 hover:text-red-500"
-            title="Delete Chapter"
+            title={t('Delete Chapter')}
           >
             <Trash2 size={14} />
           </button>
@@ -485,9 +487,11 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           type={editingMetadata.type}
           language={language}
           spellCheck={spellCheck}
-          title={`Edit ${
-            editingMetadata.type === 'chapter' ? 'Chapter' : 'Book'
-          }: ${activeEditingData.title}`}
+          title={
+            editingMetadata.type === 'chapter'
+              ? t('Edit Chapter: {{title}}', { title: activeEditingData.title })
+              : t('Edit Book: {{title}}', { title: activeEditingData.title })
+          }
           initialData={activeEditingData}
           baseline={
             editingMetadata.type === 'chapter'
@@ -530,11 +534,13 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           theme={theme}
           aiDisabledReason={
             !isAiAvailable
-              ? 'Summary AI is unavailable because no working EDITING model is configured.'
+              ? t(
+                  'Summary AI is unavailable because no working EDITING model is configured.'
+                )
               : undefined
           }
           primarySourceLabel={
-            editingMetadata.type === 'chapter' ? 'Chapter' : undefined
+            editingMetadata.type === 'chapter' ? t('Chapter') : undefined
           }
           primarySourceAvailable={
             editingMetadata.type === 'chapter' &&
@@ -569,7 +575,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           <h2
             className={`text-sm font-semibold uppercase tracking-wider ${textHeader}`}
           >
-            {projectType === 'series' ? 'Books & Chapters' : 'Chapters'}
+            {projectType === 'series' ? t('Books & Chapters') : t('Chapters')}
           </h2>
           {projectType === 'novel' && (
             <button
@@ -623,7 +629,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                         onDragEnd={handleDragEnd}
                         onClick={() => toggleBook(book.id)}
                         aria-expanded={isExpanded}
-                        aria-label={`Toggle book ${book.title}`}
+                        aria-label={t('Toggle book {{title}}', { title: book.title })}
                       >
                         <div className="flex items-center space-x-2 font-bold text-sm pointer-events-none">
                           {isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
@@ -638,7 +644,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                           <button
                             onClick={(e) => handleEditBookMetadata(e, book)}
                             className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
-                            title="Edit Book Metadata"
+                            title={t('Edit Book Metadata')}
                           >
                             <Edit size={14} />
                           </button>
@@ -648,19 +654,21 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                               onCreate(book.id);
                             }}
                             className={`p-1 opacity-0 group-hover:opacity-100 ${btnHover}`}
-                            title="Add Chapter to Book"
+                            title={t('Add Chapter to Book')}
                           >
                             <Plus size={14} />
                           </button>
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (await confirm('Delete Book and all its chapters?')) {
+                              if (
+                                await confirm(t('Delete Book and all its chapters?'))
+                              ) {
                                 onBookDelete?.(book.id);
                               }
                             }}
                             className="text-brand-gray-400 hover:text-red-500 p-1"
-                            title="Delete Book"
+                            title={t('Delete Book')}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -673,7 +681,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                           isLight ? 'text-brand-gray-500' : 'text-brand-gray-500'
                         }`}
                       >
-                        {book.summary || 'No summary available...'}
+                        {book.summary || t('No summary available...')}
                       </p>
                     </div>
                   </div>
@@ -689,7 +697,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                           onCreate(book.id);
                         }}
                       >
-                        <Plus size={14} /> <span>Add Chapter</span>
+                        <Plus size={14} /> <span>{t('Add Chapter')}</span>
                       </button>
                     </div>
                   )}
@@ -705,7 +713,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                     className="bg-transparent border rounded p-1 text-sm outline-none focus:border-brand-500"
                     lang={language || undefined}
                     spellCheck={spellCheck}
-                    placeholder="Book Title"
+                    placeholder={t('Book Title')}
                     value={newBookTitle}
                     onChange={(e) => setNewBookTitle(e.target.value)}
                     onKeyDown={(e) => {
@@ -720,15 +728,15 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      aria-label="Cancel create book"
+                      aria-label={t('Cancel create book')}
                       onClick={() => setIsCreatingBook(false)}
                       className="text-xs opacity-50"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="button"
-                      aria-label="Create book"
+                      aria-label={t('Create book')}
                       onClick={() => {
                         onBookCreate?.(newBookTitle);
                         setNewBookTitle('');
@@ -736,20 +744,20 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                       }}
                       className="text-xs font-bold text-brand-500"
                     >
-                      Create
+                      {t('Create')}
                     </button>
                   </div>
                 </div>
               ) : (
                 <button
                   type="button"
-                  aria-label="Start creating a new book"
+                  aria-label={t('Start creating a new book')}
                   onClick={() => setIsCreatingBook(true)}
                   className={`w-full flex items-center justify-center gap-2 p-2 rounded border border-dashed text-sm opacity-60 hover:opacity-100 ${
                     isLight ? 'border-brand-gray-300' : 'border-brand-gray-700'
                   }`}
                 >
-                  <BookIcon size={16} /> <span>Add Book</span>
+                  <BookIcon size={16} /> <span>{t('Add Book')}</span>
                 </button>
               )}
             </div>
@@ -761,7 +769,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             {displayChapters.length === 0 && (
               <div className="text-center py-10 text-brand-gray-500">
                 <FileText className="mx-auto mb-2 opacity-30" size={32} />
-                <p className="text-sm">No chapters yet.</p>
+                <p className="text-sm">{t('No chapters yet.')}</p>
               </div>
             )}
           </>

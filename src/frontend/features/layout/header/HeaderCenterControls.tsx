@@ -9,7 +9,7 @@
  * Defines center controls in app header to keep top-level header composition concise.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Bold,
   ChevronDown,
@@ -43,6 +43,7 @@ import {
   HeaderViewControls,
 } from '../layoutControlTypes';
 import { ModelSelector } from '../../chat/ModelSelector';
+import { useClickOutside } from '../../../utils/hooks';
 
 type HeaderCenterControlsProps = {
   viewControls: HeaderViewControls;
@@ -115,18 +116,8 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
-        setIsModelMenuOpen(false);
-      }
-      if (formatMenuRef.current && !formatMenuRef.current.contains(e.target as Node)) {
-        setIsFormatMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [setIsFormatMenuOpen]);
+  useClickOutside(modelMenuRef, () => setIsModelMenuOpen(false), isModelMenuOpen);
+  useClickOutside(formatMenuRef, () => setIsFormatMenuOpen(false), isFormatMenuOpen);
 
   // Format buttons ordered from MOST important (index 0) to LEAST important (last).
   // The least-important ones collapse into the Formatting dropdown first.

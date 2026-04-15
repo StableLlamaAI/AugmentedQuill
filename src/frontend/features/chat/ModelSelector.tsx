@@ -13,6 +13,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
 import { LLMConfig, AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useClickOutside } from '../../utils/hooks';
 
 interface ModelSelectorProps {
   value: string;
@@ -61,22 +62,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const activeOption = selectedOption || options[0];
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
+  useClickOutside(containerRef, () => setIsOpen(false), isOpen);
 
   const getStatusIcon = (id: string) => {
     const status = connectionStatus[id] || 'idle';
@@ -111,19 +97,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </label>
         {activeOption &&
           hasCapability(activeOption, 'isMultimodal', 'is_multimodal') && (
-            <Eye size={8} className={labelColorClass} title="Multimodal" />
+            <Eye size={8} className={labelColorClass} aria-label="Multimodal" />
           )}
         {activeOption &&
           hasCapability(
             activeOption,
             'supportsFunctionCalling',
             'supports_function_calling'
-          ) && <Wand2 size={8} className={labelColorClass} title="Function Calling" />}
+          ) && (
+            <Wand2 size={8} className={labelColorClass} aria-label="Function Calling" />
+          )}
         {label === 'Writing' && activeOption?.writingWarning && (
           <AlertTriangle
             size={8}
             className="text-amber-500"
-            title={activeOption.writingWarning}
+            aria-label={activeOption.writingWarning}
           />
         )}
       </div>

@@ -9,7 +9,7 @@
  * Defines the app header unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTheme } from './ThemeContext';
 import {
   ChevronDown,
@@ -27,6 +27,7 @@ import { HeaderAppearanceControls } from '../editor/HeaderAppearanceControls';
 import { HeaderCenterControls } from './header/HeaderCenterControls';
 import { CheckpointsMenu } from '../checkpoints/CheckpointsMenu';
 import { useConfirm } from './ConfirmDialogContext';
+import { useClickOutside } from '../../utils/hooks';
 import {
   HeaderAiControls,
   HeaderAppearanceControlsState,
@@ -109,22 +110,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const redoMenuRef = useRef<HTMLDivElement | null>(null);
   const confirm = useConfirm();
 
-  useEffect(() => {
-    const onDocumentClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (undoMenuRef.current && !undoMenuRef.current.contains(target)) {
-        setIsUndoMenuOpen(false);
-      }
-      if (redoMenuRef.current && !redoMenuRef.current.contains(target)) {
-        setIsRedoMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', onDocumentClick);
-    return () => {
-      document.removeEventListener('mousedown', onDocumentClick);
-    };
-  }, []);
+  useClickOutside(undoMenuRef, () => setIsUndoMenuOpen(false), isUndoMenuOpen);
+  useClickOutside(redoMenuRef, () => setIsRedoMenuOpen(false), isRedoMenuOpen);
 
   const menuContainerClass = isLight
     ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
