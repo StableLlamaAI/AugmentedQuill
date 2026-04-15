@@ -168,7 +168,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const resizerActive = isLight ? 'bg-brand-gray-300/38' : 'bg-brand-gray-700/38';
 
   // Chapter-selection style (yellow/red) for the handle icon.
-  const gripDefault = isLight ? 'text-amber-500' : 'text-rose-400';
+  const gripDefault = isLight ? 'text-amber-500' : 'text-amber-400';
   const gripActive = isLight ? 'text-amber-600' : 'text-rose-300';
 
   const sectionId = useId();
@@ -400,6 +400,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
 
   const {
     currentChapter,
+    isChapterLoading,
     editorRef,
     viewMode,
     suggestionControls,
@@ -590,7 +591,42 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
         className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
       >
         <div className="flex-1 overflow-hidden h-full flex flex-col">
-          {currentChapter ? (
+          {isChapterLoading ? (
+            <div
+              className="flex-1 p-8 space-y-4 animate-pulse"
+              aria-busy="true"
+              aria-label="Loading chapter"
+            >
+              <div
+                className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-5/6 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-3/4 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div className="pt-2" />
+              <div
+                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-4/5 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <div
+                className={`h-3 w-2/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+            </div>
+          ) : currentChapter ? (
             <Editor
               ref={editorRef}
               chapter={currentChapter}

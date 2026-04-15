@@ -17,6 +17,12 @@ export type ConfirmFn = (input: string | ConfirmOptions) => Promise<boolean>;
 
 const fallbackConfirm: ConfirmFn = async (input) => {
   const normalized = typeof input === 'string' ? { message: input } : input;
+  // This only runs when a component is rendered outside <ConfirmDialogProvider>.
+  // Signal the issue clearly so it is not silently swallowed.
+  console.error(
+    '[ConfirmDialog] useConfirm() was called outside a <ConfirmDialogProvider>. ' +
+      'Falling back to window.confirm. Wrap the component tree in ConfirmDialogProvider.'
+  );
   return Promise.resolve(window.confirm(normalized.message));
 };
 

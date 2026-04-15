@@ -289,6 +289,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   );
 
   const lastLoadedChapterId = useRef<string | null>(null);
+  const [isChapterLoading, setIsChapterLoading] = useState(false);
 
   const refreshStory = useCallback(
     async (historyLabel?: string) => {
@@ -353,6 +354,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   // Load chapter content lazily so list refreshes stay responsive.
   useEffect(() => {
     if (currentChapterId && currentChapterId !== lastLoadedChapterId.current) {
+      setIsChapterLoading(true);
       const loadContent = async () => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
@@ -375,9 +377,13 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           });
         } catch (e) {
           console.error('Failed to load chapter content', e);
+        } finally {
+          setIsChapterLoading(false);
         }
       };
       loadContent();
+    } else {
+      setIsChapterLoading(false);
     }
   }, [currentChapterId, story.lastUpdated]);
 
@@ -818,5 +824,6 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     canRedo: currentIndex < history.length - 1,
     baselineState,
     advanceBaselineToCurrentStory,
+    isChapterLoading,
   };
 };

@@ -17,6 +17,8 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'primary' | 'danger';
+  /** When true the dialog acts as an alert with only an OK button. */
+  alertOnly?: boolean;
 }
 
 interface PendingConfirm {
@@ -44,6 +46,13 @@ export const useConfirmDialog = () => {
     });
   }, []);
 
+  /** Non-blocking themed replacement for window.alert(). */
+  const alert = useCallback(
+    (message: string, title?: string): Promise<void> =>
+      confirm({ message, title, alertOnly: true }).then(() => undefined),
+    [confirm]
+  );
+
   const handleConfirm = useCallback(() => {
     setIsOpen(false);
     pendingRef.current?.resolve(true);
@@ -58,6 +67,7 @@ export const useConfirmDialog = () => {
 
   return {
     confirm,
+    alert,
     confirmDialogState: {
       isOpen,
       message: options.message,
@@ -65,6 +75,7 @@ export const useConfirmDialog = () => {
       confirmLabel: options.confirmLabel,
       cancelLabel: options.cancelLabel,
       variant: options.variant,
+      alertOnly: options.alertOnly,
     },
     handleConfirm,
     handleCancel,

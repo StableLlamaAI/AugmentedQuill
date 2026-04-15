@@ -10,6 +10,7 @@
  */
 
 import React, { useId, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from './useFocusTrap';
 
 export interface ConfirmDialogProps {
@@ -21,6 +22,8 @@ export interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'primary' | 'danger';
+  /** When true only the confirm/OK button is shown — acts as an alert dialog. */
+  alertOnly?: boolean;
 }
 
 /**
@@ -35,14 +38,19 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   message,
   onConfirm,
   onCancel,
-  confirmLabel = 'OK',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   variant = 'primary',
+  alertOnly = false,
 }) => {
   const { isLight } = useTheme();
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const idBase = useId();
   useFocusTrap(isOpen, dialogRef, onCancel);
+
+  const resolvedConfirmLabel = confirmLabel ?? t('OK');
+  const resolvedCancelLabel = cancelLabel ?? t('Cancel');
 
   if (!isOpen) return null;
 
@@ -90,16 +98,18 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           {message}
         </p>
         <div className="flex justify-end gap-3">
-          <button
-            className={`${
-              isLight
-                ? 'bg-brand-gray-100 text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-200'
-                : 'bg-brand-gray-800 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-700'
-            } px-4 py-2 text-sm rounded-md border transition-colors`}
-            onClick={onCancel}
-          >
-            {cancelLabel}
-          </button>
+          {!alertOnly && (
+            <button
+              className={`${
+                isLight
+                  ? 'bg-brand-gray-100 text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-200'
+                  : 'bg-brand-gray-800 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-700'
+              } px-4 py-2 text-sm rounded-md border transition-colors`}
+              onClick={onCancel}
+            >
+              {resolvedCancelLabel}
+            </button>
+          )}
           <button
             className={`${
               isDanger
@@ -108,7 +118,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             } px-4 py-2 text-sm rounded-md text-white border-transparent transition-colors`}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
         </div>
       </div>

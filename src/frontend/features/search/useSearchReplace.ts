@@ -12,6 +12,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { api } from '../../services/api';
+import { useDebounce } from '../../utils/hooks';
 import type {
   SearchScope,
   SearchResultSection,
@@ -152,7 +153,6 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   highlightActiveRef.current = highlightActive;
   const searchParamsRef = useRef({ query, scope, caseSensitive, isRegex, isPhonetic });
   searchParamsRef.current = { query, scope, caseSensitive, isRegex, isPhonetic };
-  const contentRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback((keepHighlight = false) => {
@@ -356,52 +356,55 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     [query, replacement, scope, caseSensitive, isRegex, isPhonetic]
   );
 
+  const refreshHighlights = useCallback(
+    (activeChapterId?: number | null) => {
+      const {
+        query: q,
+        scope: s,
+        caseSensitive: cs,
+        isRegex: ir,
+        isPhonetic: ip,
+      } = searchParamsRef.current;
+      void (async () => {
+        try {
+          const resp = await api.search.search({
+            query: q,
+            scope: s,
+            case_sensitive: cs,
+            is_regex: ir,
+            is_phonetic: ip,
+            active_chapter_id: activeChapterId ?? null,
+          });
+          const flat = buildFlatMatches(resp.results);
+          const { ranges, texts } = buildHighlightMaps(resp.results);
+          setResults(resp.results);
+          setTotalMatches(resp.total_matches);
+          setFlatMatches(flat);
+          setCurrentMatchIndex((prev) =>
+            flat.length === 0
+              ? null
+              : prev === null
+                ? null
+                : Math.min(prev, flat.length - 1)
+          );
+          setHighlightRanges(ranges);
+          setHighlightTexts(texts);
+        } catch {
+          // Silently ignore errors on background highlight refresh
+        }
+      })();
+    },
+    [] // stable — all values read via refs
+  );
+
+  const debouncedRefreshHighlights = useDebounce(refreshHighlights, 800);
+
   const notifyContentChanged = useCallback(
     (activeChapterId?: number | null) => {
       if (!highlightActiveRef.current || !searchParamsRef.current.query.trim()) return;
-      if (contentRefreshDebounceRef.current) {
-        clearTimeout(contentRefreshDebounceRef.current);
-      }
-      contentRefreshDebounceRef.current = setTimeout(() => {
-        contentRefreshDebounceRef.current = null;
-        const {
-          query: q,
-          scope: s,
-          caseSensitive: cs,
-          isRegex: ir,
-          isPhonetic: ip,
-        } = searchParamsRef.current;
-        void (async () => {
-          try {
-            const resp = await api.search.search({
-              query: q,
-              scope: s,
-              case_sensitive: cs,
-              is_regex: ir,
-              is_phonetic: ip,
-              active_chapter_id: activeChapterId ?? null,
-            });
-            const flat = buildFlatMatches(resp.results);
-            const { ranges, texts } = buildHighlightMaps(resp.results);
-            setResults(resp.results);
-            setTotalMatches(resp.total_matches);
-            setFlatMatches(flat);
-            setCurrentMatchIndex((prev) =>
-              flat.length === 0
-                ? null
-                : prev === null
-                  ? null
-                  : Math.min(prev, flat.length - 1)
-            );
-            setHighlightRanges(ranges);
-            setHighlightTexts(texts);
-          } catch {
-            // Silently ignore errors on background highlight refresh
-          }
-        })();
-      }, 800);
+      debouncedRefreshHighlights(activeChapterId);
     },
-    [] // stable — all values read via refs
+    [debouncedRefreshHighlights]
   );
 
   return {

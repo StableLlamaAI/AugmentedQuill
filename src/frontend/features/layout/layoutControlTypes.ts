@@ -216,6 +216,7 @@ export type MainEditorAiControls = {
 
 export type MainEditorControls = {
   currentChapter?: WritingUnit | null;
+  isChapterLoading?: boolean;
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
   storyLanguage?: string;

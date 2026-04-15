@@ -15,14 +15,21 @@ export function formatError(error: unknown, fallback = 'Unknown error'): string 
   return fallback;
 }
 
+/**
+ * Module-level toast dispatcher.
+ * Wired up by calling `setErrorDispatcher` once the toast provider is mounted.
+ */
+let _dispatch: ((message: string) => void) | null = null;
+
+export function setErrorDispatcher(fn: (message: string) => void): void {
+  _dispatch = fn;
+}
+
 export function notifyError(message: string, error?: unknown): void {
   if (error !== undefined) {
     console.error(message, error);
   } else {
     console.error(message);
   }
-  const alertFn = (globalThis as { alert?: (text: string) => void }).alert;
-  if (typeof alertFn === 'function') {
-    alertFn(message);
-  }
+  _dispatch?.(message);
 }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { Button } from '../../components/ui/Button';
 import type { UseSearchReplaceResult } from './useSearchReplace';
 import type { SearchScope } from '../../services/apiClients/search';
 
@@ -180,15 +181,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   const headerClass = `flex items-center justify-between px-4 py-3 border-b ${themeClasses.border}`;
   const titleClass = `flex items-center gap-2 font-semibold ${themeClasses.text}`;
   const inputClass = `flex-1 px-3 py-2 rounded-md border ${themeClasses.border} text-sm ${themeClasses.text} ${themeClasses.input} focus:outline-none focus:ring-2 focus:ring-brand-500`;
-  const btnPrimary = isLight
-    ? 'px-4 py-2 text-sm rounded-md border border-transparent bg-brand-700 text-white hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'px-4 py-2 text-sm rounded-md border border-brand-800/50 bg-brand-900/30 text-brand-300 hover:bg-brand-900/50 hover:text-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  const btnSecondary = isLight
-    ? 'px-4 py-2 text-sm rounded-md border border-brand-gray-300 bg-brand-gray-100 text-brand-gray-700 hover:bg-brand-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'px-4 py-2 text-sm rounded-md border border-brand-gray-700 bg-brand-gray-800 text-brand-gray-300 hover:bg-brand-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  const btnGhost = isLight
-    ? 'px-4 py-2 text-sm rounded-md border border-transparent text-brand-gray-600 hover:bg-brand-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'px-4 py-2 text-sm rounded-md border border-transparent text-brand-gray-400 hover:bg-brand-gray-800 hover:text-brand-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const dialogTheme = isLight ? 'light' : 'dark';
   const toggleActiveClass = isLight
     ? 'px-2 py-1 text-xs rounded border bg-brand-100 border-brand-300 text-brand-700 font-medium'
     : 'px-2 py-1 text-xs rounded border bg-brand-900 border-brand-700 text-brand-300 font-medium';
@@ -256,14 +249,16 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               autoComplete="off"
               spellCheck={true}
             />
-            <button
+            <Button
               type="button"
+              theme={dialogTheme}
+              variant="primary"
+              size="md"
               onClick={handleSearch}
               disabled={isLoading || !query.trim()}
-              className={btnPrimary}
             >
               {isLoading ? <Loader2 size={14} className="animate-spin" /> : t('Find')}
-            </button>
+            </Button>
           </div>
           <div className="flex gap-2">
             <input
@@ -277,22 +272,26 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               autoComplete="off"
               spellCheck={true}
             />
-            <button
+            <Button
               type="button"
+              theme={dialogTheme}
+              variant="secondary"
+              size="md"
               onClick={handleReplaceCurrent}
               disabled={isLoading || currentMatchIndex === null || !query.trim()}
-              className={btnSecondary}
             >
               {t('Replace')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              theme={dialogTheme}
+              variant="secondary"
+              size="md"
               onClick={handleReplaceAll}
               disabled={isLoading || totalMatches === 0 || !query.trim()}
-              className={btnSecondary}
             >
               {t('Replace All')}
-            </button>
+            </Button>
           </div>
         </div>
 

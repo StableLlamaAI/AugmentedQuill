@@ -15,6 +15,7 @@ import './features/app/i18n';
 import App from './App';
 import './index.css';
 import { AppErrorBoundary } from './features/layout/AppErrorBoundary';
+import { ToastProvider } from './components/ui/Toast';
 import { setupSmartQuotesProxy } from './utils/textUtils';
 
 const rootElement = document.getElementById('root');
@@ -28,7 +29,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <AppErrorBoundary>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </AppErrorBoundary>
   </React.StrictMode>
 );

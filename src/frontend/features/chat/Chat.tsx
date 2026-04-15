@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChatAttachment,
   ChatMessage,
@@ -128,9 +129,6 @@ export const Chat: React.FC<ChatProps> = ({
   onMutationClick = () => {},
   storyLanguage,
 }) => {
-  const chatDisabledReason =
-    'Chat is unavailable because no working CHAT model is configured.';
-
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
@@ -155,9 +153,13 @@ export const Chat: React.FC<ChatProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
-  const { isLight } = useThemeClasses();
+  const themeClasses = useThemeClasses();
+  const { isLight } = themeClasses;
+  const { t } = useTranslation();
+  const chatDisabledReason = t(
+    'Chat is unavailable because no working CHAT model is configured.'
+  );
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
-  const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-400';
   const headerBg = isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900';
   const msgUserBg = isLight
@@ -261,7 +263,6 @@ export const Chat: React.FC<ChatProps> = ({
     setShowSystemPrompt(false);
   };
 
-  const lastMessage = messages[messages.length - 1];
   const hasUserMessage = messages.some((msg) => msg.role === 'user');
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
   const contextUsage = useMemo(
@@ -277,10 +278,10 @@ export const Chat: React.FC<ChatProps> = ({
   return (
     <div
       id="chat-panel"
-      className={`flex flex-col h-full border-l ${bgMain} ${borderMain} ${textMain}`}
+      className={`flex flex-col h-full border-l ${bgMain} ${themeClasses.border} ${textMain}`}
     >
       <ChatHeader
-        title={isIncognito ? 'Incognito Chat' : 'Writing Partner'}
+        title={isIncognito ? t('Incognito Chat') : t('Writing Partner')}
         headerBg={headerBg}
         isLightTheme={isLight}
         currentSessionId={currentSessionId}
@@ -330,14 +331,13 @@ export const Chat: React.FC<ChatProps> = ({
                 id="scratchpad-dialog-title"
                 className="text-sm font-bold uppercase tracking-wider text-brand-gray-500"
               >
-                Scratchpad
+                {t('Scratchpad')}
               </h2>
-              <h3 className="text-sm font-semibold">Scratchpad</h3>
               <button
                 onClick={() => setShowScratchpad(false)}
                 className="p-1 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800"
-                title="Close Scratchpad"
-                aria-label="Close scratchpad"
+                title={t('Close Scratchpad')}
+                aria-label={t('Close scratchpad')}
               >
                 <X size={16} />
               </button>
@@ -347,7 +347,7 @@ export const Chat: React.FC<ChatProps> = ({
               value={scratchpadDraft}
               onChange={(e) => setScratchpadDraft(e.target.value)}
               className={`w-full min-h-[220px] rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${isLight ? 'bg-white border-brand-gray-300 text-brand-gray-900' : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-100'}`}
-              placeholder="Current internal notes of the chat LLM..."
+              placeholder={t('Current internal notes of the chat LLM...')}
             />
             <div className="mt-3 flex justify-between items-center">
               <button
@@ -356,26 +356,26 @@ export const Chat: React.FC<ChatProps> = ({
                   setScratchpadDraft('');
                 }}
                 className="rounded px-3 py-1 text-xs font-medium text-red-500 hover:bg-red-500/10"
-                title="Delete scratchpad content"
+                title={t('Delete scratchpad content')}
               >
-                Delete
+                {t('Delete')}
               </button>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowScratchpad(false)}
                   className="rounded px-3 py-1 text-xs font-medium border border-brand-gray-300 hover:bg-brand-gray-100 dark:border-brand-gray-700 dark:hover:bg-brand-gray-800"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   onClick={() => {
                     onUpdateScratchpad(scratchpadDraft);
                     setShowScratchpad(false);
                   }}
-                  aria-label="Save Scratchpad"
+                  aria-label={t('Save Scratchpad')}
                   className="rounded px-3 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700"
                 >
-                  Save
+                  {t('Save')}
                 </button>
               </div>
             </div>
@@ -386,16 +386,15 @@ export const Chat: React.FC<ChatProps> = ({
       {showSystemPrompt && (
         <div
           ref={systemPromptRef}
-          role="dialog"
-          aria-modal="false"
+          role="region"
           aria-labelledby="system-instruction-title"
-          className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${borderMain}`}
+          className={`p-4 border-b animate-in slide-in-from-top-2 ${bgMain} ${themeClasses.border}`}
         >
           <label
             id="system-instruction-title"
             className="block text-xs font-medium text-brand-gray-500 uppercase tracking-wider mb-2"
           >
-            System Instruction
+            {t('System Instruction')}
           </label>
           <textarea
             lang={storyLanguage || 'en'}
@@ -403,9 +402,9 @@ export const Chat: React.FC<ChatProps> = ({
             spellCheck={true}
             onChange={(e) => setTempSystemPrompt(e.target.value)}
             className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
-            placeholder="Define the AI's persona and rules..."
+            placeholder={t("Define the AI's persona and rules...")}
             disabled={!isModelAvailable}
-            title={!isModelAvailable ? chatDisabledReason : 'System Instruction'}
+            title={!isModelAvailable ? chatDisabledReason : t('System Instruction')}
           />
           <div className="flex justify-end space-x-2">
             <Button
@@ -414,9 +413,9 @@ export const Chat: React.FC<ChatProps> = ({
               variant="ghost"
               onClick={() => setShowSystemPrompt(false)}
               disabled={!isModelAvailable}
-              title={!isModelAvailable ? chatDisabledReason : 'Cancel'}
+              title={!isModelAvailable ? chatDisabledReason : t('Cancel')}
             >
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               theme={theme}
@@ -424,9 +423,9 @@ export const Chat: React.FC<ChatProps> = ({
               variant="primary"
               onClick={handleSystemPromptSave}
               disabled={!isModelAvailable}
-              title={!isModelAvailable ? chatDisabledReason : 'Update Persona'}
+              title={!isModelAvailable ? chatDisabledReason : t('Update Persona')}
             >
-              Update Persona
+              {t('Update Persona')}
             </Button>
           </div>
         </div>
@@ -455,8 +454,9 @@ export const Chat: React.FC<ChatProps> = ({
           <div className="text-center text-brand-gray-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
             <p className="text-sm">
-              I'm your AI co-author. Ask me to write, edit, or brainstorm ideas for your
-              story!
+              {t(
+                "I'm your AI co-author. Ask me to write, edit, or brainstorm ideas for your story!"
+              )}
             </p>
           </div>
         )}
@@ -508,16 +508,16 @@ export const Chat: React.FC<ChatProps> = ({
                     <button
                       onClick={cancelEdit}
                       className="p-1 text-brand-gray-400 hover:text-brand-gray-600"
-                      aria-label="Cancel message edit"
-                      title="Cancel edit"
+                      aria-label={t('Cancel message edit')}
+                      title={t('Cancel edit')}
                     >
                       <X size={14} />
                     </button>
                     <button
                       onClick={() => saveEdit(msg.id)}
                       className="p-1 text-brand-500 hover:opacity-80"
-                      aria-label="Save message edit"
-                      title="Save edit"
+                      aria-label={t('Save message edit')}
+                      title={t('Save edit')}
                     >
                       <Save size={14} />
                     </button>
@@ -544,7 +544,9 @@ export const Chat: React.FC<ChatProps> = ({
                       ) : msg.name === 'visit_page' ? (
                         <VisitPageResult content={msg.text} />
                       ) : (
-                        <CollapsibleToolSection title={`Tool Result: ${msg.name}`}>
+                        <CollapsibleToolSection
+                          title={t('Tool Result: {{name}}', { name: msg.name })}
+                        >
                           <MarkdownView content={msg.text} />
                           {msg.name === 'create_project' &&
                             msg.text.includes('Project created:') &&
@@ -584,10 +586,10 @@ export const Chat: React.FC<ChatProps> = ({
                                   title={
                                     !isModelAvailable
                                       ? chatDisabledReason
-                                      : 'Switch to New Project'
+                                      : t('Switch to New Project')
                                   }
                                 >
-                                  Switch to New Project
+                                  {t('Switch to New Project')}
                                 </Button>
                               </div>
                             )}
@@ -598,7 +600,7 @@ export const Chat: React.FC<ChatProps> = ({
                     <>
                       {msg.thinking && (
                         <CollapsibleToolSection
-                          title="Thinking Process"
+                          title={t('Thinking Process')}
                           isExpanded={
                             thinkingProcessExpanded[msg.id] !== undefined
                               ? thinkingProcessExpanded[msg.id]
@@ -622,7 +624,7 @@ export const Chat: React.FC<ChatProps> = ({
                         msg.attachments.length > 0 && (
                           <div className="mt-3 rounded-lg border border-brand-gray-200/80 bg-brand-gray-50/80 p-3 text-sm text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-950/60 dark:text-brand-gray-200">
                             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-gray-500 dark:text-brand-gray-400">
-                              Attachments
+                              {t('Attachments')}
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {msg.attachments.map((attachment) => (
@@ -642,7 +644,7 @@ export const Chat: React.FC<ChatProps> = ({
                         )}
                       {msg.traceback && (
                         <CollapsibleToolSection
-                          title="Stack Trace"
+                          title={t('Stack Trace')}
                           defaultExpanded={false}
                         >
                           <div className="text-[10px] font-mono bg-black/5 dark:bg-black/40 p-2 rounded overflow-x-auto whitespace-pre border border-black/10 dark:border-white/10 text-red-600 dark:text-red-400">
@@ -652,9 +654,14 @@ export const Chat: React.FC<ChatProps> = ({
                       )}
                       {msg.tool_calls && msg.tool_calls.length > 0 && (
                         <CollapsibleToolSection
-                          title={`${msg.tool_calls.length} Tool Call${
-                            msg.tool_calls.length > 1 ? 's' : ''
-                          } [${msg.tool_calls.map((tc) => tc.name).join(', ')}]`}
+                          title={
+                            t(
+                              msg.tool_calls.length > 1
+                                ? '{{count}} Tool Calls'
+                                : '{{count}} Tool Call',
+                              { count: msg.tool_calls.length }
+                            ) + ` [${msg.tool_calls.map((tc) => tc.name).join(', ')}]`
+                          }
                         >
                           <div className="space-y-2">
                             {msg.tool_calls.map((tc, i) => (
@@ -663,7 +670,8 @@ export const Chat: React.FC<ChatProps> = ({
                                 className="p-2 rounded bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 text-[10px] font-mono"
                               >
                                 <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
-                                  Call: {tc.name}
+                                  {t('Call: ')}
+                                  {tc.name}
                                 </div>
                                 <ToolCallArguments args={tc.args} />
                               </div>
@@ -677,20 +685,14 @@ export const Chat: React.FC<ChatProps> = ({
               )}
 
               {!editingMessageId && !isLoading && (
-                <div
-                  className={`absolute top-0 ${
-                    msg.role === 'user'
-                      ? 'left-0 -translate-x-full pr-2'
-                      : 'right-0 translate-x-full pl-2'
-                  } opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1`}
-                >
+                <div className="mt-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => {
                       if (!isModelAvailable) return;
                       startEditing(msg);
                     }}
                     className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
-                    title={!isModelAvailable ? chatDisabledReason : 'Edit'}
+                    title={!isModelAvailable ? chatDisabledReason : t('Edit')}
                     disabled={!isModelAvailable}
                   >
                     <Edit2 size={12} />
@@ -701,7 +703,7 @@ export const Chat: React.FC<ChatProps> = ({
                       onDeleteMessage(msg.id);
                     }}
                     className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
-                    title={!isModelAvailable ? chatDisabledReason : 'Delete'}
+                    title={!isModelAvailable ? chatDisabledReason : t('Delete')}
                     disabled={!isModelAvailable}
                   >
                     <Trash2 size={12} />
@@ -737,7 +739,7 @@ export const Chat: React.FC<ChatProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className={`p-4 border-t ${bgMain} ${borderMain}`}>
+      <div className={`p-4 border-t ${bgMain} ${themeClasses.border}`}>
         {sessionMutations.length > 0 && (
           <div className="mb-3">
             <MutationTags
@@ -757,9 +759,9 @@ export const Chat: React.FC<ChatProps> = ({
                   onClick={onStop}
                   icon={<X size={12} />}
                   className="text-xs py-1 h-7 border-dashed border-red-500/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-                  title="Stop generation"
+                  title={t('Stop generation')}
                 >
-                  Stop generation
+                  {t('Stop generation')}
                 </Button>
               ) : canRegenerate ? (
                 <Button
@@ -773,10 +775,10 @@ export const Chat: React.FC<ChatProps> = ({
                   title={
                     !isModelAvailable
                       ? chatDisabledReason
-                      : 'Regenerate last response (CHAT model)'
+                      : t('Regenerate last response (CHAT model)')
                   }
                 >
-                  Regenerate last response
+                  {t('Regenerate last response')}
                 </Button>
               ) : null}
             </div>
@@ -784,8 +786,8 @@ export const Chat: React.FC<ChatProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                title="Attach files"
-                aria-label="Attach files"
+                title={t('Attach files')}
+                aria-label={t('Attach files')}
                 className={`absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition ${
                   isLight
                     ? 'border-brand-gray-300 bg-white text-brand-gray-700 hover:bg-brand-gray-50'

@@ -33,11 +33,22 @@ export class AppErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
+      const isDark =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-color-scheme: dark)').matches;
       return (
-        <div className="h-screen w-screen flex items-center justify-center bg-brand-gray-50 text-brand-gray-800 p-6">
+        <div
+          className={`h-screen w-screen flex items-center justify-center p-6 ${
+            isDark
+              ? 'bg-brand-gray-900 text-brand-gray-100'
+              : 'bg-brand-gray-50 text-brand-gray-800'
+          }`}
+        >
           <div className="max-w-md text-center space-y-2">
             <h1 className="text-lg font-semibold">Something went wrong</h1>
-            <p className="text-sm text-brand-gray-600">
+            <p
+              className={`text-sm ${isDark ? 'text-brand-gray-400' : 'text-brand-gray-600'}`}
+            >
               Reload the page to continue working. If this keeps happening, check the
               browser console for details.
             </p>

@@ -18,6 +18,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useClickOutside } from '../../utils/hooks';
+
+const PANEL_STATE_KEY = 'aq_ui_panels';
 
 export type UIPanels = {
   isChatOpen: boolean;
@@ -37,31 +40,58 @@ export type UIPanels = {
 };
 
 export function useUIPanels(): UIPanels {
-  const [isChatOpen, setIsChatOpen] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PANEL_STATE_KEY);
+      return saved
+        ? ((JSON.parse(saved) as { isChatOpen?: boolean }).isChatOpen ?? false)
+        : false;
+    } catch {
+      return false;
+    }
+  });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PANEL_STATE_KEY);
+      return saved
+        ? ((JSON.parse(saved) as { isSidebarOpen?: boolean }).isSidebarOpen ?? false)
+        : false;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const current = JSON.parse(
+        localStorage.getItem(PANEL_STATE_KEY) || '{}'
+      ) as Record<string, unknown>;
+      localStorage.setItem(
+        PANEL_STATE_KEY,
+        JSON.stringify({ ...current, isSidebarOpen })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    try {
+      const current = JSON.parse(
+        localStorage.getItem(PANEL_STATE_KEY) || '{}'
+      ) as Record<string, unknown>;
+      localStorage.setItem(PANEL_STATE_KEY, JSON.stringify({ ...current, isChatOpen }));
+    } catch {
+      /* ignore */
+    }
+  }, [isChatOpen]);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isImagesOpen, setIsImagesOpen] = useState(false);
   const [isDebugLogsOpen, setIsDebugLogsOpen] = useState(false);
   const appearanceRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        appearanceRef.current &&
-        !appearanceRef.current.contains(event.target as Node)
-      ) {
-        setIsAppearanceOpen(false);
-      }
-    }
-
-    if (isAppearanceOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isAppearanceOpen]);
+  useClickOutside(appearanceRef, () => setIsAppearanceOpen(false), isAppearanceOpen);
 
   return {
     isChatOpen,
