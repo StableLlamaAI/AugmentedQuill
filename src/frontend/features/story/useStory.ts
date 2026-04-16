@@ -190,6 +190,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const [baselineState, setBaselineState] = useState<StoryState>(
     () => INITIAL_HISTORY_ENTRY.state
   );
+  // Incrementing this counter explicitly requests a chapter content reload without
+  // depending on story.lastUpdated (which changes on every prose-streaming setStory
+  // call and would otherwise cause a React "Maximum update depth exceeded" loop).
+  const [loadChapterSignal, setLoadChapterSignal] = useState(0);
   const hasFetchedRef = useRef(false);
   const latestStoryRef = useRef(story);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
@@ -337,6 +341,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           }
 
           lastLoadedChapterId.current = null;
+          setLoadChapterSignal((s) => s + 1);
           if (historyLabel) {
             pushState(newStory, historyLabel, false);
           } else {
@@ -398,7 +403,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     } else {
       setIsChapterLoading(false);
     }
-  }, [currentChapterId, story.lastUpdated]);
+  }, [currentChapterId, loadChapterSignal]);
 
   const fetchStory = useCallback(async () => {
     if (story.id) return;
@@ -514,8 +519,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     if (pushHistory) {
       pushState(newState, buildDraftUpdateLabel(partial), isUserEdit);
     } else {
-      setStory(newState);
+      // Keep the ref synchronous so subsequent logic sees the latest state
+      // immediately.  The actual React state update is deferred as a
+      // startTransition so rapid streaming-preview calls (rAF-rate) cannot
+      // exceed React 19's nested-update limit.
       latestStoryRef.current = newState;
+      startTransition(() => setStory(newState));
     }
 
     if (!sync) return;
@@ -588,8 +597,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     if (pushHistory) {
       pushState(newState, buildChapterUpdateLabel(chapter, partial), isUserEdit);
     } else {
-      setStory(newState);
       latestStoryRef.current = newState;
+      startTransition(() => setStory(newState));
     }
 
     if (!sync) return;
@@ -706,6 +715,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setHistory([createHistoryEntry(newStory, 'Load story')]);
       setCurrentIndex(0);
       setBaselineState(newStory); // no highlight after a fresh project load
+      lastLoadedChapterId.current = null;
+      setLoadChapterSignal((s) => s + 1);
       if (newStory.currentChapterId) {
         setCurrentChapterId(newStory.currentChapterId);
       } else if (newStory.chapters.length > 0) {

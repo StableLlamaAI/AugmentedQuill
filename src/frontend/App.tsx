@@ -643,7 +643,10 @@ const App: React.FC = () => {
   // composed from the original chapter text, not from already preview-mutated
   // text (which would duplicate prior chunks and cause heavy flicker/jumps).
   const prosePreviewStateRef = useRef<
-    Record<string, { base: string; lastAccumulated: string }>
+    Record<
+      string,
+      { base: string; lastAccumulated: string; lastAppliedContent?: string }
+    >
   >({});
 
   useEffect(() => {
@@ -690,6 +693,7 @@ const App: React.FC = () => {
           ? {
               base: unit.content || '',
               lastAccumulated: '',
+              lastAppliedContent: undefined,
             }
           : prevState;
 
@@ -708,9 +712,13 @@ const App: React.FC = () => {
         prosePreviewStateRef.current[streamKey] = {
           base: streamState.base,
           lastAccumulated: accumulated,
+          lastAppliedContent: newContent,
         };
 
-        if (newContent === unit.content) {
+        if (
+          newContent === unit.content ||
+          newContent === streamState.lastAppliedContent
+        ) {
           return;
         }
 
