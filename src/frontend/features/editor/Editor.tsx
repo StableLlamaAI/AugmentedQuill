@@ -165,6 +165,28 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
 
+    // Track the diff baseline locally so we can clear it immediately when the
+    // user types — preventing newly typed text from appearing as diff insertions.
+    // Re-adopt the prop whenever a new non-undefined baseline arrives (AI write).
+    const [localBaseline, setLocalBaseline] = useState<string | undefined>(
+      baselineContent
+    );
+    const prevBaselineRef = useRef<string | undefined>(baselineContent);
+    // Keep the last non-undefined baseline so undo can restore the diff view.
+    const savedBaselineRef = useRef<string | undefined>(baselineContent);
+    if (baselineContent !== prevBaselineRef.current) {
+      prevBaselineRef.current = baselineContent;
+      setLocalBaseline(baselineContent);
+      // Only preserve as the real AI baseline when baselineContent differs from
+      // chapter.content. When isUserEdit=true, pushState sets baselineContent
+      // equal to chapter.content (no diff), so we must not overwrite the saved
+      // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+      // that wrong baseline instead of the original AI-written baseline.
+      if (baselineContent !== undefined && baselineContent !== chapter.content) {
+        savedBaselineRef.current = baselineContent;
+      }
+    }
+
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
     // Keep local state in sync when the chapter changes externally (chapter
@@ -260,6 +282,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     // Follow stream at bottom only.
     useLayoutEffect(() => {
+      // Only auto-scroll during streaming — not on every user keystroke.
+      if (!isProseStreamingRef.current) return;
+
       const container = scrollContainerRef.current;
       if (!container) return;
 
@@ -948,8 +973,21 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   language={language}
                   spellCheck={spellCheck}
                   onOpenSearch={onOpenSearch}
-                  onChange={(val: string) => {
+                  onChange={(val: string, isUndoRedo?: boolean) => {
                     setLocalContent(val);
+                    // Clear diff immediately on user input so typed text is
+                    // never highlighted as a diff insertion. Keep the baseline
+                    // active when undo/redo is used so the diff view works.
+                    if (isUndoRedo) {
+                      // Undo/redo: always restore the real AI baseline so the
+                      // diff view activates, even if localBaseline was already
+                      // set to a user-edit baseline by the debounce firing.
+                      if (savedBaselineRef.current !== undefined) {
+                        setLocalBaseline(savedBaselineRef.current);
+                      }
+                    } else if (localBaseline !== undefined) {
+                      setLocalBaseline(undefined);
+                    }
                     checkContext();
                     if (contentDebounceRef.current)
                       clearTimeout(contentDebounceRef.current);
@@ -967,7 +1005,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                   }
                   showWhitespace={showWhitespace}
                   showDiff={settings.showDiff}
-                  baselineValue={baselineContent}
+                  baselineValue={localBaseline}
                   searchHighlightRanges={chapterSearchHighlightRanges}
                   enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
                   placeholder={

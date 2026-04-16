@@ -353,7 +353,7 @@ const externalValueSyncAnnotation = Annotation.define<boolean>();
 
 export interface CodeMirrorEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, isUndoRedo?: boolean) => void;
   /**
    * Editor display mode:
    * 'raw'      — plain text, no syntax highlighting, monospace
@@ -665,7 +665,10 @@ export const CodeMirrorEditor = React.forwardRef<
             }
             const val = update.state.doc.toString();
             lastEmittedRef.current = val;
-            onChangeRef.current(val);
+            const isUndoRedo = update.transactions.some(
+              (tx) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
+            );
+            onChangeRef.current(val, isUndoRedo);
           }
           if (update.selectionSet) {
             const { anchor, head } = update.state.selection.main;
