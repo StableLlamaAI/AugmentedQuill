@@ -37,6 +37,12 @@ import { markdown } from '@codemirror/lang-markdown';
 import { diff_match_patch } from 'diff-match-patch';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+import {
+  buildMarkdownDecorationPlugin,
+  markdownDecorationTheme,
+  type DecorationViewMode,
+} from './markdownDecorations';
+import { buildClipboardExtension } from './clipboardExtension';
 
 // ─── Diff Highlight ──────────────────────────────────────────────────────────
 
@@ -349,14 +355,25 @@ export interface CodeMirrorEditorProps {
   value: string;
   onChange: (value: string) => void;
   /**
-   * 'plain'    — no syntax highlighting (default)
-   * 'markdown' — Lezer-based markdown highlighting and softbreak Enter
+   * Editor display mode:
+   * 'raw'      — plain text, no syntax highlighting, monospace
+   * 'markdown' — Lezer-based markdown highlighting, inline widgets, softbreak Enter
+   * 'visual'   — markdown syntax hidden, WYSIWYG-like rendering, softbreak Enter
+   *
+   * Legacy alias: 'plain' maps to 'raw'.
+   */
+  viewMode?: 'raw' | 'markdown' | 'visual' | 'plain';
+  /**
+   * @deprecated Use viewMode instead. Kept for backward compatibility.
    */
   mode?: 'plain' | 'markdown';
   /** Show spaces / tabs / newlines as visible glyphs */
   showWhitespace?: boolean;
   /**
-   * 'newline'   — Enter inserts a plain newline (default)
+   * Override for Enter key behavior.  When not set, derived from viewMode:
+   *   raw → 'newline', markdown/visual → 'softbreak'
+   *
+   * 'newline'   — Enter inserts a plain newline
    * 'softbreak' — Enter inserts the markdown soft-break '  \n'; a second
    *               Enter on a line already ending with '  ' removes those
    *               spaces and inserts '\n\n' (paragraph break)
@@ -395,9 +412,10 @@ export const CodeMirrorEditor = React.forwardRef<
     {
       value,
       onChange,
-      mode = 'plain',
+      viewMode: viewModeProp,
+      mode: legacyMode,
       showWhitespace = false,
-      enterBehavior = 'newline',
+      enterBehavior: enterBehaviorProp,
       placeholder,
       className,
       style,
@@ -411,6 +429,18 @@ export const CodeMirrorEditor = React.forwardRef<
     },
     ref
   ) => {
+    // Resolve viewMode: new prop takes precedence, then legacy mode, then default
+    const viewMode: DecorationViewMode =
+      viewModeProp === 'plain'
+        ? 'raw'
+        : (viewModeProp ?? (legacyMode === 'markdown' ? 'markdown' : 'raw'));
+
+    // Derive enter behavior from viewMode unless explicitly overridden
+    const enterBehavior =
+      enterBehaviorProp ?? (viewMode === 'raw' ? 'newline' : 'softbreak');
+
+    // Derive CodeMirror language mode from viewMode
+    const mode: 'plain' | 'markdown' = viewMode === 'raw' ? 'plain' : 'markdown';
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -435,6 +465,7 @@ export const CodeMirrorEditor = React.forwardRef<
     const enterCompartment = useRef(new Compartment());
     const placeholderCompartment = useRef(new Compartment());
     const attributesCompartment = useRef(new Compartment());
+    const mdDecorationCompartment = useRef(new Compartment());
 
     // ── Extension builders ──────────────────────────────────────────────────
 
@@ -575,6 +606,9 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
 
+    const buildMdDecorationExtension = (vm: DecorationViewMode): Extension =>
+      buildMarkdownDecorationPlugin(vm);
+
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -584,7 +618,9 @@ export const CodeMirrorEditor = React.forwardRef<
 
       const extensions: Extension[] = [
         baseTheme,
+        markdownDecorationTheme,
         EditorView.lineWrapping,
+        buildClipboardExtension(),
         // Spellcheck / autocorrect / platform-native behavior in its own compartment
         attributesCompartment.current.of(
           buildAttributesExtension(language, spellCheck, placeholder)
@@ -618,6 +654,7 @@ export const CodeMirrorEditor = React.forwardRef<
         languageCompartment.current.of(buildLanguageExtension(mode)),
         wsCompartment.current.of(buildWsExtension(showWhitespace)),
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
+        mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
             const isExternalSync = update.transactions.some((tx) =>
@@ -667,6 +704,14 @@ export const CodeMirrorEditor = React.forwardRef<
         effects: languageCompartment.current.reconfigure(buildLanguageExtension(mode)),
       });
     }, [mode]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: mdDecorationCompartment.current.reconfigure(
+          buildMdDecorationExtension(viewMode)
+        ),
+      });
+    }, [viewMode]);
 
     useEffect(() => {
       viewRef.current?.dispatch({

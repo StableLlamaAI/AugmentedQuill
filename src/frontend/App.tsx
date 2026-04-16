@@ -336,13 +336,7 @@ const App: React.FC = () => {
     if (pending.end > 0 && content.length < pending.end) return;
     pendingJumpRef.current = null;
     const { start, end } = pending;
-    const doJump = () => editorRef.current?.jumpToPosition(start, end);
-    if (viewMode === 'wysiwyg') {
-      setViewMode('markdown');
-      requestAnimationFrame(() => requestAnimationFrame(doJump));
-    } else {
-      requestAnimationFrame(doJump);
-    }
+    requestAnimationFrame(() => editorRef.current?.jumpToPosition(start, end));
   }, [currentChapterId, currentChapter?.content]);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
@@ -1074,16 +1068,7 @@ const App: React.FC = () => {
                 }
                 storyLanguage={story.language || 'en'}
                 onJumpToPosition={(start, end) => {
-                  if (viewMode === 'wysiwyg') {
-                    setViewMode('markdown');
-                    requestAnimationFrame(() =>
-                      requestAnimationFrame(() =>
-                        editorRef.current?.jumpToPosition(start, end)
-                      )
-                    );
-                  } else {
-                    editorRef.current?.jumpToPosition(start, end);
-                  }
+                  editorRef.current?.jumpToPosition(start, end);
                 }}
                 onStoryChanged={() => void refreshStory()}
                 onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {

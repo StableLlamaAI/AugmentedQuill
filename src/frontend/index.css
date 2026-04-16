@@ -105,33 +105,6 @@ body.light ::-webkit-scrollbar-thumb:hover {
   color: currentColor;
 }
 
-/* In WS mode, show ¶ at the end of each block and ↵ before soft-break <br>
-   via CSS pseudo-elements. No DOM injection needed, so cursor movement and
-   Enter/Backspace at block boundaries work exactly like normal editing. */
-.prose-editor-ws p::after,
-.prose-editor-ws h1::after,
-.prose-editor-ws h2::after,
-.prose-editor-ws h3::after,
-.prose-editor-ws h4::after,
-.prose-editor-ws h5::after,
-.prose-editor-ws h6::after,
-.prose-editor-ws li::after,
-.prose-editor-ws blockquote > p::after {
-  content: '\00b6';
-  opacity: 0.4;
-  pointer-events: none;
-  user-select: none;
-  font-weight: normal;
-  font-style: normal;
-}
-
-.prose-editor-ws br::before {
-  content: '\21b5';
-  opacity: 0.4;
-  pointer-events: none;
-  user-select: none;
-}
-
 .search-highlight,
 mark.search-highlight {
   background-color: rgba(245, 158, 11, 0.25);

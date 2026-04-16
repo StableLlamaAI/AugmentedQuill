@@ -24,33 +24,21 @@ import {
   Loader2,
   SplitSquareHorizontal,
   RefreshCw,
-  PenLine,
   Wand2,
   FileEdit,
-  BookOpen,
-  Image as ImageIcon,
-  Trash2,
-  X,
   Upload,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
-// @ts-ignore
-import { marked } from 'marked';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
-import { createEditorTurndownService } from './turndown';
-import { configureMarked } from './configureMarked';
-import { diff_match_patch } from 'diff-match-patch';
 import {
-  applyInlineFormatAtSelection,
   getBlockType,
   getLineAtOffset,
   insertFencedCodeBlock,
   insertFootnote,
   isInlineFormatActiveAtSelection,
-  resolveInlineSelection,
   toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
   InlineFormatType,
@@ -58,34 +46,8 @@ import {
   TextSelectionRange,
 } from './markdownToolbarUtils';
 
-// URL sanitizer helpers for createLink/insertImage to avoid passing
-// unsafe protocols directly into document.execCommand.
-export const isSafeLinkUrl = (url: string): boolean => {
-  const value = url?.trim();
-  if (!value) return false;
-
-  // Block known dangerous protocols early.
-  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
-
-  // Allow http(s), ftp, mailto, and path-based links.
-  if (/^(?:https?:\/\/|ftp:\/\/|mailto:)/i.test(value)) {
-    if (/^(?:https?:\/\/|ftp:\/\/)/i.test(value)) {
-      try {
-        new URL(value);
-      } catch {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  return (
-    (value.startsWith('/') && !value.startsWith('//')) ||
-    value.startsWith('./') ||
-    value.startsWith('../')
-  );
-};
-
+// URL sanitizer helpers for image insertion to avoid passing
+// unsafe protocols directly into markdown content.
 export const isSafeImageUrl = (src: string): boolean => {
   const value = src?.trim();
   if (!value) return false;
@@ -107,19 +69,6 @@ export const isSafeImageUrl = (src: string): boolean => {
     value.startsWith('../')
   );
 };
-
-export const escapeHtmlAttribute = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-const TAB_PLACEHOLDER = '\uF000';
-
-// Configure marked extensions once (subscript, superscript, footnotes).
-configureMarked();
 
 interface EditorProps {
   chapter: WritingUnit;
@@ -159,10 +108,6 @@ interface EditorProps {
   onOpenSearch?: () => void;
 }
 
-interface TurndownServiceLike {
-  turndown: (html: string) => string;
-}
-
 export interface EditorHandle {
   insertImage: (filename: string, url: string, altText?: string) => void;
   focus: () => void;
@@ -170,195 +115,6 @@ export interface EditorHandle {
   openImageManager?: () => void;
   jumpToPosition: (start: number, end: number) => void;
 }
-
-// Strip all WS space/tab marker spans so the DOM is clean before re-parsing.
-// Newline-pilcrow markers are no longer injected into the DOM (they come from
-// CSS ::after rules) but the removal loop is kept as a safety net.
-const removeWsMarkersWysiwyg = (root: HTMLElement): void => {
-  for (const span of Array.from(
-    root.querySelectorAll<HTMLElement>('[data-ws-marker="1"],[data-ws-tab="1"]')
-  )) {
-    const isTab = span.dataset.wsTab === '1';
-    span.parentNode?.replaceChild(document.createTextNode(isTab ? '\t' : ' '), span);
-  }
-  for (const span of Array.from(root.querySelectorAll('[data-ws-nl="1"]'))) {
-    span.parentNode?.removeChild(span);
-  }
-  root.normalize();
-};
-
-// Inject visible space/tab dot-markers into the WYSIWYG contentEditable DOM.
-// Paragraph-end ¶ symbols are rendered via CSS ::after rules so they require
-// no DOM injection and never interfere with cursor movement or Enter/Backspace.
-const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
-  const textNodes: Text[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node: Node): number {
-      const parent = (node as Text).parentElement;
-      // Skip nodes inside existing WS marker spans
-      if (parent?.dataset.wsMarker || parent?.dataset.wsNl)
-        return NodeFilter.FILTER_SKIP;
-      // Skip text inside <code> or <pre>
-      let el: Element | null = parent;
-      while (el && el !== root) {
-        if (el.tagName === 'CODE' || el.tagName === 'PRE')
-          return NodeFilter.FILTER_SKIP;
-        el = el.parentElement;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  let n: Node | null;
-  while ((n = walker.nextNode())) textNodes.push(n as Text);
-
-  for (const textNode of textNodes) {
-    const text = textNode.textContent ?? '';
-    if (!text.includes(' ') && !text.includes('\t')) continue;
-    const frag = document.createDocumentFragment();
-    let i = 0;
-    for (let j = 0; j <= text.length; j++) {
-      if (j === text.length || text[j] === ' ' || text[j] === '\t') {
-        if (j > i) frag.appendChild(document.createTextNode(text.slice(i, j)));
-        if (j < text.length) {
-          const span = document.createElement('span');
-          span.dataset.wsMarker = '1';
-          const isTab = text[j] === '\t';
-          if (isTab) {
-            span.dataset.wsTab = '1';
-          }
-          span.setAttribute('aria-hidden', 'true');
-          span.className = 'cm-ws-marker';
-          span.textContent = isTab ? '→' : ' ';
-          span.contentEditable = 'false';
-          frag.appendChild(span);
-        }
-        i = j + 1;
-      }
-    }
-    textNode.parentNode?.replaceChild(frag, textNode);
-  }
-};
-
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const highlightTextNode = (textNode: Text, regex: RegExp, className: string): void => {
-  const text = textNode.nodeValue;
-  if (!text) return;
-  const match = regex.exec(text);
-  if (!match) return;
-
-  const before = document.createTextNode(text.slice(0, match.index));
-  const mark = document.createElement('span');
-  mark.className = className;
-  mark.textContent = match[0];
-  const after = document.createTextNode(text.slice(match.index + match[0].length));
-
-  const parent = textNode.parentNode;
-  if (!parent) return;
-  parent.insertBefore(before, textNode);
-  parent.insertBefore(mark, textNode);
-  parent.insertBefore(after, textNode);
-  parent.removeChild(textNode);
-
-  regex.lastIndex = 0;
-  highlightTextNode(after, regex, className);
-};
-
-// Regex matching an entire HTML block element on a single line.
-const BLOCK_TAG_RE =
-  /^(<(p|h[1-6]|li|blockquote|pre)(\s[^>]*)?>)([\s\S]*?)(<\/\2>)\s*$/;
-const BLOCK_TAGS_SET = new Set([
-  'P',
-  'H1',
-  'H2',
-  'H3',
-  'H4',
-  'H5',
-  'H6',
-  'LI',
-  'BLOCKQUOTE',
-  'PRE',
-]);
-
-// Strip diff markup injected by the diff renderer from the live DOM.
-// Called immediately when the user starts typing so the diff disappears
-// without waiting for a React re-render cycle.
-const stripDiffMarkupWysiwyg = (root: HTMLElement): void => {
-  // Unwrap inline diff spans: inserted content stays, deleted content goes.
-  for (const span of Array.from(
-    root.querySelectorAll('span.diff-inserted, span.diff-deleted')
-  )) {
-    const htmlEl = span as HTMLElement;
-    const parent = htmlEl.parentNode;
-    if (!parent) continue;
-    if (htmlEl.classList.contains('diff-deleted')) {
-      parent.removeChild(htmlEl);
-    } else {
-      while (htmlEl.firstChild) parent.insertBefore(htmlEl.firstChild, htmlEl);
-      parent.removeChild(htmlEl);
-    }
-  }
-  // Remove diff classes + inline styles from block elements.
-  for (const el of Array.from(root.querySelectorAll('.diff-inserted, .diff-deleted'))) {
-    const htmlEl = el as HTMLElement;
-    htmlEl.classList.remove('diff-inserted', 'diff-deleted');
-    htmlEl.style.removeProperty('background-color');
-    htmlEl.style.removeProperty('border-left');
-    htmlEl.style.removeProperty('text-decoration');
-    htmlEl.style.removeProperty('opacity');
-  }
-  root.normalize();
-};
-
-// For a replacement pair (one deleted block + one inserted block), compute
-// an INLINE word-level diff on the inner HTML so only the changed words are
-// highlighted rather than the whole paragraph.
-const applyInlineDiff = (deletedBlock: string, insertedBlock: string): string => {
-  const dM = deletedBlock.match(BLOCK_TAG_RE);
-  const iM = insertedBlock.match(BLOCK_TAG_RE);
-  // Fall back to whole-block highlight when block tags differ or regex fails.
-  const fallback = (html: string, cls: string) =>
-    html.replace(/(<(?:p|h[1-6]|li|blockquote|pre)(\s|>))/, `<$2 class="${cls}"$3`);
-  if (!dM || !iM || dM[2] !== iM[2]) {
-    return fallback(insertedBlock, 'diff-inserted');
-  }
-  const openTag = iM[1];
-  const closeTag = iM[5];
-  const baseInner = dM[4];
-  const newInner = iM[4];
-  const dmpInst = new diff_match_patch();
-  const charDiffs = dmpInst.diff_main(baseInner, newInner);
-  dmpInst.diff_cleanupSemantic(charDiffs);
-  // If any diff chunk crosses an HTML tag boundary, fall back to whole-block.
-  if (charDiffs.some(([op, t]) => op !== 0 && (t.includes('<') || t.includes('>')))) {
-    return fallback(insertedBlock, 'diff-inserted');
-  }
-  let inner = '';
-  for (const [op, t] of charDiffs) {
-    if (op === 0) inner += t;
-    else if (op === 1) inner += `<span class="diff-inserted">${t}</span>`;
-    else inner += `<span class="diff-deleted">${t}</span>`;
-  }
-  return openTag + inner + closeTag + '\n';
-};
-
-const highlightWysiwygSearchMatches = (root: HTMLElement, terms: string[]): void => {
-  if (terms.length === 0) return;
-
-  const uniqueTerms = Array.from(new Set(terms.filter((t) => t.trim() !== '')));
-  if (uniqueTerms.length === 0) return;
-
-  const regex = new RegExp(uniqueTerms.map(escapeRegExp).join('|'), 'g');
-
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    const parent = node.parentElement;
-    if (!parent || parent.closest('.search-highlight')) continue;
-    highlightTextNode(node as Text, regex, 'search-highlight');
-  }
-};
 
 export const Editor = React.forwardRef<EditorHandle, EditorProps>(
   (
@@ -379,12 +135,9 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     },
     ref
   ) => {
-    // CodeMirror EditorView for Raw / Markdown modes
+    // CodeMirror EditorView — persists across all view modes
     const editorViewRef = useRef<EditorView | null>(null);
     const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
-    const lastWysiwygSelectionRef = useRef<Range | null>(null);
-    const wysiwygRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const paperDivRef = useRef<HTMLDivElement>(null);
     const showInlineTitle = true;
@@ -395,13 +148,8 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     const prevScrollTopRef = useRef<number>(0);
     const autoScrollRafRef = useRef<number | null>(null);
     const autoScrollSettleRafRef = useRef<number | null>(null);
-    const { getRanges, getMatchTexts } = useSearchHighlight();
+    const { getRanges } = useSearchHighlight();
     const chapterSearchHighlightRanges = getRanges(
-      'chapter_content',
-      String(chapter.id),
-      'content'
-    );
-    const chapterSearchHighlightTexts = getMatchTexts(
       'chapter_content',
       String(chapter.id),
       'content'
@@ -409,7 +157,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const wysiwygDirtyRef = useRef(false);
     const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const DEBOUNCE_MS = 300;
 
@@ -417,14 +164,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // typed value immediately, while the parent onChange (API call) is debounced.
     const [localContent, setLocalContent] = useState(chapter.content);
     const [localTitle, setLocalTitle] = useState(chapter.title);
-
-    const [localBaseline, setLocalBaseline] = useState<string | undefined>(
-      baselineContent
-    );
-
-    useEffect(() => {
-      setLocalBaseline(baselineContent);
-    }, [baselineContent]);
 
     const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
@@ -484,27 +223,6 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // "useLatest" pattern recommended by the React team.
     const isProseStreamingRef = useRef(isProseStreaming);
     isProseStreamingRef.current = isProseStreaming;
-    // "useLatest" refs so effect cleanup functions always call current values
-    // without needing unstable props in their dependency arrays.
-    const onChangeRef = useRef(onChange);
-    onChangeRef.current = onChange;
-    const chapterContentRef = useRef(chapter.content);
-    chapterContentRef.current = chapter.content;
-    const chapterIdRef = useRef(chapter.id);
-    chapterIdRef.current = chapter.id;
-    const baselineContentRef = useRef(baselineContent);
-    baselineContentRef.current = baselineContent;
-    const localContentRef = useRef(localContent);
-    localContentRef.current = localContent;
-    // Keep a stable ref to localBaseline so the viewMode cleanup (which runs
-    // inside a useEffect(() => { ... }, [viewMode]) and therefore has a stale
-    // closure over React state) can check whether diff markup is currently
-    // showing.  The cleanup must NOT call onChange when innerHTML contains diff
-    // classes — that would save corrupted content and push a spurious history
-    // entry that advances the baseline, causing the diff to disappear.
-    const localBaselineRef = useRef(localBaseline);
-    localBaselineRef.current = localBaseline;
-
     // ── Scroll management ─────────────────────────────────────────────────────
     //
     // Design goals:
@@ -660,42 +378,18 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
     const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
       const alt = altText || filename;
-      if (viewMode === 'wysiwyg') {
-        if (!isSafeImageUrl(url)) {
-          // Avoid inserting malicious URI contents into execCommand.
-          return;
-        }
-
-        const safeUrl = escapeHtmlAttribute(url);
-        const safeAlt = escapeHtmlAttribute(alt);
-        const html = `<img src="${safeUrl}" alt="${safeAlt}" />`;
-
-        if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
-          document.execCommand('insertHTML', false, html);
-          wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
-        } else if (lastWysiwygSelectionRef.current) {
-          const selection = window.getSelection();
-          selection?.removeAllRanges();
-          selection?.addRange(lastWysiwygSelectionRef.current);
-          document.execCommand('insertHTML', false, html);
-          wysiwygRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
-        } else {
-          const markdown = `\n![${alt}](${url})`;
-          onChange(chapter.id, { content: chapter.content + markdown });
-        }
+      if (!isSafeImageUrl(url)) return;
+      const md = `![${alt}](${url})`;
+      const view = editorViewRef.current;
+      if (view) {
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: md },
+          selection: { anchor: from + md.length },
+        });
+        view.focus();
       } else {
-        const md = `![${alt}](${url})`;
-        const view = editorViewRef.current;
-        if (view) {
-          const { from, to } = view.state.selection.main;
-          view.dispatch({
-            changes: { from, to, insert: md },
-            selection: { anchor: from + md.length },
-          });
-          view.focus();
-        } else {
-          onChange(chapter.id, { content: chapter.content + '\n' + md });
-        }
+        onChange(chapter.id, { content: chapter.content + '\n' + md });
       }
     };
 
@@ -720,321 +414,36 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       }
     };
 
-    const turndownService = useRef<TurndownServiceLike | null>(null);
-    if (!turndownService.current) {
-      turndownService.current = createEditorTurndownService();
-    }
-
-    // Keep WYSIWYG DOM synchronized when content changes externally.
-    // Use `breaks: true` so single newlines in the markdown source are
-    // rendered as <br> rather than being collapsed — this makes the
-    // marked → turndown round-trip lossless for soft line-breaks.
-    //
-    // Dep: `localContent` rather than `chapter.content` for the same reason
-    // the auto-scroll effect uses localContent — `chapter.content` can be a
-    // deferred concurrent transition and may not be committed promptly in
-    // React 19. `localContent` is a normal-priority state update that is
-    // always applied immediately, so the diff highlight never lags behind
-    // the CodeMirror view.
-    useEffect(() => {
-      if (viewMode === 'wysiwyg' && wysiwygRef.current) {
-        // Don't interrupt the user's view when streaming and they've scrolled up.
-        if (isProseStreaming && !isAtBottomRef.current) {
-          return;
-        }
-
-        // We sync if not focused OR if we are actively streaming from AI
-        if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
-          // Parse the current markdown to HTML first, then apply diff highlighting
-          // at the HTML block level.  The previous approach of injecting <span>
-          // tags into the markdown source before marked.parse was broken: marked
-          // splits input at \n\n (paragraph separators), so a span wrapping
-          // multiple new paragraphs was always split apart, causing only the first
-          // new paragraph to be highlighted.  By diffing the rendered HTML at
-          // "line" (block element) granularity instead, diff classes are added
-          // directly to complete <p>/<h1>/<li> opening tags — block boundaries
-          // are never split.
-          const parsedCurrentHtml = marked.parse(
-            localContent.replace(/\t/g, TAB_PLACEHOLDER),
-            { breaks: true }
-          ) as string;
-
-          let wysiwygHtml = parsedCurrentHtml;
-
-          if (
-            settings.showDiff &&
-            localBaseline != null &&
-            localBaseline !== localContent
-          ) {
-            const parsedBaselineHtml = marked.parse(
-              localBaseline.replace(/\t/g, TAB_PLACEHOLDER),
-              { breaks: true }
-            ) as string;
-
-            // Line-mode diff on the rendered HTML: marked puts each block
-            // element on its own line, so each 'line' is one <p>/<li>/etc.
-            // block. This gives clean block-granularity diffs that never split
-            // an HTML tag boundary.
-            const dmpInst = new diff_match_patch();
-            const { chars1, chars2, lineArray } = dmpInst.diff_linesToChars_(
-              parsedBaselineHtml,
-              parsedCurrentHtml
-            );
-            const lineDiffs = dmpInst.diff_main(chars1, chars2, false);
-            dmpInst.diff_charsToLines_(lineDiffs, lineArray);
-
-            // Walk diffs pairing deletions immediately followed by insertions
-            // (replacements) so we can highlight only the changed words inline.
-            let highlightedHtml = '';
-            let di = 0;
-            while (di < lineDiffs.length) {
-              const [op, text] = lineDiffs[di];
-              if (
-                op === -1 &&
-                di + 1 < lineDiffs.length &&
-                lineDiffs[di + 1][0] === 1
-              ) {
-                // Replacement: compute inline word-level diff.
-                highlightedHtml += applyInlineDiff(
-                  lineDiffs[di][1],
-                  lineDiffs[di + 1][1]
-                );
-                di += 2;
-              } else if (op === 0) {
-                highlightedHtml += text;
-                di++;
-              } else if (op === 1) {
-                // Pure insertion (new block with no deleted counterpart).
-                highlightedHtml += text.replace(
-                  /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
-                  '<$1 class="diff-inserted"$2'
-                );
-                di++;
-              } else {
-                // Pure deletion (removed block).
-                highlightedHtml += text.replace(
-                  /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
-                  '<$1 class="diff-deleted"$2'
-                );
-                di++;
-              }
-            }
-
-            wysiwygHtml = highlightedHtml;
-          }
-
-          wysiwygRef.current.innerHTML = wysiwygHtml.replaceAll(
-            TAB_PLACEHOLDER,
-            '&#9;'
-          );
-          if (showWhitespace) {
-            injectWsMarkersWysiwyg(wysiwygRef.current);
-          }
-
-          if (chapterSearchHighlightTexts.length > 0) {
-            highlightWysiwygSearchMatches(
-              wysiwygRef.current,
-              chapterSearchHighlightTexts
-            );
-          }
-
-          // Apply diff background styles. Block elements also get a left accent bar;
-          // inline <span> elements use only the background (from CSS class).
-          const diffInserted = wysiwygRef.current.querySelectorAll('.diff-inserted');
-          diffInserted.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            htmlEl.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
-            if (BLOCK_TAGS_SET.has(htmlEl.tagName)) {
-              htmlEl.style.borderLeft = '3px solid rgba(34, 197, 94, 0.4)';
-            }
-          });
-
-          const diffDeleted = wysiwygRef.current.querySelectorAll('.diff-deleted');
-          diffDeleted.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            htmlEl.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-            htmlEl.style.textDecoration = 'line-through';
-            htmlEl.style.opacity = '0.7';
-          });
-        }
-      }
-    }, [
-      localContent,
-      viewMode,
-      chapter.id,
-      showWhitespace,
-      isProseStreaming,
-      localBaseline,
-    ]);
-
-    const detachFromBottomOnEdit = () => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      distanceFromBottomRef.current = distanceFromBottom;
-      const atBottom = distanceFromBottom < 24;
-      isAtBottomRef.current = atBottom;
-      if (!atBottom) {
-        isDetachedFromBottomRef.current = true;
-      }
-    };
-
-    const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
-      if (e && !e.nativeEvent.isTrusted) return;
-      detachFromBottomOnEdit();
-      // Guard: only trigger a re-render when the baseline was actually set.
-      // Unconditional setLocalBaseline(undefined) on every keystroke causes
-      // a React re-render each time, which is the primary source of lag.
-      if (localBaselineRef.current !== undefined) {
-        setLocalBaseline(undefined);
-        // The useEffect that clears diff markup from the DOM skips when the
-        // editor is focused. Strip it directly from the live DOM here so the
-        // user sees the diff disappear immediately on their first keypress.
-        if (wysiwygRef.current) stripDiffMarkupWysiwyg(wysiwygRef.current);
-      }
-      // Mark dirty so blur / passive backup will flush to the server.
-      // We deliberately avoid calling onChange here — that would cause React
-      // to re-render the entire Editor on every keystroke.
-      wysiwygDirtyRef.current = true;
-      checkContext();
-    };
-
-    // Passive backup save for WYSIWYG: flush content every 10 s so the user
-    // doesn't lose more than 10 s of work if they never blur the editor.
-    // We read everything through stable refs so this effect never needs to
-    // re-run and never causes a React re-render on its own.
-    useEffect(() => {
-      if (viewMode !== 'wysiwyg') return;
-      const id = setInterval(() => {
-        if (!wysiwygDirtyRef.current || !wysiwygRef.current) return;
-        const turndown = turndownService.current;
-        if (!turndown) return;
-        // Strip WS markers so turndown reads clean HTML
-        removeWsMarkersWysiwyg(wysiwygRef.current);
-        const md = turndown.turndown(wysiwygRef.current.innerHTML);
-        if (showWhitespace) injectWsMarkersWysiwyg(wysiwygRef.current);
-        if (md !== chapterContentRef.current) {
-          onChangeRef.current(chapterIdRef.current, { content: md });
-        }
-        wysiwygDirtyRef.current = false;
-      }, 10_000);
-      return () => clearInterval(id);
-    }, [viewMode, showWhitespace]);
-
-    // Re-inject WS markers on blur to normalise the DOM after editing
-    // (the browser may have created wrapper elements during typing).
-    const handleWysiwygBlur = () => {
-      if (!wysiwygRef.current) return;
-
-      // When a diff baseline is set the WYSIWYG innerHTML contains diff markup
-      // (diff-inserted / diff-deleted class attributes on block elements).  If
-      // we read that HTML back through turndown it would include the deleted
-      // text in the saved content — corrupting the chapter on the server.  User
-      // edits always clear localBaseline immediately via handleWysiwygInput, so
-      // when localBaseline is still defined no real user edit has occurred and
-      // there is nothing to flush.
-      if (localBaseline != null) return;
-
-      const currentMd =
-        turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
-
-      if (currentMd !== chapter.content) {
-        onChange(chapter.id, { content: currentMd });
-      }
-      wysiwygDirtyRef.current = false;
-
-      if (!showWhitespace) return;
-
-      wysiwygRef.current.innerHTML = marked.parse(currentMd, {
-        breaks: true,
-      }) as string;
-      injectWsMarkersWysiwyg(wysiwygRef.current);
-    };
-
     // Update active formatting state for toolbar affordances.
     const checkContext = () => {
       if (!onContextChange) return;
 
       const formats: string[] = [];
-      const isWysiwyg = viewMode === 'wysiwyg';
 
-      if (isWysiwyg) {
-        // Walk the DOM from the selection anchor to detect formatting applied
-        // either via execCommand or via markdown→HTML rendering.  queryCommandState
-        // is unreliable for elements that were not inserted by execCommand itself
-        // (e.g. <sub>/<sup>/<del> coming from marked).
-        const selAnchor = window.getSelection()?.anchorNode ?? null;
-        const isInsideTag = (tags: string[]): boolean => {
-          let node: Node | null = selAnchor;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              tags.includes((node as Element).tagName)
-            )
-              return true;
-            node = node.parentNode;
-          }
-          return false;
-        };
+      const view = editorViewRef.current;
+      if (view) {
+        const rawText = view.state.doc.toString();
+        const { anchor, head } = view.state.selection.main;
+        const rawCaret = head;
+        const rawStart = Math.min(anchor, head);
+        const rawEnd = Math.max(anchor, head);
 
-        if (document.queryCommandState('bold')) formats.push('bold');
-        if (document.queryCommandState('italic')) formats.push('italic');
-        // strikeThrough: prefer DOM walk so <del> from markdown is detected.
-        if (isInsideTag(['DEL', 'S', 'STRIKE'])) formats.push('strikethrough');
-        // subscript/superscript: queryCommandState is unreliable for <sub>/<sup>
-        // rendered from markdown; always use DOM walk.
-        if (isInsideTag(['SUB'])) formats.push('subscript');
-        // Superscript: exclude footnote-ref <sup> (class="footnote-ref")
-        const insideNonFootnoteSup = (() => {
-          let node: Node | null = selAnchor;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              (node as Element).tagName === 'SUP'
-            ) {
-              return !(node as Element).classList.contains('footnote-ref');
-            }
-            node = node.parentNode;
-          }
-          return false;
-        })();
-        if (insideNonFootnoteSup) formats.push('superscript');
-        if (document.queryCommandState('insertUnorderedList')) formats.push('ul');
-        if (document.queryCommandState('insertOrderedList')) formats.push('ol');
-        const formatBlock = document.queryCommandValue('formatBlock');
-        if (formatBlock === 'h1') formats.push('h1');
-        if (formatBlock === 'h2') formats.push('h2');
-        if (formatBlock === 'h3') formats.push('h3');
-        if (formatBlock === 'blockquote') formats.push('quote');
-      } else {
-        const view = editorViewRef.current;
-        if (view) {
-          const rawText = view.state.doc.toString();
-          const { anchor, head } = view.state.selection.main;
-          const rawCaret = head;
-          const rawStart = Math.min(anchor, head);
-          const rawEnd = Math.max(anchor, head);
+        const line = getLineAtOffset(rawText, rawCaret);
+        const blockType = getBlockType(line);
+        if (blockType) formats.push(blockType);
 
-          const line = getLineAtOffset(rawText, rawCaret);
-          const blockType = getBlockType(line);
-          if (blockType) formats.push(blockType);
+        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold'))
+          formats.push('bold');
+        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
+          formats.push('italic');
+        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'strikethrough'))
+          formats.push('strikethrough');
+        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'subscript'))
+          formats.push('subscript');
+        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'superscript'))
+          formats.push('superscript');
 
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold'))
-            formats.push('bold');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
-            formats.push('italic');
-          if (
-            isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'strikethrough')
-          )
-            formats.push('strikethrough');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'subscript'))
-            formats.push('subscript');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'superscript'))
-            formats.push('superscript');
-
-          lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
-        }
+        lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
       }
       onContextChange(formats);
     };
@@ -1057,34 +466,12 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     };
 
     const getEditorCaretOffset = useCallback((): number | null => {
-      if (viewMode === 'raw' || viewMode === 'markdown') {
-        return editorViewRef.current?.state.selection.main.head ?? null;
-      }
-      if (viewMode === 'wysiwyg') {
-        // DOM-to-markdown offset mapping is ambiguous in WYSIWYG mode;
-        // use content-end fallback while still requiring in-editor selection.
-        const inside =
-          !!wysiwygRef.current &&
-          !!window.getSelection()?.anchorNode &&
-          wysiwygRef.current.contains(window.getSelection()!.anchorNode);
-        return inside ? chapter.content.length : null;
-      }
-      return null;
-    }, [viewMode, chapter.content.length]);
+      return editorViewRef.current?.state.selection.main.head ?? null;
+    }, []);
 
     const isEditorFocused = useCallback(() => {
-      if (viewMode === 'raw' || viewMode === 'markdown') {
-        return editorViewRef.current?.hasFocus ?? false;
-      }
-      if (viewMode === 'wysiwyg') {
-        return (
-          !!wysiwygRef.current &&
-          document.activeElement &&
-          wysiwygRef.current.contains(document.activeElement)
-        );
-      }
-      return false;
-    }, [viewMode]);
+      return editorViewRef.current?.hasFocus ?? false;
+    }, []);
 
     const maybeHandleSuggestionHotkey = useCallback(
       (e: KeyboardEvent | React.KeyboardEvent) => {
@@ -1210,419 +597,85 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       return () => window.removeEventListener('keydown', onKeyDown, true);
     }, [maybeHandleSuggestionHotkey]);
 
-    useEffect(() => {
-      if (viewMode !== 'wysiwyg') return () => {};
-      const onSelectionChange = () => {
-        if (wysiwygRef.current) {
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            if (wysiwygRef.current.contains(range.commonAncestorContainer)) {
-              lastWysiwygSelectionRef.current = range.cloneRange();
-            }
-          }
-        }
-      };
-      document.addEventListener('selectionchange', onSelectionChange);
-      return () => document.removeEventListener('selectionchange', onSelectionChange);
-    }, [viewMode]);
-
-    useEffect(() => {
-      if (viewMode !== 'wysiwyg' || !wysiwygRef.current) return () => {};
-      // Always preserve the latest WYSIWYG state when leaving visual mode.
-      // Use refs (onChangeRef, chapterContentRef, chapterIdRef) so that this
-      // effect only re-runs when viewMode changes — not on every streaming
-      // chunk that updates chapter.content or recreates the onChange function.
-      // Without refs, the cleanup would fire on every render with a stale DOM
-      // (innerHTML not yet updated by the sync effect), writing old content
-      // back to state and causing a Maximum Update Depth Exceeded loop.
-      return () => {
-        if (!wysiwygRef.current) return;
-        // When a diff baseline is active the WYSIWYG innerHTML contains
-        // diff-inserted / diff-deleted class attributes on block elements.  If we
-        // read that HTML back through turndown it would include the deleted text,
-        // producing a corrupted markdown string.  Saving that would push a
-        // spurious history entry AND advance the baseline to the AI-written
-        // content — making the baseline equal the chapter content and erasing the
-        // diff highlight.  There is nothing to save on departure: user keystrokes
-        // always clear localBaseline immediately via handleWysiwygInput, so when
-        // it is still set here no real user edit has occurred.
-        if (localBaselineRef.current != null) return;
-        const currentMd =
-          turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
-        if (currentMd !== chapterContentRef.current) {
-          onChangeRef.current(chapterIdRef.current, { content: currentMd });
-        }
-      };
-    }, [viewMode]);
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (maybeHandleSuggestionHotkey(e)) return;
-
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        setTimeout(checkContext, 0);
-      }
-
-      // WS mode: intercept Space to insert a visible dot-marker span directly
-      // at the cursor.  This is O(1) and avoids a full tree re-injection.
-      if (
-        viewMode === 'wysiwyg' &&
-        showWhitespace &&
-        e.key === ' ' &&
-        !e.ctrlKey &&
-        !e.metaKey
-      ) {
-        e.preventDefault();
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const span = document.createElement('span');
-          span.dataset.wsMarker = '1';
-          span.setAttribute('aria-hidden', 'true');
-          span.className = 'cm-ws-marker';
-          span.textContent = ' ';
-          span.contentEditable = 'false';
-          range.insertNode(span);
-          range.setStartAfter(span);
-          range.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-        handleWysiwygInput();
-        return;
-      }
-
-      if (viewMode === 'wysiwyg' && e.key === 'Tab') {
-        e.preventDefault();
-        const inserted = document.execCommand('insertText', false, '\t');
-        if (!inserted) {
-          document.execCommand('insertHTML', false, '&#9;');
-        }
-        handleWysiwygInput();
-        return;
-      }
-
-      // Visual mode: intercept Enter to implement the soft-break / paragraph
-      // semantics that match MD mode:
-      //  • Plain Enter  → soft line-break (inserts <br>, stored as '\n')
-      //  • Shift+Enter  → new paragraph   (stored as '\n\n')
-      // We leave the browser default Enter-in-paragraph behaviour alone;
-      // instead we always insert a <br> and let turndown (with its softBreak
-      // rule) convert it back to a single '\n'.  A second Enter therefore
-      // inserts another <br> which becomes a second '\n' — markdown '\n\n' —
-      // which is a paragraph in readback.
-      if (viewMode === 'wysiwyg' && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        document.execCommand('insertLineBreak');
-        handleWysiwygInput();
-      }
-    };
-
-    const withRestoredWysiwygSelection = (action: () => void) => {
-      const root = wysiwygRef.current;
-      if (!root) return;
-
-      const selection = window.getSelection();
-      const savedRange =
-        selection && selection.rangeCount > 0
-          ? selection.getRangeAt(0).cloneRange()
-          : null;
-      const hasEditorSelection =
-        !!savedRange && root.contains(savedRange.startContainer);
-
-      root.focus();
-
-      if (hasEditorSelection && savedRange) {
-        selection?.removeAllRanges();
-        selection?.addRange(savedRange);
-      }
-
-      action();
-    };
-
-    const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch);
-
-    const selectWordAtCollapsedCaret = (): boolean => {
-      const root = wysiwygRef.current;
-      const selection = window.getSelection();
-      if (!root || !selection || selection.rangeCount === 0) return false;
-
-      const range = selection.getRangeAt(0);
-      if (!range.collapsed || !root.contains(range.startContainer)) return false;
-      if (range.startContainer.nodeType !== Node.TEXT_NODE) return false;
-
-      const textNode = range.startContainer as Text;
-      const text = textNode.textContent || '';
-      const offset = range.startOffset;
-      if (!isWordChar(text[offset])) return false;
-
-      let start = offset;
-      let end = offset;
-
-      while (start > 0 && isWordChar(text[start - 1])) start -= 1;
-      while (end < text.length && isWordChar(text[end])) end += 1;
-      if (start === end) return false;
-
-      const wordRange = document.createRange();
-      wordRange.setStart(textNode, start);
-      wordRange.setEnd(textNode, end);
-      selection.removeAllRanges();
-      selection.addRange(wordRange);
-      return true;
-    };
-
-    const applyInlineWysiwygFormat = (command: 'bold' | 'italic') => {
-      withRestoredWysiwygSelection(() => {
-        const selection = window.getSelection();
-        const hasSelection = !!selection && selection.rangeCount > 0;
-        const isCollapsed = hasSelection ? selection!.getRangeAt(0).collapsed : true;
-
-        if (isCollapsed) {
-          // Match expected MD-like ergonomics in visual mode:
-          // if caret is inside a word, format that word; otherwise insert empty style toggle.
-          selectWordAtCollapsedCaret();
-        }
-
-        document.execCommand(command);
-      });
-    };
-
     const format = (type: string) => {
-      if (viewMode === 'wysiwyg') {
-        // DOM helpers for sub/sup toggle and mutual-exclusion unwrapping.
-        const findWysiwygAncestor = (tags: string[]): Element | null => {
-          let node: Node | null = window.getSelection()?.anchorNode ?? null;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              tags.includes((node as Element).tagName)
-            )
-              return node as Element;
-            node = node.parentNode;
-          }
-          return null;
-        };
-        const unwrapWysiwygEl = (el: Element): void => {
-          const p = el.parentNode!;
-          while (el.firstChild) p.insertBefore(el.firstChild, el);
-          p.removeChild(el);
-        };
+      const view = editorViewRef.current;
+      if (!view) return;
 
-        switch (type) {
-          case 'bold':
-            applyInlineWysiwygFormat('bold');
-            break;
-          case 'italic':
-            applyInlineWysiwygFormat('italic');
-            break;
-          case 'strikethrough':
-            withRestoredWysiwygSelection(() => document.execCommand('strikeThrough'));
-            break;
-          case 'subscript': {
-            withRestoredWysiwygSelection(() => {
-              const subEl = findWysiwygAncestor(['SUB']);
-              if (subEl) {
-                // Already subscript — toggle off by unwrapping.
-                unwrapWysiwygEl(subEl);
-              } else {
-                // Remove any enclosing superscript first (mutual exclusion).
-                const supEl = findWysiwygAncestor(['SUP']);
-                if (supEl && !supEl.classList.contains('footnote-ref'))
-                  unwrapWysiwygEl(supEl);
-                document.execCommand('subscript');
-              }
-            });
-            break;
-          }
-          case 'superscript': {
-            withRestoredWysiwygSelection(() => {
-              const supEl = findWysiwygAncestor(['SUP']);
-              if (supEl && !supEl.classList.contains('footnote-ref')) {
-                // Already superscript — toggle off by unwrapping.
-                unwrapWysiwygEl(supEl);
-              } else {
-                // Remove any enclosing subscript first (mutual exclusion).
-                const subEl = findWysiwygAncestor(['SUB']);
-                if (subEl) unwrapWysiwygEl(subEl);
-                document.execCommand('superscript');
-              }
-            });
-            break;
-          }
-          case 'codeblock': {
-            withRestoredWysiwygSelection(() => {
-              const sel = window.getSelection();
-              if (sel && sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                const selectedText = range.toString();
-                const pre = document.createElement('pre');
-                const code = document.createElement('code');
-                code.textContent = selectedText || '';
-                pre.appendChild(code);
-                range.deleteContents();
-                range.insertNode(pre);
-              }
-            });
-            break;
-          }
-          case 'footnote': {
-            // Determine next footnote number from current content.
-            const currentMd =
-              turndownService.current?.turndown(wysiwygRef.current?.innerHTML ?? '') ??
-              '';
-            const existing = currentMd.match(/\[\^(\d+)\]/g) ?? [];
-            const maxNum = existing.reduce((max, m) => {
-              const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
-              return n > max ? n : max;
-            }, 0);
-            const fn = maxNum + 1;
-            withRestoredWysiwygSelection(() => {
-              const refHtml = `<sup class="footnote-ref" id="fnref-${fn}"><a href="#fn-${fn}">[${fn}]</a></sup>`;
-              document.execCommand('insertHTML', false, refHtml);
-            });
-            if (wysiwygRef.current) {
-              const defHtml = `<p class="footnote-def" id="fn-${fn}"><sup>[${fn}]</sup>\u00a0(footnote text) <a href="#fnref-${fn}" class="footnote-backref">\u21a9</a></p>`;
-              wysiwygRef.current.insertAdjacentHTML('beforeend', defHtml);
-            }
-            break;
-          }
-          case 'h1':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H1')
-            );
-            break;
-          case 'h2':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H2')
-            );
-            break;
-          case 'h3':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H3')
-            );
-            break;
-          case 'quote':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'BLOCKQUOTE')
-            );
-            break;
-          case 'ul':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('insertUnorderedList')
-            );
-            break;
-          case 'ol':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('insertOrderedList')
-            );
-            break;
-          case 'link': {
-            const url = prompt('Enter URL:');
-            if (url !== null) {
-              const safe = isSafeLinkUrl(url);
-              if (safe)
-                withRestoredWysiwygSelection(() =>
-                  document.execCommand('createLink', false, url)
-                );
-            }
-            break;
-          }
-          case 'image': {
-            const src = prompt('Enter Image URL:');
-            if (src !== null) {
-              const safe = isSafeImageUrl(src);
-              if (safe)
-                withRestoredWysiwygSelection(() =>
-                  document.execCommand('insertImage', false, src)
-                );
-            }
-            break;
-          }
-        }
-        handleWysiwygInput();
+      const rawText = view.state.doc.toString();
+      const { anchor, head } = view.state.selection.main;
+      const rawStart = Math.min(anchor, head);
+      const rawEnd = Math.max(anchor, head);
+
+      if (
+        type === 'h1' ||
+        type === 'h2' ||
+        type === 'h3' ||
+        type === 'quote' ||
+        type === 'ul' ||
+        type === 'ol'
+      ) {
+        toggleBlockAtCaret(type as MarkdownBlockType);
         checkContext();
-      } else {
-        // Raw / Markdown mode formatting via CodeMirror dispatch
-        const view = editorViewRef.current;
-        if (!view) return;
+        return;
+      }
 
-        const rawText = view.state.doc.toString();
-        const { anchor, head } = view.state.selection.main;
-        const rawStart = Math.min(anchor, head);
-        const rawEnd = Math.max(anchor, head);
+      if (
+        type === 'bold' ||
+        type === 'italic' ||
+        type === 'strikethrough' ||
+        type === 'subscript' ||
+        type === 'superscript'
+      ) {
+        const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
+          rawText,
+          rawStart,
+          rawEnd,
+          type as InlineFormatType
+        );
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+          selection: { anchor: nextStart, head: nextEnd },
+        });
+        view.focus();
+        checkContext();
+        return;
+      }
 
-        if (
-          type === 'h1' ||
-          type === 'h2' ||
-          type === 'h3' ||
-          type === 'quote' ||
-          type === 'ul' ||
-          type === 'ol'
-        ) {
-          toggleBlockAtCaret(type as MarkdownBlockType);
-          checkContext();
-          return;
-        }
+      if (type === 'link' || type === 'image') {
+        const selectedText = rawText.slice(rawStart, rawEnd);
+        const prefix = type === 'image' ? '![' : '[';
+        const suffix = `](${selectedText ? '' : 'url'})`;
+        const insert = prefix + selectedText + suffix;
+        view.dispatch({
+          changes: { from: rawStart, to: rawEnd, insert },
+          selection: { anchor: rawStart + insert.length },
+        });
+        view.focus();
+        return;
+      }
 
-        if (
-          type === 'bold' ||
-          type === 'italic' ||
-          type === 'strikethrough' ||
-          type === 'subscript' ||
-          type === 'superscript'
-        ) {
-          const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
-            rawText,
-            rawStart,
-            rawEnd,
-            type as InlineFormatType
-          );
-          view.dispatch({
-            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-            selection: { anchor: nextStart, head: nextEnd },
-          });
-          view.focus();
-          checkContext();
-          return;
-        }
+      if (type === 'codeblock') {
+        const { nextRawText, nextStart, nextEnd } = insertFencedCodeBlock(
+          rawText,
+          rawStart,
+          rawEnd
+        );
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+          selection: { anchor: nextStart, head: nextEnd },
+        });
+        view.focus();
+        return;
+      }
 
-        if (type === 'link' || type === 'image') {
-          const selectedText = rawText.slice(rawStart, rawEnd);
-          const prefix = type === 'image' ? '![' : '[';
-          const suffix = `](${selectedText ? '' : 'url'})`;
-          const insert = prefix + selectedText + suffix;
-          view.dispatch({
-            changes: { from: rawStart, to: rawEnd, insert },
-            selection: { anchor: rawStart + insert.length },
-          });
-          view.focus();
-          return;
-        }
-
-        if (type === 'codeblock') {
-          const { nextRawText, nextStart, nextEnd } = insertFencedCodeBlock(
-            rawText,
-            rawStart,
-            rawEnd
-          );
-          view.dispatch({
-            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-            selection: { anchor: nextStart, head: nextEnd },
-          });
-          view.focus();
-          return;
-        }
-
-        if (type === 'footnote') {
-          const { nextRawText, nextCaret } = insertFootnote(rawText, rawStart);
-          view.dispatch({
-            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-            selection: { anchor: nextCaret },
-          });
-          view.focus();
-          return;
-        }
+      if (type === 'footnote') {
+        const { nextRawText, nextCaret } = insertFootnote(rawText, rawStart);
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+          selection: { anchor: nextCaret },
+        });
+        view.focus();
+        return;
       }
     };
 
@@ -1630,8 +683,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       insertImage: (filename: string, url: string, altText?: string) =>
         insertImageMarkdown(filename, url, altText),
       focus: () => {
-        if (viewMode === 'wysiwyg') wysiwygRef.current?.focus();
-        else editorViewRef.current?.focus();
+        editorViewRef.current?.focus();
       },
       format: (type: string) => format(type),
       jumpToPosition: (start: number, end: number) => {
@@ -1889,73 +941,47 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
             {/* Editor Area */}
             <div id="editor-area" className="flex flex-col relative w-full">
-              {/* WYSIWYG View */}
-              <div
-                id="wysiwyg-editor"
-                ref={wysiwygRef}
-                contentEditable
-                role="textbox"
-                tabIndex={0}
-                aria-multiline="true"
-                aria-label="Story content"
-                onInput={handleWysiwygInput}
-                onBlur={handleWysiwygBlur}
-                onMouseUp={checkContext}
-                onPointerDown={detachFromBottomOnEdit}
-                onKeyDown={handleKeyDown}
-                onKeyUp={(e) => {
-                  checkContext();
-                }}
-                lang={language || 'en'}
-                spellCheck={spellCheck}
-                className={`prose-editor outline-none w-full ${
-                  viewMode === 'wysiwyg' ? 'block' : 'hidden'
-                }${showWhitespace ? ' prose-editor-ws' : ''}`}
-                style={{
-                  ...commonTextStyle,
-                  whiteSpace: 'normal',
-                }}
-              />
-
-              {/* Raw / Markdown View */}
-              {(viewMode === 'raw' || viewMode === 'markdown') && (
-                <div id="raw-markdown-editor" className="relative w-full flex flex-col">
-                  <CodeMirrorEditor
-                    ref={editorViewRef}
-                    value={localContent}
-                    language={language}
-                    spellCheck={spellCheck}
-                    onOpenSearch={onOpenSearch}
-                    onChange={(val: string) => {
-                      setLocalContent(val);
-                      setLocalBaseline(undefined); // clear diff immediately on user input
-                      checkContext();
-                      if (contentDebounceRef.current)
-                        clearTimeout(contentDebounceRef.current);
-                      contentDebounceRef.current = setTimeout(() => {
-                        onChange(chapter.id, { content: val });
-                      }, DEBOUNCE_MS);
-                    }}
-                    onSelectionChange={checkContext}
-                    mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
-                    showWhitespace={showWhitespace}
-                    showDiff={settings.showDiff}
-                    baselineValue={localBaseline}
-                    searchHighlightRanges={chapterSearchHighlightRanges}
-                    enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
-                    placeholder={
-                      chapter.scope === 'story'
-                        ? 'Start writing your story here...'
-                        : 'Start writing your chapter here...'
-                    }
-                    className="w-full"
-                    style={{
-                      ...commonTextStyle,
-                      caretColor: textColor,
-                    }}
-                  />
-                </div>
-              )}
+              <div id="codemirror-editor" className="relative w-full flex flex-col">
+                <CodeMirrorEditor
+                  ref={editorViewRef}
+                  value={localContent}
+                  language={language}
+                  spellCheck={spellCheck}
+                  onOpenSearch={onOpenSearch}
+                  onChange={(val: string) => {
+                    setLocalContent(val);
+                    checkContext();
+                    if (contentDebounceRef.current)
+                      clearTimeout(contentDebounceRef.current);
+                    contentDebounceRef.current = setTimeout(() => {
+                      onChange(chapter.id, { content: val });
+                    }, DEBOUNCE_MS);
+                  }}
+                  onSelectionChange={checkContext}
+                  viewMode={
+                    viewMode === 'wysiwyg'
+                      ? 'visual'
+                      : viewMode === 'markdown'
+                        ? 'markdown'
+                        : 'plain'
+                  }
+                  showWhitespace={showWhitespace}
+                  showDiff={settings.showDiff}
+                  baselineValue={baselineContent}
+                  searchHighlightRanges={chapterSearchHighlightRanges}
+                  enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                  placeholder={
+                    chapter.scope === 'story'
+                      ? 'Start writing your story here...'
+                      : 'Start writing your chapter here...'
+                  }
+                  className="w-full"
+                  style={{
+                    ...commonTextStyle,
+                    caretColor: textColor,
+                  }}
+                />
+              </div>
             </div>
           </div>
 
