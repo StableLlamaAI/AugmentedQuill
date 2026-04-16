@@ -573,6 +573,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
             isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
             onToggleAutoSelection={onToggleAutoSourcebookSelection}
             isAutoSelectionRunning={isSourcebookSelectionRunning}
+            mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
             onMutated={onSourcebookMutated}
             onAppUndo={onAppUndo}
             onAppRedo={onAppRedo}

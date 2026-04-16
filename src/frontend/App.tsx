@@ -9,7 +9,7 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -103,27 +103,33 @@ const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
     };
   },
   add_sourcebook_relation: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
+    const targetId = args.target_id || args.targetId;
+    const label = sourceId
+      ? `SB: ${sourceId}`
+      : targetId
+        ? `SB: ${targetId}`
+        : 'Sourcebook';
     return {
       id: `sb-${Date.now()}-${Math.random()}`,
       type: 'sourcebook',
       label,
-      targetId: id as string | undefined,
+      targetId: (sourceId || targetId) as string | undefined,
     };
   },
   remove_sourcebook_relation: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
+    const targetId = args.target_id || args.targetId;
+    const label = sourceId
+      ? `SB: ${sourceId}`
+      : targetId
+        ? `SB: ${targetId}`
+        : 'Sourcebook';
     return {
       id: `sb-${Date.now()}-${Math.random()}`,
       type: 'sourcebook',
       label,
-      targetId: id as string | undefined,
+      targetId: (sourceId || targetId) as string | undefined,
     };
   },
   // Metadata tools – produce one tag per changed field
@@ -574,6 +580,14 @@ const App: React.FC = () => {
     recordHistoryEntry: pushExternalHistoryEntry,
   });
 
+  const sourcebookMutationEntryIds = useMemo(() => {
+    return new Set(
+      sessionMutations
+        .filter((m) => m.type === 'sourcebook' && m.targetId)
+        .map((m) => m.targetId as string)
+    );
+  }, [sessionMutations]);
+
   const onMutationClick = useCallback(
     (m: SessionMutation) => {
       if (m.type === 'chapter') {
@@ -867,6 +881,7 @@ const App: React.FC = () => {
                 isAutoSourcebookSelectionEnabled,
                 onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
                 isSourcebookSelectionRunning,
+                mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
                 onSourcebookMutated: async (params) => {
                   const entryExistsInBaseline = Boolean(
                     params.entryExistsInBaseline ??

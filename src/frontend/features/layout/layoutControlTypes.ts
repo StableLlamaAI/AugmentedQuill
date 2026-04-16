@@ -162,6 +162,7 @@ export type MainSidebarControls = {
   isAutoSourcebookSelectionEnabled?: boolean;
   onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
   isSourcebookSelectionRunning?: boolean;
+  mutatedSourcebookEntryIds?: Set<string>;
   onSourcebookMutated?: (entry: {
     label: string;
     onUndo?: () => Promise<void>;

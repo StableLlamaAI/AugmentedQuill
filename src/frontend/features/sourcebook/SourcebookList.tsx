@@ -59,6 +59,7 @@ interface SourcebookListProps {
     entryId?: string;
     entryExistsInBaseline?: boolean;
   }) => Promise<void>;
+  mutatedEntryIds?: Set<string>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;
   canAppUndo?: boolean;
@@ -178,6 +179,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
   canAppRedo = false,
   sourcebookDialogTrigger,
   closeDialogTrigger,
+  mutatedEntryIds,
   language = 'en',
   baselineEntries,
 }) => {
@@ -334,6 +336,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
         .map((e) => e.id)
     );
   }, [entries, baselineEntries]);
+  const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
 
   const deletedEntries = useMemo<SourcebookEntry[]>(() => {
     if (!baselineEntries) return [];
@@ -594,7 +597,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
               const isChecked = checkedIds.includes(e.id);
               const diffBorderClass = createdEntryIds.has(e.id)
                 ? 'border-l-2 border-l-green-500'
-                : modifiedEntryIds.has(e.id)
+                : modifiedEntryIds.has(e.id) || externalMutationEntryIds.has(e.id)
                   ? 'border-l-2 border-l-amber-400'
                   : '';
               return (
