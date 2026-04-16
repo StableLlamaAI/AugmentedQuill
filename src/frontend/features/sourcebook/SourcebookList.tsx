@@ -58,6 +58,8 @@ interface SourcebookListProps {
     onRedo?: () => Promise<void>;
     entryId?: string;
     entryExistsInBaseline?: boolean;
+    /** The upserted entry after create/update, or null after delete. */
+    updatedEntry?: SourcebookEntry | null;
   }) => Promise<void>;
   mutatedEntryIds?: Set<string>;
   onAppUndo?: () => Promise<void>;
@@ -382,6 +384,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       },
       entryId: created.id,
       entryExistsInBaseline: Boolean(baselineEntries?.some((b) => b.id === created.id)),
+      updatedEntry: created,
     });
   };
 
@@ -426,6 +429,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       },
       entryId: entry.id,
       entryExistsInBaseline,
+      updatedEntry: updated,
     });
   };
 
@@ -459,6 +463,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
       },
       entryId: deletedEntry.id,
       entryExistsInBaseline,
+      updatedEntry: null,
     });
   };
 

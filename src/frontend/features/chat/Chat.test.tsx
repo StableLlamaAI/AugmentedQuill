@@ -160,6 +160,35 @@ describe('Chat', () => {
     expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
   });
 
+  it('renders mutation tags as buttons and invokes click handler', () => {
+    const onMutationClick = vi.fn();
+    renderWithI18n(
+      <Chat
+        messages={[]}
+        isLoading={false}
+        scratchpad=""
+        onUpdateScratchpad={vi.fn()}
+        onDeleteScratchpad={vi.fn()}
+        sessionMutations={[
+          { id: 'm1', type: 'chapter', label: 'Updated chapter title', targetId: '1' },
+        ]}
+        onMutationClick={onMutationClick}
+        {...defaultProps}
+      />
+    );
+
+    const tagButton = screen.getByRole('button', { name: /Updated chapter title/i });
+    expect(tagButton.getAttribute('type')).toBe('button');
+
+    fireEvent.click(tagButton);
+    expect(onMutationClick).toHaveBeenCalledWith({
+      id: 'm1',
+      type: 'chapter',
+      label: 'Updated chapter title',
+      targetId: '1',
+    });
+  });
+
   it('allows file attachments to be added, previewed, and sent', async () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });

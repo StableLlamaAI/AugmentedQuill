@@ -9,7 +9,14 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  startTransition,
+} from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -261,6 +268,7 @@ const App: React.FC = () => {
     canRedo,
     baselineState,
     advanceBaselineToCurrentStory,
+    patchSourcebook,
     isChapterLoading,
   } = useStory({ confirm, alert: (msg) => void alert(msg) });
 
@@ -590,39 +598,43 @@ const App: React.FC = () => {
 
   const onMutationClick = useCallback(
     (m: SessionMutation) => {
-      if (m.type === 'chapter') {
-        if (m.targetId) {
-          handleChapterSelect(m.targetId);
-        }
-      } else if (m.type === 'story') {
-        handleChapterSelect(null);
-      } else if (m.type === 'metadata') {
-        setIsSidebarOpen(true);
-        setMetadataDialogTrigger((prev) => ({
-          id: (prev?.id ?? 0) + 1,
-          initialTab: m.subType as any,
-        }));
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-        }));
-      } else if (m.type === 'sourcebook') {
-        setIsSidebarOpen(true);
-        setSourcebookDialogTrigger((prev) => ({
-          id: (prev?.id ?? 0) + 1,
-          entryId: m.targetId ?? '',
-        }));
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-        }));
-      } else if (m.type === 'book') {
-        setIsSidebarOpen(true);
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-        }));
-      }
+      startTransition(() => {
+        requestAnimationFrame(() => {
+          if (m.type === 'chapter') {
+            if (m.targetId) {
+              handleChapterSelect(m.targetId);
+            }
+          } else if (m.type === 'story') {
+            handleChapterSelect(null);
+          } else if (m.type === 'metadata') {
+            setIsSidebarOpen(true);
+            setMetadataDialogTrigger((prev) => ({
+              id: (prev?.id ?? 0) + 1,
+              initialTab: m.subType as any,
+            }));
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+            }));
+          } else if (m.type === 'sourcebook') {
+            setIsSidebarOpen(true);
+            setSourcebookDialogTrigger((prev) => ({
+              id: (prev?.id ?? 0) + 1,
+              entryId: m.targetId ?? '',
+            }));
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+            }));
+          } else if (m.type === 'book') {
+            setIsSidebarOpen(true);
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+            }));
+          }
+        });
+      });
     },
     [handleChapterSelect, setIsSidebarOpen, setEditorSettings]
   );
@@ -890,25 +902,47 @@ const App: React.FC = () => {
                     )
                   );
 
-                  if (!entryExistsInBaseline) {
-                    // For AI-created entries that are being edited by the user,
-                    // keep the pre-save baseline so the transition from created
-                    // (green) to modified (amber) is preserved.
-                    advanceBaselineToCurrentStory();
+                  if (params.updatedEntry !== undefined) {
+                    // Capture the pre-save baseline BEFORE patching the ref so
+                    // AI-created entries edited by the user show as "modified"
+                    // (amber) rather than "created" (green) after save.
+                    if (!entryExistsInBaseline) {
+                      advanceBaselineToCurrentStory();
+                    }
+
+                    const changed = patchSourcebook(
+                      params.updatedEntry,
+                      params.entryId
+                    );
+                    if (!changed) {
+                      // Content is identical to what was already stored — the
+                      // user opened and saved without edits.  Skip all state
+                      // updates to avoid the full-app re-render entirely.
+                      return;
+                    }
+
+                    if (entryExistsInBaseline) {
+                      // Manual edits to an already-baselined entry: advance
+                      // baseline to post-save state so no diff is shown.
+                      advanceBaselineToCurrentStory();
+                    }
+
+                    // forceNewHistory skips the expensive areStoriesEqual
+                    // JSON.stringify — content change was already confirmed
+                    // by patchSourcebook above.
+                    pushExternalHistoryEntry({ ...params, forceNewHistory: true });
+                  } else {
+                    // Fallback: full refresh for external mutations (e.g. LLM
+                    // tool results where we don't have the resulting entry).
+                    if (!entryExistsInBaseline) {
+                      advanceBaselineToCurrentStory();
+                    }
+                    await refreshStory();
+                    if (entryExistsInBaseline) {
+                      advanceBaselineToCurrentStory();
+                    }
+                    pushExternalHistoryEntry(params);
                   }
-
-                  // Refresh story so story.sourcebook reflects the mutation
-                  // before we snapshot the state into the undo/redo history.
-                  await refreshStory();
-
-                  if (entryExistsInBaseline) {
-                    // Manual edits to an already-baselined entry should not be
-                    // shown as an automatic diff; set the baseline to the new
-                    // post-save story state instead.
-                    advanceBaselineToCurrentStory();
-                  }
-
-                  pushExternalHistoryEntry(params);
                 },
                 onAppUndo: undo,
                 onAppRedo: redo,

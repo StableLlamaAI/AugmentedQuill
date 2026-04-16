@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { StoryState, Chapter, Book, WritingUnit } from '../../types';
+import { StoryState, Chapter, Book, WritingUnit, SourcebookEntry } from '../../types';
 import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
@@ -239,6 +239,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       state?: StoryState;
       onUndo?: () => Promise<void> | void;
       onRedo?: () => Promise<void> | void;
+      /** When true, skip the areStoriesEqual check and always push a new
+       *  history entry.  Use when the caller already knows the state changed
+       *  (e.g. after patchSourcebook confirmed a diff), avoiding an expensive
+       *  full-story JSON.stringify. */
+      forceNewHistory?: boolean;
     }) => {
       const sourceState = resolveExternalHistorySourceState(
         params.state,
@@ -248,7 +253,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const updatedState = { ...sourceState, lastUpdated: Date.now() };
 
       const currentEntry = history[currentIndex];
-      if (currentEntry && areStoriesEqual(currentEntry.state, updatedState)) {
+      if (
+        !params.forceNewHistory &&
+        currentEntry &&
+        areStoriesEqual(currentEntry.state, updatedState)
+      ) {
         // Update the existing entry with the undo/redo handlers if they are missing
         const updatedOnUndo = params.onUndo ?? currentEntry.onUndo;
         const updatedOnRedo = params.onRedo ?? currentEntry.onRedo;
@@ -266,7 +275,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           };
           setHistory(updatedHistory);
         }
-        setStory(updatedState);
+        // Stories are equal in content; skip setStory to avoid a costly
+        // full-app re-render when nothing meaningful changed.  The ref is
+        // already current so subsequent pushes will build on correct state.
         latestStoryRef.current = updatedState;
         return;
       }
@@ -774,6 +785,54 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     setBaselineState(latestStoryRef.current);
   }, []);
 
+  /**
+   * Patch only `latestStoryRef.current.sourcebook` without triggering a React
+   * re-render.  Returns `true` when the entry content actually changed (using
+   * only user-editable fields; auto-generated keywords are excluded so a
+   * background keyword refresh never counts as a change).  Returns `false`
+   * when the content is identical, meaning no state update is needed at all.
+   *
+   * Callers should only call `pushExternalHistoryEntry` when this returns
+   * `true` — and can pass `forceNewHistory: true` since a content difference
+   * is already confirmed, skipping the expensive areStoriesEqual JSON.stringify.
+   *
+   * Pass `null` for `entry` to remove an entry by `entryId`.
+   */
+  const patchSourcebook = useCallback(
+    (entry: SourcebookEntry | null, entryId?: string): boolean => {
+      if (!latestStoryRef.current) return false;
+      const prev = latestStoryRef.current.sourcebook ?? [];
+      let next: SourcebookEntry[];
+      if (entry === null) {
+        next = prev.filter((e) => e.id !== entryId);
+        if (next.length === prev.length) return false; // entry not found
+      } else {
+        const idx = prev.findIndex((e) => e.id === entry.id);
+        if (idx >= 0) {
+          // Compare only user-editable fields; keywords are auto-generated and
+          // must not cause a spurious content-changed detection.
+          const sig = (e: SourcebookEntry) =>
+            JSON.stringify({
+              name: e.name,
+              description: e.description,
+              category: e.category,
+              synonyms: e.synonyms,
+              images: e.images,
+              relations: e.relations,
+            });
+          if (sig(prev[idx]) === sig(entry)) return false; // no meaningful change
+          next = [...prev];
+          next[idx] = entry;
+        } else {
+          next = [...prev, entry];
+        }
+      }
+      latestStoryRef.current = { ...latestStoryRef.current, sourcebook: next };
+      return true;
+    },
+    []
+  );
+
   const undoOptions: StoryHistoryOption[] = [];
   for (let idx = currentIndex; idx > 0 && undoOptions.length < 10; idx -= 1) {
     undoOptions.push({
@@ -824,6 +883,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     canRedo: currentIndex < history.length - 1,
     baselineState,
     advanceBaselineToCurrentStory,
+    patchSourcebook,
     isChapterLoading,
   };
 };

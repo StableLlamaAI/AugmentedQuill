@@ -242,6 +242,13 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const [history, setHistory] = useState<SourcebookEntryHistoryState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const isRestoringRef = useRef(false);
+  // Refs that mirror history state so the push-effect can read them without
+  // listing them as deps — this prevents the effect from re-triggering itself
+  // every time it pushes a new entry.
+  const historyRef = useRef<SourcebookEntryHistoryState[]>([]);
+  const historyIndexRef = useRef(0);
+  historyRef.current = history;
+  historyIndexRef.current = historyIndex;
 
   // No automatic syncing; rely on parent to provide a fully-loaded entry.
 
@@ -268,27 +275,22 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       keywords,
     };
 
-    const current = history[historyIndex];
+    const idx = historyIndexRef.current;
+    const current = historyRef.current[idx];
     if (current && JSON.stringify(current) === JSON.stringify(snapshot)) {
       return;
     }
 
     setHistory((prev) => {
-      const next = [...prev.slice(0, historyIndex + 1), snapshot];
+      const next = [...prev.slice(0, idx + 1), snapshot];
       return next.length > 100 ? next.slice(next.length - 100) : next;
     });
-    setHistoryIndex((prev) => Math.min(prev + 1, 99));
-  }, [
-    name,
-    description,
-    category,
-    synonyms,
-    images,
-    relations,
-    keywords,
-    historyIndex,
-    history,
-  ]);
+    setHistoryIndex(Math.min(idx + 1, 99));
+    // NOTE: history and historyIndex are intentionally omitted from deps.
+    // They are read via historyRef/historyIndexRef to prevent this effect from
+    // re-running each time it updates those values (which previously caused a
+    // double JSON.stringify pass on every field change).
+  }, [name, description, category, synonyms, images, relations, keywords]);
 
   const restoreSourcebookHistory = (index: number) => {
     if (index < 0 || index >= history.length) {

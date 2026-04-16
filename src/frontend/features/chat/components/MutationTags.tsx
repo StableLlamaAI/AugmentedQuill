@@ -60,8 +60,12 @@ export const MutationTags: React.FC<MutationTagsProps> = ({
     <div className="flex flex-wrap gap-2 mb-3">
       {mutations.map((m) => (
         <button
+          type="button"
           key={m.id}
-          onClick={() => onMutationClick(m)}
+          onClick={(event) => {
+            event.preventDefault();
+            onMutationClick(m);
+          }}
           className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-medium transition-colors ${bgClass} ${textClass} ${hoverClass}`}
         >
           {getIcon(m.type)}

@@ -194,7 +194,9 @@ class SourcebookApiTest(ApiTestCase):
             )
             self.assertEqual(create.status_code, 200, create.text)
             body = create.json()
-            self.assertEqual(body.get("keywords"), ["traveling archivist"])
+            # Keywords are refreshed in a background task; the immediate response
+            # returns the entry without keywords.
+            self.assertEqual(body.get("keywords"), [])
             mocked_refresh.assert_awaited_once_with("Aelith", payload={})
 
     def test_sourcebook_api_update_calls_keyword_refresh(self):
@@ -229,7 +231,9 @@ class SourcebookApiTest(ApiTestCase):
             )
             self.assertEqual(update.status_code, 200, update.text)
             body = update.json()
-            self.assertEqual(body.get("keywords"), ["renowned archivist"])
+            # Keywords are refreshed in a background task; the immediate response
+            # returns the entry without keywords.
+            self.assertEqual(body.get("keywords"), [])
             mocked_refresh.assert_awaited_once_with("Aelith", payload={})
 
     def test_sourcebook_keywords_endpoint(self):

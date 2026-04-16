@@ -19,6 +19,7 @@ import type {
   ChatSession,
   EditorSettings,
   LLMConfig,
+  SourcebookEntry,
   StoryState,
   ViewMode,
   WritingUnit,
@@ -169,6 +170,10 @@ export type MainSidebarControls = {
     onRedo?: () => Promise<void>;
     entryId?: string;
     entryExistsInBaseline?: boolean;
+    /** The upserted entry after create/update, or null after delete.
+     *  When provided, the receiver should patch story.sourcebook directly
+     *  instead of calling refreshStory() to avoid a full app re-render. */
+    updatedEntry?: SourcebookEntry | null;
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;
