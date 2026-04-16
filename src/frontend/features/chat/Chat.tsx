@@ -9,7 +9,14 @@
  * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useDeferredValue,
+  useCallback,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ChatAttachment,
@@ -20,28 +27,13 @@ import {
 } from '../../types';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { useThemeClasses } from '../layout/ThemeContext';
-import {
-  Loader2,
-  Bot,
-  User,
-  RefreshCw,
-  Trash2,
-  Edit2,
-  Save,
-  X,
-  Settings2,
-  ArrowRight,
-  FileText,
-  Paperclip,
-} from 'lucide-react';
+import { Loader2, Bot, RefreshCw, X, Paperclip } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { MarkdownView } from '../editor/MarkdownView';
-import { CollapsibleToolSection } from './components/CollapsibleToolSection';
-import { WebSearchResults, VisitPageResult } from './components/ToolResultViews';
 import { MutationTags, SessionMutation } from './components/MutationTags';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatHistoryPanel } from './components/ChatHistoryPanel';
 import { ChatComposer } from './components/ChatComposer';
+import { ChatMessageItem } from './components/ChatMessageItem';
 import { estimateChatContextUsage } from './chatContextBudget';
 
 interface ChatProps {
@@ -76,27 +68,10 @@ interface ChatProps {
   storyLanguage?: string;
 }
 
-type ToolCallArgumentsProps = {
-  args: unknown;
-};
-
-const ToolCallArguments: React.FC<ToolCallArgumentsProps> = React.memo(({ args }) => {
-  const formattedArgs = useMemo(() => {
-    if (typeof args === 'string') return args;
-
-    try {
-      return JSON.stringify(args, null, 2);
-    } catch {
-      return String(args);
-    }
-  }, [args]);
-
-  return (
-    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
-      {formattedArgs}
-    </div>
-  );
-});
+// Initial number of messages to commit on first render; older messages are
+// progressively added one chunk per animation frame to keep each commit well
+// under the browser's 50 ms long-task threshold.
+const INITIAL_DISPLAY = 8;
 
 export const Chat: React.FC<ChatProps> = ({
   messages,
@@ -240,28 +215,64 @@ export const Chat: React.FC<ChatProps> = ({
     setTimeout(() => scrollToBottom('auto'), 0);
   };
 
-  const startEditing = (msg: ChatMessage) => {
+  // Keep a ref so handleSaveEdit has a stable identity regardless of editContent.
+  const editContentRef = useRef(editContent);
+  editContentRef.current = editContent;
+
+  const handleStartEditing = useCallback((msg: ChatMessage) => {
     setEditingMessageId(msg.id);
     setEditContent(msg.text);
-  };
+  }, []);
 
-  const saveEdit = (id: string) => {
-    if (editContent.trim()) {
-      onEditMessage(id, editContent.trim());
-      setEditingMessageId(null);
-      setEditContent('');
-    }
-  };
+  const handleSaveEdit = useCallback(
+    (id: string) => {
+      if (editContentRef.current.trim()) {
+        onEditMessage(id, editContentRef.current.trim());
+        setEditingMessageId(null);
+        setEditContent('');
+      }
+    },
+    [onEditMessage]
+  );
 
-  const cancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingMessageId(null);
     setEditContent('');
-  };
+  }, []);
+
+  const handleThinkingToggle = useCallback((id: string, next: boolean) => {
+    setThinkingProcessExpanded((prev) => ({ ...prev, [id]: next }));
+  }, []);
 
   const handleSystemPromptSave = () => {
     onUpdateSystemPrompt(tempSystemPrompt);
     setShowSystemPrompt(false);
   };
+
+  const deferredMessages = useDeferredValue(messages);
+
+  // Incremental rendering: start with the most‑recent INITIAL_DISPLAY messages
+  // and add one chunk per animation frame. With React.memo on ChatMessageItem,
+  // each frame only commits the new items; already-rendered ones bail out.
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY);
+
+  useEffect(() => {
+    setDisplayCount(INITIAL_DISPLAY);
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (displayCount >= deferredMessages.length) return;
+    const raf = requestAnimationFrame(() => {
+      setDisplayCount((prev) =>
+        Math.min(prev + INITIAL_DISPLAY, deferredMessages.length)
+      );
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [displayCount, deferredMessages.length]);
+
+  const visibleMessages = deferredMessages.slice(
+    Math.max(0, deferredMessages.length - displayCount)
+  );
 
   const hasUserMessage = messages.some((msg) => msg.role === 'user');
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
@@ -450,7 +461,7 @@ export const Chat: React.FC<ChatProps> = ({
           </div>
         )}
 
-        {messages.length === 0 && !showSystemPrompt && (
+        {visibleMessages.length === 0 && !showSystemPrompt && (
           <div className="text-center text-brand-gray-500 mt-10 p-4">
             <Bot className="mx-auto mb-3 opacity-50" size={40} />
             <p className="text-sm">
@@ -461,257 +472,32 @@ export const Chat: React.FC<ChatProps> = ({
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div
-            key={`${msg.id || 'msg'}-${i}`}
-            className={`group flex items-start space-x-3 ${
-              msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
-            }`}
-          >
-            <div
-              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
-                msg.role === 'user'
-                  ? 'bg-blue-100 border-blue-200 text-blue-700'
-                  : msg.role === 'tool'
-                    ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
-                    : isLight
-                      ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-500'
-                      : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-400'
-              }`}
-            >
-              {msg.role === 'user' ? (
-                <User size={16} />
-              ) : msg.role === 'tool' ? (
-                <Settings2 size={16} />
-              ) : (
-                <Bot size={16} />
-              )}
-            </div>
-
-            <div className={'flex-1 max-w-[85%] relative'}>
-              {editingMessageId === msg.id ? (
-                <div
-                  className={`border rounded-lg p-3 shadow-lg ${
-                    isLight
-                      ? 'bg-brand-gray-50 border-brand-gray-200'
-                      : 'bg-brand-gray-800 border-brand-gray-600'
-                  }`}
-                >
-                  <textarea
-                    lang={storyLanguage || 'en'}
-                    value={editContent}
-                    spellCheck={true}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
-                  />
-                  <div className="flex justify-end space-x-2 mt-2">
-                    <button
-                      onClick={cancelEdit}
-                      className="p-1 text-brand-gray-400 hover:text-brand-gray-600"
-                      aria-label={t('Cancel message edit')}
-                      title={t('Cancel edit')}
-                    >
-                      <X size={14} />
-                    </button>
-                    <button
-                      onClick={() => saveEdit(msg.id)}
-                      className="p-1 text-brand-500 hover:opacity-80"
-                      aria-label={t('Save message edit')}
-                      title={t('Save edit')}
-                    >
-                      <Save size={14} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className={`rounded-lg p-3 text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? msgUserBg
-                      : msg.role === 'tool'
-                        ? msg.name === 'web_search' ||
-                          msg.name === 'wikipedia_search' ||
-                          msg.name === 'visit_page'
-                          ? 'bg-blue-500/5 border border-blue-500/30 shadow-sm'
-                          : 'bg-blue-500/5 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-mono text-xs'
-                        : msgBotBg
-                  }`}
-                >
-                  {msg.role === 'tool' ? (
-                    <>
-                      {msg.name === 'web_search' || msg.name === 'wikipedia_search' ? (
-                        <WebSearchResults content={msg.text} name={msg.name} />
-                      ) : msg.name === 'visit_page' ? (
-                        <VisitPageResult content={msg.text} />
-                      ) : (
-                        <CollapsibleToolSection
-                          title={t('Tool Result: {{name}}', { name: msg.name })}
-                        >
-                          <MarkdownView content={msg.text} />
-                          {msg.name === 'create_project' &&
-                            msg.text.includes('Project created:') &&
-                            onSwitchProject && (
-                              <div className="mt-2">
-                                <Button
-                                  theme={theme}
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => {
-                                    if (!isModelAvailable) return;
-                                    // Extract project name from either raw text or JSON message field
-                                    let projectName = '';
-                                    try {
-                                      const parsed = JSON.parse(msg.text);
-                                      const innerMsg = parsed.message || '';
-                                      const match =
-                                        innerMsg.match(/Project created: (.+)/);
-                                      if (match) projectName = match[1];
-                                    } catch (e) {
-                                      /* ignore */
-                                    }
-
-                                    if (!projectName) {
-                                      const match = msg.text.match(
-                                        /Project created: ([^"}\s]+)/
-                                      );
-                                      if (match) projectName = match[1];
-                                    }
-
-                                    if (projectName) {
-                                      onSwitchProject(projectName.trim());
-                                    }
-                                  }}
-                                  icon={<ArrowRight size={14} />}
-                                  disabled={!isModelAvailable}
-                                  title={
-                                    !isModelAvailable
-                                      ? chatDisabledReason
-                                      : t('Switch to New Project')
-                                  }
-                                >
-                                  {t('Switch to New Project')}
-                                </Button>
-                              </div>
-                            )}
-                        </CollapsibleToolSection>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {msg.thinking && (
-                        <CollapsibleToolSection
-                          title={t('Thinking Process')}
-                          isExpanded={
-                            thinkingProcessExpanded[msg.id] !== undefined
-                              ? thinkingProcessExpanded[msg.id]
-                              : isLoading && i === messages.length - 1
-                          }
-                          onExpandedChange={(next) =>
-                            setThinkingProcessExpanded((prev) => ({
-                              ...prev,
-                              [msg.id]: next,
-                            }))
-                          }
-                        >
-                          <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
-                            {msg.thinking}
-                          </div>
-                        </CollapsibleToolSection>
-                      )}
-                      <MarkdownView content={msg.text} />
-                      {msg.role === 'user' &&
-                        msg.attachments &&
-                        msg.attachments.length > 0 && (
-                          <div className="mt-3 rounded-lg border border-brand-gray-200/80 bg-brand-gray-50/80 p-3 text-sm text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-950/60 dark:text-brand-gray-200">
-                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-gray-500 dark:text-brand-gray-400">
-                              {t('Attachments')}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {msg.attachments.map((attachment) => (
-                                <div
-                                  key={attachment.id}
-                                  className="inline-flex items-center gap-2 rounded-full border border-brand-gray-300 bg-white px-3 py-1 text-xs text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-900 dark:text-brand-gray-200"
-                                  title={attachment.name}
-                                >
-                                  <FileText size={14} />
-                                  <span className="truncate max-w-[10rem]">
-                                    {attachment.name}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      {msg.traceback && (
-                        <CollapsibleToolSection
-                          title={t('Stack Trace')}
-                          defaultExpanded={false}
-                        >
-                          <div className="text-[10px] font-mono bg-black/5 dark:bg-black/40 p-2 rounded overflow-x-auto whitespace-pre border border-black/10 dark:border-white/10 text-red-600 dark:text-red-400">
-                            {msg.traceback}
-                          </div>
-                        </CollapsibleToolSection>
-                      )}
-                      {msg.tool_calls && msg.tool_calls.length > 0 && (
-                        <CollapsibleToolSection
-                          title={
-                            t(
-                              msg.tool_calls.length > 1
-                                ? '{{count}} Tool Calls'
-                                : '{{count}} Tool Call',
-                              { count: msg.tool_calls.length }
-                            ) + ` [${msg.tool_calls.map((tc) => tc.name).join(', ')}]`
-                          }
-                        >
-                          <div className="space-y-2">
-                            {msg.tool_calls.map((tc, i) => (
-                              <div
-                                key={i}
-                                className="p-2 rounded bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 text-[10px] font-mono"
-                              >
-                                <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
-                                  {t('Call: ')}
-                                  {tc.name}
-                                </div>
-                                <ToolCallArguments args={tc.args} />
-                              </div>
-                            ))}
-                          </div>
-                        </CollapsibleToolSection>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {!editingMessageId && !isLoading && (
-                <div className="mt-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => {
-                      if (!isModelAvailable) return;
-                      startEditing(msg);
-                    }}
-                    className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
-                    title={!isModelAvailable ? chatDisabledReason : t('Edit')}
-                    disabled={!isModelAvailable}
-                  >
-                    <Edit2 size={12} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!isModelAvailable) return;
-                      onDeleteMessage(msg.id);
-                    }}
-                    className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
-                    title={!isModelAvailable ? chatDisabledReason : t('Delete')}
-                    disabled={!isModelAvailable}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+        {visibleMessages.map((msg, i) => (
+          <ChatMessageItem
+            key={msg.id || `msg-${i}`}
+            msg={msg}
+            isLast={i === visibleMessages.length - 1}
+            isLoading={isLoading}
+            isLight={isLight}
+            msgUserBg={msgUserBg}
+            msgBotBg={msgBotBg}
+            inputBg={inputBg}
+            isEditing={editingMessageId === msg.id}
+            editContent={editingMessageId === msg.id ? editContent : ''}
+            anyMessageBeingEdited={!!editingMessageId}
+            isThinkingExpanded={thinkingProcessExpanded[msg.id]}
+            isModelAvailable={isModelAvailable}
+            chatDisabledReason={chatDisabledReason}
+            storyLanguage={storyLanguage}
+            theme={theme}
+            onSwitchProject={onSwitchProject}
+            onStartEditing={handleStartEditing}
+            onCancelEdit={handleCancelEdit}
+            onSaveEdit={handleSaveEdit}
+            onSetEditContent={setEditContent}
+            onDeleteMessage={onDeleteMessage}
+            onThinkingToggle={handleThinkingToggle}
+          />
         ))}
 
         {isLoading && (

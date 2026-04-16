@@ -9,7 +9,7 @@
  * Defines the markdown view unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 // @ts-ignore
 import { marked } from 'marked';
@@ -21,6 +21,19 @@ import { configureMarked } from './configureMarked';
 configureMarked();
 
 const dmp = new diff_match_patch();
+
+// Module-level HTML cache – shared across all MarkdownView instances for the browser
+// session. Eliminates redundant parsing when messages are re-rendered or sessions are
+// switched back to; populated lazily the first time each content string is seen.
+const htmlCache = new Map<string, string>();
+
+function parseAndSanitize(contentToParse: string): string {
+  const rawHtml = marked.parse(contentToParse) as string;
+  return DOMPurify.sanitize(rawHtml, {
+    ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code', 'span'],
+    ADD_ATTR: ['src', 'alt', 'title', 'class', 'id', 'href'],
+  });
+}
 
 interface MarkdownViewProps {
   content?: string | null;
@@ -61,46 +74,65 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
 }) => {
   const safeContent = typeof content === 'string' ? content : '';
 
-  const cleanHtml = useMemo(() => {
-    if (simple) return '';
+  // Diff case (editor diff viewer, one instance at a time): render synchronously so
+  // the diff appears immediately when the user opens a checkpoint comparison.
+  const hasDiff = !simple && !!baseline && baseline !== safeContent;
+  const diffHtml = useMemo(() => {
+    if (!hasDiff || !baseline) return null;
 
-    let contentToParse = safeContent;
+    const diffs = dmp.diff_main(baseline, safeContent);
+    dmp.diff_cleanupSemantic(diffs);
 
-    if (baseline && baseline !== safeContent) {
-      const diffs = dmp.diff_main(baseline, safeContent);
-      dmp.diff_cleanupSemantic(diffs);
+    // We need to be careful with HTML injection inside Markdown.
+    // We use a custom escaping strategy for the diff segments.
+    let highlightedMd = '';
+    for (const [op, text] of diffs) {
+      // Escape standard HTML characters within the diff segment text
+      const escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 
-      // We need to be careful with HTML injection inside Markdown.
-      // We use a custom escaping strategy for the diff segments.
-      let highlightedMd = '';
-      for (const [op, text] of diffs) {
-        // Escape standard HTML characters within the diff segment text
-        const escaped = text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;');
-
-        if (op === 0) {
-          highlightedMd += text; // Unchanged text remains raw Markdown
-        } else if (op === 1) {
-          highlightedMd += `<span class="diff-inserted">${escaped}</span>`;
-        } else if (op === -1) {
-          highlightedMd += `<span class="diff-deleted">${escaped}</span>`;
-        }
+      if (op === 0) {
+        highlightedMd += text; // Unchanged text remains raw Markdown
+      } else if (op === 1) {
+        highlightedMd += `<span class="diff-inserted">${escaped}</span>`;
+      } else if (op === -1) {
+        highlightedMd += `<span class="diff-deleted">${escaped}</span>`;
       }
-      contentToParse = highlightedMd;
     }
-
     // Since we've already injected HTML spans, we need to ensure marked
     // doesn't double-escape them if they are at the top level.
-    const rawHtml = marked.parse(contentToParse) as string;
-    return DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['img', 'sub', 'sup', 'del', 's', 'strike', 'pre', 'code', 'span'],
-      ADD_ATTR: ['src', 'alt', 'title', 'class', 'id', 'href'],
-    });
-  }, [safeContent, simple, baseline]);
+    return parseAndSanitize(highlightedMd);
+  }, [hasDiff, safeContent, baseline]);
+
+  // Plain-markdown case (chat messages, many instances rendered simultaneously):
+  // initialise from the module-level cache so already-seen content is instant, then
+  // defer first-time parsing to a setTimeout so it runs outside the React scheduler's
+  // message-handler and cannot cause '[Violation] message handler took Xms' warnings.
+  const [asyncHtml, setAsyncHtml] = useState<string>(() =>
+    simple || hasDiff ? '' : (htmlCache.get(safeContent) ?? '')
+  );
+
+  useEffect(() => {
+    if (simple || hasDiff) return;
+    if (htmlCache.has(safeContent)) {
+      const cached = htmlCache.get(safeContent)!;
+      setAsyncHtml((prev) => (prev === cached ? prev : cached));
+      return;
+    }
+    // Defer expensive markdown parsing off the synchronous render path.
+    const id = setTimeout(() => {
+      const html = parseAndSanitize(safeContent);
+      htmlCache.set(safeContent, html);
+      setAsyncHtml(html);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [safeContent, simple, hasDiff]);
+
+  const cleanHtml = hasDiff ? (diffHtml ?? '') : asyncHtml;
 
   // Diff pairs for simple (inline) rendering — computed only when needed.
   const simpleDiff = useMemo(() => {

@@ -9,7 +9,7 @@
  * Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, startTransition } from 'react';
 import { StoryState, Chapter, Book, WritingUnit, SourcebookEntry } from '../../types';
 import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
@@ -370,26 +370,28 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
           lastLoadedChapterId.current = currentChapterId;
-          setStory((prev) => {
-            const updatedChapters = prev.chapters.map((c) =>
-              c.id === currentChapterId
-                ? {
-                    ...c,
-                    content: res.content,
-                    notes: res.notes,
-                    private_notes: res.private_notes,
-                    conflicts: res.conflicts,
-                    title: res.title,
-                    summary: res.summary,
-                  }
-                : c
-            );
-            return { ...prev, chapters: updatedChapters };
+          startTransition(() => {
+            setStory((prev) => {
+              const updatedChapters = prev.chapters.map((c) =>
+                c.id === currentChapterId
+                  ? {
+                      ...c,
+                      content: res.content,
+                      notes: res.notes,
+                      private_notes: res.private_notes,
+                      conflicts: res.conflicts,
+                      title: res.title,
+                      summary: res.summary,
+                    }
+                  : c
+              );
+              return { ...prev, chapters: updatedChapters };
+            });
+            setIsChapterLoading(false);
           });
         } catch (e) {
           console.error('Failed to load chapter content', e);
-        } finally {
-          setIsChapterLoading(false);
+          startTransition(() => setIsChapterLoading(false));
         }
       };
       loadContent();
@@ -421,13 +423,14 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
             };
           }
 
-          setStory(newStory);
           latestStoryRef.current = newStory;
-          setHistory([createHistoryEntry(newStory, 'Load story')]);
-          setCurrentIndex(0);
-          setBaselineState(newStory); // no highlight after a fresh project load
-
-          setCurrentChapterId(newStory.currentChapterId);
+          startTransition(() => {
+            setStory(newStory);
+            setHistory([createHistoryEntry(newStory, 'Load story')]);
+            setCurrentIndex(0);
+            setBaselineState(newStory); // no highlight after a fresh project load
+            setCurrentChapterId(newStory.currentChapterId);
+          });
         }
       }
     } catch (e) {

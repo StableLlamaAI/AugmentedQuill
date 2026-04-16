@@ -1033,11 +1033,13 @@ const App: React.FC = () => {
               instructionLanguages={instructionLanguages}
             />
 
-            <DebugLogs
-              isOpen={isDebugLogsOpen}
-              onClose={() => setIsDebugLogsOpen(false)}
-              theme={currentTheme}
-            />
+            {isDebugLogsOpen && (
+              <DebugLogs
+                isOpen={isDebugLogsOpen}
+                onClose={() => setIsDebugLogsOpen(false)}
+                theme={currentTheme}
+              />
+            )}
 
             <ToolCallLimitDialog
               isOpen={!!toolCallLoopDialog}
@@ -1046,72 +1048,74 @@ const App: React.FC = () => {
               onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
             />
 
-            <SearchReplaceDialog
-              searchState={searchState}
-              activeChapterId={
-                currentChapterId !== null ? parseInt(currentChapterId, 10) : null
-              }
-              storyLanguage={story.language || 'en'}
-              onJumpToPosition={(start, end) => {
-                if (viewMode === 'wysiwyg') {
-                  setViewMode('markdown');
-                  requestAnimationFrame(() =>
+            {searchState.isOpen && (
+              <SearchReplaceDialog
+                searchState={searchState}
+                activeChapterId={
+                  currentChapterId !== null ? parseInt(currentChapterId, 10) : null
+                }
+                storyLanguage={story.language || 'en'}
+                onJumpToPosition={(start, end) => {
+                  if (viewMode === 'wysiwyg') {
+                    setViewMode('markdown');
                     requestAnimationFrame(() =>
-                      editorRef.current?.jumpToPosition(start, end)
-                    )
-                  );
-                } else {
-                  editorRef.current?.jumpToPosition(start, end);
-                }
-              }}
-              onStoryChanged={() => void refreshStory()}
-              onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
-                setMetadataDialogCloseTrigger((c) => c + 1);
-                setSourcebookDialogCloseTrigger((c) => c + 1);
-                if (jumpStart !== undefined && jumpEnd !== undefined) {
-                  pendingJumpRef.current = {
-                    chapterId: String(chapId),
-                    start: jumpStart,
-                    end: jumpEnd,
-                  };
-                }
-                handleChapterSelect(String(chapId));
-              }}
-              onNavigateToSourcebookEntry={(entryId) => {
-                setMetadataDialogCloseTrigger((c) => c + 1);
-                setIsSidebarOpen(true);
-                setSourcebookDialogTrigger((prev) => ({
-                  id: (prev?.id ?? 0) + 1,
-                  entryId,
-                }));
-                setEditorSettings((prev) => ({
-                  ...prev,
-                  sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-                }));
-              }}
-              onNavigateToStoryMetadata={(field) => {
-                const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
-                  field === 'story_summary'
-                    ? 'summary'
-                    : field === 'notes'
-                      ? 'notes'
-                      : field === 'private_notes'
-                        ? 'private'
-                        : field.startsWith('conflicts')
-                          ? 'conflicts'
-                          : 'summary';
-                setSourcebookDialogCloseTrigger((c) => c + 1);
-                setIsSidebarOpen(true);
-                setMetadataDialogTrigger((prev) => ({
-                  id: (prev?.id ?? 0) + 1,
-                  initialTab: tab,
-                }));
-                setEditorSettings((prev) => ({
-                  ...prev,
-                  sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-                }));
-              }}
-            />
+                      requestAnimationFrame(() =>
+                        editorRef.current?.jumpToPosition(start, end)
+                      )
+                    );
+                  } else {
+                    editorRef.current?.jumpToPosition(start, end);
+                  }
+                }}
+                onStoryChanged={() => void refreshStory()}
+                onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
+                  setMetadataDialogCloseTrigger((c) => c + 1);
+                  setSourcebookDialogCloseTrigger((c) => c + 1);
+                  if (jumpStart !== undefined && jumpEnd !== undefined) {
+                    pendingJumpRef.current = {
+                      chapterId: String(chapId),
+                      start: jumpStart,
+                      end: jumpEnd,
+                    };
+                  }
+                  handleChapterSelect(String(chapId));
+                }}
+                onNavigateToSourcebookEntry={(entryId) => {
+                  setMetadataDialogCloseTrigger((c) => c + 1);
+                  setIsSidebarOpen(true);
+                  setSourcebookDialogTrigger((prev) => ({
+                    id: (prev?.id ?? 0) + 1,
+                    entryId,
+                  }));
+                  setEditorSettings((prev) => ({
+                    ...prev,
+                    sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+                  }));
+                }}
+                onNavigateToStoryMetadata={(field) => {
+                  const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+                    field === 'story_summary'
+                      ? 'summary'
+                      : field === 'notes'
+                        ? 'notes'
+                        : field === 'private_notes'
+                          ? 'private'
+                          : field.startsWith('conflicts')
+                            ? 'conflicts'
+                            : 'summary';
+                  setSourcebookDialogCloseTrigger((c) => c + 1);
+                  setIsSidebarOpen(true);
+                  setMetadataDialogTrigger((prev) => ({
+                    id: (prev?.id ?? 0) + 1,
+                    initialTab: tab,
+                  }));
+                  setEditorSettings((prev) => ({
+                    ...prev,
+                    sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+                  }));
+                }}
+              />
+            )}
           </div>
         </ThemeProvider>
       </SearchHighlightProvider>

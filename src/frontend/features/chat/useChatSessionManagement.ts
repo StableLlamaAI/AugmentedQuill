@@ -9,7 +9,14 @@
  * Defines the use chat session management unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useState,
+  startTransition,
+} from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, ChatSession } from '../../types';
@@ -100,14 +107,16 @@ export function useChatSessionManagement({
       try {
         const chat = await api.chat.load(id);
         if (chat) {
-          setChatMessages(chat.messages || []);
-          setCurrentChatId(id);
-          setIsIncognito(false);
-          setScratchpad(chat.scratchpad || '');
-          if (chat.systemPrompt) {
-            setSystemPrompt(chat.systemPrompt);
-          }
-          setAllowWebSearch(chat.allowWebSearch || false);
+          startTransition(() => {
+            setChatMessages(chat.messages || []);
+            setCurrentChatId(id);
+            setIsIncognito(false);
+            setScratchpad(chat.scratchpad || '');
+            if (chat.systemPrompt) {
+              setSystemPrompt(chat.systemPrompt);
+            }
+            setAllowWebSearch(chat.allowWebSearch || false);
+          });
         }
       } catch (error) {
         console.error('Failed to load chat', error);
@@ -182,7 +191,7 @@ export function useChatSessionManagement({
       const loadInitialChats = async () => {
         try {
           const chats = await api.chat.list();
-          setChatHistoryList(chats);
+          startTransition(() => setChatHistoryList(chats));
           if (chats.length > 0) {
             await handleSelectChat(chats[0].id);
           } else {
