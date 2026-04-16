@@ -12,7 +12,7 @@
  * interact with the document exclusively through EditorView's state API.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import {
   EditorView,
   keymap,
@@ -718,7 +718,13 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [language, spellCheck, placeholder]);
 
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) keeps this in the same frame as the
+    // external value sync below.  Both are declared in order (baseline first,
+    // value second) so that when a new baseline and new content land in the
+    // same render the plugin is reconfigured with the correct baseline BEFORE
+    // the content dispatch fires — ensuring the first painted frame already
+    // shows the correct diff decorations rather than missing them.
+    useLayoutEffect(() => {
       viewRef.current?.dispatch({
         effects: diffCompartment.current.reconfigure(
           buildDiffExtension(baselineValue, showDiff)
@@ -738,7 +744,11 @@ export const CodeMirrorEditor = React.forwardRef<
     // Update the CodeMirror document when the value prop changes due to an
     // external cause (chapter switch, AI insertion) — not when the change
     // originated from our own onChange callback.
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) ensures CodeMirror's DOM is updated
+    // synchronously in the same commit phase as the React render, so that any
+    // sibling layout effects that measure scrollHeight see the new content
+    // height immediately — eliminating one-frame flicker during LLM streaming.
+    useLayoutEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       const docStr = view.state.doc.toString();

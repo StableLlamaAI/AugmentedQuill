@@ -497,7 +497,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           isDetachedFromBottomRef.current = false;
         });
       }
-    }, [chapter.content]);
+    }, [localContent]);
 
     // Chapter switch: reset scroll so the new chapter starts at the top.
     useLayoutEffect(() => {
@@ -633,6 +633,13 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // Use `breaks: true` so single newlines in the markdown source are
     // rendered as <br> rather than being collapsed — this makes the
     // marked → turndown round-trip lossless for soft line-breaks.
+    //
+    // Dep: `localContent` rather than `chapter.content` for the same reason
+    // the auto-scroll effect uses localContent — `chapter.content` can be a
+    // deferred concurrent transition and may not be committed promptly in
+    // React 19. `localContent` is a normal-priority state update that is
+    // always applied immediately, so the diff highlight never lags behind
+    // the CodeMirror view.
     useEffect(() => {
       if (viewMode === 'wysiwyg' && wysiwygRef.current) {
         // Don't interrupt the user's view when streaming and they've scrolled up.
@@ -642,37 +649,71 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
         // We sync if not focused OR if we are actively streaming from AI
         if (document.activeElement !== wysiwygRef.current || proseStreamingActive) {
-          let contentToRender = chapter.content;
+          // Parse the current markdown to HTML first, then apply diff highlighting
+          // at the HTML block level.  The previous approach of injecting <span>
+          // tags into the markdown source before marked.parse was broken: marked
+          // splits input at \n\n (paragraph separators), so a span wrapping
+          // multiple new paragraphs was always split apart, causing only the first
+          // new paragraph to be highlighted.  By diffing the rendered HTML at
+          // "line" (block element) granularity instead, diff classes are added
+          // directly to complete <p>/<h1>/<li> opening tags — block boundaries
+          // are never split.
+          const parsedCurrentHtml = marked.parse(
+            localContent.replace(/\t/g, TAB_PLACEHOLDER),
+            { breaks: true }
+          ) as string;
+
+          let wysiwygHtml = parsedCurrentHtml;
+
           if (
             settings.showDiff &&
             localBaseline != null &&
-            localBaseline !== chapter.content
+            localBaseline !== localContent
           ) {
-            const diffs = new diff_match_patch().diff_main(
-              localBaseline,
-              chapter.content
+            const parsedBaselineHtml = marked.parse(
+              localBaseline.replace(/\t/g, TAB_PLACEHOLDER),
+              { breaks: true }
+            ) as string;
+
+            // Line-mode diff on the rendered HTML: marked puts each block
+            // element on its own line, so each 'line' is one <p>/<li>/etc.
+            // block. This gives clean block-granularity diffs that never split
+            // an HTML tag boundary.
+            const dmpInst = new diff_match_patch();
+            const { chars1, chars2, lineArray } = dmpInst.diff_linesToChars_(
+              parsedBaselineHtml,
+              parsedCurrentHtml
             );
-            new diff_match_patch().diff_cleanupSemantic(diffs);
-            let highlightedMd = '';
-            for (const [op, text] of diffs) {
+            const lineDiffs = dmpInst.diff_main(chars1, chars2, false);
+            dmpInst.diff_charsToLines_(lineDiffs, lineArray);
+
+            let highlightedHtml = '';
+            for (const [op, text] of lineDiffs) {
               if (op === 0) {
-                highlightedMd += text;
+                highlightedHtml += text;
               } else if (op === 1) {
-                highlightedMd += `<span class="diff-inserted">${text}</span>`;
+                // Inserted blocks: inject diff-inserted class onto the opening tag.
+                highlightedHtml += text.replace(
+                  /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
+                  '<$1 class="diff-inserted"$2'
+                );
               } else if (op === -1) {
-                highlightedMd += `<span class="diff-deleted">${text}</span>`;
+                // Deleted blocks: inject diff-deleted class; kept visible so the
+                // user can see what was replaced.
+                highlightedHtml += text.replace(
+                  /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
+                  '<$1 class="diff-deleted"$2'
+                );
               }
             }
-            contentToRender = highlightedMd;
+
+            wysiwygHtml = highlightedHtml;
           }
 
-          const parsedHtml = marked.parse(
-            contentToRender.replace(/\t/g, TAB_PLACEHOLDER),
-            {
-              breaks: true,
-            }
-          ) as string;
-          wysiwygRef.current.innerHTML = parsedHtml.replaceAll(TAB_PLACEHOLDER, '&#9;');
+          wysiwygRef.current.innerHTML = wysiwygHtml.replaceAll(
+            TAB_PLACEHOLDER,
+            '&#9;'
+          );
           if (showWhitespace) {
             injectWsMarkersWysiwyg(wysiwygRef.current);
           }
@@ -684,26 +725,25 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             );
           }
 
-          // Apply diff background styles to the injected spans.
-          const diffSpans = wysiwygRef.current.querySelectorAll('.diff-inserted');
-          diffSpans.forEach((span) => {
-            const htmlSpan = span as HTMLElement;
-            htmlSpan.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
-            htmlSpan.style.borderBottom = '1px solid rgba(34, 197, 94, 0.4)';
+          // Apply diff background styles to block-level diff elements.
+          const diffInserted = wysiwygRef.current.querySelectorAll('.diff-inserted');
+          diffInserted.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            htmlEl.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+            htmlEl.style.borderLeft = '3px solid rgba(34, 197, 94, 0.4)';
           });
 
-          const deletedSpans = wysiwygRef.current.querySelectorAll('.diff-deleted');
-          deletedSpans.forEach((span) => {
-            const htmlSpan = span as HTMLElement;
-            htmlSpan.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-            htmlSpan.style.borderBottom = '1px solid rgba(239, 68, 68, 0.4)';
-            htmlSpan.style.textDecoration = 'line-through';
-            htmlSpan.style.opacity = '0.7';
+          const diffDeleted = wysiwygRef.current.querySelectorAll('.diff-deleted');
+          diffDeleted.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            htmlEl.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+            htmlEl.style.textDecoration = 'line-through';
+            htmlEl.style.opacity = '0.7';
           });
         }
       }
     }, [
-      chapter.content,
+      localContent,
       viewMode,
       chapter.id,
       showWhitespace,
@@ -731,6 +771,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // disrupted; on blur we re-render and re-inject for a clean view.
     const handleWysiwygBlur = () => {
       if (!wysiwygRef.current) return;
+
+      // When a diff baseline is set the WYSIWYG innerHTML contains diff markup
+      // (diff-inserted / diff-deleted class attributes on block elements).  If
+      // we read that HTML back through turndown it would include the deleted
+      // text in the saved content — corrupting the chapter on the server.  User
+      // edits always clear localBaseline immediately via handleWysiwygInput, so
+      // when localBaseline is still defined no real user edit has occurred and
+      // there is nothing to flush.
+      if (localBaseline != null) return;
 
       const currentMd =
         turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';

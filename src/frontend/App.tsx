@@ -61,6 +61,7 @@ import {
 } from './features/app/appSelectors';
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
+import { applySmartQuotes } from './utils/textUtils';
 
 // ---------------------------------------------------------------------------
 // Mutation tool dispatch registry
@@ -697,13 +698,22 @@ const App: React.FC = () => {
             }
           : prevState;
 
+        // Apply typographic quote conversion so the live preview already uses the
+        // same quote style that the backend will persist (backend runs
+        // apply_typographic_quotes on the final accumulated text).  Without this,
+        // the history entry captured by pushExternalHistoryEntry contains raw
+        // quotes, and when the lazy-load later delivers the typographic version
+        // the diff changes to show only the quote positions instead of the full
+        // newly-written text.
+        const typographicAccumulated = applySmartQuotes(accumulated);
+
         let newContent: string;
         if (writeMode === 'replace') {
-          newContent = accumulated;
+          newContent = typographicAccumulated;
         } else if (writeMode === 'append') {
           const base = streamState.base;
           const separator = base && !base.endsWith('\n') ? '\n' : '';
-          newContent = base + separator + accumulated;
+          newContent = base + separator + typographicAccumulated;
         } else {
           // insert_at_marker: skip live preview (position is inside the text)
           return;

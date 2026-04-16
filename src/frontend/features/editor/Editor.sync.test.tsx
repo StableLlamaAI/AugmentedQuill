@@ -266,3 +266,177 @@ describe('Editor diff highlighting', () => {
     });
   });
 });
+
+describe('Editor diff highlighting – WYSIWYG mode', () => {
+  it('shows diff decoration in wysiwyg mode when baseline differs from chapter content', async () => {
+    const aiChapter = { ...mockChapter, content: 'Original content with AI paragraph' };
+
+    const { rerender } = render(<Editor {...defaultProps} viewMode="wysiwyg" />);
+
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          viewMode="wysiwyg"
+          chapter={aiChapter}
+          baselineContent="Original content"
+        />
+      );
+    });
+
+    const wysiwyg = document.querySelector('#wysiwyg-editor');
+    expect(wysiwyg?.innerHTML).toContain('diff-inserted');
+  });
+
+  it('shows diff decoration in wysiwyg mode when streaming is active', async () => {
+    const { rerender } = render(<Editor {...defaultProps} viewMode="wysiwyg" />);
+
+    const updatedChapter = { ...mockChapter, content: 'Original content with AI' };
+
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          viewMode="wysiwyg"
+          chapter={updatedChapter}
+          baselineContent="Original content"
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
+        />
+      );
+    });
+
+    const wysiwyg = document.querySelector('#wysiwyg-editor');
+    expect(wysiwyg?.innerHTML).toContain('diff-inserted');
+  });
+
+  it('highlights ALL new paragraphs in wysiwyg mode, not only the first (multi-para regression)', async () => {
+    // This is the block-level diff regression: the old approach injected <span>
+    // tags into markdown source before marked.parse, which caused paragraph
+    // separators (\n\n) inside the span to split it — only the first new
+    // paragraph ended up highlighted.  The block-level HTML diff approach fixes
+    // this by adding diff classes directly to <p> opening tags in the HTML.
+    const multiParaChapter = {
+      ...mockChapter,
+      content: 'Original text.\n\nNew paragraph 1.\n\nNew paragraph 2.',
+    };
+
+    const { rerender } = render(<Editor {...defaultProps} viewMode="wysiwyg" />);
+
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          viewMode="wysiwyg"
+          chapter={multiParaChapter}
+          baselineContent="Original text."
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
+        />
+      );
+    });
+
+    const wysiwyg = document.querySelector('#wysiwyg-editor');
+    const highlighted = wysiwyg?.querySelectorAll('.diff-inserted');
+    // Both new paragraphs must be individually highlighted.
+    expect(highlighted?.length).toBeGreaterThanOrEqual(2);
+    // Both paragraph texts must appear inside highlighted elements.
+    const highlightedTexts = Array.from(highlighted ?? [])
+      .map((el) => el.textContent ?? '')
+      .join(' ');
+    expect(highlightedTexts).toContain('New paragraph 1');
+    expect(highlightedTexts).toContain('New paragraph 2');
+  });
+
+  it('does not call onChange on blur when diff baseline present (prevents diff markup data loss)', async () => {
+    // When a diff baseline is set, the WYSIWYG innerHTML contains
+    // class="diff-deleted" block elements.  Reading that HTML through turndown
+    // on blur would include deleted text in the saved content, corrupting the
+    // chapter.  The blur handler must skip saving whenever localBaseline is set.
+    const onChange = vi.fn();
+    const aiChapter = { ...mockChapter, content: 'Original content with AI text' };
+
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={aiChapter}
+        baselineContent="Original content"
+        onChange={onChange}
+      />
+    );
+
+    await act(async () => {});
+
+    const wysiwyg = container.querySelector('#wysiwyg-editor');
+    await act(async () => {
+      fireEvent.blur(wysiwyg as HTMLElement);
+    });
+
+    // onChange must NOT be called — baseline is set so diff markup is showing.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('Editor diff highlighting – smart-quote regression', () => {
+  it('preserves full diff after typographic quote replacement (smart-quote regression)', async () => {
+    // Baseline: original content with typographic quotes already.
+    // After streaming (raw quotes in the new text), then after lazy-load applies
+    // typographic quotes to server content, the diff must still show the FULL
+    // new text — not only the quote-position changes.
+    const baseline = 'He said \u201Chello.\u201D';
+    const rawQuoteChapter = {
+      ...mockChapter,
+      content: 'He said \u201Chello.\u201D\n\nShe replied "goodbye."',
+    };
+    const typographicChapter = {
+      ...mockChapter,
+      content: 'He said \u201Chello.\u201D\n\nShe replied \u201Cgoodbye.\u201D',
+    };
+
+    const { rerender } = render(<Editor {...defaultProps} />);
+
+    // Simulate streaming preview arriving (raw quotes in the new paragraph).
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          chapter={rawQuoteChapter}
+          baselineContent={baseline}
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
+        />
+      );
+    });
+
+    let cmContent = document.querySelector('.cm-content');
+    // Full new paragraph must be highlighted, not just the quotes.
+    expect(cmContent?.innerHTML).toContain('diff-inserted');
+    const htmlAfterRaw = cmContent?.innerHTML ?? '';
+
+    // Simulate lazy-load replacing content with typographic version from server.
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          chapter={typographicChapter}
+          baselineContent={baseline}
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: false }}
+        />
+      );
+    });
+
+    cmContent = document.querySelector('.cm-content');
+    expect(cmContent?.innerHTML).toContain('diff-inserted');
+    // The highlighted region must contain the new paragraph text, not shrink to
+    // just the quote-character positions.
+    expect(cmContent?.innerHTML).toContain('goodbye');
+    // The size of the highlighted region should be comparable (same logical
+    // new text, just with different quote characters).
+    const htmlAfterTypographic = cmContent?.innerHTML ?? '';
+    // Both versions should highlight a similar amount of new content —
+    // the typographic version must not suddenly show much less than the raw one.
+    const countInserted = (html: string) =>
+      (html.match(/class="cm-diff-inserted"/g) ?? []).length;
+    expect(countInserted(htmlAfterTypographic)).toBeGreaterThanOrEqual(
+      countInserted(htmlAfterRaw) - 1
+    );
+  });
+});
