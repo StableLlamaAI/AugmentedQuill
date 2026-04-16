@@ -25,7 +25,7 @@
     "@types/react-dom": "^19.2.3",
     "codemirror": "^6.0.2",
     "diff-match-patch": "^1.0.5",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.0",
     "i18next": "^26.0.4",
     "lucide-react": "^1.8.0",
     "marked": "17.0.6",
