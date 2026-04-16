@@ -408,6 +408,14 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     baselineContentRef.current = baselineContent;
     const localContentRef = useRef(localContent);
     localContentRef.current = localContent;
+    // Keep a stable ref to localBaseline so the viewMode cleanup (which runs
+    // inside a useEffect(() => { ... }, [viewMode]) and therefore has a stale
+    // closure over React state) can check whether diff markup is currently
+    // showing.  The cleanup must NOT call onChange when innerHTML contains diff
+    // classes — that would save corrupted content and push a spurious history
+    // entry that advances the baseline, causing the diff to disappear.
+    const localBaselineRef = useRef(localBaseline);
+    localBaselineRef.current = localBaseline;
 
     // ── Scroll management ─────────────────────────────────────────────────────
     //
@@ -1082,6 +1090,16 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       // back to state and causing a Maximum Update Depth Exceeded loop.
       return () => {
         if (!wysiwygRef.current) return;
+        // When a diff baseline is active the WYSIWYG innerHTML contains
+        // diff-inserted / diff-deleted class attributes on block elements.  If we
+        // read that HTML back through turndown it would include the deleted text,
+        // producing a corrupted markdown string.  Saving that would push a
+        // spurious history entry AND advance the baseline to the AI-written
+        // content — making the baseline equal the chapter content and erasing the
+        // diff highlight.  There is nothing to save on departure: user keystrokes
+        // always clear localBaseline immediately via handleWysiwygInput, so when
+        // it is still set here no real user edit has occurred.
+        if (localBaselineRef.current != null) return;
         const currentMd =
           turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
         if (currentMd !== chapterContentRef.current) {

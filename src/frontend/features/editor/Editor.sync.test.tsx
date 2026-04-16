@@ -374,6 +374,54 @@ describe('Editor diff highlighting – WYSIWYG mode', () => {
     // onChange must NOT be called — baseline is set so diff markup is showing.
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('preserves diff highlight and does not push extra undo entry when switching from wysiwyg to raw mode (mode-switch cleanup regression)', async () => {
+    // When diff is showing in WYSIWYG mode and the user switches to Raw mode,
+    // the viewMode useEffect cleanup reads innerHTML (which contains diff-markup
+    // blocks) via turndown and was calling onChange with the corrupted result.
+    // That pushed a spurious history entry AND advanced the baseline to the
+    // AI-written content, making localBaseline == localContent and erasing the
+    // diff.  The cleanup must skip saving when localBaseline is set.
+    const onChange = vi.fn();
+    const aiChapter = { ...mockChapter, content: 'Original content with AI text' };
+
+    const { rerender } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={aiChapter}
+        baselineContent="Original content"
+        onChange={onChange}
+      />
+    );
+
+    await act(async () => {});
+
+    // Diff should be showing.
+    const wysiwyg = document.querySelector('#wysiwyg-editor');
+    expect(wysiwyg?.innerHTML).toContain('diff-inserted');
+
+    // Switch to Raw mode — triggers the viewMode cleanup.
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          viewMode="raw"
+          chapter={aiChapter}
+          baselineContent="Original content"
+          onChange={onChange}
+        />
+      );
+    });
+
+    // onChange must NOT have been called; calling it with diff-markup HTML
+    // would add a spurious undo entry and advance the baseline.
+    expect(onChange).not.toHaveBeenCalled();
+
+    // Diff should still be showing in Raw mode (CodeMirrorEditor uses baseline).
+    const cmContent = document.querySelector('.cm-content');
+    expect(cmContent?.innerHTML).toContain('diff-inserted');
+  });
 });
 
 describe('Editor diff highlighting – smart-quote regression', () => {
