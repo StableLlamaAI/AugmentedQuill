@@ -210,12 +210,10 @@ describe('CodeMirrorEditor', () => {
     );
     await act(async () => {});
 
-    const marker = Array.from(container.querySelectorAll('.cm-ws-marker')).find(
-      (el) => el.textContent === '·'
-    ) as HTMLElement | undefined;
+    const marker = container.querySelector(
+      '.cm-ws-marker[data-ws-marker="1"]'
+    ) as HTMLElement | null;
     expect(marker).toBeDefined();
-    expect(marker?.style.minWidth).toBe('1ch');
-    expect(marker?.style.width).toBe('1ch');
   });
 
   it('renders a visible tab marker when showWhitespace is active', async () => {

@@ -171,17 +171,33 @@ export interface EditorHandle {
   jumpToPosition: (start: number, end: number) => void;
 }
 
-// Inject visible whitespace markers into the WYSIWYG contentEditable DOM.
-// Replaces space characters in text nodes (skipping code/pre blocks and
-// existing marker spans) with a visible middle-dot span.  The injected
-// element carries data-ws-marker so turndown can strip it back to a space.
+// Strip all WS space/tab marker spans so the DOM is clean before re-parsing.
+// Newline-pilcrow markers are no longer injected into the DOM (they come from
+// CSS ::after rules) but the removal loop is kept as a safety net.
+const removeWsMarkersWysiwyg = (root: HTMLElement): void => {
+  for (const span of Array.from(
+    root.querySelectorAll<HTMLElement>('[data-ws-marker="1"],[data-ws-tab="1"]')
+  )) {
+    const isTab = span.dataset.wsTab === '1';
+    span.parentNode?.replaceChild(document.createTextNode(isTab ? '\t' : ' '), span);
+  }
+  for (const span of Array.from(root.querySelectorAll('[data-ws-nl="1"]'))) {
+    span.parentNode?.removeChild(span);
+  }
+  root.normalize();
+};
+
+// Inject visible space/tab dot-markers into the WYSIWYG contentEditable DOM.
+// Paragraph-end ¶ symbols are rendered via CSS ::after rules so they require
+// no DOM injection and never interfere with cursor movement or Enter/Backspace.
 const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
   const textNodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
       const parent = (node as Text).parentElement;
       // Skip nodes inside existing WS marker spans
-      if (parent?.dataset.wsMarker) return NodeFilter.FILTER_SKIP;
+      if (parent?.dataset.wsMarker || parent?.dataset.wsNl)
+        return NodeFilter.FILTER_SKIP;
       // Skip text inside <code> or <pre>
       let el: Element | null = parent;
       while (el && el !== root) {
@@ -212,15 +228,8 @@ const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
           }
           span.setAttribute('aria-hidden', 'true');
           span.className = 'cm-ws-marker';
-          span.textContent = isTab ? '→' : '\u00b7';
-          span.style.display = 'inline-block';
-          span.style.minWidth = '1ch';
-          span.style.width = '1ch';
-          span.style.textAlign = 'center';
-          span.style.verticalAlign = 'baseline';
-          span.style.opacity = '0.5';
-          span.style.pointerEvents = 'none';
-          span.style.userSelect = 'none';
+          span.textContent = isTab ? '→' : ' ';
+          span.contentEditable = 'false';
           frag.appendChild(span);
         }
         i = j + 1;
@@ -254,6 +263,84 @@ const highlightTextNode = (textNode: Text, regex: RegExp, className: string): vo
 
   regex.lastIndex = 0;
   highlightTextNode(after, regex, className);
+};
+
+// Regex matching an entire HTML block element on a single line.
+const BLOCK_TAG_RE =
+  /^(<(p|h[1-6]|li|blockquote|pre)(\s[^>]*)?>)([\s\S]*?)(<\/\2>)\s*$/;
+const BLOCK_TAGS_SET = new Set([
+  'P',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'LI',
+  'BLOCKQUOTE',
+  'PRE',
+]);
+
+// Strip diff markup injected by the diff renderer from the live DOM.
+// Called immediately when the user starts typing so the diff disappears
+// without waiting for a React re-render cycle.
+const stripDiffMarkupWysiwyg = (root: HTMLElement): void => {
+  // Unwrap inline diff spans: inserted content stays, deleted content goes.
+  for (const span of Array.from(
+    root.querySelectorAll('span.diff-inserted, span.diff-deleted')
+  )) {
+    const htmlEl = span as HTMLElement;
+    const parent = htmlEl.parentNode;
+    if (!parent) continue;
+    if (htmlEl.classList.contains('diff-deleted')) {
+      parent.removeChild(htmlEl);
+    } else {
+      while (htmlEl.firstChild) parent.insertBefore(htmlEl.firstChild, htmlEl);
+      parent.removeChild(htmlEl);
+    }
+  }
+  // Remove diff classes + inline styles from block elements.
+  for (const el of Array.from(root.querySelectorAll('.diff-inserted, .diff-deleted'))) {
+    const htmlEl = el as HTMLElement;
+    htmlEl.classList.remove('diff-inserted', 'diff-deleted');
+    htmlEl.style.removeProperty('background-color');
+    htmlEl.style.removeProperty('border-left');
+    htmlEl.style.removeProperty('text-decoration');
+    htmlEl.style.removeProperty('opacity');
+  }
+  root.normalize();
+};
+
+// For a replacement pair (one deleted block + one inserted block), compute
+// an INLINE word-level diff on the inner HTML so only the changed words are
+// highlighted rather than the whole paragraph.
+const applyInlineDiff = (deletedBlock: string, insertedBlock: string): string => {
+  const dM = deletedBlock.match(BLOCK_TAG_RE);
+  const iM = insertedBlock.match(BLOCK_TAG_RE);
+  // Fall back to whole-block highlight when block tags differ or regex fails.
+  const fallback = (html: string, cls: string) =>
+    html.replace(/(<(?:p|h[1-6]|li|blockquote|pre)(\s|>))/, `<$2 class="${cls}"$3`);
+  if (!dM || !iM || dM[2] !== iM[2]) {
+    return fallback(insertedBlock, 'diff-inserted');
+  }
+  const openTag = iM[1];
+  const closeTag = iM[5];
+  const baseInner = dM[4];
+  const newInner = iM[4];
+  const dmpInst = new diff_match_patch();
+  const charDiffs = dmpInst.diff_main(baseInner, newInner);
+  dmpInst.diff_cleanupSemantic(charDiffs);
+  // If any diff chunk crosses an HTML tag boundary, fall back to whole-block.
+  if (charDiffs.some(([op, t]) => op !== 0 && (t.includes('<') || t.includes('>')))) {
+    return fallback(insertedBlock, 'diff-inserted');
+  }
+  let inner = '';
+  for (const [op, t] of charDiffs) {
+    if (op === 0) inner += t;
+    else if (op === 1) inner += `<span class="diff-inserted">${t}</span>`;
+    else inner += `<span class="diff-deleted">${t}</span>`;
+  }
+  return openTag + inner + closeTag + '\n';
 };
 
 const highlightWysiwygSearchMatches = (root: HTMLElement, terms: string[]): void => {
@@ -322,6 +409,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
     // Debounce timers for API-level persistence so every keystroke does not
     // trigger a network request.  Display updates remain synchronous.
     const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const wysiwygDirtyRef = useRef(false);
     const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const DEBOUNCE_MS = 300;
 
@@ -695,23 +783,40 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             const lineDiffs = dmpInst.diff_main(chars1, chars2, false);
             dmpInst.diff_charsToLines_(lineDiffs, lineArray);
 
+            // Walk diffs pairing deletions immediately followed by insertions
+            // (replacements) so we can highlight only the changed words inline.
             let highlightedHtml = '';
-            for (const [op, text] of lineDiffs) {
-              if (op === 0) {
+            let di = 0;
+            while (di < lineDiffs.length) {
+              const [op, text] = lineDiffs[di];
+              if (
+                op === -1 &&
+                di + 1 < lineDiffs.length &&
+                lineDiffs[di + 1][0] === 1
+              ) {
+                // Replacement: compute inline word-level diff.
+                highlightedHtml += applyInlineDiff(
+                  lineDiffs[di][1],
+                  lineDiffs[di + 1][1]
+                );
+                di += 2;
+              } else if (op === 0) {
                 highlightedHtml += text;
+                di++;
               } else if (op === 1) {
-                // Inserted blocks: inject diff-inserted class onto the opening tag.
+                // Pure insertion (new block with no deleted counterpart).
                 highlightedHtml += text.replace(
                   /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
                   '<$1 class="diff-inserted"$2'
                 );
-              } else if (op === -1) {
-                // Deleted blocks: inject diff-deleted class; kept visible so the
-                // user can see what was replaced.
+                di++;
+              } else {
+                // Pure deletion (removed block).
                 highlightedHtml += text.replace(
                   /<(p|h[1-6]|li|blockquote|pre)([ >])/g,
                   '<$1 class="diff-deleted"$2'
                 );
+                di++;
               }
             }
 
@@ -733,12 +838,15 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
             );
           }
 
-          // Apply diff background styles to block-level diff elements.
+          // Apply diff background styles. Block elements also get a left accent bar;
+          // inline <span> elements use only the background (from CSS class).
           const diffInserted = wysiwygRef.current.querySelectorAll('.diff-inserted');
           diffInserted.forEach((el) => {
             const htmlEl = el as HTMLElement;
             htmlEl.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
-            htmlEl.style.borderLeft = '3px solid rgba(34, 197, 94, 0.4)';
+            if (BLOCK_TAGS_SET.has(htmlEl.tagName)) {
+              htmlEl.style.borderLeft = '3px solid rgba(34, 197, 94, 0.4)';
+            }
           });
 
           const diffDeleted = wysiwygRef.current.querySelectorAll('.diff-deleted');
@@ -759,24 +867,63 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       localBaseline,
     ]);
 
-    const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
-      if (e && !e.nativeEvent.isTrusted) return;
-      setLocalBaseline(undefined); // clear diff immediately on user input
-      if (wysiwygRef.current) {
-        const html = wysiwygRef.current.innerHTML;
-        const turndown = turndownService.current;
-        if (!turndown) return;
-        const md = turndown.turndown(html);
-        if (md !== chapter.content) {
-          onChange(chapter.id, { content: md });
-        }
-        checkContext();
+    const detachFromBottomOnEdit = () => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      distanceFromBottomRef.current = distanceFromBottom;
+      const atBottom = distanceFromBottom < 24;
+      isAtBottomRef.current = atBottom;
+      if (!atBottom) {
+        isDetachedFromBottomRef.current = true;
       }
     };
 
-    // Re-inject WS markers after the user finishes editing.
-    // While the element is focused, markers are absent so typing isn't
-    // disrupted; on blur we re-render and re-inject for a clean view.
+    const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
+      if (e && !e.nativeEvent.isTrusted) return;
+      detachFromBottomOnEdit();
+      // Guard: only trigger a re-render when the baseline was actually set.
+      // Unconditional setLocalBaseline(undefined) on every keystroke causes
+      // a React re-render each time, which is the primary source of lag.
+      if (localBaselineRef.current !== undefined) {
+        setLocalBaseline(undefined);
+        // The useEffect that clears diff markup from the DOM skips when the
+        // editor is focused. Strip it directly from the live DOM here so the
+        // user sees the diff disappear immediately on their first keypress.
+        if (wysiwygRef.current) stripDiffMarkupWysiwyg(wysiwygRef.current);
+      }
+      // Mark dirty so blur / passive backup will flush to the server.
+      // We deliberately avoid calling onChange here — that would cause React
+      // to re-render the entire Editor on every keystroke.
+      wysiwygDirtyRef.current = true;
+      checkContext();
+    };
+
+    // Passive backup save for WYSIWYG: flush content every 10 s so the user
+    // doesn't lose more than 10 s of work if they never blur the editor.
+    // We read everything through stable refs so this effect never needs to
+    // re-run and never causes a React re-render on its own.
+    useEffect(() => {
+      if (viewMode !== 'wysiwyg') return;
+      const id = setInterval(() => {
+        if (!wysiwygDirtyRef.current || !wysiwygRef.current) return;
+        const turndown = turndownService.current;
+        if (!turndown) return;
+        // Strip WS markers so turndown reads clean HTML
+        removeWsMarkersWysiwyg(wysiwygRef.current);
+        const md = turndown.turndown(wysiwygRef.current.innerHTML);
+        if (showWhitespace) injectWsMarkersWysiwyg(wysiwygRef.current);
+        if (md !== chapterContentRef.current) {
+          onChangeRef.current(chapterIdRef.current, { content: md });
+        }
+        wysiwygDirtyRef.current = false;
+      }, 10_000);
+      return () => clearInterval(id);
+    }, [viewMode, showWhitespace]);
+
+    // Re-inject WS markers on blur to normalise the DOM after editing
+    // (the browser may have created wrapper elements during typing).
     const handleWysiwygBlur = () => {
       if (!wysiwygRef.current) return;
 
@@ -795,6 +942,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
       if (currentMd !== chapter.content) {
         onChange(chapter.id, { content: currentMd });
       }
+      wysiwygDirtyRef.current = false;
 
       if (!showWhitespace) return;
 
@@ -1113,6 +1261,36 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
 
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         setTimeout(checkContext, 0);
+      }
+
+      // WS mode: intercept Space to insert a visible dot-marker span directly
+      // at the cursor.  This is O(1) and avoids a full tree re-injection.
+      if (
+        viewMode === 'wysiwyg' &&
+        showWhitespace &&
+        e.key === ' ' &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          const span = document.createElement('span');
+          span.dataset.wsMarker = '1';
+          span.setAttribute('aria-hidden', 'true');
+          span.className = 'cm-ws-marker';
+          span.textContent = ' ';
+          span.contentEditable = 'false';
+          range.insertNode(span);
+          range.setStartAfter(span);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        handleWysiwygInput();
+        return;
       }
 
       if (viewMode === 'wysiwyg' && e.key === 'Tab') {
@@ -1723,6 +1901,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 onInput={handleWysiwygInput}
                 onBlur={handleWysiwygBlur}
                 onMouseUp={checkContext}
+                onPointerDown={detachFromBottomOnEdit}
                 onKeyDown={handleKeyDown}
                 onKeyUp={(e) => {
                   checkContext();
@@ -1734,7 +1913,7 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
                 }${showWhitespace ? ' prose-editor-ws' : ''}`}
                 style={{
                   ...commonTextStyle,
-                  whiteSpace: showWhitespace ? 'pre-wrap' : 'normal',
+                  whiteSpace: 'normal',
                 }}
               />
 

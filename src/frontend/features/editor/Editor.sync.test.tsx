@@ -18,6 +18,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from './Editor';
 import { WritingUnit } from '../../types';
 
+if (typeof window.requestAnimationFrame !== 'function') {
+  window.requestAnimationFrame = (cb: FrameRequestCallback) =>
+    window.setTimeout(() => cb(0), 0);
+}
+if (typeof window.cancelAnimationFrame !== 'function') {
+  window.cancelAnimationFrame = window.clearTimeout;
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -183,7 +191,88 @@ describe('Editor diff highlighting', () => {
     expect(marker).toBeDefined();
   });
 
-  it('uses pre-wrap whitespace handling in wysiwyg whitespace mode', async () => {
+  it('renders the prose-editor-ws class (enabling CSS ¶ markers) in wysiwyg whitespace mode', async () => {
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'first\nsecond' }}
+        showWhitespace={true}
+      />
+    );
+
+    await act(async () => {});
+
+    // ¶ marks are provided by CSS ::after on .prose-editor-ws block elements.
+    // Verify the class is present so the CSS rule fires.
+    const editor = container.querySelector('#wysiwyg-editor');
+    expect(editor?.classList.contains('prose-editor-ws')).toBe(true);
+    // The DOM must still contain the rendered paragraph/br structure.
+    expect(editor?.querySelector('p,br')).not.toBeNull();
+  });
+
+  it('does not auto-scroll to bottom when editing wysiwyg text away from the bottom', async () => {
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'Original content' }}
+        baselineContent="Original content"
+      />
+    );
+
+    const containerEl = container.querySelector(
+      '[data-testid="editor-scroll-container"]'
+    ) as HTMLElement;
+    const editor = container.querySelector('#wysiwyg-editor') as HTMLElement;
+
+    expect(containerEl).toBeDefined();
+    expect(editor).toBeDefined();
+
+    Object.defineProperty(containerEl, 'scrollHeight', {
+      configurable: true,
+      value: 1000,
+    });
+    Object.defineProperty(containerEl, 'clientHeight', {
+      configurable: true,
+      value: 500,
+    });
+    containerEl.scrollTop = 0;
+
+    fireEvent.pointerDown(editor);
+
+    await act(async () => {
+      fireEvent.input(editor, { target: { textContent: 'Original contentx' } });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(containerEl.scrollTop).toBe(0);
+  });
+
+  it('renders two block elements (CSS ¶) and no gap markers for two-paragraph content', async () => {
+    const { container } = render(
+      <Editor
+        {...defaultProps}
+        viewMode="wysiwyg"
+        chapter={{ ...mockChapter, content: 'first\n\nsecond' }}
+        showWhitespace={true}
+      />
+    );
+
+    await act(async () => {});
+
+    // ¶ is provided by CSS ::after on each <p>; no DOM spans needed.
+    const paragraphs = container.querySelectorAll('#wysiwyg-editor p');
+    expect(paragraphs.length).toBeGreaterThanOrEqual(2);
+    // No data-ws-nl DOM spans (those are gone; CSS handles it).
+    const nlSpans = container.querySelectorAll('#wysiwyg-editor [data-ws-nl]');
+    expect(nlSpans.length).toBe(0);
+  });
+
+  it('renders space markers (not pre-wrap) for multiple spaces in wysiwyg whitespace mode', async () => {
     const { container } = render(
       <Editor
         {...defaultProps}
@@ -197,7 +286,12 @@ describe('Editor diff highlighting', () => {
 
     const editor = container.querySelector('#wysiwyg-editor');
     expect(editor).toBeDefined();
-    expect(editor?.getAttribute('style')).toContain('white-space: pre-wrap');
+    // Spaces are represented by explicit WS marker spans, not by pre-wrap CSS.
+    const spaceMarkers = container.querySelectorAll(
+      '#wysiwyg-editor .cm-ws-marker[data-ws-marker="1"]'
+    );
+    expect(spaceMarkers.length).toBeGreaterThan(0);
+    expect(editor?.getAttribute('style')).not.toContain('white-space: pre-wrap');
   });
 
   it('re-shows diff decoration when a new baselineContent prop arrives after user cleared it', async () => {

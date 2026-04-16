@@ -122,19 +122,8 @@ class WsSpaceWidget extends WidgetType {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
     el.className = 'cm-ws-marker';
-    el.textContent = '·';
-    // Use inline-block with a width equal to a typical space, so visible whitespace
-    // mode does not significantly change layout.  Keep consistent with WYSIWYG.
-    el.style.display = 'inline-block';
-    // Use 1ch so the visible marker takes up exactly one monospace character cell
-    // and does not alter layout in Raw mode.
-    el.style.minWidth = '1ch';
-    el.style.width = '1ch';
-    el.style.textAlign = 'center';
-    el.style.verticalAlign = 'baseline';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
+    el.dataset.wsMarker = '1';
+    el.textContent = ' ';
     return el;
   }
   ignoreEvent() {
@@ -147,15 +136,8 @@ class WsTabWidget extends WidgetType {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
     el.className = 'cm-ws-marker';
+    el.dataset.wsTab = '1';
     el.textContent = '→';
-    el.style.display = 'inline-block';
-    el.style.minWidth = '1ch';
-    el.style.width = '1ch';
-    el.style.textAlign = 'center';
-    el.style.verticalAlign = 'baseline';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
     return el;
   }
   ignoreEvent() {
@@ -168,10 +150,8 @@ class WsNlWidget extends WidgetType {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
     el.className = 'cm-ws-marker';
+    el.dataset.wsNl = '1';
     el.textContent = '¶';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
     return el;
   }
   ignoreEvent() {
