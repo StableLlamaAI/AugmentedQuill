@@ -105,12 +105,6 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   const { isLight } = useThemeClasses();
   const { getRanges } = useSearchHighlight();
   const summaryHighlightRanges = getRanges('story_metadata', 'story', 'story_summary');
-  const notesHighlightRanges = getRanges('story_metadata', 'story', 'notes');
-  const privateNotesHighlightRanges = getRanges(
-    'story_metadata',
-    'story',
-    'private_notes'
-  );
 
   const containerClass = isLight
     ? 'bg-brand-gray-50 text-brand-gray-800 border-brand-gray-200'
@@ -231,22 +225,6 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           <span className="italic">No description yet.</span>
         )}
       </div>
-      {notes && (
-        <div className="text-sm text-brand-gray-500 mb-4 leading-relaxed border-t pt-2 dark:border-gray-700">
-          <span className="text-xs uppercase font-bold text-brand-gray-600 block mb-1">
-            Notes (LLM Visible)
-          </span>
-          <div className="max-h-24 overflow-y-auto custom-scrollbar">
-            <MarkdownView
-              content={notes}
-              simple
-              baseline={baselineNotes}
-              language={language}
-              searchHighlightRanges={notesHighlightRanges}
-            />
-          </div>
-        </div>
-      )}
       <div className="flex flex-wrap gap-2">
         {tags.map((tag, i) => (
           <span key={i} className={`px-2 py-1 text-xs rounded-full border ${tagClass}`}>
