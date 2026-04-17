@@ -376,6 +376,29 @@ const App: React.FC = () => {
     [story.sourcebook]
   );
 
+  // A stable snapshot of baselineState that only updates when sidebar-visible
+  // fields change — i.e. NOT when chapter content changes due to typing.
+  // The sidebar only diffs metadata (summary, notes, chapter title/summary,
+  // sourcebook); it never needs to diff raw prose content.
+  // This prevents sidebarControls from rebuilding on every debounced keystroke,
+  // which in turn keeps AppMainLayout.React.memo valid during editing.
+  const baselineChaptersMetaKey = baselineState.chapters
+    .map((c) => `${c.id}:${c.title}:${c.summary ?? ''}`)
+    .join('|');
+  const sidebarBaselineState = useMemo(
+    () => baselineState,
+    [
+      baselineState.summary,
+      baselineState.notes,
+      baselineState.private_notes,
+      baselineState.conflicts,
+      baselineState.sourcebook,
+      baselineState.draft?.summary,
+      baselineState.draft?.notes,
+      baselineChaptersMetaKey,
+    ]
+  );
+
   const openSearchWithKeyboard = useCallback(() => {
     openSearch();
   }, [openSearch]);
@@ -980,22 +1003,19 @@ const App: React.FC = () => {
     ]
   );
 
+  const isCurrentChapterEmpty =
+    !currentChapter ||
+    !currentChapter.content ||
+    currentChapter.content.trim().length === 0;
+
   const headerAiControls = useMemo(
     () => ({
       handleAiAction,
       isAiActionLoading,
       isWritingAvailable: roleAvailability.writing,
-      isChapterEmpty:
-        !currentChapter ||
-        !currentChapter.content ||
-        currentChapter.content.trim().length === 0,
+      isChapterEmpty: isCurrentChapterEmpty,
     }),
-    [
-      handleAiAction,
-      isAiActionLoading,
-      roleAvailability.writing,
-      currentChapter?.content,
-    ]
+    [handleAiAction, isAiActionLoading, roleAvailability.writing, isCurrentChapterEmpty]
   );
 
   const chatPanelControls = useMemo(
@@ -1117,7 +1137,7 @@ const App: React.FC = () => {
       sourcebookDialogCloseTrigger,
       metadataDialogTrigger,
       metadataDialogCloseTrigger,
-      baselineState,
+      baselineState: sidebarBaselineState,
       sidebarStoryMetadata,
       sidebarStoryChapters,
       sidebarStoryBooks,
@@ -1155,7 +1175,7 @@ const App: React.FC = () => {
       sourcebookDialogCloseTrigger,
       metadataDialogTrigger,
       metadataDialogCloseTrigger,
-      baselineState,
+      sidebarBaselineState,
       sidebarStoryMetadata,
       sidebarStoryChapters,
       sidebarStoryBooks,
@@ -1188,10 +1208,7 @@ const App: React.FC = () => {
         isAiActionLoading,
         isWritingAvailable: roleAvailability.writing,
         isProseStreaming: isChatLoading || isAiActionLoading,
-        isChapterEmpty:
-          !currentChapter ||
-          !currentChapter.content ||
-          currentChapter.content.trim().length === 0,
+        isChapterEmpty: isCurrentChapterEmpty,
       },
       setActiveFormats,
       showWhitespace,

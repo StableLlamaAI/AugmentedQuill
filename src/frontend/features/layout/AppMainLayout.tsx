@@ -9,7 +9,7 @@
  * Defines the app main layout unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId, useMemo } from 'react';
 import { ChevronDown, ChevronRight, GripHorizontal } from 'lucide-react';
 
 import { ChapterList } from '../chapters/ChapterList';
@@ -458,6 +458,13 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       onMutationClick,
     } = chatControls;
 
+    // Memoize merged session list so Chat's React.memo isn't defeated by a
+    // new array reference on every AppMainLayout render.
+    const chatSessions = useMemo(
+      () => [...incognitoSessions, ...chatHistoryList],
+      [incognitoSessions, chatHistoryList]
+    );
+
     // Stable callbacks so memoized sidebar sub-components don't re-render on
     // every AppMainLayout render caused by sidebarControls reference churn.
     const handleSourcebookToggle = useCallback(
@@ -725,7 +732,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               onUpdateSystemPrompt={setSystemPrompt}
               onSwitchProject={handleLoadProject}
               theme={currentTheme}
-              sessions={[...incognitoSessions, ...chatHistoryList]}
+              sessions={chatSessions}
               currentSessionId={currentChatId}
               isIncognito={isIncognito}
               onSelectSession={handleSelectChat}

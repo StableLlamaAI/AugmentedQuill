@@ -9,7 +9,7 @@
  * Defines the use chat execution unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useRef } from 'react';
+import { Dispatch, SetStateAction, useCallback, useRef } from 'react';
 
 const createAssistantMessage = (
   id: string,
@@ -450,7 +450,20 @@ export function useChatExecution({
     };
   };
 
-  const handleSendMessage = async (text: string, attachments?: ChatAttachment[]) => {
+  // Keep stable refs so callers holding empty-dep useCallback/useMemo never
+  // receive new function identities just because App re-rendered (e.g. due to
+  // a debounced story-content update).  The refs are updated every render so
+  // the latest captured values are always used at call time.
+  const handleSendMessageImplRef = useRef<
+    (text: string, attachments?: ChatAttachment[]) => Promise<void>
+  >(null!);
+  const handleStopChatImplRef = useRef<() => void>(null!);
+  const handleRegenerateImplRef = useRef<() => Promise<void>>(null!);
+
+  const handleSendMessageImpl = async (
+    text: string,
+    attachments?: ChatAttachment[]
+  ) => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const historyBefore = [...chatMessages];
@@ -473,12 +486,12 @@ export function useChatExecution({
     await executeChatRequest(text, historyWithContext, attachments, userMsgId);
   };
 
-  const handleStopChat = () => {
+  const handleStopChatImpl = () => {
     stopSignalRef.current = true;
     setIsChatLoading(false);
   };
 
-  const handleRegenerate = async () => {
+  const handleRegenerateImpl = async () => {
     if (!isChatAvailable) return;
 
     let userMessageIndex = -1;
@@ -501,6 +514,21 @@ export function useChatExecution({
       userMessage.id
     );
   };
+
+  // Update impl refs every render so stable callbacks always call the latest version.
+  handleSendMessageImplRef.current = handleSendMessageImpl;
+  handleStopChatImplRef.current = handleStopChatImpl;
+  handleRegenerateImplRef.current = handleRegenerateImpl;
+
+  // Stable wrappers: identity never changes, so chatControls/useMemo deps that
+  // capture these functions don't invalidate on every debounced keystroke.
+  const handleSendMessage = useCallback(
+    (text: string, attachments?: ChatAttachment[]) =>
+      handleSendMessageImplRef.current(text, attachments),
+    []
+  );
+  const handleStopChat = useCallback(() => handleStopChatImplRef.current(), []);
+  const handleRegenerate = useCallback(() => handleRegenerateImplRef.current(), []);
 
   return {
     isChatLoading,
