@@ -580,7 +580,13 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       return;
     }
 
-    const chapter = story.chapters.find((ch) => ch.id === id);
+    // For streaming preview (sync=false, pushHistory=false), read from the ref
+    // rather than the stale React state closure. Rapid sequential calls from a
+    // throttled timer otherwise each close over the same old `story` value and
+    // React 19 detects the resulting nested startTransition as an update loop.
+    const currentStory = !sync && !pushHistory ? latestStoryRef.current : story;
+
+    const chapter = currentStory.chapters.find((ch) => ch.id === id);
     if (!chapter) return;
 
     const isDifferent = Object.entries(partial).some(([key, value]) => {
@@ -589,10 +595,14 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       return value !== old;
     });
 
-    const newChapters = story.chapters.map((ch) =>
+    const newChapters = currentStory.chapters.map((ch) =>
       ch.id === id ? { ...ch, ...partial } : ch
     );
-    const newState = { ...story, chapters: newChapters, lastUpdated: Date.now() };
+    const newState = {
+      ...currentStory,
+      chapters: newChapters,
+      lastUpdated: Date.now(),
+    };
 
     if (pushHistory) {
       pushState(newState, buildChapterUpdateLabel(chapter, partial), isUserEdit);

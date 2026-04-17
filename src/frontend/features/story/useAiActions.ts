@@ -83,22 +83,34 @@ export function useAiActions({
           ? '\n\n'
           : '';
 
-      let lastPushed = '';
-      let lastPushAt = 0;
+      let pendingPartial: string | null = null;
+      let throttleHandle: ReturnType<typeof setTimeout> | null = null;
+      // Throttle interval for streaming preview updates. Fires via setTimeout
+      // (macrotask) so it is always outside React's render cycle, avoiding the
+      // "Maximum update depth exceeded" error that requestAnimationFrame can
+      // trigger when React 19 concurrent rendering is mid-flight.
+      const PREVIEW_INTERVAL_MS = 150;
+
+      const flushPending = () => {
+        throttleHandle = null;
+        if (pendingPartial === null) return;
+        const partial = pendingPartial;
+        pendingPartial = null;
+        const nextContent =
+          action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
+        // Atomic local state update WITHOUT server sync during stream
+        void updateChapter(currentUnit.id, { content: nextContent }, false);
+      };
 
       const pushProgress = (partial: string) => {
         if (!isChapterStreamingAction) return;
-        if (partial === lastPushed) return;
-        const now = Date.now();
-        if (now - lastPushAt < 50) return; // Faster for local UI
-        lastPushAt = now;
-        lastPushed = partial;
-
-        const nextContent =
-          action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
-
-        // Atomic local state update WITHOUT server sync during stream
-        void updateChapter(currentUnit.id, { content: nextContent }, false);
+        // Coalesce all SSE chunks arriving within PREVIEW_INTERVAL_MS into a
+        // single state update. Storing the latest value means we never render
+        // a stale intermediate — only the most-recent accumulated text is shown.
+        pendingPartial = partial;
+        if (throttleHandle === null) {
+          throttleHandle = setTimeout(flushPending, PREVIEW_INTERVAL_MS);
+        }
       };
 
       const result = await streamAiAction(
@@ -112,6 +124,14 @@ export function useAiActions({
         checkedSourcebookIds,
         cancelSignalRef.current
       );
+
+      // Cancel any pending throttle flush before applying the final result to
+      // avoid a stale intermediate state overwriting the completed content.
+      if (throttleHandle !== null) {
+        clearTimeout(throttleHandle);
+        throttleHandle = null;
+        pendingPartial = null;
+      }
 
       // If the user cancelled the action while it was streaming, avoid
       // applying any final updates and exit quickly so the UI can return to
