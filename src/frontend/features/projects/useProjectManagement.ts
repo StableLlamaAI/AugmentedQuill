@@ -135,15 +135,7 @@ export function useProjectManagement({
         },
       ];
     });
-  }, [
-    story.id,
-    story.title,
-    story.projectType,
-    story.language,
-    story.chapters,
-    story.summary,
-    story.styleTags,
-  ]);
+  }, [story.id, story.title, story.projectType, story.language]);
 
   const handleLoadProject = useCallback(
     async (id: string) => {

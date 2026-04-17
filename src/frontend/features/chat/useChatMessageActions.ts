@@ -9,7 +9,7 @@
  * Defines the use chat message actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useCallback } from 'react';
 
 import { ChatMessage } from '../../types';
 
@@ -20,17 +20,23 @@ type UseChatMessageActionsParams = {
 export function useChatMessageActions({
   setChatMessages,
 }: UseChatMessageActionsParams) {
-  const handleEditMessage = (id: string, newText: string) => {
-    setChatMessages((previous) =>
-      previous.map((message) =>
-        message.id === id ? { ...message, text: newText } : message
-      )
-    );
-  };
+  const handleEditMessage = useCallback(
+    (id: string, newText: string) => {
+      setChatMessages((previous) =>
+        previous.map((message) =>
+          message.id === id ? { ...message, text: newText } : message
+        )
+      );
+    },
+    [setChatMessages]
+  );
 
-  const handleDeleteMessage = (id: string) => {
-    setChatMessages((previous) => previous.filter((message) => message.id !== id));
-  };
+  const handleDeleteMessage = useCallback(
+    (id: string) => {
+      setChatMessages((previous) => previous.filter((message) => message.id !== id));
+    },
+    [setChatMessages]
+  );
 
   return {
     handleEditMessage,
