@@ -11,7 +11,7 @@ API endpoints for managing the sourcebook (knowledge base) associated with a pro
 """
 
 from typing import List, Optional, Literal
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
@@ -124,7 +124,9 @@ async def get_sourcebook(
 
 
 @router.post("/sourcebook")
-async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEntry:
+async def create_sourcebook_entry(
+    entry: SourcebookEntryCreate, background_tasks: BackgroundTasks
+) -> SourcebookEntry:
     """Create Sourcebook Entry."""
     active = get_active_project_dir()
     if not active:
@@ -141,15 +143,15 @@ async def create_sourcebook_entry(entry: SourcebookEntryCreate) -> SourcebookEnt
     if "error" in created:
         raise HTTPException(status_code=400, detail=created["error"])
 
-    refreshed = await sourcebook_refresh_entry_keywords(created["id"], payload={})
-    if isinstance(refreshed, dict):
-        created = refreshed
+    background_tasks.add_task(
+        sourcebook_refresh_entry_keywords, created["id"], payload={}
+    )
     return SourcebookEntry(**created)
 
 
 @router.put("/sourcebook/{entry_name:path}")
 async def update_sourcebook_entry(
-    entry_name: str, updates: SourcebookEntryUpdate
+    entry_name: str, updates: SourcebookEntryUpdate, background_tasks: BackgroundTasks
 ) -> SourcebookEntry:
     """Update Sourcebook Entry."""
     active = get_active_project_dir()
@@ -173,9 +175,9 @@ async def update_sourcebook_entry(
         detail = str(result["error"])
         status = 404 if "not found" in detail.lower() else 400
         raise HTTPException(status_code=status, detail=detail)
-    refreshed = await sourcebook_refresh_entry_keywords(result["id"], payload={})
-    if isinstance(refreshed, dict):
-        result = refreshed
+    background_tasks.add_task(
+        sourcebook_refresh_entry_keywords, result["id"], payload={}
+    )
     return SourcebookEntry(**result)
 
 

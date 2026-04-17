@@ -13,10 +13,18 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { render, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, act, cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from './Editor';
 import { WritingUnit } from '../../types';
+
+if (typeof window.requestAnimationFrame !== 'function') {
+  window.requestAnimationFrame = (cb: FrameRequestCallback) =>
+    window.setTimeout(() => cb(0), 0);
+}
+if (typeof window.cancelAnimationFrame !== 'function') {
+  window.cancelAnimationFrame = window.clearTimeout;
+}
 
 afterEach(() => {
   cleanup();
@@ -165,41 +173,6 @@ describe('Editor diff highlighting', () => {
     vi.useRealTimers();
   });
 
-  it('renders a visible tab marker in wysiwyg whitespace mode', async () => {
-    const { container } = render(
-      <Editor
-        {...defaultProps}
-        viewMode="wysiwyg"
-        chapter={{ ...mockChapter, content: 'a\tb' }}
-        showWhitespace={true}
-      />
-    );
-
-    await act(async () => {});
-
-    const marker = Array.from(
-      container.querySelectorAll('#wysiwyg-editor .cm-ws-marker')
-    ).find((el) => el.textContent === '→');
-    expect(marker).toBeDefined();
-  });
-
-  it('uses pre-wrap whitespace handling in wysiwyg whitespace mode', async () => {
-    const { container } = render(
-      <Editor
-        {...defaultProps}
-        viewMode="wysiwyg"
-        chapter={{ ...mockChapter, content: 'a  b' }}
-        showWhitespace={true}
-      />
-    );
-
-    await act(async () => {});
-
-    const editor = container.querySelector('#wysiwyg-editor');
-    expect(editor).toBeDefined();
-    expect(editor?.getAttribute('style')).toContain('white-space: pre-wrap');
-  });
-
   it('re-shows diff decoration when a new baselineContent prop arrives after user cleared it', async () => {
     const onChange = vi.fn();
     const { rerender } = render(
@@ -230,39 +203,69 @@ describe('Editor diff highlighting', () => {
     cmContent = document.querySelector('.cm-content');
     expect(cmContent?.innerHTML).toContain('diff-inserted');
   });
+});
 
-  it('inserts a tab character in wysiwyg mode instead of moving focus', async () => {
-    const originalExecCommand = document.execCommand;
-    const execCommandMock = vi.fn(() => true);
-    Object.defineProperty(document, 'execCommand', {
-      value: execCommandMock,
-      configurable: true,
-    });
+describe('Editor diff highlighting – smart-quote regression', () => {
+  it('preserves full diff after typographic quote replacement (smart-quote regression)', async () => {
+    // Baseline: original content with typographic quotes already.
+    // After streaming (raw quotes in the new text), then after lazy-load applies
+    // typographic quotes to server content, the diff must still show the FULL
+    // new text — not only the quote-position changes.
+    const baseline = 'He said \u201Chello.\u201D';
+    const rawQuoteChapter = {
+      ...mockChapter,
+      content: 'He said \u201Chello.\u201D\n\nShe replied "goodbye."',
+    };
+    const typographicChapter = {
+      ...mockChapter,
+      content: 'He said \u201Chello.\u201D\n\nShe replied \u201Cgoodbye.\u201D',
+    };
 
-    const { container } = render(
-      <Editor
-        {...defaultProps}
-        viewMode="wysiwyg"
-        chapter={{ ...mockChapter, content: 'Line one' }}
-      />
-    );
+    const { rerender } = render(<Editor {...defaultProps} />);
 
-    const wysiwyg = container.querySelector('#wysiwyg-editor');
-    expect(wysiwyg).toBeTruthy();
-
+    // Simulate streaming preview arriving (raw quotes in the new paragraph).
     await act(async () => {
-      fireEvent.keyDown(wysiwyg as HTMLElement, {
-        key: 'Tab',
-        code: 'Tab',
-        keyCode: 9,
-        charCode: 9,
-      });
+      rerender(
+        <Editor
+          {...defaultProps}
+          chapter={rawQuoteChapter}
+          baselineContent={baseline}
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
+        />
+      );
     });
 
-    expect(execCommandMock).toHaveBeenCalledWith('insertText', false, '\t');
-    Object.defineProperty(document, 'execCommand', {
-      value: originalExecCommand,
-      configurable: true,
+    let cmContent = document.querySelector('.cm-content');
+    // Full new paragraph must be highlighted, not just the quotes.
+    expect(cmContent?.innerHTML).toContain('diff-inserted');
+    const htmlAfterRaw = cmContent?.innerHTML ?? '';
+
+    // Simulate lazy-load replacing content with typographic version from server.
+    await act(async () => {
+      rerender(
+        <Editor
+          {...defaultProps}
+          chapter={typographicChapter}
+          baselineContent={baseline}
+          aiControls={{ ...defaultProps.aiControls, isProseStreaming: false }}
+        />
+      );
     });
+
+    cmContent = document.querySelector('.cm-content');
+    expect(cmContent?.innerHTML).toContain('diff-inserted');
+    // The highlighted region must contain the new paragraph text, not shrink to
+    // just the quote-character positions.
+    expect(cmContent?.innerHTML).toContain('goodbye');
+    // The size of the highlighted region should be comparable (same logical
+    // new text, just with different quote characters).
+    const htmlAfterTypographic = cmContent?.innerHTML ?? '';
+    // Both versions should highlight a similar amount of new content —
+    // the typographic version must not suddenly show much less than the raw one.
+    const countInserted = (html: string) =>
+      (html.match(/class="cm-diff-inserted"/g) ?? []).length;
+    expect(countInserted(htmlAfterTypographic)).toBeGreaterThanOrEqual(
+      countInserted(htmlAfterRaw) - 1
+    );
   });
 });

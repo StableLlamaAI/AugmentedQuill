@@ -68,6 +68,43 @@ body.light ::-webkit-scrollbar-thumb:hover {
   border-radius: 2px;
 }
 
+.cm-ws-marker {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  font-style: normal;
+  font-weight: normal;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.cm-ws-marker[data-ws-marker='1'] {
+  display: inline;
+  position: relative;
+  color: inherit;
+  background-image: radial-gradient(circle, currentColor 35%, transparent 36%);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 0.35em 0.35em;
+}
+
+.cm-ws-marker[data-ws-tab='1'] {
+  display: inline-block;
+  min-width: 1ch;
+  width: 1ch;
+  text-align: center;
+  vertical-align: baseline;
+  background-image: none;
+  color: currentColor;
+}
+
+.cm-ws-marker[data-ws-nl='1']:not([data-ws-gap='1']) {
+  display: inline;
+  background-image: none;
+  color: currentColor;
+}
+
 .search-highlight,
 mark.search-highlight {
   background-color: rgba(245, 158, 11, 0.25);

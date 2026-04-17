@@ -99,6 +99,36 @@ describe('useProjectManagement', () => {
     expect(result.current.instructionLanguages).toEqual(['en', 'de']);
   });
 
+  it('resets undo history when the user switches projects', async () => {
+    vi.mocked(api.projects.select).mockResolvedValue({ ok: true } as any);
+    vi.mocked(api.chat.list).mockResolvedValue([] as any);
+
+    const refreshStory = vi.fn().mockResolvedValue(undefined);
+    const handleNewChat = vi.fn();
+
+    const { result } = renderHook(() =>
+      useProjectManagement({
+        story: baseStory,
+        refreshStory,
+        loadStory: vi.fn(),
+        updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
+        handleSelectChat: vi.fn().mockResolvedValue(undefined),
+        handleNewChat,
+        setChatHistoryList: vi.fn(),
+        getErrorMessage: () => 'error',
+        isSettingsOpen: false,
+        setIsSettingsOpen: vi.fn(),
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleLoadProject('p1');
+    });
+
+    expect(refreshStory).toHaveBeenCalledWith(undefined, true);
+    expect(handleNewChat).toHaveBeenCalled();
+  });
+
   it('renames a non-active project and persists language to local storage', async () => {
     localStorage.setItem(
       'project_other',
@@ -184,5 +214,76 @@ describe('useProjectManagement', () => {
     expect(
       result.current.projects.find((project) => project.id === 'active-story')?.language
     ).toBe('de');
+  });
+
+  it('does not resync project metadata for chapter content-only edits', async () => {
+    const initialStory = {
+      ...baseStory,
+      chapters: [
+        {
+          id: '1',
+          title: 'Chapter 1',
+          summary: '',
+          content: 'Before',
+          filename: '01.md',
+        },
+      ],
+      language: 'en',
+    };
+
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(2000)
+      .mockReturnValueOnce(3000)
+      .mockReturnValueOnce(4000)
+      .mockReturnValueOnce(5000);
+
+    const { result, rerender } = renderHook(
+      ({ story }) =>
+        useProjectManagement({
+          story,
+          refreshStory: vi.fn().mockResolvedValue(undefined),
+          loadStory: vi.fn(),
+          updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
+          handleSelectChat: vi.fn().mockResolvedValue(undefined),
+          handleNewChat: vi.fn(),
+          setChatHistoryList: vi.fn(),
+          getErrorMessage: () => 'error',
+          isSettingsOpen: false,
+          setIsSettingsOpen: vi.fn(),
+        }),
+      { initialProps: { story: initialStory } }
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.projects.some((project) => project.id === 'active-story')
+      ).toBe(true);
+    });
+
+    const before = result.current.projects.find(
+      (project) => project.id === 'active-story'
+    );
+
+    act(() => {
+      rerender({
+        story: {
+          ...initialStory,
+          chapters: [
+            {
+              ...initialStory.chapters[0],
+              content: 'After',
+            },
+          ],
+        },
+      });
+    });
+
+    const after = result.current.projects.find(
+      (project) => project.id === 'active-story'
+    );
+    expect(after?.updatedAt).toBe(before?.updatedAt);
+    expect(after?.title).toBe(before?.title);
+    expect(after?.language).toBe(before?.language);
   });
 });

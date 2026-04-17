@@ -9,7 +9,7 @@
  * Defines the use app settings unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import i18n, { detectBrowserLanguage } from '../app/i18n';
 import { AppSettings, LLMConfig } from '../../types';
 import { api } from '../../services/api';
@@ -119,49 +119,54 @@ export function useAppSettings(defaultSettings: AppSettings) {
             }
           );
 
-          setAppSettings((prev) => {
-            const next = { ...prev, providers };
-            const selectedName = (openai?.selected || '') as string;
-            const selectedChat = (openai?.selected_chat || selectedName) as string;
-            const selectedWriting = (openai?.selected_writing ||
-              selectedName) as string;
-            const selectedEditing = (openai?.selected_editing ||
-              selectedName) as string;
+          startTransition(() =>
+            setAppSettings((prev) => {
+              const next = { ...prev, providers };
+              const selectedName = (openai?.selected || '') as string;
+              const selectedChat = (openai?.selected_chat || selectedName) as string;
+              const selectedWriting = (openai?.selected_writing ||
+                selectedName) as string;
+              const selectedEditing = (openai?.selected_editing ||
+                selectedName) as string;
 
-            if (!next.activeChatProviderId || next.activeChatProviderId === 'default') {
-              if (selectedChat) next.activeChatProviderId = selectedChat;
-            }
-            if (
-              !next.activeWritingProviderId ||
-              next.activeWritingProviderId === 'default'
-            ) {
-              if (selectedWriting) next.activeWritingProviderId = selectedWriting;
-            }
-            if (
-              !next.activeEditingProviderId ||
-              next.activeEditingProviderId === 'default'
-            ) {
-              if (selectedEditing) next.activeEditingProviderId = selectedEditing;
-            }
+              if (
+                !next.activeChatProviderId ||
+                next.activeChatProviderId === 'default'
+              ) {
+                if (selectedChat) next.activeChatProviderId = selectedChat;
+              }
+              if (
+                !next.activeWritingProviderId ||
+                next.activeWritingProviderId === 'default'
+              ) {
+                if (selectedWriting) next.activeWritingProviderId = selectedWriting;
+              }
+              if (
+                !next.activeEditingProviderId ||
+                next.activeEditingProviderId === 'default'
+              ) {
+                if (selectedEditing) next.activeEditingProviderId = selectedEditing;
+              }
 
-            if (machine?.gui_language) {
-              next.guiLanguage = machine.gui_language;
-            }
+              if (machine?.gui_language) {
+                next.guiLanguage = machine.gui_language;
+              }
 
-            const exists = (id: string) =>
-              providers.some((provider) => provider.id === id);
-            if (!exists(next.activeChatProviderId)) {
-              next.activeChatProviderId = providers[0].id;
-            }
-            if (!exists(next.activeWritingProviderId)) {
-              next.activeWritingProviderId = providers[0].id;
-            }
-            if (!exists(next.activeEditingProviderId)) {
-              next.activeEditingProviderId = providers[0].id;
-            }
+              const exists = (id: string) =>
+                providers.some((provider) => provider.id === id);
+              if (!exists(next.activeChatProviderId)) {
+                next.activeChatProviderId = providers[0].id;
+              }
+              if (!exists(next.activeWritingProviderId)) {
+                next.activeWritingProviderId = providers[0].id;
+              }
+              if (!exists(next.activeEditingProviderId)) {
+                next.activeEditingProviderId = providers[0].id;
+              }
 
-            return next;
-          });
+              return next;
+            })
+          );
         }
       } catch (error) {
         console.error('Failed to sync settings with backend', error);

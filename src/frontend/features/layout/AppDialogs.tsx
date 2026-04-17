@@ -82,57 +82,63 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
 }) => {
   return (
     <>
-      <SettingsDialog
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={appSettings}
-        onSaveSettings={setAppSettings}
-        projects={projects}
-        activeProjectId={story.id}
-        onLoadProject={handleLoadProject}
-        onCreateProject={handleCreateProject}
-        onImportProject={handleImportProject}
-        onDeleteProject={handleDeleteProject}
-        onRenameProject={handleRenameProject}
-        onConvertProject={handleConvertProject}
-        onRefreshProjects={refreshProjects}
-        activeProjectType={story.projectType}
-        activeProjectStats={{
-          chapterCount: story.chapters.length,
-          bookCount: story.books?.length || 0,
-        }}
-        theme={currentTheme}
-        defaultPrompts={prompts}
-        projectLanguages={instructionLanguages}
-      />
+      {isSettingsOpen && (
+        <SettingsDialog
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={appSettings}
+          onSaveSettings={setAppSettings}
+          projects={projects}
+          activeProjectId={story.id}
+          onLoadProject={handleLoadProject}
+          onCreateProject={handleCreateProject}
+          onImportProject={handleImportProject}
+          onDeleteProject={handleDeleteProject}
+          onRenameProject={handleRenameProject}
+          onConvertProject={handleConvertProject}
+          onRefreshProjects={refreshProjects}
+          activeProjectType={story.projectType}
+          activeProjectStats={{
+            chapterCount: story.chapters.length,
+            bookCount: story.books?.length || 0,
+          }}
+          theme={currentTheme}
+          defaultPrompts={prompts}
+          projectLanguages={instructionLanguages}
+        />
+      )}
 
-      <ProjectImages
-        isOpen={isImagesOpen}
-        projectLanguage={story.language || 'en'}
-        onClose={() => setIsImagesOpen(false)}
-        theme={currentTheme}
-        settings={appSettings}
-        prompts={prompts}
-        imageActionsAvailable={imageActionsAvailable}
-        onRecordHistory={recordHistoryEntry}
-        imageStyle={story.image_style}
-        imageAdditionalInfo={story.image_additional_info}
-        onUpdateSettings={updateStoryImageSettings}
-        onInsert={(filename, url, altText) => {
-          if (url && editorRef.current) {
-            editorRef.current.insertImage(filename, url, altText);
-            setIsImagesOpen(false);
-          }
-        }}
-      />
+      {isImagesOpen && (
+        <ProjectImages
+          isOpen={isImagesOpen}
+          projectLanguage={story.language || 'en'}
+          onClose={() => setIsImagesOpen(false)}
+          theme={currentTheme}
+          settings={appSettings}
+          prompts={prompts}
+          imageActionsAvailable={imageActionsAvailable}
+          onRecordHistory={recordHistoryEntry}
+          imageStyle={story.image_style}
+          imageAdditionalInfo={story.image_additional_info}
+          onUpdateSettings={updateStoryImageSettings}
+          onInsert={(filename, url, altText) => {
+            if (url && editorRef.current) {
+              editorRef.current.insertImage(filename, url, altText);
+              setIsImagesOpen(false);
+            }
+          }}
+        />
+      )}
 
-      <CreateProjectDialog
-        isOpen={isCreateProjectOpen}
-        onClose={() => setIsCreateProjectOpen(false)}
-        languages={instructionLanguages}
-        onCreate={handleCreateProjectConfirm}
-        theme={currentTheme}
-      />
+      {isCreateProjectOpen && (
+        <CreateProjectDialog
+          isOpen={isCreateProjectOpen}
+          onClose={() => setIsCreateProjectOpen(false)}
+          languages={instructionLanguages}
+          onCreate={handleCreateProjectConfirm}
+          theme={currentTheme}
+        />
+      )}
     </>
   );
 };

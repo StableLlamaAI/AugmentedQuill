@@ -9,7 +9,7 @@
  * Defines the use prompts unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import { api } from '../../services/api';
 import { setSmartQuoteChars } from '../../utils/textUtils';
 
@@ -33,10 +33,12 @@ export function usePrompts(storyId: string) {
         const promptsData = await api.settings.getPrompts();
         const system_messages = promptsData.system_messages || {};
 
-        setPrompts({
-          system_messages,
-          user_prompts: promptsData.user_prompts || {},
-          languages: promptsData.languages,
+        startTransition(() => {
+          setPrompts({
+            system_messages,
+            user_prompts: promptsData.user_prompts || {},
+            languages: promptsData.languages,
+          });
         });
 
         // Ensure smart quotes use the project language's typographic quote characters.

@@ -9,7 +9,14 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  startTransition,
+} from 'react';
 import { useStory } from './features/story/useStory';
 import { StoryMetadata } from './features/story/StoryMetadata';
 import { ChapterList } from './features/chapters/ChapterList';
@@ -35,7 +42,7 @@ import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage } from './types';
+import { ChatMessage, SourcebookEntry } from './types';
 import { SessionMutation } from './features/chat';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
@@ -54,6 +61,7 @@ import {
 } from './features/app/appSelectors';
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
+import { applySmartQuotes } from './utils/textUtils';
 
 // ---------------------------------------------------------------------------
 // Mutation tool dispatch registry
@@ -103,27 +111,33 @@ const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
     };
   },
   add_sourcebook_relation: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
+    const targetId = args.target_id || args.targetId;
+    const label = sourceId
+      ? `SB: ${sourceId}`
+      : targetId
+        ? `SB: ${targetId}`
+        : 'Sourcebook';
     return {
       id: `sb-${Date.now()}-${Math.random()}`,
       type: 'sourcebook',
       label,
-      targetId: id as string | undefined,
+      targetId: (sourceId || targetId) as string | undefined,
     };
   },
   remove_sourcebook_relation: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
+    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
+    const targetId = args.target_id || args.targetId;
+    const label = sourceId
+      ? `SB: ${sourceId}`
+      : targetId
+        ? `SB: ${targetId}`
+        : 'Sourcebook';
     return {
       id: `sb-${Date.now()}-${Math.random()}`,
       type: 'sourcebook',
       label,
-      targetId: id as string | undefined,
+      targetId: (sourceId || targetId) as string | undefined,
     };
   },
   // Metadata tools – produce one tag per changed field
@@ -255,8 +269,14 @@ const App: React.FC = () => {
     canRedo,
     baselineState,
     advanceBaselineToCurrentStory,
+    patchSourcebook,
     isChapterLoading,
   } = useStory({ confirm, alert: (msg) => void alert(msg) });
+
+  // Stable ref to avoid recreating callbacks that read story state during
+  // streaming (e.g. onProseChunk).
+  const storyRef = useRef(story);
+  storyRef.current = story;
 
   useBrowserHistory({
     historyIndex,
@@ -292,6 +312,97 @@ const App: React.FC = () => {
   const searchState = useSearchReplace();
   const openSearch = useCallback(() => searchState.open(), [searchState]);
 
+  const sidebarStoryMetadata = useMemo(
+    () => ({
+      title: story.title,
+      summary: story.summary,
+      tags: story.styleTags,
+      notes: story.notes,
+      private_notes: story.private_notes,
+      conflicts: story.conflicts,
+      language: story.language,
+      projectType: story.projectType,
+      draft: story.draft,
+    }),
+    [
+      story.title,
+      story.summary,
+      story.styleTags,
+      story.notes,
+      story.private_notes,
+      story.conflicts,
+      story.language,
+      story.projectType,
+      story.draft,
+    ]
+  );
+
+  const chapterListChaptersKey = useMemo(
+    () =>
+      story.chapters
+        .map(
+          (ch) =>
+            `${ch.id}:${ch.title}:${ch.summary ?? ''}:${ch.book_id ?? ''}:${
+              ch.conflicts?.length ?? 0
+            }`
+        )
+        .join('|'),
+    [story.chapters]
+  );
+
+  const sidebarStoryChapters = useMemo(
+    () =>
+      story.chapters.map((ch) => ({
+        ...ch,
+        content: '',
+      })),
+    [chapterListChaptersKey]
+  );
+
+  const sidebarStoryBooks = useMemo(
+    () =>
+      (story.books || []).map((book) => ({
+        ...book,
+      })),
+    [
+      (story.books || [])
+        .map((book) => `${book.id}:${book.title}:${book.summary ?? ''}`)
+        .join('|'),
+    ]
+  );
+
+  const sidebarSourcebookEntries = useMemo(
+    () => story.sourcebook || [],
+    [story.sourcebook]
+  );
+
+  // A stable snapshot of baselineState that only updates when sidebar-visible
+  // fields change — i.e. NOT when chapter content changes due to typing.
+  // The sidebar only diffs metadata (summary, notes, chapter title/summary,
+  // sourcebook); it never needs to diff raw prose content.
+  // This prevents sidebarControls from rebuilding on every debounced keystroke,
+  // which in turn keeps AppMainLayout.React.memo valid during editing.
+  const baselineChaptersMetaKey = baselineState.chapters
+    .map((c) => `${c.id}:${c.title}:${c.summary ?? ''}`)
+    .join('|');
+  const sidebarBaselineState = useMemo(
+    () => baselineState,
+    [
+      baselineState.summary,
+      baselineState.notes,
+      baselineState.private_notes,
+      baselineState.conflicts,
+      baselineState.sourcebook,
+      baselineState.draft?.summary,
+      baselineState.draft?.notes,
+      baselineChaptersMetaKey,
+    ]
+  );
+
+  const openSearchWithKeyboard = useCallback(() => {
+    openSearch();
+  }, [openSearch]);
+
   // Global Ctrl+F / Cmd+F hotkey opens the search dialog
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -301,7 +412,7 @@ const App: React.FC = () => {
         const isEditorFocused = target.closest('#raw-markdown-editor') !== null;
         if (!isEditorFocused) {
           e.preventDefault();
-          openSearch();
+          openSearchWithKeyboard();
         }
       }
     };
@@ -321,13 +432,7 @@ const App: React.FC = () => {
     if (pending.end > 0 && content.length < pending.end) return;
     pendingJumpRef.current = null;
     const { start, end } = pending;
-    const doJump = () => editorRef.current?.jumpToPosition(start, end);
-    if (viewMode === 'wysiwyg') {
-      setViewMode('markdown');
-      requestAnimationFrame(() => requestAnimationFrame(doJump));
-    } else {
-      requestAnimationFrame(doJump);
-    }
+    requestAnimationFrame(() => editorRef.current?.jumpToPosition(start, end));
   }, [currentChapterId, currentChapter?.content]);
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
@@ -386,6 +491,8 @@ const App: React.FC = () => {
     setIsDebugLogsOpen,
     appearanceRef,
   } = useUIPanels();
+
+  const openImagesDialog = useCallback(() => setIsImagesOpen(true), [setIsImagesOpen]);
 
   const {
     viewMode,
@@ -574,41 +681,53 @@ const App: React.FC = () => {
     recordHistoryEntry: pushExternalHistoryEntry,
   });
 
+  const sourcebookMutationEntryIds = useMemo(() => {
+    return new Set(
+      sessionMutations
+        .filter((m) => m.type === 'sourcebook' && m.targetId)
+        .map((m) => m.targetId as string)
+    );
+  }, [sessionMutations]);
+
   const onMutationClick = useCallback(
     (m: SessionMutation) => {
-      if (m.type === 'chapter') {
-        if (m.targetId) {
-          handleChapterSelect(m.targetId);
-        }
-      } else if (m.type === 'story') {
-        handleChapterSelect(null);
-      } else if (m.type === 'metadata') {
-        setIsSidebarOpen(true);
-        setMetadataDialogTrigger((prev) => ({
-          id: (prev?.id ?? 0) + 1,
-          initialTab: m.subType as any,
-        }));
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-        }));
-      } else if (m.type === 'sourcebook') {
-        setIsSidebarOpen(true);
-        setSourcebookDialogTrigger((prev) => ({
-          id: (prev?.id ?? 0) + 1,
-          entryId: m.targetId ?? '',
-        }));
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-        }));
-      } else if (m.type === 'book') {
-        setIsSidebarOpen(true);
-        setEditorSettings((prev) => ({
-          ...prev,
-          sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-        }));
-      }
+      startTransition(() => {
+        requestAnimationFrame(() => {
+          if (m.type === 'chapter') {
+            if (m.targetId) {
+              handleChapterSelect(m.targetId);
+            }
+          } else if (m.type === 'story') {
+            handleChapterSelect(null);
+          } else if (m.type === 'metadata') {
+            setIsSidebarOpen(true);
+            setMetadataDialogTrigger((prev) => ({
+              id: (prev?.id ?? 0) + 1,
+              initialTab: m.subType as any,
+            }));
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+            }));
+          } else if (m.type === 'sourcebook') {
+            setIsSidebarOpen(true);
+            setSourcebookDialogTrigger((prev) => ({
+              id: (prev?.id ?? 0) + 1,
+              entryId: m.targetId ?? '',
+            }));
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+            }));
+          } else if (m.type === 'book') {
+            setIsSidebarOpen(true);
+            setEditorSettings((prev) => ({
+              ...prev,
+              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+            }));
+          }
+        });
+      });
     },
     [handleChapterSelect, setIsSidebarOpen, setEditorSettings]
   );
@@ -617,7 +736,10 @@ const App: React.FC = () => {
   // composed from the original chapter text, not from already preview-mutated
   // text (which would duplicate prior chunks and cause heavy flicker/jumps).
   const prosePreviewStateRef = useRef<
-    Record<string, { base: string; lastAccumulated: string }>
+    Record<
+      string,
+      { base: string; lastAccumulated: string; lastAppliedContent?: string }
+    >
   >({});
 
   useEffect(() => {
@@ -644,11 +766,14 @@ const App: React.FC = () => {
       (chapId: number, writeMode: string, accumulated: string) => {
         // Find the writing unit for the given chapter ID so we can compute the
         // correct full content to preview in the editor while the LLM writes.
+        // Read from ref to avoid recreating this callback whenever story state
+        // changes during streaming.
+        const currentStory = storyRef.current;
         let unit: { id: string; content: string } | null = null;
-        if (story.projectType === 'short-story' && story.draft) {
-          unit = story.draft;
+        if (currentStory.projectType === 'short-story' && currentStory.draft) {
+          unit = currentStory.draft;
         } else {
-          const found = story.chapters.find((c) => Number(c.id) === chapId);
+          const found = currentStory.chapters.find((c) => Number(c.id) === chapId);
           unit = found ?? null;
         }
         if (!unit) return;
@@ -664,16 +789,26 @@ const App: React.FC = () => {
           ? {
               base: unit.content || '',
               lastAccumulated: '',
+              lastAppliedContent: undefined,
             }
           : prevState;
 
+        // Apply typographic quote conversion so the live preview already uses the
+        // same quote style that the backend will persist (backend runs
+        // apply_typographic_quotes on the final accumulated text).  Without this,
+        // the history entry captured by pushExternalHistoryEntry contains raw
+        // quotes, and when the lazy-load later delivers the typographic version
+        // the diff changes to show only the quote positions instead of the full
+        // newly-written text.
+        const typographicAccumulated = applySmartQuotes(accumulated);
+
         let newContent: string;
         if (writeMode === 'replace') {
-          newContent = accumulated;
+          newContent = typographicAccumulated;
         } else if (writeMode === 'append') {
           const base = streamState.base;
           const separator = base && !base.endsWith('\n') ? '\n' : '';
-          newContent = base + separator + accumulated;
+          newContent = base + separator + typographicAccumulated;
         } else {
           // insert_at_marker: skip live preview (position is inside the text)
           return;
@@ -682,9 +817,13 @@ const App: React.FC = () => {
         prosePreviewStateRef.current[streamKey] = {
           base: streamState.base,
           lastAccumulated: accumulated,
+          lastAppliedContent: newContent,
         };
 
-        if (newContent === unit.content) {
+        if (
+          newContent === unit.content ||
+          newContent === streamState.lastAppliedContent
+        ) {
           return;
         }
 
@@ -694,7 +833,7 @@ const App: React.FC = () => {
         // intermediate states are ephemeral and must not pollute the undo stack.
         void updateChapter(unit.id, { content: newContent }, false, false);
       },
-      [story.projectType, story.draft, story.chapters, updateChapter]
+      [updateChapter]
     ),
     onMutations: onToolMutations,
     pushExternalHistoryEntry: (params) => {
@@ -720,15 +859,460 @@ const App: React.FC = () => {
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
 
+  const searchHighlightValue = useMemo(
+    () => ({
+      highlightActive: searchState.highlightActive,
+      ranges: searchState.highlightRanges,
+      texts: searchState.highlightTexts,
+    }),
+    [
+      searchState.highlightActive,
+      searchState.highlightRanges,
+      searchState.highlightTexts,
+    ]
+  );
+
+  // ── Stable callbacks and memoised derived values for control prop objects ──
+
+  const searchControls = useMemo(
+    () => ({
+      onOpenSearch: openSearch,
+    }),
+    [openSearch]
+  );
+
+  const historyControls = useMemo(
+    () => ({
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
+    }),
+    [
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
+    ]
+  );
+
+  const viewControls = useMemo(
+    () => ({
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+    }),
+    [
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+    ]
+  );
+
+  const formatControls = useMemo(
+    () => ({
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      onOpenImages: openImagesDialog,
+    }),
+    [
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      openImagesDialog,
+    ]
+  );
+
+  const settingsControls = useMemo(
+    () => ({
+      setIsSettingsOpen,
+      setIsImagesOpen,
+      setIsDebugLogsOpen,
+    }),
+    [setIsSettingsOpen, setIsImagesOpen, setIsDebugLogsOpen]
+  );
+
+  const appearanceControls = useMemo(
+    () => ({
+      appearanceRef,
+      isAppearanceOpen,
+      setIsAppearanceOpen,
+      setAppTheme,
+      editorSettings,
+      setEditorSettings,
+    }),
+    [
+      appearanceRef,
+      isAppearanceOpen,
+      setIsAppearanceOpen,
+      setAppTheme,
+      editorSettings,
+      setEditorSettings,
+    ]
+  );
+
+  const modelControls = useMemo(
+    () => ({
+      appSettings,
+      setAppSettings,
+      saveSettings: handleSaveSettings,
+      modelConnectionStatus,
+      detectedCapabilities,
+      recheckUnavailableProviderIfStale,
+    }),
+    [
+      appSettings,
+      setAppSettings,
+      handleSaveSettings,
+      modelConnectionStatus,
+      detectedCapabilities,
+      recheckUnavailableProviderIfStale,
+    ]
+  );
+
+  const isCurrentChapterEmpty =
+    !currentChapter ||
+    !currentChapter.content ||
+    currentChapter.content.trim().length === 0;
+
+  const headerAiControls = useMemo(
+    () => ({
+      handleAiAction,
+      isAiActionLoading,
+      isWritingAvailable: roleAvailability.writing,
+      isChapterEmpty: isCurrentChapterEmpty,
+    }),
+    [handleAiAction, isAiActionLoading, roleAvailability.writing, isCurrentChapterEmpty]
+  );
+
+  const chatPanelControls = useMemo(
+    () => ({
+      isChatOpen,
+      setIsChatOpen,
+    }),
+    [isChatOpen, setIsChatOpen]
+  );
+
+  const checkedSourcebookIds = useMemo(
+    () => Array.from(checkedEntries),
+    [checkedEntries]
+  );
+
+  const handleSourcebookMutated = useCallback(
+    async (params: {
+      label: string;
+      onUndo?: () => Promise<void>;
+      onRedo?: () => Promise<void>;
+      entryId?: string;
+      entryExistsInBaseline?: boolean;
+      updatedEntry?: SourcebookEntry | null;
+    }) => {
+      const entryExistsInBaseline = Boolean(
+        params.entryExistsInBaseline ??
+        baselineState.sourcebook?.some((entry) => entry.id === params.entryId)
+      );
+
+      if (params.updatedEntry !== undefined) {
+        if (!entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+
+        const changed = patchSourcebook(params.updatedEntry, params.entryId);
+        if (!changed) {
+          return;
+        }
+
+        if (entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+
+        pushExternalHistoryEntry({ ...params, forceNewHistory: true });
+      } else {
+        if (!entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+        await refreshStory();
+        if (entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+        pushExternalHistoryEntry(params);
+      }
+    },
+    [
+      baselineState.sourcebook,
+      advanceBaselineToCurrentStory,
+      patchSourcebook,
+      pushExternalHistoryEntry,
+      refreshStory,
+    ]
+  );
+
+  const editorUpdateChapter = useCallback(
+    (id: string, partial: Record<string, unknown>) => {
+      if ('content' in partial) {
+        searchState.notifyContentChanged(parseInt(id, 10));
+      }
+      return updateChapter(id, partial, true, true, true);
+    },
+    [searchState, updateChapter]
+  );
+
+  const editorBaselineContent = useMemo(
+    () =>
+      currentChapter?.scope === 'story'
+        ? baselineState.draft?.content
+        : baselineState.chapters.find((c) => c.id === currentChapter?.id)?.content,
+    [
+      currentChapter?.scope,
+      currentChapter?.id,
+      baselineState.draft?.content,
+      baselineState.chapters,
+    ]
+  );
+
+  const sidebarControls = useMemo(
+    () => ({
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable: roleAvailability.editing,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      onToggleSourcebook: handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
+      onSourcebookMutated: handleSourcebookMutated,
+      onAppUndo: undo,
+      onAppRedo: redo,
+      canAppUndo: canUndo,
+      canAppRedo: canRedo,
+      selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+      baselineState: sidebarBaselineState,
+      sidebarStoryMetadata,
+      sidebarStoryChapters,
+      sidebarStoryBooks,
+      sidebarSourcebookEntries,
+    }),
+    [
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      roleAvailability.editing,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      sourcebookMutationEntryIds,
+      handleSourcebookMutated,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+      sidebarBaselineState,
+      sidebarStoryMetadata,
+      sidebarStoryChapters,
+      sidebarStoryBooks,
+      sidebarSourcebookEntries,
+    ]
+  );
+
+  const editorControls = useMemo(
+    () => ({
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      storyLanguage: story.language || 'en',
+      setEditorSettings,
+      viewMode,
+      updateChapter: editorUpdateChapter,
+      suggestionControls: {
+        continuations,
+        isSuggesting,
+        handleTriggerSuggestions,
+        handleCancelSuggestions: cancelSuggestions,
+        handleAcceptContinuation,
+        isSuggestionMode,
+        handleKeyboardSuggestionAction,
+      },
+      aiControls: {
+        handleAiAction,
+        cancelAiAction,
+        isAiActionLoading,
+        isWritingAvailable: roleAvailability.writing,
+        isProseStreaming: isChatLoading || isAiActionLoading,
+        isChapterEmpty: isCurrentChapterEmpty,
+      },
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      baselineContent: editorBaselineContent,
+      onOpenSearch: openSearch,
+    }),
+    [
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      story.language,
+      setEditorSettings,
+      viewMode,
+      editorUpdateChapter,
+      continuations,
+      isSuggesting,
+      handleTriggerSuggestions,
+      cancelSuggestions,
+      handleAcceptContinuation,
+      isSuggestionMode,
+      handleKeyboardSuggestionAction,
+      handleAiAction,
+      cancelAiAction,
+      isAiActionLoading,
+      roleAvailability.writing,
+      isChatLoading,
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      editorBaselineContent,
+      openSearch,
+    ]
+  );
+
+  const chatControls = useMemo(
+    () => ({
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      isChatAvailable: roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessage: handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerate: handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    }),
+    [
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    ]
+  );
+
   return (
     <ConfirmDialogProvider value={confirm}>
-      <SearchHighlightProvider
-        value={{
-          highlightActive: searchState.highlightActive,
-          ranges: searchState.highlightRanges,
-          texts: searchState.highlightTexts,
-        }}
-      >
+      <SearchHighlightProvider value={searchHighlightValue}>
         <ThemeProvider currentTheme={currentTheme}>
           <ConfirmDialog
             isOpen={confirmDialogState.isOpen}
@@ -779,216 +1363,32 @@ const App: React.FC = () => {
 
             <AppHeader
               storyTitle={story.title}
-              sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
-              settingsControls={{
-                setIsSettingsOpen,
-                setIsImagesOpen,
-                setIsDebugLogsOpen,
-              }}
-              historyControls={{
-                undo,
-                redo,
-                undoSteps,
-                redoSteps,
-                undoOptions,
-                redoOptions,
-                nextUndoLabel,
-                nextRedoLabel,
-                canUndo,
-                canRedo,
-              }}
-              viewControls={{
-                viewMode,
-                setViewMode,
-                showWhitespace,
-                setShowWhitespace,
-                isViewMenuOpen,
-                setIsViewMenuOpen,
-              }}
-              formatControls={{
-                handleFormat,
-                getFormatButtonClass,
-                isFormatMenuOpen,
-                setIsFormatMenuOpen,
-                isMobileFormatMenuOpen,
-                setIsMobileFormatMenuOpen,
-                onOpenImages: () => setIsImagesOpen(true),
-              }}
-              aiControls={{
-                handleAiAction,
-                isAiActionLoading,
-                isWritingAvailable: roleAvailability.writing,
-                isChapterEmpty:
-                  !currentChapter ||
-                  !currentChapter.content ||
-                  currentChapter.content.trim().length === 0,
-              }}
-              modelControls={{
-                appSettings,
-                setAppSettings,
-                saveSettings: handleSaveSettings,
-                modelConnectionStatus,
-                detectedCapabilities,
-                recheckUnavailableProviderIfStale,
-              }}
-              appearanceControls={{
-                appearanceRef,
-                isAppearanceOpen,
-                setIsAppearanceOpen,
-                setAppTheme,
-                editorSettings,
-                setEditorSettings,
-              }}
-              chatPanelControls={{ isChatOpen, setIsChatOpen }}
-              searchControls={{ onOpenSearch: openSearch }}
+              sidebarControls={sidebarControls}
+              settingsControls={settingsControls}
+              historyControls={historyControls}
+              viewControls={viewControls}
+              formatControls={formatControls}
+              aiControls={headerAiControls}
+              modelControls={modelControls}
+              appearanceControls={appearanceControls}
+              chatPanelControls={chatPanelControls}
+              searchControls={searchControls}
             />
 
             <AppMainLayout
-              sidebarControls={{
-                isSidebarOpen,
-                setIsSidebarOpen,
-                story,
-                currentChapterId,
-                handleChapterSelect,
-                deleteChapter,
-                updateChapter,
-                updateBook,
-                addChapter,
-                handleBookCreate,
-                handleBookDelete,
-                handleReorderChapters,
-                handleReorderBooks,
-                handleSidebarAiAction,
-                isEditingAvailable: roleAvailability.editing,
-                handleOpenImages,
-                updateStoryMetadata,
-                checkedSourcebookIds: Array.from(checkedEntries),
-                onToggleSourcebook: handleToggleEntry,
-                isAutoSourcebookSelectionEnabled,
-                onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
-                isSourcebookSelectionRunning,
-                onSourcebookMutated: async (params) => {
-                  const entryExistsInBaseline = Boolean(
-                    params.entryExistsInBaseline ??
-                    baselineState.sourcebook?.some(
-                      (entry) => entry.id === params.entryId
-                    )
-                  );
-
-                  if (!entryExistsInBaseline) {
-                    // For AI-created entries that are being edited by the user,
-                    // keep the pre-save baseline so the transition from created
-                    // (green) to modified (amber) is preserved.
-                    advanceBaselineToCurrentStory();
-                  }
-
-                  // Refresh story so story.sourcebook reflects the mutation
-                  // before we snapshot the state into the undo/redo history.
-                  await refreshStory();
-
-                  if (entryExistsInBaseline) {
-                    // Manual edits to an already-baselined entry should not be
-                    // shown as an automatic diff; set the baseline to the new
-                    // post-save story state instead.
-                    advanceBaselineToCurrentStory();
-                  }
-
-                  pushExternalHistoryEntry(params);
-                },
-                onAppUndo: undo,
-                onAppRedo: redo,
-                canAppUndo: canUndo,
-                canAppRedo: canRedo,
-                selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
-                sourcebookDialogTrigger,
-                sourcebookDialogCloseTrigger,
-                metadataDialogTrigger,
-                metadataDialogCloseTrigger,
-                baselineState,
-              }}
-              editorControls={{
-                currentChapter,
-                isChapterLoading,
-                editorRef,
-                editorSettings,
-                storyLanguage: story.language || 'en',
-                setEditorSettings,
-                viewMode,
-                updateChapter: (id, partial) => {
-                  if ('content' in partial) {
-                    searchState.notifyContentChanged(parseInt(id, 10));
-                  }
-                  return updateChapter(id, partial, true, true, true);
-                },
-                suggestionControls: {
-                  continuations,
-                  isSuggesting,
-                  handleTriggerSuggestions,
-                  handleCancelSuggestions: cancelSuggestions,
-                  handleAcceptContinuation,
-                  isSuggestionMode,
-                  handleKeyboardSuggestionAction,
-                },
-                aiControls: {
-                  handleAiAction,
-                  cancelAiAction,
-                  isAiActionLoading,
-                  isWritingAvailable: roleAvailability.writing,
-                  isProseStreaming: isChatLoading || isAiActionLoading,
-                  isChapterEmpty:
-                    !currentChapter ||
-                    !currentChapter.content ||
-                    currentChapter.content.trim().length === 0,
-                },
-                setActiveFormats,
-                showWhitespace,
-                setShowWhitespace,
-                baselineContent:
-                  currentChapter?.scope === 'story'
-                    ? baselineState.draft?.content
-                    : baselineState.chapters.find((c) => c.id === currentChapter?.id)
-                        ?.content,
-                onOpenSearch: openSearch,
-              }}
-              chatControls={{
-                isChatOpen,
-                chatMessages,
-                isChatLoading,
-                isChatAvailable: roleAvailability.chat,
-                activeChatConfig,
-                systemPrompt,
-                handleSendMessage: handleSendMessageWithReset,
-                handleStopChat,
-                handleRegenerate: handleRegenerateWithReset,
-                handleEditMessage,
-                handleDeleteMessage,
-                setSystemPrompt,
-                handleLoadProject,
-                incognitoSessions,
-                chatHistoryList,
-                currentChatId,
-                isIncognito,
-                handleSelectChat,
-                handleNewChat,
-                handleDeleteChat,
-                handleDeleteAllChats,
-                setIsIncognito,
-                allowWebSearch,
-                setAllowWebSearch,
-                scratchpad,
-                onUpdateScratchpad,
-                onDeleteScratchpad,
-                sessionMutations,
-                onMutationClick,
-              }}
+              sidebarControls={sidebarControls}
+              editorControls={editorControls}
+              chatControls={chatControls}
               instructionLanguages={instructionLanguages}
             />
 
-            <DebugLogs
-              isOpen={isDebugLogsOpen}
-              onClose={() => setIsDebugLogsOpen(false)}
-              theme={currentTheme}
-            />
+            {isDebugLogsOpen && (
+              <DebugLogs
+                isOpen={isDebugLogsOpen}
+                onClose={() => setIsDebugLogsOpen(false)}
+                theme={currentTheme}
+              />
+            )}
 
             <ToolCallLimitDialog
               isOpen={!!toolCallLoopDialog}
@@ -997,72 +1397,65 @@ const App: React.FC = () => {
               onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
             />
 
-            <SearchReplaceDialog
-              searchState={searchState}
-              activeChapterId={
-                currentChapterId !== null ? parseInt(currentChapterId, 10) : null
-              }
-              storyLanguage={story.language || 'en'}
-              onJumpToPosition={(start, end) => {
-                if (viewMode === 'wysiwyg') {
-                  setViewMode('markdown');
-                  requestAnimationFrame(() =>
-                    requestAnimationFrame(() =>
-                      editorRef.current?.jumpToPosition(start, end)
-                    )
-                  );
-                } else {
+            {searchState.isOpen && (
+              <SearchReplaceDialog
+                searchState={searchState}
+                activeChapterId={
+                  currentChapterId !== null ? parseInt(currentChapterId, 10) : null
+                }
+                storyLanguage={story.language || 'en'}
+                onJumpToPosition={(start, end) => {
                   editorRef.current?.jumpToPosition(start, end);
-                }
-              }}
-              onStoryChanged={() => void refreshStory()}
-              onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
-                setMetadataDialogCloseTrigger((c) => c + 1);
-                setSourcebookDialogCloseTrigger((c) => c + 1);
-                if (jumpStart !== undefined && jumpEnd !== undefined) {
-                  pendingJumpRef.current = {
-                    chapterId: String(chapId),
-                    start: jumpStart,
-                    end: jumpEnd,
-                  };
-                }
-                handleChapterSelect(String(chapId));
-              }}
-              onNavigateToSourcebookEntry={(entryId) => {
-                setMetadataDialogCloseTrigger((c) => c + 1);
-                setIsSidebarOpen(true);
-                setSourcebookDialogTrigger((prev) => ({
-                  id: (prev?.id ?? 0) + 1,
-                  entryId,
-                }));
-                setEditorSettings((prev) => ({
-                  ...prev,
-                  sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-                }));
-              }}
-              onNavigateToStoryMetadata={(field) => {
-                const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
-                  field === 'story_summary'
-                    ? 'summary'
-                    : field === 'notes'
-                      ? 'notes'
-                      : field === 'private_notes'
-                        ? 'private'
-                        : field.startsWith('conflicts')
-                          ? 'conflicts'
-                          : 'summary';
-                setSourcebookDialogCloseTrigger((c) => c + 1);
-                setIsSidebarOpen(true);
-                setMetadataDialogTrigger((prev) => ({
-                  id: (prev?.id ?? 0) + 1,
-                  initialTab: tab,
-                }));
-                setEditorSettings((prev) => ({
-                  ...prev,
-                  sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-                }));
-              }}
-            />
+                }}
+                onStoryChanged={() => void refreshStory()}
+                onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
+                  setMetadataDialogCloseTrigger((c) => c + 1);
+                  setSourcebookDialogCloseTrigger((c) => c + 1);
+                  if (jumpStart !== undefined && jumpEnd !== undefined) {
+                    pendingJumpRef.current = {
+                      chapterId: String(chapId),
+                      start: jumpStart,
+                      end: jumpEnd,
+                    };
+                  }
+                  handleChapterSelect(String(chapId));
+                }}
+                onNavigateToSourcebookEntry={(entryId) => {
+                  setMetadataDialogCloseTrigger((c) => c + 1);
+                  setIsSidebarOpen(true);
+                  setSourcebookDialogTrigger((prev) => ({
+                    id: (prev?.id ?? 0) + 1,
+                    entryId,
+                  }));
+                  setEditorSettings((prev) => ({
+                    ...prev,
+                    sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+                  }));
+                }}
+                onNavigateToStoryMetadata={(field) => {
+                  const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+                    field === 'story_summary'
+                      ? 'summary'
+                      : field === 'notes'
+                        ? 'notes'
+                        : field === 'private_notes'
+                          ? 'private'
+                          : field.startsWith('conflicts')
+                            ? 'conflicts'
+                            : 'summary';
+                  setSourcebookDialogCloseTrigger((c) => c + 1);
+                  setIsSidebarOpen(true);
+                  setMetadataDialogTrigger((prev) => ({
+                    id: (prev?.id ?? 0) + 1,
+                    initialTab: tab,
+                  }));
+                  setEditorSettings((prev) => ({
+                    ...prev,
+                    sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+                  }));
+                }}
+              />
+            )}
           </div>
         </ThemeProvider>
       </SearchHighlightProvider>

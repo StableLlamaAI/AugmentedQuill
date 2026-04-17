@@ -9,7 +9,7 @@
  * Defines the use provider health unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, startTransition } from 'react';
 import { AppSettings } from '../../types';
 import { api } from '../../services/api';
 
@@ -248,8 +248,10 @@ export function useProviderHealth(appSettings: AppSettings) {
           if (cancelled) return;
 
           // set all related providers to loading
-          ids.forEach((pid) => {
-            setModelConnectionStatus((prev) => ({ ...prev, [pid]: 'loading' }));
+          startTransition(() => {
+            ids.forEach((pid) => {
+              setModelConnectionStatus((prev) => ({ ...prev, [pid]: 'loading' }));
+            });
           });
 
           let promise = promiseCache.current[key];
@@ -263,23 +265,27 @@ export function useProviderHealth(appSettings: AppSettings) {
             if (cancelled) return;
 
             const status: ConnectionStatus = result.model_ok ? 'success' : 'error';
-            ids.forEach((pid) => {
-              setModelConnectionStatus((prev) => ({ ...prev, [pid]: status }));
-            });
-
-            if (result.model_ok && result.capabilities) {
+            startTransition(() => {
               ids.forEach((pid) => {
-                setDetectedCapabilities((prev) => ({
-                  ...prev,
-                  [pid]: result.capabilities!,
-                }));
+                setModelConnectionStatus((prev) => ({ ...prev, [pid]: status }));
               });
-            }
+
+              if (result.model_ok && result.capabilities) {
+                ids.forEach((pid) => {
+                  setDetectedCapabilities((prev) => ({
+                    ...prev,
+                    [pid]: result.capabilities!,
+                  }));
+                });
+              }
+            });
             markChecked(ids);
           } catch {
             if (cancelled) return;
-            ids.forEach((pid) => {
-              setModelConnectionStatus((prev) => ({ ...prev, [pid]: 'error' }));
+            startTransition(() => {
+              ids.forEach((pid) => {
+                setModelConnectionStatus((prev) => ({ ...prev, [pid]: 'error' }));
+              });
             });
             markChecked(ids);
           }
@@ -288,18 +294,25 @@ export function useProviderHealth(appSettings: AppSettings) {
 
       // finally, mark any active providers without a modelId as idle
       // providers without a model ID don’t require a network check; mark idle
-      providersToCheck.forEach((provider) => {
-        if (!provider.modelId?.trim()) {
-          setModelConnectionStatus((prev) => ({ ...prev, [provider.id]: 'idle' }));
-          markChecked([provider.id]);
-        }
+      startTransition(() => {
+        providersToCheck.forEach((provider) => {
+          if (!provider.modelId?.trim()) {
+            setModelConnectionStatus((prev) => ({ ...prev, [provider.id]: 'idle' }));
+            markChecked([provider.id]);
+          }
+        });
       });
     };
 
-    checkProviders();
+    // Debounce so rapid provider changes (e.g. typing in settings) don't
+    // fire many network requests simultaneously.
+    const timer = setTimeout(() => {
+      checkProviders();
+    }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     appSettings.providers,

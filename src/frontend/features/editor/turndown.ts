@@ -73,6 +73,12 @@ export function createEditorTurndownService(): TurndownService {
     replacement: () => '\t',
   });
 
+  td.addRule('wsNewlineMarker', {
+    filter: (node: any) =>
+      node.nodeName === 'SPAN' && node.getAttribute('data-ws-nl') === '1',
+    replacement: () => '',
+  });
+
   td.addRule('wsMarker', {
     filter: (node: any) =>
       node.nodeName === 'SPAN' && node.getAttribute('data-ws-marker') === '1',

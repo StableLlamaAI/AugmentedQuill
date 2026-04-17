@@ -19,6 +19,7 @@ import type {
   ChatSession,
   EditorSettings,
   LLMConfig,
+  SourcebookEntry,
   StoryState,
   ViewMode,
   WritingUnit,
@@ -119,7 +120,7 @@ export type HeaderThemeTokens = {
 export type MainSidebarControls = {
   isSidebarOpen: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  story: StoryState;
+  story?: StoryState;
   currentChapterId: string | null;
   handleChapterSelect: (id: string | null) => void;
   deleteChapter: (id: string) => Promise<void>;
@@ -155,6 +156,20 @@ export type MainSidebarControls = {
     conflicts?: Array<{ id: string; description: string; resolution: string }>,
     language?: string
   ) => Promise<void>;
+  sidebarStoryMetadata?: {
+    title: string;
+    summary: string;
+    tags: string[];
+    notes?: string;
+    private_notes?: string;
+    conflicts?: Array<{ id: string; description: string; resolution: string }>;
+    language?: string;
+    projectType: 'short-story' | 'novel' | 'series';
+    draft?: WritingUnit | null;
+  };
+  sidebarStoryChapters?: Chapter[];
+  sidebarStoryBooks?: Book[];
+  sidebarSourcebookEntries?: SourcebookEntry[];
   baselineState?: StoryState;
   // optional sourcebook relevance controls (provided by suggestions hook)
   checkedSourcebookIds?: string[];
@@ -162,12 +177,17 @@ export type MainSidebarControls = {
   isAutoSourcebookSelectionEnabled?: boolean;
   onToggleAutoSourcebookSelection?: (enabled: boolean) => void;
   isSourcebookSelectionRunning?: boolean;
+  mutatedSourcebookEntryIds?: Set<string>;
   onSourcebookMutated?: (entry: {
     label: string;
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
     entryId?: string;
     entryExistsInBaseline?: boolean;
+    /** The upserted entry after create/update, or null after delete.
+     *  When provided, the receiver should patch story.sourcebook directly
+     *  instead of calling refreshStory() to avoid a full app re-render. */
+    updatedEntry?: SourcebookEntry | null;
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;

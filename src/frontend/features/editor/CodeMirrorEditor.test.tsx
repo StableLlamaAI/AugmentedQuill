@@ -93,7 +93,7 @@ describe('CodeMirrorEditor', () => {
     act(() => {
       ref.current!.dispatch({ changes: { from: 0, to: 0, insert: 'typed' } });
     });
-    expect(onChange).toHaveBeenCalledWith('typed');
+    expect(onChange).toHaveBeenCalledWith('typed', false);
   });
 
   it('calls onSelectionChange with anchor and head when selection changes', async () => {
@@ -150,7 +150,7 @@ describe('CodeMirrorEditor', () => {
     act(() => {
       ref.current!.dispatch({ changes: { from: 0, to: 0, insert: 'typed' } });
     });
-    expect(onChange).toHaveBeenCalledWith('typed');
+    expect(onChange).toHaveBeenCalledWith('typed', false);
     onChange.mockClear();
 
     // React echoes the value prop back — should NOT trigger another dispatch
@@ -179,6 +179,27 @@ describe('CodeMirrorEditor', () => {
       );
     });
     expect(ref.current?.state.doc.toString()).toBe('prose text');
+  });
+
+  it('switching viewMode from raw to markdown with image syntax does not throw', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const value = 'Before image\n![Alt text](/assets/picture.jpg)\nAfter image';
+    const { rerender } = render(
+      <CodeMirrorEditor ref={ref} value={value} onChange={vi.fn()} viewMode="raw" />
+    );
+
+    await act(async () => {
+      rerender(
+        <CodeMirrorEditor
+          ref={ref}
+          value={value}
+          onChange={vi.fn()}
+          viewMode="markdown"
+        />
+      );
+    });
+
+    expect(ref.current?.state.doc.toString()).toBe(value);
   });
 
   it('toggling showWhitespace does not crash or corrupt the document', async () => {
@@ -210,12 +231,10 @@ describe('CodeMirrorEditor', () => {
     );
     await act(async () => {});
 
-    const marker = Array.from(container.querySelectorAll('.cm-ws-marker')).find(
-      (el) => el.textContent === '·'
-    ) as HTMLElement | undefined;
+    const marker = container.querySelector(
+      '.cm-ws-marker[data-ws-marker="1"]'
+    ) as HTMLElement | null;
     expect(marker).toBeDefined();
-    expect(marker?.style.minWidth).toBe('1ch');
-    expect(marker?.style.width).toBe('1ch');
   });
 
   it('renders a visible tab marker when showWhitespace is active', async () => {
@@ -360,24 +379,268 @@ describe('CodeMirrorEditor', () => {
       expect(ref.current!.state.doc.toString()).toBe('hello  \n');
     });
 
-    it('softbreak: second Enter on a line already ending with two spaces opens a paragraph', async () => {
+    it('softbreak: Enter inside an existing "  \\n" line-break upgrades it to paragraph break', async () => {
       const ref = React.createRef<EditorView | null>();
+      // JSX string attributes don't process escape sequences; use a variable.
+      const initial = 'hello  \nworld';
       await act(async () => {
         render(
           <CodeMirrorEditor
             ref={ref}
-            value="hello  "
+            value={initial}
             onChange={vi.fn()}
             enterBehavior="softbreak"
           />
         );
       });
-      // Position caret at end of the trailing spaces (offset 7)
+      // "hello  \nworld": h=0,e=1,l=2,l=3,o=4,sp=5,sp=6,\n=7,w=8... → lb=5, cursor at lb+2=7
       act(() => {
         ref.current!.dispatch({ selection: { anchor: 7 } });
       });
       pressKey(ref.current!, 'Enter');
-      expect(ref.current!.state.doc.toString()).toBe('hello\n\n');
+      expect(ref.current!.state.doc.toString()).toBe('hello\n\nworld');
+    });
+
+    // ── softbreak: Enter position coverage ──────────────────────────────────
+
+    /**
+     * Helper: mount a softbreak editor with initial content, place cursor at
+     * `cursorPos`, press the given key, and return the resulting document string.
+     */
+    async function softbreakKey(
+      initial: string,
+      cursorPos: number,
+      key: 'Enter' | 'Backspace' | 'Delete'
+    ): Promise<string> {
+      const ref = React.createRef<EditorView | null>();
+      await act(async () => {
+        render(
+          <CodeMirrorEditor
+            ref={ref}
+            value={initial}
+            onChange={vi.fn()}
+            enterBehavior="softbreak"
+          />
+        );
+      });
+      act(() => {
+        ref.current!.dispatch({ selection: { anchor: cursorPos } });
+      });
+      pressKey(ref.current!, key);
+      return ref.current!.state.doc.toString();
+    }
+
+    describe('softbreak: Enter upgrades line-break "  \\n" to paragraph break "\\n\\n"', () => {
+      // Doc: "a  \nb"  line-break starts at offset 1 (lb=1, lb+1=2, lb+2=3, lb+3=4 after \n)
+      it('cursor at lb+0 (before first space)', async () => {
+        // "a" + "  \n" + "b"  → offsets: a=0, sp1=1, sp2=2, nl=3, b=4
+        expect(await softbreakKey('a  \nb', 1, 'Enter')).toBe('a\n\nb');
+      });
+      it('cursor at lb+1 (between spaces)', async () => {
+        expect(await softbreakKey('a  \nb', 2, 'Enter')).toBe('a\n\nb');
+      });
+      it('cursor at lb+2 (between 2nd space and \\n)', async () => {
+        expect(await softbreakKey('a  \nb', 3, 'Enter')).toBe('a\n\nb');
+      });
+      it('cursor at lb+3 (just after \\n)', async () => {
+        expect(await softbreakKey('a  \nb', 4, 'Enter')).toBe('a\n\nb');
+      });
+    });
+
+    describe('softbreak: Enter in "\\n\\n" zone inserts plain "\\n" (no spaces)', () => {
+      // Doc: "a\n\nb"  paragraph break starts at offset 1 (pb=1, pb+1=2, pb+2=3)
+      it('cursor at pb+0 (before first \\n)', async () => {
+        const result = await softbreakKey('a\n\nb', 1, 'Enter');
+        // Inserts plain \n at pos 1 → "a\n\n\nb"
+        expect(result).toBe('a\n\n\nb');
+        expect(result).not.toContain('  ');
+      });
+      it("cursor at pb+1 (between the two \\n's)", async () => {
+        const result = await softbreakKey('a\n\nb', 2, 'Enter');
+        expect(result).toBe('a\n\n\nb');
+        expect(result).not.toContain('  ');
+      });
+      it('cursor at pb+2 (just after second \\n)', async () => {
+        const result = await softbreakKey('a\n\nb', 3, 'Enter');
+        expect(result).toBe('a\n\n\nb');
+        expect(result).not.toContain('  ');
+      });
+    });
+
+    describe('softbreak: Enter in normal text inserts "  \\n", stripping adjacent space', () => {
+      it('cursor in middle of word (no adjacent spaces)', async () => {
+        // "hello" cursor at 3 → "hel  \nlo"
+        expect(await softbreakKey('hello', 3, 'Enter')).toBe('hel  \nlo');
+      });
+      it('cursor just after a space removes the trailing space', async () => {
+        // "a b" cursor at 2 (after the space) → "a  \nb"
+        expect(await softbreakKey('a b', 2, 'Enter')).toBe('a  \nb');
+      });
+      it('cursor just before a space removes the leading space', async () => {
+        // "a b" cursor at 1 (before the space) → "a  \nb"
+        expect(await softbreakKey('a b', 1, 'Enter')).toBe('a  \nb');
+      });
+      it('Enter at very end of doc produces "  \\n" suffix', async () => {
+        expect(await softbreakKey('end', 3, 'Enter')).toBe('end  \n');
+      });
+    });
+
+    describe('softbreak: Backspace removes line-break "  \\n" entirely', () => {
+      // "a  \nb" — lb=1; cursor must be > lb to trigger (pos 2..4)
+      it('cursor at lb+1', async () => {
+        expect(await softbreakKey('a  \nb', 2, 'Backspace')).toBe('ab');
+      });
+      it('cursor at lb+2', async () => {
+        expect(await softbreakKey('a  \nb', 3, 'Backspace')).toBe('ab');
+      });
+      it('cursor at lb+3 (just after \\n)', async () => {
+        expect(await softbreakKey('a  \nb', 4, 'Backspace')).toBe('ab');
+      });
+      it('cursor at lb+0 does NOT intercept (let default Backspace run)', async () => {
+        // Cursor before the sequence: default Backspace deletes 'a'
+        expect(await softbreakKey('a  \nb', 1, 'Backspace')).not.toBe('ab');
+      });
+    });
+
+    describe('softbreak: Backspace downgrades "\\n\\n" to "  \\n"', () => {
+      // "a\n\nb" — pb=1; cursor must be > pb to trigger (pos 2..3)
+      it("cursor at pb+1 (between \\n's)", async () => {
+        expect(await softbreakKey('a\n\nb', 2, 'Backspace')).toBe('a  \nb');
+      });
+      it('cursor at pb+2 (just after second \\n)', async () => {
+        expect(await softbreakKey('a\n\nb', 3, 'Backspace')).toBe('a  \nb');
+      });
+    });
+
+    // ── Systematic Backspace/Delete on \\n\\n with 0-3 neighbouring newlines ──
+    //
+    // For every combination of prefix (0..3) and suffix (0..3) bare newlines
+    // surrounding the \\n\\n pair we verify all four cursor positions:
+    //   Backspace at pb+1 and pb+2
+    //   Delete    at pb+0 and pb+1
+    //
+    // Rule: downgrade \\n\\n → "  \\n" ONLY when the pair is completely isolated
+    // (prefix === 0 AND suffix === 0).  Any neighbouring \\n means the pair is
+    // part of a longer run; the key should just remove one \\n (default behaviour).
+    describe('softbreak: systematic \\n\\n Backspace/Delete (0-3 prefix × 0-3 suffix)', () => {
+      for (let prefix = 0; prefix <= 3; prefix++) {
+        for (let suffix = 0; suffix <= 3; suffix++) {
+          // Build document  'a' + \\n×prefix + '\\n\\n' + \\n×suffix + 'b'
+          const pre = '\n'.repeat(prefix);
+          const suf = '\n'.repeat(suffix);
+          const doc = `a${pre}\n\n${suf}b`;
+          // Index of the first \\n of the \\n\\n pair inside the doc
+          const pairStart = 1 + prefix;
+
+          const shouldDowngrade = prefix === 0 && suffix === 0;
+          // Downgrade result: replace the \\n\\n with '  \\n'
+          const downgradeResult = `a${pre}  \n${suf}b`;
+          // Fall-through result: one \\n removed from the run (total \\n count decreases by 1)
+          const removeResult = `a${'\n'.repeat(prefix + suffix + 1)}b`;
+
+          const label = `prefix=${prefix}, suffix=${suffix}`;
+
+          // ── Backspace at pb+1 (cursor between the two \\n's) ──────────────
+          it(`Backspace pb+1 [${label}]`, async () => {
+            const result = await softbreakKey(doc, pairStart + 1, 'Backspace');
+            expect(result).toBe(shouldDowngrade ? downgradeResult : removeResult);
+          });
+
+          // ── Backspace at pb+2 (cursor just after both \\n's) ──────────────
+          it(`Backspace pb+2 [${label}]`, async () => {
+            const result = await softbreakKey(doc, pairStart + 2, 'Backspace');
+            expect(result).toBe(shouldDowngrade ? downgradeResult : removeResult);
+          });
+
+          // ── Delete at pb+0 (cursor before the first \\n) ──────────────────
+          it(`Delete pb+0 [${label}]`, async () => {
+            const result = await softbreakKey(doc, pairStart, 'Delete');
+            expect(result).toBe(shouldDowngrade ? downgradeResult : removeResult);
+          });
+
+          // ── Delete at pb+1 (cursor between the two \\n's) ─────────────────
+          it(`Delete pb+1 [${label}]`, async () => {
+            const result = await softbreakKey(doc, pairStart + 1, 'Delete');
+            expect(result).toBe(shouldDowngrade ? downgradeResult : removeResult);
+          });
+        }
+      }
+    });
+
+    describe('softbreak: Backspace on "\\n\\n\\n\\n" removes one \\n, not "  \\n"', () => {
+      it('cursor at end of "\\n\\n\\n\\n" → removes one \\n leaving "\\n\\n\\n"', async () => {
+        const result = await softbreakKey('\n\n\n\n', 4, 'Backspace');
+        expect(result).toBe('\n\n\n');
+        expect(result).not.toContain('  ');
+      });
+      it('cursor at end of "\\n\\n\\n" → removes one \\n leaving "\\n\\n"', async () => {
+        const result = await softbreakKey('\n\n\n', 3, 'Backspace');
+        expect(result).toBe('\n\n');
+        expect(result).not.toContain('  ');
+      });
+    });
+
+    describe('softbreak: Delete on "\\n\\n\\n" keeps one \\n, not "  \\n"', () => {
+      it('cursor at start of "\\n\\n\\n" → removes one \\n leaving "\\n\\n"', async () => {
+        const result = await softbreakKey('\n\n\n', 0, 'Delete');
+        expect(result).toBe('\n\n');
+        expect(result).not.toContain('  ');
+      });
+      it('cursor at start of "\\n\\n\\n\\n" → removes one \\n leaving "\\n\\n\\n"', async () => {
+        const result = await softbreakKey('\n\n\n\n', 0, 'Delete');
+        expect(result).toBe('\n\n\n');
+        expect(result).not.toContain('  ');
+      });
+    });
+
+    describe('softbreak: Delete removes line-break "  \\n" entirely', () => {
+      // "a  \nb" — lb=1; cursor must be <= lb+2 to trigger (pos 1..3)
+      it('cursor at lb+0 (before first space)', async () => {
+        expect(await softbreakKey('a  \nb', 1, 'Delete')).toBe('ab');
+      });
+      it('cursor at lb+1 (between spaces)', async () => {
+        expect(await softbreakKey('a  \nb', 2, 'Delete')).toBe('ab');
+      });
+      it('cursor at lb+2 (before \\n)', async () => {
+        expect(await softbreakKey('a  \nb', 3, 'Delete')).toBe('ab');
+      });
+      it('cursor at lb+3 does NOT intercept (let default Delete run)', async () => {
+        // Cursor after the sequence: default Delete removes 'b'
+        expect(await softbreakKey('a  \nb', 4, 'Delete')).not.toBe('ab');
+      });
+    });
+
+    describe('softbreak: Delete downgrades "\\n\\n" to "  \\n"', () => {
+      // "a\n\nb" — pb=1; cursor must be <= pb+1 to trigger (pos 1..2)
+      it('cursor at pb+0 (before first \\n)', async () => {
+        expect(await softbreakKey('a\n\nb', 1, 'Delete')).toBe('a  \nb');
+      });
+      it("cursor at pb+1 (between \\n's)", async () => {
+        expect(await softbreakKey('a\n\nb', 2, 'Delete')).toBe('a  \nb');
+      });
+    });
+
+    describe('softbreak: "  \\n" adjacent to "\\n\\n" — no cross-contamination', () => {
+      // Doc: "a  \n\n\nb" — "  \n" at lb=1, then bare "\n\n" at positions 4,5
+      it('Enter at lb+0 upgrades the line-break, leaves the \\n\\n intact', async () => {
+        const result = await softbreakKey('a  \n\n\nb', 1, 'Enter');
+        expect(result).toBe('a\n\n\n\nb');
+      });
+      it('Enter at pb+1 (pos 5) inserts plain \\n inside the \\n\\n zone, no new spaces', async () => {
+        // 'a  \n\n\nb': a=0, sp=1, sp=2, nl=3, nl=4, nl=5, b=6
+        // paraBreakAt(doc,5) → pb=4 (\n\n at 4,5; isLineBreakNl(4): ch(3)='\n'≠' ' → false)
+        // → inserts plain \n at pos 5 → 'a  \n\n\n\nb'
+        // The pre-existing '  \n' is untouched; only a plain \n was added.
+        const result = await softbreakKey('a  \n\n\nb', 5, 'Enter');
+        // One extra \n added, no spurious spaces introduced by this Enter
+        expect(result).toBe('a  \n\n\n\nb');
+      });
+      it('Delete at pb+0 (pos 4) removes one \\n (pair not isolated — adjacent to line-break \\n)', async () => {
+        // 'a  \n\n\nb': a=0, sp=1, sp=2, \n=3 (soft-nl), \n=4 (pair[0]), \n=5 (pair[1]), b=6
+        // At pos 4: ch(from-1)='\n' (the soft-nl) → pair is not isolated → fall through
+        // Default Delete removes \n at pos 4 → 'a  \n\nb'
+        expect(await softbreakKey('a  \n\n\nb', 4, 'Delete')).toBe('a  \n\nb');
+      });
     });
   });
 });

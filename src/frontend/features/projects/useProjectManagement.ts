@@ -135,15 +135,7 @@ export function useProjectManagement({
         },
       ];
     });
-  }, [
-    story.id,
-    story.title,
-    story.projectType,
-    story.language,
-    story.chapters,
-    story.summary,
-    story.styleTags,
-  ]);
+  }, [story.id, story.title, story.projectType, story.language]);
 
   const handleLoadProject = useCallback(
     async (id: string) => {
@@ -151,7 +143,7 @@ export function useProjectManagement({
         const response = await api.projects.select(id);
         if (!response.ok) return;
 
-        await refreshStory();
+        await refreshStory(undefined, true);
         const chats = await api.chat.list();
         setChatHistoryList(chats);
         if (chats.length > 0) {

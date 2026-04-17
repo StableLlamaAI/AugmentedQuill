@@ -153,7 +153,13 @@ const resolveInlineTarget = (
   return { start, end };
 };
 
-const countChar = (s: string, c: string) => s.split(c).length - 1;
+const countChar = (s: string, c: string) => {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === c) n++;
+  }
+  return n;
+};
 
 const getLeftFormat = (str: string, start: number) => {
   let L = start;
