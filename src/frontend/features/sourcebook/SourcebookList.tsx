@@ -32,6 +32,13 @@ import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
+import { SourcebookEntryRow } from './SourcebookEntryRow';
+import {
+  entryDiffSignature,
+  filterSourcebookEntries,
+  resolveExternalSourcebookEntries,
+  updateSourcebookEntryInList,
+} from './sourcebookUtils';
 
 const CATEGORY_DETAILS: Record<string, { icon: React.ElementType }> = {
   Character: { icon: User },
@@ -93,182 +100,12 @@ interface SourcebookListProps {
  *               re-injects them via _get_entry_relations(), so comparing
  *               with history baselines always produces a false positive.
  */
-const entryDiffSignature = (e: SourcebookEntry): string =>
-  JSON.stringify({
-    name: e.name,
-    description: e.description,
-    category: e.category ?? '',
-    synonyms: [...(e.synonyms ?? [])].sort(),
-    images: [...(e.images ?? [])].sort(),
-  });
-
-export const resolveExternalSourcebookEntries = (
-  externalEntries: SourcebookEntry[] | undefined,
-  currentEntries: SourcebookEntry[]
-): SourcebookEntry[] => {
-  if (Array.isArray(externalEntries)) {
-    return externalEntries;
-  }
-  return currentEntries;
-};
-
-export const updateSourcebookEntryInList = (
-  entries: SourcebookEntry[],
-  previousId: string,
-  updated: SourcebookEntry
-): SourcebookEntry[] => {
-  return entries.map((value) => (value.id === previousId ? updated : value));
-};
-
-interface SourcebookEntryRowProps {
-  entry: SourcebookEntry;
-  CategoryIcon: React.ElementType;
-  isChecked: boolean;
-  diffBorderClass: string;
-  isAutoSelectionEnabled: boolean;
-  isLoadingEntry: boolean;
-  isLight: boolean;
-  textClass: string;
-  subTextClass: string;
-  itemHoverClass: string;
-  onClick: (entry: SourcebookEntry) => void;
-  onMouseEnter: (
-    event: React.MouseEvent<HTMLButtonElement>,
-    entry: SourcebookEntry
-  ) => void;
-  onMouseLeave: () => void;
-  onToggle: (id: string, checked: boolean) => void;
-}
-
-const SourcebookEntryRow = React.memo(
-  ({
-    entry,
-    CategoryIcon,
-    isChecked,
-    diffBorderClass,
-    isAutoSelectionEnabled,
-    isLoadingEntry,
-    isLight,
-    textClass,
-    subTextClass,
-    itemHoverClass,
-    onClick,
-    onMouseEnter,
-    onMouseLeave,
-    onToggle,
-  }: SourcebookEntryRowProps) => {
-    return (
-      <div
-        key={entry.id}
-        className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${diffBorderClass} ${
-          isLoadingEntry ? 'pointer-events-none opacity-70' : ''
-        }`}
-        role="listitem"
-      >
-        <button
-          type="button"
-          onClick={() => onClick(entry)}
-          onMouseEnter={(evt) => onMouseEnter(evt, entry)}
-          onMouseLeave={onMouseLeave}
-          className="flex items-center gap-2 flex-1 min-w-0"
-        >
-          <CategoryIcon
-            size={14}
-            className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-          />
-          <div className={`text-sm truncate ${textClass}`}>{entry.name}</div>
-        </button>
-        <button
-          onClick={(ev) => {
-            ev.stopPropagation();
-            if (isAutoSelectionEnabled) return;
-            onToggle(entry.id, !isChecked);
-          }}
-          disabled={isAutoSelectionEnabled}
-          className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
-            isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
-          } ${
-            isChecked
-              ? 'bg-brand-500 border-brand-500 text-white'
-              : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
-          }`}
-          title={
-            isAutoSelectionEnabled
-              ? 'Automatic selection is enabled; disable Auto to change this manually'
-              : isChecked
-                ? 'Exclude from context'
-                : 'Include in context'
-          }
-        >
-          {isChecked && <Check size={10} strokeWidth={4} />}
-        </button>
-      </div>
-    );
-  },
-  (prevProps, nextProps) =>
-    prevProps.entry.id === nextProps.entry.id &&
-    prevProps.entry.name === nextProps.entry.name &&
-    prevProps.entry.category === nextProps.entry.category &&
-    prevProps.isChecked === nextProps.isChecked &&
-    prevProps.diffBorderClass === nextProps.diffBorderClass &&
-    prevProps.isAutoSelectionEnabled === nextProps.isAutoSelectionEnabled &&
-    prevProps.isLoadingEntry === nextProps.isLoadingEntry &&
-    prevProps.isLight === nextProps.isLight &&
-    prevProps.textClass === nextProps.textClass &&
-    prevProps.subTextClass === nextProps.subTextClass &&
-    prevProps.itemHoverClass === nextProps.itemHoverClass &&
-    prevProps.CategoryIcon === nextProps.CategoryIcon &&
-    prevProps.onClick === nextProps.onClick &&
-    prevProps.onMouseEnter === nextProps.onMouseEnter &&
-    prevProps.onMouseLeave === nextProps.onMouseLeave &&
-    prevProps.onToggle === nextProps.onToggle
-);
-
-export const filterSourcebookEntries = (
-  entries: SourcebookEntry[],
-  query: string
-): SourcebookEntry[] => {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return entries;
-  }
-
-  return entries.filter((entry) => {
-    const description = (entry.description || '').toLowerCase();
-    if (entry.name.toLowerCase().includes(normalizedQuery)) {
-      return true;
-    }
-    if (
-      (entry.synonyms || []).some((syn) => syn.toLowerCase().includes(normalizedQuery))
-    ) {
-      return true;
-    }
-    if (
-      (entry.keywords || []).some((kw) => kw.toLowerCase().includes(normalizedQuery))
-    ) {
-      return true;
-    }
-    if (description.includes(normalizedQuery)) {
-      return true;
-    }
-
-    // Fallback for natural multi-word queries: require every token to appear
-    // in at least one searchable field.
-    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-    if (!tokens.length) {
-      return false;
-    }
-
-    const fields = [
-      entry.name,
-      ...(entry.synonyms || []),
-      ...(entry.keywords || []),
-      entry.description || '',
-    ].map((value) => value.toLowerCase());
-
-    return tokens.every((token) => fields.some((field) => field.includes(token)));
-  });
-};
+// Re-export utilities so existing importers of SourcebookList keep working.
+export {
+  filterSourcebookEntries,
+  resolveExternalSourcebookEntries,
+  updateSourcebookEntryInList,
+} from './sourcebookUtils';
 
 export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
   ({

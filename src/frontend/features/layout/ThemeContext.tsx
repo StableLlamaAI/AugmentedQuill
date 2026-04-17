@@ -120,6 +120,22 @@ export type ThemeClasses = {
   surface: string;
   /** Muted label / helper text: text-brand-gray-600 (light) | text-brand-gray-400 (dark). */
   muted: string;
+  /**
+   * Accent background for panel headers, collapsible section headers, etc.
+   * bg-brand-gray-100 (light) | bg-brand-gray-900 (dark).
+   */
+  bgAccent: string;
+  /**
+   * Skeleton / placeholder element background.
+   * bg-brand-gray-200 (light) | bg-brand-gray-700 (dark).
+   */
+  skeleton: string;
+  /**
+   * Convenience: combined class string for a standard text input element.
+   * Combines input background, border colour, and primary text colour.
+   * Suitable for <input> and <textarea> elements.
+   */
+  inputField: string;
 };
 
 /**
@@ -128,17 +144,23 @@ export type ThemeClasses = {
  */
 export function useThemeClasses(): ThemeClasses {
   const { isLight } = useTheme();
-  return useMemo<ThemeClasses>(
-    () => ({
+  return useMemo<ThemeClasses>(() => {
+    const bg = isLight ? 'bg-white' : 'bg-brand-gray-900';
+    const text = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
+    const border = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
+    const input = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
+    return {
       isLight,
-      bg: isLight ? 'bg-white' : 'bg-brand-gray-900',
-      text: isLight ? 'text-brand-gray-900' : 'text-brand-gray-100',
-      border: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
-      input: isLight ? 'bg-white' : 'bg-brand-gray-950/50',
+      bg,
+      text,
+      border,
+      input,
       card: isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800',
       surface: isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900',
       muted: isLight ? 'text-brand-gray-600' : 'text-brand-gray-400',
-    }),
-    [isLight]
-  );
+      bgAccent: isLight ? 'bg-brand-gray-100' : 'bg-brand-gray-900',
+      skeleton: isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700',
+      inputField: `${input} ${border} ${text}`,
+    };
+  }, [isLight]);
 }

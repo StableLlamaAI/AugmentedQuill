@@ -19,20 +19,13 @@ import React, {
 } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorSettings, ViewMode, WritingUnit } from '../../types';
-import {
-  Sparkles,
-  Loader2,
-  SplitSquareHorizontal,
-  RefreshCw,
-  Wand2,
-  FileEdit,
-  Upload,
-} from 'lucide-react';
+import { Wand2, FileEdit, Upload } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
+import { EditorSuggestionPanel } from './EditorSuggestionPanel';
 import {
   getBlockType,
   getLineAtOffset,
@@ -46,29 +39,9 @@ import {
   TextSelectionRange,
 } from './markdownToolbarUtils';
 
-// URL sanitizer helpers for image insertion to avoid passing
-// unsafe protocols directly into markdown content.
-export const isSafeImageUrl = (src: string): boolean => {
-  const value = src?.trim();
-  if (!value) return false;
-
-  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
-
-  if (/^https?:\/\//i.test(value)) {
-    try {
-      new URL(value);
-    } catch {
-      return false;
-    }
-    return true;
-  }
-
-  return (
-    (value.startsWith('/') && !value.startsWith('//')) ||
-    value.startsWith('./') ||
-    value.startsWith('../')
-  );
-};
+// URL sanitizer — re-exported for backward compat with Editor.url.test.ts
+export { isSafeImageUrl } from './editorUtils';
+import { isSafeImageUrl } from './editorUtils';
 
 interface EditorProps {
   chapter: WritingUnit;
@@ -1116,139 +1089,27 @@ export const Editor = React.memo(
           </div>
 
           {/* Persistent Footer */}
-          <div
-            className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
-          >
-            {shouldShowContinuationPanel ? (
-              <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div
-                  className="flex items-center justify-between mb-3 px-1"
-                  role="region"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  <div className="flex items-center space-x-2 text-brand-500">
-                    <SplitSquareHorizontal size={18} />
-                    <span className="text-xs font-bold uppercase tracking-wider">
-                      Choose a continuation
-                    </span>
-                    <button
-                      onClick={() => {
-                        const cursor =
-                          (typeof getEditorCaretOffset === 'function'
-                            ? getEditorCaretOffset()
-                            : null) ?? localContentRef.current.length;
-                        suggestionControls.onKeyboardSuggestionAction?.(
-                          'regenerate',
-                          cursor,
-                          localContentRef.current
-                        );
-                      }}
-                      className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
-                      title="Reload suggestions (same as arrow-down)"
-                      aria-label="Reload continuation suggestions"
-                    >
-                      <RefreshCw size={14} />
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => onAcceptContinuation('', localContentRef.current)}
-                    className={`${textMuted} hover:text-brand-gray-800 text-xs`}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-
-                <div
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
-                  role="list"
-                >
-                  {displayedContinuations.map((option, idx) => {
-                    const isEmpty = !option || option.trim().length === 0;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={isEmpty}
-                        onClick={
-                          isEmpty
-                            ? undefined
-                            : () =>
-                                onAcceptContinuation(option, localContentRef.current)
-                        }
-                        className={`group relative p-5 rounded-lg border transition-all text-left ${
-                          isEmpty
-                            ? 'cursor-default opacity-60'
-                            : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
-                        } ${
-                          settings.theme === 'light'
-                            ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                            : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
-                        }`}
-                        role="listitem"
-                        aria-label={
-                          isEmpty
-                            ? 'Waiting for suggestion'
-                            : `Accept suggestion: ${option.substring(0, 50)}...`
-                        }
-                      >
-                        <div
-                          className={`font-serif text-sm leading-relaxed ${
-                            settings.theme === 'light'
-                              ? isEmpty
-                                ? 'text-brand-gray-400 italic'
-                                : 'text-brand-gray-800'
-                              : isEmpty
-                                ? 'text-brand-gray-500 italic'
-                                : 'text-brand-gray-300 group-hover:text-brand-gray-200'
-                          }`}
-                        >
-                          {isEmpty ? 'Waiting for suggestion...' : option}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 flex justify-center items-center space-x-3">
-                <button
-                  onClick={handleSuggestionButtonClick}
-                  disabled={!isWritingAvailable}
-                  className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                    settings.theme === 'light'
-                      ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
-                      : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
-                  }`}
-                  title={
-                    !isWritingAvailable
-                      ? writingUnavailableReason
-                      : isSuggesting || isAiLoading
-                        ? 'Stop current AI generation'
-                        : 'Get AI Suggestions (WRITING model)'
-                  }
-                >
-                  {isSuggesting || isAiLoading ? (
-                    <>
-                      <Loader2 className="animate-spin text-violet-500" size={18} />
-                      <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
-                        Writing...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-violet-100 dark:bg-violet-900/30 p-1 rounded-md text-violet-600 dark:text-violet-400">
-                        <Sparkles size={16} />
-                      </div>
-                      <span className="font-medium text-sm">
-                        Suggest next paragraph
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
+          <EditorSuggestionPanel
+            theme={settings.theme}
+            footerBg={footerBg}
+            textMuted={textMuted}
+            shouldShowContinuationPanel={shouldShowContinuationPanel}
+            displayedContinuations={displayedContinuations}
+            isSuggesting={isSuggesting}
+            isAiLoading={isAiLoading}
+            isWritingAvailable={isWritingAvailable}
+            writingUnavailableReason={writingUnavailableReason}
+            localContentRef={localContentRef}
+            onSuggestionButtonClick={handleSuggestionButtonClick}
+            onAcceptContinuation={onAcceptContinuation}
+            onRegenerate={(cursor, content) =>
+              suggestionControls.onKeyboardSuggestionAction?.(
+                'regenerate',
+                cursor,
+                content
+              )
+            }
+          />
         </div>
       );
     }

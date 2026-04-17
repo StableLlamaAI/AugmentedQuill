@@ -15,3 +15,4 @@ export * from './useChatExecution';
 export * from './useChatMessageActions';
 export * from './useChatSessionManagement';
 export * from './components/MutationTags';
+export * from './mutationToolRegistry';

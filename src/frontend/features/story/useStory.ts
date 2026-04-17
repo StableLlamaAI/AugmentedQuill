@@ -15,6 +15,13 @@ import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
 import { notifyError } from '../../services/errorNotifier';
+import {
+  StoryHistoryEntry,
+  areStoriesEqual,
+  buildChapterUpdateLabel,
+  buildDraftUpdateLabel,
+  createHistoryEntry,
+} from './historyUtils';
 
 /** Maximum number of undo/redo states retained in memory. */
 const MAX_HISTORY = 50;
@@ -51,33 +58,6 @@ const INITIAL_STORY: StoryState = {
   lastUpdated: Date.now(),
 };
 
-const areStoriesEqual = (a: StoryState, b: StoryState): boolean => {
-  try {
-    const aCopy = { ...a, lastUpdated: 0 };
-    const bCopy = { ...b, lastUpdated: 0 };
-    return JSON.stringify(aCopy) === JSON.stringify(bCopy);
-  } catch {
-    return false;
-  }
-};
-
-export interface StoryHistoryOption {
-  id: string;
-  label: string;
-  steps: number;
-}
-
-interface StoryHistoryEntry {
-  id: string;
-  label: string;
-  state: StoryState;
-  /** True when this entry was created by the user typing in the editor,
-   * not by an AI action.  Entries tagged this way do not trigger highlights. */
-  isUserEdit?: boolean;
-  onUndo?: () => Promise<void> | void;
-  onRedo?: () => Promise<void> | void;
-}
-
 export const resolveExternalHistorySourceState = (
   explicitState: StoryState | undefined,
   latestState: StoryState,
@@ -86,6 +66,12 @@ export const resolveExternalHistorySourceState = (
   if (explicitState) return explicitState;
   return latestState || fallbackState;
 };
+
+export interface StoryHistoryOption {
+  id: string;
+  label: string;
+  steps: number;
+}
 
 const buildStoryDraft = (
   projectId: string,
@@ -138,44 +124,6 @@ const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
   id: `history-${Date.now()}`,
   label: 'Initial story state',
   state: INITIAL_STORY,
-};
-
-const createHistoryEntry = (
-  state: StoryState,
-  label: string,
-  handlers?: Pick<StoryHistoryEntry, 'onUndo' | 'onRedo' | 'isUserEdit'>
-): StoryHistoryEntry => ({
-  id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  label,
-  state,
-  isUserEdit: handlers?.isUserEdit ?? false,
-  onUndo: handlers?.onUndo,
-  onRedo: handlers?.onRedo,
-});
-
-const buildChapterUpdateLabel = (
-  chapter: Chapter | undefined,
-  partial: Partial<Chapter>
-): string => {
-  const chapterName = chapter?.title?.trim() || `Chapter ${chapter?.id || ''}`.trim();
-  if (partial.content !== undefined) return `Edit chapter content: ${chapterName}`;
-  if (partial.title !== undefined) return `Rename chapter: ${chapterName}`;
-  if (partial.summary !== undefined) return `Update chapter summary: ${chapterName}`;
-  if (partial.notes !== undefined || partial.private_notes !== undefined) {
-    return `Update chapter notes: ${chapterName}`;
-  }
-  return `Update chapter: ${chapterName}`;
-};
-
-const buildDraftUpdateLabel = (partial: Partial<WritingUnit>): string => {
-  if (partial.content !== undefined) return 'Edit story draft';
-  if (partial.title !== undefined) return 'Rename story';
-  if (partial.summary !== undefined) return 'Update story summary';
-  if (partial.conflicts !== undefined) return 'Update story conflicts';
-  if (partial.notes !== undefined || partial.private_notes !== undefined) {
-    return 'Update story notes';
-  }
-  return 'Update story draft';
 };
 
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
