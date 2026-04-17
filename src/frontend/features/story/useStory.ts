@@ -324,53 +324,62 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const lastLoadedChapterId = useRef<string | null>(null);
   const [isChapterLoading, setIsChapterLoading] = useState(false);
 
-  const refreshStory = useCallback(async (historyLabel?: string) => {
-    try {
-      const projects = await api.projects.list();
-      const currentProject = projects.current || latestStoryRef.current.id;
-      if (!currentProject) return;
+  const refreshStory = useCallback(
+    async (historyLabel?: string, resetHistory: boolean = false) => {
+      try {
+        const projects = await api.projects.list();
+        const currentProject = projects.current || latestStoryRef.current.id;
+        if (!currentProject) return;
 
-      const res = await api.projects.select(currentProject);
-      if (res.error === 'invalid_config') {
-        dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
-        return;
-      } else if (res.ok && res.story) {
-        const chapters: Chapter[] =
-          res.story.project_type === 'short-story'
-            ? []
-            : mapApiChapters((await api.chapters.list()).chapters);
+        const res = await api.projects.select(currentProject);
+        if (res.error === 'invalid_config') {
+          dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
+          return;
+        } else if (res.ok && res.story) {
+          const chapters: Chapter[] =
+            res.story.project_type === 'short-story'
+              ? []
+              : mapApiChapters((await api.chapters.list()).chapters);
 
-        let newStory: StoryState = mapSelectStoryToState(
-          currentProject,
-          res.story,
-          chapters,
-          currentChapterIdRef.current,
-          latestStoryRef.current.chapters
-        );
+          let newStory: StoryState = mapSelectStoryToState(
+            currentProject,
+            res.story,
+            chapters,
+            currentChapterIdRef.current,
+            latestStoryRef.current.chapters
+          );
 
-        if (res.story.project_type === 'short-story') {
-          const content = (await api.story.getContent()).content;
-          newStory = {
-            ...newStory,
-            draft: buildStoryDraft(currentProject, res.story, content),
-            currentChapterId: null,
-          };
+          if (res.story.project_type === 'short-story') {
+            const content = (await api.story.getContent()).content;
+            newStory = {
+              ...newStory,
+              draft: buildStoryDraft(currentProject, res.story, content),
+              currentChapterId: null,
+            };
+          }
+
+          lastLoadedChapterId.current = null;
+          setLoadChapterSignal((s) => s + 1);
+          if (historyLabel) {
+            pushStateRef.current(newStory, historyLabel, false);
+          } else if (resetHistory) {
+            setStory(newStory);
+            latestStoryRef.current = newStory;
+            setHistory([createHistoryEntry(newStory, 'Load story')]);
+            setCurrentIndex(0);
+            setBaselineState(newStory);
+          } else {
+            setStory(newStory);
+            latestStoryRef.current = newStory;
+          }
+          setCurrentChapterId(newStory.currentChapterId);
         }
-
-        lastLoadedChapterId.current = null;
-        setLoadChapterSignal((s) => s + 1);
-        if (historyLabel) {
-          pushStateRef.current(newStory, historyLabel, false);
-        } else {
-          setStory(newStory);
-          latestStoryRef.current = newStory;
-        }
-        setCurrentChapterId(newStory.currentChapterId);
+      } catch (e) {
+        console.error('Failed to refresh story', e);
       }
-    } catch (e) {
-      console.error('Failed to refresh story', e);
-    }
-  }, []);
+    },
+    []
+  );
 
   const selectChapter = useCallback(
     (id: string | null) => {
