@@ -166,510 +166,544 @@ export const filterSourcebookEntries = (
   });
 };
 
-export const SourcebookList: React.FC<SourcebookListProps> = ({
-  theme = 'mixed',
-  externalEntries,
-  checkedIds = [],
-  onToggle,
-  isAutoSelectionEnabled = true,
-  isAutoSelectionRunning = false,
-  onToggleAutoSelection,
-  onMutated,
-  onAppUndo,
-  onAppRedo,
-  canAppUndo = false,
-  canAppRedo = false,
-  sourcebookDialogTrigger,
-  closeDialogTrigger,
-  mutatedEntryIds,
-  language = 'en',
-  baselineEntries,
-}) => {
-  const [entries, setEntries] = useState<SourcebookEntry[]>(
-    resolveExternalSourcebookEntries(externalEntries, [])
-  );
-  const [search, setSearch] = useState('');
-  const externalEntriesRef = useRef<SourcebookEntry[] | undefined>(undefined);
-  const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
+export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
+  ({
+    theme = 'mixed',
+    externalEntries,
+    checkedIds = [],
+    onToggle,
+    isAutoSelectionEnabled = true,
+    isAutoSelectionRunning = false,
+    onToggleAutoSelection,
+    onMutated,
+    onAppUndo,
+    onAppRedo,
+    canAppUndo = false,
+    canAppRedo = false,
+    sourcebookDialogTrigger,
+    closeDialogTrigger,
+    mutatedEntryIds,
+    language = 'en',
+    baselineEntries,
+  }) => {
+    const [entries, setEntries] = useState<SourcebookEntry[]>(
+      resolveExternalSourcebookEntries(externalEntries, [])
+    );
+    const [search, setSearch] = useState('');
+    const externalEntriesRef = useRef<SourcebookEntry[] | undefined>(undefined);
+    const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isLoadingEntry, setIsLoadingEntry] = useState(false);
 
-  // Keep hover preview state local so list rendering stays stateless.
-  const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  // Track whether the dialog was opened by a mutation-tag trigger (vs. a
-  // manual list-item click).  Only when true can we safely show "new entry"
-  // diff highlighting for entries that do not appear in the baseline.
-  const [dialogOpenedViaTrigger, setDialogOpenedViaTrigger] = useState(false);
-  // Incrementing this forces SourcebookEntryDialog to remount when the entry's
-  // content changes externally (e.g. after app-level undo/redo), resetting all
-  // dialog-local state (form fields, local history) cleanly.
-  const [dialogKey, setDialogKey] = useState(0);
+    // Keep hover preview state local so list rendering stays stateless.
+    const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
+    const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+    // Track whether the dialog was opened by a mutation-tag trigger (vs. a
+    // manual list-item click).  Only when true can we safely show "new entry"
+    // diff highlighting for entries that do not appear in the baseline.
+    const [dialogOpenedViaTrigger, setDialogOpenedViaTrigger] = useState(false);
+    // Incrementing this forces SourcebookEntryDialog to remount when the entry's
+    // content changes externally (e.g. after app-level undo/redo), resetting all
+    // dialog-local state (form fields, local history) cleanly.
+    const [dialogKey, setDialogKey] = useState(0);
 
-  const { isLight } = useThemeClasses();
+    const { isLight } = useThemeClasses();
 
-  const loadEntries = async (query?: string) => {
-    try {
-      const data = await api.sourcebook.list(query, 'extensive', false);
-      setEntries(data);
-    } catch (e) {
-      console.error('Failed to load sourcebook', e);
-    }
-  };
-
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const hasQuery = search.trim().length > 0;
-
-    // In embedded/external mode we still rely on backend search for non-empty
-    // queries so filtering uses canonical sourcebook data (including generated keywords).
-    if (Array.isArray(externalEntries) && !hasQuery) {
-      const externalChanged = externalEntriesRef.current !== externalEntries;
-      if (externalChanged) {
-        externalEntriesRef.current = externalEntries;
-        setEntries(filterSourcebookEntries(externalEntries, search));
-      }
-    } else {
-      timeoutId = setTimeout(() => {
-        loadEntries(search);
-      }, 300);
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+    const loadEntries = async (query?: string) => {
+      try {
+        const data = await api.sourcebook.list(query, 'extensive', false);
+        setEntries(data);
+      } catch (e) {
+        console.error('Failed to load sourcebook', e);
       }
     };
-  }, [externalEntries, search]);
 
-  // Open the entry dialog when a mutation-tag trigger arrives.  This effect
-  // intentionally only depends on sourcebookDialogTrigger?.id so that:
-  //   a) it fires exactly once per tag click (even for the same entry twice), and
-  //   b) it does NOT re-fire when the entries list refreshes after an LLM
-  //      operation (which caused the dialog to auto-open in the old code).
-  useEffect(() => {
-    if (!sourcebookDialogTrigger) return;
+    useEffect(() => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const hasQuery = search.trim().length > 0;
 
-    let cancelled = false;
-    const entryId = sourcebookDialogTrigger.entryId;
-
-    const openTriggeredEntry = async () => {
-      const findEntry = (entriesToSearch: SourcebookEntry[]) =>
-        entriesToSearch.find((e) => e.id === entryId);
-
-      // Check currently displayed entries first to avoid an extra round-trip.
-      const existing = findEntry(entries);
-      if (existing) {
-        setSelectedEntry(existing);
-        setDialogOpenedViaTrigger(true);
-        setIsDialogOpen(true);
-        return;
+      // In embedded/external mode we still rely on backend search for non-empty
+      // queries so filtering uses canonical sourcebook data (including generated keywords).
+      if (Array.isArray(externalEntries) && !hasQuery) {
+        const externalChanged = externalEntriesRef.current !== externalEntries;
+        if (externalChanged) {
+          externalEntriesRef.current = externalEntries;
+          setEntries(filterSourcebookEntries(externalEntries, search));
+        }
+      } else {
+        timeoutId = setTimeout(() => {
+          loadEntries(search);
+        }, 300);
       }
 
-      try {
-        const all = await api.sourcebook.list();
-        if (cancelled) return;
-        setEntries(all);
-        const target = findEntry(all);
-        if (target) {
-          setSelectedEntry(target);
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+    }, [externalEntries, search]);
+
+    // Open the entry dialog when a mutation-tag trigger arrives.  This effect
+    // intentionally only depends on sourcebookDialogTrigger?.id so that:
+    //   a) it fires exactly once per tag click (even for the same entry twice), and
+    //   b) it does NOT re-fire when the entries list refreshes after an LLM
+    //      operation (which caused the dialog to auto-open in the old code).
+    useEffect(() => {
+      if (!sourcebookDialogTrigger) return;
+
+      let cancelled = false;
+      const entryId = sourcebookDialogTrigger.entryId;
+
+      const openTriggeredEntry = async () => {
+        const findEntry = (entriesToSearch: SourcebookEntry[]) =>
+          entriesToSearch.find((e) => e.id === entryId);
+
+        // Check currently displayed entries first to avoid an extra round-trip.
+        const existing = findEntry(entries);
+        if (existing) {
+          setSelectedEntry(existing);
           setDialogOpenedViaTrigger(true);
           setIsDialogOpen(true);
+          return;
         }
-      } catch (e) {
-        console.error('Failed to load sourcebook entry for trigger', e);
+
+        try {
+          const all = await api.sourcebook.list();
+          if (cancelled) return;
+          setEntries(all);
+          const target = findEntry(all);
+          if (target) {
+            setSelectedEntry(target);
+            setDialogOpenedViaTrigger(true);
+            setIsDialogOpen(true);
+          }
+        } catch (e) {
+          console.error('Failed to load sourcebook entry for trigger', e);
+        }
+      };
+
+      openTriggeredEntry();
+      return () => {
+        cancelled = true;
+      };
+    }, [sourcebookDialogTrigger?.id]); // Only the trigger id matters; entries is read via closure (stale ok — falls back to API fetch)
+
+    // Close the dialog when an external navigation event requests it.
+    useEffect(() => {
+      if (closeDialogTrigger) {
+        setIsDialogOpen(false);
       }
-    };
+    }, [closeDialogTrigger]);
 
-    openTriggeredEntry();
-    return () => {
-      cancelled = true;
-    };
-  }, [sourcebookDialogTrigger?.id]); // Only the trigger id matters; entries is read via closure (stale ok — falls back to API fetch)
+    // When externalEntries change (e.g. after app-level undo/redo), either close
+    // the dialog (entry was deleted) or refresh selectedEntry + force a dialog
+    // remount (entry content changed).  We intentionally list only externalEntries
+    // in the deps so this fires exactly once per external update, not on every
+    // local state change.
+    const externalEntriesForEffect = externalEntries;
+    useEffect(() => {
+      if (!isDialogOpen || !selectedEntry || !Array.isArray(externalEntriesForEffect))
+        return;
+      const updated = externalEntriesForEffect.find((e) => e.id === selectedEntry.id);
+      if (!updated) {
+        // Entry was deleted (e.g. undo removed it) — close the dialog.
+        setIsDialogOpen(false);
+        setSelectedEntry(null);
+        setDialogOpenedViaTrigger(false);
+      } else if (entryDiffSignature(updated) !== entryDiffSignature(selectedEntry)) {
+        // Entry content changed (e.g. undo reverted it) — refresh and remount.
+        setSelectedEntry(updated);
+        setDialogKey((k) => k + 1);
+      }
+    }, [externalEntriesForEffect]); // intentional: only react to external entry changes
 
-  // Close the dialog when an external navigation event requests it.
-  useEffect(() => {
-    if (closeDialogTrigger) {
-      setIsDialogOpen(false);
-    }
-  }, [closeDialogTrigger]);
+    // Compute diff status for each entry relative to the baseline snapshot.
+    const createdEntryIds = useMemo<Set<string>>(() => {
+      if (!baselineEntries) return new Set();
+      const baselineIds = new Set(baselineEntries.map((b) => b.id));
+      return new Set(entries.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
+    }, [entries, baselineEntries]);
 
-  // When externalEntries change (e.g. after app-level undo/redo), either close
-  // the dialog (entry was deleted) or refresh selectedEntry + force a dialog
-  // remount (entry content changed).  We intentionally list only externalEntries
-  // in the deps so this fires exactly once per external update, not on every
-  // local state change.
-  const externalEntriesForEffect = externalEntries;
-  useEffect(() => {
-    if (!isDialogOpen || !selectedEntry || !Array.isArray(externalEntriesForEffect))
-      return;
-    const updated = externalEntriesForEffect.find((e) => e.id === selectedEntry.id);
-    if (!updated) {
-      // Entry was deleted (e.g. undo removed it) — close the dialog.
-      setIsDialogOpen(false);
-      setSelectedEntry(null);
-      setDialogOpenedViaTrigger(false);
-    } else if (entryDiffSignature(updated) !== entryDiffSignature(selectedEntry)) {
-      // Entry content changed (e.g. undo reverted it) — refresh and remount.
-      setSelectedEntry(updated);
-      setDialogKey((k) => k + 1);
-    }
-  }, [externalEntriesForEffect]); // intentional: only react to external entry changes
+    const modifiedEntryIds = useMemo<Set<string>>(() => {
+      if (!baselineEntries) return new Set();
+      return new Set(
+        entries
+          .filter((e) => {
+            const baseline = baselineEntries.find((b) => b.id === e.id);
+            // Use entryDiffSignature to normalize optional arrays and field
+            // ordering so that semantically identical entries stored at different
+            // times (e.g. before and after an API refresh) are never falsely
+            // flagged as modified.
+            return baseline && entryDiffSignature(baseline) !== entryDiffSignature(e);
+          })
+          .map((e) => e.id)
+      );
+    }, [entries, baselineEntries]);
+    const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
 
-  // Compute diff status for each entry relative to the baseline snapshot.
-  const createdEntryIds = useMemo<Set<string>>(() => {
-    if (!baselineEntries) return new Set();
-    const baselineIds = new Set(baselineEntries.map((b) => b.id));
-    return new Set(entries.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
-  }, [entries, baselineEntries]);
+    const deletedEntries = useMemo<SourcebookEntry[]>(() => {
+      if (!baselineEntries) return [];
+      const currentIds = new Set(entries.map((e) => e.id));
+      return baselineEntries.filter((b) => !currentIds.has(b.id));
+    }, [entries, baselineEntries]);
 
-  const modifiedEntryIds = useMemo<Set<string>>(() => {
-    if (!baselineEntries) return new Set();
-    return new Set(
-      entries
-        .filter((e) => {
-          const baseline = baselineEntries.find((b) => b.id === e.id);
-          // Use entryDiffSignature to normalize optional arrays and field
-          // ordering so that semantically identical entries stored at different
-          // times (e.g. before and after an API refresh) are never falsely
-          // flagged as modified.
-          return baseline && entryDiffSignature(baseline) !== entryDiffSignature(e);
-        })
-        .map((e) => e.id)
-    );
-  }, [entries, baselineEntries]);
-  const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
-
-  const deletedEntries = useMemo<SourcebookEntry[]>(() => {
-    if (!baselineEntries) return [];
-    const currentIds = new Set(entries.map((e) => e.id));
-    return baselineEntries.filter((b) => !currentIds.has(b.id));
-  }, [entries, baselineEntries]);
-
-  const syncEntries = async (
-    updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
-  ) => {
-    if (Array.isArray(externalEntries)) {
-      if (search.trim()) {
-        await loadEntries(search);
+    const syncEntries = async (
+      updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
+    ) => {
+      if (Array.isArray(externalEntries)) {
+        if (search.trim()) {
+          await loadEntries(search);
+          return;
+        }
+        if (updater) {
+          setEntries((prev) => filterSourcebookEntries(updater(prev), search));
+        } else {
+          setEntries((prev) => {
+            const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
+            return filterSourcebookEntries(resolved, search);
+          });
+        }
         return;
       }
-      if (updater) {
-        setEntries((prev) => filterSourcebookEntries(updater(prev), search));
-      } else {
-        setEntries((prev) => {
-          const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
-          return filterSourcebookEntries(resolved, search);
+      await loadEntries();
+    };
+
+    const handleCreate = async (entry: SourcebookUpsertPayload) => {
+      const created = await api.sourcebook.create(entry);
+      await syncEntries((prev) => [...prev, created]);
+      let createdId = created.id;
+      await onMutated?.({
+        label: `Create sourcebook entry: ${entry.name}`,
+        onUndo: async () => {
+          await api.sourcebook.delete(createdId);
+          await loadEntries();
+        },
+        onRedo: async () => {
+          const recreated = await api.sourcebook.create(entry);
+          createdId = recreated.id;
+          await loadEntries();
+        },
+        entryId: created.id,
+        entryExistsInBaseline: Boolean(
+          baselineEntries?.some((b) => b.id === created.id)
+        ),
+        updatedEntry: created,
+      });
+    };
+
+    const handleUpdate = async (entry: SourcebookUpsertPayload) => {
+      if (!entry.id) return;
+      const previous = entries.find((value) => value.id === entry.id);
+      const previousId = entry.id;
+      const updated = await api.sourcebook.update(entry.id, entry);
+      await syncEntries((prev) =>
+        updateSourcebookEntryInList(prev, previousId, updated)
+      );
+      if (selectedEntry?.id === previousId) {
+        setSelectedEntry(updated);
+      }
+      if (!previous) return;
+
+      const entryExistsInBaseline = Boolean(
+        baselineEntries?.some((b) => b.id === entry.id)
+      );
+      let activeId = updated.id;
+      await onMutated?.({
+        label: `Update sourcebook entry: ${entry.name}`,
+        onUndo: async () => {
+          const reverted = await api.sourcebook.update(activeId, {
+            name: previous.name,
+            synonyms: previous.synonyms,
+            category: previous.category,
+            description: previous.description,
+            images: previous.images,
+          });
+          activeId = reverted.id;
+          await loadEntries();
+        },
+        onRedo: async () => {
+          const redone = await api.sourcebook.update(activeId, {
+            name: entry.name,
+            synonyms: entry.synonyms,
+            category: entry.category,
+            description: entry.description,
+            images: entry.images,
+          });
+          activeId = redone.id;
+          await loadEntries();
+        },
+        entryId: entry.id,
+        entryExistsInBaseline,
+        updatedEntry: updated,
+      });
+    };
+
+    const handleDelete = async (id: string) => {
+      const deletedEntry = entries.find((entry) => entry.id === id);
+      await api.sourcebook.delete(id);
+      await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
+      if (!deletedEntry) return;
+
+      const entryExistsInBaseline = Boolean(
+        baselineEntries?.some((b) => b.id === deletedEntry.id)
+      );
+      let activeId = deletedEntry.id;
+      await onMutated?.({
+        label: `Delete sourcebook entry: ${deletedEntry.name}`,
+        onUndo: async () => {
+          const restored = await api.sourcebook.create({
+            id: deletedEntry.id,
+            name: deletedEntry.name,
+            synonyms: deletedEntry.synonyms,
+            category: deletedEntry.category,
+            description: deletedEntry.description,
+            images: deletedEntry.images,
+          });
+          activeId = restored.id;
+          await loadEntries();
+        },
+        onRedo: async () => {
+          await api.sourcebook.delete(activeId);
+          await loadEntries();
+        },
+        entryId: deletedEntry.id,
+        entryExistsInBaseline,
+        updatedEntry: null,
+      });
+    };
+
+    const handleMouseEnter = (e: React.MouseEvent, entry: SourcebookEntry) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = rect.right + 10;
+      // Clamp tooltip origin so previews remain visible on short viewports.
+      const y = Math.min(rect.top, window.innerHeight - 200);
+      setTooltipPos({ x, y });
+      setHoveredEntry(entry);
+    };
+
+    const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
+    const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
+    const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
+    const subTextClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
+    const itemHoverClass = isLight
+      ? 'hover:bg-brand-gray-100'
+      : 'hover:bg-brand-gray-800';
+    const inputBg = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
+    const inputBorder = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
+    const inputPlace = 'placeholder-brand-gray-500';
+    const btnHover = isLight
+      ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
+      : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
+
+    // Resolve image metadata lazily to avoid extra API traffic during normal list browsing.
+    const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
+    useEffect(() => {
+      if (hoveredEntry && hoveredEntry.images?.length > 0) {
+        api.projects.listImages().then((data) => {
+          setAvailableImages(data.images || []);
         });
       }
-      return;
-    }
-    await loadEntries();
-  };
+    }, [hoveredEntry]);
 
-  const handleCreate = async (entry: SourcebookUpsertPayload) => {
-    const created = await api.sourcebook.create(entry);
-    await syncEntries((prev) => [...prev, created]);
-    let createdId = created.id;
-    await onMutated?.({
-      label: `Create sourcebook entry: ${entry.name}`,
-      onUndo: async () => {
-        await api.sourcebook.delete(createdId);
-        await loadEntries();
-      },
-      onRedo: async () => {
-        const recreated = await api.sourcebook.create(entry);
-        createdId = recreated.id;
-        await loadEntries();
-      },
-      entryId: created.id,
-      entryExistsInBaseline: Boolean(baselineEntries?.some((b) => b.id === created.id)),
-      updatedEntry: created,
-    });
-  };
+    const getEntryImage = (entry: SourcebookEntry) => {
+      if (!entry.images || entry.images.length === 0) return null;
+      // Preview only the primary linked image to keep the hover card lightweight.
+      const firstImgName = entry.images[0];
+      const imgData = availableImages.find((image) => image.filename === firstImgName);
+      return imgData;
+    };
 
-  const handleUpdate = async (entry: SourcebookUpsertPayload) => {
-    if (!entry.id) return;
-    const previous = entries.find((value) => value.id === entry.id);
-    const previousId = entry.id;
-    const updated = await api.sourcebook.update(entry.id, entry);
-    await syncEntries((prev) => updateSourcebookEntryInList(prev, previousId, updated));
-    if (selectedEntry?.id === previousId) {
-      setSelectedEntry(updated);
-    }
-    if (!previous) return;
+    return (
+      <div
+        id="sourcebook-list"
+        className={'flex flex-col mt-0 flex-1 min-h-0 bg-opacity-50'}
+      >
+        {/* Title Header */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h3
+              className={`text-sm font-semibold uppercase tracking-wider ${textHeaderClass} flex items-center gap-2`}
+            >
+              SOURCEBOOK
+            </h3>
+            <button
+              onClick={() => {
+                setSelectedEntry(null);
+                setIsDialogOpen(true);
+              }}
+              className={`p-1 rounded-full transition-colors ${btnHover}`}
+              title="Add Entry"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
 
-    const entryExistsInBaseline = Boolean(
-      baselineEntries?.some((b) => b.id === entry.id)
-    );
-    let activeId = updated.id;
-    await onMutated?.({
-      label: `Update sourcebook entry: ${entry.name}`,
-      onUndo: async () => {
-        const reverted = await api.sourcebook.update(activeId, {
-          name: previous.name,
-          synonyms: previous.synonyms,
-          category: previous.category,
-          description: previous.description,
-          images: previous.images,
-        });
-        activeId = reverted.id;
-        await loadEntries();
-      },
-      onRedo: async () => {
-        const redone = await api.sourcebook.update(activeId, {
-          name: entry.name,
-          synonyms: entry.synonyms,
-          category: entry.category,
-          description: entry.description,
-          images: entry.images,
-        });
-        activeId = redone.id;
-        await loadEntries();
-      },
-      entryId: entry.id,
-      entryExistsInBaseline,
-      updatedEntry: updated,
-    });
-  };
-
-  const handleDelete = async (id: string) => {
-    const deletedEntry = entries.find((entry) => entry.id === id);
-    await api.sourcebook.delete(id);
-    await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
-    if (!deletedEntry) return;
-
-    const entryExistsInBaseline = Boolean(
-      baselineEntries?.some((b) => b.id === deletedEntry.id)
-    );
-    let activeId = deletedEntry.id;
-    await onMutated?.({
-      label: `Delete sourcebook entry: ${deletedEntry.name}`,
-      onUndo: async () => {
-        const restored = await api.sourcebook.create({
-          id: deletedEntry.id,
-          name: deletedEntry.name,
-          synonyms: deletedEntry.synonyms,
-          category: deletedEntry.category,
-          description: deletedEntry.description,
-          images: deletedEntry.images,
-        });
-        activeId = restored.id;
-        await loadEntries();
-      },
-      onRedo: async () => {
-        await api.sourcebook.delete(activeId);
-        await loadEntries();
-      },
-      entryId: deletedEntry.id,
-      entryExistsInBaseline,
-      updatedEntry: null,
-    });
-  };
-
-  const handleMouseEnter = (e: React.MouseEvent, entry: SourcebookEntry) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = rect.right + 10;
-    // Clamp tooltip origin so previews remain visible on short viewports.
-    const y = Math.min(rect.top, window.innerHeight - 200);
-    setTooltipPos({ x, y });
-    setHoveredEntry(entry);
-  };
-
-  const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-  const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
-  const subTextClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-  const itemHoverClass = isLight
-    ? 'hover:bg-brand-gray-100'
-    : 'hover:bg-brand-gray-800';
-  const inputBg = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
-  const inputBorder = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const inputPlace = 'placeholder-brand-gray-500';
-  const btnHover = isLight
-    ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
-    : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
-
-  // Resolve image metadata lazily to avoid extra API traffic during normal list browsing.
-  const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
-  useEffect(() => {
-    if (hoveredEntry && hoveredEntry.images?.length > 0) {
-      api.projects.listImages().then((data) => {
-        setAvailableImages(data.images || []);
-      });
-    }
-  }, [hoveredEntry]);
-
-  const getEntryImage = (entry: SourcebookEntry) => {
-    if (!entry.images || entry.images.length === 0) return null;
-    // Preview only the primary linked image to keep the hover card lightweight.
-    const firstImgName = entry.images[0];
-    const imgData = availableImages.find((image) => image.filename === firstImgName);
-    return imgData;
-  };
-
-  return (
-    <div
-      id="sourcebook-list"
-      className={'flex flex-col mt-0 flex-1 min-h-0 bg-opacity-50'}
-    >
-      {/* Title Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <h3
-            className={`text-sm font-semibold uppercase tracking-wider ${textHeaderClass} flex items-center gap-2`}
+          <div
+            className={`flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide ${subTextClass}`}
+            title="Enable automatic sourcebook entry selection. While enabled, the AI picks relevant entries and manual entry checkboxes are locked. Disable to stop this AI helper and choose entries manually."
           >
-            SOURCEBOOK
-          </h3>
-          <button
-            onClick={() => {
-              setSelectedEntry(null);
-              setIsDialogOpen(true);
-            }}
-            className={`p-1 rounded-full transition-colors ${btnHover}`}
-            title="Add Entry"
-          >
-            <Plus size={18} />
-          </button>
+            <span className="whitespace-nowrap">AUTO SELECTION</span>
+            {isAutoSelectionRunning && (
+              <LoaderCircle
+                size={12}
+                className="animate-spin text-brand-500"
+                aria-label="Automatic sourcebook selection is running"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => onToggleAutoSelection?.(!isAutoSelectionEnabled)}
+              className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                isAutoSelectionEnabled
+                  ? 'bg-brand-500 border-brand-500 text-white'
+                  : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+              }`}
+              title="Toggle automatic sourcebook selection"
+              aria-label="Toggle automatic sourcebook selection"
+              aria-pressed={isAutoSelectionEnabled}
+            >
+              {isAutoSelectionEnabled && <Check size={10} strokeWidth={4} />}
+            </button>
+          </div>
         </div>
 
-        <div
-          className={`flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide ${subTextClass}`}
-          title="Enable automatic sourcebook entry selection. While enabled, the AI picks relevant entries and manual entry checkboxes are locked. Disable to stop this AI helper and choose entries manually."
-        >
-          <span className="whitespace-nowrap">AUTO SELECTION</span>
-          {isAutoSelectionRunning && (
-            <LoaderCircle
-              size={12}
-              className="animate-spin text-brand-500"
-              aria-label="Automatic sourcebook selection is running"
+        {/* Search Bar */}
+        <div className="px-3 mb-2 pt-2">
+          <div className="relative">
+            <Search size={12} className={`absolute left-2.5 top-2 ${subTextClass}`} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter entries..."
+              className={`w-full pl-8 pr-2 py-1.5 text-xs rounded border ${inputBorder} ${inputBg} ${textClass} ${inputPlace} focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors`}
             />
-          )}
-          <button
-            type="button"
-            onClick={() => onToggleAutoSelection?.(!isAutoSelectionEnabled)}
-            className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
-              isAutoSelectionEnabled
-                ? 'bg-brand-500 border-brand-500 text-white'
-                : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
-            }`}
-            title="Toggle automatic sourcebook selection"
-            aria-label="Toggle automatic sourcebook selection"
-            aria-pressed={isAutoSelectionEnabled}
-          >
-            {isAutoSelectionEnabled && <Check size={10} strokeWidth={4} />}
-          </button>
+          </div>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="px-3 mb-2 pt-2">
-        <div className="relative">
-          <Search size={12} className={`absolute left-2.5 top-2 ${subTextClass}`} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter entries..."
-            className={`w-full pl-8 pr-2 py-1.5 text-xs rounded border ${inputBorder} ${inputBg} ${textClass} ${inputPlace} focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors`}
-          />
-        </div>
-      </div>
-
-      {/* List */}
-      <div className="relative flex-1 overflow-y-auto px-1 pb-2">
-        {isLoadingEntry && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30">
-            <div className="flex flex-col items-center gap-2 rounded-lg bg-white/90 px-6 py-4 shadow-lg">
-              <LoaderCircle className="animate-spin" size={24} />
-              <span className="text-sm font-medium text-brand-gray-900">
-                Loading entry…
-              </span>
+        {/* List */}
+        <div className="relative flex-1 overflow-y-auto px-1 pb-2">
+          {isLoadingEntry && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30">
+              <div className="flex flex-col items-center gap-2 rounded-lg bg-white/90 px-6 py-4 shadow-lg">
+                <LoaderCircle className="animate-spin" size={24} />
+                <span className="text-sm font-medium text-brand-gray-900">
+                  Loading entry…
+                </span>
+              </div>
             </div>
-          </div>
-        )}
-        {entries.length === 0 && (
-          <div className={`text-center py-4 text-xs ${subTextClass}`}>
-            No entries yet.
-          </div>
-        )}
+          )}
+          {entries.length === 0 && (
+            <div className={`text-center py-4 text-xs ${subTextClass}`}>
+              No entries yet.
+            </div>
+          )}
 
-        {entries.length > 0 && (
-          <div className="space-y-0.5" role="list">
-            {entries.map((e) => {
-              const CategoryIcon =
-                (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
-              const isChecked = checkedIds.includes(e.id);
-              const diffBorderClass = createdEntryIds.has(e.id)
-                ? 'border-l-2 border-l-green-500'
-                : modifiedEntryIds.has(e.id) || externalMutationEntryIds.has(e.id)
-                  ? 'border-l-2 border-l-amber-400'
-                  : '';
-              return (
-                <div
-                  key={e.id}
-                  className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${diffBorderClass} ${
-                    isLoadingEntry ? 'pointer-events-none opacity-70' : ''
-                  }`}
-                  role="listitem"
-                >
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsLoadingEntry(true);
-                      try {
-                        const all = await api.sourcebook.list();
-                        const full = all.find((x) => x.id === e.id) || e;
-                        setEntries(all);
-                        setSelectedEntry(full);
-                        // Show diff for newly AI-created entries even when
-                        // opened via list click (not just via mutation tag).
-                        setDialogOpenedViaTrigger(createdEntryIds.has(e.id));
-                        setIsDialogOpen(true);
-                      } finally {
-                        setIsLoadingEntry(false);
-                      }
-                    }}
-                    onMouseEnter={(evt) => handleMouseEnter(evt, e)}
-                    onMouseLeave={() => setHoveredEntry(null)}
-                    className="flex items-center gap-2 flex-1 min-w-0"
-                  >
-                    <CategoryIcon
-                      size={14}
-                      className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-                    />
-                    <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
-                  </button>
-                  <button
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      if (isAutoSelectionEnabled) return;
-                      onToggle?.(e.id, !isChecked);
-                    }}
-                    disabled={isAutoSelectionEnabled}
-                    className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                      isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
-                    } ${
-                      isChecked
-                        ? 'bg-brand-500 border-brand-500 text-white'
-                        : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+          {entries.length > 0 && (
+            <div className="space-y-0.5" role="list">
+              {entries.map((e) => {
+                const CategoryIcon =
+                  (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
+                const isChecked = checkedIds.includes(e.id);
+                const diffBorderClass = createdEntryIds.has(e.id)
+                  ? 'border-l-2 border-l-green-500'
+                  : modifiedEntryIds.has(e.id) || externalMutationEntryIds.has(e.id)
+                    ? 'border-l-2 border-l-amber-400'
+                    : '';
+                return (
+                  <div
+                    key={e.id}
+                    className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${diffBorderClass} ${
+                      isLoadingEntry ? 'pointer-events-none opacity-70' : ''
                     }`}
-                    title={
-                      isAutoSelectionEnabled
-                        ? 'Automatic selection is enabled; disable Auto to change this manually'
-                        : isChecked
-                          ? 'Exclude from context'
-                          : 'Include in context'
-                    }
+                    role="listitem"
                   >
-                    {isChecked && <Check size={10} strokeWidth={4} />}
-                  </button>
-                </div>
-              );
-            })}
-            {/* Deleted entries (diff indicator — only when search is not active) */}
-            {!search.trim() &&
-              deletedEntries.map((e) => {
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsLoadingEntry(true);
+                        try {
+                          const all = await api.sourcebook.list();
+                          const full = all.find((x) => x.id === e.id) || e;
+                          setEntries(all);
+                          setSelectedEntry(full);
+                          // Show diff for newly AI-created entries even when
+                          // opened via list click (not just via mutation tag).
+                          setDialogOpenedViaTrigger(createdEntryIds.has(e.id));
+                          setIsDialogOpen(true);
+                        } finally {
+                          setIsLoadingEntry(false);
+                        }
+                      }}
+                      onMouseEnter={(evt) => handleMouseEnter(evt, e)}
+                      onMouseLeave={() => setHoveredEntry(null)}
+                      className="flex items-center gap-2 flex-1 min-w-0"
+                    >
+                      <CategoryIcon
+                        size={14}
+                        className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
+                      />
+                      <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
+                    </button>
+                    <button
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        if (isAutoSelectionEnabled) return;
+                        onToggle?.(e.id, !isChecked);
+                      }}
+                      disabled={isAutoSelectionEnabled}
+                      className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                        isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${
+                        isChecked
+                          ? 'bg-brand-500 border-brand-500 text-white'
+                          : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                      }`}
+                      title={
+                        isAutoSelectionEnabled
+                          ? 'Automatic selection is enabled; disable Auto to change this manually'
+                          : isChecked
+                            ? 'Exclude from context'
+                            : 'Include in context'
+                      }
+                    >
+                      {isChecked && <Check size={10} strokeWidth={4} />}
+                    </button>
+                  </div>
+                );
+              })}
+              {/* Deleted entries (diff indicator — only when search is not active) */}
+              {!search.trim() &&
+                deletedEntries.map((e) => {
+                  const CategoryIcon =
+                    (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
+                  return (
+                    <div
+                      key={`deleted-${e.id}`}
+                      className={`group px-3 py-2 rounded-md flex items-center gap-2 select-none border-l-2 border-l-red-500 opacity-60 ${
+                        isLight ? 'bg-red-50/40' : 'bg-red-900/10'
+                      }`}
+                      title="Deleted"
+                      role="listitem"
+                      aria-label={`${e.name} (deleted)`}
+                    >
+                      <CategoryIcon size={14} className="flex-shrink-0 text-red-400" />
+                      <div
+                        className={`text-sm truncate line-through ${
+                          isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
+                        }`}
+                      >
+                        {e.name}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+          {/* Show deleted entries even when current list is empty */}
+          {entries.length === 0 && !search.trim() && deletedEntries.length > 0 && (
+            <div className="space-y-0.5" role="list">
+              {deletedEntries.map((e) => {
                 const CategoryIcon =
                   (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
                 return (
@@ -693,117 +727,95 @@ export const SourcebookList: React.FC<SourcebookListProps> = ({
                   </div>
                 );
               })}
-          </div>
-        )}
-        {/* Show deleted entries even when current list is empty */}
-        {entries.length === 0 && !search.trim() && deletedEntries.length > 0 && (
-          <div className="space-y-0.5" role="list">
-            {deletedEntries.map((e) => {
-              const CategoryIcon =
-                (e.category && CATEGORY_DETAILS[e.category]?.icon) || HelpCircle;
-              return (
-                <div
-                  key={`deleted-${e.id}`}
-                  className={`group px-3 py-2 rounded-md flex items-center gap-2 select-none border-l-2 border-l-red-500 opacity-60 ${
-                    isLight ? 'bg-red-50/40' : 'bg-red-900/10'
-                  }`}
-                  title="Deleted"
-                  role="listitem"
-                  aria-label={`${e.name} (deleted)`}
-                >
-                  <CategoryIcon size={14} className="flex-shrink-0 text-red-400" />
-                  <div
-                    className={`text-sm truncate line-through ${
-                      isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
-                    }`}
-                  >
-                    {e.name}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <SourcebookEntryDialog
-        key={dialogKey}
-        isOpen={isDialogOpen}
-        onClose={() => {
-          setIsDialogOpen(false);
-          setDialogOpenedViaTrigger(false);
-        }}
-        entry={selectedEntry}
-        allEntries={entries}
-        language={language}
-        onSave={selectedEntry ? handleUpdate : handleCreate}
-        onDelete={selectedEntry ? handleDelete : undefined}
-        theme={theme}
-        baselineEntry={baselineEntries?.find((e) => e.id === selectedEntry?.id) ?? null}
-        showDiffForNew={dialogOpenedViaTrigger}
-        canAppUndo={canAppUndo}
-        canAppRedo={canAppRedo}
-        onAppUndo={onAppUndo}
-        onAppRedo={onAppRedo}
-      />
-
-      {/* Portal Tooltip */}
-      {hoveredEntry &&
-        createPortal(
-          <div
-            style={{
-              top: tooltipPos.y,
-              left: tooltipPos.x,
-              maxWidth: '300px',
-            }}
-            className={`fixed z-[100] p-3 rounded-lg shadow-xl border ${borderClass} ${isLight ? 'bg-white' : 'bg-brand-gray-900'} animate-in fade-in zoom-in-95 duration-100`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <h4 className={`font-bold text-sm ${textClass}`}>{hoveredEntry.name}</h4>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded-full border ${borderClass} ${subTextClass}`}
-              >
-                {hoveredEntry.category}
-              </span>
             </div>
+          )}
+        </div>
 
-            {/* Image Preview if exists */}
-            {(() => {
-              const img = getEntryImage(hoveredEntry);
-              if (img) {
-                return (
-                  <div className="mb-2 rounded overflow-hidden border border-brand-500/20 bg-black/5 aspect-video flex items-center justify-center">
-                    {img.is_placeholder || !img.url ? (
-                      <div className="text-gray-400 flex flex-col items-center">
-                        <ImageIcon size={24} />
-                      </div>
-                    ) : (
-                      <img
-                        src={img.url}
-                        alt={img.filename}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                );
-              }
-              return null;
-            })()}
+        <SourcebookEntryDialog
+          key={dialogKey}
+          isOpen={isDialogOpen}
+          onClose={() => {
+            setIsDialogOpen(false);
+            setDialogOpenedViaTrigger(false);
+          }}
+          entry={selectedEntry}
+          allEntries={entries}
+          language={language}
+          onSave={selectedEntry ? handleUpdate : handleCreate}
+          onDelete={selectedEntry ? handleDelete : undefined}
+          theme={theme}
+          baselineEntry={
+            baselineEntries?.find((e) => e.id === selectedEntry?.id) ?? null
+          }
+          showDiffForNew={dialogOpenedViaTrigger}
+          canAppUndo={canAppUndo}
+          canAppRedo={canAppRedo}
+          onAppUndo={onAppUndo}
+          onAppRedo={onAppRedo}
+        />
 
-            {hoveredEntry.description ? (
-              <p
-                className={`text-xs ${isLight ? 'text-brand-gray-700' : 'text-brand-gray-300'} line-clamp-6 leading-relaxed`}
-              >
-                {hoveredEntry.description}
-              </p>
-            ) : (
-              <p className={`text-xs italic ${subTextClass}`}>
-                No description provided.
-              </p>
-            )}
-          </div>,
-          document.body
-        )}
-    </div>
-  );
-};
+        {/* Portal Tooltip */}
+        {hoveredEntry &&
+          createPortal(
+            <div
+              style={{
+                top: tooltipPos.y,
+                left: tooltipPos.x,
+                maxWidth: '300px',
+              }}
+              className={`fixed z-[100] p-3 rounded-lg shadow-xl border ${borderClass} ${isLight ? 'bg-white' : 'bg-brand-gray-900'} animate-in fade-in zoom-in-95 duration-100`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className={`font-bold text-sm ${textClass}`}>
+                  {hoveredEntry.name}
+                </h4>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full border ${borderClass} ${subTextClass}`}
+                >
+                  {hoveredEntry.category}
+                </span>
+              </div>
+
+              {/* Image Preview if exists */}
+              {(() => {
+                const img = getEntryImage(hoveredEntry);
+                if (img) {
+                  return (
+                    <div className="mb-2 rounded overflow-hidden border border-brand-500/20 bg-black/5 aspect-video flex items-center justify-center">
+                      {img.is_placeholder || !img.url ? (
+                        <div className="text-gray-400 flex flex-col items-center">
+                          <ImageIcon size={24} />
+                        </div>
+                      ) : (
+                        <img
+                          src={img.url}
+                          alt={img.filename}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {hoveredEntry.description ? (
+                <p
+                  className={`text-xs ${isLight ? 'text-brand-gray-700' : 'text-brand-gray-300'} line-clamp-6 leading-relaxed`}
+                >
+                  {hoveredEntry.description}
+                </p>
+              ) : (
+                <p className={`text-xs italic ${subTextClass}`}>
+                  No description provided.
+                </p>
+              )}
+            </div>,
+            document.body
+          )}
+      </div>
+    );
+  }
+);
+
+SourcebookList.displayName = 'SourcebookList';

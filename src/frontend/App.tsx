@@ -312,6 +312,74 @@ const App: React.FC = () => {
   const searchState = useSearchReplace();
   const openSearch = useCallback(() => searchState.open(), [searchState]);
 
+  const sidebarStoryMetadata = useMemo(
+    () => ({
+      title: story.title,
+      summary: story.summary,
+      tags: story.styleTags,
+      notes: story.notes,
+      private_notes: story.private_notes,
+      conflicts: story.conflicts,
+      language: story.language,
+      projectType: story.projectType,
+      draft: story.draft,
+    }),
+    [
+      story.title,
+      story.summary,
+      story.styleTags,
+      story.notes,
+      story.private_notes,
+      story.conflicts,
+      story.language,
+      story.projectType,
+      story.draft,
+    ]
+  );
+
+  const chapterListChaptersKey = useMemo(
+    () =>
+      story.chapters
+        .map(
+          (ch) =>
+            `${ch.id}:${ch.title}:${ch.summary ?? ''}:${ch.book_id ?? ''}:${
+              ch.conflicts?.length ?? 0
+            }`
+        )
+        .join('|'),
+    [story.chapters]
+  );
+
+  const sidebarStoryChapters = useMemo(
+    () =>
+      story.chapters.map((ch) => ({
+        ...ch,
+        content: '',
+      })),
+    [chapterListChaptersKey]
+  );
+
+  const sidebarStoryBooks = useMemo(
+    () =>
+      (story.books || []).map((book) => ({
+        ...book,
+      })),
+    [
+      (story.books || [])
+        .map((book) => `${book.id}:${book.title}:${book.summary ?? ''}`)
+        .join('|'),
+    ]
+  );
+
+  const sidebarSourcebookEntries = useMemo(
+    () => story.sourcebook || [],
+    [story.sourcebook]
+  );
+
+  const openSearchWithKeyboard = useCallback(() => {
+    openSearch();
+  }, [openSearch]);
+
   // Global Ctrl+F / Cmd+F hotkey opens the search dialog
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -321,7 +389,7 @@ const App: React.FC = () => {
         const isEditorFocused = target.closest('#raw-markdown-editor') !== null;
         if (!isEditorFocused) {
           e.preventDefault();
-          openSearch();
+          openSearchWithKeyboard();
         }
       }
     };
@@ -400,6 +468,8 @@ const App: React.FC = () => {
     setIsDebugLogsOpen,
     appearanceRef,
   } = useUIPanels();
+
+  const openImagesDialog = useCallback(() => setIsImagesOpen(true), [setIsImagesOpen]);
 
   const {
     viewMode,
@@ -781,6 +851,161 @@ const App: React.FC = () => {
 
   // ── Stable callbacks and memoised derived values for control prop objects ──
 
+  const searchControls = useMemo(
+    () => ({
+      onOpenSearch: openSearch,
+    }),
+    [openSearch]
+  );
+
+  const historyControls = useMemo(
+    () => ({
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
+    }),
+    [
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
+    ]
+  );
+
+  const viewControls = useMemo(
+    () => ({
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+    }),
+    [
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+    ]
+  );
+
+  const formatControls = useMemo(
+    () => ({
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      onOpenImages: openImagesDialog,
+    }),
+    [
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      openImagesDialog,
+    ]
+  );
+
+  const settingsControls = useMemo(
+    () => ({
+      setIsSettingsOpen,
+      setIsImagesOpen,
+      setIsDebugLogsOpen,
+    }),
+    [setIsSettingsOpen, setIsImagesOpen, setIsDebugLogsOpen]
+  );
+
+  const appearanceControls = useMemo(
+    () => ({
+      appearanceRef,
+      isAppearanceOpen,
+      setIsAppearanceOpen,
+      setAppTheme,
+      editorSettings,
+      setEditorSettings,
+    }),
+    [
+      appearanceRef,
+      isAppearanceOpen,
+      setIsAppearanceOpen,
+      setAppTheme,
+      editorSettings,
+      setEditorSettings,
+    ]
+  );
+
+  const modelControls = useMemo(
+    () => ({
+      appSettings,
+      setAppSettings,
+      saveSettings: handleSaveSettings,
+      modelConnectionStatus,
+      detectedCapabilities,
+      recheckUnavailableProviderIfStale,
+    }),
+    [
+      appSettings,
+      setAppSettings,
+      handleSaveSettings,
+      modelConnectionStatus,
+      detectedCapabilities,
+      recheckUnavailableProviderIfStale,
+    ]
+  );
+
+  const headerAiControls = useMemo(
+    () => ({
+      handleAiAction,
+      isAiActionLoading,
+      isWritingAvailable: roleAvailability.writing,
+      isChapterEmpty:
+        !currentChapter ||
+        !currentChapter.content ||
+        currentChapter.content.trim().length === 0,
+    }),
+    [
+      handleAiAction,
+      isAiActionLoading,
+      roleAvailability.writing,
+      currentChapter?.content,
+    ]
+  );
+
+  const chatPanelControls = useMemo(
+    () => ({
+      isChatOpen,
+      setIsChatOpen,
+    }),
+    [isChatOpen, setIsChatOpen]
+  );
+
   const checkedSourcebookIds = useMemo(
     () => Array.from(checkedEntries),
     [checkedEntries]
@@ -858,6 +1083,216 @@ const App: React.FC = () => {
     ]
   );
 
+  const sidebarControls = useMemo(
+    () => ({
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable: roleAvailability.editing,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      onToggleSourcebook: handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
+      onSourcebookMutated: handleSourcebookMutated,
+      onAppUndo: undo,
+      onAppRedo: redo,
+      canAppUndo: canUndo,
+      canAppRedo: canRedo,
+      selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+      baselineState,
+      sidebarStoryMetadata,
+      sidebarStoryChapters,
+      sidebarStoryBooks,
+      sidebarSourcebookEntries,
+    }),
+    [
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      roleAvailability.editing,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      sourcebookMutationEntryIds,
+      handleSourcebookMutated,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+      baselineState,
+      sidebarStoryMetadata,
+      sidebarStoryChapters,
+      sidebarStoryBooks,
+      sidebarSourcebookEntries,
+    ]
+  );
+
+  const editorControls = useMemo(
+    () => ({
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      storyLanguage: story.language || 'en',
+      setEditorSettings,
+      viewMode,
+      updateChapter: editorUpdateChapter,
+      suggestionControls: {
+        continuations,
+        isSuggesting,
+        handleTriggerSuggestions,
+        handleCancelSuggestions: cancelSuggestions,
+        handleAcceptContinuation,
+        isSuggestionMode,
+        handleKeyboardSuggestionAction,
+      },
+      aiControls: {
+        handleAiAction,
+        cancelAiAction,
+        isAiActionLoading,
+        isWritingAvailable: roleAvailability.writing,
+        isProseStreaming: isChatLoading || isAiActionLoading,
+        isChapterEmpty:
+          !currentChapter ||
+          !currentChapter.content ||
+          currentChapter.content.trim().length === 0,
+      },
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      baselineContent: editorBaselineContent,
+      onOpenSearch: openSearch,
+    }),
+    [
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      story.language,
+      setEditorSettings,
+      viewMode,
+      editorUpdateChapter,
+      continuations,
+      isSuggesting,
+      handleTriggerSuggestions,
+      cancelSuggestions,
+      handleAcceptContinuation,
+      isSuggestionMode,
+      handleKeyboardSuggestionAction,
+      handleAiAction,
+      cancelAiAction,
+      isAiActionLoading,
+      roleAvailability.writing,
+      isChatLoading,
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      editorBaselineContent,
+      openSearch,
+    ]
+  );
+
+  const chatControls = useMemo(
+    () => ({
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      isChatAvailable: roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessage: handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerate: handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    }),
+    [
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    ]
+  );
+
   return (
     <ConfirmDialogProvider value={confirm}>
       <SearchHighlightProvider value={searchHighlightValue}>
@@ -911,173 +1346,22 @@ const App: React.FC = () => {
 
             <AppHeader
               storyTitle={story.title}
-              sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
-              settingsControls={{
-                setIsSettingsOpen,
-                setIsImagesOpen,
-                setIsDebugLogsOpen,
-              }}
-              historyControls={{
-                undo,
-                redo,
-                undoSteps,
-                redoSteps,
-                undoOptions,
-                redoOptions,
-                nextUndoLabel,
-                nextRedoLabel,
-                canUndo,
-                canRedo,
-              }}
-              viewControls={{
-                viewMode,
-                setViewMode,
-                showWhitespace,
-                setShowWhitespace,
-                isViewMenuOpen,
-                setIsViewMenuOpen,
-              }}
-              formatControls={{
-                handleFormat,
-                getFormatButtonClass,
-                isFormatMenuOpen,
-                setIsFormatMenuOpen,
-                isMobileFormatMenuOpen,
-                setIsMobileFormatMenuOpen,
-                onOpenImages: () => setIsImagesOpen(true),
-              }}
-              aiControls={{
-                handleAiAction,
-                isAiActionLoading,
-                isWritingAvailable: roleAvailability.writing,
-                isChapterEmpty:
-                  !currentChapter ||
-                  !currentChapter.content ||
-                  currentChapter.content.trim().length === 0,
-              }}
-              modelControls={{
-                appSettings,
-                setAppSettings,
-                saveSettings: handleSaveSettings,
-                modelConnectionStatus,
-                detectedCapabilities,
-                recheckUnavailableProviderIfStale,
-              }}
-              appearanceControls={{
-                appearanceRef,
-                isAppearanceOpen,
-                setIsAppearanceOpen,
-                setAppTheme,
-                editorSettings,
-                setEditorSettings,
-              }}
-              chatPanelControls={{ isChatOpen, setIsChatOpen }}
-              searchControls={{ onOpenSearch: openSearch }}
+              sidebarControls={sidebarControls}
+              settingsControls={settingsControls}
+              historyControls={historyControls}
+              viewControls={viewControls}
+              formatControls={formatControls}
+              aiControls={headerAiControls}
+              modelControls={modelControls}
+              appearanceControls={appearanceControls}
+              chatPanelControls={chatPanelControls}
+              searchControls={searchControls}
             />
 
             <AppMainLayout
-              sidebarControls={{
-                isSidebarOpen,
-                setIsSidebarOpen,
-                story,
-                currentChapterId,
-                handleChapterSelect,
-                deleteChapter,
-                updateChapter,
-                updateBook,
-                addChapter,
-                handleBookCreate,
-                handleBookDelete,
-                handleReorderChapters,
-                handleReorderBooks,
-                handleSidebarAiAction,
-                isEditingAvailable: roleAvailability.editing,
-                handleOpenImages,
-                updateStoryMetadata,
-                checkedSourcebookIds,
-                onToggleSourcebook: handleToggleEntry,
-                isAutoSourcebookSelectionEnabled,
-                onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
-                isSourcebookSelectionRunning,
-                mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
-                onSourcebookMutated: handleSourcebookMutated,
-                onAppUndo: undo,
-                onAppRedo: redo,
-                canAppUndo: canUndo,
-                canAppRedo: canRedo,
-                selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
-                sourcebookDialogTrigger,
-                sourcebookDialogCloseTrigger,
-                metadataDialogTrigger,
-                metadataDialogCloseTrigger,
-                baselineState,
-              }}
-              editorControls={{
-                currentChapter,
-                isChapterLoading,
-                editorRef,
-                editorSettings,
-                storyLanguage: story.language || 'en',
-                setEditorSettings,
-                viewMode,
-                updateChapter: editorUpdateChapter,
-                suggestionControls: {
-                  continuations,
-                  isSuggesting,
-                  handleTriggerSuggestions,
-                  handleCancelSuggestions: cancelSuggestions,
-                  handleAcceptContinuation,
-                  isSuggestionMode,
-                  handleKeyboardSuggestionAction,
-                },
-                aiControls: {
-                  handleAiAction,
-                  cancelAiAction,
-                  isAiActionLoading,
-                  isWritingAvailable: roleAvailability.writing,
-                  isProseStreaming: isChatLoading || isAiActionLoading,
-                  isChapterEmpty:
-                    !currentChapter ||
-                    !currentChapter.content ||
-                    currentChapter.content.trim().length === 0,
-                },
-                setActiveFormats,
-                showWhitespace,
-                setShowWhitespace,
-                baselineContent: editorBaselineContent,
-                onOpenSearch: openSearch,
-              }}
-              chatControls={{
-                isChatOpen,
-                chatMessages,
-                isChatLoading,
-                isChatAvailable: roleAvailability.chat,
-                activeChatConfig,
-                systemPrompt,
-                handleSendMessage: handleSendMessageWithReset,
-                handleStopChat,
-                handleRegenerate: handleRegenerateWithReset,
-                handleEditMessage,
-                handleDeleteMessage,
-                setSystemPrompt,
-                handleLoadProject,
-                incognitoSessions,
-                chatHistoryList,
-                currentChatId,
-                isIncognito,
-                handleSelectChat,
-                handleNewChat,
-                handleDeleteChat,
-                handleDeleteAllChats,
-                setIsIncognito,
-                allowWebSearch,
-                setAllowWebSearch,
-                scratchpad,
-                onUpdateScratchpad,
-                onDeleteScratchpad,
-                sessionMutations,
-                onMutationClick,
-              }}
+              sidebarControls={sidebarControls}
+              editorControls={editorControls}
+              chatControls={chatControls}
               instructionLanguages={instructionLanguages}
             />
 

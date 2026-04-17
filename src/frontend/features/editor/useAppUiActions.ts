@@ -9,7 +9,7 @@
  * Defines the use app ui actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, RefObject, SetStateAction } from 'react';
+import { Dispatch, RefObject, SetStateAction, useCallback } from 'react';
 
 import { api } from '../../services/api';
 import { AppTheme, EditorSettings, StoryState } from '../../types';
@@ -52,165 +52,192 @@ export function useAppUiActions({
 }: UseAppUiActionsParams) {
   const { buttonActive, isLight } = useTheme();
 
-  const handleFormat = (type: string) => {
-    if (editorRef.current) {
-      editorRef.current.format(type);
-      setIsFormatMenuOpen(false);
-      setIsMobileFormatMenuOpen(false);
-    }
-  };
+  const handleFormat = useCallback(
+    (type: string) => {
+      if (editorRef.current) {
+        editorRef.current.format(type);
+        setIsFormatMenuOpen(false);
+        setIsMobileFormatMenuOpen(false);
+      }
+    },
+    [editorRef, setIsFormatMenuOpen, setIsMobileFormatMenuOpen]
+  );
 
-  const handleChapterSelect = (id: string | null) => {
-    selectChapter(id);
-    setIsSidebarOpen(false);
-  };
+  const handleChapterSelect = useCallback(
+    (id: string | null) => {
+      selectChapter(id);
+      setIsSidebarOpen(false);
+    },
+    [selectChapter, setIsSidebarOpen]
+  );
 
-  const getFormatButtonClass = (type: string) => {
-    const isActive = activeFormats.includes(type);
-    if (isActive) return `p-1.5 rounded-md transition-colors ${buttonActive}`;
-    return `p-1.5 rounded-md transition-colors ${
-      isLight
-        ? 'text-brand-gray-500 hover:bg-brand-gray-100 hover:text-brand-gray-700'
-        : 'text-brand-gray-500 hover:bg-brand-gray-800 hover:text-brand-gray-300'
-    }`;
-  };
+  const getFormatButtonClass = useCallback(
+    (type: string) => {
+      const isActive = activeFormats.includes(type);
+      if (isActive) return `p-1.5 rounded-md transition-colors ${buttonActive}`;
+      return `p-1.5 rounded-md transition-colors ${
+        isLight
+          ? 'text-brand-gray-500 hover:bg-brand-gray-100 hover:text-brand-gray-700'
+          : 'text-brand-gray-500 hover:bg-brand-gray-800 hover:text-brand-gray-300'
+      }`;
+    },
+    [activeFormats, buttonActive, isLight]
+  );
 
-  const handleConvertProject = async (newType: string) => {
-    try {
-      if (newType === currentProjectType) return;
-      await api.projects.convert(newType);
-      await refreshStory();
-      recordHistoryEntry?.({
-        label: `Convert project: ${currentProjectType} -> ${newType}`,
-        onUndo: async () => {
-          await api.projects.convert(currentProjectType);
-          await refreshStory();
-        },
-        onRedo: async () => {
-          await api.projects.convert(newType);
-          await refreshStory();
-        },
-      });
-    } catch (error: unknown) {
-      notifyError(
-        `Failed to convert project: ${getErrorMessage(error, 'Unknown error')}`,
-        error
-      );
-    }
-  };
+  const handleConvertProject = useCallback(
+    async (newType: string) => {
+      try {
+        if (newType === currentProjectType) return;
+        await api.projects.convert(newType);
+        await refreshStory();
+        recordHistoryEntry?.({
+          label: `Convert project: ${currentProjectType} -> ${newType}`,
+          onUndo: async () => {
+            await api.projects.convert(currentProjectType);
+            await refreshStory();
+          },
+          onRedo: async () => {
+            await api.projects.convert(newType);
+            await refreshStory();
+          },
+        });
+      } catch (error: unknown) {
+        notifyError(
+          `Failed to convert project: ${getErrorMessage(error, 'Unknown error')}`,
+          error
+        );
+      }
+    },
+    [currentProjectType, refreshStory, getErrorMessage, recordHistoryEntry]
+  );
 
-  const handleBookCreate = async (title: string) => {
-    try {
-      const created = await api.books.create(title);
-      let createdBookId = created.book_id || '';
-      await refreshStory();
-      recordHistoryEntry?.({
-        label: `Create book: ${title}`,
-        onUndo: async () => {
-          if (!createdBookId) return;
-          await api.books.delete(createdBookId);
-          await refreshStory();
-        },
-        onRedo: async () => {
-          const recreated = await api.books.create(title);
-          createdBookId = recreated.book_id || createdBookId;
-          await refreshStory();
-        },
-      });
-    } catch (error: unknown) {
-      notifyError(
-        `Failed to create book: ${getErrorMessage(error, 'Unknown error')}`,
-        error
-      );
-    }
-  };
+  const handleBookCreate = useCallback(
+    async (title: string) => {
+      try {
+        const created = await api.books.create(title);
+        let createdBookId = created.book_id || '';
+        await refreshStory();
+        recordHistoryEntry?.({
+          label: `Create book: ${title}`,
+          onUndo: async () => {
+            if (!createdBookId) return;
+            await api.books.delete(createdBookId);
+            await refreshStory();
+          },
+          onRedo: async () => {
+            const recreated = await api.books.create(title);
+            createdBookId = recreated.book_id || createdBookId;
+            await refreshStory();
+          },
+        });
+      } catch (error: unknown) {
+        notifyError(
+          `Failed to create book: ${getErrorMessage(error, 'Unknown error')}`,
+          error
+        );
+      }
+    },
+    [refreshStory, getErrorMessage, recordHistoryEntry]
+  );
 
-  const handleBookDelete = async (id: string) => {
-    try {
-      const deleted = await api.books.delete(id);
-      let latestRestoreId = deleted.restore_id || '';
-      await refreshStory();
-      recordHistoryEntry?.({
-        label: `Delete book: ${id}`,
-        onUndo: async () => {
-          if (!latestRestoreId) return;
-          await api.books.restore(latestRestoreId);
-          await refreshStory();
-        },
-        onRedo: async () => {
-          const redone = await api.books.delete(id);
-          latestRestoreId = redone.restore_id || latestRestoreId;
-          await refreshStory();
-        },
-      });
-    } catch (error: unknown) {
-      notifyError(
-        `Failed to delete book: ${getErrorMessage(error, 'Unknown error')}`,
-        error
-      );
-    }
-  };
+  const handleBookDelete = useCallback(
+    async (id: string) => {
+      try {
+        const deleted = await api.books.delete(id);
+        let latestRestoreId = deleted.restore_id || '';
+        await refreshStory();
+        recordHistoryEntry?.({
+          label: `Delete book: ${id}`,
+          onUndo: async () => {
+            if (!latestRestoreId) return;
+            await api.books.restore(latestRestoreId);
+            await refreshStory();
+          },
+          onRedo: async () => {
+            const redone = await api.books.delete(id);
+            latestRestoreId = redone.restore_id || latestRestoreId;
+            await refreshStory();
+          },
+        });
+      } catch (error: unknown) {
+        notifyError(
+          `Failed to delete book: ${getErrorMessage(error, 'Unknown error')}`,
+          error
+        );
+      }
+    },
+    [refreshStory, getErrorMessage, recordHistoryEntry]
+  );
 
-  const handleReorderChapters = async (chapterIds: number[], bookId?: string) => {
-    try {
-      const previousChapterIds = story.chapters
-        .filter((chapter) => (bookId ? chapter.book_id === bookId : true))
-        .map((chapter) => Number(chapter.id));
+  const handleReorderChapters = useCallback(
+    async (chapterIds: number[], bookId?: string) => {
+      try {
+        const previousChapterIds = story.chapters
+          .filter((chapter) => (bookId ? chapter.book_id === bookId : true))
+          .map((chapter) => Number(chapter.id));
 
-      await api.chapters.reorder(chapterIds, bookId);
-      await refreshStory();
-      recordHistoryEntry?.({
-        label: bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters',
-        onUndo: async () => {
-          await api.chapters.reorder(previousChapterIds, bookId);
-          await refreshStory();
-        },
-        onRedo: async () => {
-          await api.chapters.reorder(chapterIds, bookId);
-          await refreshStory();
-        },
-      });
-    } catch (error: unknown) {
-      notifyError(
-        `Failed to reorder chapters: ${getErrorMessage(error, 'Unknown error')}`,
-        error
-      );
-    }
-  };
+        await api.chapters.reorder(chapterIds, bookId);
+        await refreshStory();
+        recordHistoryEntry?.({
+          label: bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters',
+          onUndo: async () => {
+            await api.chapters.reorder(previousChapterIds, bookId);
+            await refreshStory();
+          },
+          onRedo: async () => {
+            await api.chapters.reorder(chapterIds, bookId);
+            await refreshStory();
+          },
+        });
+      } catch (error: unknown) {
+        notifyError(
+          `Failed to reorder chapters: ${getErrorMessage(error, 'Unknown error')}`,
+          error
+        );
+      }
+    },
+    [story.chapters, refreshStory, getErrorMessage, recordHistoryEntry]
+  );
 
-  const handleReorderBooks = async (bookIds: string[]) => {
-    try {
-      const previousBookIds = (story.books || []).map((book) => book.id);
-      await api.books.reorder(bookIds);
-      await refreshStory();
-      recordHistoryEntry?.({
-        label: 'Reorder books',
-        onUndo: async () => {
-          await api.books.reorder(previousBookIds);
-          await refreshStory();
-        },
-        onRedo: async () => {
-          await api.books.reorder(bookIds);
-          await refreshStory();
-        },
-      });
-    } catch (error: unknown) {
-      notifyError(
-        `Failed to reorder books: ${getErrorMessage(error, 'Unknown error')}`,
-        error
-      );
-    }
-  };
+  const handleReorderBooks = useCallback(
+    async (bookIds: string[]) => {
+      try {
+        const previousBookIds = (story.books || []).map((book) => book.id);
+        await api.books.reorder(bookIds);
+        await refreshStory();
+        recordHistoryEntry?.({
+          label: 'Reorder books',
+          onUndo: async () => {
+            await api.books.reorder(previousBookIds);
+            await refreshStory();
+          },
+          onRedo: async () => {
+            await api.books.reorder(bookIds);
+            await refreshStory();
+          },
+        });
+      } catch (error: unknown) {
+        notifyError(
+          `Failed to reorder books: ${getErrorMessage(error, 'Unknown error')}`,
+          error
+        );
+      }
+    },
+    [story.books, refreshStory, getErrorMessage, recordHistoryEntry]
+  );
 
-  const handleOpenImages = () => {
+  const handleOpenImages = useCallback(() => {
     if (editorRef.current?.openImageManager) {
       editorRef.current.openImageManager();
     }
-  };
+  }, [editorRef]);
 
-  const setAppTheme = (theme: AppTheme) => {
-    setEditorSettings((previous) => ({ ...previous, theme }));
-  };
+  const setAppTheme = useCallback(
+    (theme: AppTheme) => {
+      setEditorSettings((previous) => ({ ...previous, theme }));
+    },
+    [setEditorSettings]
+  );
 
   return {
     handleFormat,

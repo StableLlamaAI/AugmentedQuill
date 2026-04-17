@@ -237,6 +237,15 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     [history, currentIndex]
   );
 
+  // Stable ref to the latest pushState so mutation callbacks can hold empty
+  // deps arrays and still always call the version with current history/index.
+  const pushStateRef = useRef(pushState);
+  pushStateRef.current = pushState;
+
+  // Stable ref to the latest currentChapterId for use inside memoized callbacks.
+  const currentChapterIdRef = useRef(currentChapterId);
+  currentChapterIdRef.current = currentChapterId;
+
   const pushExternalHistoryEntry = useCallback(
     (params: {
       label: string;
@@ -450,114 +459,126 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     }
   }, [fetchStory]);
 
-  const updateStoryMetadata = async (
-    title: string,
-    summary: string,
-    tags: string[],
-    notes?: string,
-    private_notes?: string,
-    conflicts?: StoryState['conflicts'],
-    language?: string
-  ) => {
-    const newState = {
-      ...story,
-      title,
-      summary,
-      styleTags: tags,
-      notes,
-      private_notes,
-      conflicts: conflicts ?? story.conflicts,
-      language,
-      draft:
-        story.projectType === 'short-story' && story.draft
-          ? {
-              ...story.draft,
-              title,
-              summary,
-              notes,
-              private_notes,
-              conflicts: conflicts ?? story.draft.conflicts,
-            }
-          : story.draft,
-    };
-    pushState(newState, `Update story metadata: ${title || story.title || 'Untitled'}`);
-
-    try {
-      await api.story.updateMetadata({
+  const updateStoryMetadata = useCallback(
+    async (
+      title: string,
+      summary: string,
+      tags: string[],
+      notes?: string,
+      private_notes?: string,
+      conflicts?: StoryState['conflicts'],
+      language?: string
+    ) => {
+      const story = latestStoryRef.current;
+      const newState = {
+        ...story,
         title,
         summary,
-        tags,
+        styleTags: tags,
         notes,
         private_notes,
-        conflicts,
+        conflicts: conflicts ?? story.conflicts,
         language,
-      });
-    } catch (e) {
-      console.error('Failed to update story metadata', e);
-    }
-  };
+        draft:
+          story.projectType === 'short-story' && story.draft
+            ? {
+                ...story.draft,
+                title,
+                summary,
+                notes,
+                private_notes,
+                conflicts: conflicts ?? story.draft.conflicts,
+              }
+            : story.draft,
+      };
+      pushStateRef.current(
+        newState,
+        `Update story metadata: ${title || story.title || 'Untitled'}`
+      );
 
-  const updateStoryDraft = async (
-    partial: Partial<WritingUnit>,
-    sync: boolean = true,
-    pushHistory: boolean = true,
-    isUserEdit: boolean = false
-  ) => {
-    if (!story.draft) return;
-
-    const newState: StoryState = {
-      ...story,
-      title: partial.title ?? story.title,
-      summary: partial.summary ?? story.summary,
-      notes: partial.notes ?? story.notes,
-      private_notes: partial.private_notes ?? story.private_notes,
-      conflicts: partial.conflicts ?? story.conflicts,
-      draft: { ...story.draft, ...partial },
-      lastUpdated: Date.now(),
-    };
-
-    if (pushHistory) {
-      pushState(newState, buildDraftUpdateLabel(partial), isUserEdit);
-    } else {
-      // Keep the ref synchronous so subsequent logic sees the latest state
-      // immediately.  The actual React state update is deferred as a
-      // startTransition so rapid streaming-preview calls (rAF-rate) cannot
-      // exceed React 19's nested-update limit.
-      latestStoryRef.current = newState;
-      startTransition(() => setStory(newState));
-    }
-
-    if (!sync) return;
-
-    try {
-      if (partial.content !== undefined) {
-        await api.story.updateContent(partial.content);
-      }
-
-      if (
-        partial.title !== undefined ||
-        partial.summary !== undefined ||
-        partial.notes !== undefined ||
-        partial.private_notes !== undefined
-      ) {
+      try {
         await api.story.updateMetadata({
-          title: partial.title ?? story.title,
-          summary: partial.summary ?? story.summary,
-          tags: story.styleTags,
-          notes: partial.notes ?? story.notes,
-          private_notes: partial.private_notes ?? story.private_notes,
-          conflicts: partial.conflicts ?? story.conflicts,
-          language: story.language,
+          title,
+          summary,
+          tags,
+          notes,
+          private_notes,
+          conflicts,
+          language,
         });
+      } catch (e) {
+        console.error('Failed to update story metadata', e);
       }
-    } catch (e) {
-      console.error('Failed to update story draft', e);
-    }
-  };
+    },
+    []
+  );
 
-  const updateStoryImageSettings = async (style: string, info: string) => {
+  const updateStoryDraft = useCallback(
+    async (
+      partial: Partial<WritingUnit>,
+      sync: boolean = true,
+      pushHistory: boolean = true,
+      isUserEdit: boolean = false
+    ) => {
+      const story = latestStoryRef.current;
+      if (!story.draft) return;
+
+      const newState: StoryState = {
+        ...story,
+        title: partial.title ?? story.title,
+        summary: partial.summary ?? story.summary,
+        notes: partial.notes ?? story.notes,
+        private_notes: partial.private_notes ?? story.private_notes,
+        conflicts: partial.conflicts ?? story.conflicts,
+        draft: { ...story.draft, ...partial },
+        lastUpdated: Date.now(),
+      };
+
+      if (pushHistory) {
+        pushStateRef.current(newState, buildDraftUpdateLabel(partial), isUserEdit);
+      } else {
+        // Keep the ref synchronous so subsequent logic sees the latest state
+        // immediately.  The actual React state update is deferred as a
+        // startTransition so rapid streaming-preview calls (rAF-rate) cannot
+        // exceed React 19's nested-update limit.
+        latestStoryRef.current = newState;
+        startTransition(() => setStory(newState));
+      }
+
+      if (!sync) return;
+
+      try {
+        if (partial.content !== undefined) {
+          await api.story.updateContent(partial.content);
+        }
+
+        if (
+          partial.title !== undefined ||
+          partial.summary !== undefined ||
+          partial.notes !== undefined ||
+          partial.private_notes !== undefined
+        ) {
+          await api.story.updateMetadata({
+            title: partial.title ?? story.title,
+            summary: partial.summary ?? story.summary,
+            tags: story.styleTags,
+            notes: partial.notes ?? story.notes,
+            private_notes: partial.private_notes ?? story.private_notes,
+            conflicts: partial.conflicts ?? story.conflicts,
+            language: story.language,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to update story draft', e);
+      }
+    },
+    []
+  );
+
+  const updateStoryImageSettings = useCallback(async (style: string, info: string) => {
+    const story = latestStoryRef.current;
     const newState = { ...story, image_style: style, image_additional_info: info };
-    pushState(newState, 'Update story image settings');
+    pushStateRef.current(newState, 'Update story image settings');
     try {
       await api.story.updateSettings({
         image_style: style,
@@ -566,110 +587,120 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     } catch (e) {
       console.error('Failed to update story image settings', e);
     }
-  };
+  }, []);
 
-  const updateChapter = async (
-    id: string,
-    partial: Partial<Chapter>,
-    sync: boolean = true,
-    pushHistory: boolean = true,
-    isUserEdit: boolean = false
-  ) => {
-    if (story.projectType === 'short-story') {
-      await updateStoryDraft(partial, sync, pushHistory, isUserEdit);
-      return;
-    }
+  const updateChapter = useCallback(
+    async (
+      id: string,
+      partial: Partial<Chapter>,
+      sync: boolean = true,
+      pushHistory: boolean = true,
+      isUserEdit: boolean = false
+    ) => {
+      const story = latestStoryRef.current;
+      if (story.projectType === 'short-story') {
+        await updateStoryDraft(partial, sync, pushHistory, isUserEdit);
+        return;
+      }
 
-    // For streaming preview (sync=false, pushHistory=false), read from the ref
-    // rather than the stale React state closure. Rapid sequential calls from a
-    // throttled timer otherwise each close over the same old `story` value and
-    // React 19 detects the resulting nested startTransition as an update loop.
-    const currentStory = !sync && !pushHistory ? latestStoryRef.current : story;
+      // For streaming preview (sync=false, pushHistory=false), always use ref.
+      // For all other cases, also use the ref now that updateChapter is a stable
+      // useCallback — the ref is always current since it is updated on every render.
+      const currentStory = latestStoryRef.current;
 
-    const chapter = currentStory.chapters.find((ch) => ch.id === id);
-    if (!chapter) return;
+      const chapter = currentStory.chapters.find((ch) => ch.id === id);
+      if (!chapter) return;
 
-    const isDifferent = Object.entries(partial).some(([key, value]) => {
-      if (value === undefined) return false;
-      const old = (chapter as any)[key];
-      return value !== old;
-    });
+      const isDifferent = Object.entries(partial).some(([key, value]) => {
+        if (value === undefined) return false;
+        const old = (chapter as any)[key];
+        return value !== old;
+      });
 
-    const newChapters = currentStory.chapters.map((ch) =>
-      ch.id === id ? { ...ch, ...partial } : ch
-    );
-    const newState = {
-      ...currentStory,
-      chapters: newChapters,
-      lastUpdated: Date.now(),
-    };
+      const newChapters = currentStory.chapters.map((ch) =>
+        ch.id === id ? { ...ch, ...partial } : ch
+      );
+      const newState = {
+        ...currentStory,
+        chapters: newChapters,
+        lastUpdated: Date.now(),
+      };
 
-    if (pushHistory) {
-      pushState(newState, buildChapterUpdateLabel(chapter, partial), isUserEdit);
-    } else {
-      latestStoryRef.current = newState;
-      startTransition(() => setStory(newState));
-    }
+      if (pushHistory) {
+        pushStateRef.current(
+          newState,
+          buildChapterUpdateLabel(chapter, partial),
+          isUserEdit
+        );
+      } else {
+        latestStoryRef.current = newState;
+        startTransition(() => setStory(newState));
+      }
 
-    if (!sync) return;
+      if (!sync) return;
 
-    if (!isDifferent) return;
+      if (!isDifferent) return;
 
-    try {
-      const numId = Number(id);
-      if (partial.content !== undefined)
-        await api.chapters.updateContent(numId, partial.content);
-      if (partial.title !== undefined)
-        await api.chapters.updateTitle(numId, partial.title);
-      if (partial.summary !== undefined)
-        await api.chapters.updateSummary(numId, partial.summary);
-      // Metadata fields are managed through dedicated metadata flows to avoid
-      // partial writes racing with dialog autosave.
-    } catch (e) {
-      console.error('Failed to update chapter', e);
-    }
-  };
+      try {
+        const numId = Number(id);
+        if (partial.content !== undefined)
+          await api.chapters.updateContent(numId, partial.content);
+        if (partial.title !== undefined)
+          await api.chapters.updateTitle(numId, partial.title);
+        if (partial.summary !== undefined)
+          await api.chapters.updateSummary(numId, partial.summary);
+        // Metadata fields are managed through dedicated metadata flows to avoid
+        // partial writes racing with dialog autosave.
+      } catch (e) {
+        console.error('Failed to update chapter', e);
+      }
+    },
+    [updateStoryDraft]
+  );
 
-  const updateBook = async (id: string, partial: Partial<Book>) => {
+  const updateBook = useCallback(async (id: string, partial: Partial<Book>) => {
+    const story = latestStoryRef.current;
     const newBooks =
       story.books?.map((b) => (b.id === id ? { ...b, ...partial } : b)) || [];
     const newState = { ...story, books: newBooks };
     const bookTitle =
       story.books?.find((book) => book.id === id)?.title || partial.title || 'Untitled';
-    pushState(newState, `Update book: ${bookTitle}`);
+    pushStateRef.current(newState, `Update book: ${bookTitle}`);
     // Book persistence stays at call sites that own the surrounding workflow
     // (rename, reorder, metadata edit) to keep this hook narrowly scoped.
-  };
+  }, []);
 
-  const addChapter = async (
-    title: string = 'New Chapter',
-    summary: string = '',
-    bookId?: string
-  ) => {
-    try {
-      const res = await api.chapters.create(title, '', bookId);
-      const chaptersRes = await api.chapters.list();
-      const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
+  const addChapter = useCallback(
+    async (title: string = 'New Chapter', summary: string = '', bookId?: string) => {
+      try {
+        const res = await api.chapters.create(title, '', bookId);
+        const chaptersRes = await api.chapters.list();
+        const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
 
-      const newChapter = newChapters.find((c) => c.id === String(res.id));
-      if (!newChapter) {
-        throw new Error('Created chapter not found in refreshed chapter list');
+        const newChapter = newChapters.find((c) => c.id === String(res.id));
+        if (!newChapter) {
+          throw new Error('Created chapter not found in refreshed chapter list');
+        }
+
+        const story = latestStoryRef.current;
+        const newState: StoryState = {
+          ...story,
+          chapters: newChapters,
+          currentChapterId: newChapter.id,
+          lastUpdated: Date.now(),
+        };
+        pushStateRef.current(newState, `Create chapter: ${newChapter.title || title}`);
+      } catch (e) {
+        console.error('Failed to add chapter', e);
       }
+    },
+    []
+  );
 
-      const newState: StoryState = {
-        ...story,
-        chapters: newChapters,
-        currentChapterId: newChapter.id,
-        lastUpdated: Date.now(),
-      };
-      pushState(newState, `Create chapter: ${newChapter.title || title}`);
-    } catch (e) {
-      console.error('Failed to add chapter', e);
-    }
-  };
-
-  const deleteChapter = async (id: string) => {
+  const deleteChapter = useCallback(async (id: string) => {
     try {
+      const story = latestStoryRef.current;
+      const currentChapterId = currentChapterIdRef.current;
       const deletedChapter = story.chapters.find((c) => c.id === id);
       const currentChap = story.chapters.find((c) => c.id === currentChapterId);
 
@@ -704,11 +735,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentChapterId: newSelection,
         lastUpdated: Date.now(),
       };
-      pushState(newState, `Delete chapter: ${deletedChapter?.title || id}`);
+      pushStateRef.current(newState, `Delete chapter: ${deletedChapter?.title || id}`);
     } catch (e) {
       console.error('Failed to delete chapter', e);
     }
-  };
+  }, []);
 
   const loadStory = useCallback(
     (newStory: StoryState) => {
@@ -798,13 +829,21 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     [currentIndex, history]
   );
 
+  // Keep stable refs to undoSteps/redoSteps so the undo/redo callbacks never
+  // need to be recreated, preventing sidebarControls from invalidating on
+  // every history push (which happens on every debounced keystroke).
+  const undoStepsRef = useRef(undoSteps);
+  undoStepsRef.current = undoSteps;
+  const redoStepsRef = useRef(redoSteps);
+  redoStepsRef.current = redoSteps;
+
   const undo = useCallback(async () => {
-    await undoSteps(1);
-  }, [undoSteps]);
+    await undoStepsRef.current(1);
+  }, []);
 
   const redo = useCallback(async () => {
-    await redoSteps(1);
-  }, [redoSteps]);
+    await redoStepsRef.current(1);
+  }, []);
 
   // Baseline is managed explicitly via setBaselineState — see pushState,
   // undoSteps, redoSteps, and loadStory above.

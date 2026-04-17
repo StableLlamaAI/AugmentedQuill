@@ -166,6 +166,10 @@ export const Editor = React.memo(
       // Local content/title state so the editor div always gets the latest
       // typed value immediately, while the parent onChange (API call) is debounced.
       const [localContent, setLocalContent] = useState(chapter.content);
+      // Ref that always holds the current content without triggering re-renders.
+      // Used in callbacks that need the latest value at call time (e.g. suggestion
+      // hotkeys) so those callbacks don't need localContent in their deps arrays.
+      const localContentRef = useRef(chapter.content);
       const [localTitle, setLocalTitle] = useState(chapter.title);
 
       // Track the diff baseline locally so we can clear it immediately when the
@@ -218,6 +222,7 @@ export const Editor = React.memo(
           proseStreamingActive ||
           (!editorFocused && !shouldDeferStreamingSync)
         ) {
+          localContentRef.current = chapter.content;
           setLocalContent(chapter.content);
         }
       }, [chapter.id, chapter.content, proseStreamingActive]);
@@ -397,8 +402,8 @@ export const Editor = React.memo(
           }
           return;
         }
-        const cursor = getEditorCaretOffset() ?? localContent.length;
-        onTriggerSuggestions(cursor, localContent);
+        const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
+        onTriggerSuggestions(cursor, localContentRef.current);
       };
 
       const [isDragging, setIsDragging] = useState(false);
@@ -458,6 +463,10 @@ export const Editor = React.memo(
         if (contextDebounceRef.current) clearTimeout(contextDebounceRef.current);
         contextDebounceRef.current = setTimeout(checkContext, CONTEXT_DEBOUNCE_MS);
       };
+
+      // Track the last reported formats so we can skip calling onContextChange
+      // when the cursor moves but the active format context hasn't changed.
+      const lastReportedFormatsRef = useRef<string[]>([]);
 
       const checkContext = () => {
         if (!onContextChange) return;
@@ -522,7 +531,15 @@ export const Editor = React.memo(
 
           lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
         }
-        onContextChange(formats);
+        // Only notify parent when the set of active formats actually changes, so
+        // App.tsx doesn't re-render on every cursor move within plain text.
+        const prev = lastReportedFormatsRef.current;
+        const changed =
+          prev.length !== formats.length || formats.some((f, i) => f !== prev[i]);
+        if (changed) {
+          lastReportedFormatsRef.current = formats;
+          onContextChange(formats);
+        }
       };
 
       const toggleBlockAtCaret = (type: MarkdownBlockType) => {
@@ -574,7 +591,7 @@ export const Editor = React.memo(
             e.preventDefault();
             // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('trigger', cursor, localContent);
+            onKeyboardSuggestionAction('trigger', cursor, localContentRef.current);
             return true;
           }
 
@@ -584,22 +601,30 @@ export const Editor = React.memo(
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
+            onKeyboardSuggestionAction(
+              'chooseLeft',
+              undefined,
+              localContentRef.current
+            );
             return true;
           }
           if (key === 'ArrowRight') {
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('chooseRight', undefined, localContent);
+            onKeyboardSuggestionAction(
+              'chooseRight',
+              undefined,
+              localContentRef.current
+            );
             return true;
           }
           if (key === 'ArrowDown') {
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            const cursor = getEditorCaretOffset() ?? localContent.length;
-            onKeyboardSuggestionAction('regenerate', cursor, localContent);
+            const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
+            onKeyboardSuggestionAction('regenerate', cursor, localContentRef.current);
             return true;
           }
           if (key === 'ArrowUp') {
@@ -614,7 +639,7 @@ export const Editor = React.memo(
               e.preventDefault();
               // @ts-ignore
               e.stopPropagation?.();
-              onKeyboardSuggestionAction('exit', undefined, localContent);
+              onKeyboardSuggestionAction('exit', undefined, localContentRef.current);
               return true;
             }
             return false;
@@ -626,22 +651,30 @@ export const Editor = React.memo(
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
+            onKeyboardSuggestionAction(
+              'chooseLeft',
+              undefined,
+              localContentRef.current
+            );
             return true;
           }
           if (key === 'ArrowRight') {
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('chooseRight', undefined, localContent);
+            onKeyboardSuggestionAction(
+              'chooseRight',
+              undefined,
+              localContentRef.current
+            );
             return true;
           }
           if (key === 'ArrowDown') {
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            const cursor = getEditorCaretOffset() ?? localContent.length;
-            onKeyboardSuggestionAction('regenerate', cursor, localContent);
+            const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
+            onKeyboardSuggestionAction('regenerate', cursor, localContentRef.current);
             return true;
           }
           if (key === 'ArrowUp') {
@@ -660,7 +693,8 @@ export const Editor = React.memo(
           onKeyboardSuggestionAction,
           getEditorCaretOffset,
           isEditorFocused,
-          localContent,
+          // localContentRef is a stable ref; reading .current inside the callback
+          // always gives the latest value without requiring it in deps.
         ]
       );
 
@@ -1029,6 +1063,7 @@ export const Editor = React.memo(
                     onOpenSearch={onOpenSearch}
                     onChange={(val: string, isUndoRedo?: boolean) => {
                       setLocalContent(val);
+                      localContentRef.current = val;
                       // Clear diff immediately on user input so typed text is
                       // never highlighted as a diff insertion. Keep the baseline
                       // active when undo/redo is used so the diff view works.
@@ -1102,11 +1137,11 @@ export const Editor = React.memo(
                         const cursor =
                           (typeof getEditorCaretOffset === 'function'
                             ? getEditorCaretOffset()
-                            : null) ?? localContent.length;
+                            : null) ?? localContentRef.current.length;
                         suggestionControls.onKeyboardSuggestionAction?.(
                           'regenerate',
                           cursor,
-                          localContent
+                          localContentRef.current
                         );
                       }}
                       className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
@@ -1117,7 +1152,7 @@ export const Editor = React.memo(
                     </button>
                   </div>
                   <button
-                    onClick={() => onAcceptContinuation('', localContent)}
+                    onClick={() => onAcceptContinuation('', localContentRef.current)}
                     className={`${textMuted} hover:text-brand-gray-800 text-xs`}
                   >
                     Dismiss
@@ -1138,7 +1173,8 @@ export const Editor = React.memo(
                         onClick={
                           isEmpty
                             ? undefined
-                            : () => onAcceptContinuation(option, localContent)
+                            : () =>
+                                onAcceptContinuation(option, localContentRef.current)
                         }
                         className={`group relative p-5 rounded-lg border transition-all text-left ${
                           isEmpty

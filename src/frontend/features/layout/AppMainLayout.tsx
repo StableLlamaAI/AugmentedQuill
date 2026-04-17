@@ -321,11 +321,31 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       sourcebookDialogCloseTrigger,
       metadataDialogTrigger,
       metadataDialogCloseTrigger,
+      sidebarStoryMetadata,
+      sidebarStoryChapters,
+      sidebarStoryBooks,
+      sidebarSourcebookEntries,
     } = sidebarControls;
 
     const { editorSettings, setEditorSettings } = editorControls;
     const sidebarPrefs = editorSettings.sidebar || {};
     const sidebarRef = useRef<HTMLDivElement>(null);
+
+    const storyTitle = sidebarStoryMetadata?.title ?? story?.title ?? '';
+    const storySummary = sidebarStoryMetadata?.summary ?? story?.summary ?? '';
+    const storyTags = sidebarStoryMetadata?.tags ?? story?.styleTags ?? [];
+    const storyNotes = sidebarStoryMetadata?.notes ?? story?.notes;
+    const storyPrivateNotes =
+      sidebarStoryMetadata?.private_notes ?? story?.private_notes;
+    const storyConflicts = sidebarStoryMetadata?.conflicts ?? story?.conflicts;
+    const storyDraft = sidebarStoryMetadata?.draft ?? story?.draft;
+    const sidebarChapters = sidebarStoryChapters ?? story?.chapters ?? [];
+    const sidebarBooks = sidebarStoryBooks ?? story?.books ?? [];
+    const storySourcebookEntries = sidebarSourcebookEntries ?? story?.sourcebook ?? [];
+    const storyLanguage = sidebarStoryMetadata?.language ?? story?.language ?? 'en';
+    const storyProjectType =
+      sidebarStoryMetadata?.projectType ?? story?.projectType ?? 'novel';
+    const storyId = story?.id ?? '';
 
     useEffect(() => {
       // If we don't have stored heights, initialize them based on available space and content
@@ -336,13 +356,13 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         (!sidebarPrefs.storyHeight || !sidebarPrefs.chaptersHeight)
       ) {
         // Intelligence: Check content to decide priorities
-        const hasStorySummary = !!story.summary;
+        const hasStorySummary = !!storySummary;
         const chapterCount =
-          story.projectType === 'short-story' ? 0 : story.chapters.length;
+          storyProjectType === 'short-story' ? 0 : sidebarChapters.length;
 
         // Base ratios
-        let storyRatio = story.projectType === 'short-story' ? 0.5 : 0.33;
-        let chaptersRatio = story.projectType === 'short-story' ? 0.15 : 0.33;
+        let storyRatio = storyProjectType === 'short-story' ? 0.5 : 0.33;
+        let chaptersRatio = storyProjectType === 'short-story' ? 0.15 : 0.33;
 
         if (chapterCount < 2) {
           chaptersRatio = 0.2;
@@ -365,7 +385,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         }));
       }
     }, [
-      story.id,
+      storyId,
       setEditorSettings,
       sidebarPrefs.storyHeight,
       sidebarPrefs.chaptersHeight,
@@ -438,6 +458,17 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       onMutationClick,
     } = chatControls;
 
+    // Stable callbacks so memoized sidebar sub-components don't re-render on
+    // every AppMainLayout render caused by sidebarControls reference churn.
+    const handleSourcebookToggle = useCallback(
+      (id: string, checked: boolean) => onToggleSourcebook?.(id, checked),
+      [onToggleSourcebook]
+    );
+    const handleAddChapter = useCallback(
+      (bookId?: string) => addChapter('New Chapter', '', bookId),
+      [addChapter]
+    );
+
     return (
       <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
         {isSidebarOpen && (
@@ -469,14 +500,14 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
             isLight={isLight}
           >
             <StoryMetadata
-              title={story.title}
-              summary={story.summary}
-              tags={story.styleTags}
-              notes={story.notes}
-              private_notes={story.private_notes}
-              language={story.language}
-              conflicts={story.conflicts}
-              projectType={story.projectType}
+              title={storyTitle}
+              summary={storySummary}
+              tags={storyTags}
+              notes={storyNotes}
+              private_notes={storyPrivateNotes}
+              language={storyLanguage}
+              conflicts={storyConflicts}
+              projectType={storyProjectType}
               baselineSummary={sidebarControls.baselineState?.summary}
               baselineNotes={sidebarControls.baselineState?.notes}
               baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
@@ -490,7 +521,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               ) =>
                 handleSidebarAiAction(
                   'story',
-                  story.id,
+                  storyId,
                   action,
                   onProgress,
                   currentText,
@@ -504,8 +535,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                   : undefined
               }
               primarySourceAvailable={
-                story.projectType === 'short-story'
-                  ? !!story.draft?.content?.trim()
+                storyProjectType === 'short-story'
+                  ? !!storyDraft?.content?.trim()
                   : undefined
               }
               onUpdate={updateStoryMetadata}
@@ -518,7 +549,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
             />
           </CollapsibleSection>
 
-          {story.projectType !== 'short-story' && (
+          {storyProjectType !== 'short-story' && (
             <CollapsibleSection
               title="Chapters"
               isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
@@ -528,15 +559,15 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               isLight={isLight}
             >
               <ChapterList
-                chapters={story.chapters}
-                books={story.books}
-                projectType={story.projectType}
+                chapters={sidebarChapters}
+                books={sidebarBooks}
+                projectType={storyProjectType}
                 currentChapterId={currentChapterId}
                 onSelect={handleChapterSelect}
                 onDelete={deleteChapter}
                 onUpdateChapter={updateChapter}
                 onUpdateBook={updateBook}
-                onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
+                onCreate={handleAddChapter}
                 onBookCreate={handleBookCreate}
                 onBookDelete={handleBookDelete}
                 onReorderChapters={handleReorderChapters}
@@ -547,7 +578,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 onOpenImages={handleOpenImages}
                 languages={instructionLanguages}
                 baselineChapters={sidebarControls.baselineState?.chapters}
-                language={story.language}
+                language={storyLanguage}
                 spellCheck={true}
               />
             </CollapsibleSection>
@@ -562,10 +593,10 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
           >
             <SourcebookList
               theme={currentTheme}
-              language={story.language}
-              externalEntries={story.sourcebook || []}
+              language={storyLanguage}
+              externalEntries={storySourcebookEntries}
               checkedIds={checkedSourcebookIds || []}
-              onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
+              onToggle={handleSourcebookToggle}
               isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
               onToggleAutoSelection={onToggleAutoSourcebookSelection}
               isAutoSelectionRunning={isSourcebookSelectionRunning}
@@ -709,7 +740,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               onDeleteScratchpad={onDeleteScratchpad}
               sessionMutations={sessionMutations}
               onMutationClick={onMutationClick}
-              storyLanguage={story.language}
+              storyLanguage={storyLanguage}
             />
           </aside>
         )}

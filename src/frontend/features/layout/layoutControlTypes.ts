@@ -120,7 +120,7 @@ export type HeaderThemeTokens = {
 export type MainSidebarControls = {
   isSidebarOpen: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  story: StoryState;
+  story?: StoryState;
   currentChapterId: string | null;
   handleChapterSelect: (id: string | null) => void;
   deleteChapter: (id: string) => Promise<void>;
@@ -156,6 +156,20 @@ export type MainSidebarControls = {
     conflicts?: Array<{ id: string; description: string; resolution: string }>,
     language?: string
   ) => Promise<void>;
+  sidebarStoryMetadata?: {
+    title: string;
+    summary: string;
+    tags: string[];
+    notes?: string;
+    private_notes?: string;
+    conflicts?: Array<{ id: string; description: string; resolution: string }>;
+    language?: string;
+    projectType: 'short-story' | 'novel' | 'series';
+    draft?: WritingUnit | null;
+  };
+  sidebarStoryChapters?: Chapter[];
+  sidebarStoryBooks?: Book[];
+  sidebarSourcebookEntries?: SourcebookEntry[];
   baselineState?: StoryState;
   // optional sourcebook relevance controls (provided by suggestions hook)
   checkedSourcebookIds?: string[];
