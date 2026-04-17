@@ -9,7 +9,7 @@
  * Defines the sourcebook list unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus,
@@ -120,6 +120,110 @@ export const updateSourcebookEntryInList = (
   return entries.map((value) => (value.id === previousId ? updated : value));
 };
 
+interface SourcebookEntryRowProps {
+  entry: SourcebookEntry;
+  CategoryIcon: React.ElementType;
+  isChecked: boolean;
+  diffBorderClass: string;
+  isAutoSelectionEnabled: boolean;
+  isLoadingEntry: boolean;
+  isLight: boolean;
+  textClass: string;
+  subTextClass: string;
+  itemHoverClass: string;
+  onClick: (entry: SourcebookEntry) => void;
+  onMouseEnter: (
+    event: React.MouseEvent<HTMLButtonElement>,
+    entry: SourcebookEntry
+  ) => void;
+  onMouseLeave: () => void;
+  onToggle: (id: string, checked: boolean) => void;
+}
+
+const SourcebookEntryRow = React.memo(
+  ({
+    entry,
+    CategoryIcon,
+    isChecked,
+    diffBorderClass,
+    isAutoSelectionEnabled,
+    isLoadingEntry,
+    isLight,
+    textClass,
+    subTextClass,
+    itemHoverClass,
+    onClick,
+    onMouseEnter,
+    onMouseLeave,
+    onToggle,
+  }: SourcebookEntryRowProps) => {
+    return (
+      <div
+        key={entry.id}
+        className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${diffBorderClass} ${
+          isLoadingEntry ? 'pointer-events-none opacity-70' : ''
+        }`}
+        role="listitem"
+      >
+        <button
+          type="button"
+          onClick={() => onClick(entry)}
+          onMouseEnter={(evt) => onMouseEnter(evt, entry)}
+          onMouseLeave={onMouseLeave}
+          className="flex items-center gap-2 flex-1 min-w-0"
+        >
+          <CategoryIcon
+            size={14}
+            className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
+          />
+          <div className={`text-sm truncate ${textClass}`}>{entry.name}</div>
+        </button>
+        <button
+          onClick={(ev) => {
+            ev.stopPropagation();
+            if (isAutoSelectionEnabled) return;
+            onToggle(entry.id, !isChecked);
+          }}
+          disabled={isAutoSelectionEnabled}
+          className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
+            isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
+          } ${
+            isChecked
+              ? 'bg-brand-500 border-brand-500 text-white'
+              : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+          }`}
+          title={
+            isAutoSelectionEnabled
+              ? 'Automatic selection is enabled; disable Auto to change this manually'
+              : isChecked
+                ? 'Exclude from context'
+                : 'Include in context'
+          }
+        >
+          {isChecked && <Check size={10} strokeWidth={4} />}
+        </button>
+      </div>
+    );
+  },
+  (prevProps, nextProps) =>
+    prevProps.entry.id === nextProps.entry.id &&
+    prevProps.entry.name === nextProps.entry.name &&
+    prevProps.entry.category === nextProps.entry.category &&
+    prevProps.isChecked === nextProps.isChecked &&
+    prevProps.diffBorderClass === nextProps.diffBorderClass &&
+    prevProps.isAutoSelectionEnabled === nextProps.isAutoSelectionEnabled &&
+    prevProps.isLoadingEntry === nextProps.isLoadingEntry &&
+    prevProps.isLight === nextProps.isLight &&
+    prevProps.textClass === nextProps.textClass &&
+    prevProps.subTextClass === nextProps.subTextClass &&
+    prevProps.itemHoverClass === nextProps.itemHoverClass &&
+    prevProps.CategoryIcon === nextProps.CategoryIcon &&
+    prevProps.onClick === nextProps.onClick &&
+    prevProps.onMouseEnter === nextProps.onMouseEnter &&
+    prevProps.onMouseLeave === nextProps.onMouseLeave &&
+    prevProps.onToggle === nextProps.onToggle
+);
+
 export const filterSourcebookEntries = (
   entries: SourcebookEntry[],
   query: string
@@ -191,6 +295,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     );
     const [search, setSearch] = useState('');
     const externalEntriesRef = useRef<SourcebookEntry[] | undefined>(undefined);
+    const createdEntryIdsRef = useRef<Set<string>>(new Set());
     const [selectedEntry, setSelectedEntry] = useState<SourcebookEntry | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isLoadingEntry, setIsLoadingEntry] = useState(false);
@@ -206,6 +311,43 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     // content changes externally (e.g. after app-level undo/redo), resetting all
     // dialog-local state (form fields, local history) cleanly.
     const [dialogKey, setDialogKey] = useState(0);
+
+    const handleEntryHover = useCallback(
+      (event: React.MouseEvent<HTMLButtonElement>, entry: SourcebookEntry) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = rect.right + 10;
+        const y = Math.min(rect.top, window.innerHeight - 200);
+        setTooltipPos({ x, y });
+        setHoveredEntry(entry);
+      },
+      []
+    );
+
+    const handleEntryHoverLeave = useCallback(() => {
+      setHoveredEntry(null);
+    }, []);
+
+    const handleEntryClick = useCallback(async (entry: SourcebookEntry) => {
+      setIsLoadingEntry(true);
+      try {
+        const all = await api.sourcebook.list();
+        const full = all.find((x) => x.id === entry.id) || entry;
+        setEntries(all);
+        setSelectedEntry(full);
+        setDialogOpenedViaTrigger(createdEntryIdsRef.current.has(entry.id));
+        setIsDialogOpen(true);
+      } finally {
+        setIsLoadingEntry(false);
+      }
+    }, []);
+
+    const handleToggleEntry = useCallback(
+      (id: string, checked: boolean) => {
+        if (isAutoSelectionEnabled) return;
+        onToggle?.(id, checked);
+      },
+      [isAutoSelectionEnabled, onToggle]
+    );
 
     const { isLight } = useThemeClasses();
 
@@ -323,6 +465,10 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       const baselineIds = new Set(baselineEntries.map((b) => b.id));
       return new Set(entries.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
     }, [entries, baselineEntries]);
+
+    useEffect(() => {
+      createdEntryIdsRef.current = createdEntryIds;
+    }, [createdEntryIds]);
 
     const modifiedEntryIds = useMemo<Set<string>>(() => {
       if (!baselineEntries) return new Set();
@@ -472,15 +618,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       });
     };
 
-    const handleMouseEnter = (e: React.MouseEvent, entry: SourcebookEntry) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = rect.right + 10;
-      // Clamp tooltip origin so previews remain visible on short viewports.
-      const y = Math.min(rect.top, window.innerHeight - 200);
-      setTooltipPos({ x, y });
-      setHoveredEntry(entry);
-    };
-
     const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
     const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
     const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
@@ -611,65 +748,23 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
                     ? 'border-l-2 border-l-amber-400'
                     : '';
                 return (
-                  <div
+                  <SourcebookEntryRow
                     key={e.id}
-                    className={`group px-3 py-2 rounded-md transition-colors ${itemHoverClass} flex items-center gap-2 select-none ${diffBorderClass} ${
-                      isLoadingEntry ? 'pointer-events-none opacity-70' : ''
-                    }`}
-                    role="listitem"
-                  >
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setIsLoadingEntry(true);
-                        try {
-                          const all = await api.sourcebook.list();
-                          const full = all.find((x) => x.id === e.id) || e;
-                          setEntries(all);
-                          setSelectedEntry(full);
-                          // Show diff for newly AI-created entries even when
-                          // opened via list click (not just via mutation tag).
-                          setDialogOpenedViaTrigger(createdEntryIds.has(e.id));
-                          setIsDialogOpen(true);
-                        } finally {
-                          setIsLoadingEntry(false);
-                        }
-                      }}
-                      onMouseEnter={(evt) => handleMouseEnter(evt, e)}
-                      onMouseLeave={() => setHoveredEntry(null)}
-                      className="flex items-center gap-2 flex-1 min-w-0"
-                    >
-                      <CategoryIcon
-                        size={14}
-                        className={`flex-shrink-0 ${subTextClass} group-hover:text-brand-500 transition-colors`}
-                      />
-                      <div className={`text-sm truncate ${textClass}`}>{e.name}</div>
-                    </button>
-                    <button
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        if (isAutoSelectionEnabled) return;
-                        onToggle?.(e.id, !isChecked);
-                      }}
-                      disabled={isAutoSelectionEnabled}
-                      className={`ml-auto w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                        isAutoSelectionEnabled ? 'opacity-40 cursor-not-allowed' : ''
-                      } ${
-                        isChecked
-                          ? 'bg-brand-500 border-brand-500 text-white'
-                          : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
-                      }`}
-                      title={
-                        isAutoSelectionEnabled
-                          ? 'Automatic selection is enabled; disable Auto to change this manually'
-                          : isChecked
-                            ? 'Exclude from context'
-                            : 'Include in context'
-                      }
-                    >
-                      {isChecked && <Check size={10} strokeWidth={4} />}
-                    </button>
-                  </div>
+                    entry={e}
+                    CategoryIcon={CategoryIcon}
+                    isChecked={isChecked}
+                    diffBorderClass={diffBorderClass}
+                    isAutoSelectionEnabled={isAutoSelectionEnabled}
+                    isLoadingEntry={isLoadingEntry}
+                    isLight={isLight}
+                    textClass={textClass}
+                    subTextClass={subTextClass}
+                    itemHoverClass={itemHoverClass}
+                    onClick={handleEntryClick}
+                    onMouseEnter={handleEntryHover}
+                    onMouseLeave={handleEntryHoverLeave}
+                    onToggle={handleToggleEntry}
+                  />
                 );
               })}
               {/* Deleted entries (diff indicator — only when search is not active) */}

@@ -23,6 +23,13 @@ import {
   MainEditorControls,
   MainSidebarControls,
 } from './layoutControlTypes';
+import type {
+  AppTheme,
+  Book,
+  Chapter,
+  SourcebookEntry,
+  WritingUnit,
+} from '../../types';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
@@ -266,6 +273,241 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   );
 };
 
+interface SidebarPaneProps {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  sidebarControls: MainSidebarControls;
+  sidebarPrefs: NonNullable<MainEditorControls['editorSettings']['sidebar']>;
+  isLight: boolean;
+  currentTheme: AppTheme;
+  instructionLanguages: string[];
+  storyTitle: string;
+  storySummary: string;
+  storyTags: string[];
+  storyNotes?: string;
+  storyPrivateNotes?: string;
+  storyConflicts?: Array<{ id: string; description: string; resolution: string }>;
+  storyDraft?: WritingUnit | null;
+  sidebarChapters: Chapter[];
+  sidebarBooks: Book[];
+  storySourcebookEntries: SourcebookEntry[];
+  storyLanguage: string;
+  storyProjectType: 'short-story' | 'novel' | 'series';
+  storyId: string;
+  handleSourcebookToggle: (id: string, checked: boolean) => void;
+  handleAddChapter: (bookId?: string) => Promise<void>;
+  toggleCollapsed: (
+    key: keyof NonNullable<MainEditorControls['editorSettings']['sidebar']>
+  ) => void;
+  updateHeight: (
+    key: keyof NonNullable<MainEditorControls['editorSettings']['sidebar']>,
+    height: number
+  ) => void;
+}
+
+const SidebarPane: React.FC<SidebarPaneProps> = React.memo(
+  ({
+    isSidebarOpen,
+    setIsSidebarOpen,
+    sidebarControls,
+    sidebarPrefs,
+    isLight,
+    currentTheme,
+    instructionLanguages,
+    storyTitle,
+    storySummary,
+    storyTags,
+    storyNotes,
+    storyPrivateNotes,
+    storyConflicts,
+    storyDraft,
+    sidebarChapters,
+    sidebarBooks,
+    storySourcebookEntries,
+    storyLanguage,
+    storyProjectType,
+    storyId,
+    handleSourcebookToggle,
+    handleAddChapter,
+    toggleCollapsed,
+    updateHeight,
+  }) => {
+    const {
+      story,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      onToggleAutoSourcebookSelection,
+      isSourcebookSelectionRunning,
+      onSourcebookMutated,
+      onAppUndo,
+      onAppRedo,
+      canAppUndo,
+      canAppRedo,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+      baselineState,
+    } = sidebarControls;
+
+    return (
+      <nav
+        id="aq-sidebar"
+        role="navigation"
+        aria-label="Project sidebar"
+        className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${
+          isLight
+            ? 'bg-brand-gray-50 border-brand-gray-200'
+            : 'bg-brand-gray-900 border-brand-gray-800'
+        }`}
+      >
+        {isSidebarOpen && (
+          <button
+            className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close sidebar"
+          ></button>
+        )}
+
+        <CollapsibleSection
+          title="Story"
+          isCollapsed={!!sidebarPrefs.isStoryCollapsed}
+          onToggle={() => toggleCollapsed('isStoryCollapsed')}
+          height={sidebarPrefs.storyHeight}
+          onHeightChange={(h) => updateHeight('storyHeight', h)}
+          isLight={isLight}
+        >
+          <StoryMetadata
+            title={storyTitle}
+            summary={storySummary}
+            tags={storyTags}
+            notes={storyNotes}
+            private_notes={storyPrivateNotes}
+            language={storyLanguage}
+            conflicts={storyConflicts}
+            projectType={storyProjectType}
+            baselineSummary={baselineState?.summary}
+            baselineNotes={baselineState?.notes}
+            baselinePrivateNotes={baselineState?.private_notes}
+            baselineConflicts={baselineState?.conflicts}
+            onAiGenerateSummary={(
+              action,
+              onProgress,
+              currentText,
+              onThinking,
+              source
+            ) =>
+              handleSidebarAiAction(
+                'story',
+                storyId,
+                action,
+                onProgress,
+                currentText,
+                onThinking,
+                source
+              )
+            }
+            summaryAiDisabledReason={
+              !isEditingAvailable
+                ? 'Summary AI is unavailable because no working EDITING model is configured.'
+                : undefined
+            }
+            primarySourceAvailable={
+              storyProjectType === 'short-story' && storyDraft
+                ? !!storyDraft.content?.trim()
+                : undefined
+            }
+            onUpdate={updateStoryMetadata}
+            metadataDialogTrigger={metadataDialogTrigger}
+            closeDialogTrigger={metadataDialogCloseTrigger}
+            initialTab={metadataDialogTrigger?.initialTab}
+            theme={currentTheme}
+            languages={instructionLanguages}
+            spellCheck={true}
+          />
+        </CollapsibleSection>
+
+        {storyProjectType !== 'short-story' && (
+          <CollapsibleSection
+            title="Chapters"
+            isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
+            onToggle={() => toggleCollapsed('isChaptersCollapsed')}
+            height={sidebarPrefs.chaptersHeight}
+            onHeightChange={(h) => updateHeight('chaptersHeight', h)}
+            isLight={isLight}
+          >
+            <ChapterList
+              chapters={sidebarChapters}
+              books={sidebarBooks}
+              projectType={storyProjectType}
+              currentChapterId={currentChapterId}
+              onSelect={handleChapterSelect}
+              onDelete={deleteChapter}
+              onUpdateChapter={updateChapter}
+              onUpdateBook={updateBook}
+              onCreate={handleAddChapter}
+              onBookCreate={handleBookCreate}
+              onBookDelete={handleBookDelete}
+              onReorderChapters={handleReorderChapters}
+              onReorderBooks={handleReorderBooks}
+              onAiAction={handleSidebarAiAction}
+              isAiAvailable={isEditingAvailable}
+              theme={currentTheme}
+              onOpenImages={handleOpenImages}
+              languages={instructionLanguages}
+              baselineChapters={baselineState?.chapters}
+              language={storyLanguage}
+              spellCheck={true}
+            />
+          </CollapsibleSection>
+        )}
+
+        <CollapsibleSection
+          title="Sourcebook"
+          isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
+          onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
+          isLast
+          isLight={isLight}
+        >
+          <SourcebookList
+            theme={currentTheme}
+            language={storyLanguage}
+            externalEntries={storySourcebookEntries}
+            checkedIds={checkedSourcebookIds || []}
+            onToggle={handleSourcebookToggle}
+            isAutoSelectionEnabled={sidebarControls.isAutoSourcebookSelectionEnabled}
+            onToggleAutoSelection={sidebarControls.onToggleAutoSourcebookSelection}
+            isAutoSelectionRunning={sidebarControls.isSourcebookSelectionRunning}
+            mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
+            onMutated={onSourcebookMutated}
+            onAppUndo={onAppUndo}
+            onAppRedo={onAppRedo}
+            canAppUndo={canAppUndo}
+            canAppRedo={canAppRedo}
+            sourcebookDialogTrigger={sourcebookDialogTrigger}
+            closeDialogTrigger={sourcebookDialogCloseTrigger}
+            baselineEntries={baselineState?.sourcebook}
+          />
+        </CollapsibleSection>
+      </nav>
+    );
+  }
+);
+
 export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
   ({ sidebarControls, editorControls, chatControls, instructionLanguages }) => {
     const { bgMain, isLight, currentTheme } = useTheme();
@@ -478,147 +720,34 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
 
     return (
       <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
-        {isSidebarOpen && (
-          <button
-            className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
-            onClick={() => setIsSidebarOpen(false)}
-            aria-label="Close sidebar"
-          ></button>
-        )}
-        <nav
-          id="aq-sidebar"
-          role="navigation"
-          aria-label="Project sidebar"
-          ref={sidebarRef}
-          className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
-            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } ${
-            isLight
-              ? 'bg-brand-gray-50 border-brand-gray-200'
-              : 'bg-brand-gray-900 border-brand-gray-800'
-          }`}
-        >
-          <CollapsibleSection
-            title="Story"
-            isCollapsed={!!sidebarPrefs.isStoryCollapsed}
-            onToggle={() => toggleCollapsed('isStoryCollapsed')}
-            height={sidebarPrefs.storyHeight}
-            onHeightChange={(h) => updateHeight('storyHeight', h)}
-            isLight={isLight}
-          >
-            <StoryMetadata
-              title={storyTitle}
-              summary={storySummary}
-              tags={storyTags}
-              notes={storyNotes}
-              private_notes={storyPrivateNotes}
-              language={storyLanguage}
-              conflicts={storyConflicts}
-              projectType={storyProjectType}
-              baselineSummary={sidebarControls.baselineState?.summary}
-              baselineNotes={sidebarControls.baselineState?.notes}
-              baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
-              baselineConflicts={sidebarControls.baselineState?.conflicts}
-              onAiGenerateSummary={(
-                action,
-                onProgress,
-                currentText,
-                onThinking,
-                source
-              ) =>
-                handleSidebarAiAction(
-                  'story',
-                  storyId,
-                  action,
-                  onProgress,
-                  currentText,
-                  onThinking,
-                  source
-                )
-              }
-              summaryAiDisabledReason={
-                !isEditingAvailable
-                  ? 'Summary AI is unavailable because no working EDITING model is configured.'
-                  : undefined
-              }
-              primarySourceAvailable={
-                storyProjectType === 'short-story'
-                  ? !!storyDraft?.content?.trim()
-                  : undefined
-              }
-              onUpdate={updateStoryMetadata}
-              metadataDialogTrigger={metadataDialogTrigger}
-              closeDialogTrigger={metadataDialogCloseTrigger}
-              initialTab={metadataDialogTrigger?.initialTab}
-              theme={currentTheme}
-              languages={instructionLanguages}
-              spellCheck={true}
-            />
-          </CollapsibleSection>
-
-          {storyProjectType !== 'short-story' && (
-            <CollapsibleSection
-              title="Chapters"
-              isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
-              onToggle={() => toggleCollapsed('isChaptersCollapsed')}
-              height={sidebarPrefs.chaptersHeight}
-              onHeightChange={(h) => updateHeight('chaptersHeight', h)}
-              isLight={isLight}
-            >
-              <ChapterList
-                chapters={sidebarChapters}
-                books={sidebarBooks}
-                projectType={storyProjectType}
-                currentChapterId={currentChapterId}
-                onSelect={handleChapterSelect}
-                onDelete={deleteChapter}
-                onUpdateChapter={updateChapter}
-                onUpdateBook={updateBook}
-                onCreate={handleAddChapter}
-                onBookCreate={handleBookCreate}
-                onBookDelete={handleBookDelete}
-                onReorderChapters={handleReorderChapters}
-                onReorderBooks={handleReorderBooks}
-                onAiAction={handleSidebarAiAction}
-                isAiAvailable={isEditingAvailable}
-                theme={currentTheme}
-                onOpenImages={handleOpenImages}
-                languages={instructionLanguages}
-                baselineChapters={sidebarControls.baselineState?.chapters}
-                language={storyLanguage}
-                spellCheck={true}
-              />
-            </CollapsibleSection>
-          )}
-
-          <CollapsibleSection
-            title="Sourcebook"
-            isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
-            onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
-            isLast
-            isLight={isLight}
-          >
-            <SourcebookList
-              theme={currentTheme}
-              language={storyLanguage}
-              externalEntries={storySourcebookEntries}
-              checkedIds={checkedSourcebookIds || []}
-              onToggle={handleSourcebookToggle}
-              isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
-              onToggleAutoSelection={onToggleAutoSourcebookSelection}
-              isAutoSelectionRunning={isSourcebookSelectionRunning}
-              mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
-              onMutated={onSourcebookMutated}
-              onAppUndo={onAppUndo}
-              onAppRedo={onAppRedo}
-              canAppUndo={canAppUndo}
-              canAppRedo={canAppRedo}
-              sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
-              closeDialogTrigger={sourcebookDialogCloseTrigger}
-              baselineEntries={sidebarControls.baselineState?.sourcebook}
-            />
-          </CollapsibleSection>
-        </nav>
+        <SidebarPane
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          sidebarControls={sidebarControls}
+          sidebarPrefs={
+            sidebarPrefs as NonNullable<MainEditorControls['editorSettings']['sidebar']>
+          }
+          isLight={isLight}
+          currentTheme={currentTheme}
+          instructionLanguages={instructionLanguages}
+          storyTitle={storyTitle}
+          storySummary={storySummary}
+          storyTags={storyTags}
+          storyNotes={storyNotes}
+          storyPrivateNotes={storyPrivateNotes}
+          storyConflicts={storyConflicts}
+          storyDraft={storyDraft}
+          sidebarChapters={sidebarChapters}
+          sidebarBooks={sidebarBooks}
+          storySourcebookEntries={storySourcebookEntries}
+          storyLanguage={storyLanguage}
+          storyProjectType={storyProjectType}
+          storyId={storyId}
+          handleSourcebookToggle={handleSourcebookToggle}
+          handleAddChapter={handleAddChapter}
+          toggleCollapsed={toggleCollapsed}
+          updateHeight={updateHeight}
+        />
         <section
           id="aq-editor"
           role="main"
