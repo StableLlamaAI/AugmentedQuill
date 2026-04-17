@@ -169,21 +169,31 @@ export const Chat: React.FC<ChatProps> = ({
     const el = scrollContainerRef.current;
     if (!el) return undefined;
 
-    // Use MutationObserver to catch any size changes in children (like Markdown rendering, Collapsible tool sections expanding, etc.)
+    // Use MutationObserver to catch size changes in children (like Markdown
+    // rendering, Collapsible tool sections expanding, etc.).  The callback is
+    // RAF-throttled so that rapid DOM mutations during streaming don't pile up
+    // redundant scroll operations.
+    let rafId: number | null = null;
     const observer = new MutationObserver(() => {
-      if (isAtBottomRef.current) {
+      if (!isAtBottomRef.current) return;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
         scrollToBottom(isLoading ? 'auto' : 'smooth');
-      }
+      });
     });
 
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    observer.observe(el, { childList: true, subtree: true });
 
     // Ensure we scroll immediately if a basic dependency change caused an update too
     if (isAtBottomRef.current) {
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [messages, isLoading, editingMessageId]);
 
   // Always scroll to bottom on session switch

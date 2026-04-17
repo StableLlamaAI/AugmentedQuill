@@ -69,20 +69,58 @@ class DeletedWidget extends WidgetType {
   }
 }
 
+/** Debounce delay before recomputing full diff decorations (ms). */
+const DIFF_DEBOUNCE_MS = 500;
+/** Documents smaller than this threshold are diffed immediately. */
+const DIFF_IMMEDIATE_THRESHOLD = 5000;
+
 const buildDiffPlugin = (baseline: string) =>
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      private pending: ReturnType<typeof setTimeout> | null = null;
       constructor(view: EditorView) {
         this.decorations = this.build(view);
       }
       update(u: ViewUpdate) {
-        // Diff decorations are computed over the whole document and do not
-        // depend on the current viewport. Recomputing on scroll is expensive
-        // for large documents and can block the UI.
-        if (u.docChanged) {
+        if (!u.docChanged) return;
+
+        // External value syncs (undo/redo, AI insertion, chapter switch)
+        // are single atomic replacements — compute immediately so the
+        // user sees the diff result without delay.
+        const isExternalSync = u.transactions.some((tr) =>
+          tr.annotation(externalValueSyncAnnotation)
+        );
+
+        // For small documents or external syncs, compute immediately.
+        if (u.state.doc.length < DIFF_IMMEDIATE_THRESHOLD || isExternalSync) {
+          this.cancelPending();
           this.decorations = this.build(u.view);
+          return;
         }
+
+        // For large documents during normal typing, remap existing
+        // decorations immediately so positions stay correct, then
+        // schedule a full diff rebuild after the user pauses typing.
+        this.decorations = this.decorations.map(u.changes);
+        this.scheduleBuild(u.view);
+      }
+      destroy() {
+        this.cancelPending();
+      }
+      private cancelPending() {
+        if (this.pending !== null) {
+          clearTimeout(this.pending);
+          this.pending = null;
+        }
+      }
+      private scheduleBuild(view: EditorView) {
+        this.cancelPending();
+        this.pending = setTimeout(() => {
+          this.pending = null;
+          this.decorations = this.build(view);
+          view.dispatch(); // trigger decoration update
+        }, DIFF_DEBOUNCE_MS);
       }
       build(view: EditorView): DecorationSet {
         const currentText = view.state.doc.toString();

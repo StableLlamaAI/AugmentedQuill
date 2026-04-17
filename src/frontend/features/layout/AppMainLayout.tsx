@@ -266,457 +266,454 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   );
 };
 
-export const AppMainLayout: React.FC<AppMainLayoutProps> = ({
-  sidebarControls,
-  editorControls,
-  chatControls,
-  instructionLanguages,
-}) => {
-  const { bgMain, isLight, currentTheme } = useTheme();
+export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
+  ({ sidebarControls, editorControls, chatControls, instructionLanguages }) => {
+    const { bgMain, isLight, currentTheme } = useTheme();
 
-  if (!sidebarControls || !editorControls || !chatControls) {
-    // Guard against missing layout control bundles which can occur during
-    // rehydration mismatch or when state is not yet initialized.
-    // This prevents crashes like "Cannot destructure property 'editorSettings' of 'editorControls' as it is undefined".
-    console.error('AppMainLayout missing required controls', {
-      sidebarControls,
-      editorControls,
-      chatControls,
-    });
-    return (
-      <div className="flex-1 flex items-center justify-center p-8 text-center text-brand-red-500">
-        <p className="text-lg font-semibold">Application failed to initialize.</p>
-        <p className="mt-2 text-sm text-brand-gray-400">
-          Please refresh the page or try again.
-        </p>
-      </div>
-    );
-  }
+    if (!sidebarControls || !editorControls || !chatControls) {
+      // Guard against missing layout control bundles which can occur during
+      // rehydration mismatch or when state is not yet initialized.
+      // This prevents crashes like "Cannot destructure property 'editorSettings' of 'editorControls' as it is undefined".
+      console.error('AppMainLayout missing required controls', {
+        sidebarControls,
+        editorControls,
+        chatControls,
+      });
+      return (
+        <div className="flex-1 flex items-center justify-center p-8 text-center text-brand-red-500">
+          <p className="text-lg font-semibold">Application failed to initialize.</p>
+          <p className="mt-2 text-sm text-brand-gray-400">
+            Please refresh the page or try again.
+          </p>
+        </div>
+      );
+    }
 
-  const {
-    isSidebarOpen,
-    setIsSidebarOpen,
-    story,
-    currentChapterId,
-    handleChapterSelect,
-    deleteChapter,
-    updateChapter,
-    updateBook,
-    addChapter,
-    handleBookCreate,
-    handleBookDelete,
-    handleReorderChapters,
-    handleReorderBooks,
-    handleSidebarAiAction,
-    isEditingAvailable,
-    handleOpenImages,
-    updateStoryMetadata,
-    checkedSourcebookIds,
-    onToggleSourcebook,
-    isAutoSourcebookSelectionEnabled,
-    onToggleAutoSourcebookSelection,
-    isSourcebookSelectionRunning,
-    onSourcebookMutated,
-    onAppUndo,
-    onAppRedo,
-    canAppUndo,
-    canAppRedo,
-    sourcebookDialogTrigger,
-    sourcebookDialogCloseTrigger,
-    metadataDialogTrigger,
-    metadataDialogCloseTrigger,
-  } = sidebarControls;
+    const {
+      isSidebarOpen,
+      setIsSidebarOpen,
+      story,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      onToggleSourcebook,
+      isAutoSourcebookSelectionEnabled,
+      onToggleAutoSourcebookSelection,
+      isSourcebookSelectionRunning,
+      onSourcebookMutated,
+      onAppUndo,
+      onAppRedo,
+      canAppUndo,
+      canAppRedo,
+      sourcebookDialogTrigger,
+      sourcebookDialogCloseTrigger,
+      metadataDialogTrigger,
+      metadataDialogCloseTrigger,
+    } = sidebarControls;
 
-  const { editorSettings, setEditorSettings } = editorControls;
-  const sidebarPrefs = editorSettings.sidebar || {};
-  const sidebarRef = useRef<HTMLDivElement>(null);
+    const { editorSettings, setEditorSettings } = editorControls;
+    const sidebarPrefs = editorSettings.sidebar || {};
+    const sidebarRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // If we don't have stored heights, initialize them based on available space and content
-    // We only do this once when totalHeight becomes available or story changes significantly
-    const totalHeight = sidebarRef.current?.clientHeight || 0;
-    if (
-      totalHeight > 0 &&
-      (!sidebarPrefs.storyHeight || !sidebarPrefs.chaptersHeight)
-    ) {
-      // Intelligence: Check content to decide priorities
-      const hasStorySummary = !!story.summary;
-      const chapterCount =
-        story.projectType === 'short-story' ? 0 : story.chapters.length;
+    useEffect(() => {
+      // If we don't have stored heights, initialize them based on available space and content
+      // We only do this once when totalHeight becomes available or story changes significantly
+      const totalHeight = sidebarRef.current?.clientHeight || 0;
+      if (
+        totalHeight > 0 &&
+        (!sidebarPrefs.storyHeight || !sidebarPrefs.chaptersHeight)
+      ) {
+        // Intelligence: Check content to decide priorities
+        const hasStorySummary = !!story.summary;
+        const chapterCount =
+          story.projectType === 'short-story' ? 0 : story.chapters.length;
 
-      // Base ratios
-      let storyRatio = story.projectType === 'short-story' ? 0.5 : 0.33;
-      let chaptersRatio = story.projectType === 'short-story' ? 0.15 : 0.33;
+        // Base ratios
+        let storyRatio = story.projectType === 'short-story' ? 0.5 : 0.33;
+        let chaptersRatio = story.projectType === 'short-story' ? 0.15 : 0.33;
 
-      if (chapterCount < 2) {
-        chaptersRatio = 0.2;
-        storyRatio = hasStorySummary ? 0.4 : 0.3;
-      } else if (chapterCount > 10) {
-        chaptersRatio = 0.5;
-        storyRatio = 0.25;
+        if (chapterCount < 2) {
+          chaptersRatio = 0.2;
+          storyRatio = hasStorySummary ? 0.4 : 0.3;
+        } else if (chapterCount > 10) {
+          chaptersRatio = 0.5;
+          storyRatio = 0.25;
+        }
+
+        const sHeight = Math.round(totalHeight * storyRatio);
+        const cHeight = Math.round(totalHeight * chaptersRatio);
+
+        setEditorSettings((prev) => ({
+          ...prev,
+          sidebar: {
+            ...prev.sidebar,
+            storyHeight: prev.sidebar?.storyHeight || sHeight,
+            chaptersHeight: prev.sidebar?.chaptersHeight || cHeight,
+          },
+        }));
       }
+    }, [
+      story.id,
+      setEditorSettings,
+      sidebarPrefs.storyHeight,
+      sidebarPrefs.chaptersHeight,
+    ]);
 
-      const sHeight = Math.round(totalHeight * storyRatio);
-      const cHeight = Math.round(totalHeight * chaptersRatio);
-
+    const toggleCollapsed = (key: keyof NonNullable<typeof editorSettings.sidebar>) => {
       setEditorSettings((prev) => ({
         ...prev,
         sidebar: {
           ...prev.sidebar,
-          storyHeight: prev.sidebar?.storyHeight || sHeight,
-          chaptersHeight: prev.sidebar?.chaptersHeight || cHeight,
+          [key]: !prev.sidebar?.[key],
         },
       }));
-    }
-  }, [
-    story.id,
-    setEditorSettings,
-    sidebarPrefs.storyHeight,
-    sidebarPrefs.chaptersHeight,
-  ]);
+    };
 
-  const toggleCollapsed = (key: keyof NonNullable<typeof editorSettings.sidebar>) => {
-    setEditorSettings((prev) => ({
-      ...prev,
-      sidebar: {
-        ...prev.sidebar,
-        [key]: !prev.sidebar?.[key],
-      },
-    }));
-  };
+    const updateHeight = (
+      key: keyof NonNullable<typeof editorSettings.sidebar>,
+      height: number
+    ) => {
+      setEditorSettings((prev) => ({
+        ...prev,
+        sidebar: {
+          ...prev.sidebar,
+          [key]: height,
+        },
+      }));
+    };
 
-  const updateHeight = (
-    key: keyof NonNullable<typeof editorSettings.sidebar>,
-    height: number
-  ) => {
-    setEditorSettings((prev) => ({
-      ...prev,
-      sidebar: {
-        ...prev.sidebar,
-        [key]: height,
-      },
-    }));
-  };
+    const {
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      viewMode,
+      suggestionControls,
+      aiControls,
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      onOpenSearch,
+    } = editorControls;
 
-  const {
-    currentChapter,
-    isChapterLoading,
-    editorRef,
-    viewMode,
-    suggestionControls,
-    aiControls,
-    setActiveFormats,
-    showWhitespace,
-    setShowWhitespace,
-    onOpenSearch,
-  } = editorControls;
+    const {
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessage,
+      handleStopChat,
+      handleRegenerate,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    } = chatControls;
 
-  const {
-    isChatOpen,
-    chatMessages,
-    isChatLoading,
-    activeChatConfig,
-    systemPrompt,
-    handleSendMessage,
-    handleStopChat,
-    handleRegenerate,
-    handleEditMessage,
-    handleDeleteMessage,
-    setSystemPrompt,
-    handleLoadProject,
-    incognitoSessions,
-    chatHistoryList,
-    currentChatId,
-    isIncognito,
-    handleSelectChat,
-    handleNewChat,
-    handleDeleteChat,
-    handleDeleteAllChats,
-    setIsIncognito,
-    allowWebSearch,
-    setAllowWebSearch,
-    scratchpad,
-    onUpdateScratchpad,
-    onDeleteScratchpad,
-    sessionMutations,
-    onMutationClick,
-  } = chatControls;
-
-  return (
-    <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
-      {isSidebarOpen && (
-        <button
-          className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-label="Close sidebar"
-        ></button>
-      )}
-      <nav
-        id="aq-sidebar"
-        role="navigation"
-        aria-label="Project sidebar"
-        ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } ${
-          isLight
-            ? 'bg-brand-gray-50 border-brand-gray-200'
-            : 'bg-brand-gray-900 border-brand-gray-800'
-        }`}
-      >
-        <CollapsibleSection
-          title="Story"
-          isCollapsed={!!sidebarPrefs.isStoryCollapsed}
-          onToggle={() => toggleCollapsed('isStoryCollapsed')}
-          height={sidebarPrefs.storyHeight}
-          onHeightChange={(h) => updateHeight('storyHeight', h)}
-          isLight={isLight}
+    return (
+      <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
+        {isSidebarOpen && (
+          <button
+            className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close sidebar"
+          ></button>
+        )}
+        <nav
+          id="aq-sidebar"
+          role="navigation"
+          aria-label="Project sidebar"
+          ref={sidebarRef}
+          className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } ${
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-200'
+              : 'bg-brand-gray-900 border-brand-gray-800'
+          }`}
         >
-          <StoryMetadata
-            title={story.title}
-            summary={story.summary}
-            tags={story.styleTags}
-            notes={story.notes}
-            private_notes={story.private_notes}
-            language={story.language}
-            conflicts={story.conflicts}
-            projectType={story.projectType}
-            baselineSummary={sidebarControls.baselineState?.summary}
-            baselineNotes={sidebarControls.baselineState?.notes}
-            baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
-            baselineConflicts={sidebarControls.baselineState?.conflicts}
-            onAiGenerateSummary={(
-              action,
-              onProgress,
-              currentText,
-              onThinking,
-              source
-            ) =>
-              handleSidebarAiAction(
-                'story',
-                story.id,
+          <CollapsibleSection
+            title="Story"
+            isCollapsed={!!sidebarPrefs.isStoryCollapsed}
+            onToggle={() => toggleCollapsed('isStoryCollapsed')}
+            height={sidebarPrefs.storyHeight}
+            onHeightChange={(h) => updateHeight('storyHeight', h)}
+            isLight={isLight}
+          >
+            <StoryMetadata
+              title={story.title}
+              summary={story.summary}
+              tags={story.styleTags}
+              notes={story.notes}
+              private_notes={story.private_notes}
+              language={story.language}
+              conflicts={story.conflicts}
+              projectType={story.projectType}
+              baselineSummary={sidebarControls.baselineState?.summary}
+              baselineNotes={sidebarControls.baselineState?.notes}
+              baselinePrivateNotes={sidebarControls.baselineState?.private_notes}
+              baselineConflicts={sidebarControls.baselineState?.conflicts}
+              onAiGenerateSummary={(
                 action,
                 onProgress,
                 currentText,
                 onThinking,
                 source
-              )
-            }
-            summaryAiDisabledReason={
-              !isEditingAvailable
-                ? 'Summary AI is unavailable because no working EDITING model is configured.'
-                : undefined
-            }
-            primarySourceAvailable={
-              story.projectType === 'short-story'
-                ? !!story.draft?.content?.trim()
-                : undefined
-            }
-            onUpdate={updateStoryMetadata}
-            metadataDialogTrigger={metadataDialogTrigger}
-            closeDialogTrigger={metadataDialogCloseTrigger}
-            initialTab={metadataDialogTrigger?.initialTab}
-            theme={currentTheme}
-            languages={instructionLanguages}
-            spellCheck={true}
-          />
-        </CollapsibleSection>
-
-        {story.projectType !== 'short-story' && (
-          <CollapsibleSection
-            title="Chapters"
-            isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
-            onToggle={() => toggleCollapsed('isChaptersCollapsed')}
-            height={sidebarPrefs.chaptersHeight}
-            onHeightChange={(h) => updateHeight('chaptersHeight', h)}
-            isLight={isLight}
-          >
-            <ChapterList
-              chapters={story.chapters}
-              books={story.books}
-              projectType={story.projectType}
-              currentChapterId={currentChapterId}
-              onSelect={handleChapterSelect}
-              onDelete={deleteChapter}
-              onUpdateChapter={updateChapter}
-              onUpdateBook={updateBook}
-              onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
-              onBookCreate={handleBookCreate}
-              onBookDelete={handleBookDelete}
-              onReorderChapters={handleReorderChapters}
-              onReorderBooks={handleReorderBooks}
-              onAiAction={handleSidebarAiAction}
-              isAiAvailable={isEditingAvailable}
+              ) =>
+                handleSidebarAiAction(
+                  'story',
+                  story.id,
+                  action,
+                  onProgress,
+                  currentText,
+                  onThinking,
+                  source
+                )
+              }
+              summaryAiDisabledReason={
+                !isEditingAvailable
+                  ? 'Summary AI is unavailable because no working EDITING model is configured.'
+                  : undefined
+              }
+              primarySourceAvailable={
+                story.projectType === 'short-story'
+                  ? !!story.draft?.content?.trim()
+                  : undefined
+              }
+              onUpdate={updateStoryMetadata}
+              metadataDialogTrigger={metadataDialogTrigger}
+              closeDialogTrigger={metadataDialogCloseTrigger}
+              initialTab={metadataDialogTrigger?.initialTab}
               theme={currentTheme}
-              onOpenImages={handleOpenImages}
               languages={instructionLanguages}
-              baselineChapters={sidebarControls.baselineState?.chapters}
-              language={story.language}
               spellCheck={true}
             />
           </CollapsibleSection>
-        )}
 
-        <CollapsibleSection
-          title="Sourcebook"
-          isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
-          onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
-          isLast
-          isLight={isLight}
-        >
-          <SourcebookList
-            theme={currentTheme}
-            language={story.language}
-            externalEntries={story.sourcebook || []}
-            checkedIds={checkedSourcebookIds || []}
-            onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
-            isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
-            onToggleAutoSelection={onToggleAutoSourcebookSelection}
-            isAutoSelectionRunning={isSourcebookSelectionRunning}
-            mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
-            onMutated={onSourcebookMutated}
-            onAppUndo={onAppUndo}
-            onAppRedo={onAppRedo}
-            canAppUndo={canAppUndo}
-            canAppRedo={canAppRedo}
-            sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
-            closeDialogTrigger={sourcebookDialogCloseTrigger}
-            baselineEntries={sidebarControls.baselineState?.sourcebook}
-          />
-        </CollapsibleSection>
-      </nav>
-      <section
-        id="aq-editor"
-        role="main"
-        aria-label="Story editor"
-        className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
-      >
-        <div className="flex-1 overflow-hidden h-full flex flex-col">
-          {isChapterLoading ? (
-            <div
-              className="flex-1 p-8 space-y-4 animate-pulse"
-              aria-busy="true"
-              aria-label="Loading chapter"
+          {story.projectType !== 'short-story' && (
+            <CollapsibleSection
+              title="Chapters"
+              isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
+              onToggle={() => toggleCollapsed('isChaptersCollapsed')}
+              height={sidebarPrefs.chaptersHeight}
+              onHeightChange={(h) => updateHeight('chaptersHeight', h)}
+              isLight={isLight}
             >
-              <div
-                className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              <ChapterList
+                chapters={story.chapters}
+                books={story.books}
+                projectType={story.projectType}
+                currentChapterId={currentChapterId}
+                onSelect={handleChapterSelect}
+                onDelete={deleteChapter}
+                onUpdateChapter={updateChapter}
+                onUpdateBook={updateBook}
+                onCreate={(bookId) => addChapter('New Chapter', '', bookId)}
+                onBookCreate={handleBookCreate}
+                onBookDelete={handleBookDelete}
+                onReorderChapters={handleReorderChapters}
+                onReorderBooks={handleReorderBooks}
+                onAiAction={handleSidebarAiAction}
+                isAiAvailable={isEditingAvailable}
+                theme={currentTheme}
+                onOpenImages={handleOpenImages}
+                languages={instructionLanguages}
+                baselineChapters={sidebarControls.baselineState?.chapters}
+                language={story.language}
+                spellCheck={true}
               />
-              <div
-                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-5/6 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-3/4 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div className="pt-2" />
-              <div
-                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-4/5 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-              <div
-                className={`h-3 w-2/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-              />
-            </div>
-          ) : currentChapter ? (
-            <Editor
-              ref={editorRef}
-              chapter={currentChapter}
-              settings={editorSettings}
-              language={editorControls.storyLanguage || 'en'}
-              viewMode={viewMode}
-              onChange={editorControls.updateChapter}
-              suggestionControls={{
-                continuations: suggestionControls.continuations,
-                isSuggesting: suggestionControls.isSuggesting,
-                onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
-                onCancelSuggestion: suggestionControls.handleCancelSuggestions,
-                onAcceptContinuation: suggestionControls.handleAcceptContinuation,
-                isSuggestionMode: suggestionControls.isSuggestionMode,
-                onKeyboardSuggestionAction:
-                  suggestionControls.handleKeyboardSuggestionAction,
-              }}
-              aiControls={{
-                onAiAction: aiControls.handleAiAction,
-                isAiLoading: aiControls.isAiActionLoading,
-                isProseStreaming: aiControls.isProseStreaming,
-                isWritingAvailable: aiControls.isWritingAvailable,
-                onCancelAiAction: aiControls.cancelAiAction,
-              }}
-              onContextChange={setActiveFormats}
-              showWhitespace={showWhitespace}
-              onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
-              baselineContent={editorControls.baselineContent}
-              spellCheck={true}
-              onOpenSearch={onOpenSearch}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
-              <img
-                src="/static/images/logo_512.png"
-                srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
-                sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
-                className="w-64 h-64 mb-8 opacity-20"
-                alt="AugmentedQuill Logo"
-                decoding="async"
-                loading="lazy"
-              />
-              <p className="text-lg font-medium">
-                Select or create a chapter to start writing.
-              </p>
-            </div>
+            </CollapsibleSection>
           )}
-        </div>
-      </section>
 
-      {isChatOpen && (
-        <aside
-          id="aq-chat"
-          aria-label="AI Chat Assistant"
-          className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
+          <CollapsibleSection
+            title="Sourcebook"
+            isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
+            onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
+            isLast
+            isLight={isLight}
+          >
+            <SourcebookList
+              theme={currentTheme}
+              language={story.language}
+              externalEntries={story.sourcebook || []}
+              checkedIds={checkedSourcebookIds || []}
+              onToggle={(id, checked) => onToggleSourcebook?.(id, checked)}
+              isAutoSelectionEnabled={isAutoSourcebookSelectionEnabled}
+              onToggleAutoSelection={onToggleAutoSourcebookSelection}
+              isAutoSelectionRunning={isSourcebookSelectionRunning}
+              mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
+              onMutated={onSourcebookMutated}
+              onAppUndo={onAppUndo}
+              onAppRedo={onAppRedo}
+              canAppUndo={canAppUndo}
+              canAppRedo={canAppRedo}
+              sourcebookDialogTrigger={sidebarControls.sourcebookDialogTrigger}
+              closeDialogTrigger={sourcebookDialogCloseTrigger}
+              baselineEntries={sidebarControls.baselineState?.sourcebook}
+            />
+          </CollapsibleSection>
+        </nav>
+        <section
+          id="aq-editor"
+          role="main"
+          aria-label="Story editor"
+          className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
         >
-          <Chat
-            messages={chatMessages}
-            isLoading={isChatLoading}
-            isModelAvailable={chatControls.isChatAvailable}
-            activeChatConfig={activeChatConfig}
-            systemPrompt={systemPrompt}
-            onSendMessage={handleSendMessage}
-            onStop={handleStopChat}
-            onRegenerate={handleRegenerate}
-            onEditMessage={handleEditMessage}
-            onDeleteMessage={handleDeleteMessage}
-            onUpdateSystemPrompt={setSystemPrompt}
-            onSwitchProject={handleLoadProject}
-            theme={currentTheme}
-            sessions={[...incognitoSessions, ...chatHistoryList]}
-            currentSessionId={currentChatId}
-            isIncognito={isIncognito}
-            onSelectSession={handleSelectChat}
-            onNewSession={handleNewChat}
-            onDeleteSession={handleDeleteChat}
-            onDeleteAllSessions={handleDeleteAllChats}
-            onToggleIncognito={setIsIncognito}
-            allowWebSearch={allowWebSearch}
-            onToggleWebSearch={setAllowWebSearch}
-            scratchpad={scratchpad}
-            onUpdateScratchpad={onUpdateScratchpad}
-            onDeleteScratchpad={onDeleteScratchpad}
-            sessionMutations={sessionMutations}
-            onMutationClick={onMutationClick}
-            storyLanguage={story.language}
-          />
-        </aside>
-      )}
-    </main>
-  );
-};
+          <div className="flex-1 overflow-hidden h-full flex flex-col">
+            {isChapterLoading ? (
+              <div
+                className="flex-1 p-8 space-y-4 animate-pulse"
+                aria-busy="true"
+                aria-label="Loading chapter"
+              >
+                <div
+                  className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-5/6 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-3/4 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div className="pt-2" />
+                <div
+                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-4/5 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+                <div
+                  className={`h-3 w-2/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+                />
+              </div>
+            ) : currentChapter ? (
+              <Editor
+                ref={editorRef}
+                chapter={currentChapter}
+                settings={editorSettings}
+                language={editorControls.storyLanguage || 'en'}
+                viewMode={viewMode}
+                onChange={editorControls.updateChapter}
+                suggestionControls={{
+                  continuations: suggestionControls.continuations,
+                  isSuggesting: suggestionControls.isSuggesting,
+                  onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
+                  onCancelSuggestion: suggestionControls.handleCancelSuggestions,
+                  onAcceptContinuation: suggestionControls.handleAcceptContinuation,
+                  isSuggestionMode: suggestionControls.isSuggestionMode,
+                  onKeyboardSuggestionAction:
+                    suggestionControls.handleKeyboardSuggestionAction,
+                }}
+                aiControls={{
+                  onAiAction: aiControls.handleAiAction,
+                  isAiLoading: aiControls.isAiActionLoading,
+                  isProseStreaming: aiControls.isProseStreaming,
+                  isWritingAvailable: aiControls.isWritingAvailable,
+                  onCancelAiAction: aiControls.cancelAiAction,
+                }}
+                onContextChange={setActiveFormats}
+                showWhitespace={showWhitespace}
+                onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
+                baselineContent={editorControls.baselineContent}
+                spellCheck={true}
+                onOpenSearch={onOpenSearch}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
+                <img
+                  src="/static/images/logo_512.png"
+                  srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
+                  sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
+                  className="w-64 h-64 mb-8 opacity-20"
+                  alt="AugmentedQuill Logo"
+                  decoding="async"
+                  loading="lazy"
+                />
+                <p className="text-lg font-medium">
+                  Select or create a chapter to start writing.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {isChatOpen && (
+          <aside
+            id="aq-chat"
+            aria-label="AI Chat Assistant"
+            className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
+          >
+            <Chat
+              messages={chatMessages}
+              isLoading={isChatLoading}
+              isModelAvailable={chatControls.isChatAvailable}
+              activeChatConfig={activeChatConfig}
+              systemPrompt={systemPrompt}
+              onSendMessage={handleSendMessage}
+              onStop={handleStopChat}
+              onRegenerate={handleRegenerate}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+              onUpdateSystemPrompt={setSystemPrompt}
+              onSwitchProject={handleLoadProject}
+              theme={currentTheme}
+              sessions={[...incognitoSessions, ...chatHistoryList]}
+              currentSessionId={currentChatId}
+              isIncognito={isIncognito}
+              onSelectSession={handleSelectChat}
+              onNewSession={handleNewChat}
+              onDeleteSession={handleDeleteChat}
+              onDeleteAllSessions={handleDeleteAllChats}
+              onToggleIncognito={setIsIncognito}
+              allowWebSearch={allowWebSearch}
+              onToggleWebSearch={setAllowWebSearch}
+              scratchpad={scratchpad}
+              onUpdateScratchpad={onUpdateScratchpad}
+              onDeleteScratchpad={onDeleteScratchpad}
+              sessionMutations={sessionMutations}
+              onMutationClick={onMutationClick}
+              storyLanguage={story.language}
+            />
+          </aside>
+        )}
+      </main>
+    );
+  }
+);

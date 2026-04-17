@@ -169,13 +169,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     const el = textareaRef.current;
     el.style.height = 'auto';
 
-    // Keep the input box responsive and bounded for right-pane layout.
+    // Single read of scrollHeight to avoid layout thrashing.
     const maxHeight = 280;
-    const nextHeight = Math.min(el.scrollHeight, maxHeight);
-    el.style.height = `${nextHeight}px`;
-
-    // If we hit max height, keep vertical scrolling inside textarea.
-    el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    const sh = el.scrollHeight;
+    el.style.height = `${Math.min(sh, maxHeight)}px`;
+    el.style.overflowY = sh > maxHeight ? 'auto' : 'hidden';
   }, [textareaRef]);
 
   const submitCurrentInput = useCallback(() => {
@@ -189,9 +187,6 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      if (textareaRef.current.scrollHeight) {
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-      }
       textareaRef.current.style.overflowY = 'hidden';
     }
   }, [input, attachments, isDisabled, onSubmit, onAttachmentsChange, textareaRef]);

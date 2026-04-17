@@ -124,12 +124,22 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
       return;
     }
     // Defer expensive markdown parsing off the synchronous render path.
-    const id = setTimeout(() => {
+    // Use requestIdleCallback where available so parsing runs when the
+    // browser is idle, avoiding long-task violations during streaming.
+    const scheduleWork =
+      typeof requestIdleCallback === 'function'
+        ? (cb: () => void) => requestIdleCallback(cb)
+        : (cb: () => void) => setTimeout(cb, 0);
+    const cancelWork =
+      typeof cancelIdleCallback === 'function'
+        ? (id: number) => cancelIdleCallback(id)
+        : (id: number) => clearTimeout(id);
+    const id = scheduleWork(() => {
       const html = parseAndSanitize(safeContent);
       htmlCache.set(safeContent, html);
       setAsyncHtml(html);
-    }, 0);
-    return () => clearTimeout(id);
+    });
+    return () => cancelWork(id as number);
   }, [safeContent, simple, hasDiff]);
 
   const cleanHtml = hasDiff ? (diffHtml ?? '') : asyncHtml;

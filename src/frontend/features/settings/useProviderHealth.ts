@@ -304,10 +304,15 @@ export function useProviderHealth(appSettings: AppSettings) {
       });
     };
 
-    checkProviders();
+    // Debounce so rapid provider changes (e.g. typing in settings) don't
+    // fire many network requests simultaneously.
+    const timer = setTimeout(() => {
+      checkProviders();
+    }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     appSettings.providers,

@@ -116,249 +116,241 @@ export interface EditorHandle {
   jumpToPosition: (start: number, end: number) => void;
 }
 
-export const Editor = React.forwardRef<EditorHandle, EditorProps>(
-  (
-    {
-      chapter,
-      settings,
-      viewMode,
-      showWhitespace,
-      onToggleShowWhitespace,
-      onChange,
-      baselineContent = undefined,
-      suggestionControls,
-      aiControls,
-      language,
-      spellCheck,
-      onContextChange,
-      onOpenSearch,
-    },
-    ref
-  ) => {
-    // CodeMirror EditorView — persists across all view modes
-    const editorViewRef = useRef<EditorView | null>(null);
-    const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const paperDivRef = useRef<HTMLDivElement>(null);
-    const showInlineTitle = true;
-    const conflictCount = chapter.conflicts?.length ?? 0;
-    const isAtBottomRef = useRef<boolean>(true);
-    const isDetachedFromBottomRef = useRef<boolean>(false);
-    const distanceFromBottomRef = useRef<number>(0);
-    const prevScrollTopRef = useRef<number>(0);
-    const autoScrollRafRef = useRef<number | null>(null);
-    const autoScrollSettleRafRef = useRef<number | null>(null);
-    const { getRanges } = useSearchHighlight();
-    const chapterSearchHighlightRanges = getRanges(
-      'chapter_content',
-      String(chapter.id),
-      'content'
-    );
-    // Debounce timers for API-level persistence so every keystroke does not
-    // trigger a network request.  Display updates remain synchronous.
-    const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const DEBOUNCE_MS = 300;
+export const Editor = React.memo(
+  React.forwardRef<EditorHandle, EditorProps>(
+    (
+      {
+        chapter,
+        settings,
+        viewMode,
+        showWhitespace,
+        onToggleShowWhitespace,
+        onChange,
+        baselineContent = undefined,
+        suggestionControls,
+        aiControls,
+        language,
+        spellCheck,
+        onContextChange,
+        onOpenSearch,
+      },
+      ref
+    ) => {
+      // CodeMirror EditorView — persists across all view modes
+      const editorViewRef = useRef<EditorView | null>(null);
+      const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
+      const scrollContainerRef = useRef<HTMLDivElement>(null);
+      const paperDivRef = useRef<HTMLDivElement>(null);
+      const showInlineTitle = true;
+      const conflictCount = chapter.conflicts?.length ?? 0;
+      const isAtBottomRef = useRef<boolean>(true);
+      const isDetachedFromBottomRef = useRef<boolean>(false);
+      const distanceFromBottomRef = useRef<number>(0);
+      const prevScrollTopRef = useRef<number>(0);
+      const autoScrollRafRef = useRef<number | null>(null);
+      const autoScrollSettleRafRef = useRef<number | null>(null);
+      const { getRanges } = useSearchHighlight();
+      const chapterSearchHighlightRanges = getRanges(
+        'chapter_content',
+        String(chapter.id),
+        'content'
+      );
+      // Debounce timers for API-level persistence so every keystroke does not
+      // trigger a network request.  Display updates remain synchronous.
+      const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const contextDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const DEBOUNCE_MS = 300;
+      const CONTEXT_DEBOUNCE_MS = 150;
 
-    // Local content/title state so the editor div always gets the latest
-    // typed value immediately, while the parent onChange (API call) is debounced.
-    const [localContent, setLocalContent] = useState(chapter.content);
-    const [localTitle, setLocalTitle] = useState(chapter.title);
+      // Local content/title state so the editor div always gets the latest
+      // typed value immediately, while the parent onChange (API call) is debounced.
+      const [localContent, setLocalContent] = useState(chapter.content);
+      const [localTitle, setLocalTitle] = useState(chapter.title);
 
-    // Track the diff baseline locally so we can clear it immediately when the
-    // user types — preventing newly typed text from appearing as diff insertions.
-    // Re-adopt the prop whenever a new non-undefined baseline arrives (AI write).
-    const [localBaseline, setLocalBaseline] = useState<string | undefined>(
-      baselineContent
-    );
-    const prevBaselineRef = useRef<string | undefined>(baselineContent);
-    // Keep the last non-undefined baseline so undo can restore the diff view.
-    const savedBaselineRef = useRef<string | undefined>(baselineContent);
-    if (baselineContent !== prevBaselineRef.current) {
-      prevBaselineRef.current = baselineContent;
-      setLocalBaseline(baselineContent);
-      // Only preserve as the real AI baseline when baselineContent differs from
-      // chapter.content. When isUserEdit=true, pushState sets baselineContent
-      // equal to chapter.content (no diff), so we must not overwrite the saved
-      // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
-      // that wrong baseline instead of the original AI-written baseline.
-      if (baselineContent !== undefined && baselineContent !== chapter.content) {
-        savedBaselineRef.current = baselineContent;
+      // Track the diff baseline locally so we can clear it immediately when the
+      // user types — preventing newly typed text from appearing as diff insertions.
+      // Re-adopt the prop whenever a new non-undefined baseline arrives (AI write).
+      const [localBaseline, setLocalBaseline] = useState<string | undefined>(
+        baselineContent
+      );
+      const prevBaselineRef = useRef<string | undefined>(baselineContent);
+      // Keep the last non-undefined baseline so undo can restore the diff view.
+      const savedBaselineRef = useRef<string | undefined>(baselineContent);
+      if (baselineContent !== prevBaselineRef.current) {
+        prevBaselineRef.current = baselineContent;
+        setLocalBaseline(baselineContent);
+        // Only preserve as the real AI baseline when baselineContent differs from
+        // chapter.content. When isUserEdit=true, pushState sets baselineContent
+        // equal to chapter.content (no diff), so we must not overwrite the saved
+        // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+        // that wrong baseline instead of the original AI-written baseline.
+        if (baselineContent !== undefined && baselineContent !== chapter.content) {
+          savedBaselineRef.current = baselineContent;
+        }
       }
-    }
 
-    const proseStreamingActive = aiControls.isProseStreaming ?? false;
+      const proseStreamingActive = aiControls.isProseStreaming ?? false;
 
-    // Keep local state in sync when the chapter changes externally (chapter
-    // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
-    // for chapter switches; also watch chapter.content so AI insertions and
-    // undo/redo (which can change content without changing id) are reflected.
-    const lastChapterIdRef = useRef(chapter.id);
-    useEffect(() => {
-      const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
-      lastChapterIdRef.current = chapter.id;
+      // Keep local state in sync when the chapter changes externally (chapter
+      // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
+      // for chapter switches; also watch chapter.content so AI insertions and
+      // undo/redo (which can change content without changing id) are reflected.
+      const lastChapterIdRef = useRef(chapter.id);
+      useEffect(() => {
+        const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
+        lastChapterIdRef.current = chapter.id;
 
-      // On chapter switch always reset.  For in-place content changes (AI,
-      // undo/redo) only sync when the editor is not focused — when it IS
-      // focused CodeMirror already has the correct document state.
-      const editorFocused = editorViewRef.current?.hasFocus ?? false;
-      const shouldDeferStreamingSync =
-        proseStreamingActive &&
-        isDetachedFromBottomRef.current &&
-        distanceFromBottomRef.current > 120 &&
-        !isChapterSwitch;
+        // On chapter switch always reset.  For in-place content changes (AI,
+        // undo/redo) only sync when the editor is not focused — when it IS
+        // focused CodeMirror already has the correct document state.
+        const editorFocused = editorViewRef.current?.hasFocus ?? false;
+        const shouldDeferStreamingSync =
+          proseStreamingActive &&
+          isDetachedFromBottomRef.current &&
+          distanceFromBottomRef.current > 120 &&
+          !isChapterSwitch;
 
-      // Always update local content when streaming so AI changes flow in
-      // even while the editor is focused.
-      if (
-        isChapterSwitch ||
-        proseStreamingActive ||
-        (!editorFocused && !shouldDeferStreamingSync)
-      ) {
-        setLocalContent(chapter.content);
-      }
-    }, [chapter.id, chapter.content, proseStreamingActive]);
+        // Always update local content when streaming so AI changes flow in
+        // even while the editor is focused.
+        if (
+          isChapterSwitch ||
+          proseStreamingActive ||
+          (!editorFocused && !shouldDeferStreamingSync)
+        ) {
+          setLocalContent(chapter.content);
+        }
+      }, [chapter.id, chapter.content, proseStreamingActive]);
 
-    useEffect(() => {
-      setLocalTitle(chapter.title);
-    }, [chapter.id, chapter.title]);
+      useEffect(() => {
+        setLocalTitle(chapter.title);
+      }, [chapter.id, chapter.title]);
 
-    const {
-      continuations,
-      isSuggesting,
-      onTriggerSuggestions,
-      onAcceptContinuation,
-      isSuggestionMode,
-      onKeyboardSuggestionAction,
-    } = suggestionControls;
-    const {
-      onAiAction,
-      isAiLoading,
-      isWritingAvailable = true,
-      onCancelAiAction,
-      isProseStreaming = false,
-    } = aiControls;
+      const {
+        continuations,
+        isSuggesting,
+        onTriggerSuggestions,
+        onAcceptContinuation,
+        isSuggestionMode,
+        onKeyboardSuggestionAction,
+      } = suggestionControls;
+      const {
+        onAiAction,
+        isAiLoading,
+        isWritingAvailable = true,
+        onCancelAiAction,
+        isProseStreaming = false,
+      } = aiControls;
 
-    // Keep a stable ref to isProseStreaming so handleScroll (which has [] deps
-    // and cannot close over changing props) can read the current value.
-    // Assigning to a ref during render is safe — it is the canonical
-    // "useLatest" pattern recommended by the React team.
-    const isProseStreamingRef = useRef(isProseStreaming);
-    isProseStreamingRef.current = isProseStreaming;
-    // ── Scroll management ─────────────────────────────────────────────────────
-    //
-    // Design goals:
-    //   1. At bottom → auto-scroll to follow new content.
-    //   2. Not at bottom → never programmatically move the user's viewport.
-    //   3. No synthetic min-height locks (they create temporary blank space).
-    //
-    // While prose streams and the user is NOT at bottom, we freeze editor text
-    // syncing (see localContent sync effect above). This keeps scroll geometry
-    // stable and avoids jump-to-top/clamp artifacts.
+      // Keep a stable ref to isProseStreaming so handleScroll (which has [] deps
+      // and cannot close over changing props) can read the current value.
+      // Assigning to a ref during render is safe — it is the canonical
+      // "useLatest" pattern recommended by the React team.
+      const isProseStreamingRef = useRef(isProseStreaming);
+      isProseStreamingRef.current = isProseStreaming;
+      // ── Scroll management ─────────────────────────────────────────────────────
+      //
+      // Design goals:
+      //   1. At bottom → auto-scroll to follow new content.
+      //   2. Not at bottom → never programmatically move the user's viewport.
+      //   3. No synthetic min-height locks (they create temporary blank space).
+      //
+      // While prose streams and the user is NOT at bottom, we freeze editor text
+      // syncing (see localContent sync effect above). This keeps scroll geometry
+      // stable and avoids jump-to-top/clamp artifacts.
 
-    const handleScroll = useCallback(() => {
-      if (!scrollContainerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      const scrollDelta = scrollTop - prevScrollTopRef.current;
-      prevScrollTopRef.current = scrollTop;
-      distanceFromBottomRef.current = distanceFromBottom;
-      const atBottom = distanceFromBottom < 24;
-      isAtBottomRef.current = atBottom;
+      const scrollRafRef = useRef<number | null>(null);
 
-      // Hysteresis prevents accidental detachment caused by tiny geometry
-      // fluctuations while streaming. Only a clear manual scroll-away should
-      // pause live content sync.
-      if (atBottom) {
-        isDetachedFromBottomRef.current = false;
-      } else if (scrollDelta < -2 && distanceFromBottom > 96) {
-        isDetachedFromBottomRef.current = true;
-      } else if (scrollDelta > 2 && distanceFromBottom < 240) {
-        // Reattach early when user scrolls back down near the end so
-        // streaming resumes before reaching exact bottom.
-        isDetachedFromBottomRef.current = false;
-      }
-    }, []);
+      const handleScroll = useCallback(() => {
+        if (scrollRafRef.current !== null) return;
+        scrollRafRef.current = requestAnimationFrame(() => {
+          scrollRafRef.current = null;
+          if (!scrollContainerRef.current) return;
+          const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+          const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+          const scrollDelta = scrollTop - prevScrollTopRef.current;
+          prevScrollTopRef.current = scrollTop;
+          distanceFromBottomRef.current = distanceFromBottom;
+          const atBottom = distanceFromBottom < 24;
+          isAtBottomRef.current = atBottom;
 
-    // Follow stream at bottom only.
-    useLayoutEffect(() => {
-      // Only auto-scroll during streaming — not on every user keystroke.
-      if (!isProseStreamingRef.current) return;
-
-      const container = scrollContainerRef.current;
-      if (!container) return;
-
-      if (isDetachedFromBottomRef.current) return; // user intentionally scrolled away
-
-      // At bottom: follow new content, but coalesce writes to one per frame.
-      if (autoScrollRafRef.current === null) {
-        autoScrollRafRef.current = window.requestAnimationFrame(() => {
-          autoScrollRafRef.current = null;
-          const activeContainer = scrollContainerRef.current;
-          if (!activeContainer || isDetachedFromBottomRef.current) return;
-
-          const pinToBottom = () => {
-            const maxScrollTop = Math.max(
-              0,
-              activeContainer.scrollHeight - activeContainer.clientHeight
-            );
-            if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
-              activeContainer.scrollTop = maxScrollTop;
-            }
-          };
-
-          pinToBottom();
-
-          // Paragraph boundaries can change final line-wrapping/height one
-          // frame later; repin once more to avoid visible down/up jitter.
-          if (autoScrollSettleRafRef.current !== null) {
-            window.cancelAnimationFrame(autoScrollSettleRafRef.current);
+          // Hysteresis prevents accidental detachment caused by tiny geometry
+          // fluctuations while streaming. Only a clear manual scroll-away should
+          // pause live content sync.
+          if (atBottom) {
+            isDetachedFromBottomRef.current = false;
+          } else if (scrollDelta < -2 && distanceFromBottom > 96) {
+            isDetachedFromBottomRef.current = true;
+          } else if (scrollDelta > 2 && distanceFromBottom < 240) {
+            // Reattach early when user scrolls back down near the end so
+            // streaming resumes before reaching exact bottom.
+            isDetachedFromBottomRef.current = false;
           }
-          autoScrollSettleRafRef.current = window.requestAnimationFrame(() => {
-            autoScrollSettleRafRef.current = null;
-            const settledContainer = scrollContainerRef.current;
-            if (!settledContainer || isDetachedFromBottomRef.current) return;
-            const maxScrollTop = Math.max(
-              0,
-              settledContainer.scrollHeight - settledContainer.clientHeight
-            );
-            if (Math.abs(maxScrollTop - settledContainer.scrollTop) > 1) {
-              settledContainer.scrollTop = maxScrollTop;
-            }
-            distanceFromBottomRef.current =
-              settledContainer.scrollHeight -
-              settledContainer.scrollTop -
-              settledContainer.clientHeight;
-            prevScrollTopRef.current = settledContainer.scrollTop;
-          });
-
-          isAtBottomRef.current = true;
-          isDetachedFromBottomRef.current = false;
         });
-      }
-    }, [localContent]);
+      }, []);
 
-    // Chapter switch: reset scroll so the new chapter starts at the top.
-    useLayoutEffect(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      if (autoScrollRafRef.current !== null) {
-        window.cancelAnimationFrame(autoScrollRafRef.current);
-        autoScrollRafRef.current = null;
-      }
-      if (autoScrollSettleRafRef.current !== null) {
-        window.cancelAnimationFrame(autoScrollSettleRafRef.current);
-        autoScrollSettleRafRef.current = null;
-      }
-      container.scrollTop = 0;
-      isAtBottomRef.current = true;
-      isDetachedFromBottomRef.current = false;
-      prevScrollTopRef.current = 0;
-      distanceFromBottomRef.current = 0;
-    }, [chapter.id]);
+      // Follow stream at bottom only.
+      useLayoutEffect(() => {
+        // Only auto-scroll during streaming — not on every user keystroke.
+        if (!isProseStreamingRef.current) return;
 
-    useEffect(() => {
-      return () => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        if (isDetachedFromBottomRef.current) return; // user intentionally scrolled away
+
+        // At bottom: follow new content, but coalesce writes to one per frame.
+        if (autoScrollRafRef.current === null) {
+          autoScrollRafRef.current = window.requestAnimationFrame(() => {
+            autoScrollRafRef.current = null;
+            const activeContainer = scrollContainerRef.current;
+            if (!activeContainer || isDetachedFromBottomRef.current) return;
+
+            const pinToBottom = () => {
+              const maxScrollTop = Math.max(
+                0,
+                activeContainer.scrollHeight - activeContainer.clientHeight
+              );
+              if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
+                activeContainer.scrollTop = maxScrollTop;
+              }
+            };
+
+            pinToBottom();
+
+            // Paragraph boundaries can change final line-wrapping/height one
+            // frame later; repin once more to avoid visible down/up jitter.
+            if (autoScrollSettleRafRef.current !== null) {
+              window.cancelAnimationFrame(autoScrollSettleRafRef.current);
+            }
+            autoScrollSettleRafRef.current = window.requestAnimationFrame(() => {
+              autoScrollSettleRafRef.current = null;
+              const settledContainer = scrollContainerRef.current;
+              if (!settledContainer || isDetachedFromBottomRef.current) return;
+              const maxScrollTop = Math.max(
+                0,
+                settledContainer.scrollHeight - settledContainer.clientHeight
+              );
+              if (Math.abs(maxScrollTop - settledContainer.scrollTop) > 1) {
+                settledContainer.scrollTop = maxScrollTop;
+              }
+              distanceFromBottomRef.current =
+                settledContainer.scrollHeight -
+                settledContainer.scrollTop -
+                settledContainer.clientHeight;
+              prevScrollTopRef.current = settledContainer.scrollTop;
+            });
+
+            isAtBottomRef.current = true;
+            isDetachedFromBottomRef.current = false;
+          });
+        }
+      }, [localContent]);
+
+      // Chapter switch: reset scroll so the new chapter starts at the top.
+      useLayoutEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
         if (autoScrollRafRef.current !== null) {
           window.cancelAnimationFrame(autoScrollRafRef.current);
           autoScrollRafRef.current = null;
@@ -367,799 +359,864 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           window.cancelAnimationFrame(autoScrollSettleRafRef.current);
           autoScrollSettleRafRef.current = null;
         }
+        container.scrollTop = 0;
+        isAtBottomRef.current = true;
+        isDetachedFromBottomRef.current = false;
+        prevScrollTopRef.current = 0;
+        distanceFromBottomRef.current = 0;
+      }, [chapter.id]);
+
+      useEffect(() => {
+        return () => {
+          if (autoScrollRafRef.current !== null) {
+            window.cancelAnimationFrame(autoScrollRafRef.current);
+            autoScrollRafRef.current = null;
+          }
+          if (autoScrollSettleRafRef.current !== null) {
+            window.cancelAnimationFrame(autoScrollSettleRafRef.current);
+            autoScrollSettleRafRef.current = null;
+          }
+          if (scrollRafRef.current !== null) {
+            cancelAnimationFrame(scrollRafRef.current);
+            scrollRafRef.current = null;
+          }
+        };
+      }, []);
+
+      // ──────────────────────────────────────────────────────────────────────────
+
+      const writingUnavailableReason =
+        'This action is unavailable because no working WRITING model is configured.';
+
+      const handleSuggestionButtonClick = () => {
+        if (isSuggesting || isAiLoading) {
+          if (isSuggesting) {
+            suggestionControls.onCancelSuggestion?.();
+          } else if (isAiLoading) {
+            onCancelAiAction?.();
+          }
+          return;
+        }
+        const cursor = getEditorCaretOffset() ?? localContent.length;
+        onTriggerSuggestions(cursor, localContent);
       };
-    }, []);
 
-    // ──────────────────────────────────────────────────────────────────────────
+      const [isDragging, setIsDragging] = useState(false);
 
-    const writingUnavailableReason =
-      'This action is unavailable because no working WRITING model is configured.';
-
-    const handleSuggestionButtonClick = () => {
-      if (isSuggesting || isAiLoading) {
-        if (isSuggesting) {
-          suggestionControls.onCancelSuggestion?.();
-        } else if (isAiLoading) {
-          onCancelAiAction?.();
+      const handleImageUpload = async (file: File) => {
+        try {
+          const res = await api.projects.uploadImage(file);
+          if (res.ok) {
+            insertImageMarkdown(res.filename, res.url);
+          }
+        } catch (e) {
+          notifyError('Failed to upload image', e);
         }
-        return;
-      }
-      const cursor = getEditorCaretOffset() ?? localContent.length;
-      onTriggerSuggestions(cursor, localContent);
-    };
+      };
 
-    const [isDragging, setIsDragging] = useState(false);
-
-    const handleImageUpload = async (file: File) => {
-      try {
-        const res = await api.projects.uploadImage(file);
-        if (res.ok) {
-          insertImageMarkdown(res.filename, res.url);
+      const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
+        const alt = altText || filename;
+        if (!isSafeImageUrl(url)) return;
+        const md = `![${alt}](${url})`;
+        const view = editorViewRef.current;
+        if (view) {
+          const { from, to } = view.state.selection.main;
+          view.dispatch({
+            changes: { from, to, insert: md },
+            selection: { anchor: from + md.length },
+          });
+          view.focus();
+        } else {
+          onChange(chapter.id, { content: chapter.content + '\n' + md });
         }
-      } catch (e) {
-        notifyError('Failed to upload image', e);
-      }
-    };
+      };
 
-    const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
-      const alt = altText || filename;
-      if (!isSafeImageUrl(url)) return;
-      const md = `![${alt}](${url})`;
-      const view = editorViewRef.current;
-      if (view) {
-        const { from, to } = view.state.selection.main;
+      const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+      };
+
+      const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+      };
+
+      const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          if (file.type.startsWith('image/')) {
+            await handleImageUpload(file);
+          }
+        }
+      };
+
+      // Update active formatting state for toolbar affordances.
+      // Debounced to avoid expensive format detection on every keystroke.
+      const scheduleCheckContext = () => {
+        if (contextDebounceRef.current) clearTimeout(contextDebounceRef.current);
+        contextDebounceRef.current = setTimeout(checkContext, CONTEXT_DEBOUNCE_MS);
+      };
+
+      const checkContext = () => {
+        if (!onContextChange) return;
+
+        const formats: string[] = [];
+
+        const view = editorViewRef.current;
+        if (view) {
+          const { anchor, head } = view.state.selection.main;
+          const rawCaret = head;
+          const rawStart = Math.min(anchor, head);
+          const rawEnd = Math.max(anchor, head);
+
+          // Extract a small window around the cursor instead of converting the
+          // entire document to a string.  Format markers are always adjacent to
+          // the selection so 200 chars of context is more than sufficient.
+          const WINDOW = 200;
+          const winStart = Math.max(0, rawStart - WINDOW);
+          const winEnd = Math.min(view.state.doc.length, rawEnd + WINDOW);
+          const localText = view.state.doc.sliceString(winStart, winEnd);
+          const localCaret = rawCaret - winStart;
+          const localStart = rawStart - winStart;
+          const localEnd = rawEnd - winStart;
+
+          const line = getLineAtOffset(localText, localCaret);
+          const blockType = getBlockType(line);
+          if (blockType) formats.push(blockType);
+
+          if (isInlineFormatActiveAtSelection(localText, localStart, localEnd, 'bold'))
+            formats.push('bold');
+          if (
+            isInlineFormatActiveAtSelection(localText, localStart, localEnd, 'italic')
+          )
+            formats.push('italic');
+          if (
+            isInlineFormatActiveAtSelection(
+              localText,
+              localStart,
+              localEnd,
+              'strikethrough'
+            )
+          )
+            formats.push('strikethrough');
+          if (
+            isInlineFormatActiveAtSelection(
+              localText,
+              localStart,
+              localEnd,
+              'subscript'
+            )
+          )
+            formats.push('subscript');
+          if (
+            isInlineFormatActiveAtSelection(
+              localText,
+              localStart,
+              localEnd,
+              'superscript'
+            )
+          )
+            formats.push('superscript');
+
+          lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
+        }
+        onContextChange(formats);
+      };
+
+      const toggleBlockAtCaret = (type: MarkdownBlockType) => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        const rawText = view.state.doc.toString();
+        const rawCaret = view.state.selection.main.head;
+        const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
+          rawText,
+          rawCaret,
+          type
+        );
         view.dispatch({
-          changes: { from, to, insert: md },
-          selection: { anchor: from + md.length },
+          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+          selection: { anchor: nextRawCaret },
         });
         view.focus();
-      } else {
-        onChange(chapter.id, { content: chapter.content + '\n' + md });
-      }
-    };
+      };
 
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(true);
-    };
+      const getEditorCaretOffset = useCallback((): number | null => {
+        return editorViewRef.current?.state.selection.main.head ?? null;
+      }, []);
 
-    const handleDragLeave = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-    };
+      const isEditorFocused = useCallback(() => {
+        return editorViewRef.current?.hasFocus ?? false;
+      }, []);
 
-    const handleDrop = async (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        if (file.type.startsWith('image/')) {
-          await handleImageUpload(file);
-        }
-      }
-    };
+      const maybeHandleSuggestionHotkey = useCallback(
+        (e: KeyboardEvent | React.KeyboardEvent) => {
+          const key = 'key' in e ? e.key : '';
+          const ctrlKey = 'ctrlKey' in e ? e.ctrlKey : false;
+          const metaKey = 'metaKey' in e ? e.metaKey : false;
 
-    // Update active formatting state for toolbar affordances.
-    const checkContext = () => {
-      if (!onContextChange) return;
+          const suggestionActive =
+            isSuggestionMode || continuations.length > 0 || isSuggesting;
 
-      const formats: string[] = [];
+          const editingFocus = isEditorFocused();
+          const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
+            key
+          );
 
-      const view = editorViewRef.current;
-      if (view) {
-        const rawText = view.state.doc.toString();
-        const { anchor, head } = view.state.selection.main;
-        const rawCaret = head;
-        const rawStart = Math.min(anchor, head);
-        const rawEnd = Math.max(anchor, head);
+          if (isArrow && editingFocus) {
+            return false;
+          }
 
-        const line = getLineAtOffset(rawText, rawCaret);
-        const blockType = getBlockType(line);
-        if (blockType) formats.push(blockType);
+          // Trigger: Ctrl+Enter / Cmd+Enter
+          if (key === 'Enter' && (ctrlKey || metaKey)) {
+            const cursor = getEditorCaretOffset() ?? chapter.content.length;
+            e.preventDefault();
+            // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('trigger', cursor, localContent);
+            return true;
+          }
 
-        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold'))
-          formats.push('bold');
-        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
-          formats.push('italic');
-        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'strikethrough'))
-          formats.push('strikethrough');
-        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'subscript'))
-          formats.push('subscript');
-        if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'superscript'))
-          formats.push('superscript');
+          if (!suggestionActive) return false;
 
-        lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
-      }
-      onContextChange(formats);
-    };
-
-    const toggleBlockAtCaret = (type: MarkdownBlockType) => {
-      const view = editorViewRef.current;
-      if (!view) return;
-      const rawText = view.state.doc.toString();
-      const rawCaret = view.state.selection.main.head;
-      const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
-        rawText,
-        rawCaret,
-        type
-      );
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-        selection: { anchor: nextRawCaret },
-      });
-      view.focus();
-    };
-
-    const getEditorCaretOffset = useCallback((): number | null => {
-      return editorViewRef.current?.state.selection.main.head ?? null;
-    }, []);
-
-    const isEditorFocused = useCallback(() => {
-      return editorViewRef.current?.hasFocus ?? false;
-    }, []);
-
-    const maybeHandleSuggestionHotkey = useCallback(
-      (e: KeyboardEvent | React.KeyboardEvent) => {
-        const key = 'key' in e ? e.key : '';
-        const ctrlKey = 'ctrlKey' in e ? e.ctrlKey : false;
-        const metaKey = 'metaKey' in e ? e.metaKey : false;
-
-        const suggestionActive =
-          isSuggestionMode || continuations.length > 0 || isSuggesting;
-
-        const editingFocus = isEditorFocused();
-        const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
-          key
-        );
-
-        if (isArrow && editingFocus) {
-          return false;
-        }
-
-        // Trigger: Ctrl+Enter / Cmd+Enter
-        if (key === 'Enter' && (ctrlKey || metaKey)) {
-          const cursor = getEditorCaretOffset() ?? chapter.content.length;
-          e.preventDefault();
-          // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('trigger', cursor, localContent);
-          return true;
-        }
-
-        if (!suggestionActive) return false;
-
-        if (key === 'ArrowLeft') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowRight') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowDown') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          const cursor = getEditorCaretOffset() ?? localContent.length;
-          onKeyboardSuggestionAction('regenerate', cursor, localContent);
-          return true;
-        }
-        if (key === 'ArrowUp') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('undo');
-          return true;
-        }
-        if (key === 'Escape') {
-          if (suggestionActive) {
+          if (key === 'ArrowLeft') {
             e.preventDefault();
             // @ts-ignore
             e.stopPropagation?.();
-            onKeyboardSuggestionAction('exit', undefined, localContent);
+            onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
+            return true;
+          }
+          if (key === 'ArrowRight') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('chooseRight', undefined, localContent);
+            return true;
+          }
+          if (key === 'ArrowDown') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            const cursor = getEditorCaretOffset() ?? localContent.length;
+            onKeyboardSuggestionAction('regenerate', cursor, localContent);
+            return true;
+          }
+          if (key === 'ArrowUp') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('undo');
+            return true;
+          }
+          if (key === 'Escape') {
+            if (suggestionActive) {
+              e.preventDefault();
+              // @ts-ignore
+              e.stopPropagation?.();
+              onKeyboardSuggestionAction('exit', undefined, localContent);
+              return true;
+            }
+            return false;
+          }
+
+          if (!suggestionActive) return false;
+
+          if (key === 'ArrowLeft') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
+            return true;
+          }
+          if (key === 'ArrowRight') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('chooseRight', undefined, localContent);
+            return true;
+          }
+          if (key === 'ArrowDown') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            const cursor = getEditorCaretOffset() ?? localContent.length;
+            onKeyboardSuggestionAction('regenerate', cursor, localContent);
+            return true;
+          }
+          if (key === 'ArrowUp') {
+            e.preventDefault();
+            // @ts-ignore
+            e.stopPropagation?.();
+            onKeyboardSuggestionAction('undo');
             return true;
           }
           return false;
-        }
+        },
+        [
+          isSuggestionMode,
+          continuations.length,
+          isSuggesting,
+          onKeyboardSuggestionAction,
+          getEditorCaretOffset,
+          isEditorFocused,
+          localContent,
+        ]
+      );
 
-        if (!suggestionActive) return false;
+      useEffect(() => {
+        // Capture shortcuts globally so suggestion controls remain reachable
+        // while focus moves across editor-adjacent UI.
+        const onKeyDown = (e: KeyboardEvent) => {
+          maybeHandleSuggestionHotkey(e);
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => window.removeEventListener('keydown', onKeyDown, true);
+      }, [maybeHandleSuggestionHotkey]);
 
-        if (key === 'ArrowLeft') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowRight') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowDown') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          const cursor = getEditorCaretOffset() ?? localContent.length;
-          onKeyboardSuggestionAction('regenerate', cursor, localContent);
-          return true;
-        }
-        if (key === 'ArrowUp') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('undo');
-          return true;
-        }
-        return false;
-      },
-      [
-        isSuggestionMode,
-        continuations.length,
-        isSuggesting,
-        onKeyboardSuggestionAction,
-        getEditorCaretOffset,
-        isEditorFocused,
-        localContent,
-      ]
-    );
-
-    useEffect(() => {
-      // Capture shortcuts globally so suggestion controls remain reachable
-      // while focus moves across editor-adjacent UI.
-      const onKeyDown = (e: KeyboardEvent) => {
-        maybeHandleSuggestionHotkey(e);
-      };
-      window.addEventListener('keydown', onKeyDown, true);
-      return () => window.removeEventListener('keydown', onKeyDown, true);
-    }, [maybeHandleSuggestionHotkey]);
-
-    const format = (type: string) => {
-      const view = editorViewRef.current;
-      if (!view) return;
-
-      const rawText = view.state.doc.toString();
-      const { anchor, head } = view.state.selection.main;
-      const rawStart = Math.min(anchor, head);
-      const rawEnd = Math.max(anchor, head);
-
-      if (
-        type === 'h1' ||
-        type === 'h2' ||
-        type === 'h3' ||
-        type === 'quote' ||
-        type === 'ul' ||
-        type === 'ol'
-      ) {
-        toggleBlockAtCaret(type as MarkdownBlockType);
-        checkContext();
-        return;
-      }
-
-      if (
-        type === 'bold' ||
-        type === 'italic' ||
-        type === 'strikethrough' ||
-        type === 'subscript' ||
-        type === 'superscript'
-      ) {
-        const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
-          rawText,
-          rawStart,
-          rawEnd,
-          type as InlineFormatType
-        );
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-          selection: { anchor: nextStart, head: nextEnd },
-        });
-        view.focus();
-        checkContext();
-        return;
-      }
-
-      if (type === 'link' || type === 'image') {
-        const selectedText = rawText.slice(rawStart, rawEnd);
-        const prefix = type === 'image' ? '![' : '[';
-        const suffix = `](${selectedText ? '' : 'url'})`;
-        const insert = prefix + selectedText + suffix;
-        view.dispatch({
-          changes: { from: rawStart, to: rawEnd, insert },
-          selection: { anchor: rawStart + insert.length },
-        });
-        view.focus();
-        return;
-      }
-
-      if (type === 'codeblock') {
-        const { nextRawText, nextStart, nextEnd } = insertFencedCodeBlock(
-          rawText,
-          rawStart,
-          rawEnd
-        );
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-          selection: { anchor: nextStart, head: nextEnd },
-        });
-        view.focus();
-        return;
-      }
-
-      if (type === 'footnote') {
-        const { nextRawText, nextCaret } = insertFootnote(rawText, rawStart);
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-          selection: { anchor: nextCaret },
-        });
-        view.focus();
-        return;
-      }
-    };
-
-    useImperativeHandle(ref, () => ({
-      insertImage: (filename: string, url: string, altText?: string) =>
-        insertImageMarkdown(filename, url, altText),
-      focus: () => {
-        editorViewRef.current?.focus();
-      },
-      format: (type: string) => format(type),
-      jumpToPosition: (start: number, end: number) => {
+      const format = (type: string) => {
         const view = editorViewRef.current;
         if (!view) return;
-        view.dispatch({
-          selection: { anchor: start, head: end },
-          scrollIntoView: true,
-        });
-        view.focus();
-      },
-    }));
 
-    // Styles & Theme Logic
-    let pageBackgroundColor: string;
-    let textColor: string;
-    let editorContainerBg: string;
+        const rawText = view.state.doc.toString();
+        const { anchor, head } = view.state.selection.main;
+        const rawStart = Math.min(anchor, head);
+        const rawEnd = Math.max(anchor, head);
 
-    if (settings.theme === 'dark') {
-      const b = settings.brightness * 20; // range 10-20% lightness
-      pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
-      textColor = `rgba(231, 229, 228, ${settings.contrast})`;
-      editorContainerBg = 'bg-brand-gray-950';
-    } else {
-      pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
-      textColor = `rgba(20, 15, 10, ${settings.contrast})`;
-      editorContainerBg =
-        settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
-    }
-
-    const isMonospace = viewMode === 'raw';
-    const fontFamily = isMonospace
-      ? '"JetBrains Mono", "Fira Code", monospace'
-      : 'Merriweather, serif';
-    const titleFontFamily = 'Merriweather, serif'; // Always serif for title
-
-    const commonTextStyle: React.CSSProperties = {
-      fontFamily: 'inherit',
-      fontSize: 'inherit',
-      lineHeight: '1.75',
-      padding: '0px',
-      margin: '0',
-      border: 'none',
-      width: '100%',
-      boxSizing: 'border-box',
-      whiteSpace: 'pre-wrap',
-      overflowWrap: 'break-word',
-      wordBreak: 'break-word',
-    };
-
-    const toolbarBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
-        : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
-    const summaryBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-b border-brand-gray-200'
-        : 'bg-brand-gray-900 border-b border-brand-gray-800';
-    const inputBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
-        : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
-    const textMuted =
-      settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
-    const footerBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-t border-brand-gray-200'
-        : 'bg-brand-gray-900 border-t border-brand-gray-800';
-    const hasContinuationOptions = continuations.some(
-      (option) => option && option.trim().length > 0
-    );
-    const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
-    const displayedContinuations =
-      continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
-    const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
-
-    const scrollMainContentToBottom = useCallback(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      container.scrollTop = container.scrollHeight;
-    }, []);
-
-    // We need to scroll in a few scenarios:
-    //   * suggestion generation is active and options are changing,
-    //   * the continuation panel just became visible.
-    //
-    // IMPORTANT: prose streaming has its own dedicated bottom-follow logic in
-    // the layout effect above. Running this effect at the same time causes two
-    // competing scroll writers and can produce up/down flicker at bottom.
-    //   * the continuation panel first becomes visible
-    //     (`hasContinuationOptions` transitions from false to true), because
-    //     its appearance can push the editor content upward and may hide the
-    //     current viewport.
-    //
-    // We deliberately *do not* auto-scroll when the user is editing while the
-    // panel is already present; the guard below prevents scrolling unless an
-    // LLM action is active or the panel just opened.
-    const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
-    useEffect(() => {
-      const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
-      prevHasContinuationRef.current = hasContinuationOptions;
-
-      if (isProseStreaming) return undefined;
-      if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
-
-      const raf = window.requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
-          scrollMainContentToBottom();
+        if (
+          type === 'h1' ||
+          type === 'h2' ||
+          type === 'h3' ||
+          type === 'quote' ||
+          type === 'ul' ||
+          type === 'ol'
+        ) {
+          toggleBlockAtCaret(type as MarkdownBlockType);
+          checkContext();
+          return;
         }
-      });
-      return () => {
-        window.cancelAnimationFrame(raf);
-      };
-    }, [
-      continuations,
-      isAiLoading,
-      isSuggesting,
-      isProseStreaming,
-      hasContinuationOptions,
-      scrollMainContentToBottom,
-    ]);
 
-    return (
-      <div
-        className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
-      >
-        <div className={`flex-none z-20 xl:hidden ${toolbarBg}`}>
-          <div className="h-14 flex items-center justify-between px-4">
-            <div className="flex items-center space-x-3">
-              {/* Mobile Toolbar Left Items */}
-            </div>
-            <div className="flex items-center space-x-2">
-              <div
-                className={`flex items-center rounded-md p-1 space-x-1 ${
-                  settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-800'
-                }`}
-              >
-                <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
-                  {chapter.scope === 'story' ? 'Story AI' : 'Chapter AI'}
-                </span>
+        if (
+          type === 'bold' ||
+          type === 'italic' ||
+          type === 'strikethrough' ||
+          type === 'subscript' ||
+          type === 'superscript'
+        ) {
+          const { nextRawText, nextStart, nextEnd } = toggleInlineFormatAtSelection(
+            rawText,
+            rawStart,
+            rawEnd,
+            type as InlineFormatType
+          );
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextStart, head: nextEnd },
+          });
+          view.focus();
+          checkContext();
+          return;
+        }
+
+        if (type === 'link' || type === 'image') {
+          const selectedText = rawText.slice(rawStart, rawEnd);
+          const prefix = type === 'image' ? '![' : '[';
+          const suffix = `](${selectedText ? '' : 'url'})`;
+          const insert = prefix + selectedText + suffix;
+          view.dispatch({
+            changes: { from: rawStart, to: rawEnd, insert },
+            selection: { anchor: rawStart + insert.length },
+          });
+          view.focus();
+          return;
+        }
+
+        if (type === 'codeblock') {
+          const { nextRawText, nextStart, nextEnd } = insertFencedCodeBlock(
+            rawText,
+            rawStart,
+            rawEnd
+          );
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextStart, head: nextEnd },
+          });
+          view.focus();
+          return;
+        }
+
+        if (type === 'footnote') {
+          const { nextRawText, nextCaret } = insertFootnote(rawText, rawStart);
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
+            selection: { anchor: nextCaret },
+          });
+          view.focus();
+          return;
+        }
+      };
+
+      useImperativeHandle(ref, () => ({
+        insertImage: (filename: string, url: string, altText?: string) =>
+          insertImageMarkdown(filename, url, altText),
+        focus: () => {
+          editorViewRef.current?.focus();
+        },
+        format: (type: string) => format(type),
+        jumpToPosition: (start: number, end: number) => {
+          const view = editorViewRef.current;
+          if (!view) return;
+          view.dispatch({
+            selection: { anchor: start, head: end },
+            scrollIntoView: true,
+          });
+          view.focus();
+        },
+      }));
+
+      // Styles & Theme Logic
+      let pageBackgroundColor: string;
+      let textColor: string;
+      let editorContainerBg: string;
+
+      if (settings.theme === 'dark') {
+        const b = settings.brightness * 20; // range 10-20% lightness
+        pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
+        textColor = `rgba(231, 229, 228, ${settings.contrast})`;
+        editorContainerBg = 'bg-brand-gray-950';
+      } else {
+        pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
+        textColor = `rgba(20, 15, 10, ${settings.contrast})`;
+        editorContainerBg =
+          settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
+      }
+
+      const isMonospace = viewMode === 'raw';
+      const fontFamily = isMonospace
+        ? '"JetBrains Mono", "Fira Code", monospace'
+        : 'Merriweather, serif';
+      const titleFontFamily = 'Merriweather, serif'; // Always serif for title
+
+      const commonTextStyle: React.CSSProperties = {
+        fontFamily: 'inherit',
+        fontSize: 'inherit',
+        lineHeight: '1.75',
+        padding: '0px',
+        margin: '0',
+        border: 'none',
+        width: '100%',
+        boxSizing: 'border-box',
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'break-word',
+        wordBreak: 'break-word',
+      };
+
+      const toolbarBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
+          : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
+      const summaryBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-b border-brand-gray-200'
+          : 'bg-brand-gray-900 border-b border-brand-gray-800';
+      const inputBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
+          : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
+      const textMuted =
+        settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
+      const footerBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-t border-brand-gray-200'
+          : 'bg-brand-gray-900 border-t border-brand-gray-800';
+      const hasContinuationOptions = continuations.some(
+        (option) => option && option.trim().length > 0
+      );
+      const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
+      const displayedContinuations =
+        continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
+      const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
+
+      const scrollMainContentToBottom = useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        container.scrollTop = container.scrollHeight;
+      }, []);
+
+      // We need to scroll in a few scenarios:
+      //   * suggestion generation is active and options are changing,
+      //   * the continuation panel just became visible.
+      //
+      // IMPORTANT: prose streaming has its own dedicated bottom-follow logic in
+      // the layout effect above. Running this effect at the same time causes two
+      // competing scroll writers and can produce up/down flicker at bottom.
+      //   * the continuation panel first becomes visible
+      //     (`hasContinuationOptions` transitions from false to true), because
+      //     its appearance can push the editor content upward and may hide the
+      //     current viewport.
+      //
+      // We deliberately *do not* auto-scroll when the user is editing while the
+      // panel is already present; the guard below prevents scrolling unless an
+      // LLM action is active or the panel just opened.
+      const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
+      useEffect(() => {
+        const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
+        prevHasContinuationRef.current = hasContinuationOptions;
+
+        if (isProseStreaming) return undefined;
+        if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
+
+        const raf = window.requestAnimationFrame(() => {
+          if (isAtBottomRef.current) {
+            scrollMainContentToBottom();
+          }
+        });
+        return () => {
+          window.cancelAnimationFrame(raf);
+        };
+      }, [
+        continuations,
+        isAiLoading,
+        isSuggesting,
+        isProseStreaming,
+        hasContinuationOptions,
+        scrollMainContentToBottom,
+      ]);
+
+      return (
+        <div
+          className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
+        >
+          <div className={`flex-none z-20 xl:hidden ${toolbarBg}`}>
+            <div className="h-14 flex items-center justify-between px-4">
+              <div className="flex items-center space-x-3">
+                {/* Mobile Toolbar Left Items */}
+              </div>
+              <div className="flex items-center space-x-2">
                 <div
-                  className={`w-px h-4 ${
+                  className={`flex items-center rounded-md p-1 space-x-1 ${
                     settings.theme === 'light'
-                      ? 'bg-brand-gray-300'
-                      : 'bg-brand-gray-700'
+                      ? 'bg-brand-gray-100'
+                      : 'bg-brand-gray-800'
                   }`}
-                ></div>
-                <Button
-                  theme={settings.theme}
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs h-7"
-                  onClick={() => onAiAction('chapter', 'extend')}
-                  disabled={isAiLoading || !isWritingAvailable}
-                  icon={<Wand2 size={12} />}
-                  title={
-                    !isWritingAvailable
-                      ? writingUnavailableReason
-                      : chapter.scope === 'story'
-                        ? 'Extend Story Draft (WRITING model)'
-                        : 'Extend Chapter (WRITING model)'
-                  }
                 >
-                  Extend
-                </Button>
-                <Button
-                  theme={settings.theme}
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs h-7"
-                  onClick={() => onAiAction('chapter', 'rewrite')}
-                  disabled={isAiLoading || !isWritingAvailable || isChapterEmpty}
-                  icon={<FileEdit size={12} />}
-                  title={
-                    !isWritingAvailable
-                      ? writingUnavailableReason
-                      : isChapterEmpty
-                        ? 'Chapter is empty; cannot rewrite existing text.'
+                  <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
+                    {chapter.scope === 'story' ? 'Story AI' : 'Chapter AI'}
+                  </span>
+                  <div
+                    className={`w-px h-4 ${
+                      settings.theme === 'light'
+                        ? 'bg-brand-gray-300'
+                        : 'bg-brand-gray-700'
+                    }`}
+                  ></div>
+                  <Button
+                    theme={settings.theme}
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs h-7"
+                    onClick={() => onAiAction('chapter', 'extend')}
+                    disabled={isAiLoading || !isWritingAvailable}
+                    icon={<Wand2 size={12} />}
+                    title={
+                      !isWritingAvailable
+                        ? writingUnavailableReason
                         : chapter.scope === 'story'
-                          ? 'Rewrite Story Draft (WRITING model)'
-                          : 'Rewrite Chapter (WRITING model)'
-                  }
-                >
-                  Rewrite
-                </Button>
+                          ? 'Extend Story Draft (WRITING model)'
+                          : 'Extend Chapter (WRITING model)'
+                    }
+                  >
+                    Extend
+                  </Button>
+                  <Button
+                    theme={settings.theme}
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs h-7"
+                    onClick={() => onAiAction('chapter', 'rewrite')}
+                    disabled={isAiLoading || !isWritingAvailable || isChapterEmpty}
+                    icon={<FileEdit size={12} />}
+                    title={
+                      !isWritingAvailable
+                        ? writingUnavailableReason
+                        : isChapterEmpty
+                          ? 'Chapter is empty; cannot rewrite existing text.'
+                          : chapter.scope === 'story'
+                            ? 'Rewrite Story Draft (WRITING model)'
+                            : 'Rewrite Chapter (WRITING model)'
+                    }
+                  >
+                    Rewrite
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Main Scrollable Content Area */}
-        <div
-          ref={scrollContainerRef}
-          data-testid="editor-scroll-container"
-          className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
-          style={{ overflowAnchor: 'none' }}
-          onScroll={handleScroll}
-        >
-          {isDragging && (
-            <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
-                <Upload className="w-8 h-8 mb-2 text-blue-500" />
-                <span className="font-bold text-blue-500">Drop image to upload</span>
-              </div>
-            </div>
-          )}
-          {/* The Paper - Grows infinitely */}
-          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+          {/* Main Scrollable Content Area */}
           <div
-            ref={paperDivRef}
-            role="group"
-            aria-label="Editor workspace"
-            className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
-            style={{
-              maxWidth: `${settings.maxWidth}ch`,
-              backgroundColor: pageBackgroundColor,
-              color: textColor,
-              fontSize: `${settings.fontSize}px`,
-              fontFamily: fontFamily,
-            }}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            ref={scrollContainerRef}
+            data-testid="editor-scroll-container"
+            className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
+            style={{ overflowAnchor: 'none' }}
+            onScroll={handleScroll}
           >
-            {/* Toolbar - Removed Image Icon here */}
-            {showInlineTitle && (
-              <div className="flex items-start gap-3 mb-8">
-                <textarea
-                  value={localTitle}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\n/g, '');
-                    setLocalTitle(val);
-                    if (titleDebounceRef.current)
-                      clearTimeout(titleDebounceRef.current);
-                    titleDebounceRef.current = setTimeout(() => {
-                      onChange(chapter.id, { title: val });
-                    }, DEBOUNCE_MS);
-                  }}
-                  rows={1}
-                  className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
-                  placeholder={
-                    chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
-                  }
-                  lang={language || 'en'}
-                  spellCheck={spellCheck}
-                  style={{
-                    ...commonTextStyle,
-                    fontSize: '1.8em',
-                    lineHeight: '1.3',
-                    fontFamily: titleFontFamily,
-                  }}
-                />
+            {isDragging && (
+              <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
+                  <Upload className="w-8 h-8 mb-2 text-blue-500" />
+                  <span className="font-bold text-blue-500">Drop image to upload</span>
+                </div>
               </div>
             )}
-
-            {/* Editor Area */}
-            <div id="editor-area" className="flex flex-col relative w-full">
-              <div id="codemirror-editor" className="relative w-full flex flex-col">
-                <CodeMirrorEditor
-                  ref={editorViewRef}
-                  value={localContent}
-                  language={language}
-                  spellCheck={spellCheck}
-                  onOpenSearch={onOpenSearch}
-                  onChange={(val: string, isUndoRedo?: boolean) => {
-                    setLocalContent(val);
-                    // Clear diff immediately on user input so typed text is
-                    // never highlighted as a diff insertion. Keep the baseline
-                    // active when undo/redo is used so the diff view works.
-                    if (isUndoRedo) {
-                      // Undo/redo: always restore the real AI baseline so the
-                      // diff view activates, even if localBaseline was already
-                      // set to a user-edit baseline by the debounce firing.
-                      if (savedBaselineRef.current !== undefined) {
-                        setLocalBaseline(savedBaselineRef.current);
-                      }
-                    } else if (localBaseline !== undefined) {
-                      setLocalBaseline(undefined);
+            {/* The Paper - Grows infinitely */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+            <div
+              ref={paperDivRef}
+              role="group"
+              aria-label="Editor workspace"
+              className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
+              style={{
+                maxWidth: `${settings.maxWidth}ch`,
+                backgroundColor: pageBackgroundColor,
+                color: textColor,
+                fontSize: `${settings.fontSize}px`,
+                fontFamily: fontFamily,
+              }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {/* Toolbar - Removed Image Icon here */}
+              {showInlineTitle && (
+                <div className="flex items-start gap-3 mb-8">
+                  <textarea
+                    value={localTitle}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\n/g, '');
+                      setLocalTitle(val);
+                      if (titleDebounceRef.current)
+                        clearTimeout(titleDebounceRef.current);
+                      titleDebounceRef.current = setTimeout(() => {
+                        onChange(chapter.id, { title: val });
+                      }, DEBOUNCE_MS);
+                    }}
+                    rows={1}
+                    className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
+                    placeholder={
+                      chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
                     }
-                    checkContext();
-                    if (contentDebounceRef.current)
-                      clearTimeout(contentDebounceRef.current);
-                    contentDebounceRef.current = setTimeout(() => {
-                      onChange(chapter.id, { content: val });
-                    }, DEBOUNCE_MS);
-                  }}
-                  onSelectionChange={checkContext}
-                  viewMode={
-                    viewMode === 'wysiwyg'
-                      ? 'visual'
-                      : viewMode === 'markdown'
-                        ? 'markdown'
-                        : 'plain'
-                  }
-                  showWhitespace={showWhitespace}
-                  showDiff={settings.showDiff}
-                  baselineValue={localBaseline}
-                  searchHighlightRanges={chapterSearchHighlightRanges}
-                  enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
-                  placeholder={
-                    chapter.scope === 'story'
-                      ? 'Start writing your story here...'
-                      : 'Start writing your chapter here...'
-                  }
-                  className="w-full"
-                  style={{
-                    ...commonTextStyle,
-                    caretColor: textColor,
-                  }}
-                />
+                    lang={language || 'en'}
+                    spellCheck={spellCheck}
+                    style={{
+                      ...commonTextStyle,
+                      fontSize: '1.8em',
+                      lineHeight: '1.3',
+                      fontFamily: titleFontFamily,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Editor Area */}
+              <div id="editor-area" className="flex flex-col relative w-full">
+                <div id="codemirror-editor" className="relative w-full flex flex-col">
+                  <CodeMirrorEditor
+                    ref={editorViewRef}
+                    value={localContent}
+                    language={language}
+                    spellCheck={spellCheck}
+                    onOpenSearch={onOpenSearch}
+                    onChange={(val: string, isUndoRedo?: boolean) => {
+                      setLocalContent(val);
+                      // Clear diff immediately on user input so typed text is
+                      // never highlighted as a diff insertion. Keep the baseline
+                      // active when undo/redo is used so the diff view works.
+                      if (isUndoRedo) {
+                        // Undo/redo: always restore the real AI baseline so the
+                        // diff view activates, even if localBaseline was already
+                        // set to a user-edit baseline by the debounce firing.
+                        if (savedBaselineRef.current !== undefined) {
+                          setLocalBaseline(savedBaselineRef.current);
+                        }
+                      } else if (localBaseline !== undefined) {
+                        setLocalBaseline(undefined);
+                      }
+                      scheduleCheckContext();
+                      if (contentDebounceRef.current)
+                        clearTimeout(contentDebounceRef.current);
+                      contentDebounceRef.current = setTimeout(() => {
+                        onChange(chapter.id, { content: val });
+                      }, DEBOUNCE_MS);
+                    }}
+                    onSelectionChange={scheduleCheckContext}
+                    viewMode={
+                      viewMode === 'wysiwyg'
+                        ? 'visual'
+                        : viewMode === 'markdown'
+                          ? 'markdown'
+                          : 'plain'
+                    }
+                    showWhitespace={showWhitespace}
+                    showDiff={settings.showDiff}
+                    baselineValue={localBaseline}
+                    searchHighlightRanges={chapterSearchHighlightRanges}
+                    enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                    placeholder={
+                      chapter.scope === 'story'
+                        ? 'Start writing your story here...'
+                        : 'Start writing your chapter here...'
+                    }
+                    className="w-full"
+                    style={{
+                      ...commonTextStyle,
+                      caretColor: textColor,
+                    }}
+                  />
+                </div>
               </div>
             </div>
+
+            <div className="flex-shrink-0 h-16 w-full"></div>
           </div>
 
-          <div className="flex-shrink-0 h-16 w-full"></div>
-        </div>
-
-        {/* Persistent Footer */}
-        <div
-          className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
-        >
-          {shouldShowContinuationPanel ? (
-            <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
-              <div
-                className="flex items-center justify-between mb-3 px-1"
-                role="region"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <div className="flex items-center space-x-2 text-brand-500">
-                  <SplitSquareHorizontal size={18} />
-                  <span className="text-xs font-bold uppercase tracking-wider">
-                    Choose a continuation
-                  </span>
+          {/* Persistent Footer */}
+          <div
+            className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
+          >
+            {shouldShowContinuationPanel ? (
+              <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
+                <div
+                  className="flex items-center justify-between mb-3 px-1"
+                  role="region"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <div className="flex items-center space-x-2 text-brand-500">
+                    <SplitSquareHorizontal size={18} />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Choose a continuation
+                    </span>
+                    <button
+                      onClick={() => {
+                        const cursor =
+                          (typeof getEditorCaretOffset === 'function'
+                            ? getEditorCaretOffset()
+                            : null) ?? localContent.length;
+                        suggestionControls.onKeyboardSuggestionAction?.(
+                          'regenerate',
+                          cursor,
+                          localContent
+                        );
+                      }}
+                      className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
+                      title="Reload suggestions (same as arrow-down)"
+                      aria-label="Reload continuation suggestions"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  </div>
                   <button
-                    onClick={() => {
-                      const cursor =
-                        (typeof getEditorCaretOffset === 'function'
-                          ? getEditorCaretOffset()
-                          : null) ?? localContent.length;
-                      suggestionControls.onKeyboardSuggestionAction?.(
-                        'regenerate',
-                        cursor,
-                        localContent
-                      );
-                    }}
-                    className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
-                    title="Reload suggestions (same as arrow-down)"
-                    aria-label="Reload continuation suggestions"
+                    onClick={() => onAcceptContinuation('', localContent)}
+                    className={`${textMuted} hover:text-brand-gray-800 text-xs`}
                   >
-                    <RefreshCw size={14} />
+                    Dismiss
                   </button>
                 </div>
-                <button
-                  onClick={() => onAcceptContinuation('', localContent)}
-                  className={`${textMuted} hover:text-brand-gray-800 text-xs`}
+
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
+                  role="list"
                 >
-                  Dismiss
+                  {displayedContinuations.map((option, idx) => {
+                    const isEmpty = !option || option.trim().length === 0;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={isEmpty}
+                        onClick={
+                          isEmpty
+                            ? undefined
+                            : () => onAcceptContinuation(option, localContent)
+                        }
+                        className={`group relative p-5 rounded-lg border transition-all text-left ${
+                          isEmpty
+                            ? 'cursor-default opacity-60'
+                            : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
+                        } ${
+                          settings.theme === 'light'
+                            ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
+                            : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
+                        }`}
+                        role="listitem"
+                        aria-label={
+                          isEmpty
+                            ? 'Waiting for suggestion'
+                            : `Accept suggestion: ${option.substring(0, 50)}...`
+                        }
+                      >
+                        <div
+                          className={`font-serif text-sm leading-relaxed ${
+                            settings.theme === 'light'
+                              ? isEmpty
+                                ? 'text-brand-gray-400 italic'
+                                : 'text-brand-gray-800'
+                              : isEmpty
+                                ? 'text-brand-gray-500 italic'
+                                : 'text-brand-gray-300 group-hover:text-brand-gray-200'
+                          }`}
+                        >
+                          {isEmpty ? 'Waiting for suggestion...' : option}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex justify-center items-center space-x-3">
+                <button
+                  onClick={handleSuggestionButtonClick}
+                  disabled={!isWritingAvailable}
+                  className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                    settings.theme === 'light'
+                      ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
+                      : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
+                  }`}
+                  title={
+                    !isWritingAvailable
+                      ? writingUnavailableReason
+                      : isSuggesting || isAiLoading
+                        ? 'Stop current AI generation'
+                        : 'Get AI Suggestions (WRITING model)'
+                  }
+                >
+                  {isSuggesting || isAiLoading ? (
+                    <>
+                      <Loader2 className="animate-spin text-violet-500" size={18} />
+                      <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
+                        Writing...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-violet-100 dark:bg-violet-900/30 p-1 rounded-md text-violet-600 dark:text-violet-400">
+                        <Sparkles size={16} />
+                      </div>
+                      <span className="font-medium text-sm">
+                        Suggest next paragraph
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
-
-              <div
-                className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
-                role="list"
-              >
-                {displayedContinuations.map((option, idx) => {
-                  const isEmpty = !option || option.trim().length === 0;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      disabled={isEmpty}
-                      onClick={
-                        isEmpty
-                          ? undefined
-                          : () => onAcceptContinuation(option, localContent)
-                      }
-                      className={`group relative p-5 rounded-lg border transition-all text-left ${
-                        isEmpty
-                          ? 'cursor-default opacity-60'
-                          : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
-                      } ${
-                        settings.theme === 'light'
-                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-gray-500/50'
-                      }`}
-                      role="listitem"
-                      aria-label={
-                        isEmpty
-                          ? 'Waiting for suggestion'
-                          : `Accept suggestion: ${option.substring(0, 50)}...`
-                      }
-                    >
-                      <div
-                        className={`font-serif text-sm leading-relaxed ${
-                          settings.theme === 'light'
-                            ? isEmpty
-                              ? 'text-brand-gray-400 italic'
-                              : 'text-brand-gray-800'
-                            : isEmpty
-                              ? 'text-brand-gray-500 italic'
-                              : 'text-brand-gray-300 group-hover:text-brand-gray-200'
-                        }`}
-                      >
-                        {isEmpty ? 'Waiting for suggestion...' : option}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 flex justify-center items-center space-x-3">
-              <button
-                onClick={handleSuggestionButtonClick}
-                disabled={!isWritingAvailable}
-                className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                  settings.theme === 'light'
-                    ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
-                    : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
-                }`}
-                title={
-                  !isWritingAvailable
-                    ? writingUnavailableReason
-                    : isSuggesting || isAiLoading
-                      ? 'Stop current AI generation'
-                      : 'Get AI Suggestions (WRITING model)'
-                }
-              >
-                {isSuggesting || isAiLoading ? (
-                  <>
-                    <Loader2 className="animate-spin text-violet-500" size={18} />
-                    <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
-                      Writing...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-violet-100 dark:bg-violet-900/30 p-1 rounded-md text-violet-600 dark:text-violet-400">
-                      <Sparkles size={16} />
-                    </div>
-                    <span className="font-medium text-sm">Suggest next paragraph</span>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
+  )
 );
 
 Editor.displayName = 'Editor';

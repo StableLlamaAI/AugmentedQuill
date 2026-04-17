@@ -738,14 +738,18 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         if (handler) callbacks.push(handler);
       }
 
-      // Baseline = the state we're leaving so undo-restored text is highlighted.
-      setBaselineState(history[currentIndex].state);
-
-      setCurrentIndex(targetIndex);
       const prevState = history[targetIndex].state;
-      setStory(prevState);
+
+      // Mark the re-render as a transition so React can time-slice it,
+      // keeping the main thread responsive (avoids click-handler violations).
+      startTransition(() => {
+        // Baseline = the state we're leaving so undo-restored text is highlighted.
+        setBaselineState(history[currentIndex].state);
+        setCurrentIndex(targetIndex);
+        setStory(prevState);
+        setCurrentChapterId(prevState.currentChapterId ?? null);
+      });
       latestStoryRef.current = prevState;
-      setCurrentChapterId(prevState.currentChapterId ?? null);
 
       for (const callback of callbacks) {
         await callback();
@@ -764,14 +768,18 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         if (handler) callbacks.push(handler);
       }
 
-      // Baseline = the state we're leaving so redo-restored text is highlighted.
-      setBaselineState(history[currentIndex].state);
-
-      setCurrentIndex(targetIndex);
       const nextState = history[targetIndex].state;
-      setStory(nextState);
+
+      // Mark the re-render as a transition so React can time-slice it,
+      // keeping the main thread responsive (avoids click-handler violations).
+      startTransition(() => {
+        // Baseline = the state we're leaving so redo-restored text is highlighted.
+        setBaselineState(history[currentIndex].state);
+        setCurrentIndex(targetIndex);
+        setStory(nextState);
+        setCurrentChapterId(nextState.currentChapterId ?? null);
+      });
       latestStoryRef.current = nextState;
-      setCurrentChapterId(nextState.currentChapterId ?? null);
 
       for (const callback of callbacks) {
         await callback();

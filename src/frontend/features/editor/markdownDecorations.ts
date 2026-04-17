@@ -71,6 +71,7 @@ class ImageWidget extends WidgetType {
     img.style.maxHeight = '400px';
     img.style.display = 'block';
     img.draggable = false;
+    img.loading = 'lazy';
 
     img.onerror = () => {
       img.style.display = 'none';

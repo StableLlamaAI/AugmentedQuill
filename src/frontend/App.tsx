@@ -42,7 +42,7 @@ import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage } from './types';
+import { ChatMessage, SourcebookEntry } from './types';
 import { SessionMutation } from './features/chat';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
@@ -272,6 +272,11 @@ const App: React.FC = () => {
     patchSourcebook,
     isChapterLoading,
   } = useStory({ confirm, alert: (msg) => void alert(msg) });
+
+  // Stable ref to avoid recreating callbacks that read story state during
+  // streaming (e.g. onProseChunk).
+  const storyRef = useRef(story);
+  storyRef.current = story;
 
   useBrowserHistory({
     historyIndex,
@@ -668,11 +673,14 @@ const App: React.FC = () => {
       (chapId: number, writeMode: string, accumulated: string) => {
         // Find the writing unit for the given chapter ID so we can compute the
         // correct full content to preview in the editor while the LLM writes.
+        // Read from ref to avoid recreating this callback whenever story state
+        // changes during streaming.
+        const currentStory = storyRef.current;
         let unit: { id: string; content: string } | null = null;
-        if (story.projectType === 'short-story' && story.draft) {
-          unit = story.draft;
+        if (currentStory.projectType === 'short-story' && currentStory.draft) {
+          unit = currentStory.draft;
         } else {
-          const found = story.chapters.find((c) => Number(c.id) === chapId);
+          const found = currentStory.chapters.find((c) => Number(c.id) === chapId);
           unit = found ?? null;
         }
         if (!unit) return;
@@ -732,7 +740,7 @@ const App: React.FC = () => {
         // intermediate states are ephemeral and must not pollute the undo stack.
         void updateChapter(unit.id, { content: newContent }, false, false);
       },
-      [story.projectType, story.draft, story.chapters, updateChapter]
+      [updateChapter]
     ),
     onMutations: onToolMutations,
     pushExternalHistoryEntry: (params) => {
@@ -758,15 +766,101 @@ const App: React.FC = () => {
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
 
+  const searchHighlightValue = useMemo(
+    () => ({
+      highlightActive: searchState.highlightActive,
+      ranges: searchState.highlightRanges,
+      texts: searchState.highlightTexts,
+    }),
+    [
+      searchState.highlightActive,
+      searchState.highlightRanges,
+      searchState.highlightTexts,
+    ]
+  );
+
+  // ── Stable callbacks and memoised derived values for control prop objects ──
+
+  const checkedSourcebookIds = useMemo(
+    () => Array.from(checkedEntries),
+    [checkedEntries]
+  );
+
+  const handleSourcebookMutated = useCallback(
+    async (params: {
+      label: string;
+      onUndo?: () => Promise<void>;
+      onRedo?: () => Promise<void>;
+      entryId?: string;
+      entryExistsInBaseline?: boolean;
+      updatedEntry?: SourcebookEntry | null;
+    }) => {
+      const entryExistsInBaseline = Boolean(
+        params.entryExistsInBaseline ??
+        baselineState.sourcebook?.some((entry) => entry.id === params.entryId)
+      );
+
+      if (params.updatedEntry !== undefined) {
+        if (!entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+
+        const changed = patchSourcebook(params.updatedEntry, params.entryId);
+        if (!changed) {
+          return;
+        }
+
+        if (entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+
+        pushExternalHistoryEntry({ ...params, forceNewHistory: true });
+      } else {
+        if (!entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+        await refreshStory();
+        if (entryExistsInBaseline) {
+          advanceBaselineToCurrentStory();
+        }
+        pushExternalHistoryEntry(params);
+      }
+    },
+    [
+      baselineState.sourcebook,
+      advanceBaselineToCurrentStory,
+      patchSourcebook,
+      pushExternalHistoryEntry,
+      refreshStory,
+    ]
+  );
+
+  const editorUpdateChapter = useCallback(
+    (id: string, partial: Record<string, unknown>) => {
+      if ('content' in partial) {
+        searchState.notifyContentChanged(parseInt(id, 10));
+      }
+      return updateChapter(id, partial, true, true, true);
+    },
+    [searchState, updateChapter]
+  );
+
+  const editorBaselineContent = useMemo(
+    () =>
+      currentChapter?.scope === 'story'
+        ? baselineState.draft?.content
+        : baselineState.chapters.find((c) => c.id === currentChapter?.id)?.content,
+    [
+      currentChapter?.scope,
+      currentChapter?.id,
+      baselineState.draft?.content,
+      baselineState.chapters,
+    ]
+  );
+
   return (
     <ConfirmDialogProvider value={confirm}>
-      <SearchHighlightProvider
-        value={{
-          highlightActive: searchState.highlightActive,
-          ranges: searchState.highlightRanges,
-          texts: searchState.highlightTexts,
-        }}
-      >
+      <SearchHighlightProvider value={searchHighlightValue}>
         <ThemeProvider currentTheme={currentTheme}>
           <ConfirmDialog
             isOpen={confirmDialogState.isOpen}
@@ -900,62 +994,13 @@ const App: React.FC = () => {
                 isEditingAvailable: roleAvailability.editing,
                 handleOpenImages,
                 updateStoryMetadata,
-                checkedSourcebookIds: Array.from(checkedEntries),
+                checkedSourcebookIds,
                 onToggleSourcebook: handleToggleEntry,
                 isAutoSourcebookSelectionEnabled,
                 onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
                 isSourcebookSelectionRunning,
                 mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
-                onSourcebookMutated: async (params) => {
-                  const entryExistsInBaseline = Boolean(
-                    params.entryExistsInBaseline ??
-                    baselineState.sourcebook?.some(
-                      (entry) => entry.id === params.entryId
-                    )
-                  );
-
-                  if (params.updatedEntry !== undefined) {
-                    // Capture the pre-save baseline BEFORE patching the ref so
-                    // AI-created entries edited by the user show as "modified"
-                    // (amber) rather than "created" (green) after save.
-                    if (!entryExistsInBaseline) {
-                      advanceBaselineToCurrentStory();
-                    }
-
-                    const changed = patchSourcebook(
-                      params.updatedEntry,
-                      params.entryId
-                    );
-                    if (!changed) {
-                      // Content is identical to what was already stored — the
-                      // user opened and saved without edits.  Skip all state
-                      // updates to avoid the full-app re-render entirely.
-                      return;
-                    }
-
-                    if (entryExistsInBaseline) {
-                      // Manual edits to an already-baselined entry: advance
-                      // baseline to post-save state so no diff is shown.
-                      advanceBaselineToCurrentStory();
-                    }
-
-                    // forceNewHistory skips the expensive areStoriesEqual
-                    // JSON.stringify — content change was already confirmed
-                    // by patchSourcebook above.
-                    pushExternalHistoryEntry({ ...params, forceNewHistory: true });
-                  } else {
-                    // Fallback: full refresh for external mutations (e.g. LLM
-                    // tool results where we don't have the resulting entry).
-                    if (!entryExistsInBaseline) {
-                      advanceBaselineToCurrentStory();
-                    }
-                    await refreshStory();
-                    if (entryExistsInBaseline) {
-                      advanceBaselineToCurrentStory();
-                    }
-                    pushExternalHistoryEntry(params);
-                  }
-                },
+                onSourcebookMutated: handleSourcebookMutated,
                 onAppUndo: undo,
                 onAppRedo: redo,
                 canAppUndo: canUndo,
@@ -975,12 +1020,7 @@ const App: React.FC = () => {
                 storyLanguage: story.language || 'en',
                 setEditorSettings,
                 viewMode,
-                updateChapter: (id, partial) => {
-                  if ('content' in partial) {
-                    searchState.notifyContentChanged(parseInt(id, 10));
-                  }
-                  return updateChapter(id, partial, true, true, true);
-                },
+                updateChapter: editorUpdateChapter,
                 suggestionControls: {
                   continuations,
                   isSuggesting,
@@ -1004,11 +1044,7 @@ const App: React.FC = () => {
                 setActiveFormats,
                 showWhitespace,
                 setShowWhitespace,
-                baselineContent:
-                  currentChapter?.scope === 'story'
-                    ? baselineState.draft?.content
-                    : baselineState.chapters.find((c) => c.id === currentChapter?.id)
-                        ?.content,
+                baselineContent: editorBaselineContent,
                 onOpenSearch: openSearch,
               }}
               chatControls={{
