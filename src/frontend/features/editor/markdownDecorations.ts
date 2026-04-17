@@ -449,11 +449,40 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
         this.decorations = buildDecorations(view, mode);
       }
       update(u: ViewUpdate) {
-        if (
-          u.docChanged ||
-          u.viewportChanged ||
-          syntaxTree(u.state) !== syntaxTree(u.startState)
-        ) {
+        if (u.viewportChanged) {
+          // Viewport scroll/resize: always rebuild to cover newly visible lines.
+          this.decorations = buildDecorations(u.view, mode);
+          return;
+        }
+        if (!u.docChanged) return;
+
+        // Fast path: if the only change is a single "structurally inert"
+        // character insertion (plain letters, digits, common punctuation)
+        // we can just remap existing decoration positions without re-traversing
+        // the syntax tree.  Markdown structure cannot change from such chars.
+        // Any deletion, multi-char change, or markdown-significant character
+        // falls through to a full rebuild.
+        let isSafeInsert = true;
+        u.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+          if (toA !== fromA) {
+            isSafeInsert = false; // deletion present
+            return;
+          }
+          if (inserted.length !== 1) {
+            isSafeInsert = false; // multi-char or empty
+            return;
+          }
+          // Characters that can begin or alter markdown structure
+          const c = inserted.sliceString(0, 1);
+          if (/[*_#[\]()~`>!\\\-\n\r\t ]/.test(c)) {
+            isSafeInsert = false;
+          }
+        });
+
+        if (isSafeInsert) {
+          // Positions shift by the inserted character; map without rebuild.
+          this.decorations = this.decorations.map(u.changes);
+        } else {
           this.decorations = buildDecorations(u.view, mode);
         }
       }
