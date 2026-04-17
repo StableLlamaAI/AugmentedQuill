@@ -93,7 +93,7 @@ describe('CodeMirrorEditor', () => {
     act(() => {
       ref.current!.dispatch({ changes: { from: 0, to: 0, insert: 'typed' } });
     });
-    expect(onChange).toHaveBeenCalledWith('typed');
+    expect(onChange).toHaveBeenCalledWith('typed', false);
   });
 
   it('calls onSelectionChange with anchor and head when selection changes', async () => {
@@ -150,7 +150,7 @@ describe('CodeMirrorEditor', () => {
     act(() => {
       ref.current!.dispatch({ changes: { from: 0, to: 0, insert: 'typed' } });
     });
-    expect(onChange).toHaveBeenCalledWith('typed');
+    expect(onChange).toHaveBeenCalledWith('typed', false);
     onChange.mockClear();
 
     // React echoes the value prop back — should NOT trigger another dispatch
@@ -179,6 +179,27 @@ describe('CodeMirrorEditor', () => {
       );
     });
     expect(ref.current?.state.doc.toString()).toBe('prose text');
+  });
+
+  it('switching viewMode from raw to markdown with image syntax does not throw', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const value = 'Before image\n![Alt text](/assets/picture.jpg)\nAfter image';
+    const { rerender } = render(
+      <CodeMirrorEditor ref={ref} value={value} onChange={vi.fn()} viewMode="raw" />
+    );
+
+    await act(async () => {
+      rerender(
+        <CodeMirrorEditor
+          ref={ref}
+          value={value}
+          onChange={vi.fn()}
+          viewMode="markdown"
+        />
+      );
+    });
+
+    expect(ref.current?.state.doc.toString()).toBe(value);
   });
 
   it('toggling showWhitespace does not crash or corrupt the document', async () => {

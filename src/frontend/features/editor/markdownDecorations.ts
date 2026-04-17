@@ -295,19 +295,19 @@ function buildDecorations(view: EditorView, mode: DecorationViewMode): Decoratio
 
           if (src) {
             if (isVisual) {
-              // Replace entire image syntax with rendered image
+              // Replace entire image syntax with rendered image.
+              // The widget DOM is block-level, so block semantics are preserved
+              // without using a block decoration via a plugin.
               decs.push(
                 Decoration.replace({
                   widget: new ImageWidget(src, altText),
-                  block: true,
                 }).range(node.from, node.to)
               );
             } else {
-              // MD mode: append image preview after the markdown text
+              // MD mode: append image preview after the markdown text.
               decs.push(
                 Decoration.widget({
                   widget: new ImageWidget(src, altText),
-                  block: true,
                   side: 1,
                 }).range(node.to)
               );
@@ -321,7 +321,6 @@ function buildDecorations(view: EditorView, mode: DecorationViewMode): Decoratio
           decs.push(
             Decoration.replace({
               widget: hrWidget,
-              block: true,
             }).range(node.from, node.to)
           );
           return false;
