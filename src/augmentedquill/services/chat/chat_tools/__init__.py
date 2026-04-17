@@ -15,6 +15,7 @@ Tools are auto-registered via the @chat_tool decorator.
 
 # Import all tool modules to trigger decorator registration
 from augmentedquill.services.chat.chat_tools import chapter_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tools import chapter_prose_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import image_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import order_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import project_tools  # noqa: F401
@@ -25,6 +26,7 @@ from augmentedquill.services.chat.chat_tools import search_tools  # noqa: F401
 
 __all__ = [
     "chapter_tools",
+    "chapter_prose_tools",
     "image_tools",
     "order_tools",
     "project_tools",

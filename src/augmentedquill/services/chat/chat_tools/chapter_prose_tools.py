@@ -1,0 +1,446 @@
+# Copyright (C) 2026 StableLlama
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+"""Defines the chapter prose tools unit (WRITING and EDITING delegation tools) so this responsibility stays isolated, testable, and easy to evolve."""
+
+import json
+
+from pydantic import BaseModel, Field
+
+from augmentedquill.core.config import load_story_config
+from augmentedquill.utils.json_repair import apply_typographic_quotes
+from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
+from augmentedquill.services.chat.chat_tool_decorator import (
+    CHAT_ROLE,
+    EDITING_ROLE,
+    chat_tool,
+)
+from augmentedquill.services.projects.projects import (
+    get_active_project_dir,
+    write_chapter_content as _write_chapter_content,
+)
+from augmentedquill.services.chat.chat_tools.chapter_tools import MARKER
+
+# ============================================================================
+# call_writing_llm
+# ============================================================================
+
+
+class CallWritingLlmParams(BaseModel):
+    instruction: str = Field(
+        ...,
+        description="The task for the WRITING LLM for the active draft or chapter (e.g. 'Rewrite this paragraph to be more descriptive').",
+    )
+    context: str = Field(
+        ..., description="The text context the WRITING LLM needs to operate on."
+    )
+    write_mode: str | None = Field(
+        None,
+        description="How to persist output: 'append' (add to end of chapter), 'replace' (overwrite entire chapter), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+    )
+    chap_id: int | None = Field(
+        None,
+        description="Chapter ID to write to when writing into a chapter. The active schema indicates whether this parameter is required.",
+    )
+
+
+@chat_tool(
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
+    capability="delegation",
+    project_types=("short-story", "novel", "series"),
+)
+async def call_writing_llm(
+    params: CallWritingLlmParams, payload: dict, mutations: dict
+):
+    from augmentedquill.core.config import BASE_DIR, load_machine_config
+    from augmentedquill.core.prompts import (
+        get_system_message,
+        load_model_prompt_overrides,
+    )
+    from augmentedquill.services.llm import llm
+
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="WRITING"
+    )
+
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+
+    from augmentedquill.services.exceptions import BadRequestError
+
+    # Enforce conflict-first workflow: writing requires at least one defined conflict.
+    story_conflicts = story.get("conflicts") or []
+    has_conflicts = bool(story_conflicts)
+    project_type = str(story.get("project_type") or "")
+    if not has_conflicts and project_type in ("novel", "series"):
+        chapters = []
+        if project_type == "novel":
+            chapters = story.get("chapters") or []
+        else:
+            books = story.get("books") or []
+            for book in books:
+                for chapter in book.get("chapters") or []:
+                    chapters.append(chapter)
+
+        for c in chapters:
+            if isinstance(c, dict) and c.get("conflicts"):
+                has_conflicts = True
+                break
+
+    if not has_conflicts:
+        raise BadRequestError(
+            "No conflicts are set in the story or chapters. "
+            "Set conflicts and resolution directions before calling call_writing_llm."
+        )
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    system_prompt = get_system_message(
+        "story_writer", model_overrides, language=project_lang
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Task for this request:\n{params.instruction}\n\n"
+                f"Context materials:\n{params.context}"
+            ),
+        },
+    ]
+
+    stream_queue = mutations.get("_stream_queue")
+
+    if stream_queue is not None:
+        # Streaming path: emit prose chunks so the frontend can show live progress.
+
+        accumulated = ""
+        # Resolve write_mode and chap_id early so we can include them in events.
+        # (Actual persistence happens after streaming completes below.)
+        preview_write_mode = params.write_mode or "return_only"
+        preview_chap_id: int | None = params.chap_id
+        if (
+            preview_chap_id is None
+            and params.write_mode
+            and project_type == "short-story"
+        ):
+            preview_chap_id = 1
+
+        await stream_queue.put(
+            (
+                "prose_start",
+                {"chap_id": preview_chap_id, "write_mode": preview_write_mode},
+            )
+        )
+
+        async for chunk in llm.unified_chat_stream(
+            caller_id="chat_tools.call_writing_llm",
+            model_type="WRITING",
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+            model_name=model_name,
+            supports_function_calling=False,
+            skip_validation=True,
+        ):
+            if "content" in chunk:
+                accumulated += chunk["content"]
+                await stream_queue.put(
+                    (
+                        "prose_chunk",
+                        {
+                            "accumulated": accumulated,
+                            "chap_id": preview_chap_id,
+                            "write_mode": preview_write_mode,
+                        },
+                    )
+                )
+
+        generated_text = apply_typographic_quotes(accumulated, language=project_lang)
+    else:
+        # Non-streaming path (fallback / backward-compat).
+        response = await llm.unified_chat_complete(
+            caller_id="chat_tools.call_writing_llm",
+            model_type="WRITING",
+            messages=messages,
+            base_url=base_url,
+            api_key=api_key,
+            model_id=model_id,
+            timeout_s=timeout_s,
+            model_name=model_name,
+        )
+        generated_text = apply_typographic_quotes(
+            response.get("content", ""), language=project_lang
+        )
+
+    # If write_mode is specified, persist the generated text
+    if params.write_mode:
+        # Auto-detect chapter ID for short-story projects if not provided
+        chap_id = params.chap_id
+        if chap_id is None:
+            if project_type == "short-story":
+                chap_id = 1  # Short-story projects use pseudo-chapter ID 1
+            else:
+                raise BadRequestError(
+                    "chap_id is required when write_mode is set for chapter-based projects (novel/series). "
+                    "Call get_project_overview to see available chapter IDs."
+                )
+
+        # Validate chapter exists and get path
+        _, path, _ = _chapter_by_id_or_404(chap_id)
+
+        if params.write_mode == "append":
+            # Append to end of chapter (like continue_chapter)
+            existing = path.read_text(encoding="utf-8")
+            new_content = (
+                existing
+                + ("\n" if existing and not existing.endswith("\n") else "")
+                + generated_text
+            )
+            _write_chapter_content(chap_id, new_content)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "append",
+                "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "replace":
+            # Replace entire chapter content
+            _write_chapter_content(chap_id, generated_text)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "replace",
+                "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "insert_at_marker":
+            # Insert at ~~~ marker (replace marker with text)
+            existing = path.read_text(encoding="utf-8")
+            marker_pos = existing.find(MARKER)
+            if marker_pos < 0:
+                raise BadRequestError(
+                    f"Marker '{MARKER}' not found in chapter {chap_id}. "
+                    "Place the marker where you want text inserted."
+                )
+            new_content = (
+                existing[:marker_pos]
+                + generated_text
+                + existing[marker_pos + len(MARKER) :]
+            )
+            _write_chapter_content(chap_id, new_content)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "insert_at_marker",
+                "chap_id": chap_id,
+            }
+
+        else:
+            raise BadRequestError(
+                f"Invalid write_mode: {params.write_mode}. "
+                "Use 'append', 'replace', 'insert_at_marker', or omit for return-only."
+            )
+
+    # Default: just return the generated text without writing
+    return {"generated_text": generated_text}
+
+
+# ============================================================================
+# call_editing_assistant
+# ============================================================================
+
+
+class CallEditingAssistantParams(BaseModel):
+    task: str = Field(
+        ...,
+        description="The task the user wants the editor to perform on existing project prose (e.g., 'Fix the grammar in the current draft', 'Rewrite paragraph 2 to be more descriptive').",
+    )
+    chapter_id: int | None = Field(
+        None,
+        description="Optional chapter ID to set as the active writing unit for chapter-based EDITING sessions. Omit this for short-story projects.",
+    )
+    book_id: str | None = Field(
+        None,
+        description="Optional book ID (series only). Used together with chapter_id to disambiguate the active chapter.",
+    )
+
+
+@chat_tool(
+    description="Delegate a prose editing task to the EDITING LLM. Use ONLY when existing prose text in the project must be corrected, refined, rewritten, or structurally revised. Do NOT use for character analysis, psychological insights, world-building questions, brainstorming, research, or any task that does not directly modify or review actual stored project prose.",
+    allowed_roles=(CHAT_ROLE,),
+    capability="delegation",
+    project_types=("short-story", "novel", "series"),
+)
+async def call_editing_assistant(
+    params: CallEditingAssistantParams, payload: dict, mutations: dict
+):
+    from augmentedquill.services.llm import llm
+    from augmentedquill.services.chat.chat_tool_decorator import (
+        execute_registered_tool,
+        get_registered_tool_schemas,
+    )
+    from augmentedquill.core.prompts import (
+        load_model_prompt_overrides,
+        get_system_message,
+    )
+    from augmentedquill.core.config import load_machine_config, BASE_DIR
+
+    # Resolve EDITING model
+    base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
+        payload, model_type="EDITING"
+    )
+
+    machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+    model_overrides = load_model_prompt_overrides(machine_config, model_name)
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    project_lang = str(story.get("language", "en") or "en")
+    sys_msg = get_system_message("editing_llm", model_overrides, language=project_lang)
+
+    ctx_note = ""
+    if params.chapter_id is not None:
+        ctx_note = f"\nActive chapter ID for this task: {params.chapter_id}"
+        if params.book_id:
+            ctx_note += f", book ID: {params.book_id}"
+
+    messages = [
+        {"role": "system", "content": sys_msg},
+        {
+            "role": "user",
+            "content": (
+                "Editing task for this request:\n"
+                f"{params.task}\n\n"
+                "Read any additional story, chapter, or sourcebook context you need with tools before editing."
+                + ctx_note
+            ),
+        },
+    ]
+
+    # Build base payload so EDITING tools can resolve the active chapter automatically
+    base_nested_payload = dict(payload or {})
+    if params.chapter_id is not None:
+        base_nested_payload["active_chapter_id"] = params.chapter_id
+    if params.book_id is not None:
+        base_nested_payload["active_book_id"] = params.book_id
+
+    _editing_project_type: str | None = None
+    try:
+        if active:
+            _story_cfg = load_story_config(active / "story.json") or {}
+            _editing_project_type = _story_cfg.get("project_type") or None
+    except Exception:
+        pass
+
+    tools = get_registered_tool_schemas(
+        model_type=EDITING_ROLE, project_type=_editing_project_type
+    )
+
+    final_output = ""
+    recommended_updates: list[dict] = []
+    for _ in range(7):  # max 7 steps
+        try:
+            res = await llm.unified_chat_complete(
+                caller_id="chat_tools.call_editing_assistant",
+                model_type="EDITING",
+                messages=messages,
+                base_url=base_url,
+                api_key=api_key,
+                model_id=model_id,
+                timeout_s=timeout_s,
+                model_name=model_name,
+                tools=tools,
+            )
+        except Exception as e:
+            # Llama.cpp and some endpoints return 500 when tool call JSON is malformed
+            # Catching it gives the subagent a chance to adjust (e.g. use smaller chunk sizes)
+            err_msg = str(e)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"System Warning: Your previous attempt failed with an API/parsing error ({err_msg}). This typically occurs if your output was truncated due to length limits or formed invalid JSON. Please try again using smaller operations, shorter text chunks, or a different approach.",
+                }
+            )
+            continue
+
+        tool_calls = res.get("tool_calls", [])
+        content = res.get("content", "")
+
+        assistant_msg = {"role": "assistant"}
+        if content:
+            assistant_msg["content"] = content
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+
+        messages.append(assistant_msg)
+
+        if not tool_calls:
+            final_output = content
+            break
+
+        for tcall in tool_calls:
+            func = tcall.get("function", {})
+            f_name = func.get("name")
+            f_args = func.get("arguments", "{}")
+            if isinstance(f_args, str):
+                try:
+                    args_obj = json.loads(f_args)
+                except Exception:
+                    args_obj = {}
+            else:
+                args_obj = f_args
+
+            tcall_id = tcall.get("id")
+
+            nested_payload = dict(base_nested_payload)
+            nested_payload["_tool_role"] = EDITING_ROLE
+
+            tool_res = await execute_registered_tool(
+                f_name,
+                args_obj,
+                tcall_id,
+                nested_payload,
+                mutations,
+                tool_role=EDITING_ROLE,
+            )
+            if "role" not in tool_res:
+                from augmentedquill.services.chat.chat_tool_decorator import (
+                    tool_message,
+                )
+
+                tool_res = tool_message(f_name, tcall_id, tool_res)
+
+            if f_name == "recommend_metadata_updates":
+                try:
+                    tool_content = json.loads(tool_res.get("content") or "{}")
+                except Exception:
+                    tool_content = {}
+                recommendation = tool_content.get("recommended_updates")
+                if recommendation:
+                    recommended_updates.append(recommendation)
+            messages.append(tool_res)
+
+    if not final_output:
+        final_output = "Task completed using tools."
+
+    final_output = apply_typographic_quotes(final_output, language=project_lang)
+    result = {"message": "Editing Assistant finished", "response": final_output}
+    if recommended_updates:
+        result["recommended_updates"] = recommended_updates
+    return result

@@ -7,29 +7,20 @@
 
 /**
  * Defines the app main layout unit so this responsibility stays isolated, testable, and easy to evolve.
+ * Composes AppSidebar, the story editor pane, and AppChatPanel.
  */
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 
-import { ChapterList } from '../chapters/ChapterList';
-import { Chat } from '../chat/Chat';
 import { Editor } from '../editor/Editor';
-import { SourcebookList } from '../sourcebook/SourcebookList';
-import { StoryMetadata } from '../story/StoryMetadata';
-import { CollapsibleSection } from './CollapsibleSection';
+import { AppChatPanel } from './AppChatPanel';
+import { AppSidebar } from './AppSidebar';
 import { useTheme } from './ThemeContext';
 import {
   MainChatControls,
   MainEditorControls,
   MainSidebarControls,
 } from './layoutControlTypes';
-import type {
-  AppTheme,
-  Book,
-  Chapter,
-  SourcebookEntry,
-  WritingUnit,
-} from '../../types';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
@@ -39,249 +30,11 @@ type AppMainLayoutProps = {
   instructionLanguages: string[];
 };
 
-interface SidebarPaneProps {
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  sidebarControls: MainSidebarControls;
-  sidebarPrefs: NonNullable<MainEditorControls['editorSettings']['sidebar']>;
-  isLight: boolean;
-  currentTheme: AppTheme;
-  instructionLanguages: string[];
-  storyTitle: string;
-  storySummary: string;
-  storyTags: string[];
-  storyNotes?: string;
-  storyPrivateNotes?: string;
-  storyConflicts?: Array<{ id: string; description: string; resolution: string }>;
-  storyDraft?: WritingUnit | null;
-  sidebarChapters: Chapter[];
-  sidebarBooks: Book[];
-  storySourcebookEntries: SourcebookEntry[];
-  storyLanguage: string;
-  storyProjectType: 'short-story' | 'novel' | 'series';
-  storyId: string;
-  handleSourcebookToggle: (id: string, checked: boolean) => void;
-  handleAddChapter: (bookId?: string) => Promise<void>;
-  toggleCollapsed: (
-    key: keyof NonNullable<MainEditorControls['editorSettings']['sidebar']>
-  ) => void;
-  updateHeight: (
-    key: keyof NonNullable<MainEditorControls['editorSettings']['sidebar']>,
-    height: number
-  ) => void;
-}
-
-const SidebarPane: React.FC<SidebarPaneProps> = React.memo(
-  ({
-    isSidebarOpen,
-    setIsSidebarOpen,
-    sidebarControls,
-    sidebarPrefs,
-    isLight,
-    currentTheme,
-    instructionLanguages,
-    storyTitle,
-    storySummary,
-    storyTags,
-    storyNotes,
-    storyPrivateNotes,
-    storyConflicts,
-    storyDraft,
-    sidebarChapters,
-    sidebarBooks,
-    storySourcebookEntries,
-    storyLanguage,
-    storyProjectType,
-    storyId,
-    handleSourcebookToggle,
-    handleAddChapter,
-    toggleCollapsed,
-    updateHeight,
-  }) => {
-    const {
-      story,
-      currentChapterId,
-      handleChapterSelect,
-      deleteChapter,
-      updateChapter,
-      updateBook,
-      handleBookCreate,
-      handleBookDelete,
-      handleReorderChapters,
-      handleReorderBooks,
-      handleSidebarAiAction,
-      isEditingAvailable,
-      handleOpenImages,
-      updateStoryMetadata,
-      checkedSourcebookIds,
-      onToggleAutoSourcebookSelection,
-      isSourcebookSelectionRunning,
-      onSourcebookMutated,
-      onAppUndo,
-      onAppRedo,
-      canAppUndo,
-      canAppRedo,
-      sourcebookDialogTrigger,
-      sourcebookDialogCloseTrigger,
-      metadataDialogTrigger,
-      metadataDialogCloseTrigger,
-      baselineState,
-    } = sidebarControls;
-
-    return (
-      <nav
-        id="aq-sidebar"
-        role="navigation"
-        aria-label="Project sidebar"
-        className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } ${
-          isLight
-            ? 'bg-brand-gray-50 border-brand-gray-200'
-            : 'bg-brand-gray-900 border-brand-gray-800'
-        }`}
-      >
-        {isSidebarOpen && (
-          <button
-            className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
-            onClick={() => setIsSidebarOpen(false)}
-            aria-label="Close sidebar"
-          ></button>
-        )}
-
-        <CollapsibleSection
-          title="Story"
-          isCollapsed={!!sidebarPrefs.isStoryCollapsed}
-          onToggle={() => toggleCollapsed('isStoryCollapsed')}
-          height={sidebarPrefs.storyHeight}
-          onHeightChange={(h) => updateHeight('storyHeight', h)}
-          isLight={isLight}
-        >
-          <StoryMetadata
-            title={storyTitle}
-            summary={storySummary}
-            tags={storyTags}
-            notes={storyNotes}
-            private_notes={storyPrivateNotes}
-            language={storyLanguage}
-            conflicts={storyConflicts}
-            projectType={storyProjectType}
-            baselineSummary={baselineState?.summary}
-            baselineNotes={baselineState?.notes}
-            baselinePrivateNotes={baselineState?.private_notes}
-            baselineConflicts={baselineState?.conflicts}
-            onAiGenerateSummary={(
-              action,
-              onProgress,
-              currentText,
-              onThinking,
-              source
-            ) =>
-              handleSidebarAiAction(
-                'story',
-                storyId,
-                action,
-                onProgress,
-                currentText,
-                onThinking,
-                source
-              )
-            }
-            summaryAiDisabledReason={
-              !isEditingAvailable
-                ? 'Summary AI is unavailable because no working EDITING model is configured.'
-                : undefined
-            }
-            primarySourceAvailable={
-              storyProjectType === 'short-story' && storyDraft
-                ? !!storyDraft.content?.trim()
-                : undefined
-            }
-            onUpdate={updateStoryMetadata}
-            metadataDialogTrigger={metadataDialogTrigger}
-            closeDialogTrigger={metadataDialogCloseTrigger}
-            initialTab={metadataDialogTrigger?.initialTab}
-            theme={currentTheme}
-            languages={instructionLanguages}
-            spellCheck={true}
-          />
-        </CollapsibleSection>
-
-        {storyProjectType !== 'short-story' && (
-          <CollapsibleSection
-            title="Chapters"
-            isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
-            onToggle={() => toggleCollapsed('isChaptersCollapsed')}
-            height={sidebarPrefs.chaptersHeight}
-            onHeightChange={(h) => updateHeight('chaptersHeight', h)}
-            isLight={isLight}
-          >
-            <ChapterList
-              chapters={sidebarChapters}
-              books={sidebarBooks}
-              projectType={storyProjectType}
-              currentChapterId={currentChapterId}
-              onSelect={handleChapterSelect}
-              onDelete={deleteChapter}
-              onUpdateChapter={updateChapter}
-              onUpdateBook={updateBook}
-              onCreate={handleAddChapter}
-              onBookCreate={handleBookCreate}
-              onBookDelete={handleBookDelete}
-              onReorderChapters={handleReorderChapters}
-              onReorderBooks={handleReorderBooks}
-              onAiAction={handleSidebarAiAction}
-              isAiAvailable={isEditingAvailable}
-              theme={currentTheme}
-              onOpenImages={handleOpenImages}
-              languages={instructionLanguages}
-              baselineChapters={baselineState?.chapters}
-              language={storyLanguage}
-              spellCheck={true}
-            />
-          </CollapsibleSection>
-        )}
-
-        <CollapsibleSection
-          title="Sourcebook"
-          isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
-          onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
-          isLast
-          isLight={isLight}
-        >
-          <SourcebookList
-            theme={currentTheme}
-            language={storyLanguage}
-            externalEntries={storySourcebookEntries}
-            checkedIds={checkedSourcebookIds || []}
-            onToggle={handleSourcebookToggle}
-            isAutoSelectionEnabled={sidebarControls.isAutoSourcebookSelectionEnabled}
-            onToggleAutoSelection={sidebarControls.onToggleAutoSourcebookSelection}
-            isAutoSelectionRunning={sidebarControls.isSourcebookSelectionRunning}
-            mutatedEntryIds={sidebarControls.mutatedSourcebookEntryIds}
-            onMutated={onSourcebookMutated}
-            onAppUndo={onAppUndo}
-            onAppRedo={onAppRedo}
-            canAppUndo={canAppUndo}
-            canAppRedo={canAppRedo}
-            sourcebookDialogTrigger={sourcebookDialogTrigger}
-            closeDialogTrigger={sourcebookDialogCloseTrigger}
-            baselineEntries={baselineState?.sourcebook}
-          />
-        </CollapsibleSection>
-      </nav>
-    );
-  }
-);
-
 export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
   ({ sidebarControls, editorControls, chatControls, instructionLanguages }) => {
     const { bgMain, isLight, currentTheme } = useTheme();
 
     if (!sidebarControls || !editorControls || !chatControls) {
-      // Guard against missing layout control bundles which can occur during
-      // rehydration mismatch or when state is not yet initialized.
-      // This prevents crashes like "Cannot destructure property 'editorSettings' of 'editorControls' as it is undefined".
       console.error('AppMainLayout missing required controls', {
         sidebarControls,
         editorControls,
@@ -298,37 +51,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     }
 
     const {
+      story,
+      addChapter,
       isSidebarOpen,
       setIsSidebarOpen,
-      story,
-      currentChapterId,
-      handleChapterSelect,
-      deleteChapter,
-      updateChapter,
-      updateBook,
-      addChapter,
-      handleBookCreate,
-      handleBookDelete,
-      handleReorderChapters,
-      handleReorderBooks,
-      handleSidebarAiAction,
-      isEditingAvailable,
-      handleOpenImages,
-      updateStoryMetadata,
-      checkedSourcebookIds,
       onToggleSourcebook,
-      isAutoSourcebookSelectionEnabled,
-      onToggleAutoSourcebookSelection,
-      isSourcebookSelectionRunning,
-      onSourcebookMutated,
-      onAppUndo,
-      onAppRedo,
-      canAppUndo,
-      canAppRedo,
-      sourcebookDialogTrigger,
-      sourcebookDialogCloseTrigger,
-      metadataDialogTrigger,
-      metadataDialogCloseTrigger,
       sidebarStoryMetadata,
       sidebarStoryChapters,
       sidebarStoryBooks,
@@ -356,19 +83,15 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     const storyId = story?.id ?? '';
 
     useEffect(() => {
-      // If we don't have stored heights, initialize them based on available space and content
-      // We only do this once when totalHeight becomes available or story changes significantly
       const totalHeight = sidebarRef.current?.clientHeight || 0;
       if (
         totalHeight > 0 &&
         (!sidebarPrefs.storyHeight || !sidebarPrefs.chaptersHeight)
       ) {
-        // Intelligence: Check content to decide priorities
         const hasStorySummary = !!storySummary;
         const chapterCount =
           storyProjectType === 'short-story' ? 0 : sidebarChapters.length;
 
-        // Base ratios
         let storyRatio = storyProjectType === 'short-story' ? 0.5 : 0.33;
         let chaptersRatio = storyProjectType === 'short-story' ? 0.15 : 0.33;
 
@@ -435,44 +158,6 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       onOpenSearch,
     } = editorControls;
 
-    const {
-      isChatOpen,
-      chatMessages,
-      isChatLoading,
-      activeChatConfig,
-      systemPrompt,
-      handleSendMessage,
-      handleStopChat,
-      handleRegenerate,
-      handleEditMessage,
-      handleDeleteMessage,
-      setSystemPrompt,
-      handleLoadProject,
-      incognitoSessions,
-      chatHistoryList,
-      currentChatId,
-      isIncognito,
-      handleSelectChat,
-      handleNewChat,
-      handleDeleteChat,
-      handleDeleteAllChats,
-      setIsIncognito,
-      allowWebSearch,
-      setAllowWebSearch,
-      scratchpad,
-      onUpdateScratchpad,
-      onDeleteScratchpad,
-      sessionMutations,
-      onMutationClick,
-    } = chatControls;
-
-    // Memoize merged session list so Chat's React.memo isn't defeated by a
-    // new array reference on every AppMainLayout render.
-    const chatSessions = useMemo(
-      () => [...incognitoSessions, ...chatHistoryList],
-      [incognitoSessions, chatHistoryList]
-    );
-
     // Stable callbacks so memoized sidebar sub-components don't re-render on
     // every AppMainLayout render caused by sidebarControls reference churn.
     const handleSourcebookToggle = useCallback(
@@ -486,7 +171,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
 
     return (
       <main id="aq-main-layout" className="flex-1 flex overflow-hidden relative">
-        <SidebarPane
+        <AppSidebar
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
           sidebarControls={sidebarControls}
@@ -514,6 +199,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
           toggleCollapsed={toggleCollapsed}
           updateHeight={updateHeight}
         />
+
         <section
           id="aq-editor"
           role="main"
@@ -607,45 +293,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
           </div>
         </section>
 
-        {isChatOpen && (
-          <aside
-            id="aq-chat"
-            aria-label="AI Chat Assistant"
-            className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
-          >
-            <Chat
-              messages={chatMessages}
-              isLoading={isChatLoading}
-              isModelAvailable={chatControls.isChatAvailable}
-              activeChatConfig={activeChatConfig}
-              systemPrompt={systemPrompt}
-              onSendMessage={handleSendMessage}
-              onStop={handleStopChat}
-              onRegenerate={handleRegenerate}
-              onEditMessage={handleEditMessage}
-              onDeleteMessage={handleDeleteMessage}
-              onUpdateSystemPrompt={setSystemPrompt}
-              onSwitchProject={handleLoadProject}
-              theme={currentTheme}
-              sessions={chatSessions}
-              currentSessionId={currentChatId}
-              isIncognito={isIncognito}
-              onSelectSession={handleSelectChat}
-              onNewSession={handleNewChat}
-              onDeleteSession={handleDeleteChat}
-              onDeleteAllSessions={handleDeleteAllChats}
-              onToggleIncognito={setIsIncognito}
-              allowWebSearch={allowWebSearch}
-              onToggleWebSearch={setAllowWebSearch}
-              scratchpad={scratchpad}
-              onUpdateScratchpad={onUpdateScratchpad}
-              onDeleteScratchpad={onDeleteScratchpad}
-              sessionMutations={sessionMutations}
-              onMutationClick={onMutationClick}
-              storyLanguage={storyLanguage}
-            />
-          </aside>
-        )}
+        <AppChatPanel
+          chatControls={chatControls}
+          currentTheme={currentTheme}
+          storyLanguage={storyLanguage}
+        />
       </main>
     );
   }

@@ -10,7 +10,6 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Plus,
   Search,
@@ -22,7 +21,6 @@ import {
   Package,
   Calendar,
   HelpCircle,
-  Image as ImageIcon,
   Check,
   LoaderCircle,
 } from 'lucide-react';
@@ -33,6 +31,7 @@ import { AppTheme, SourcebookEntry } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { SourcebookEntryRow } from './SourcebookEntryRow';
+import { SourcebookHoverCard } from './SourcebookHoverCard';
 import {
   entryDiffSignature,
   filterSourcebookEntries,
@@ -479,14 +478,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       }
     }, [hoveredEntry]);
 
-    const getEntryImage = (entry: SourcebookEntry) => {
-      if (!entry.images || entry.images.length === 0) return null;
-      // Preview only the primary linked image to keep the hover card lightweight.
-      const firstImgName = entry.images[0];
-      const imgData = availableImages.find((image) => image.filename === firstImgName);
-      return imgData;
-    };
-
     return (
       <div
         id="sourcebook-list"
@@ -687,64 +678,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
         />
 
         {/* Portal Tooltip */}
-        {hoveredEntry &&
-          createPortal(
-            <div
-              style={{
-                top: tooltipPos.y,
-                left: tooltipPos.x,
-                maxWidth: '300px',
-              }}
-              className={`fixed z-[100] p-3 rounded-lg shadow-xl border ${borderClass} ${isLight ? 'bg-white' : 'bg-brand-gray-900'} animate-in fade-in zoom-in-95 duration-100`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <h4 className={`font-bold text-sm ${textClass}`}>
-                  {hoveredEntry.name}
-                </h4>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full border ${borderClass} ${subTextClass}`}
-                >
-                  {hoveredEntry.category}
-                </span>
-              </div>
-
-              {/* Image Preview if exists */}
-              {(() => {
-                const img = getEntryImage(hoveredEntry);
-                if (img) {
-                  return (
-                    <div className="mb-2 rounded overflow-hidden border border-brand-500/20 bg-black/5 aspect-video flex items-center justify-center">
-                      {img.is_placeholder || !img.url ? (
-                        <div className="text-gray-400 flex flex-col items-center">
-                          <ImageIcon size={24} />
-                        </div>
-                      ) : (
-                        <img
-                          src={img.url}
-                          alt={img.filename}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {hoveredEntry.description ? (
-                <p
-                  className={`text-xs ${isLight ? 'text-brand-gray-700' : 'text-brand-gray-300'} line-clamp-6 leading-relaxed`}
-                >
-                  {hoveredEntry.description}
-                </p>
-              ) : (
-                <p className={`text-xs italic ${subTextClass}`}>
-                  No description provided.
-                </p>
-              )}
-            </div>,
-            document.body
-          )}
+        {hoveredEntry && (
+          <SourcebookHoverCard
+            entry={hoveredEntry}
+            position={tooltipPos}
+            isLight={isLight}
+            borderClass={borderClass}
+            textClass={textClass}
+            subTextClass={subTextClass}
+            availableImages={availableImages}
+          />
+        )}
       </div>
     );
   }

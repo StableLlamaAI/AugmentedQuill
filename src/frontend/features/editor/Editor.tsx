@@ -19,13 +19,14 @@ import React, {
 } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorSettings, ViewMode, WritingUnit } from '../../types';
-import { Wand2, FileEdit, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { EditorSuggestionPanel } from './EditorSuggestionPanel';
+import { EditorMobileToolbar } from './EditorMobileToolbar';
 import {
   getBlockType,
   getLineAtOffset,
@@ -894,71 +895,17 @@ export const Editor = React.memo(
         <div
           className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
         >
-          <div className={`flex-none z-20 xl:hidden ${toolbarBg}`}>
-            <div className="h-14 flex items-center justify-between px-4">
-              <div className="flex items-center space-x-3">
-                {/* Mobile Toolbar Left Items */}
-              </div>
-              <div className="flex items-center space-x-2">
-                <div
-                  className={`flex items-center rounded-md p-1 space-x-1 ${
-                    settings.theme === 'light'
-                      ? 'bg-brand-gray-100'
-                      : 'bg-brand-gray-800'
-                  }`}
-                >
-                  <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
-                    {chapter.scope === 'story' ? 'Story AI' : 'Chapter AI'}
-                  </span>
-                  <div
-                    className={`w-px h-4 ${
-                      settings.theme === 'light'
-                        ? 'bg-brand-gray-300'
-                        : 'bg-brand-gray-700'
-                    }`}
-                  ></div>
-                  <Button
-                    theme={settings.theme}
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs h-7"
-                    onClick={() => onAiAction('chapter', 'extend')}
-                    disabled={isAiLoading || !isWritingAvailable}
-                    icon={<Wand2 size={12} />}
-                    title={
-                      !isWritingAvailable
-                        ? writingUnavailableReason
-                        : chapter.scope === 'story'
-                          ? 'Extend Story Draft (WRITING model)'
-                          : 'Extend Chapter (WRITING model)'
-                    }
-                  >
-                    Extend
-                  </Button>
-                  <Button
-                    theme={settings.theme}
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs h-7"
-                    onClick={() => onAiAction('chapter', 'rewrite')}
-                    disabled={isAiLoading || !isWritingAvailable || isChapterEmpty}
-                    icon={<FileEdit size={12} />}
-                    title={
-                      !isWritingAvailable
-                        ? writingUnavailableReason
-                        : isChapterEmpty
-                          ? 'Chapter is empty; cannot rewrite existing text.'
-                          : chapter.scope === 'story'
-                            ? 'Rewrite Story Draft (WRITING model)'
-                            : 'Rewrite Chapter (WRITING model)'
-                    }
-                  >
-                    Rewrite
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <EditorMobileToolbar
+            theme={settings.theme}
+            toolbarBg={toolbarBg}
+            textMuted={textMuted}
+            chapterScope={chapter.scope}
+            isAiLoading={isAiLoading}
+            isWritingAvailable={isWritingAvailable}
+            writingUnavailableReason={writingUnavailableReason}
+            isChapterEmpty={isChapterEmpty}
+            onAiAction={onAiAction}
+          />
 
           {/* Main Scrollable Content Area */}
           <div
