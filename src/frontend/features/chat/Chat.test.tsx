@@ -18,6 +18,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import i18n from '../app/i18n';
 import { Chat } from './Chat';
+import { ChatProvider, ChatContextValue } from './ChatContext';
 import { LLMConfig } from '../../types';
 
 const mockConfig: LLMConfig = {
@@ -30,7 +31,11 @@ const mockConfig: LLMConfig = {
   prompts: { system: '', continuation: '', summary: '' },
 };
 
-const defaultProps = {
+const defaultContext: ChatContextValue = {
+  isChatOpen: true,
+  messages: [],
+  isLoading: false,
+  isModelAvailable: true,
   activeChatConfig: mockConfig,
   systemPrompt: '',
   onSendMessage: vi.fn(),
@@ -40,20 +45,33 @@ const defaultProps = {
   onDeleteMessage: vi.fn(),
   onUpdateSystemPrompt: vi.fn(),
   onSwitchProject: vi.fn(),
-  theme: 'light' as const,
+  currentTheme: 'light' as const,
   sessions: [],
   currentSessionId: null,
   isIncognito: false,
   onSelectSession: vi.fn(),
   onNewSession: vi.fn(),
   onDeleteSession: vi.fn(),
+  onDeleteAllSessions: vi.fn(),
   onToggleIncognito: vi.fn(),
   allowWebSearch: false,
   onToggleWebSearch: vi.fn(),
+  scratchpad: '',
+  onUpdateScratchpad: vi.fn(),
+  onDeleteScratchpad: vi.fn(),
+  sessionMutations: [],
+  onMutationClick: vi.fn(),
+  storyLanguage: 'en',
 };
 
-const renderWithI18n = (ui: React.ReactElement) =>
-  render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
+const renderWithI18n = (contextOverrides: Partial<ChatContextValue> = {}) =>
+  render(
+    <I18nextProvider i18n={i18n}>
+      <ChatProvider value={{ ...defaultContext, ...contextOverrides }}>
+        <Chat />
+      </ChatProvider>
+    </I18nextProvider>
+  );
 
 describe('Chat', () => {
   beforeAll(() => {
@@ -77,28 +95,16 @@ describe('Chat', () => {
       },
     ];
 
-    const { rerender } = renderWithI18n(
-      <Chat
-        messages={messages}
-        isLoading={true}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        {...defaultProps}
-      />
-    );
+    const { rerender } = renderWithI18n({ messages, isLoading: true });
 
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
     rerender(
-      <Chat
-        messages={messages}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        {...defaultProps}
-      />
+      <I18nextProvider i18n={i18n}>
+        <ChatProvider value={{ ...defaultContext, messages, isLoading: false }}>
+          <Chat />
+        </ChatProvider>
+      </I18nextProvider>
     );
     expect(screen.queryByText('first streaming content')).toBeNull();
 
@@ -106,26 +112,20 @@ describe('Chat', () => {
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
     rerender(
-      <Chat
-        messages={messages}
-        isLoading={true}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        {...defaultProps}
-      />
+      <I18nextProvider i18n={i18n}>
+        <ChatProvider value={{ ...defaultContext, messages, isLoading: true }}>
+          <Chat />
+        </ChatProvider>
+      </I18nextProvider>
     );
     expect(screen.getByText('first streaming content')).toBeTruthy();
 
     rerender(
-      <Chat
-        messages={messages}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        {...defaultProps}
-      />
+      <I18nextProvider i18n={i18n}>
+        <ChatProvider value={{ ...defaultContext, messages, isLoading: false }}>
+          <Chat />
+        </ChatProvider>
+      </I18nextProvider>
     );
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
@@ -134,16 +134,7 @@ describe('Chat', () => {
     const onUpdateScratchpad = vi.fn();
     const onDeleteScratchpad = vi.fn();
 
-    renderWithI18n(
-      <Chat
-        messages={[]}
-        isLoading={false}
-        scratchpad="initial"
-        onUpdateScratchpad={onUpdateScratchpad}
-        onDeleteScratchpad={onDeleteScratchpad}
-        {...defaultProps}
-      />
-    );
+    renderWithI18n({ scratchpad: 'initial', onUpdateScratchpad, onDeleteScratchpad });
 
     fireEvent.click(screen.getByTitle('Open Scratchpad'));
     expect(screen.getByRole('dialog', { name: /scratchpad/i })).toBeTruthy();
@@ -162,20 +153,12 @@ describe('Chat', () => {
 
   it('renders mutation tags as buttons and invokes click handler', () => {
     const onMutationClick = vi.fn();
-    renderWithI18n(
-      <Chat
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        sessionMutations={[
-          { id: 'm1', type: 'chapter', label: 'Updated chapter title', targetId: '1' },
-        ]}
-        onMutationClick={onMutationClick}
-        {...defaultProps}
-      />
-    );
+    renderWithI18n({
+      sessionMutations: [
+        { id: 'm1', type: 'chapter', label: 'Updated chapter title', targetId: '1' },
+      ],
+      onMutationClick,
+    });
 
     const tagButton = screen.getByRole('button', { name: /Updated chapter title/i });
     expect(tagButton.getAttribute('type')).toBe('button');
@@ -193,17 +176,7 @@ describe('Chat', () => {
     const onSendMessage = vi.fn();
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
 
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        onSendMessage={onSendMessage}
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({ onSendMessage });
 
     fireEvent.click(screen.getByRole('button', { name: /Attach files/i }));
     fireEvent.change(screen.getByTestId('chat-attachment-input'), {
@@ -231,17 +204,7 @@ describe('Chat', () => {
       types: ['Files'],
     } as unknown as DataTransfer;
 
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        onSendMessage={onSendMessage}
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({ onSendMessage });
 
     const input = screen.getByRole('textbox', { name: /Chat message/i });
     fireEvent.drop(input, {
@@ -264,16 +227,7 @@ describe('Chat', () => {
     const file = new File(['story'], 'example.txt', { type: 'text/plain' });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({});
 
     fireEvent.click(screen.getByRole('button', { name: /Attach files/i }));
     fireEvent.change(screen.getByTestId('chat-attachment-input'), {
@@ -295,16 +249,7 @@ describe('Chat', () => {
   });
 
   it('closes system instruction panel on Escape', () => {
-    renderWithI18n(
-      <Chat
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-        {...defaultProps}
-      />
-    );
+    renderWithI18n({});
 
     fireEvent.click(screen.getByTitle('Chat Settings'));
     expect(screen.getByText('System Instruction')).toBeTruthy();
@@ -314,61 +259,35 @@ describe('Chat', () => {
   });
 
   it('shows tool call names in the hidden tool call title', () => {
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        messages={[
-          {
-            id: 'a1',
-            role: 'model' as const,
-            text: 'Planning a tool call',
-            tool_calls: [
-              { id: 't1', name: 'search_books', args: { query: 'fantasy' } },
-            ],
-          },
-        ]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({
+      messages: [
+        {
+          id: 'a1',
+          role: 'model' as const,
+          text: 'Planning a tool call',
+          tool_calls: [{ id: 't1', name: 'search_books', args: { query: 'fantasy' } }],
+        },
+      ],
+    });
 
     expect(screen.getByText(/1 Tool Call \[search_books\]/i)).toBeTruthy();
   });
 
   it('shows regenerate button when there is a user message and generation is not active', () => {
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        messages={[{ id: 'u1', role: 'user' as const, text: 'Hello' }]}
-        isLoading={false}
-        scratchpad=""
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({
+      messages: [{ id: 'u1', role: 'user' as const, text: 'Hello' }],
+    });
 
     expect(
       screen.getByRole('button', { name: /Regenerate last response/i })
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Regenerate last response/i }));
-    expect(defaultProps.onRegenerate).toHaveBeenCalled();
+    expect(defaultContext.onRegenerate).toHaveBeenCalled();
   });
 
   it('applies story language to chat inputs and dialog textareas', () => {
-    renderWithI18n(
-      <Chat
-        {...defaultProps}
-        messages={[]}
-        isLoading={false}
-        scratchpad=""
-        storyLanguage="fr"
-        onUpdateScratchpad={vi.fn()}
-        onDeleteScratchpad={vi.fn()}
-      />
-    );
+    renderWithI18n({ storyLanguage: 'fr' });
 
     const composer = screen.getByRole('textbox', { name: /Chat message/i });
     expect(composer.getAttribute('lang')).toBe('fr');

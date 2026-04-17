@@ -14,39 +14,25 @@
 
 import React from 'react';
 import { Sparkles, Loader2, SplitSquareHorizontal, RefreshCw } from 'lucide-react';
-import { AppTheme } from '../../types';
+import { useEditorContext } from './EditorContext';
 
-export interface EditorSuggestionPanelProps {
-  theme: AppTheme;
-  footerBg: string;
-  textMuted: string;
-  shouldShowContinuationPanel: boolean;
-  displayedContinuations: string[];
-  isSuggesting: boolean;
-  isAiLoading: boolean;
-  isWritingAvailable: boolean;
-  writingUnavailableReason: string;
-  localContentRef: React.MutableRefObject<string>;
-  onSuggestionButtonClick: () => void;
-  onAcceptContinuation: (text: string, contentOverride?: string) => void;
-  onRegenerate: (cursor: number, content: string) => void;
-}
+export const EditorSuggestionPanel: React.FC = () => {
+  const {
+    theme,
+    footerBg,
+    textMuted,
+    shouldShowContinuationPanel,
+    displayedContinuations,
+    isSuggesting,
+    isAiLoading,
+    isWritingAvailable,
+    writingUnavailableReason,
+    localContentRef,
+    onSuggestionButtonClick,
+    onAcceptContinuation,
+    onRegenerate,
+  } = useEditorContext();
 
-export const EditorSuggestionPanel: React.FC<EditorSuggestionPanelProps> = ({
-  theme,
-  footerBg,
-  textMuted,
-  shouldShowContinuationPanel,
-  displayedContinuations,
-  isSuggesting,
-  isAiLoading,
-  isWritingAvailable,
-  writingUnavailableReason,
-  localContentRef,
-  onSuggestionButtonClick,
-  onAcceptContinuation,
-  onRegenerate,
-}) => {
   return (
     <div
       className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}

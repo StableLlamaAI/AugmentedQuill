@@ -13,34 +13,21 @@
 import React from 'react';
 import { Wand2, FileEdit } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import type { AppTheme } from '../../types';
+import { useEditorContext } from './EditorContext';
 
-interface EditorMobileToolbarProps {
-  theme: AppTheme;
-  toolbarBg: string;
-  textMuted: string;
-  chapterScope: string | undefined;
-  isAiLoading: boolean;
-  isWritingAvailable: boolean;
-  writingUnavailableReason: string;
-  isChapterEmpty: boolean;
-  onAiAction: (
-    unit: 'chapter' | 'summary',
-    action: 'update' | 'rewrite' | 'extend'
-  ) => void;
-}
+export const EditorMobileToolbar: React.FC = () => {
+  const {
+    theme,
+    toolbarBg,
+    textMuted,
+    chapterScope,
+    isAiLoading,
+    isWritingAvailable,
+    writingUnavailableReason,
+    isChapterEmpty,
+    onAiAction,
+  } = useEditorContext();
 
-export const EditorMobileToolbar: React.FC<EditorMobileToolbarProps> = ({
-  theme,
-  toolbarBg,
-  textMuted,
-  chapterScope,
-  isAiLoading,
-  isWritingAvailable,
-  writingUnavailableReason,
-  isChapterEmpty,
-  onAiAction,
-}) => {
   return (
     <div className={`flex-none z-20 xl:hidden ${toolbarBg}`}>
       <div className="h-14 flex items-center justify-between px-4">

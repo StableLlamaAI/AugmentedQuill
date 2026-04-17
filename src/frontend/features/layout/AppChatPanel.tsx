@@ -13,6 +13,7 @@
 import React, { useMemo } from 'react';
 
 import { Chat } from '../chat/Chat';
+import { ChatProvider } from '../chat/ChatContext';
 import { MainChatControls } from './layoutControlTypes';
 import type { AppTheme } from '../../types';
 
@@ -71,37 +72,42 @@ export const AppChatPanel: React.FC<AppChatPanelProps> = React.memo(
         aria-label="AI Chat Assistant"
         className="fixed inset-y-0 right-0 top-14 w-full md:w-[var(--sidebar-width)] flex-shrink-0 flex flex-col z-40 shadow-xl transition duration-300 ease-in-out md:relative md:top-auto md:bottom-auto md:z-20 md:h-full"
       >
-        <Chat
-          messages={chatMessages}
-          isLoading={isChatLoading}
-          isModelAvailable={isChatAvailable}
-          activeChatConfig={activeChatConfig}
-          systemPrompt={systemPrompt}
-          onSendMessage={handleSendMessage}
-          onStop={handleStopChat}
-          onRegenerate={handleRegenerate}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onUpdateSystemPrompt={setSystemPrompt}
-          onSwitchProject={handleLoadProject}
-          theme={currentTheme}
-          sessions={chatSessions}
-          currentSessionId={currentChatId}
-          isIncognito={isIncognito}
-          onSelectSession={handleSelectChat}
-          onNewSession={handleNewChat}
-          onDeleteSession={handleDeleteChat}
-          onDeleteAllSessions={handleDeleteAllChats}
-          onToggleIncognito={setIsIncognito}
-          allowWebSearch={allowWebSearch}
-          onToggleWebSearch={setAllowWebSearch}
-          scratchpad={scratchpad}
-          onUpdateScratchpad={onUpdateScratchpad}
-          onDeleteScratchpad={onDeleteScratchpad}
-          sessionMutations={sessionMutations}
-          onMutationClick={onMutationClick}
-          storyLanguage={storyLanguage}
-        />
+        <ChatProvider
+          value={{
+            isChatOpen,
+            messages: chatMessages,
+            isLoading: isChatLoading,
+            isModelAvailable: isChatAvailable,
+            activeChatConfig,
+            systemPrompt,
+            onSendMessage: handleSendMessage,
+            onStop: handleStopChat,
+            onRegenerate: handleRegenerate,
+            onEditMessage: handleEditMessage,
+            onDeleteMessage: handleDeleteMessage,
+            onUpdateSystemPrompt: setSystemPrompt,
+            onSwitchProject: handleLoadProject,
+            sessions: chatSessions,
+            currentSessionId: currentChatId,
+            isIncognito,
+            onSelectSession: handleSelectChat,
+            onNewSession: handleNewChat,
+            onDeleteSession: handleDeleteChat,
+            onDeleteAllSessions: handleDeleteAllChats,
+            onToggleIncognito: setIsIncognito,
+            allowWebSearch,
+            onToggleWebSearch: setAllowWebSearch,
+            scratchpad,
+            onUpdateScratchpad,
+            onDeleteScratchpad,
+            sessionMutations,
+            onMutationClick,
+            storyLanguage,
+            currentTheme,
+          }}
+        >
+          <Chat />
+        </ChatProvider>
       </aside>
     );
   }

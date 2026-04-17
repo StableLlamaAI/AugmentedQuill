@@ -18,31 +18,21 @@ import React, {
   startTransition,
 } from 'react';
 import { useStory } from './features/story/useStory';
-import { StoryMetadata } from './features/story/StoryMetadata';
-import { ChapterList } from './features/chapters/ChapterList';
 import { useChapterSuggestions } from './features/chapters/useChapterSuggestions';
-import { Editor, EditorHandle } from './features/editor/Editor';
+import { EditorHandle } from './features/editor/Editor';
 import { useAppUiActions } from './features/editor/useAppUiActions';
 import { useEditorPreferences } from './features/editor/useEditorPreferences';
 import { useAiActions } from './features/story/useAiActions';
-import { Chat } from './features/chat/Chat';
 import { useChatExecution } from './features/chat/useChatExecution';
 import { useChatMessageActions } from './features/chat/useChatMessageActions';
-import { ToolCallLimitDialog } from './features/chat/ToolCallLimitDialog';
 import { useChatSessionManagement } from './features/chat/useChatSessionManagement';
-import { AppDialogs } from './features/layout/AppDialogs';
-import { AppHeader } from './features/layout/AppHeader';
-import { AppMainLayout } from './features/layout/AppMainLayout';
-import { ConfirmDialog } from './features/layout/ConfirmDialog';
-import { ConfirmDialogProvider } from './features/layout/ConfirmDialogContext';
+import { AppLayout } from './features/layout/AppLayout';
 import { useConfirmDialog } from './features/layout/useConfirmDialog';
-import { ThemeProvider } from './features/layout/ThemeContext';
 import { useProjectManagement } from './features/projects/useProjectManagement';
-import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage, SourcebookEntry } from './types';
+import { ChatMessage, ChatAttachment, SourcebookEntry } from './types';
 import { SessionMutation } from './features/chat';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
@@ -51,8 +41,6 @@ import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
 import { useSearchReplace } from './features/search/useSearchReplace';
-import { SearchReplaceDialog } from './features/search/SearchReplaceDialog';
-import { SearchHighlightProvider } from './features/search/SearchHighlightContext';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -676,9 +664,9 @@ const App: React.FC = () => {
   });
 
   const handleSendMessageWithReset = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: ChatAttachment[]) => {
       onChatNewMessageBegin();
-      await handleSendMessage(text);
+      await handleSendMessage(text, attachments);
     },
     [handleSendMessage, onChatNewMessageBegin]
   );
@@ -1144,155 +1132,122 @@ const App: React.FC = () => {
   );
 
   return (
-    <ConfirmDialogProvider value={confirm}>
-      <SearchHighlightProvider value={searchHighlightValue}>
-        <ThemeProvider currentTheme={currentTheme}>
-          <ConfirmDialog
-            isOpen={confirmDialogState.isOpen}
-            title={confirmDialogState.title}
-            message={confirmDialogState.message}
-            confirmLabel={confirmDialogState.confirmLabel}
-            cancelLabel={confirmDialogState.cancelLabel}
-            variant={confirmDialogState.variant as any}
-            onConfirm={handleConfirm}
-            onCancel={handleCancel}
-          />
-          <div
-            id="aq-app-root"
-            className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
-            style={
-              {
-                '--sidebar-width': `${editorSettings.sidebarWidth}px`,
-              } as React.CSSProperties
-            }
-          >
-            <AppDialogs
-              isSettingsOpen={isSettingsOpen}
-              setIsSettingsOpen={setIsSettingsOpen}
-              appSettings={appSettings}
-              setAppSettings={handleSaveSettings}
-              projects={projects}
-              story={story}
-              handleLoadProject={handleLoadProject}
-              handleCreateProject={handleCreateProject}
-              handleImportProject={handleImportProject}
-              handleDeleteProject={handleDeleteProject}
-              handleRenameProject={handleRenameProject}
-              handleConvertProject={handleConvertProject}
-              refreshProjects={refreshProjects}
-              currentTheme={currentTheme}
-              prompts={prompts}
-              instructionLanguages={instructionLanguages}
-              isImagesOpen={isImagesOpen}
-              setIsImagesOpen={setIsImagesOpen}
-              updateStoryImageSettings={updateStoryImageSettings}
-              imageActionsAvailable={imageActionsAvailable}
-              recordHistoryEntry={pushExternalHistoryEntry}
-              editorRef={editorRef}
-              isCreateProjectOpen={isCreateProjectOpen}
-              setIsCreateProjectOpen={setIsCreateProjectOpen}
-              handleCreateProjectConfirm={handleCreateProjectConfirm}
-            />
-
-            <AppHeader
-              storyTitle={story.title}
-              sidebarControls={sidebarControls}
-              settingsControls={settingsControls}
-              historyControls={historyControls}
-              viewControls={viewControls}
-              formatControls={formatControls}
-              aiControls={headerAiControls}
-              modelControls={modelControls}
-              appearanceControls={appearanceControls}
-              chatPanelControls={chatPanelControls}
-              searchControls={searchControls}
-            />
-
-            <AppMainLayout
-              sidebarControls={sidebarControls}
-              editorControls={editorControls}
-              chatControls={chatControls}
-              instructionLanguages={instructionLanguages}
-            />
-
-            {isDebugLogsOpen && (
-              <DebugLogs
-                isOpen={isDebugLogsOpen}
-                onClose={() => setIsDebugLogsOpen(false)}
-                theme={currentTheme}
-              />
-            )}
-
-            <ToolCallLimitDialog
-              isOpen={!!toolCallLoopDialog}
-              count={toolCallLoopDialog?.count ?? 0}
-              theme={currentTheme}
-              onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-            />
-
-            {searchState.isOpen && (
-              <SearchReplaceDialog
-                searchState={searchState}
-                activeChapterId={
-                  currentChapterId !== null ? parseInt(currentChapterId, 10) : null
-                }
-                storyLanguage={story.language || 'en'}
-                onJumpToPosition={(start, end) => {
-                  editorRef.current?.jumpToPosition(start, end);
-                }}
-                onStoryChanged={() => void refreshStory()}
-                onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
-                  setMetadataDialogCloseTrigger((c) => c + 1);
-                  setSourcebookDialogCloseTrigger((c) => c + 1);
-                  if (jumpStart !== undefined && jumpEnd !== undefined) {
-                    pendingJumpRef.current = {
-                      chapterId: String(chapId),
-                      start: jumpStart,
-                      end: jumpEnd,
-                    };
-                  }
-                  handleChapterSelect(String(chapId));
-                }}
-                onNavigateToSourcebookEntry={(entryId) => {
-                  setMetadataDialogCloseTrigger((c) => c + 1);
-                  setIsSidebarOpen(true);
-                  setSourcebookDialogTrigger((prev) => ({
-                    id: (prev?.id ?? 0) + 1,
-                    entryId,
-                  }));
-                  setEditorSettings((prev) => ({
-                    ...prev,
-                    sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-                  }));
-                }}
-                onNavigateToStoryMetadata={(field) => {
-                  const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
-                    field === 'story_summary'
-                      ? 'summary'
-                      : field === 'notes'
-                        ? 'notes'
-                        : field === 'private_notes'
-                          ? 'private'
-                          : field.startsWith('conflicts')
-                            ? 'conflicts'
-                            : 'summary';
-                  setSourcebookDialogCloseTrigger((c) => c + 1);
-                  setIsSidebarOpen(true);
-                  setMetadataDialogTrigger((prev) => ({
-                    id: (prev?.id ?? 0) + 1,
-                    initialTab: tab,
-                  }));
-                  setEditorSettings((prev) => ({
-                    ...prev,
-                    sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-                  }));
-                }}
-              />
-            )}
-          </div>
-        </ThemeProvider>
-      </SearchHighlightProvider>
-    </ConfirmDialogProvider>
+    <AppLayout
+      confirm={confirm}
+      searchHighlightValue={searchHighlightValue}
+      currentTheme={currentTheme}
+      confirmDialogState={confirmDialogState}
+      handleConfirm={handleConfirm}
+      handleCancel={handleCancel}
+      bgMain={bgMain}
+      textMain={textMain}
+      sidebarWidth={editorSettings.sidebarWidth}
+      appDialogsProps={{
+        isSettingsOpen,
+        setIsSettingsOpen,
+        appSettings,
+        setAppSettings: handleSaveSettings,
+        projects,
+        story,
+        handleLoadProject,
+        handleCreateProject,
+        handleImportProject,
+        handleDeleteProject,
+        handleRenameProject,
+        handleConvertProject,
+        refreshProjects,
+        currentTheme,
+        prompts,
+        instructionLanguages,
+        isImagesOpen,
+        setIsImagesOpen,
+        updateStoryImageSettings,
+        imageActionsAvailable,
+        recordHistoryEntry: pushExternalHistoryEntry,
+        editorRef,
+        isCreateProjectOpen,
+        setIsCreateProjectOpen,
+        handleCreateProjectConfirm,
+      }}
+      appHeaderProps={{
+        storyTitle: story.title,
+        sidebarControls,
+        settingsControls,
+        historyControls,
+        viewControls,
+        formatControls,
+        aiControls: headerAiControls,
+        modelControls,
+        appearanceControls,
+        chatPanelControls,
+        searchControls,
+      }}
+      appMainLayoutProps={{
+        sidebarControls,
+        editorControls,
+        chatControls,
+        instructionLanguages,
+      }}
+      isDebugLogsOpen={isDebugLogsOpen}
+      setIsDebugLogsOpen={setIsDebugLogsOpen}
+      toolCallLoopDialog={toolCallLoopDialog}
+      searchReplaceDialogProps={{
+        searchState,
+        activeChapterId:
+          currentChapterId !== null ? parseInt(currentChapterId, 10) : null,
+        storyLanguage: story.language || 'en',
+        onJumpToPosition: (start, end) => {
+          editorRef.current?.jumpToPosition(start, end);
+        },
+        onStoryChanged: () => void refreshStory(),
+        onNavigateToChapter: (chapId, jumpStart, jumpEnd) => {
+          setMetadataDialogCloseTrigger((c) => c + 1);
+          setSourcebookDialogCloseTrigger((c) => c + 1);
+          if (jumpStart !== undefined && jumpEnd !== undefined) {
+            pendingJumpRef.current = {
+              chapterId: String(chapId),
+              start: jumpStart,
+              end: jumpEnd,
+            };
+          }
+          handleChapterSelect(String(chapId));
+        },
+        onNavigateToSourcebookEntry: (entryId) => {
+          setMetadataDialogCloseTrigger((c) => c + 1);
+          setIsSidebarOpen(true);
+          setSourcebookDialogTrigger((prev) => ({
+            id: (prev?.id ?? 0) + 1,
+            entryId,
+          }));
+          setEditorSettings((prev) => ({
+            ...prev,
+            sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+          }));
+        },
+        onNavigateToStoryMetadata: (field) => {
+          const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+            field === 'story_summary'
+              ? 'summary'
+              : field === 'notes'
+                ? 'notes'
+                : field === 'private_notes'
+                  ? 'private'
+                  : field.startsWith('conflicts')
+                    ? 'conflicts'
+                    : 'summary';
+          setSourcebookDialogCloseTrigger((c) => c + 1);
+          setIsSidebarOpen(true);
+          setMetadataDialogTrigger((prev) => ({
+            id: (prev?.id ?? 0) + 1,
+            initialTab: tab,
+          }));
+          setEditorSettings((prev) => ({
+            ...prev,
+            sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+          }));
+        },
+      }}
+    />
   );
 };
 

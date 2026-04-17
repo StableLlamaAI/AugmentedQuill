@@ -27,6 +27,7 @@ import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { EditorSuggestionPanel } from './EditorSuggestionPanel';
 import { EditorMobileToolbar } from './EditorMobileToolbar';
+import { EditorProvider } from './EditorContext';
 import {
   getBlockType,
   getLineAtOffset,
@@ -892,172 +893,171 @@ export const Editor = React.memo(
       ]);
 
       return (
-        <div
-          className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
-        >
-          <EditorMobileToolbar
-            theme={settings.theme}
-            toolbarBg={toolbarBg}
-            textMuted={textMuted}
-            chapterScope={chapter.scope}
-            isAiLoading={isAiLoading}
-            isWritingAvailable={isWritingAvailable}
-            writingUnavailableReason={writingUnavailableReason}
-            isChapterEmpty={isChapterEmpty}
-            onAiAction={onAiAction}
-          />
-
-          {/* Main Scrollable Content Area */}
-          <div
-            ref={scrollContainerRef}
-            data-testid="editor-scroll-container"
-            className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
-            style={{ overflowAnchor: 'none' }}
-            onScroll={handleScroll}
-          >
-            {isDragging && (
-              <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
-                <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
-                  <Upload className="w-8 h-8 mb-2 text-blue-500" />
-                  <span className="font-bold text-blue-500">Drop image to upload</span>
-                </div>
-              </div>
-            )}
-            {/* The Paper - Grows infinitely */}
-            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-            <div
-              ref={paperDivRef}
-              role="group"
-              aria-label="Editor workspace"
-              className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
-              style={{
-                maxWidth: `${settings.maxWidth}ch`,
-                backgroundColor: pageBackgroundColor,
-                color: textColor,
-                fontSize: `${settings.fontSize}px`,
-                fontFamily: fontFamily,
-              }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              {/* Toolbar - Removed Image Icon here */}
-              {showInlineTitle && (
-                <div className="flex items-start gap-3 mb-8">
-                  <textarea
-                    value={localTitle}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\n/g, '');
-                      setLocalTitle(val);
-                      if (titleDebounceRef.current)
-                        clearTimeout(titleDebounceRef.current);
-                      titleDebounceRef.current = setTimeout(() => {
-                        onChange(chapter.id, { title: val });
-                      }, DEBOUNCE_MS);
-                    }}
-                    rows={1}
-                    className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
-                    placeholder={
-                      chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
-                    }
-                    lang={language || 'en'}
-                    spellCheck={spellCheck}
-                    style={{
-                      ...commonTextStyle,
-                      fontSize: '1.8em',
-                      lineHeight: '1.3',
-                      fontFamily: titleFontFamily,
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Editor Area */}
-              <div id="editor-area" className="flex flex-col relative w-full">
-                <div id="codemirror-editor" className="relative w-full flex flex-col">
-                  <CodeMirrorEditor
-                    ref={editorViewRef}
-                    value={localContent}
-                    language={language}
-                    spellCheck={spellCheck}
-                    onOpenSearch={onOpenSearch}
-                    onChange={(val: string, isUndoRedo?: boolean) => {
-                      setLocalContent(val);
-                      localContentRef.current = val;
-                      // Clear diff immediately on user input so typed text is
-                      // never highlighted as a diff insertion. Keep the baseline
-                      // active when undo/redo is used so the diff view works.
-                      if (isUndoRedo) {
-                        // Undo/redo: always restore the real AI baseline so the
-                        // diff view activates, even if localBaseline was already
-                        // set to a user-edit baseline by the debounce firing.
-                        if (savedBaselineRef.current !== undefined) {
-                          setLocalBaseline(savedBaselineRef.current);
-                        }
-                      } else if (localBaseline !== undefined) {
-                        setLocalBaseline(undefined);
-                      }
-                      scheduleCheckContext();
-                      if (contentDebounceRef.current)
-                        clearTimeout(contentDebounceRef.current);
-                      contentDebounceRef.current = setTimeout(() => {
-                        onChange(chapter.id, { content: val });
-                      }, DEBOUNCE_MS);
-                    }}
-                    onSelectionChange={scheduleCheckContext}
-                    viewMode={
-                      viewMode === 'wysiwyg'
-                        ? 'visual'
-                        : viewMode === 'markdown'
-                          ? 'markdown'
-                          : 'plain'
-                    }
-                    showWhitespace={showWhitespace}
-                    showDiff={settings.showDiff}
-                    baselineValue={localBaseline}
-                    searchHighlightRanges={chapterSearchHighlightRanges}
-                    enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
-                    placeholder={
-                      chapter.scope === 'story'
-                        ? 'Start writing your story here...'
-                        : 'Start writing your chapter here...'
-                    }
-                    className="w-full"
-                    style={{
-                      ...commonTextStyle,
-                      caretColor: textColor,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 h-16 w-full"></div>
-          </div>
-
-          {/* Persistent Footer */}
-          <EditorSuggestionPanel
-            theme={settings.theme}
-            footerBg={footerBg}
-            textMuted={textMuted}
-            shouldShowContinuationPanel={shouldShowContinuationPanel}
-            displayedContinuations={displayedContinuations}
-            isSuggesting={isSuggesting}
-            isAiLoading={isAiLoading}
-            isWritingAvailable={isWritingAvailable}
-            writingUnavailableReason={writingUnavailableReason}
-            localContentRef={localContentRef}
-            onSuggestionButtonClick={handleSuggestionButtonClick}
-            onAcceptContinuation={onAcceptContinuation}
-            onRegenerate={(cursor, content) =>
+        <EditorProvider
+          value={{
+            theme: settings.theme,
+            toolbarBg,
+            footerBg,
+            textMuted,
+            chapterScope: chapter.scope,
+            isAiLoading,
+            isWritingAvailable,
+            writingUnavailableReason,
+            isChapterEmpty,
+            onAiAction,
+            shouldShowContinuationPanel,
+            displayedContinuations,
+            isSuggesting,
+            localContentRef,
+            onSuggestionButtonClick: handleSuggestionButtonClick,
+            onAcceptContinuation,
+            onRegenerate: (cursor, content) =>
               suggestionControls.onKeyboardSuggestionAction?.(
                 'regenerate',
                 cursor,
                 content
-              )
-            }
-          />
-        </div>
+              ),
+          }}
+        >
+          <div
+            className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
+          >
+            <EditorMobileToolbar />
+
+            {/* Main Scrollable Content Area */}
+            <div
+              ref={scrollContainerRef}
+              data-testid="editor-scroll-container"
+              className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
+              style={{ overflowAnchor: 'none' }}
+              onScroll={handleScroll}
+            >
+              {isDragging && (
+                <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
+                    <Upload className="w-8 h-8 mb-2 text-blue-500" />
+                    <span className="font-bold text-blue-500">
+                      Drop image to upload
+                    </span>
+                  </div>
+                </div>
+              )}
+              {/* The Paper - Grows infinitely */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+              <div
+                ref={paperDivRef}
+                role="group"
+                aria-label="Editor workspace"
+                className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
+                style={{
+                  maxWidth: `${settings.maxWidth}ch`,
+                  backgroundColor: pageBackgroundColor,
+                  color: textColor,
+                  fontSize: `${settings.fontSize}px`,
+                  fontFamily: fontFamily,
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                {/* Toolbar - Removed Image Icon here */}
+                {showInlineTitle && (
+                  <div className="flex items-start gap-3 mb-8">
+                    <textarea
+                      value={localTitle}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\n/g, '');
+                        setLocalTitle(val);
+                        if (titleDebounceRef.current)
+                          clearTimeout(titleDebounceRef.current);
+                        titleDebounceRef.current = setTimeout(() => {
+                          onChange(chapter.id, { title: val });
+                        }, DEBOUNCE_MS);
+                      }}
+                      rows={1}
+                      className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
+                      placeholder={
+                        chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
+                      }
+                      lang={language || 'en'}
+                      spellCheck={spellCheck}
+                      style={{
+                        ...commonTextStyle,
+                        fontSize: '1.8em',
+                        lineHeight: '1.3',
+                        fontFamily: titleFontFamily,
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Editor Area */}
+                <div id="editor-area" className="flex flex-col relative w-full">
+                  <div id="codemirror-editor" className="relative w-full flex flex-col">
+                    <CodeMirrorEditor
+                      ref={editorViewRef}
+                      value={localContent}
+                      language={language}
+                      spellCheck={spellCheck}
+                      onOpenSearch={onOpenSearch}
+                      onChange={(val: string, isUndoRedo?: boolean) => {
+                        setLocalContent(val);
+                        localContentRef.current = val;
+                        // Clear diff immediately on user input so typed text is
+                        // never highlighted as a diff insertion. Keep the baseline
+                        // active when undo/redo is used so the diff view works.
+                        if (isUndoRedo) {
+                          // Undo/redo: always restore the real AI baseline so the
+                          // diff view activates, even if localBaseline was already
+                          // set to a user-edit baseline by the debounce firing.
+                          if (savedBaselineRef.current !== undefined) {
+                            setLocalBaseline(savedBaselineRef.current);
+                          }
+                        } else if (localBaseline !== undefined) {
+                          setLocalBaseline(undefined);
+                        }
+                        scheduleCheckContext();
+                        if (contentDebounceRef.current)
+                          clearTimeout(contentDebounceRef.current);
+                        contentDebounceRef.current = setTimeout(() => {
+                          onChange(chapter.id, { content: val });
+                        }, DEBOUNCE_MS);
+                      }}
+                      onSelectionChange={scheduleCheckContext}
+                      viewMode={
+                        viewMode === 'wysiwyg'
+                          ? 'visual'
+                          : viewMode === 'markdown'
+                            ? 'markdown'
+                            : 'plain'
+                      }
+                      showWhitespace={showWhitespace}
+                      showDiff={settings.showDiff}
+                      baselineValue={localBaseline}
+                      searchHighlightRanges={chapterSearchHighlightRanges}
+                      enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                      placeholder={
+                        chapter.scope === 'story'
+                          ? 'Start writing your story here...'
+                          : 'Start writing your chapter here...'
+                      }
+                      className="w-full"
+                      style={{
+                        ...commonTextStyle,
+                        caretColor: textColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 h-16 w-full"></div>
+            </div>
+
+            {/* Persistent Footer */}
+            <EditorSuggestionPanel />
+          </div>
+        </EditorProvider>
       );
     }
   )

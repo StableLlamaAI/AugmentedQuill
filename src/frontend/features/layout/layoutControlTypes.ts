@@ -15,6 +15,7 @@ import type {
   AppSettings,
   AppTheme,
   Chapter,
+  ChatAttachment,
   ChatMessage,
   ChatSession,
   EditorSettings,
@@ -259,7 +260,7 @@ export type MainChatControls = {
   isChatAvailable: boolean;
   activeChatConfig: LLMConfig;
   systemPrompt: string;
-  handleSendMessage: (text: string) => Promise<void>;
+  handleSendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;
   handleStopChat: () => void;
   handleRegenerate: () => Promise<void>;
   handleEditMessage: (id: string, newText: string) => void;
