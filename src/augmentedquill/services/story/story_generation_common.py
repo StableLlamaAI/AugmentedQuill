@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 
 from augmentedquill.services.exceptions import BadRequestError
+from augmentedquill.services.chat.chat_tool_decorator import EDITING_ROLE, WRITING_ROLE
 
 from augmentedquill.core.config import BASE_DIR, save_story_config
 from augmentedquill.services.story.story_api_prompt_ops import (
@@ -280,7 +281,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
             model_type,
         ) = resolve_model_runtime(
             payload=payload,
-            model_type="EDITING",
+            model_type=EDITING_ROLE,
             base_dir=BASE_DIR,
         )
         content_label = get_system_message(
@@ -309,7 +310,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
             "timeout_s": timeout_s,
             "tools": (
                 _get_read_only_tool_schemas(project_type="short-story")
-                if model_type == "EDITING"
+                if model_type == EDITING_ROLE
                 else None
             ),
         }
@@ -329,7 +330,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
-            model_type="EDITING",
+            model_type=EDITING_ROLE,
             base_dir=BASE_DIR,
         )
     )
@@ -363,7 +364,7 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
         "timeout_s": timeout_s,
         "tools": (
             _get_read_only_tool_schemas(project_type=story.get("project_type"))
-            if model_type == "EDITING"
+            if model_type == EDITING_ROLE
             else None
         ),
     }
@@ -389,7 +390,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
-            model_type="EDITING",
+            model_type=EDITING_ROLE,
             base_dir=BASE_DIR,
         )
     )
@@ -425,7 +426,7 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
         "timeout_s": timeout_s,
         "tools": (
             _get_read_only_tool_schemas(project_type=story.get("project_type"))
-            if model_type == "EDITING"
+            if model_type == EDITING_ROLE
             else None
         ),
     }
@@ -458,7 +459,7 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
     )
@@ -517,7 +518,7 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
     )
@@ -654,9 +655,9 @@ def prepare_ai_action_generation(payload: dict) -> dict:
     )
 
     model_type = (
-        "EDITING"
+        EDITING_ROLE
         if target in ("summary", "story_summary", "book_summary")
-        else "WRITING"
+        else WRITING_ROLE
     )
     base_url, api_key, model_id, timeout_s, model_name, model_overrides, model_type = (
         resolve_model_runtime(
@@ -719,7 +720,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         "timeout_s": timeout_s,
         "tools": (
             _get_read_only_tool_schemas(project_type=project_type)
-            if model_type == "EDITING"
+            if model_type == EDITING_ROLE
             else None
         ),
     }

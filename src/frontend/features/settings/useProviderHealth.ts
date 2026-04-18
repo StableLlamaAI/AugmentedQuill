@@ -10,14 +10,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState, startTransition } from 'react';
-import { AppSettings } from '../../types';
+import { AppSettings, ConnectionStatus, ProviderCapabilities } from '../../types';
 import { api } from '../../services/api';
-
-type ConnectionStatus = 'idle' | 'success' | 'error' | 'loading';
-type ProviderCapabilities = {
-  is_multimodal: boolean;
-  supports_function_calling: boolean;
-};
 
 /**
  * Construct a stable string key from provider connection fields.

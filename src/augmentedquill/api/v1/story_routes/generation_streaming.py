@@ -41,6 +41,7 @@ from augmentedquill.services.story.story_api_stream_ops import (
     stream_unified_chat_content,
 )
 from augmentedquill.services.exceptions import ServiceError
+from augmentedquill.services.chat.chat_tool_decorator import WRITING_ROLE
 from augmentedquill.api.v1.story_routes.common import parse_json_body
 
 router = APIRouter(tags=["Story"])
@@ -187,7 +188,7 @@ async def api_story_sourcebook_relevance(request: Request):
             _model_type,
         ) = resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
         # guarantee at least 120 seconds for background relevance requests to
@@ -203,7 +204,7 @@ async def api_story_sourcebook_relevance(request: Request):
         try:
             res = await llm.unified_chat_complete(
                 caller_id="api.story.sourcebook_relevance",
-                model_type="WRITING",
+                model_type=WRITING_ROLE,
                 messages=[
                     {
                         "role": "system",
@@ -308,7 +309,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             _model_type,
         ) = resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
 

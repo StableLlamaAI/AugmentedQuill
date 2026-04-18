@@ -102,3 +102,12 @@ export interface ProjectMetadata {
   updatedAt: number;
   language?: string;
 }
+
+export type ConnectionStatus = 'idle' | 'success' | 'error' | 'loading';
+
+export interface ProviderCapabilities {
+  is_multimodal: boolean;
+  supports_function_calling: boolean;
+}
+
+export type MetadataTab = 'summary' | 'notes' | 'private' | 'conflicts';

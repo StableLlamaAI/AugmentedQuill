@@ -11,9 +11,7 @@
  */
 
 import { Dispatch, SetStateAction, useCallback } from 'react';
-import { EditorSettings } from '../../types';
-
-type MetadataTab = 'summary' | 'notes' | 'private' | 'conflicts';
+import { EditorSettings, MetadataTab } from '../../types';
 
 type MetadataDialogTrigger = {
   id: number;

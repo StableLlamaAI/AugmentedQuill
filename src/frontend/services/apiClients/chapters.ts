@@ -11,7 +11,7 @@
 
 import { Conflict } from '../../types';
 import { ChapterDetailResponse, ChapterListResponse } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, putJson, postJson, deleteJson } from './shared';
 
 export const chaptersApi = {
   list: async () =>
@@ -26,49 +26,33 @@ export const chaptersApi = {
   },
 
   create: async (title: string, content: string = '', book_id?: string) => {
-    return fetchJson<{ ok: boolean; id: number; title: string; book_id?: string }>(
+    return postJson<{ ok: boolean; id: number; title: string; book_id?: string }>(
       '/chapters',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, book_id }),
-      },
+      { title, content, book_id },
       'Failed to create chapter'
     );
   },
 
   updateContent: async (id: number, content: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return putJson<{ ok: boolean }>(
       `/chapters/${id}/content`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      },
+      { content },
       'Failed to update chapter content'
     );
   },
 
   updateTitle: async (id: number, title: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return putJson<{ ok: boolean }>(
       `/chapters/${id}/title`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      },
+      { title },
       'Failed to update chapter title'
     );
   },
 
   updateSummary: async (id: number, summary: string) => {
-    return fetchJson<{ ok: boolean }>(
+    return putJson<{ ok: boolean }>(
       `/chapters/${id}/summary`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary }),
-      },
+      { summary },
       'Failed to update chapter summary'
     );
   },
@@ -82,23 +66,15 @@ export const chaptersApi = {
       conflicts?: Conflict[];
     }
   ) => {
-    return fetchJson<{ ok: boolean; id?: number; message?: string }>(
+    return putJson<{ ok: boolean; id?: number; message?: string }>(
       `/chapters/${id}/metadata`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      },
+      data,
       'Failed to update chapter metadata'
     );
   },
 
   delete: async (id: number) => {
-    return fetchJson<{ ok: boolean }>(
-      `/chapters/${id}`,
-      { method: 'DELETE' },
-      'Failed to delete chapter'
-    );
+    return deleteJson<{ ok: boolean }>(`/chapters/${id}`, 'Failed to delete chapter');
   },
 
   reorder: async (chapterIds: number[], bookId?: string) => {

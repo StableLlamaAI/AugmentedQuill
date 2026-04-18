@@ -10,12 +10,10 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Conflict } from '../../types';
+import { Conflict, MetadataTab } from '../../types';
 import { MetadataParams, computeSyncUpdates } from './metadataSync';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { useMetadataDialogHistory } from './useMetadataDialogHistory';
-
-type MetadataTab = 'summary' | 'notes' | 'private' | 'conflicts';
 type MetadataAction = 'write' | 'update' | 'rewrite';
 type MetadataAiSource = 'chapter' | 'notes';
 

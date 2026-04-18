@@ -19,6 +19,7 @@ from augmentedquill.core.config import (
     load_machine_config,
 )
 from augmentedquill.services.llm.llm_http_ops import logged_stream_request
+from augmentedquill.services.chat.chat_tool_decorator import EDITING_ROLE
 from augmentedquill.services.llm.llm_request_helpers import (
     apply_native_tool_calling_mode,
 )
@@ -122,7 +123,7 @@ async def unified_chat_stream(
 
     # For EDITING tasks (like summarization), if we have a thinking model, we likely need more tokens.
     # We boost max_tokens to 16k if it's below that, to allow for extensive reasoning.
-    if model_type == "EDITING" and (max_tokens is None or max_tokens < 16384):
+    if model_type == EDITING_ROLE and (max_tokens is None or max_tokens < 16384):
         # We check for known reasoning model patterns if possible, or just apply it for all editing tasks
         # since summaries usually don't reach 16k anyway, so it's a safe upper bound.
         max_tokens = 16384

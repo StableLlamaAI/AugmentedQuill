@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 from augmentedquill.core.config import load_story_config
 from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.services.chat.chat_tool_decorator import MODEL_ROLES
 from augmentedquill.services.chat.chat_tools.chapter_tools import (
     compose_current_chapter_state,
 )
@@ -32,7 +33,7 @@ def _normalize_model_type(model_type: str | None) -> str:
     if model_type is None:
         return None
     value = str(model_type).strip().upper()
-    return value if value in ("CHAT", "WRITING", "EDITING") else None
+    return value if value in MODEL_ROLES else None
 
 
 def _resolve_stream_selected_name(

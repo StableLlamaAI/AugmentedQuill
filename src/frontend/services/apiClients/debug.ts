@@ -10,7 +10,7 @@
  */
 
 import { DebugLogEntry } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, deleteJson } from './shared';
 
 export const debugApi = {
   getLogs: async () => {
@@ -22,9 +22,8 @@ export const debugApi = {
   },
 
   clearLogs: async () => {
-    return fetchJson<{ status: string }>(
+    return deleteJson<{ status: string }>(
       '/debug/llm_logs?_t=' + Date.now(),
-      { method: 'DELETE' },
       'Failed to clear debug logs'
     );
   },

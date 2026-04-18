@@ -10,7 +10,7 @@
  */
 
 import { StoryContentResponse } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, putJson } from './shared';
 
 export const storyApi = {
   updateTitle: async (title: string) => {
@@ -26,25 +26,17 @@ export const storyApi = {
   },
 
   updateSummary: async (summary: string) => {
-    return fetchJson<{ ok: boolean; summary?: string }>(
+    return putJson<{ ok: boolean; summary?: string }>(
       '/story/summary',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary }),
-      },
+      { summary },
       'Failed to update story summary'
     );
   },
 
   updateTags: async (tags: string[]) => {
-    return fetchJson<{ ok: boolean }>(
+    return putJson<{ ok: boolean }>(
       '/story/tags',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags }),
-      },
+      { tags },
       'Failed to update story tags'
     );
   },

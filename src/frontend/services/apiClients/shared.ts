@@ -71,3 +71,23 @@ export async function postJson<T>(
     fallbackError
   );
 }
+
+export async function putJson<T>(
+  path: string,
+  body: unknown,
+  fallbackError: string
+): Promise<T> {
+  return fetchJson<T>(
+    path,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    fallbackError
+  );
+}
+
+export async function deleteJson<T>(path: string, fallbackError: string): Promise<T> {
+  return fetchJson<T>(path, { method: 'DELETE' }, fallbackError);
+}

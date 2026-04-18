@@ -11,7 +11,7 @@
 
 import { SourcebookEntry } from '../../types';
 import { SourcebookUpsertPayload } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, postJson, putJson, deleteJson } from './shared';
 
 export const sourcebookApi = {
   list: async (
@@ -31,35 +31,22 @@ export const sourcebookApi = {
   },
 
   create: async (entry: SourcebookUpsertPayload) => {
-    return fetchJson<SourcebookEntry>(
-      '/sourcebook',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-      },
-      'Failed to create entry'
-    );
+    return postJson<SourcebookEntry>('/sourcebook', entry, 'Failed to create entry');
   },
 
   update: async (id: string, updates: Partial<SourcebookUpsertPayload>) => {
     const escapedId = encodeURIComponent(id);
-    return fetchJson<SourcebookEntry>(
+    return putJson<SourcebookEntry>(
       `/sourcebook/${escapedId}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      },
+      updates,
       'Failed to update entry'
     );
   },
 
   delete: async (id: string) => {
     const escapedId = encodeURIComponent(id);
-    return fetchJson<{ ok: boolean }>(
+    return deleteJson<{ ok: boolean }>(
       `/sourcebook/${escapedId}`,
-      { method: 'DELETE' },
       'Failed to delete entry'
     );
   },
@@ -69,13 +56,9 @@ export const sourcebookApi = {
     description: string;
     synonyms?: string[];
   }) => {
-    return fetchJson<{ keywords: string[] }>(
+    return postJson<{ keywords: string[] }>(
       '/sourcebook/keywords',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to generate keywords'
     );
   },

@@ -15,7 +15,7 @@ import {
   ChatToolBatchMutationResponse,
   ChatToolExecutionResponse,
 } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, postJson, deleteJson } from './shared';
 
 export const chatApi = {
   list: async () =>
@@ -35,31 +35,15 @@ export const chatApi = {
       scratchpad?: string;
     }
   ) => {
-    return fetchJson<{ ok: boolean }>(
-      `/chats/${id}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      },
-      'Failed to save chat'
-    );
+    return postJson<{ ok: boolean }>(`/chats/${id}`, data, 'Failed to save chat');
   },
 
   delete: async (id: string) => {
-    return fetchJson<{ ok: boolean }>(
-      `/chats/${id}`,
-      { method: 'DELETE' },
-      'Failed to delete chat'
-    );
+    return deleteJson<{ ok: boolean }>(`/chats/${id}`, 'Failed to delete chat');
   },
 
   deleteAll: async () => {
-    return fetchJson<{ ok: boolean }>(
-      '/chats',
-      { method: 'DELETE' },
-      'Failed to delete all chats'
-    );
+    return deleteJson<{ ok: boolean }>('/chats', 'Failed to delete all chats');
   },
 
   executeTools: async (

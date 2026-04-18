@@ -9,13 +9,12 @@
  * Defines app selectors so App component orchestration stays focused and testable.
  */
 
-import { AppSettings, LLMConfig } from '../../types';
-
-type ConnectionStatus = 'idle' | 'success' | 'error' | 'loading';
-type ProviderCapabilities = {
-  is_multimodal: boolean;
-  supports_function_calling: boolean;
-};
+import {
+  AppSettings,
+  ConnectionStatus,
+  LLMConfig,
+  ProviderCapabilities,
+} from '../../types';
 
 export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;

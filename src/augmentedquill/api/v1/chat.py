@@ -31,6 +31,8 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     execute_registered_tool,
     get_registered_tool_schemas,
     tool_message,
+    CHAT_ROLE,
+    WRITING_ROLE,
 )
 from augmentedquill.services.chat.chat_api_helpers import (
     inject_chat_attachments,
@@ -464,7 +466,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 break
 
     # If it's a chat, inject current chapter context into the latest user message
-    if model_type == "CHAT":
+    if model_type == CHAT_ROLE:
         try:
             story = (
                 load_story_config(
@@ -553,7 +555,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     story_tools = get_registered_tool_schemas(
         model_type=model_type, project_type=_active_project_type
     )
-    if _allow_web_search and model_type == "CHAT":
+    if _allow_web_search and model_type == CHAT_ROLE:
         from augmentedquill.services.chat.chat_tool_decorator import (
             get_opt_in_tool_schemas,
         )
@@ -565,7 +567,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         # This prevents some models from hallucinating tool usage even when told not to.
         if tool_choice == "none":
             pass
-    if model_type == "WRITING":
+    if model_type == WRITING_ROLE:
         story_tools = None
         tool_choice = None
         supports_function_calling = False
