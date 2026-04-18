@@ -266,7 +266,7 @@ describe('onMutated async sequencing', () => {
     let storySnapshot: Snapshot | null = null;
 
     // Simulate App.tsx's onSourcebookMutated wrapper.
-    const onSourcebookMutated = async (params: { label: string }) => {
+    const onSourcebookMutated = async (_params: { label: string }) => {
       // Simulated refreshStory: removes 'hero' from sourcebook.
       await Promise.resolve();
       storySnapshot = { sourcebook: [] }; // reflects deletion

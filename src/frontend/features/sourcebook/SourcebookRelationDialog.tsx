@@ -29,6 +29,229 @@ interface SourcebookRelationDialogProps {
   initialRelation?: SourcebookRelation;
 }
 
+interface TargetEntrySectionProps {
+  borderClass: string;
+  inputBorderClass: string;
+  inputBgClass: string;
+  textClass: string;
+  filter: string;
+  targetId: string;
+  filteredEntries: Array<{ id: string; name: string; description?: string }>;
+  onFilterChange: (value: string) => void;
+  onTargetSelect: (id: string) => void;
+  t: (key: string, options?: Record<string, string>) => string;
+}
+
+const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
+  borderClass,
+  inputBorderClass,
+  inputBgClass,
+  textClass,
+  filter,
+  targetId,
+  filteredEntries,
+  onFilterChange,
+  onTargetSelect,
+  t,
+}) => {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">{t('Target Entry')}</label>
+      <div className={`border ${borderClass} rounded-md p-2 space-y-3`}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-gray-400" />
+          <input
+            type="text"
+            placeholder={t('Filter entries...')}
+            value={filter}
+            onChange={(e) => onFilterChange(e.target.value)}
+            className={`w-full pl-9 pr-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
+          />
+        </div>
+        <div className="max-h-40 overflow-y-auto space-y-1 pr-2">
+          {filteredEntries.length === 0 ? (
+            <p className="text-sm text-center py-4 opacity-50">
+              {t('No entries found.')}
+            </p>
+          ) : (
+            filteredEntries.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => onTargetSelect(entry.id)}
+                className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
+                  targetId === entry.id
+                    ? 'bg-brand-500 text-white border-brand-500'
+                    : 'border-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
+                }`}
+                aria-label={t('Select target entry {{name}}', {
+                  name: entry.name,
+                })}
+              >
+                <div className="font-medium">{entry.name}</div>
+                <div className="text-xs opacity-70 truncate">{entry.description}</div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface RelationLogicSectionProps {
+  direction: 'forward' | 'reverse';
+  mainName: string;
+  targetName: string;
+  relationStatement: string;
+  inputBorderClass: string;
+  inputBgClass: string;
+  textClass: string;
+  theme: AppTheme;
+  onToggleDirection: () => void;
+  onRelationStatementChange: (value: string) => void;
+  t: (key: string) => string;
+}
+
+const RelationLogicSection: React.FC<RelationLogicSectionProps> = ({
+  direction,
+  mainName,
+  targetName,
+  relationStatement,
+  inputBorderClass,
+  inputBgClass,
+  textClass,
+  theme,
+  onToggleDirection,
+  onRelationStatementChange,
+  t,
+}) => {
+  return (
+    <div className="space-y-3 p-4 border rounded-md bg-opacity-50 bg-brand-gray-500/5 border-brand-500/20">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">{t('Relation Logic')}</label>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onToggleDirection}
+          icon={<ArrowRightLeft className="w-3 h-3" />}
+          theme={theme}
+        >
+          {t('Swap Direction')}
+        </Button>
+      </div>
+      <div className="flex flex-col md:flex-row md:items-center gap-3 w-full">
+        <div
+          className={`flex-1 p-2 text-center rounded-md ${direction === 'forward' ? 'font-semibold text-brand-500 bg-brand-500/10' : 'opacity-80 bg-brand-gray-500/10'}`}
+        >
+          {direction === 'forward' ? mainName : targetName}
+        </div>
+        <input
+          type="text"
+          placeholder={t("e.g. 'owns', 'is married to'")}
+          value={relationStatement}
+          onChange={(e) => onRelationStatementChange(e.target.value)}
+          className={`w-full md:w-1/3 px-3 flex-shrink-0 text-center py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
+        />
+        <div
+          className={`flex-1 p-2 text-center rounded-md ${direction === 'reverse' ? 'font-semibold text-brand-500 bg-brand-500/10' : 'opacity-80 bg-brand-gray-500/10'}`}
+        >
+          {direction === 'reverse' ? mainName : targetName}
+        </div>
+      </div>
+      <p className="text-xs opacity-70 text-center">
+        {t('How does the left entry relate to the right entry?')}
+      </p>
+    </div>
+  );
+};
+
+interface ConstraintSectionProps {
+  showChapters: boolean;
+  showBooks: boolean;
+  startChapter: string;
+  endChapter: string;
+  startBook: string;
+  endBook: string;
+  inputBorderClass: string;
+  inputBgClass: string;
+  textClass: string;
+  onStartChapterChange: (value: string) => void;
+  onEndChapterChange: (value: string) => void;
+  onStartBookChange: (value: string) => void;
+  onEndBookChange: (value: string) => void;
+  t: (key: string) => string;
+}
+
+const ConstraintSection: React.FC<ConstraintSectionProps> = ({
+  showChapters,
+  showBooks,
+  startChapter,
+  endChapter,
+  startBook,
+  endBook,
+  inputBorderClass,
+  inputBgClass,
+  textClass,
+  onStartChapterChange,
+  onEndChapterChange,
+  onStartBookChange,
+  onEndBookChange,
+  t,
+}) => {
+  if (!showChapters && !showBooks) {
+    return null;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 pt-2">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">{t('Start Constraint')}</label>
+        {showChapters && (
+          <input
+            type="text"
+            placeholder={t('e.g. Chapter 3')}
+            value={startChapter}
+            onChange={(e) => onStartChapterChange(e.target.value)}
+            className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
+          />
+        )}
+        {showBooks && (
+          <input
+            type="text"
+            placeholder={t('e.g. Book 1')}
+            value={startBook}
+            onChange={(e) => onStartBookChange(e.target.value)}
+            className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
+          />
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">{t('End Constraint')}</label>
+        {showChapters && (
+          <input
+            type="text"
+            placeholder={t('e.g. Chapter 10')}
+            value={endChapter}
+            onChange={(e) => onEndChapterChange(e.target.value)}
+            className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
+          />
+        )}
+        {showBooks && (
+          <input
+            type="text"
+            placeholder={t('e.g. Book 1')}
+            value={endBook}
+            onChange={(e) => onEndBookChange(e.target.value)}
+            className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> = ({
   isOpen,
   onClose,
@@ -148,139 +371,51 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Target Selection */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t('Target Entry')}</label>
-            <div className={`border ${borderClass} rounded-md p-2 space-y-3`}>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-gray-400" />
-                <input
-                  type="text"
-                  placeholder={t('Filter entries...')}
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  className={`w-full pl-9 pr-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
-                />
-              </div>
-              <div className="max-h-40 overflow-y-auto space-y-1 pr-2">
-                {filteredEntries.length === 0 ? (
-                  <p className="text-sm text-center py-4 opacity-50">
-                    {t('No entries found.')}
-                  </p>
-                ) : (
-                  filteredEntries.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      onClick={() => setTargetId(entry.id)}
-                      className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
-                        targetId === entry.id
-                          ? 'bg-brand-500 text-white border-brand-500'
-                          : 'border-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
-                      }`}
-                      aria-label={t('Select target entry {{name}}', {
-                        name: entry.name,
-                      })}
-                    >
-                      <div className="font-medium">{entry.name}</div>
-                      <div className="text-xs opacity-70 truncate">
-                        {entry.description}
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+          <TargetEntrySection
+            borderClass={borderClass}
+            inputBorderClass={inputBorderClass}
+            inputBgClass={inputBgClass}
+            textClass={textClass}
+            filter={filter}
+            targetId={targetId}
+            filteredEntries={filteredEntries}
+            onFilterChange={setFilter}
+            onTargetSelect={setTargetId}
+            t={t}
+          />
 
-          {/* Relation & Direction */}
-          <div className="space-y-3 p-4 border rounded-md bg-opacity-50 bg-brand-gray-500/5 border-brand-500/20">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">{t('Relation Logic')}</label>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  setDirection((d) => (d === 'forward' ? 'reverse' : 'forward'))
-                }
-                icon={<ArrowRightLeft className="w-3 h-3" />}
-                theme={theme}
-              >
-                {t('Swap Direction')}
-              </Button>
-            </div>
-            <div className="flex flex-col md:flex-row md:items-center gap-3 w-full">
-              <div
-                className={`flex-1 p-2 text-center rounded-md ${direction === 'forward' ? 'font-semibold text-brand-500 bg-brand-500/10' : 'opacity-80 bg-brand-gray-500/10'}`}
-              >
-                {direction === 'forward' ? mainName : targetName}
-              </div>
-              <input
-                type="text"
-                placeholder={t("e.g. 'owns', 'is married to'")}
-                value={relationStatement}
-                onChange={(e) => setRelationStatement(e.target.value)}
-                className={`w-full md:w-1/3 px-3 flex-shrink-0 text-center py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
-              />
-              <div
-                className={`flex-1 p-2 text-center rounded-md ${direction === 'reverse' ? 'font-semibold text-brand-500 bg-brand-500/10' : 'opacity-80 bg-brand-gray-500/10'}`}
-              >
-                {direction === 'reverse' ? mainName : targetName}
-              </div>
-            </div>
-            <p className="text-xs opacity-70 text-center">
-              {t('How does the left entry relate to the right entry?')}
-            </p>
-          </div>
+          <RelationLogicSection
+            direction={direction}
+            mainName={mainName}
+            targetName={targetName}
+            relationStatement={relationStatement}
+            inputBorderClass={inputBorderClass}
+            inputBgClass={inputBgClass}
+            textClass={textClass}
+            theme={theme}
+            onToggleDirection={() =>
+              setDirection((d) => (d === 'forward' ? 'reverse' : 'forward'))
+            }
+            onRelationStatementChange={setRelationStatement}
+            t={t}
+          />
 
-          {/* Time Constraints */}
-          {(showChapters || showBooks) && (
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('Start Constraint')}</label>
-                {showChapters && (
-                  <input
-                    type="text"
-                    placeholder={t('e.g. Chapter 3')}
-                    value={startChapter}
-                    onChange={(e) => setStartChapter(e.target.value)}
-                    className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
-                  />
-                )}
-                {showBooks && (
-                  <input
-                    type="text"
-                    placeholder={t('e.g. Book 1')}
-                    value={startBook}
-                    onChange={(e) => setStartBook(e.target.value)}
-                    className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
-                  />
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('End Constraint')}</label>
-                {showChapters && (
-                  <input
-                    type="text"
-                    placeholder={t('e.g. Chapter 10')}
-                    value={endChapter}
-                    onChange={(e) => setEndChapter(e.target.value)}
-                    className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
-                  />
-                )}
-                {showBooks && (
-                  <input
-                    type="text"
-                    placeholder={t('e.g. Book 1')}
-                    value={endBook}
-                    onChange={(e) => setEndBook(e.target.value)}
-                    className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
-                  />
-                )}
-              </div>
-            </div>
-          )}
+          <ConstraintSection
+            showChapters={showChapters}
+            showBooks={showBooks}
+            startChapter={startChapter}
+            endChapter={endChapter}
+            startBook={startBook}
+            endBook={endBook}
+            inputBorderClass={inputBorderClass}
+            inputBgClass={inputBgClass}
+            textClass={textClass}
+            onStartChapterChange={setStartChapter}
+            onEndChapterChange={setEndChapter}
+            onStartBookChange={setStartBook}
+            onEndBookChange={setEndBook}
+            t={t}
+          />
         </div>
 
         <div

@@ -106,11 +106,11 @@ export function MetadataEditorDialog({
   const getConflictRanges = (index: number, field: 'description' | 'resolution') =>
     getRanges('story_metadata', 'story', `conflicts[${index}].${field}`);
 
-  const normalizeConflict = (value: any): Conflict => {
+  const normalizeConflict = (value: Partial<Conflict> | undefined | null): Conflict => {
     return {
-      id: value.id || crypto.randomUUID(),
-      description: value.description || '',
-      resolution: value.resolution || 'TBD',
+      id: value?.id || crypto.randomUUID(),
+      description: value?.description || '',
+      resolution: value?.resolution || 'TBD',
     };
   };
 
@@ -392,11 +392,6 @@ export function MetadataEditorDialog({
 
   const isDarkMode = theme === 'dark' || theme === 'mixed';
   const hasAiSummaryControls = !!onAiGenerate || !!aiDisabledReason;
-  const aiTooltip =
-    aiDisabledReason ||
-    (type === 'story'
-      ? 'Generate story summary with AI (EDITING model)'
-      : 'Generate summary with AI (EDITING model)');
   const primarySourceTitle = `from ${primarySourceLabel}`;
   const regeneratePrimaryTitle = `Regenerate summary from ${primarySourceLabel}`;
   const updatePrimaryTitle = `Update existing summary with facts from ${primarySourceLabel}`;
