@@ -10,11 +10,11 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Search,
   BookOpen,
-  Book,
   User,
   MapPin,
   Users,
@@ -24,14 +24,19 @@ import {
   Check,
   LoaderCircle,
 } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
 import { SourcebookEntryDialog } from './SourcebookEntryDialog';
-import { api } from '../../services/api';
 import { AppTheme, SourcebookEntry } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { SourcebookEntryRow } from './SourcebookEntryRow';
 import { SourcebookHoverCard } from './SourcebookHoverCard';
+import {
+  createSourcebookEntry,
+  deleteSourcebookEntry,
+  listProjectImages,
+  listSourcebookEntries,
+  updateSourcebookEntry,
+} from './sourcebookApi';
 import {
   entryDiffSignature,
   filterSourcebookEntries,
@@ -126,6 +131,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     language = 'en',
     baselineEntries,
   }) => {
+    const { t } = useTranslation();
     const [entries, setEntries] = useState<SourcebookEntry[]>(
       resolveExternalSourcebookEntries(externalEntries, [])
     );
@@ -166,7 +172,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     const handleEntryClick = useCallback(async (entry: SourcebookEntry) => {
       setIsLoadingEntry(true);
       try {
-        const all = await api.sourcebook.list();
+        const all = await listSourcebookEntries();
         const full = all.find((x) => x.id === entry.id) || entry;
         setEntries(all);
         setSelectedEntry(full);
@@ -189,7 +195,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
 
     const loadEntries = async (query?: string) => {
       try {
-        const data = await api.sourcebook.list(query, 'extensive', false);
+        const data = await listSourcebookEntries(query, 'extensive');
         setEntries(data);
       } catch (e) {
         console.error('Failed to load sourcebook', e);
@@ -246,7 +252,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
         }
 
         try {
-          const all = await api.sourcebook.list();
+          const all = await listSourcebookEntries();
           if (cancelled) return;
           setEntries(all);
           const target = findEntry(all);
@@ -351,17 +357,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     };
 
     const handleCreate = async (entry: SourcebookUpsertPayload) => {
-      const created = await api.sourcebook.create(entry);
+      const created = await createSourcebookEntry(entry);
       await syncEntries((prev) => [...prev, created]);
       let createdId = created.id;
       await onMutated?.({
         label: `Create sourcebook entry: ${entry.name}`,
         onUndo: async () => {
-          await api.sourcebook.delete(createdId);
+          await deleteSourcebookEntry(createdId);
           await loadEntries();
         },
         onRedo: async () => {
-          const recreated = await api.sourcebook.create(entry);
+          const recreated = await createSourcebookEntry(entry);
           createdId = recreated.id;
           await loadEntries();
         },
@@ -377,7 +383,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       if (!entry.id) return;
       const previous = entries.find((value) => value.id === entry.id);
       const previousId = entry.id;
-      const updated = await api.sourcebook.update(entry.id, entry);
+      const updated = await updateSourcebookEntry(entry.id, entry);
       await syncEntries((prev) =>
         updateSourcebookEntryInList(prev, previousId, updated)
       );
@@ -393,7 +399,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       await onMutated?.({
         label: `Update sourcebook entry: ${entry.name}`,
         onUndo: async () => {
-          const reverted = await api.sourcebook.update(activeId, {
+          const reverted = await updateSourcebookEntry(activeId, {
             name: previous.name,
             synonyms: previous.synonyms,
             category: previous.category,
@@ -404,7 +410,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
           await loadEntries();
         },
         onRedo: async () => {
-          const redone = await api.sourcebook.update(activeId, {
+          const redone = await updateSourcebookEntry(activeId, {
             name: entry.name,
             synonyms: entry.synonyms,
             category: entry.category,
@@ -422,7 +428,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
 
     const handleDelete = async (id: string) => {
       const deletedEntry = entries.find((entry) => entry.id === id);
-      await api.sourcebook.delete(id);
+      await deleteSourcebookEntry(id);
       await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
       if (!deletedEntry) return;
 
@@ -433,7 +439,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       await onMutated?.({
         label: `Delete sourcebook entry: ${deletedEntry.name}`,
         onUndo: async () => {
-          const restored = await api.sourcebook.create({
+          const restored = await createSourcebookEntry({
             id: deletedEntry.id,
             name: deletedEntry.name,
             synonyms: deletedEntry.synonyms,
@@ -445,7 +451,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
           await loadEntries();
         },
         onRedo: async () => {
-          await api.sourcebook.delete(activeId);
+          await deleteSourcebookEntry(activeId);
           await loadEntries();
         },
         entryId: deletedEntry.id,
@@ -472,8 +478,8 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
     useEffect(() => {
       if (hoveredEntry && hoveredEntry.images?.length > 0) {
-        api.projects.listImages().then((data) => {
-          setAvailableImages(data.images || []);
+        listProjectImages().then((images) => {
+          setAvailableImages(images);
         });
       }
     }, [hoveredEntry]);
@@ -489,7 +495,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
             <h3
               className={`text-sm font-semibold uppercase tracking-wider ${textHeaderClass} flex items-center gap-2`}
             >
-              SOURCEBOOK
+              {t('SOURCEBOOK')}
             </h3>
             <button
               onClick={() => {
@@ -497,7 +503,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
                 setIsDialogOpen(true);
               }}
               className={`p-1 rounded-full transition-colors ${btnHover}`}
-              title="Add Entry"
+              title={t('Add Entry')}
             >
               <Plus size={18} />
             </button>
@@ -505,14 +511,16 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
 
           <div
             className={`flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide ${subTextClass}`}
-            title="Enable automatic sourcebook entry selection. While enabled, the AI picks relevant entries and manual entry checkboxes are locked. Disable to stop this AI helper and choose entries manually."
+            title={t(
+              'Enable automatic sourcebook entry selection. While enabled, the AI picks relevant entries and manual entry checkboxes are locked. Disable to stop this AI helper and choose entries manually.'
+            )}
           >
-            <span className="whitespace-nowrap">AUTO SELECTION</span>
+            <span className="whitespace-nowrap">{t('AUTO SELECTION')}</span>
             {isAutoSelectionRunning && (
               <LoaderCircle
                 size={12}
                 className="animate-spin text-brand-500"
-                aria-label="Automatic sourcebook selection is running"
+                aria-label={t('Automatic sourcebook selection is running')}
               />
             )}
             <button
@@ -523,8 +531,8 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
                   ? 'bg-brand-500 border-brand-500 text-white'
                   : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
               }`}
-              title="Toggle automatic sourcebook selection"
-              aria-label="Toggle automatic sourcebook selection"
+              title={t('Toggle automatic sourcebook selection')}
+              aria-label={t('Toggle automatic sourcebook selection')}
               aria-pressed={isAutoSelectionEnabled}
             >
               {isAutoSelectionEnabled && <Check size={10} strokeWidth={4} />}
@@ -540,7 +548,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter entries..."
+              placeholder={t('Filter entries...')}
               className={`w-full pl-8 pr-2 py-1.5 text-xs rounded border ${inputBorder} ${inputBg} ${textClass} ${inputPlace} focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors`}
             />
           </div>
@@ -553,14 +561,14 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
               <div className="flex flex-col items-center gap-2 rounded-lg bg-white/90 px-6 py-4 shadow-lg">
                 <LoaderCircle className="animate-spin" size={24} />
                 <span className="text-sm font-medium text-brand-gray-900">
-                  Loading entry…
+                  {t('Loading entry...')}
                 </span>
               </div>
             </div>
           )}
           {entries.length === 0 && (
             <div className={`text-center py-4 text-xs ${subTextClass}`}>
-              No entries yet.
+              {t('No entries yet.')}
             </div>
           )}
 
@@ -606,9 +614,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
                       className={`group px-3 py-2 rounded-md flex items-center gap-2 select-none border-l-2 border-l-red-500 opacity-60 ${
                         isLight ? 'bg-red-50/40' : 'bg-red-900/10'
                       }`}
-                      title="Deleted"
+                      title={t('Deleted')}
                       role="listitem"
-                      aria-label={`${e.name} (deleted)`}
+                      aria-label={t('{{name}} (deleted)', { name: e.name })}
                     >
                       <CategoryIcon size={14} className="flex-shrink-0 text-red-400" />
                       <div
@@ -635,9 +643,9 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
                     className={`group px-3 py-2 rounded-md flex items-center gap-2 select-none border-l-2 border-l-red-500 opacity-60 ${
                       isLight ? 'bg-red-50/40' : 'bg-red-900/10'
                     }`}
-                    title="Deleted"
+                    title={t('Deleted')}
                     role="listitem"
-                    aria-label={`${e.name} (deleted)`}
+                    aria-label={t('{{name}} (deleted)', { name: e.name })}
                   >
                     <CategoryIcon size={14} className="flex-shrink-0 text-red-400" />
                     <div

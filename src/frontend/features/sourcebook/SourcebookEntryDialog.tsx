@@ -9,8 +9,9 @@
  * Defines the sourcebook entry dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import {
   X,
   Plus,
@@ -37,7 +38,6 @@ import {
   MessageSquareDiff,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { api } from '../../services/api';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
 import { SourcebookRelationDialog } from './SourcebookRelationDialog';
@@ -47,6 +47,11 @@ import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
+import {
+  SourcebookEntryHistoryState,
+  useSourcebookEntryHistory,
+} from './useSourcebookEntryHistory';
+import { useSourcebookEntryData } from './useSourcebookEntryData';
 
 const CATEGORY_DETAILS: Record<
   string,
@@ -105,16 +110,6 @@ interface SourcebookEntryDialogProps {
   onAppRedo?: () => Promise<void>;
 }
 
-type SourcebookEntryHistoryState = {
-  name: string;
-  description: string;
-  category: string;
-  synonyms: string[];
-  images: string[];
-  relations: SourcebookRelation[];
-  keywords: string[];
-};
-
 export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   entry,
   allEntries,
@@ -131,6 +126,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   onAppUndo,
   onAppRedo,
 }) => {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionBaseline, setDescriptionBaseline] = useState<string | undefined>(
@@ -154,7 +150,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     return map;
   }, [allEntries]);
 
-  const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
   const { getRanges } = useSearchHighlight();
   const descriptionHighlightRanges = getRanges(
@@ -169,16 +164,38 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   useFocusTrap(isOpen, entryDialogRef, onClose);
   useFocusTrap(isImagePickerOpen, imagePickerRef, () => setIsImagePickerOpen(false));
 
-  useEffect(() => {
-    if (isOpen) {
-      api.projects
-        .listImages()
-        .then((data) => {
-          setAvailableImages(data.images || []);
-        })
-        .catch(console.error);
+  const { availableImages, selectedImagesList, keywords, isGeneratingKeywords } =
+    useSourcebookEntryData({
+      isOpen,
+      isImagePickerOpen,
+      images,
+      keywordInputs: { name, description, synonyms },
+      hasEntry: Boolean(entry),
+      entryKeywords: entry?.keywords,
+    });
+
+  const [initialHistoryState, setInitialHistoryState] =
+    useState<SourcebookEntryHistoryState>({
+      name: '',
+      description: '',
+      category: Object.keys(CATEGORY_DETAILS)[0],
+      synonyms: [],
+      images: [],
+      relations: [],
+      keywords: [],
+    });
+
+  const currentHistoryState = useMemo(
+    () => ({ name, description, category, synonyms, images, relations, keywords }),
+    [name, description, category, synonyms, images, relations, keywords]
+  );
+
+  const { history, historyIndex, restoreSourcebookHistory } = useSourcebookEntryHistory(
+    {
+      initialState: initialHistoryState,
+      currentState: currentHistoryState,
     }
-  }, [isOpen]);
+  );
 
   useEffect(() => {
     const hasImages = (entry?.images?.length ?? 0) > 0;
@@ -214,7 +231,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setSynonyms(initialState.synonyms);
       setImages(initialState.images);
       setRelations(initialState.relations);
-      setKeywords(initialState.keywords);
       setNewSynonym('');
       setShowKeywordsPanel(false);
     } else {
@@ -226,29 +242,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setImages([]);
       setRelations([]);
       setNewSynonym('');
-      setKeywords([]);
       setShowKeywordsPanel(false);
     }
 
-    setHistory([initialState]);
-    setHistoryIndex(0);
+    setInitialHistoryState(initialState);
     setIsImagesExpanded(hasImages);
     setIsRelationsExpanded(hasRelations);
   }, [entry?.id, isOpen]);
-
-  const [keywords, setKeywords] = useState<string[]>(entry?.keywords || []);
-  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
   const [showKeywordsPanel, setShowKeywordsPanel] = useState(false);
-  const [history, setHistory] = useState<SourcebookEntryHistoryState[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const isRestoringRef = useRef(false);
-  // Refs that mirror history state so the push-effect can read them without
-  // listing them as deps — this prevents the effect from re-triggering itself
-  // every time it pushes a new entry.
-  const historyRef = useRef<SourcebookEntryHistoryState[]>([]);
-  const historyIndexRef = useRef(0);
-  historyRef.current = history;
-  historyIndexRef.current = historyIndex;
 
   // No automatic syncing; rely on parent to provide a fully-loaded entry.
 
@@ -259,62 +260,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       setIsRelationsExpanded(true);
     }
   }, [relations]);
-
-  useEffect(() => {
-    if (isRestoringRef.current) {
-      return;
-    }
-
-    const snapshot: SourcebookEntryHistoryState = {
-      name,
-      description,
-      category,
-      synonyms,
-      images,
-      relations,
-      keywords,
-    };
-
-    const idx = historyIndexRef.current;
-    const current = historyRef.current[idx];
-    if (current && JSON.stringify(current) === JSON.stringify(snapshot)) {
-      return;
-    }
-
-    setHistory((prev) => {
-      const next = [...prev.slice(0, idx + 1), snapshot];
-      return next.length > 100 ? next.slice(next.length - 100) : next;
-    });
-    setHistoryIndex(Math.min(idx + 1, 99));
-    // NOTE: history and historyIndex are intentionally omitted from deps.
-    // They are read via historyRef/historyIndexRef to prevent this effect from
-    // re-running each time it updates those values (which previously caused a
-    // double JSON.stringify pass on every field change).
-  }, [name, description, category, synonyms, images, relations, keywords]);
-
-  const restoreSourcebookHistory = (index: number) => {
-    if (index < 0 || index >= history.length) {
-      return;
-    }
-
-    const snapshot = history[index];
-    if (!snapshot) {
-      return;
-    }
-
-    isRestoringRef.current = true;
-    setName(snapshot.name);
-    setDescription(snapshot.description);
-    setCategory(snapshot.category);
-    setSynonyms(snapshot.synonyms);
-    setImages(snapshot.images);
-    setRelations(snapshot.relations);
-    setKeywords(snapshot.keywords);
-    setHistoryIndex(index);
-    setTimeout(() => {
-      isRestoringRef.current = false;
-    }, 0);
-  };
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -376,71 +321,6 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       ? keywords.join(', ')
       : 'No keywords yet.';
 
-  const lastGeneratedInputs = useRef<{
-    name: string;
-    description: string;
-    synonyms: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    if (entry) {
-      setKeywords(entry.keywords || []);
-      lastGeneratedInputs.current = {
-        name: entry.name || '',
-        description: entry.description || '',
-        synonyms: entry.synonyms || [],
-      };
-    } else {
-      setKeywords([]);
-      lastGeneratedInputs.current = null;
-    }
-  }, [entry, isOpen]);
-
-  useEffect(() => {
-    const currentInputs = { name, description, synonyms };
-    const isValid = Boolean(name.trim() && description.trim());
-    const last = lastGeneratedInputs.current;
-    const inputsMatch =
-      last &&
-      last.name === currentInputs.name &&
-      last.description === currentInputs.description &&
-      JSON.stringify(last.synonyms) === JSON.stringify(currentInputs.synonyms);
-
-    if (!isValid || inputsMatch) {
-      if (!isValid) {
-        setIsGeneratingKeywords(false);
-      }
-      return () => {
-        /* noop cleanup */
-      };
-    }
-
-    setIsGeneratingKeywords(true);
-    const handle = window.setTimeout(async () => {
-      try {
-        const res = await api.sourcebook.generateKeywords({
-          name: currentInputs.name,
-          description: currentInputs.description,
-          synonyms: currentInputs.synonyms,
-        });
-
-        setKeywords(res.keywords || []);
-        lastGeneratedInputs.current = currentInputs;
-      } catch {
-        // Fail quietly; UI will simply keep showing a placeholder state.
-      } finally {
-        setIsGeneratingKeywords(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(handle);
-  }, [name, description, synonyms]);
-
-  // Keep picker rendering derived from canonical selection state.
-  const selectedImagesList = availableImages.filter((img) =>
-    images.includes(img.filename)
-  );
-
   if (!isOpen) {
     return null;
   }
@@ -469,21 +349,28 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 className={isLight ? 'text-brand-700' : 'text-brand-400'}
               />
               <h2 id="sourcebook-entry-title" className="text-lg font-bold">
-                {entry ? 'Edit Entry' : 'New Sourcebook Entry'}
+                {entry ? t('Edit Entry') : t('New Sourcebook Entry')}
               </h2>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   if (historyIndex > 0) {
-                    restoreSourcebookHistory(historyIndex - 1);
+                    restoreSourcebookHistory(historyIndex - 1, (snapshot) => {
+                      setName(snapshot.name);
+                      setDescription(snapshot.description);
+                      setCategory(snapshot.category);
+                      setSynonyms(snapshot.synonyms);
+                      setImages(snapshot.images);
+                      setRelations(snapshot.relations);
+                    });
                   } else {
                     onAppUndo?.();
                   }
                 }}
                 disabled={historyIndex === 0 && !canAppUndo}
-                aria-label="Undo sourcebook entry changes"
-                title="Undo"
+                aria-label={t('Undo sourcebook entry changes')}
+                title={t('Undo')}
                 className={`p-1 rounded-md transition-colors ${
                   isLight
                     ? 'hover:bg-brand-gray-100 text-brand-gray-500 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -495,14 +382,21 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               <button
                 onClick={() => {
                   if (historyIndex < history.length - 1) {
-                    restoreSourcebookHistory(historyIndex + 1);
+                    restoreSourcebookHistory(historyIndex + 1, (snapshot) => {
+                      setName(snapshot.name);
+                      setDescription(snapshot.description);
+                      setCategory(snapshot.category);
+                      setSynonyms(snapshot.synonyms);
+                      setImages(snapshot.images);
+                      setRelations(snapshot.relations);
+                    });
                   } else {
                     onAppRedo?.();
                   }
                 }}
                 disabled={historyIndex >= history.length - 1 && !canAppRedo}
-                aria-label="Redo sourcebook entry changes"
-                title="Redo"
+                aria-label={t('Redo sourcebook entry changes')}
+                title={t('Redo')}
                 className={`p-1 rounded-md transition-colors ${
                   isLight
                     ? 'hover:bg-brand-gray-100 text-brand-gray-500 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -513,9 +407,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               </button>
               <button
                 onClick={() => setShowDiff(!showDiff)}
-                aria-label="Toggle diff view"
+                aria-label={t('Toggle diff view')}
                 aria-pressed={showDiff}
-                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
+                title={showDiff ? t('Hide diff highlights') : t('Show diff highlights')}
                 className={`p-1 rounded-md transition-colors ${
                   showDiff
                     ? isLight
@@ -530,7 +424,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               </button>
               <button
                 onClick={onClose}
-                aria-label="Close sourcebook entry"
+                aria-label={t('Close sourcebook entry')}
                 className={`p-1 rounded-md transition-colors ${
                   isLight
                     ? 'hover:bg-brand-gray-100 text-brand-gray-500'
@@ -550,7 +444,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 <label
                   className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
                 >
-                  Name
+                  {t('Name')}
                 </label>
                 <div className="relative">
                   <Type
@@ -564,7 +458,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     lang={language}
                     spellCheck={true}
                     className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
-                    placeholder="E.g. Captain Ahab"
+                    placeholder={t('E.g. Captain Ahab')}
                   />
                 </div>
               </div>
@@ -573,7 +467,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                 <label
                   className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
                 >
-                  Category
+                  {t('Category')}
                 </label>
                 <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
                   {Object.entries(CATEGORY_DETAILS).map(([cat, details]) => {
@@ -611,7 +505,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               <label
                 className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
               >
-                Synonyms & Nicknames
+                {t('Synonyms & Nicknames')}
               </label>
               <div
                 className={`p-3 rounded-md border ${inputBorderClass} ${inputBgClass} min-h-[60px]`}
@@ -649,7 +543,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                         }
                       }}
                       className="bg-transparent text-sm focus:outline-none w-full"
-                      placeholder="Add (+)"
+                      placeholder={t('Add (+)')}
                     />
                   </div>
                 </div>
@@ -664,7 +558,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   onClick={() => setIsImagesExpanded((v) => !v)}
                   className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
-                  <span>Associated Images</span>
+                  <span>{t('Associated Images')}</span>
                   {!isImagesExpanded && selectedImagesList.length > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                       {selectedImagesList.length}
@@ -683,7 +577,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     theme={theme}
                     icon={<ImagePlus size={14} />}
                   >
-                    Manage Images
+                    {t('Manage Images')}
                   </Button>
                 </div>
               </div>
@@ -695,7 +589,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   {selectedImagesList.length === 0 ? (
                     <div className="h-20 flex flex-col items-center justify-center text-gray-500 text-xs">
                       <ImageIcon size={20} className="mb-1 opacity-50" />
-                      <span>No images associated</span>
+                      <span>{t('No images associated')}</span>
                     </div>
                   ) : (
                     <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
@@ -741,7 +635,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   onClick={() => setIsRelationsExpanded((v) => !v)}
                   className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wider focus:outline-none ${labelClass}`}
                 >
-                  <span>Relations</span>
+                  <span>{t('Relations')}</span>
                   {!isRelationsExpanded && relations.length > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                       {relations.length}
@@ -762,7 +656,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   icon={<Plus size={14} />}
                   theme={theme}
                 >
-                  Add Relation
+                  {t('Add Relation')}
                 </Button>
               </div>
 
@@ -844,7 +738,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   <div
                     className={`text-sm opacity-60 italic p-3 rounded-md border border-dashed ${inputBorderClass}`}
                   >
-                    No relations to other entries yet.
+                    {t('No relations to other entries yet.')}
                   </div>
                 ))}
             </div>
@@ -856,12 +750,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   <label
                     className={`text-xs font-semibold uppercase tracking-wider ${labelClass}`}
                   >
-                    Description & Facts
+                    {t('Description & Facts')}
                   </label>
                   <p className={`text-xs leading-relaxed ${labelClass}`}>
-                    Describe the details the models should remember. CHAT uses this for
-                    planning and consistency, while WRITING and EDITING receive relevant
-                    entries as read-only context.
+                    {t(
+                      'Describe the details the models should remember. CHAT uses this for planning and consistency, while WRITING and EDITING receive relevant entries as read-only context.'
+                    )}
                   </p>
                 </div>
                 <div className="relative inline-block group">
@@ -873,7 +767,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     aria-expanded={showKeywordsPanel}
                   >
                     <Tag size={12} />
-                    Keywords
+                    {t('Keywords')}
                   </button>
 
                   <div
@@ -888,7 +782,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                     } group-hover:opacity-100 group-hover:pointer-events-auto`}
                   >
                     {isGeneratingKeywords ? (
-                      <div className="italic opacity-70">Generating…</div>
+                      <div className="italic opacity-70">{t('Generating...')}</div>
                     ) : keywords.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {keywords.map((kw) => (
@@ -905,7 +799,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                         ))}
                       </div>
                     ) : (
-                      <div className="italic opacity-60">No keywords yet.</div>
+                      <div className="italic opacity-60">{t('No keywords yet.')}</div>
                     )}
                   </div>
                 </div>
@@ -927,7 +821,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   spellCheck={true}
                   mode="markdown"
                   className={`w-full h-full p-4 text-sm bg-transparent ${descriptionTextClass}`}
-                  placeholder="Detailed description, personality traits, history, rules, and constraints the AI should remember..."
+                  placeholder={t(
+                    'Detailed description, personality traits, history, rules, and constraints the AI should remember...'
+                  )}
                   style={{ minHeight: '220px' }}
                 />
               </div>
@@ -942,7 +838,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               {entry && onDelete && (
                 <Button
                   onClick={async () => {
-                    if (await confirm('Are you sure you want to delete this entry?')) {
+                    if (
+                      await confirm(t('Are you sure you want to delete this entry?'))
+                    ) {
                       await onDelete(entry.id);
                       onClose();
                     }
@@ -952,13 +850,13 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   theme={theme}
                   icon={<Trash2 size={16} />}
                 >
-                  Delete
+                  {t('Delete')}
                 </Button>
               )}
             </div>
             <div className="flex gap-3">
               <Button onClick={onClose} variant="ghost" theme={theme}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button
                 onClick={handleSave}
@@ -972,7 +870,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
                   )
                 }
               >
-                {isSaving ? 'Saving…' : 'Save Entry'}
+                {isSaving ? t('Saving...') : t('Save Entry')}
               </Button>
             </div>
           </div>
@@ -999,12 +897,12 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               <div className="flex items-center gap-2">
                 <ImagePlus size={20} className="text-brand-500" />
                 <h3 id="image-picker-title" className="text-lg font-bold">
-                  Select Images
+                  {t('Select Images')}
                 </h3>
               </div>
               <button
                 onClick={() => setIsImagePickerOpen(false)}
-                aria-label="Close image picker"
+                aria-label={t('Close image picker')}
               >
                 <X size={20} className="text-gray-500 hover:text-gray-300" />
               </button>
@@ -1013,7 +911,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
             <div className="flex-1 overflow-y-auto p-6">
               {availableImages.length === 0 ? (
                 <div className="text-center py-10 text-gray-500">
-                  No images found in project.
+                  {t('No images found in project.')}
                 </div>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
@@ -1063,14 +961,14 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
               className={`px-6 py-4 border-t ${borderClass} flex justify-between items-center`}
             >
               <span className="text-sm opacity-70">
-                {images.length} images selected
+                {t('{{count}} images selected', { count: images.length })}
               </span>
               <Button
                 onClick={() => setIsImagePickerOpen(false)}
                 theme={theme}
                 icon={<Check size={16} />}
               >
-                Done
+                {t('Done')}
               </Button>
             </div>
           </div>

@@ -37,6 +37,7 @@ import { Conflict, AppTheme } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { CodeMirrorEditor } from '../editor/CodeMirrorEditor';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
+import { useMetadataDialogHistory } from './useMetadataDialogHistory';
 
 interface Props {
   type: 'story' | 'book' | 'chapter';
@@ -124,28 +125,19 @@ export function MetadataEditorDialog({
     (a.private_notes || '') === (b.private_notes || '') &&
     JSON.stringify(a.conflicts || []) === JSON.stringify(b.conflicts || []);
 
-  const [history, setHistory] = useState<MetadataParams[]>(() => {
-    const current = normalizeMetadataParams(initialData);
-    if (baseline) {
-      const base = normalizeMetadataParams(baseline);
-      if (!diffFieldsEqual(base, current)) {
-        return [base, current];
-      }
-    }
-    return [current];
+  const [conflicts, setConflicts] = useState<Conflict[]>(
+    (initialData.conflicts || []).map((c) => normalizeConflict(c))
+  );
+
+  const { history, historyIndex, restoreMetadataHistory } = useMetadataDialogHistory({
+    data,
+    initialData,
+    baseline,
+    normalizeMetadataParams,
+    diffFieldsEqual,
+    setData,
+    setConflicts,
   });
-  const [historyIndex, setHistoryIndex] = useState(() => {
-    if (baseline) {
-      const base = normalizeMetadataParams(baseline);
-      const current = normalizeMetadataParams(initialData);
-      if (!diffFieldsEqual(base, current)) {
-        return 1;
-      }
-    }
-    return 0;
-  });
-  const isRestoringRef = useRef(false);
-  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track latest data in a ref so the baselineData effect can read it
   // without adding `data` to its dependency array (which would cause the
   // effect to re-run on every keystroke and reset diff highlights).
@@ -225,10 +217,6 @@ export function MetadataEditorDialog({
   const isFirstRun = useRef(true);
   const lastSavedDataRef = useRef<MetadataParams>(initialData);
 
-  const [conflicts, setConflicts] = useState<Conflict[]>(
-    (initialData.conflicts || []).map((c) => normalizeConflict(c))
-  );
-
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
@@ -260,78 +248,6 @@ export function MetadataEditorDialog({
       return { ...prev, conflicts };
     });
   }, [conflicts]);
-
-  useEffect(() => {
-    if (isRestoringRef.current) {
-      return;
-    }
-
-    const DEBOUNCE_MS = 600;
-
-    const pushNow = (
-      currentData: MetadataParams,
-      currentHistory: MetadataParams[],
-      currentIndex: number
-    ) => {
-      const snapshot = normalizeMetadataParams(
-        JSON.parse(JSON.stringify(currentData)) as MetadataParams
-      );
-      const existing = currentHistory[currentIndex];
-      if (existing && JSON.stringify(existing) === JSON.stringify(snapshot)) {
-        return;
-      }
-
-      const snapshotJson = JSON.stringify(snapshot);
-      const historyJson = currentHistory.map((entry) => JSON.stringify(entry));
-      const matchedIndex = historyJson.findIndex(
-        (entryJson) => entryJson === snapshotJson
-      );
-      if (matchedIndex !== -1) {
-        setHistoryIndex(matchedIndex);
-        return;
-      }
-
-      setHistory((prev) => {
-        const next = [...prev.slice(0, currentIndex + 1), snapshot];
-        return next.length > 100 ? next.slice(next.length - 100) : next;
-      });
-      setHistoryIndex((prev) => Math.min(prev + 1, 99));
-    };
-
-    if (historyDebounceRef.current) {
-      clearTimeout(historyDebounceRef.current);
-    }
-    historyDebounceRef.current = setTimeout(() => {
-      historyDebounceRef.current = null;
-      pushNow(data, history, historyIndex);
-    }, DEBOUNCE_MS);
-
-    return () => {
-      if (historyDebounceRef.current) {
-        clearTimeout(historyDebounceRef.current);
-        historyDebounceRef.current = null;
-      }
-    };
-  }, [data, historyIndex, history]);
-
-  const restoreMetadataHistory = (index: number) => {
-    if (index < 0 || index >= history.length) {
-      return;
-    }
-
-    const entry = history[index];
-    if (!entry) {
-      return;
-    }
-
-    isRestoringRef.current = true;
-    setData(JSON.parse(JSON.stringify(entry)));
-    setConflicts(JSON.parse(JSON.stringify(entry.conflicts || [])));
-    setHistoryIndex(index);
-    setTimeout(() => {
-      isRestoringRef.current = false;
-    }, 0);
-  };
 
   // Debounced autosave reduces write pressure while preserving quick feedback.
   useEffect(() => {
