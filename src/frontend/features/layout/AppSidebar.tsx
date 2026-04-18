@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ChapterList } from '../chapters/ChapterList';
 import { SourcebookList } from '../sourcebook/SourcebookList';
@@ -84,8 +85,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
     toggleCollapsed,
     updateHeight,
   }) => {
+    const { t } = useTranslation();
     const {
-      story,
       currentChapterId,
       handleChapterSelect,
       deleteChapter,
@@ -100,8 +101,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
       handleOpenImages,
       updateStoryMetadata,
       checkedSourcebookIds,
-      onToggleAutoSourcebookSelection,
-      isSourcebookSelectionRunning,
       onSourcebookMutated,
       onAppUndo,
       onAppRedo,
@@ -118,7 +117,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
       <nav
         id="aq-sidebar"
         role="navigation"
-        aria-label="Project sidebar"
+        aria-label={t('Project sidebar')}
         className={`fixed inset-y-0 left-0 top-14 w-[var(--sidebar-width)] flex-col border-r flex-shrink-0 z-40 transition-transform duration-300 ease-in-out lg:relative lg:top-auto lg:translate-x-0 flex h-full ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
@@ -131,12 +130,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
           <button
             className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
             onClick={() => setIsSidebarOpen(false)}
-            aria-label="Close sidebar"
+            aria-label={t('Close sidebar')}
           ></button>
         )}
 
         <CollapsibleSection
-          title="Story"
+          title={t('Story')}
           isCollapsed={!!sidebarPrefs.isStoryCollapsed}
           onToggle={() => toggleCollapsed('isStoryCollapsed')}
           height={sidebarPrefs.storyHeight}
@@ -175,7 +174,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             }
             summaryAiDisabledReason={
               !isEditingAvailable
-                ? 'Summary AI is unavailable because no working EDITING model is configured.'
+                ? t(
+                    'Summary AI is unavailable because no working EDITING model is configured.'
+                  )
                 : undefined
             }
             primarySourceAvailable={
@@ -195,7 +196,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
 
         {storyProjectType !== 'short-story' && (
           <CollapsibleSection
-            title="Chapters"
+            title={t('Chapters')}
             isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
             onToggle={() => toggleCollapsed('isChaptersCollapsed')}
             height={sidebarPrefs.chaptersHeight}
@@ -229,7 +230,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
         )}
 
         <CollapsibleSection
-          title="Sourcebook"
+          title={t('Sourcebook')}
           isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
           onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
           isLast

@@ -41,6 +41,7 @@ import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
 import { useSearchReplace } from './features/search/useSearchReplace';
+import { useSidebarIntents } from './features/layout/sidebarIntents';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -333,6 +334,14 @@ const App: React.FC = () => {
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
+  const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
+    useSidebarIntents({
+      setIsSidebarOpen,
+      setEditorSettings,
+      setMetadataDialogTrigger,
+      setSourcebookDialogTrigger,
+    });
+
   const getSystemPrompt = useCallback(() => {
     return prompts.system_messages.chat_llm || '';
   }, [prompts]);
@@ -521,36 +530,23 @@ const App: React.FC = () => {
           } else if (m.type === 'story') {
             handleChapterSelect(null);
           } else if (m.type === 'metadata') {
-            setIsSidebarOpen(true);
-            setMetadataDialogTrigger((prev) => ({
-              id: (prev?.id ?? 0) + 1,
-              initialTab: m.subType as any,
-            }));
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-            }));
+            openStoryMetadataDialog(
+              m.subType as 'summary' | 'notes' | 'private' | 'conflicts'
+            );
           } else if (m.type === 'sourcebook') {
-            setIsSidebarOpen(true);
-            setSourcebookDialogTrigger((prev) => ({
-              id: (prev?.id ?? 0) + 1,
-              entryId: m.targetId ?? '',
-            }));
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-            }));
+            openSourcebookEntryDialog(m.targetId ?? '');
           } else if (m.type === 'book') {
-            setIsSidebarOpen(true);
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-            }));
+            openAndExpandStory();
           }
         });
       });
     },
-    [handleChapterSelect, setIsSidebarOpen, setEditorSettings]
+    [
+      handleChapterSelect,
+      openAndExpandStory,
+      openSourcebookEntryDialog,
+      openStoryMetadataDialog,
+    ]
   );
 
   // Keep a stable base snapshot per prose stream so append-mode previews are
@@ -1214,15 +1210,7 @@ const App: React.FC = () => {
         },
         onNavigateToSourcebookEntry: (entryId) => {
           setMetadataDialogCloseTrigger((c) => c + 1);
-          setIsSidebarOpen(true);
-          setSourcebookDialogTrigger((prev) => ({
-            id: (prev?.id ?? 0) + 1,
-            entryId,
-          }));
-          setEditorSettings((prev) => ({
-            ...prev,
-            sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-          }));
+          openSourcebookEntryDialog(entryId);
         },
         onNavigateToStoryMetadata: (field) => {
           const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
@@ -1236,15 +1224,7 @@ const App: React.FC = () => {
                     ? 'conflicts'
                     : 'summary';
           setSourcebookDialogCloseTrigger((c) => c + 1);
-          setIsSidebarOpen(true);
-          setMetadataDialogTrigger((prev) => ({
-            id: (prev?.id ?? 0) + 1,
-            initialTab: tab,
-          }));
-          setEditorSettings((prev) => ({
-            ...prev,
-            sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-          }));
+          openStoryMetadataDialog(tab);
         },
       }}
     />

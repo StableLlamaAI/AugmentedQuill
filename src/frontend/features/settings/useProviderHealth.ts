@@ -207,40 +207,7 @@ export function useProviderHealth(appSettings: AppSettings) {
       const providersToCheck = appSettings.providers.filter((provider) =>
         activeIds.has(provider.id)
       );
-
-      // group providers by key so we only perform one request per unique
-      // combination of baseUrl/apiKey/modelId
-      const groups: Record<
-        string,
-        {
-          ids: string[];
-          payload: {
-            base_url: string;
-            api_key?: string;
-            timeout_s: number;
-            model_id: string;
-          };
-        }
-      > = {};
-
-      providersToCheck.forEach((provider) => {
-        const modelId = (provider.modelId || '').trim();
-        if (!modelId) return; // we'll mark them idle later
-
-        const key = `${provider.baseUrl || ''}||${provider.apiKey || ''}||${modelId}`;
-        if (!groups[key]) {
-          groups[key] = {
-            ids: [],
-            payload: {
-              base_url: provider.baseUrl,
-              api_key: provider.apiKey,
-              timeout_s: Math.round((provider.timeout || 10000) / 1000),
-              model_id: modelId,
-            },
-          };
-        }
-        groups[key].ids.push(provider.id);
-      });
+      const groups = groupProviders(appSettings.providers, activeIds);
 
       // kick off checks for each group
       await Promise.all(

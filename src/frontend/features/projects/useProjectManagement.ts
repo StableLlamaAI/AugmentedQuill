@@ -79,12 +79,26 @@ export function useProjectManagement({
     try {
       const data = await api.projects.list();
       if (data.available) {
-        setProjects(mapProjectsList(data.available));
+        const listedProjects = mapProjectsList(data.available);
+        setProjects((prev) => {
+          const hasActiveStory = listedProjects.some(
+            (project) => project.id === story.id
+          );
+          if (hasActiveStory) {
+            return listedProjects;
+          }
+          const activeFromPreviousState = prev.find(
+            (project) => project.id === story.id
+          );
+          return activeFromPreviousState
+            ? [...listedProjects, activeFromPreviousState]
+            : listedProjects;
+        });
       }
     } catch (error) {
       console.error('Failed to fetch projects', error);
     }
-  }, []);
+  }, [story.id]);
 
   useEffect(() => {
     refreshProjects();
