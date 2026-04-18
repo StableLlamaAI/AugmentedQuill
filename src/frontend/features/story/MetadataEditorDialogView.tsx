@@ -9,8 +9,6 @@
  * Purpose: Render the metadata editor dialog UI while keeping orchestration logic in the container.
  */
 
-/* eslint-disable max-lines-per-function, complexity */
-
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {

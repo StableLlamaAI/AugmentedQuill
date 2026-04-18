@@ -34,6 +34,7 @@ import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
 import { ChatMessage, ChatAttachment, SourcebookEntry } from './types';
 import { SessionMutation } from './features/chat';
+import { ChatToolExecutionResponse } from './services/apiTypes';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
 import { useEditorUIState } from './features/app/useEditorUIState';
@@ -51,10 +52,7 @@ import {
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
 import { applySmartQuotes } from './utils/textUtils';
-import {
-  MUTATION_TOOL_REGISTRY,
-  buildMetadataFields,
-} from './features/chat/mutationToolRegistry';
+import { MUTATION_TOOL_REGISTRY } from './features/chat/mutationToolRegistry';
 
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
@@ -360,7 +358,6 @@ const App: React.FC = () => {
     onUpdateScratchpad,
     onDeleteScratchpad,
     incognitoSessions,
-    refreshChatList,
     handleNewChat,
     handleSelectChat,
     handleDeleteChat,
@@ -378,11 +375,18 @@ const App: React.FC = () => {
     advanceBaselineToCurrentStory();
   }, [advanceBaselineToCurrentStory]);
 
-  const onToolMutations = useCallback((muts: any) => {
+  type ToolMutationPayload = ChatToolExecutionResponse & {
+    _call_results?: Array<{
+      name: string;
+      args: Record<string, unknown>;
+      result: Record<string, unknown>;
+    }>;
+  };
+
+  const onToolMutations = useCallback((muts: ToolMutationPayload) => {
     if (!muts) return;
     const newMuts: SessionMutation[] = [];
-    const callResults =
-      (muts._call_results as Array<{ name: string; args: any; result: any }>) || [];
+    const callResults = muts._call_results || [];
 
     callResults.forEach((res) => {
       const factory = MUTATION_TOOL_REGISTRY[res.name];
@@ -439,7 +443,7 @@ const App: React.FC = () => {
   });
 
   // Get Active LLM Configs
-  const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
+  const { activeChatConfig, activeWritingConfig } =
     resolveActiveProviderConfigs(appSettings);
 
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
@@ -450,7 +454,6 @@ const App: React.FC = () => {
     continuations,
     isSuggesting,
     isSuggestionMode,
-    suggestCursor,
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,

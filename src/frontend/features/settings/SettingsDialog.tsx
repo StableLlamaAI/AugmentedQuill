@@ -257,8 +257,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           } else {
             setModelLists((prev) => ({ ...prev, [providerId]: [] }));
           }
-        } catch (e) {
+        } catch (_error) {
           if (cancelled) return;
+          console.error('Failed to test machine config', _error);
           lastConnTestKeyRef.current[providerId] = testKey;
           setConnectionStatus((s) => ({ ...s, [providerId]: 'error' }));
           setModelLists((prev) => ({ ...prev, [providerId]: [] }));
@@ -332,8 +333,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             ...s,
             [providerId]: res?.ok && res?.model_ok ? 'success' : 'error',
           }));
-        } catch (e) {
+        } catch (_error) {
           if (cancelled) return;
+          console.error('Failed to test model id', _error);
           prevModelIdRef.current[providerId] = modelId;
           setModelStatus((s) => ({ ...s, [providerId]: 'error' }));
         }
@@ -358,16 +360,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setSaveLoading(true);
     try {
       const providers = localSettings.providers || [];
-      const activeChat =
-        providers.find((p) => p.id === localSettings.activeChatProviderId) ||
-        providers[0];
-      const activeWriting =
-        providers.find((p) => p.id === localSettings.activeWritingProviderId) ||
-        providers[0];
-      const activeEditing =
-        providers.find((p) => p.id === localSettings.activeEditingProviderId) ||
-        providers[0];
-
       const cleanedProviders = providers.map((p) => ({
         ...p,
         prompts: normalizeProviderPrompts(p.prompts, DEFAULT_LLM_CONFIG.prompts),
@@ -377,9 +369,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
       await onSaveSettings(cleanedSettings);
       onClose();
-    } catch (e: unknown) {
-      console.error('Failed to save machine settings', e);
-      setSaveError(e instanceof Error ? e.message : 'Failed to save');
+    } catch (_error: unknown) {
+      console.error('Failed to save machine settings', _error);
+      setSaveError(_error instanceof Error ? _error.message : 'Failed to save');
     } finally {
       setSaveLoading(false);
     }

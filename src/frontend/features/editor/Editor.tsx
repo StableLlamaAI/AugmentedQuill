@@ -943,7 +943,6 @@ export const Editor = React.memo(
                 </div>
               )}
               {/* The Paper - Grows infinitely */}
-              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
               <div
                 ref={paperDivRef}
                 role="group"

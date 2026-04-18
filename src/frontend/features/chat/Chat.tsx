@@ -18,18 +18,12 @@ import React, {
   useCallback,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ChatAttachment,
-  ChatMessage,
-  AppTheme,
-  ChatSession,
-  LLMConfig,
-} from '../../types';
+import { ChatAttachment, ChatMessage } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useChatContext } from './ChatContext';
 import { Loader2, Bot, RefreshCw, X, Paperclip } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { MutationTags, SessionMutation } from './components/MutationTags';
+import { MutationTags } from './components/MutationTags';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatHistoryPanel } from './components/ChatHistoryPanel';
 import { ChatComposer } from './components/ChatComposer';
@@ -65,7 +59,6 @@ export const Chat: React.FC = React.memo(() => {
     onNewSession,
     onDeleteSession,
     onDeleteAllSessions,
-    onToggleIncognito,
     allowWebSearch,
     onToggleWebSearch,
     scratchpad,
