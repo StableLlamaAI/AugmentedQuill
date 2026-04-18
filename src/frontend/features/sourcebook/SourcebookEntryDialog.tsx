@@ -10,22 +10,12 @@
  */
 
 import React, { useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AppTheme, SourcebookEntry, SourcebookRelation } from '../../types';
-import { SourcebookRelationDialog } from './SourcebookRelationDialog';
 import { SourcebookUpsertPayload } from '../../services/apiTypes';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
-import {
-  SourcebookEntryBasicsSection,
-  SourcebookEntryDescriptionSection,
-  SourcebookEntryFooter,
-  SourcebookEntryHeader,
-  SourcebookEntryImagesSection,
-  SourcebookEntryRelationsSection,
-  SourcebookImagePickerModal,
-} from './SourcebookEntryDialogSections';
+import { SourcebookEntryDialogView } from './SourcebookEntryDialogView';
 import { useSourcebookEntryDialogState } from './useSourcebookEntryDialogState';
 
 interface SourcebookEntryDialogProps {
@@ -68,50 +58,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   onAppRedo,
 }) => {
   const { t } = useTranslation();
-  const {
-    name,
-    description,
-    descriptionBaseline,
-    showDiff,
-    category,
-    synonyms,
-    newSynonym,
-    images,
-    relations,
-    isImagesExpanded,
-    isRelationsExpanded,
-    isRelationDialogVisible,
-    editingRelationIndex,
-    isImagePickerOpen,
-    showKeywordsPanel,
-    isSaving,
-    relationNameMap,
-    descriptionHighlightRanges,
-    availableImages,
-    selectedImagesList,
-    keywords,
-    isGeneratingKeywords,
-    history,
-    historyIndex,
-    setName,
-    setDescription,
-    setDescriptionBaseline,
-    setShowDiff,
-    setCategory,
-    setNewSynonym,
-    setRelations,
-    setIsImagesExpanded,
-    setIsRelationsExpanded,
-    setIsRelationDialogVisible,
-    setEditingRelationIndex,
-    setIsImagePickerOpen,
-    setShowKeywordsPanel,
-    handleSave,
-    addSynonym,
-    removeSynonym,
-    toggleImage,
-    restoreFromHistory,
-  } = useSourcebookEntryDialogState({
+  const state = useSourcebookEntryDialogState({
     entry,
     allEntries,
     isOpen,
@@ -125,7 +72,9 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const imagePickerRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(isOpen, entryDialogRef, onClose);
-  useFocusTrap(isImagePickerOpen, imagePickerRef, () => setIsImagePickerOpen(false));
+  useFocusTrap(state.isImagePickerOpen, imagePickerRef, () =>
+    state.setIsImagePickerOpen(false)
+  );
 
   const {
     isLight,
@@ -138,10 +87,10 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   } = useThemeClasses();
   const inputBorderClass = borderClass;
   const descriptionTextClass = isLight ? 'text-brand-gray-700' : 'text-brand-gray-300';
-  const keywordsTooltip = isGeneratingKeywords
+  const keywordsTooltip = state.isGeneratingKeywords
     ? '...generating...'
-    : keywords.length > 0
-      ? keywords.join(', ')
+    : state.keywords.length > 0
+      ? state.keywords.join(', ')
       : 'No keywords yet.';
 
   if (!isOpen) {
@@ -149,16 +98,16 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   }
 
   const handleUndo = () => {
-    if (historyIndex > 0) {
-      restoreFromHistory(historyIndex - 1);
+    if (state.historyIndex > 0) {
+      state.restoreFromHistory(state.historyIndex - 1);
       return;
     }
     onAppUndo?.();
   };
 
   const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      restoreFromHistory(historyIndex + 1);
+    if (state.historyIndex < state.history.length - 1) {
+      state.restoreFromHistory(state.historyIndex + 1);
       return;
     }
     onAppRedo?.();
@@ -176,170 +125,97 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   };
 
   const handleRelationSave = (rel: SourcebookRelation) => {
-    if (editingRelationIndex !== null) {
-      const nextRelations = [...relations];
-      nextRelations[editingRelationIndex] = rel;
-      setRelations(nextRelations);
+    if (state.editingRelationIndex !== null) {
+      const nextRelations = [...state.relations];
+      nextRelations[state.editingRelationIndex] = rel;
+      state.setRelations(nextRelations);
       return;
     }
 
-    setRelations([...relations, rel]);
+    state.setRelations([...state.relations, rel]);
   };
 
-  return createPortal(
-    <>
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-        role="none"
-      >
-        <div
-          ref={entryDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="sourcebook-entry-title"
-          tabIndex={-1}
-          className={`${bgClass} ${textClass} w-full max-w-[90vw] rounded-lg shadow-2xl border ${borderClass} flex flex-col max-h-[94vh]`}
-        >
-          <SourcebookEntryHeader
-            entryExists={Boolean(entry)}
-            isLight={isLight}
-            borderClass={borderClass}
-            historyIndex={historyIndex}
-            historyLength={history.length}
-            canAppUndo={canAppUndo}
-            canAppRedo={canAppRedo}
-            showDiff={showDiff}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            onToggleDiff={() => setShowDiff((value) => !value)}
-            onClose={onClose}
-            t={t}
-          />
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            <SourcebookEntryBasicsSection
-              name={name}
-              category={category}
-              synonyms={synonyms}
-              newSynonym={newSynonym}
-              inputBorderClass={inputBorderClass}
-              inputBgClass={inputBgClass}
-              labelClass={labelClass}
-              isLight={isLight}
-              language={language}
-              t={t}
-              onNameChange={setName}
-              onCategoryChange={setCategory}
-              onSynonymInputChange={setNewSynonym}
-              onAddSynonym={addSynonym}
-              onRemoveSynonym={removeSynonym}
-            />
-
-            <SourcebookEntryImagesSection
-              isImagesExpanded={isImagesExpanded}
-              selectedImagesList={selectedImagesList}
-              labelClass={labelClass}
-              inputBorderClass={inputBorderClass}
-              inputBgClass={inputBgClass}
-              theme={theme}
-              t={t}
-              onToggleExpanded={() => setIsImagesExpanded((value) => !value)}
-              onOpenPicker={() => setIsImagePickerOpen(true)}
-              onToggleImage={toggleImage}
-            />
-
-            <SourcebookEntryRelationsSection
-              isRelationsExpanded={isRelationsExpanded}
-              relations={relations}
-              relationNameMap={relationNameMap}
-              labelClass={labelClass}
-              inputBorderClass={inputBorderClass}
-              inputBgClass={inputBgClass}
-              theme={theme}
-              t={t}
-              onToggleExpanded={() => setIsRelationsExpanded((value) => !value)}
-              onOpenAddRelation={() => {
-                setEditingRelationIndex(null);
-                setIsRelationDialogVisible(true);
-              }}
-              onEditRelation={(index) => {
-                setEditingRelationIndex(index);
-                setIsRelationDialogVisible(true);
-              }}
-              onDeleteRelation={(index) => {
-                setRelations(
-                  relations.filter((_, relationIndex) => relationIndex !== index)
-                );
-              }}
-            />
-
-            <SourcebookEntryDescriptionSection
-              description={description}
-              descriptionBaseline={descriptionBaseline}
-              showDiff={showDiff}
-              showKeywordsPanel={showKeywordsPanel}
-              keywords={keywords}
-              isGeneratingKeywords={isGeneratingKeywords}
-              keywordsTooltip={keywordsTooltip}
-              isLight={isLight}
-              borderClass={borderClass}
-              inputBorderClass={inputBorderClass}
-              descriptionSurfaceClass={descriptionSurfaceClass}
-              descriptionTextClass={descriptionTextClass}
-              labelClass={labelClass}
-              language={language}
-              searchHighlightRanges={descriptionHighlightRanges}
-              t={t}
-              onDescriptionChange={(value) => {
-                setDescriptionBaseline(value);
-                setDescription(value);
-              }}
-              onToggleKeywordsPanel={() => setShowKeywordsPanel((value) => !value)}
-            />
-          </div>
-
-          <SourcebookEntryFooter
-            entry={entry}
-            canDelete={Boolean(onDelete)}
-            isSaving={isSaving}
-            isLight={isLight}
-            borderClass={borderClass}
-            theme={theme}
-            t={t}
-            onDelete={handleDeleteEntry}
-            onCancel={onClose}
-            onSave={handleSave}
-            disableSave={!name.trim() || isSaving}
-          />
-        </div>
-      </div>
-
-      <SourcebookImagePickerModal
-        isOpen={isImagePickerOpen}
-        availableImages={availableImages}
-        selectedImageNames={images}
-        bgClass={bgClass}
-        textClass={textClass}
-        borderClass={borderClass}
-        theme={theme}
-        imagePickerRef={imagePickerRef}
-        t={t}
-        onClose={() => setIsImagePickerOpen(false)}
-        onToggleImage={toggleImage}
-      />
-
-      <SourcebookRelationDialog
-        isOpen={isRelationDialogVisible}
-        onClose={() => setIsRelationDialogVisible(false)}
-        onSave={handleRelationSave}
-        currentEntryId={entry?.id}
-        currentEntryName={name}
-        theme={theme}
-        initialRelation={
-          editingRelationIndex !== null ? relations[editingRelationIndex] : undefined
-        }
-      />
-    </>,
-    document.body
+  return (
+    <SourcebookEntryDialogView
+      entry={entry}
+      theme={theme}
+      language={language}
+      entryDialogRef={entryDialogRef}
+      imagePickerRef={imagePickerRef}
+      bgClass={bgClass}
+      textClass={textClass}
+      borderClass={borderClass}
+      inputBgClass={inputBgClass}
+      labelClass={labelClass}
+      descriptionSurfaceClass={descriptionSurfaceClass}
+      descriptionTextClass={descriptionTextClass}
+      inputBorderClass={inputBorderClass}
+      isLight={isLight}
+      name={state.name}
+      category={state.category}
+      synonyms={state.synonyms}
+      newSynonym={state.newSynonym}
+      images={state.images}
+      relations={state.relations}
+      relationNameMap={state.relationNameMap}
+      availableImages={state.availableImages}
+      selectedImagesList={state.selectedImagesList}
+      description={state.description}
+      descriptionBaseline={state.descriptionBaseline}
+      showDiff={state.showDiff}
+      showKeywordsPanel={state.showKeywordsPanel}
+      keywords={state.keywords}
+      isGeneratingKeywords={state.isGeneratingKeywords}
+      keywordsTooltip={keywordsTooltip}
+      searchHighlightRanges={state.descriptionHighlightRanges}
+      isImagesExpanded={state.isImagesExpanded}
+      isRelationsExpanded={state.isRelationsExpanded}
+      isImagePickerOpen={state.isImagePickerOpen}
+      isRelationDialogVisible={state.isRelationDialogVisible}
+      editingRelationIndex={state.editingRelationIndex}
+      historyIndex={state.historyIndex}
+      historyLength={state.history.length}
+      canAppUndo={canAppUndo}
+      canAppRedo={canAppRedo}
+      isSaving={state.isSaving}
+      canDelete={Boolean(onDelete)}
+      t={t}
+      onUndo={handleUndo}
+      onRedo={handleRedo}
+      onToggleDiff={() => state.setShowDiff((value) => !value)}
+      onClose={onClose}
+      onNameChange={state.setName}
+      onCategoryChange={state.setCategory}
+      onSynonymInputChange={state.setNewSynonym}
+      onAddSynonym={state.addSynonym}
+      onRemoveSynonym={state.removeSynonym}
+      onToggleImagesExpanded={() => state.setIsImagesExpanded((value) => !value)}
+      onOpenImagePicker={() => state.setIsImagePickerOpen(true)}
+      onToggleImage={state.toggleImage}
+      onToggleRelationsExpanded={() => state.setIsRelationsExpanded((value) => !value)}
+      onOpenAddRelation={() => (
+        state.setEditingRelationIndex(null),
+        state.setIsRelationDialogVisible(true)
+      )}
+      onEditRelation={(index) => (
+        state.setEditingRelationIndex(index),
+        state.setIsRelationDialogVisible(true)
+      )}
+      onDeleteRelation={(index) =>
+        state.setRelations(
+          state.relations.filter((_, relationIndex) => relationIndex !== index)
+        )
+      }
+      onDescriptionChange={(value) => (
+        state.setDescriptionBaseline(value),
+        state.setDescription(value)
+      )}
+      onToggleKeywordsPanel={() => state.setShowKeywordsPanel((value) => !value)}
+      onDeleteEntry={handleDeleteEntry}
+      onSaveEntry={state.handleSave}
+      onSaveRelation={handleRelationSave}
+      onCloseRelationDialog={() => state.setIsRelationDialogVisible(false)}
+      onCloseImagePicker={() => state.setIsImagePickerOpen(false)}
+    />
   );
 };
