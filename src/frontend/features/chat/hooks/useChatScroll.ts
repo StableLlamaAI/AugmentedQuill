@@ -20,7 +20,7 @@ interface UseChatScrollDeps {
 }
 
 interface UseChatScrollResult {
-  scrollContainerRef: React.RefObject<HTMLDivElement>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   handleScroll: () => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
 }

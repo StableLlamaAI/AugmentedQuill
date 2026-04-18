@@ -30,7 +30,7 @@ interface UseEditorScrollOptions {
 }
 
 export interface UseEditorScrollResult {
-  scrollContainerRef: React.RefObject<HTMLDivElement>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   handleScroll: () => void;
   scrollMainContentToBottom: () => void;
   /** Exposed so callers can check whether the user has scrolled away mid-stream. */

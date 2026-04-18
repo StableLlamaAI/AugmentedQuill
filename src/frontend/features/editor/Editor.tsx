@@ -634,7 +634,7 @@ export const Editor = React.memo(
         if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
         const raf = window.requestAnimationFrame(() => {
-          if (isAtBottomRef.current) {
+          if (!isDetachedFromBottomRef.current) {
             scrollMainContentToBottom();
           }
         });

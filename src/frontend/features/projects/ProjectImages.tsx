@@ -98,17 +98,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const promptPopupRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(!!selectedImage, selectedImageRef, () => setSelectedImage(null));
-  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
-    setPromptPopup((prev) => ({ ...prev, isOpen: false }))
-  );
 
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
+  const getErrorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback;
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-700';
   const cardBg = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800';
-  const getErrorMessage = (err: unknown, fallback: string) =>
-    err instanceof Error ? err.message : fallback;
   const mapApiImageToEntry = (img: ProjectImage): ImageEntry => ({
     filename: img.filename,
     url: img.url ?? null,
@@ -116,8 +114,6 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     title: img.title,
     is_placeholder: Boolean(img.is_placeholder),
   });
-
-  const { confirm } = useConfirm();
 
   const loadImages = async () => {
     setLoading(true);
@@ -173,6 +169,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     getErrorMessage,
     setError,
   });
+
+  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
+    setPromptPopup((prev) => ({ ...prev, isOpen: false }))
+  );
 
   const {
     fileInputRef,
