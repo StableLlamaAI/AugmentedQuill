@@ -31,11 +31,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { ProjectImage } from '../../services/apiTypes';
-import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
+import { useImageGeneration } from './hooks/useImageGeneration';
+import { useImageUpload } from './hooks/useImageUpload';
 
 interface ImageEntry {
   filename: string;
@@ -83,31 +84,22 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 }) => {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState<string | null>(null);
   const [edits, setEdits] = useState<
     Record<string, { description?: string; title?: string }>
   >({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef, onClose);
-  const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
-  const [promptPopup, setPromptPopup] = useState<{
-    isOpen: boolean;
-    content: string;
-    loading: boolean;
-  }>({ isOpen: false, content: '', loading: false });
-  const [copied, setCopied] = useState(false);
   const [showImageSettings, setShowImageSettings] = useState(false);
   const selectedImageRef = useRef<HTMLDivElement>(null);
   const promptPopupRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(!!selectedImage, selectedImageRef, () => setSelectedImage(null));
   useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
-    setPromptPopup({ ...promptPopup, isOpen: false })
+    setPromptPopup((prev) => ({ ...prev, isOpen: false }))
   );
 
   const { isLight } = useThemeClasses();
@@ -115,8 +107,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-700';
   const cardBg = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800';
-  const getErrorMessage = (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback;
+  const getErrorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback;
   const mapApiImageToEntry = (img: ProjectImage): ImageEntry => ({
     filename: img.filename,
     url: img.url ?? null,
@@ -125,38 +117,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     is_placeholder: Boolean(img.is_placeholder),
   });
 
-  const buildImagePromptText = (img: ImageEntry) => {
-    const title = img.title?.trim() || '(untitled)';
-    const description = img.description?.trim() || '(no description)';
-    const style = imageStyle?.trim() || '(none)';
-    const extraInfo = imageAdditionalInfo?.trim() || '(none)';
-    return [
-      `Title: ${title}`,
-      `Description: ${description}`,
-      `Project Image Style: ${style}`,
-      `Additional Information: ${extraInfo}`,
-      'Generate one single-line production-ready image prompt in English.',
-    ].join('\n');
-  };
-
-  const generateImagePrompt = async (
-    img: ImageEntry,
-    activeProvider: AppSettings['providers'][number],
-    system: string,
-    onUpdate: (text: string) => void
-  ) => {
-    const prompt = buildImagePromptText(img);
-    return generateSimpleContent(prompt, system, activeProvider, 'EDITING', {
-      tool_choice: 'none',
-      onUpdate,
-    });
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      loadImages();
-    }
-  }, [isOpen]);
+  const { confirm } = useConfirm();
 
   const loadImages = async () => {
     setLoading(true);
@@ -185,6 +146,49 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       },
     }));
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadImages();
+    }
+  }, [isOpen]);
+
+  const {
+    generating,
+    promptPopup,
+    setPromptPopup,
+    copied,
+    setCopied,
+    handleGenerateDescription,
+    handleCreatePrompt,
+    handleGenerateAllPrompts,
+  } = useImageGeneration({
+    images,
+    imageStyle,
+    imageAdditionalInfo,
+    imageActionsAvailable,
+    settings,
+    prompts,
+    onMetadataChange: handleMetadataChange,
+    getErrorMessage,
+    setError,
+  });
+
+  const {
+    fileInputRef,
+    handleUploadClick,
+    handleUploadFile,
+    handleFileChange,
+    handleDelete,
+    handleCreatePlaceholder,
+  } = useImageUpload({
+    images,
+    loadImages,
+    getErrorMessage,
+    setError,
+    onRecordHistory,
+    confirm,
+  });
 
   const handleSaveMetadata = async (filename: string) => {
     const edit = edits[filename];
@@ -228,272 +232,6 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       });
     } catch (err: unknown) {
       setError('Failed to save metadata: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleGenerateDescription = async (img: ImageEntry) => {
-    if (!imageActionsAvailable) return;
-    if (generating) return;
-    setGenerating(img.filename);
-    setError(null);
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      const promptTemplate = prompts?.user_prompts?.image_describer_prompt || '';
-      const system = prompts?.system_messages?.image_describer || '';
-
-      if (!promptTemplate || !system) {
-        throw new Error('Prompts not loaded');
-      }
-
-      const prompt = promptTemplate.replace(/{filename}/g, img.filename);
-
-      const result = await generateSimpleContent(
-        prompt,
-        system,
-        activeProvider,
-        'EDITING',
-        { tool_choice: 'none' }
-      );
-
-      if (result) {
-        handleMetadataChange(img.filename, 'description', result);
-      }
-    } catch (err: unknown) {
-      setError('Generation failed: ' + getErrorMessage(err, 'Unknown error'));
-    } finally {
-      setGenerating(null);
-    }
-  };
-
-  const handleCreatePrompt = async (img: ImageEntry) => {
-    if (!imageActionsAvailable) return;
-    if (!img.description) return;
-
-    setPromptPopup({ isOpen: true, content: '', loading: true });
-
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      const system = prompts?.system_messages?.image_prompt_generator || '';
-
-      await generateImagePrompt(img, activeProvider, system, (text: string) => {
-        setPromptPopup((prev) => ({ ...prev, content: text }));
-      });
-
-      setPromptPopup((prev) => ({ ...prev, loading: false }));
-    } catch (err: unknown) {
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: 'Error creating prompt: ' + getErrorMessage(err, 'Unknown error'),
-        loading: false,
-      }));
-    }
-  };
-
-  const handleGenerateAllPrompts = async () => {
-    if (!imageActionsAvailable) return;
-    const placeholders = images.filter((i) => i.is_placeholder);
-    if (placeholders.length === 0) return;
-
-    // Reset output so streamed progress reflects only the current run.
-    setPromptPopup({ isOpen: true, content: '', loading: true });
-
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      let completedOutput = '';
-
-      for (const img of placeholders) {
-        if (!img.description) continue;
-
-        const system = prompts?.system_messages?.image_prompt_generator || '';
-
-        let currentItemText = '';
-        await generateImagePrompt(img, activeProvider, system, (text: string) => {
-          currentItemText = text.replace(/[\r\n]+/g, ' ');
-          setPromptPopup((prev) => ({
-            ...prev,
-            content: completedOutput + currentItemText,
-          }));
-        });
-
-        completedOutput += currentItemText + '\n';
-        setPromptPopup((prev) => ({ ...prev, content: completedOutput }));
-      }
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: prev.content.trimEnd(),
-        loading: false,
-      }));
-    } catch (err: unknown) {
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: prev.content + '\nError: ' + getErrorMessage(err, 'Unknown error'),
-        loading: false,
-      }));
-    }
-  };
-
-  const handleUploadClick = (targetName?: string) => {
-    setReplaceTarget(targetName || null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleUploadFile = async (file: File, replaceTargetName: string | null) => {
-    try {
-      if (replaceTargetName) {
-        // Keep replacement intent while preserving metadata when filenames differ.
-        if (file.name === replaceTargetName) {
-          const replaced = await api.projects.uploadImage(file, replaceTargetName);
-          let previousRestoreId = replaced.restore_id || '';
-          onRecordHistory?.({
-            label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
-              if (previousRestoreId) {
-                await api.projects.restoreImage(previousRestoreId);
-                await loadImages();
-              }
-            },
-            onRedo: async () => {
-              const redoReplace = await api.projects.uploadImage(
-                file,
-                replaceTargetName
-              );
-              previousRestoreId = redoReplace.restore_id || previousRestoreId;
-              await loadImages();
-            },
-          });
-        } else {
-          const res = await api.projects.uploadImage(file);
-          const newFilename = res.filename;
-
-          const oldImage = images.find((i) => i.filename === replaceTargetName);
-          if (oldImage) {
-            await api.projects.updateImage(
-              newFilename,
-              oldImage.description,
-              oldImage.title
-            );
-          }
-          const deletedOld = await api.projects.deleteImage(replaceTargetName);
-          let oldRestoreId = deletedOld.restore_id || '';
-          let newRestoreId = '';
-          onRecordHistory?.({
-            label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
-              const deletedNew = await api.projects.deleteImage(newFilename);
-              newRestoreId = deletedNew.restore_id || newRestoreId;
-              if (oldRestoreId) {
-                await api.projects.restoreImage(oldRestoreId);
-              }
-              await loadImages();
-            },
-            onRedo: async () => {
-              if (!newRestoreId) return;
-              const deletedOldAgain = await api.projects.deleteImage(replaceTargetName);
-              oldRestoreId = deletedOldAgain.restore_id || oldRestoreId;
-              await api.projects.restoreImage(newRestoreId);
-              await loadImages();
-            },
-          });
-        }
-      } else {
-        const uploaded = await api.projects.uploadImage(file);
-        let uploadedRestoreId = '';
-        onRecordHistory?.({
-          label: `Upload image: ${uploaded.filename}`,
-          onUndo: async () => {
-            const deleted = await api.projects.deleteImage(uploaded.filename);
-            uploadedRestoreId = deleted.restore_id || '';
-            await loadImages();
-          },
-          onRedo: async () => {
-            if (uploadedRestoreId) {
-              await api.projects.restoreImage(uploadedRestoreId);
-              await loadImages();
-            }
-          },
-        });
-      }
-      await loadImages();
-      setReplaceTarget(null);
-    } catch (err: unknown) {
-      setError('Upload failed: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await handleUploadFile(file, replaceTarget);
-  };
-
-  const handleDelete = async (filename: string) => {
-    if (!(await confirm('Are you sure you want to delete this image?'))) return;
-    try {
-      const deleted = await api.projects.deleteImage(filename);
-      setImages((prev) => prev.filter((i) => i.filename !== filename));
-      let latestRestoreId = deleted.restore_id || '';
-      onRecordHistory?.({
-        label: `Delete image: ${filename}`,
-        onUndo: async () => {
-          if (latestRestoreId) {
-            await api.projects.restoreImage(latestRestoreId);
-            await loadImages();
-          }
-        },
-        onRedo: async () => {
-          const redoDelete = await api.projects.deleteImage(filename);
-          latestRestoreId = redoDelete.restore_id || latestRestoreId;
-          await loadImages();
-        },
-      });
-    } catch (err: unknown) {
-      setError('Delete failed: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleCreatePlaceholder = async () => {
-    try {
-      const created = await api.projects.createImagePlaceholder('', '');
-      await loadImages();
-      let restoreId = '';
-      onRecordHistory?.({
-        label: `Create image placeholder: ${created.filename}`,
-        onUndo: async () => {
-          const deleted = await api.projects.deleteImage(created.filename);
-          restoreId = deleted.restore_id || '';
-          await loadImages();
-        },
-        onRedo: async () => {
-          if (restoreId) {
-            await api.projects.restoreImage(restoreId);
-          } else {
-            await api.projects.updateImage(
-              created.filename,
-              '',
-              'Untitled Placeholder'
-            );
-          }
-          await loadImages();
-        },
-      });
-    } catch (e: unknown) {
-      setError('Failed to create placeholder: ' + getErrorMessage(e, 'Unknown error'));
     }
   };
 

@@ -12,7 +12,6 @@
 import React, {
   useRef,
   useEffect,
-  useLayoutEffect,
   useImperativeHandle,
   useCallback,
   useState,
@@ -29,17 +28,14 @@ import { EditorSuggestionPanel } from './EditorSuggestionPanel';
 import { EditorMobileToolbar } from './EditorMobileToolbar';
 import { EditorProvider } from './EditorContext';
 import {
-  getBlockType,
-  getLineAtOffset,
   insertFencedCodeBlock,
   insertFootnote,
-  isInlineFormatActiveAtSelection,
-  toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
   InlineFormatType,
   MarkdownBlockType,
-  TextSelectionRange,
 } from './markdownToolbarUtils';
+import { useEditorScroll } from './hooks/useEditorScroll';
+import { useEditorFormatting } from './hooks/useEditorFormatting';
 
 // URL sanitizer — re-exported for backward compat with Editor.url.test.ts
 export { isSafeImageUrl } from './editorUtils';
@@ -113,17 +109,9 @@ export const Editor = React.memo(
     ) => {
       // CodeMirror EditorView — persists across all view modes
       const editorViewRef = useRef<EditorView | null>(null);
-      const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
-      const scrollContainerRef = useRef<HTMLDivElement>(null);
       const paperDivRef = useRef<HTMLDivElement>(null);
       const showInlineTitle = true;
       const conflictCount = chapter.conflicts?.length ?? 0;
-      const isAtBottomRef = useRef<boolean>(true);
-      const isDetachedFromBottomRef = useRef<boolean>(false);
-      const distanceFromBottomRef = useRef<number>(0);
-      const prevScrollTopRef = useRef<number>(0);
-      const autoScrollRafRef = useRef<number | null>(null);
-      const autoScrollSettleRafRef = useRef<number | null>(null);
       const { getRanges } = useSearchHighlight();
       const chapterSearchHighlightRanges = getRanges(
         'chapter_content',
@@ -134,9 +122,7 @@ export const Editor = React.memo(
       // trigger a network request.  Display updates remain synchronous.
       const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
       const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-      const contextDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
       const DEBOUNCE_MS = 300;
-      const CONTEXT_DEBOUNCE_MS = 150;
 
       // Local content/title state so the editor div always gets the latest
       // typed value immediately, while the parent onChange (API call) is debounced.
@@ -222,148 +208,28 @@ export const Editor = React.memo(
         isProseStreaming = false,
       } = aiControls;
 
-      // Keep a stable ref to isProseStreaming so handleScroll (which has [] deps
-      // and cannot close over changing props) can read the current value.
-      // Assigning to a ref during render is safe — it is the canonical
-      // "useLatest" pattern recommended by the React team.
-      const isProseStreamingRef = useRef(isProseStreaming);
-      isProseStreamingRef.current = isProseStreaming;
-      // ── Scroll management ─────────────────────────────────────────────────────
-      //
-      // Design goals:
-      //   1. At bottom → auto-scroll to follow new content.
-      //   2. Not at bottom → never programmatically move the user's viewport.
-      //   3. No synthetic min-height locks (they create temporary blank space).
-      //
-      // While prose streams and the user is NOT at bottom, we freeze editor text
-      // syncing (see localContent sync effect above). This keeps scroll geometry
-      // stable and avoids jump-to-top/clamp artifacts.
+      const {
+        scrollContainerRef,
+        handleScroll,
+        scrollMainContentToBottom,
+        isDetachedFromBottomRef,
+        distanceFromBottomRef,
+      } = useEditorScroll({
+        localContent,
+        isProseStreaming,
+        chapterId: chapter.id,
+      });
 
-      const scrollRafRef = useRef<number | null>(null);
-
-      const handleScroll = useCallback(() => {
-        if (scrollRafRef.current !== null) return;
-        scrollRafRef.current = requestAnimationFrame(() => {
-          scrollRafRef.current = null;
-          if (!scrollContainerRef.current) return;
-          const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-          const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-          const scrollDelta = scrollTop - prevScrollTopRef.current;
-          prevScrollTopRef.current = scrollTop;
-          distanceFromBottomRef.current = distanceFromBottom;
-          const atBottom = distanceFromBottom < 24;
-          isAtBottomRef.current = atBottom;
-
-          // Hysteresis prevents accidental detachment caused by tiny geometry
-          // fluctuations while streaming. Only a clear manual scroll-away should
-          // pause live content sync.
-          if (atBottom) {
-            isDetachedFromBottomRef.current = false;
-          } else if (scrollDelta < -2 && distanceFromBottom > 96) {
-            isDetachedFromBottomRef.current = true;
-          } else if (scrollDelta > 2 && distanceFromBottom < 240) {
-            // Reattach early when user scrolls back down near the end so
-            // streaming resumes before reaching exact bottom.
-            isDetachedFromBottomRef.current = false;
-          }
-        });
-      }, []);
-
-      // Follow stream at bottom only.
-      useLayoutEffect(() => {
-        // Only auto-scroll during streaming — not on every user keystroke.
-        if (!isProseStreamingRef.current) return;
-
-        const container = scrollContainerRef.current;
-        if (!container) return;
-
-        if (isDetachedFromBottomRef.current) return; // user intentionally scrolled away
-
-        // At bottom: follow new content, but coalesce writes to one per frame.
-        if (autoScrollRafRef.current === null) {
-          autoScrollRafRef.current = window.requestAnimationFrame(() => {
-            autoScrollRafRef.current = null;
-            const activeContainer = scrollContainerRef.current;
-            if (!activeContainer || isDetachedFromBottomRef.current) return;
-
-            const pinToBottom = () => {
-              const maxScrollTop = Math.max(
-                0,
-                activeContainer.scrollHeight - activeContainer.clientHeight
-              );
-              if (Math.abs(maxScrollTop - activeContainer.scrollTop) > 1) {
-                activeContainer.scrollTop = maxScrollTop;
-              }
-            };
-
-            pinToBottom();
-
-            // Paragraph boundaries can change final line-wrapping/height one
-            // frame later; repin once more to avoid visible down/up jitter.
-            if (autoScrollSettleRafRef.current !== null) {
-              window.cancelAnimationFrame(autoScrollSettleRafRef.current);
-            }
-            autoScrollSettleRafRef.current = window.requestAnimationFrame(() => {
-              autoScrollSettleRafRef.current = null;
-              const settledContainer = scrollContainerRef.current;
-              if (!settledContainer || isDetachedFromBottomRef.current) return;
-              const maxScrollTop = Math.max(
-                0,
-                settledContainer.scrollHeight - settledContainer.clientHeight
-              );
-              if (Math.abs(maxScrollTop - settledContainer.scrollTop) > 1) {
-                settledContainer.scrollTop = maxScrollTop;
-              }
-              distanceFromBottomRef.current =
-                settledContainer.scrollHeight -
-                settledContainer.scrollTop -
-                settledContainer.clientHeight;
-              prevScrollTopRef.current = settledContainer.scrollTop;
-            });
-
-            isAtBottomRef.current = true;
-            isDetachedFromBottomRef.current = false;
-          });
-        }
-      }, [localContent]);
-
-      // Chapter switch: reset scroll so the new chapter starts at the top.
-      useLayoutEffect(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        if (autoScrollRafRef.current !== null) {
-          window.cancelAnimationFrame(autoScrollRafRef.current);
-          autoScrollRafRef.current = null;
-        }
-        if (autoScrollSettleRafRef.current !== null) {
-          window.cancelAnimationFrame(autoScrollSettleRafRef.current);
-          autoScrollSettleRafRef.current = null;
-        }
-        container.scrollTop = 0;
-        isAtBottomRef.current = true;
-        isDetachedFromBottomRef.current = false;
-        prevScrollTopRef.current = 0;
-        distanceFromBottomRef.current = 0;
-      }, [chapter.id]);
-
-      useEffect(() => {
-        return () => {
-          if (autoScrollRafRef.current !== null) {
-            window.cancelAnimationFrame(autoScrollRafRef.current);
-            autoScrollRafRef.current = null;
-          }
-          if (autoScrollSettleRafRef.current !== null) {
-            window.cancelAnimationFrame(autoScrollSettleRafRef.current);
-            autoScrollSettleRafRef.current = null;
-          }
-          if (scrollRafRef.current !== null) {
-            cancelAnimationFrame(scrollRafRef.current);
-            scrollRafRef.current = null;
-          }
-        };
-      }, []);
-
-      // ──────────────────────────────────────────────────────────────────────────
+      const {
+        lastRawSelectionRef,
+        checkContext,
+        scheduleCheckContext,
+        toggleBlockAtCaret,
+      } = useEditorFormatting({
+        editorViewRef,
+        onContextChange,
+        contextDebounceMs: 150,
+      });
 
       const writingUnavailableReason =
         'This action is unavailable because no working WRITING model is configured.';
@@ -430,108 +296,6 @@ export const Editor = React.memo(
             await handleImageUpload(file);
           }
         }
-      };
-
-      // Update active formatting state for toolbar affordances.
-      // Debounced to avoid expensive format detection on every keystroke.
-      const scheduleCheckContext = () => {
-        if (contextDebounceRef.current) clearTimeout(contextDebounceRef.current);
-        contextDebounceRef.current = setTimeout(checkContext, CONTEXT_DEBOUNCE_MS);
-      };
-
-      // Track the last reported formats so we can skip calling onContextChange
-      // when the cursor moves but the active format context hasn't changed.
-      const lastReportedFormatsRef = useRef<string[]>([]);
-
-      const checkContext = () => {
-        if (!onContextChange) return;
-
-        const formats: string[] = [];
-
-        const view = editorViewRef.current;
-        if (view) {
-          const { anchor, head } = view.state.selection.main;
-          const rawCaret = head;
-          const rawStart = Math.min(anchor, head);
-          const rawEnd = Math.max(anchor, head);
-
-          // Extract a small window around the cursor instead of converting the
-          // entire document to a string.  Format markers are always adjacent to
-          // the selection so 200 chars of context is more than sufficient.
-          const WINDOW = 200;
-          const winStart = Math.max(0, rawStart - WINDOW);
-          const winEnd = Math.min(view.state.doc.length, rawEnd + WINDOW);
-          const localText = view.state.doc.sliceString(winStart, winEnd);
-          const localCaret = rawCaret - winStart;
-          const localStart = rawStart - winStart;
-          const localEnd = rawEnd - winStart;
-
-          const line = getLineAtOffset(localText, localCaret);
-          const blockType = getBlockType(line);
-          if (blockType) formats.push(blockType);
-
-          if (isInlineFormatActiveAtSelection(localText, localStart, localEnd, 'bold'))
-            formats.push('bold');
-          if (
-            isInlineFormatActiveAtSelection(localText, localStart, localEnd, 'italic')
-          )
-            formats.push('italic');
-          if (
-            isInlineFormatActiveAtSelection(
-              localText,
-              localStart,
-              localEnd,
-              'strikethrough'
-            )
-          )
-            formats.push('strikethrough');
-          if (
-            isInlineFormatActiveAtSelection(
-              localText,
-              localStart,
-              localEnd,
-              'subscript'
-            )
-          )
-            formats.push('subscript');
-          if (
-            isInlineFormatActiveAtSelection(
-              localText,
-              localStart,
-              localEnd,
-              'superscript'
-            )
-          )
-            formats.push('superscript');
-
-          lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
-        }
-        // Only notify parent when the set of active formats actually changes, so
-        // App.tsx doesn't re-render on every cursor move within plain text.
-        const prev = lastReportedFormatsRef.current;
-        const changed =
-          prev.length !== formats.length || formats.some((f, i) => f !== prev[i]);
-        if (changed) {
-          lastReportedFormatsRef.current = formats;
-          onContextChange(formats);
-        }
-      };
-
-      const toggleBlockAtCaret = (type: MarkdownBlockType) => {
-        const view = editorViewRef.current;
-        if (!view) return;
-        const rawText = view.state.doc.toString();
-        const rawCaret = view.state.selection.main.head;
-        const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
-          rawText,
-          rawCaret,
-          type
-        );
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-          selection: { anchor: nextRawCaret },
-        });
-        view.focus();
       };
 
       const getEditorCaretOffset = useCallback((): number | null => {
@@ -845,12 +609,6 @@ export const Editor = React.memo(
       const displayedContinuations =
         continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
       const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
-
-      const scrollMainContentToBottom = useCallback(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        container.scrollTop = container.scrollHeight;
-      }, []);
 
       // We need to scroll in a few scenarios:
       //   * suggestion generation is active and options are changing,

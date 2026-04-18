@@ -9,16 +9,9 @@
  * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useDeferredValue,
-  useCallback,
-} from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChatAttachment, ChatMessage } from '../../types';
+import { ChatAttachment } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useChatContext } from './ChatContext';
 import { Loader2, Bot, RefreshCw, X, Paperclip } from 'lucide-react';
@@ -31,11 +24,10 @@ import { ChatMessageItem } from './components/ChatMessageItem';
 import { ChatScratchpadDialog } from './components/ChatScratchpadDialog';
 import { ChatSystemPromptPanel } from './components/ChatSystemPromptPanel';
 import { estimateChatContextUsage } from './chatContextBudget';
-
-// Initial number of messages to commit on first render; older messages are
-// progressively added one chunk per animation frame to keep each commit well
-// under the browser's 50 ms long-task threshold.
-const INITIAL_DISPLAY = 8;
+import { useChatScroll } from './hooks/useChatScroll';
+import { useChatEditing } from './hooks/useChatEditing';
+import { useChatUIState } from './hooks/useChatUIState';
+import { useChatMessages } from './hooks/useChatMessages';
 
 export const Chat: React.FC = React.memo(() => {
   const {
@@ -69,22 +61,39 @@ export const Chat: React.FC = React.memo(() => {
     storyLanguage,
   } = useChatContext();
 
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showScratchpad, setShowScratchpad] = useState(false);
+  const {
+    editingMessageId,
+    editContent,
+    setEditContent,
+    handleStartEditing,
+    handleSaveEdit,
+    handleCancelEdit,
+  } = useChatEditing(onEditMessage);
 
-  const [thinkingProcessExpanded, setThinkingProcessExpanded] = useState<
-    Record<string, boolean>
-  >({});
+  const {
+    showSystemPrompt,
+    setShowSystemPrompt,
+    showHistory,
+    setShowHistory,
+    showScratchpad,
+    setShowScratchpad,
+    thinkingProcessExpanded,
+    handleThinkingToggle,
+  } = useChatUIState();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
+
+  const { scrollContainerRef, handleScroll, scrollToBottom } = useChatScroll({
+    messages,
+    isLoading,
+    editingMessageId,
+    currentSessionId,
+  });
+
+  const { visibleMessages } = useChatMessages(messages, currentSessionId);
 
   const themeClasses = useThemeClasses();
   const { isLight } = themeClasses;
@@ -105,127 +114,17 @@ export const Chat: React.FC = React.memo(() => {
     ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
     : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
-  const handleScroll = () => {
-    if (scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Consider "at bottom" if within 50px of the actual bottom to handle fast layouts
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
-      isAtBottomRef.current = isAtBottom;
-    }
-  };
-
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (!scrollContainerRef.current) return;
-    const { scrollHeight } = scrollContainerRef.current;
-    scrollContainerRef.current.scrollTo({
-      top: scrollHeight,
-      behavior,
-    });
-  };
-
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return undefined;
-
-    // Use MutationObserver to catch size changes in children (like Markdown
-    // rendering, Collapsible tool sections expanding, etc.).  The callback is
-    // RAF-throttled so that rapid DOM mutations during streaming don't pile up
-    // redundant scroll operations.
-    let rafId: number | null = null;
-    const observer = new MutationObserver(() => {
-      if (!isAtBottomRef.current) return;
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        scrollToBottom(isLoading ? 'auto' : 'smooth');
-      });
-    });
-
-    observer.observe(el, { childList: true, subtree: true });
-
-    // Ensure we scroll immediately if a basic dependency change caused an update too
-    if (isAtBottomRef.current) {
-      scrollToBottom(isLoading ? 'auto' : 'smooth');
-    }
-
-    return () => {
-      observer.disconnect();
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, [messages, isLoading, editingMessageId]);
-
-  // Always scroll to bottom on session switch
-  useEffect(() => {
-    isAtBottomRef.current = true;
-    scrollToBottom('auto');
-  }, [currentSessionId]);
-
-  const handleSubmit = (text: string, attachments?: ChatAttachment[]) => {
+  const handleSubmit = (text: string, files?: ChatAttachment[]) => {
     if (isLoading || !isModelAvailable) return;
 
-    onSendMessage(text, attachments);
+    onSendMessage(text, files);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
     // Force scroll to bottom on user message
-    isAtBottomRef.current = true;
     setTimeout(() => scrollToBottom('auto'), 0);
   };
-
-  // Keep a ref so handleSaveEdit has a stable identity regardless of editContent.
-  const editContentRef = useRef(editContent);
-  editContentRef.current = editContent;
-
-  const handleStartEditing = useCallback((msg: ChatMessage) => {
-    setEditingMessageId(msg.id);
-    setEditContent(msg.text);
-  }, []);
-
-  const handleSaveEdit = useCallback(
-    (id: string) => {
-      if (editContentRef.current.trim()) {
-        onEditMessage(id, editContentRef.current.trim());
-        setEditingMessageId(null);
-        setEditContent('');
-      }
-    },
-    [onEditMessage]
-  );
-
-  const handleCancelEdit = useCallback(() => {
-    setEditingMessageId(null);
-    setEditContent('');
-  }, []);
-
-  const handleThinkingToggle = useCallback((id: string, next: boolean) => {
-    setThinkingProcessExpanded((prev) => ({ ...prev, [id]: next }));
-  }, []);
-
-  const deferredMessages = useDeferredValue(messages);
-
-  // Incremental rendering: start with the most‑recent INITIAL_DISPLAY messages
-  // and add one chunk per animation frame. With React.memo on ChatMessageItem,
-  // each frame only commits the new items; already-rendered ones bail out.
-  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY);
-
-  useEffect(() => {
-    setDisplayCount(INITIAL_DISPLAY);
-  }, [currentSessionId]);
-
-  useEffect(() => {
-    if (displayCount >= deferredMessages.length) return;
-    const raf = requestAnimationFrame(() => {
-      setDisplayCount((prev) =>
-        Math.min(prev + INITIAL_DISPLAY, deferredMessages.length)
-      );
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [displayCount, deferredMessages.length]);
-
-  const visibleMessages = deferredMessages.slice(
-    Math.max(0, deferredMessages.length - displayCount)
-  );
 
   const hasUserMessage = messages.some((msg) => msg.role === 'user');
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;

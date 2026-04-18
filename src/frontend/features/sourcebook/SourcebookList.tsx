@@ -9,12 +9,11 @@
  * Defines the sourcebook list unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppTheme, SourcebookEntry } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
-import { ProjectImage } from '../../services/apiTypes';
-import { listProjectImages, listSourcebookEntries } from './sourcebookApi';
+import { listSourcebookEntries } from './sourcebookApi';
 import {
   entryDiffSignature,
   filterSourcebookEntries,
@@ -22,6 +21,8 @@ import {
 } from './sourcebookUtils';
 import { SourcebookListView } from './SourcebookListView';
 import { useSourcebookListMutations } from './useSourcebookListMutations';
+import { useSourcebookEntryInteractions } from './hooks/useSourcebookEntryInteractions';
+import { useSourcebookDialogLifecycle } from './hooks/useSourcebookDialogLifecycle';
 
 interface SourcebookListProps {
   theme?: AppTheme;
@@ -79,207 +80,6 @@ export {
   resolveExternalSourcebookEntries,
   updateSourcebookEntryInList,
 } from './sourcebookUtils';
-
-interface UseSourcebookEntryInteractionsArgs {
-  isAutoSelectionEnabled: boolean;
-  onToggle?: (id: string, checked: boolean) => void;
-  createdEntryIdsRef: React.MutableRefObject<Set<string>>;
-  setEntries: React.Dispatch<React.SetStateAction<SourcebookEntry[]>>;
-  setSelectedEntry: React.Dispatch<React.SetStateAction<SourcebookEntry | null>>;
-  setDialogOpenedViaTrigger: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-}
-
-function useSourcebookEntryInteractions({
-  isAutoSelectionEnabled,
-  onToggle,
-  createdEntryIdsRef,
-  setEntries,
-  setSelectedEntry,
-  setDialogOpenedViaTrigger,
-  setIsDialogOpen,
-}: UseSourcebookEntryInteractionsArgs) {
-  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
-  const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
-
-  const handleEntryHover = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, entry: SourcebookEntry) => {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = rect.right + 10;
-      const y = Math.min(rect.top, window.innerHeight - 200);
-      setTooltipPos({ x, y });
-      setHoveredEntry(entry);
-    },
-    []
-  );
-
-  const handleEntryHoverLeave = useCallback(() => {
-    setHoveredEntry(null);
-  }, []);
-
-  const handleEntryClick = useCallback(
-    async (entry: SourcebookEntry) => {
-      setIsLoadingEntry(true);
-      try {
-        const all = await listSourcebookEntries();
-        const full = all.find((x) => x.id === entry.id) || entry;
-        setEntries(all);
-        setSelectedEntry(full);
-        setDialogOpenedViaTrigger(createdEntryIdsRef.current.has(entry.id));
-        setIsDialogOpen(true);
-      } finally {
-        setIsLoadingEntry(false);
-      }
-    },
-    [
-      createdEntryIdsRef,
-      setDialogOpenedViaTrigger,
-      setEntries,
-      setIsDialogOpen,
-      setSelectedEntry,
-    ]
-  );
-
-  const handleToggleEntry = useCallback(
-    (id: string, checked: boolean) => {
-      if (isAutoSelectionEnabled) {
-        return;
-      }
-      onToggle?.(id, checked);
-    },
-    [isAutoSelectionEnabled, onToggle]
-  );
-
-  useEffect(() => {
-    if (hoveredEntry && hoveredEntry.images?.length > 0) {
-      listProjectImages().then((images) => {
-        setAvailableImages(images);
-      });
-    }
-  }, [hoveredEntry]);
-
-  return {
-    isLoadingEntry,
-    hoveredEntry,
-    tooltipPos,
-    availableImages,
-    handleEntryHover,
-    handleEntryHoverLeave,
-    handleEntryClick,
-    handleToggleEntry,
-  };
-}
-
-interface UseSourcebookDialogLifecycleArgs {
-  sourcebookDialogTrigger?: { id: number; entryId: string } | null;
-  entries: SourcebookEntry[];
-  setEntries: React.Dispatch<React.SetStateAction<SourcebookEntry[]>>;
-  setSelectedEntry: React.Dispatch<React.SetStateAction<SourcebookEntry | null>>;
-  setDialogOpenedViaTrigger: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  closeDialogTrigger?: number;
-  externalEntries?: SourcebookEntry[];
-  isDialogOpen: boolean;
-  selectedEntry: SourcebookEntry | null;
-  setDialogKey: React.Dispatch<React.SetStateAction<number>>;
-}
-
-function useSourcebookDialogLifecycle({
-  sourcebookDialogTrigger,
-  entries,
-  setEntries,
-  setSelectedEntry,
-  setDialogOpenedViaTrigger,
-  setIsDialogOpen,
-  closeDialogTrigger,
-  externalEntries,
-  isDialogOpen,
-  selectedEntry,
-  setDialogKey,
-}: UseSourcebookDialogLifecycleArgs) {
-  useEffect(() => {
-    if (!sourcebookDialogTrigger) {
-      return;
-    }
-
-    let cancelled = false;
-    const entryId = sourcebookDialogTrigger.entryId;
-    const findEntry = (entriesToSearch: SourcebookEntry[]) =>
-      entriesToSearch.find((entry) => entry.id === entryId);
-
-    const openTriggeredEntry = async () => {
-      const existing = findEntry(entries);
-      if (existing) {
-        setSelectedEntry(existing);
-        setDialogOpenedViaTrigger(true);
-        setIsDialogOpen(true);
-        return;
-      }
-
-      try {
-        const all = await listSourcebookEntries();
-        if (cancelled) {
-          return;
-        }
-        setEntries(all);
-        const target = findEntry(all);
-        if (target) {
-          setSelectedEntry(target);
-          setDialogOpenedViaTrigger(true);
-          setIsDialogOpen(true);
-        }
-      } catch (error) {
-        console.error('Failed to load sourcebook entry for trigger', error);
-      }
-    };
-
-    openTriggeredEntry();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    entries,
-    setDialogOpenedViaTrigger,
-    setEntries,
-    setIsDialogOpen,
-    setSelectedEntry,
-    sourcebookDialogTrigger,
-  ]);
-
-  useEffect(() => {
-    if (closeDialogTrigger) {
-      setIsDialogOpen(false);
-    }
-  }, [closeDialogTrigger, setIsDialogOpen]);
-
-  useEffect(() => {
-    if (!isDialogOpen || !selectedEntry || !Array.isArray(externalEntries)) {
-      return;
-    }
-
-    const updated = externalEntries.find((entry) => entry.id === selectedEntry.id);
-    if (!updated) {
-      setIsDialogOpen(false);
-      setSelectedEntry(null);
-      setDialogOpenedViaTrigger(false);
-      return;
-    }
-    if (entryDiffSignature(updated) !== entryDiffSignature(selectedEntry)) {
-      setSelectedEntry(updated);
-      setDialogKey((value) => value + 1);
-    }
-  }, [
-    externalEntries,
-    isDialogOpen,
-    selectedEntry,
-    setDialogKey,
-    setDialogOpenedViaTrigger,
-    setIsDialogOpen,
-    setSelectedEntry,
-  ]);
-}
 
 export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
   ({
