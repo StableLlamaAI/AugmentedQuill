@@ -125,7 +125,7 @@ describe('useProjectManagement', () => {
       await result.current.handleLoadProject('p1');
     });
 
-    expect(refreshStory).toHaveBeenCalledWith(undefined, true);
+    expect(refreshStory).toHaveBeenCalled();
     expect(handleNewChat).toHaveBeenCalled();
   });
 

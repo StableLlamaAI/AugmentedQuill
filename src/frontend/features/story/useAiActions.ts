@@ -46,7 +46,10 @@ export function useAiActions({
   getErrorMessage,
 }: UseAiActionsParams) {
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
-  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const cancelSignalRef = useRef<{
+    cancelled: boolean;
+    reader?: ReadableStreamDefaultReader<Uint8Array>;
+  }>({ cancelled: false });
   const isMountedRef = useRef(true);
 
   // Avoid updating state after the component has unmounted.

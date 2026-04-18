@@ -35,6 +35,7 @@ import { Button } from '../../components/ui/Button';
 import { SettingsProjects } from './settings/SettingsProjects';
 import SettingsMachine from './settings/SettingsMachine';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { machineModelToProvider, normalizeProviderPrompts } from './providerAdapter';
 
 const GUI_LANGUAGE_OPTIONS: Array<{ code: string; labelKey: string }> = [
   { code: '', labelKey: 'System Default' },
@@ -148,60 +149,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
         const providers: LLMConfig[] = models
           .filter((m): m is MachineModelConfig => Boolean(m && typeof m === 'object'))
-          .map((m) => {
-            const name = String(m.name || '').trim() || 'Unnamed';
-            const timeoutS = Number(m.timeout_s ?? 60);
-            return {
-              ...DEFAULT_LLM_CONFIG,
-              id: name,
-              name,
-              baseUrl: String(m.base_url || '').trim(),
-              apiKey: String(m.api_key || ''),
-              timeout: Number.isFinite(timeoutS) ? Math.max(1, timeoutS) * 1000 : 60000,
-              modelId: String(m.model || '').trim(),
-              contextWindowTokens:
-                m.context_window_tokens === null ||
-                m.context_window_tokens === undefined
-                  ? undefined
-                  : Number(m.context_window_tokens),
-              temperature:
-                m.temperature === null || m.temperature === undefined
-                  ? DEFAULT_LLM_CONFIG.temperature
-                  : Number(m.temperature),
-              topP:
-                m.top_p === null || m.top_p === undefined
-                  ? DEFAULT_LLM_CONFIG.topP
-                  : Number(m.top_p),
-              maxTokens:
-                m.max_tokens === null || m.max_tokens === undefined
-                  ? DEFAULT_LLM_CONFIG.maxTokens
-                  : Number(m.max_tokens),
-              presencePenalty:
-                m.presence_penalty === null || m.presence_penalty === undefined
-                  ? DEFAULT_LLM_CONFIG.presencePenalty
-                  : Number(m.presence_penalty),
-              frequencyPenalty:
-                m.frequency_penalty === null || m.frequency_penalty === undefined
-                  ? DEFAULT_LLM_CONFIG.frequencyPenalty
-                  : Number(m.frequency_penalty),
-              stop: Array.isArray(m.stop) ? m.stop.map((entry) => String(entry)) : [],
-              seed:
-                m.seed === null || m.seed === undefined ? undefined : Number(m.seed),
-              topK:
-                m.top_k === null || m.top_k === undefined ? undefined : Number(m.top_k),
-              minP:
-                m.min_p === null || m.min_p === undefined ? undefined : Number(m.min_p),
-              extraBody: String(m.extra_body || ''),
-              presetId: m.preset_id || null,
-              writingWarning: m.writing_warning || null,
-              isMultimodal: m.is_multimodal,
-              supportsFunctionCalling: m.supports_function_calling,
-              prompts: {
-                ...DEFAULT_LLM_CONFIG.prompts,
-                ...(m.prompt_overrides || {}),
-              },
-            };
-          });
+          .map((m) => machineModelToProvider(m, DEFAULT_LLM_CONFIG));
 
         if (cancelled) return;
 
@@ -420,16 +368,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         providers.find((p) => p.id === localSettings.activeEditingProviderId) ||
         providers[0];
 
-      const cleanPromptOverrides = (prompts?: Record<string, string> | null) =>
-        Object.fromEntries(
-          Object.entries(prompts || {}).filter(
-            ([, value]) => String(value || '').trim() !== ''
-          )
-        );
-
       const cleanedProviders = providers.map((p) => ({
         ...p,
-        prompts: cleanPromptOverrides(p.prompts),
+        prompts: normalizeProviderPrompts(p.prompts, DEFAULT_LLM_CONFIG.prompts),
       }));
 
       const cleanedSettings = { ...localSettings, providers: cleanedProviders };

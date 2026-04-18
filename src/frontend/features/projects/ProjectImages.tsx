@@ -30,6 +30,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { ProjectImage } from '../../services/apiTypes';
 import { generateSimpleContent } from '../../services/openaiService';
 import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -116,6 +117,40 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const cardBg = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800';
   const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback;
+  const mapApiImageToEntry = (img: ProjectImage): ImageEntry => ({
+    filename: img.filename,
+    url: img.url ?? null,
+    description: img.description || '',
+    title: img.title,
+    is_placeholder: Boolean(img.is_placeholder),
+  });
+
+  const buildImagePromptText = (img: ImageEntry) => {
+    const title = img.title?.trim() || '(untitled)';
+    const description = img.description?.trim() || '(no description)';
+    const style = imageStyle?.trim() || '(none)';
+    const extraInfo = imageAdditionalInfo?.trim() || '(none)';
+    return [
+      `Title: ${title}`,
+      `Description: ${description}`,
+      `Project Image Style: ${style}`,
+      `Additional Information: ${extraInfo}`,
+      'Generate one single-line production-ready image prompt in English.',
+    ].join('\n');
+  };
+
+  const generateImagePrompt = async (
+    img: ImageEntry,
+    activeProvider: AppSettings['providers'][number],
+    system: string,
+    onUpdate: (text: string) => void
+  ) => {
+    const prompt = buildImagePromptText(img);
+    return generateSimpleContent(prompt, system, activeProvider, 'EDITING', {
+      tool_choice: 'none',
+      onUpdate,
+    });
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -128,7 +163,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     setError(null);
     try {
       const res = await api.projects.listImages();
-      setImages(res.images || []);
+      setImages((res.images || []).map(mapApiImageToEntry));
       setEdits({});
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load images'));
@@ -249,7 +284,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
 
       const system = prompts?.system_messages?.image_prompt_generator || '';
 
-      await generateImagePrompt(img, activeProvider, system, (text) => {
+      await generateImagePrompt(img, activeProvider, system, (text: string) => {
         setPromptPopup((prev) => ({ ...prev, content: text }));
       });
 
@@ -285,7 +320,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         const system = prompts?.system_messages?.image_prompt_generator || '';
 
         let currentItemText = '';
-        await generateImagePrompt(img, activeProvider, system, (text) => {
+        await generateImagePrompt(img, activeProvider, system, (text: string) => {
           currentItemText = text.replace(/[\r\n]+/g, ' ');
           setPromptPopup((prev) => ({
             ...prev,
@@ -513,6 +548,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     >
       <div
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
+        role="button"
+        tabIndex={0}
+        aria-label="Project images drop zone"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleUploadClick();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -652,6 +696,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               {images.map((img) => (
                 <div
                   key={img.filename}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Image card ${img.filename}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleUploadClick(img.filename);
+                    }
+                  }}
                   className={`rounded-lg p-3 ${cardBg} flex flex-col gap-3 transition-all duration-200 relative ${
                     dragTarget === img.filename
                       ? 'border-4 border-dashed border-brand-blue-500 bg-brand-blue-50 dark:bg-brand-blue-900/20 z-10'
@@ -773,7 +826,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     <div className="mt-2 flex flex-wrap gap-2">
                       {onInsert && (
                         <Button
-                          size="xs"
+                          size="sm"
                           variant="secondary"
                           className="whitespace-nowrap flex-grow sm:flex-grow-0"
                           onClick={() => onInsert(img.filename, img.url, img.title)}
@@ -784,7 +837,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         </Button>
                       )}
                       <Button
-                        size="xs"
+                        size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleGenerateDescription(img)}
@@ -796,7 +849,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           : 'Generate description'}
                       </Button>
                       <Button
-                        size="xs"
+                        size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleCreatePrompt(img)}
@@ -811,7 +864,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         (edits[img.filename].description !== undefined ||
                           edits[img.filename].title !== undefined) && (
                           <Button
-                            size="xs"
+                            size="sm"
                             variant="primary"
                             className="whitespace-nowrap ml-auto"
                             onClick={() => handleSaveMetadata(img.filename)}
@@ -858,6 +911,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             aria-modal="true"
             aria-label={`Preview of ${selectedImage.filename}`}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setSelectedImage(null);
+              }
+            }}
             tabIndex={-1}
           >
             <img

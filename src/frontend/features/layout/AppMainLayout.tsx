@@ -11,6 +11,7 @@
  */
 
 import React, { useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Editor } from '../editor/Editor';
 import { AppChatPanel } from './AppChatPanel';
@@ -33,6 +34,7 @@ type AppMainLayoutProps = {
 export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
   ({ sidebarControls, editorControls, chatControls, instructionLanguages }) => {
     const { bgMain, isLight, currentTheme } = useTheme();
+    const { t } = useTranslation();
 
     if (!sidebarControls || !editorControls || !chatControls) {
       console.error('AppMainLayout missing required controls', {
@@ -42,9 +44,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       });
       return (
         <div className="flex-1 flex items-center justify-center p-8 text-center text-brand-red-500">
-          <p className="text-lg font-semibold">Application failed to initialize.</p>
+          <p className="text-lg font-semibold">
+            {t('Application failed to initialize.')}
+          </p>
           <p className="mt-2 text-sm text-brand-gray-400">
-            Please refresh the page or try again.
+            {t('Please refresh the page or try again.')}
           </p>
         </div>
       );
@@ -203,7 +207,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         <section
           id="aq-editor"
           role="main"
-          aria-label="Story editor"
+          aria-label={t('Story editor')}
           className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
         >
           <div className="flex-1 overflow-hidden h-full flex flex-col">
@@ -211,7 +215,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
               <div
                 className="flex-1 p-8 space-y-4 animate-pulse"
                 aria-busy="true"
-                aria-label="Loading chapter"
+                aria-label={t('Loading chapter')}
               >
                 <div
                   className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
@@ -286,7 +290,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                   loading="lazy"
                 />
                 <p className="text-lg font-medium">
-                  Select or create a chapter to start writing.
+                  {t('Select or create a chapter to start writing.')}
                 </p>
               </div>
             )}

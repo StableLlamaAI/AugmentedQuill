@@ -143,7 +143,7 @@ export function useProjectManagement({
         const response = await api.projects.select(id);
         if (!response.ok) return;
 
-        await refreshStory(undefined, true);
+        await refreshStory();
         const chats = await api.chat.list();
         setChatHistoryList(chats);
         if (chats.length > 0) {

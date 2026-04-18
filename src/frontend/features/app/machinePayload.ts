@@ -11,6 +11,7 @@
  */
 
 import { AppSettings } from '../../types';
+import { providerToMachineModel } from '../settings/providerAdapter';
 
 export function buildMachinePayload(settings: AppSettings) {
   const providers = settings.providers || [];
@@ -31,29 +32,7 @@ export function buildMachinePayload(settings: AppSettings) {
       selected_chat: activeChat?.name || '',
       selected_writing: activeWriting?.name || '',
       selected_editing: activeEditing?.name || '',
-      models: providers.map((provider) => ({
-        name: (provider.name || '').trim(),
-        base_url: (provider.baseUrl || '').trim(),
-        api_key: provider.apiKey || '',
-        timeout_s: Math.max(1, Math.round((provider.timeout || 10000) / 1000)),
-        model: (provider.modelId || '').trim(),
-        context_window_tokens: provider.contextWindowTokens,
-        temperature: provider.temperature,
-        top_p: provider.topP,
-        max_tokens: provider.maxTokens,
-        presence_penalty: provider.presencePenalty,
-        frequency_penalty: provider.frequencyPenalty,
-        stop: provider.stop || [],
-        seed: provider.seed,
-        top_k: provider.topK,
-        min_p: provider.minP,
-        extra_body: provider.extraBody || '',
-        preset_id: provider.presetId || undefined,
-        writing_warning: provider.writingWarning || undefined,
-        is_multimodal: provider.isMultimodal,
-        supports_function_calling: provider.supportsFunctionCalling,
-        prompt_overrides: provider.prompts || undefined,
-      })),
+      models: providers.map(providerToMachineModel),
     },
   };
 }

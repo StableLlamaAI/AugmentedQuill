@@ -14,6 +14,7 @@ import type { ComponentProps, Dispatch, RefObject, SetStateAction } from 'react'
 import type {
   AppSettings,
   AppTheme,
+  Book,
   Chapter,
   ChatAttachment,
   ChatMessage,

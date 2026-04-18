@@ -190,6 +190,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
       const timeoutId = setTimeout(scrollToBottom, 50);
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [isOpen, logs.length]);
 
   const toggleExpand = (id: string) => {
@@ -424,7 +425,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                               <span className="text-blue-400">status_code:</span>{' '}
                               {log.response.status_code}
                             </div>
-                            {log.response.error && (
+                            {Boolean(log.response.error) && (
                               <div className="space-y-1">
                                 <span className="text-red-400">error:</span>
                                 <div

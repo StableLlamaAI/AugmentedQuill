@@ -14,6 +14,7 @@ import i18n, { detectBrowserLanguage } from '../app/i18n';
 import { AppSettings, LLMConfig } from '../../types';
 import { api } from '../../services/api';
 import { MachineModelConfig } from '../../services/apiTypes';
+import { machineModelToProvider } from './providerAdapter';
 
 export function useAppSettings(defaultSettings: AppSettings) {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
@@ -50,73 +51,8 @@ export function useAppSettings(defaultSettings: AppSettings) {
 
         if (models.length > 0) {
           const fallbackProvider = defaultSettings.providers[0] as LLMConfig;
-          const providers: LLMConfig[] = (models as MachineModelConfig[]).map(
-            (model) => {
-              const name = String(model.name || '').trim();
-              const timeoutS = Number(model.timeout_s ?? 60);
-              return {
-                ...fallbackProvider,
-                id: name,
-                name,
-                baseUrl: String(model.base_url || '').trim(),
-                apiKey: String(model.api_key || ''),
-                timeout: Number.isFinite(timeoutS)
-                  ? Math.max(1, timeoutS) * 1000
-                  : 60000,
-                modelId: String(model.model || '').trim(),
-                contextWindowTokens:
-                  model.context_window_tokens === null ||
-                  model.context_window_tokens === undefined
-                    ? undefined
-                    : Number(model.context_window_tokens),
-                temperature:
-                  model.temperature === null || model.temperature === undefined
-                    ? fallbackProvider.temperature
-                    : Number(model.temperature),
-                topP:
-                  model.top_p === null || model.top_p === undefined
-                    ? fallbackProvider.topP
-                    : Number(model.top_p),
-                maxTokens:
-                  model.max_tokens === null || model.max_tokens === undefined
-                    ? fallbackProvider.maxTokens
-                    : Number(model.max_tokens),
-                presencePenalty:
-                  model.presence_penalty === null ||
-                  model.presence_penalty === undefined
-                    ? fallbackProvider.presencePenalty
-                    : Number(model.presence_penalty),
-                frequencyPenalty:
-                  model.frequency_penalty === null ||
-                  model.frequency_penalty === undefined
-                    ? fallbackProvider.frequencyPenalty
-                    : Number(model.frequency_penalty),
-                stop: Array.isArray(model.stop)
-                  ? model.stop.map((entry) => String(entry))
-                  : [],
-                seed:
-                  model.seed === null || model.seed === undefined
-                    ? undefined
-                    : Number(model.seed),
-                topK:
-                  model.top_k === null || model.top_k === undefined
-                    ? undefined
-                    : Number(model.top_k),
-                minP:
-                  model.min_p === null || model.min_p === undefined
-                    ? undefined
-                    : Number(model.min_p),
-                extraBody: String(model.extra_body || ''),
-                presetId: model.preset_id || null,
-                writingWarning: model.writing_warning || null,
-                isMultimodal: model.is_multimodal,
-                supportsFunctionCalling: model.supports_function_calling,
-                prompts: {
-                  ...fallbackProvider.prompts,
-                  ...(model.prompt_overrides || {}),
-                },
-              };
-            }
+          const providers: LLMConfig[] = (models as MachineModelConfig[]).map((model) =>
+            machineModelToProvider(model, fallbackProvider)
           );
 
           startTransition(() =>

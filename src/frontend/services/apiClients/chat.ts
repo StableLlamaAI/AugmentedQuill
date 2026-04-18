@@ -32,6 +32,7 @@ export const chatApi = {
       messages: unknown[];
       systemPrompt: string;
       allowWebSearch?: boolean;
+      scratchpad?: string;
     }
   ) => {
     return fetchJson<{ ok: boolean }>(

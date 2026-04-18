@@ -22,7 +22,7 @@ type UseAppUiActionsParams = {
   activeFormats: string[];
   setIsFormatMenuOpen: (open: boolean) => void;
   setIsMobileFormatMenuOpen: (open: boolean) => void;
-  selectChapter: (id: string) => void;
+  selectChapter: (id: string | null) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   story: StoryState;

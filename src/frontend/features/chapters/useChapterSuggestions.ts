@@ -126,7 +126,10 @@ export function useChapterSuggestions({
     return () => clearTimeout(timer);
   }, [currentUnit?.content, isAutoSourcebookSelectionEnabled]);
 
-  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const cancelSignalRef = useRef<{
+    cancelled: boolean;
+    reader?: ReadableStreamDefaultReader<Uint8Array>;
+  }>({ cancelled: false });
   const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
   const suggestionUpdateTimerRef = useRef<number | null>(null);
 

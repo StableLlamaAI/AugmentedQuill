@@ -120,7 +120,6 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
                   <Eye
                     size={12}
                     className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
-                    title="Multimodal (Vision)"
                   />
                 )}
                 {(p.supportsFunctionCalling === true ||
@@ -130,7 +129,6 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
                   <Wand2
                     size={12}
                     className={isLight ? 'text-brand-gray-500' : 'text-brand-gray-400'}
-                    title="Function Calling"
                   />
                 )}
                 <span
@@ -169,11 +167,7 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
                   <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200 flex items-center gap-1">
                     <BookOpen size={10} /> Writing
                     {p.writingWarning && (
-                      <AlertTriangle
-                        size={10}
-                        className="text-amber-500"
-                        title={p.writingWarning}
-                      />
+                      <AlertTriangle size={10} className="text-amber-500" />
                     )}
                   </span>
                 )}

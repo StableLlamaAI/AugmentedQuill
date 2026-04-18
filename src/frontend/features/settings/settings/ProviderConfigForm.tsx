@@ -339,11 +339,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             Writing
             {activeWritingProviderId === activeProvider.id &&
               activeProvider.writingWarning && (
-                <AlertTriangle
-                  size={12}
-                  className="text-amber-300"
-                  title={activeProvider.writingWarning}
-                />
+                <AlertTriangle size={12} className="text-amber-300" />
               )}
           </button>
           <button
@@ -884,7 +880,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                     className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-300"
                     title={activeProvider.writingWarning}
                   >
-                    <AlertTriangle size={12} title={activeProvider.writingWarning} />
+                    <AlertTriangle size={12} />
                     <span>{activeProvider.writingWarning}</span>
                   </div>
                 )}

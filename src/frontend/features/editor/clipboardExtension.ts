@@ -26,9 +26,9 @@ configureMarked();
 
 // Lazily create a single turndown instance for clipboard paste.
 let turndown: { turndown: (html: string) => string } | null = null;
-function getTurndown() {
+function getTurndown(): { turndown: (html: string) => string } {
   if (!turndown) turndown = createEditorTurndownService();
-  return turndown;
+  return turndown as { turndown: (html: string) => string };
 }
 
 /**

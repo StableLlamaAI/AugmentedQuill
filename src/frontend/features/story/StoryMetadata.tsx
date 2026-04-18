@@ -20,6 +20,7 @@ import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, Conflict } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+import { MetadataParams } from './metadataSync';
 
 interface StoryMetadataProps {
   title: string;
@@ -119,18 +120,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       ? 'Books'
       : 'Chapters';
 
-  const handleMetadataSave = async (data: {
-    title: string;
-    summary: string;
-    tags: string[];
-    notes?: string;
-    private_notes?: string;
-    conflicts?: Conflict[];
-    language?: string;
-  }) => {
+  const handleMetadataSave = async (data: MetadataParams) => {
     await onUpdate(
-      data.title,
-      data.summary,
+      data.title || '',
+      data.summary || '',
       data.tags || [],
       data.notes,
       data.private_notes,

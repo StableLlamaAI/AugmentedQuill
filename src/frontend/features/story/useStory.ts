@@ -903,7 +903,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   return {
     story,
     currentChapterId,
-    selectChapter: (id: string) => selectChapter(id),
+    selectChapter: (id: string | null) => selectChapter(id),
     updateStoryMetadata,
     updateStoryImageSettings,
     updateChapter,

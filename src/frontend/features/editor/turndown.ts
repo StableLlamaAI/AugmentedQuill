@@ -62,56 +62,66 @@ export function createEditorTurndownService(): TurndownService {
   });
 
   td.addRule('softBreak', {
-    filter: (node: any) =>
+    filter: (node: Node) =>
       node.nodeName === 'BR' && node.parentNode?.nodeName !== 'PRE',
     replacement: () => '\n',
   });
 
   td.addRule('tabMarker', {
-    filter: (node: any) =>
-      node.nodeName === 'SPAN' && node.getAttribute('data-ws-tab') === '1',
+    filter: (node: Node) =>
+      node instanceof Element &&
+      node.nodeName === 'SPAN' &&
+      node.getAttribute('data-ws-tab') === '1',
     replacement: () => '\t',
   });
 
   td.addRule('wsNewlineMarker', {
-    filter: (node: any) =>
-      node.nodeName === 'SPAN' && node.getAttribute('data-ws-nl') === '1',
+    filter: (node: Node) =>
+      node instanceof Element &&
+      node.nodeName === 'SPAN' &&
+      node.getAttribute('data-ws-nl') === '1',
     replacement: () => '',
   });
 
   td.addRule('wsMarker', {
-    filter: (node: any) =>
-      node.nodeName === 'SPAN' && node.getAttribute('data-ws-marker') === '1',
+    filter: (node: Node) =>
+      node instanceof Element &&
+      node.nodeName === 'SPAN' &&
+      node.getAttribute('data-ws-marker') === '1',
     replacement: () => ' ',
   });
 
   td.addRule('table', {
     filter: 'table',
-    replacement: (content, node) => {
-      return renderTable(node as Element);
+    replacement: (_content: string, node: Node) => {
+      if (!(node instanceof Element)) return '';
+      return renderTable(node);
     },
   });
 
   // Strikethrough: <del>, <s>, <strike> → ~~text~~
   td.addRule('strikethrough', {
-    filter: ['del', 's', 'strike'] as any,
+    filter: (node: Node) =>
+      node.nodeName === 'DEL' || node.nodeName === 'S' || node.nodeName === 'STRIKE',
     replacement: (content: string) => `~~${content}~~`,
   });
 
   // Subscript: <sub> → ~text~
   td.addRule('subscript', {
-    filter: 'sub' as any,
+    filter: 'sub',
     replacement: (content: string) => `~${content}~`,
   });
 
   // Footnote reference: <sup class="footnote-ref"> → [^N]
   td.addRule('footnoteRef', {
-    filter: (node: any) =>
+    filter: (node: Node) =>
+      node instanceof Element &&
       node.nodeName === 'SUP' &&
       typeof node.className === 'string' &&
       node.className.includes('footnote-ref'),
-    replacement: (_content: string, node: any) => {
-      const a = node.querySelector ? node.querySelector('a') : null;
+    replacement: (_content: string, node: Node) => {
+      if (!(node instanceof Element)) return '';
+      const a = node.querySelector('a');
       const text = a ? a.textContent || '' : node.textContent || '';
       // text is like "[1]" — extract the inner label
       const id = text.replace(/^\[|\]$/g, '').trim();
@@ -121,14 +131,16 @@ export function createEditorTurndownService(): TurndownService {
 
   // Footnote definition: <p class="footnote-def"> → [^N]: text
   td.addRule('footnoteDef', {
-    filter: (node: any) =>
+    filter: (node: Node) =>
+      node instanceof Element &&
       node.nodeName === 'P' &&
       typeof node.className === 'string' &&
       node.className.includes('footnote-def'),
-    replacement: (_content: string, node: any) => {
+    replacement: (_content: string, node: Node) => {
+      if (!(node instanceof HTMLElement)) return '';
       const id = (node.id || '').replace('fn-', '');
       // Get text without the leading "[N] " marker and the ↩ backref
-      let text = (node.textContent || '')
+      const text = (node.textContent || '')
         .replace(/^\[\d+\]\s*/, '')
         .replace(/\u21a9$/, '')
         .trim();
@@ -138,7 +150,8 @@ export function createEditorTurndownService(): TurndownService {
 
   // Superscript: <sup> (without footnote-ref class) → ^text^
   td.addRule('superscript', {
-    filter: (node: any) =>
+    filter: (node: Node) =>
+      node instanceof Element &&
       node.nodeName === 'SUP' &&
       !(typeof node.className === 'string' && node.className.includes('footnote-ref')),
     replacement: (content: string) => `^${content}^`,

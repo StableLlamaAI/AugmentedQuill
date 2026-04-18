@@ -134,7 +134,7 @@ export function convertContentEditableQuotes(root: HTMLElement) {
     selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
+    acceptNode(node: Node) {
       const value = node.nodeValue || '';
       return /["']/.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },

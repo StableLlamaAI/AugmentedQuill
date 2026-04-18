@@ -155,7 +155,7 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
           </h2>
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={onClose}
             aria-label="Close relation dialog"
             title="Close"
