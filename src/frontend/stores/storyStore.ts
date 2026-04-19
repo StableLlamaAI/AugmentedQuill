@@ -225,46 +225,22 @@ export const useStoryStore = create<StoryStoreState>()(
 
 /** Subscribe to story metadata only (title, summary, tags, notes, language, etc.). */
 export function useStoryMeta() {
-  return useStoryStore((s: StoryStoreState) => ({
-    id: s.story.id,
-    title: s.story.title,
-    summary: s.story.summary,
-    styleTags: s.story.styleTags,
-    notes: s.story.notes,
-    private_notes: s.story.private_notes,
-    conflicts: s.story.conflicts,
-    language: s.story.language,
-    projectType: s.story.projectType,
-    image_style: s.story.image_style,
-    image_additional_info: s.story.image_additional_info,
-    llm_prefs: s.story.llm_prefs,
-    draft: s.story.draft,
-  }));
+  return useStoryStore((s: StoryStoreState) => s.story);
 }
 
-/** Subscribe to the chapter list (metadata only, no content). */
+/** Subscribe to the chapter list. */
 export function useStoryChaptersMeta() {
-  return useStoryStore((s: StoryStoreState) =>
-    s.story.chapters.map((c: import('../types').Chapter) => ({
-      id: c.id,
-      title: c.title,
-      summary: c.summary,
-      content: '',
-      book_id: c.book_id,
-      filename: c.filename,
-      conflicts: c.conflicts,
-    }))
-  );
+  return useStoryStore((s: StoryStoreState) => s.story.chapters);
 }
 
 /** Subscribe to the books list. */
 export function useStoryBooks() {
-  return useStoryStore((s: StoryStoreState) => s.story.books ?? []);
+  return useStoryStore((s: StoryStoreState) => s.story.books);
 }
 
 /** Subscribe to the sourcebook entries list. */
 export function useStorySourcebook() {
-  return useStoryStore((s: StoryStoreState) => s.story.sourcebook ?? []);
+  return useStoryStore((s: StoryStoreState) => s.story.sourcebook);
 }
 
 /** Subscribe to the baseline state (for diff highlighting). */
