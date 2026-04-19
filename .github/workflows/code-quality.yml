@@ -46,7 +46,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd src/frontend
-        npm ci
+        npm ci --legacy-peer-deps
     - name: Run ESLint
       run: |
         cd src/frontend
