@@ -15,11 +15,12 @@ import { useTheme } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
 import { CheckpointInfo } from '../../services/apiClients/checkpoints';
+import type { ConfirmOptions } from '../layout/useConfirmDialog';
 
 interface CheckpointsMenuProps {
   onStateChange?: () => void;
   hasUnsavedChanges?: boolean;
-  confirm: (input: string | unknown) => Promise<boolean>;
+  confirm: (input: string | ConfirmOptions) => Promise<boolean>;
 }
 
 export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({

@@ -577,7 +577,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const isDifferent = Object.entries(partial).some(
         ([key, value]: [string, string | import('../../types').Conflict[]]) => {
           if (value === undefined) return false;
-          const old = (chapter as Record<string, unknown>)[key];
+          const old = (chapter as unknown as Record<string, unknown>)[key];
           return value !== old;
         }
       );

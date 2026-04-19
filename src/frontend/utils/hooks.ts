@@ -23,10 +23,10 @@ export function useDebounce<T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number
 ): (...args: Parameters<T>) => void {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Parameters<T>): void => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -58,7 +58,7 @@ export function useClickOutside<T extends HTMLElement>(
 
   useEffect(() => {
     if (!enabled) return;
-    const handler = (event: MouseEvent) => {
+    const handler = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         callbackRef.current();
       }

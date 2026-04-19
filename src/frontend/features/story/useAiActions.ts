@@ -133,11 +133,11 @@ export function useAiActions({
         }
       };
 
-      const selectedTarget: 'summary' | 'book_summary' | 'story_summary' =
+      const selectedTarget: 'summary' | 'story_summary' | 'chapter' =
         target === 'chapter'
-          ? 'summary'
-          : type === 'book'
-            ? 'book_summary'
+          ? 'chapter'
+          : currentUnit.scope === 'chapter'
+            ? 'summary'
             : 'story_summary';
 
       const result = await streamAiAction(

@@ -533,7 +533,9 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                       if (value === undefined) return false;
                       return (
                         JSON.stringify(value) !==
-                        JSON.stringify((currentChapter as Record<string, unknown>)[key])
+                        JSON.stringify(
+                          (currentChapter as unknown as Record<string, unknown>)[key]
+                        )
                       );
                     }
                   );
