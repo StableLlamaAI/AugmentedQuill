@@ -240,6 +240,7 @@ export interface DebugLogEntry {
     streaming?: boolean;
     chunks?: unknown[];
     full_content?: string;
+    thinking?: string;
     error?: unknown;
     tool_calls?: unknown[];
   } | null;

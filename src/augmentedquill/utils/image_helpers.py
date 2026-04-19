@@ -10,12 +10,14 @@
 Helper functions for managing project images and their metadata.
 """
 
+from typing import Any
 import json
 from pathlib import Path
 from augmentedquill.services.projects.projects import get_active_project_dir
 
 
 def get_images_dir() -> Path | None:
+    """Return images dir."""
     active = get_active_project_dir()
     if active:
         return active / "images"
@@ -39,7 +41,8 @@ def load_image_metadata() -> dict:
     return {}
 
 
-def save_image_metadata(data: dict):
+def save_image_metadata(data: dict) -> Any:
+    """Save image metadata."""
     d = get_images_dir()
     if d:
         d.mkdir(parents=True, exist_ok=True)
@@ -47,7 +50,9 @@ def save_image_metadata(data: dict):
         (d / "metadata.json").write_text(json.dumps(payload, indent=2), "utf-8")
 
 
-def update_image_metadata(filename: str, description: str = None, title: str = None):
+def update_image_metadata(
+    filename: str, description: str = None, title: str = None
+) -> Any:
     """Update Image Metadata."""
     meta = load_image_metadata()
     if filename not in meta:
@@ -61,7 +66,8 @@ def update_image_metadata(filename: str, description: str = None, title: str = N
     save_image_metadata(meta)
 
 
-def delete_image_metadata(filename: str):
+def delete_image_metadata(filename: str) -> Any:
+    """Delete image metadata."""
     meta = load_image_metadata()
     if filename in meta:
         del meta[filename]

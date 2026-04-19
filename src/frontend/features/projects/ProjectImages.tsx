@@ -30,11 +30,14 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
-import { generateSimpleContent } from '../../services/openaiService';
+import { ProjectImage } from '../../services/apiTypes';
 import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
+import type { PromptPopupState } from './hooks/useImageGeneration';
+import { useImageGeneration } from './hooks/useImageGeneration';
+import { useImageUpload } from './hooks/useImageUpload';
 
 interface ImageEntry {
   filename: string;
@@ -79,56 +82,46 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   onUpdateSettings,
   onInsert,
   onRecordHistory,
-}) => {
+}: ProjectImagesProps) => {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState<string | null>(null);
   const [edits, setEdits] = useState<
     Record<string, { description?: string; title?: string }>
   >({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef, onClose);
-  const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
-  const [promptPopup, setPromptPopup] = useState<{
-    isOpen: boolean;
-    content: string;
-    loading: boolean;
-  }>({ isOpen: false, content: '', loading: false });
-  const [copied, setCopied] = useState(false);
   const [showImageSettings, setShowImageSettings] = useState(false);
   const selectedImageRef = useRef<HTMLDivElement>(null);
   const promptPopupRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(!!selectedImage, selectedImageRef, () => setSelectedImage(null));
-  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
-    setPromptPopup({ ...promptPopup, isOpen: false })
-  );
 
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
+  const getErrorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback;
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-700';
   const cardBg = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-800';
-  const getErrorMessage = (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback;
-
-  useEffect(() => {
-    if (isOpen) {
-      loadImages();
-    }
-  }, [isOpen]);
+  const mapApiImageToEntry = (img: ProjectImage): ImageEntry => ({
+    filename: img.filename,
+    url: img.url ?? null,
+    description: img.description || '',
+    title: img.title,
+    is_placeholder: Boolean(img.is_placeholder),
+  });
 
   const loadImages = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await api.projects.listImages();
-      setImages(res.images || []);
+      setImages((res.images || []).map(mapApiImageToEntry));
       setEdits({});
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load images'));
@@ -142,7 +135,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     field: 'description' | 'title',
     val: string
   ) => {
-    setEdits((prev) => ({
+    setEdits((prev: Record<string, { description?: string; title?: string }>) => ({
       ...prev,
       [filename]: {
         ...prev[filename],
@@ -151,12 +144,59 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     }));
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      loadImages();
+    }
+  }, [isOpen]);
+
+  const {
+    generating,
+    promptPopup,
+    setPromptPopup,
+    copied,
+    setCopied,
+    handleGenerateDescription,
+    handleCreatePrompt,
+    handleGenerateAllPrompts,
+  } = useImageGeneration({
+    images,
+    imageStyle,
+    imageAdditionalInfo,
+    imageActionsAvailable,
+    settings,
+    prompts,
+    onMetadataChange: handleMetadataChange,
+    getErrorMessage,
+    setError,
+  });
+
+  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
+    setPromptPopup((prev: PromptPopupState) => ({ ...prev, isOpen: false }))
+  );
+
+  const {
+    fileInputRef,
+    handleUploadClick,
+    handleUploadFile,
+    handleFileChange,
+    handleDelete,
+    handleCreatePlaceholder,
+  } = useImageUpload({
+    images,
+    loadImages,
+    getErrorMessage,
+    setError,
+    onRecordHistory,
+    confirm,
+  });
+
   const handleSaveMetadata = async (filename: string) => {
     const edit = edits[filename];
     if (!edit) return;
 
     // Preserve existing fields when only one metadata field is edited.
-    const original = images.find((i) => i.filename === filename);
+    const original = images.find((i: ImageEntry) => i.filename === filename);
     if (!original) return;
 
     const newDesc =
@@ -168,14 +208,14 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     try {
       await api.projects.updateImage(filename, newDesc, newTitle);
       // Mirror persisted metadata immediately for responsive editing feedback.
-      setImages((prev) =>
-        prev.map((img) =>
+      setImages((prev: ImageEntry[]) =>
+        prev.map((img: ImageEntry) =>
           img.filename === filename
             ? { ...img, description: newDesc, title: newTitle }
             : img
         )
       );
-      setEdits((prev) => {
+      setEdits((prev: Record<string, { description?: string; title?: string }>) => {
         const next = { ...prev };
         delete next[filename];
         return next;
@@ -193,272 +233,6 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       });
     } catch (err: unknown) {
       setError('Failed to save metadata: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleGenerateDescription = async (img: ImageEntry) => {
-    if (!imageActionsAvailable) return;
-    if (generating) return;
-    setGenerating(img.filename);
-    setError(null);
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      const promptTemplate = prompts?.user_prompts?.image_describer_prompt || '';
-      const system = prompts?.system_messages?.image_describer || '';
-
-      if (!promptTemplate || !system) {
-        throw new Error('Prompts not loaded');
-      }
-
-      const prompt = promptTemplate.replace(/{filename}/g, img.filename);
-
-      const result = await generateSimpleContent(
-        prompt,
-        system,
-        activeProvider,
-        'EDITING',
-        { tool_choice: 'none' }
-      );
-
-      if (result) {
-        handleMetadataChange(img.filename, 'description', result);
-      }
-    } catch (err: unknown) {
-      setError('Generation failed: ' + getErrorMessage(err, 'Unknown error'));
-    } finally {
-      setGenerating(null);
-    }
-  };
-
-  const handleCreatePrompt = async (img: ImageEntry) => {
-    if (!imageActionsAvailable) return;
-    if (!img.description) return;
-
-    setPromptPopup({ isOpen: true, content: '', loading: true });
-
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      const system = prompts?.system_messages?.image_prompt_generator || '';
-
-      await generateImagePrompt(img, activeProvider, system, (text) => {
-        setPromptPopup((prev) => ({ ...prev, content: text }));
-      });
-
-      setPromptPopup((prev) => ({ ...prev, loading: false }));
-    } catch (err: unknown) {
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: 'Error creating prompt: ' + getErrorMessage(err, 'Unknown error'),
-        loading: false,
-      }));
-    }
-  };
-
-  const handleGenerateAllPrompts = async () => {
-    if (!imageActionsAvailable) return;
-    const placeholders = images.filter((i) => i.is_placeholder);
-    if (placeholders.length === 0) return;
-
-    // Reset output so streamed progress reflects only the current run.
-    setPromptPopup({ isOpen: true, content: '', loading: true });
-
-    try {
-      const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
-      );
-      if (!activeProvider) throw new Error('No active chat provider configured');
-
-      let completedOutput = '';
-
-      for (const img of placeholders) {
-        if (!img.description) continue;
-
-        const system = prompts?.system_messages?.image_prompt_generator || '';
-
-        let currentItemText = '';
-        await generateImagePrompt(img, activeProvider, system, (text) => {
-          currentItemText = text.replace(/[\r\n]+/g, ' ');
-          setPromptPopup((prev) => ({
-            ...prev,
-            content: completedOutput + currentItemText,
-          }));
-        });
-
-        completedOutput += currentItemText + '\n';
-        setPromptPopup((prev) => ({ ...prev, content: completedOutput }));
-      }
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: prev.content.trimEnd(),
-        loading: false,
-      }));
-    } catch (err: unknown) {
-      setPromptPopup((prev) => ({
-        ...prev,
-        content: prev.content + '\nError: ' + getErrorMessage(err, 'Unknown error'),
-        loading: false,
-      }));
-    }
-  };
-
-  const handleUploadClick = (targetName?: string) => {
-    setReplaceTarget(targetName || null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleUploadFile = async (file: File, replaceTargetName: string | null) => {
-    try {
-      if (replaceTargetName) {
-        // Keep replacement intent while preserving metadata when filenames differ.
-        if (file.name === replaceTargetName) {
-          const replaced = await api.projects.uploadImage(file, replaceTargetName);
-          let previousRestoreId = replaced.restore_id || '';
-          onRecordHistory?.({
-            label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
-              if (previousRestoreId) {
-                await api.projects.restoreImage(previousRestoreId);
-                await loadImages();
-              }
-            },
-            onRedo: async () => {
-              const redoReplace = await api.projects.uploadImage(
-                file,
-                replaceTargetName
-              );
-              previousRestoreId = redoReplace.restore_id || previousRestoreId;
-              await loadImages();
-            },
-          });
-        } else {
-          const res = await api.projects.uploadImage(file);
-          const newFilename = res.filename;
-
-          const oldImage = images.find((i) => i.filename === replaceTargetName);
-          if (oldImage) {
-            await api.projects.updateImage(
-              newFilename,
-              oldImage.description,
-              oldImage.title
-            );
-          }
-          const deletedOld = await api.projects.deleteImage(replaceTargetName);
-          let oldRestoreId = deletedOld.restore_id || '';
-          let newRestoreId = '';
-          onRecordHistory?.({
-            label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
-              const deletedNew = await api.projects.deleteImage(newFilename);
-              newRestoreId = deletedNew.restore_id || newRestoreId;
-              if (oldRestoreId) {
-                await api.projects.restoreImage(oldRestoreId);
-              }
-              await loadImages();
-            },
-            onRedo: async () => {
-              if (!newRestoreId) return;
-              const deletedOldAgain = await api.projects.deleteImage(replaceTargetName);
-              oldRestoreId = deletedOldAgain.restore_id || oldRestoreId;
-              await api.projects.restoreImage(newRestoreId);
-              await loadImages();
-            },
-          });
-        }
-      } else {
-        const uploaded = await api.projects.uploadImage(file);
-        let uploadedRestoreId = '';
-        onRecordHistory?.({
-          label: `Upload image: ${uploaded.filename}`,
-          onUndo: async () => {
-            const deleted = await api.projects.deleteImage(uploaded.filename);
-            uploadedRestoreId = deleted.restore_id || '';
-            await loadImages();
-          },
-          onRedo: async () => {
-            if (uploadedRestoreId) {
-              await api.projects.restoreImage(uploadedRestoreId);
-              await loadImages();
-            }
-          },
-        });
-      }
-      await loadImages();
-      setReplaceTarget(null);
-    } catch (err: unknown) {
-      setError('Upload failed: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await handleUploadFile(file, replaceTarget);
-  };
-
-  const handleDelete = async (filename: string) => {
-    if (!(await confirm('Are you sure you want to delete this image?'))) return;
-    try {
-      const deleted = await api.projects.deleteImage(filename);
-      setImages((prev) => prev.filter((i) => i.filename !== filename));
-      let latestRestoreId = deleted.restore_id || '';
-      onRecordHistory?.({
-        label: `Delete image: ${filename}`,
-        onUndo: async () => {
-          if (latestRestoreId) {
-            await api.projects.restoreImage(latestRestoreId);
-            await loadImages();
-          }
-        },
-        onRedo: async () => {
-          const redoDelete = await api.projects.deleteImage(filename);
-          latestRestoreId = redoDelete.restore_id || latestRestoreId;
-          await loadImages();
-        },
-      });
-    } catch (err: unknown) {
-      setError('Delete failed: ' + getErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const handleCreatePlaceholder = async () => {
-    try {
-      const created = await api.projects.createImagePlaceholder('', '');
-      await loadImages();
-      let restoreId = '';
-      onRecordHistory?.({
-        label: `Create image placeholder: ${created.filename}`,
-        onUndo: async () => {
-          const deleted = await api.projects.deleteImage(created.filename);
-          restoreId = deleted.restore_id || '';
-          await loadImages();
-        },
-        onRedo: async () => {
-          if (restoreId) {
-            await api.projects.restoreImage(restoreId);
-          } else {
-            await api.projects.updateImage(
-              created.filename,
-              '',
-              'Untitled Placeholder'
-            );
-          }
-          await loadImages();
-        },
-      });
-    } catch (e: unknown) {
-      setError('Failed to create placeholder: ' + getErrorMessage(e, 'Unknown error'));
     }
   };
 
@@ -513,6 +287,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     >
       <div
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
+        role="button"
+        tabIndex={0}
+        aria-label="Project images drop zone"
+        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleUploadClick();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -588,9 +371,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500`}
                     placeholder="Generic style for all images..."
                     value={imageStyle}
-                    onChange={(e) =>
-                      onUpdateSettings?.(e.target.value, imageAdditionalInfo)
-                    }
+                    onChange={(
+                      e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                    ) => onUpdateSettings?.(e.target.value, imageAdditionalInfo)}
                   />
                 </div>
                 <div>
@@ -603,7 +386,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500 min-h-[60px] resize-y`}
                     placeholder="Extra details passed to the prompt generator..."
                     value={imageAdditionalInfo}
-                    onChange={(e) => onUpdateSettings?.(imageStyle, e.target.value)}
+                    onChange={(
+                      e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                    ) => onUpdateSettings?.(imageStyle, e.target.value)}
                   />
                 </div>
               </div>
@@ -649,30 +434,41 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {images.map((img) => (
+              {images.map((img: ImageEntry) => (
                 <div
                   key={img.filename}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Image card ${img.filename}`}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleUploadClick(img.filename);
+                    }
+                  }}
                   className={`rounded-lg p-3 ${cardBg} flex flex-col gap-3 transition-all duration-200 relative ${
                     dragTarget === img.filename
                       ? 'border-4 border-dashed border-brand-blue-500 bg-brand-blue-50 dark:bg-brand-blue-900/20 z-10'
                       : `border ${borderClass} hover:border-brand-gray-300 dark:hover:border-brand-gray-600`
                   }`}
-                  onDragOver={(e) => {
+                  onDragOver={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     e.stopPropagation();
                   }}
-                  onDragEnter={(e) => {
+                  onDragEnter={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     setDragTarget(img.filename);
                   }}
-                  onDragLeave={(e) => {
+                  onDragLeave={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     // Only clear if we're actually leaving the container, not entering a child
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                       setDragTarget(null);
                     }
                   }}
-                  onDrop={(e) => handleCardDrop(e, img.filename)}
+                  onDrop={(e: React.DragEvent<HTMLDivElement>) =>
+                    handleCardDrop(e, img.filename)
+                  }
                 >
                   {dragTarget === img.filename && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-brand-blue-500/10 backdrop-blur-[1px] rounded-lg pointer-events-none">
@@ -748,9 +544,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           ? edits[img.filename].title
                           : img.title || ''
                       }
-                      onChange={(e) =>
-                        handleMetadataChange(img.filename, 'title', e.target.value)
-                      }
+                      onChange={(
+                        e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                      ) => handleMetadataChange(img.filename, 'title', e.target.value)}
                     />
                     <textarea
                       lang={projectLanguage}
@@ -761,7 +557,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           ? edits[img.filename].description
                           : img.description
                       }
-                      onChange={(e) =>
+                      onChange={(
+                        e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                      ) =>
                         handleMetadataChange(
                           img.filename,
                           'description',
@@ -773,7 +571,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     <div className="mt-2 flex flex-wrap gap-2">
                       {onInsert && (
                         <Button
-                          size="xs"
+                          size="sm"
                           variant="secondary"
                           className="whitespace-nowrap flex-grow sm:flex-grow-0"
                           onClick={() => onInsert(img.filename, img.url, img.title)}
@@ -784,7 +582,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         </Button>
                       )}
                       <Button
-                        size="xs"
+                        size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleGenerateDescription(img)}
@@ -796,7 +594,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           : 'Generate description'}
                       </Button>
                       <Button
-                        size="xs"
+                        size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
                         onClick={() => handleCreatePrompt(img)}
@@ -811,7 +609,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         (edits[img.filename].description !== undefined ||
                           edits[img.filename].title !== undefined) && (
                           <Button
-                            size="xs"
+                            size="sm"
                             variant="primary"
                             className="whitespace-nowrap ml-auto"
                             onClick={() => handleSaveMetadata(img.filename)}
@@ -857,7 +655,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label={`Preview of ${selectedImage.filename}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent<HTMLDivElement, MouseEvent>) =>
+              e.stopPropagation()
+            }
+            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setSelectedImage(null);
+              }
+            }}
             tabIndex={-1}
           >
             <img

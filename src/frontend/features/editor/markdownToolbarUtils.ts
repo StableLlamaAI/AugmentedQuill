@@ -439,7 +439,7 @@ export const insertFootnote = (
 ): { nextRawText: string; nextCaret: number } => {
   // Find the next available footnote number.
   const existing = rawText.match(/\[\^(\d+)\]/g) ?? [];
-  const maxNum = existing.reduce((max, m) => {
+  const maxNum = existing.reduce((max: number, m: string) => {
     const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
     return n > max ? n : max;
   }, 0);

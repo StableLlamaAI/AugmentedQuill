@@ -36,7 +36,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
   onDeleteSession,
   onDeleteAllSessions,
   onClose,
-}) => {
+}: ChatHistoryPanelProps) => {
   const { isLight } = useTheme();
   const confirm = useConfirm();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -95,7 +95,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
             No saved chats yet.
           </div>
         )}
-        {sessions.map((session) => {
+        {sessions.map((session: ChatSession) => {
           const isSIncognito = session.isIncognito;
           return (
             <div
@@ -142,7 +142,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 </span>
               </button>
               <button
-                onClick={async (e) => {
+                onClick={async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   e.stopPropagation();
                   if (isDisabled) return;
                   if (await confirm('Delete this chat?')) {

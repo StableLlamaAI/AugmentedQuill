@@ -55,7 +55,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
   setEditorSettings,
   sliderClass,
   setIsDebugLogsOpen,
-}) => {
+}: HeaderAppearanceControlsProps) => {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isAppearanceOpen, panelRef, () => setIsAppearanceOpen(false));
 
@@ -82,7 +82,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         max={max}
         {...(step ? { step } : {})}
         value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+          onChange(Number(event.target.value))
+        }
         className={sliderClass}
       />
     </div>
@@ -218,7 +220,8 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '100',
               undefined,
               editorSettings.brightness * 100,
-              (val) => setEditorSettings({ ...editorSettings, brightness: val / 100 })
+              (val: number) =>
+                setEditorSettings({ ...editorSettings, brightness: val / 100 })
             )}
             {renderSlider(
               <Moon size={14} />,
@@ -228,7 +231,8 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '100',
               undefined,
               editorSettings.contrast * 100,
-              (val) => setEditorSettings({ ...editorSettings, contrast: val / 100 })
+              (val: number) =>
+                setEditorSettings({ ...editorSettings, contrast: val / 100 })
             )}
             {renderSlider(
               <Type size={14} />,
@@ -238,7 +242,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '32',
               undefined,
               editorSettings.fontSize,
-              (val) => setEditorSettings({ ...editorSettings, fontSize: val })
+              (val: number) => setEditorSettings({ ...editorSettings, fontSize: val })
             )}
             {renderSlider(
               <Monitor size={14} />,
@@ -248,7 +252,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '100',
               undefined,
               editorSettings.maxWidth,
-              (val) => setEditorSettings({ ...editorSettings, maxWidth: val })
+              (val: number) => setEditorSettings({ ...editorSettings, maxWidth: val })
             )}
             {renderSlider(
               <SplitSquareHorizontal size={14} />,
@@ -258,9 +262,10 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               '600',
               '10',
               editorSettings.sidebarWidth,
-              (val) => setEditorSettings({ ...editorSettings, sidebarWidth: val })
+              (val: number) =>
+                setEditorSettings({ ...editorSettings, sidebarWidth: val })
             )}
-            {renderToggle('Diff View', editorSettings.showDiff, (enabled) =>
+            {renderToggle('Diff View', editorSettings.showDiff, (enabled: boolean) =>
               setEditorSettings({ ...editorSettings, showDiff: enabled })
             )}
           </div>

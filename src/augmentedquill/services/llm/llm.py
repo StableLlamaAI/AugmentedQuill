@@ -21,6 +21,7 @@ import os
 import httpx
 
 from augmentedquill.core.config import load_machine_config
+from augmentedquill.services.chat.chat_tool_decorator import MODEL_ROLES
 from augmentedquill.services.llm import llm_logging as _llm_logging
 from augmentedquill.services.llm import llm_stream_ops as _llm_stream_ops
 from augmentedquill.services.llm import llm_completion_ops as _llm_completion_ops
@@ -40,7 +41,7 @@ def _normalize_model_type(model_type: str | None) -> str | None:
     if model_type is None:
         return None
     value = str(model_type).strip().upper()
-    return value if value in ("WRITING", "CHAT", "EDITING") else None
+    return value if value in MODEL_ROLES else None
 
 
 _PROVIDERS = ("openai", "anthropic", "google")

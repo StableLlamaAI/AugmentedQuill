@@ -40,6 +40,7 @@ _RESTORE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    """Return a safe child path.."""
     base_resolved = base_dir.resolve()
     candidate = base_resolved.joinpath(*parts).resolve()
     if not candidate.is_relative_to(base_resolved):
@@ -48,18 +49,21 @@ def _safe_child_path(base_dir: Path, *parts: str) -> Path:
 
 
 def _validate_book_id(book_id: str) -> str:
+    """Validate book id."""
     if not _BOOK_ID_PATTERN.fullmatch(book_id or ""):
         raise BadRequestError("Invalid book_id")
     return book_id
 
 
 def _validate_restore_id(restore_id: str) -> str:
+    """Validate restore id."""
     if not _RESTORE_ID_PATTERN.fullmatch(restore_id or ""):
         raise BadRequestError("Invalid restore_id")
     return restore_id
 
 
 def normalize_registry(reg: dict) -> dict:
+    """Normalize registry."""
     cur = reg.get("current") or ""
     if cur:
         cur = Path(cur).name
@@ -204,12 +208,14 @@ def create_book_response(title: str) -> JSONResponse:
 
 
 def _deleted_books_dir(active: Path) -> Path:
+    """Helper for books dir.."""
     path = active / ".aq_history" / "deleted_books"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _snapshot_book_for_restore(active: Path, story: dict, book_id: str) -> str:
+    """Create a snapshot book for restore.."""
     safe_book_id = _validate_book_id(str(book_id))
     books = story.get("books", [])
     target_idx = next(

@@ -16,7 +16,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { useChatExecution } from './useChatExecution';
 import { api } from '../../services/api';
-import { createChatSession } from '../../services/openaiService';
+import { createChatSession, UnifiedChat } from '../../services/openaiService';
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -56,7 +56,7 @@ describe('useChatExecution', () => {
     // createChatSession returns object with sendMessage that resolves sequentially.
     vi.mocked(createChatSession).mockReturnValue({
       sendMessage: sendMessageMock,
-    } as any);
+    } as UnifiedChat);
 
     sendMessageMock
       .mockResolvedValueOnce({
@@ -155,7 +155,7 @@ describe('useChatExecution', () => {
 
     vi.mocked(createChatSession).mockReturnValue({
       sendMessage: sendMessageMock,
-    } as any);
+    } as UnifiedChat);
 
     const { result } = renderHook(() =>
       useChatExecution({

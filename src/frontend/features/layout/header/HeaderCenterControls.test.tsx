@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import { HeaderCenterControls } from './HeaderCenterControls';
+import type { AppSettings } from '../../types';
 
 describe('HeaderCenterControls', () => {
   const noop = vi.fn();
@@ -67,7 +68,7 @@ describe('HeaderCenterControls', () => {
         editor: { theme: 'light', fontSize: 16, lineHeight: 1.4, maxWidth: 80 },
         sidebarOpen: true,
         activeTab: 'editor',
-      } as any,
+      } as unknown as AppSettings,
       setAppSettings: noop,
       modelConnectionStatus: { default: 'success' },
       detectedCapabilities: {
@@ -127,13 +128,13 @@ describe('HeaderCenterControls', () => {
     const rewriteButtons = screen.getAllByTitle('Rewrite Chapter (WRITING model)');
 
     expect(extendButtons.length).toBeGreaterThan(0);
-    extendButtons.forEach((btn) => {
+    extendButtons.forEach((btn: HTMLElement) => {
       expect(btn).toBeInstanceOf(HTMLButtonElement);
       expect((btn as HTMLButtonElement).disabled).toBe(false);
     });
 
     expect(rewriteButtons.length).toBeGreaterThan(0);
-    rewriteButtons.forEach((btn) => {
+    rewriteButtons.forEach((btn: HTMLElement) => {
       expect(btn).toBeInstanceOf(HTMLButtonElement);
       expect((btn as HTMLButtonElement).disabled).toBe(false);
     });

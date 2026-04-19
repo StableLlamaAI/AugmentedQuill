@@ -31,7 +31,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   onCreate,
   theme,
   languages,
-}) => {
+}: CreateProjectDialogProps) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('novel');
   const [language, setLanguage] = useState(() =>
@@ -83,7 +83,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               type="text"
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                setName(e.target.value)
+              }
               placeholder="My Story"
             />
           </div>
@@ -92,9 +94,11 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
             <select
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
+                setLanguage(e.target.value)
+              }
             >
-              {languages.map((lng) => (
+              {languages.map((lng: string) => (
                 <option key={lng} value={lng}>
                   {lng.toUpperCase()}
                 </option>
@@ -113,7 +117,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="short-story"
                   checked={type === 'short-story'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
@@ -137,7 +143,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="novel"
                   checked={type === 'novel'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
@@ -161,7 +169,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="series"
                   checked={type === 'series'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>

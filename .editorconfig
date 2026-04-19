@@ -5,16 +5,18 @@ charset = utf-8
 end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
+indent_style = space
+tab_width = 8
 
 [*.py]
 indent_style = space
 indent_size = 4
-tab_width = 4
+tab_width = 8
 
 [*.{js,ts,jsx,tsx,json,css,scss,html,md}]
 indent_style = space
 indent_size = 2
-tab_width = 2
+tab_width = 8
 
 [Makefile]
 indent_style = tab

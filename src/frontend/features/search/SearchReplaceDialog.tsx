@@ -60,7 +60,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   onNavigateToChapter,
   onNavigateToSourcebookEntry,
   onNavigateToStoryMetadata,
-}) => {
+}: SearchReplaceDialogProps) => {
   const { t } = useTranslation();
   const themeClasses = useThemeClasses();
   const { isLight } = themeClasses;
@@ -131,7 +131,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   }, [replaceAllMatches, activeChapterId, onStoryChanged]);
 
   const toggleSection = useCallback((key: string) => {
-    setCollapsedSections((prev) => {
+    setCollapsedSections((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -240,7 +240,9 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               ref={queryInputRef}
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                setQuery(e.target.value)
+              }
               onKeyDown={handleKeyDown}
               placeholder={t('Search...')}
               aria-label={t('Search...')}
@@ -264,7 +266,9 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
             <input
               type="text"
               value={replacement}
-              onChange={(e) => setReplacement(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                setReplacement(e.target.value)
+              }
               placeholder={t('Replace...')}
               aria-label={t('Replace...')}
               lang={storyLanguage}
@@ -333,19 +337,21 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
             </button>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {SCOPES.map(({ value, labelKey }) => (
-              <label key={value} className={radioLabelClass}>
-                <input
-                  type="radio"
-                  name="search-scope"
-                  value={value}
-                  checked={scope === value}
-                  onChange={() => setScope(value)}
-                  className="accent-brand-600"
-                />
-                {t(labelKey)}
-              </label>
-            ))}
+            {SCOPES.map(
+              ({ value, labelKey }: { value: SearchScope; labelKey: string }) => (
+                <label key={value} className={radioLabelClass}>
+                  <input
+                    type="radio"
+                    name="search-scope"
+                    value={value}
+                    checked={scope === value}
+                    onChange={() => setScope(value)}
+                    className="accent-brand-600"
+                  />
+                  {t(labelKey)}
+                </label>
+              )
+            )}
           </div>
         </div>
 
@@ -393,114 +399,128 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
 
         {/* Results */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 min-h-0">
-          {results.map((section, si) => {
-            const sectionKey = `${section.section_type}:${section.section_id}:${section.field}`;
-            const isCollapsed = collapsedSections.has(sectionKey);
-            const sectionLabel =
-              section.section_type === 'chapter_content' ||
-              section.section_type === 'chapter_metadata'
-                ? t('Chapter {{title}}', { title: section.section_title })
-                : section.section_type === 'sourcebook'
-                  ? `${t('Sourcebook')}: ${section.section_title}`
-                  : t('Story Metadata');
-            const fieldLabel = section.field_display;
+          {results.map(
+            (
+              section: import('../../services/apiClients/search').SearchResultSection,
+              si: number
+            ) => {
+              const sectionKey = `${section.section_type}:${section.section_id}:${section.field}`;
+              const isCollapsed = collapsedSections.has(sectionKey);
+              const sectionLabel =
+                section.section_type === 'chapter_content' ||
+                section.section_type === 'chapter_metadata'
+                  ? t('Chapter {{title}}', { title: section.section_title })
+                  : section.section_type === 'sourcebook'
+                    ? `${t('Sourcebook')}: ${section.section_title}`
+                    : t('Story Metadata');
+              const fieldLabel = section.field_display;
 
-            // Compute flat index for this section's first match
-            let firstFlatIdx = 0;
-            for (let i = 0; i < si; i++) {
-              firstFlatIdx += results[i].matches.length;
+              // Compute flat index for this section's first match
+              let firstFlatIdx = 0;
+              for (let i = 0; i < si; i++) {
+                firstFlatIdx += results[i].matches.length;
+              }
+
+              return (
+                <div key={sectionKey}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(sectionKey)}
+                    className={sectionHeaderClass}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight size={14} />
+                    ) : (
+                      <ChevronDown size={14} />
+                    )}
+                    <span>
+                      {sectionLabel}
+                      {section.field_display ? ` · ${fieldLabel}` : ''}
+                    </span>
+                    <span className="ml-1 text-xs opacity-60">
+                      ({section.matches.length})
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <ul>
+                      {section.matches.map(
+                        (
+                          match: import('../../services/apiClients/search').SearchMatch,
+                          mi: number
+                        ) => {
+                          const flatIdx = firstFlatIdx + mi;
+                          const isCurrentMatch = flatIdx === currentMatchIndex;
+                          const clickTitle =
+                            section.section_type === 'chapter_content' &&
+                            activeChapterId !== null &&
+                            section.section_id === String(activeChapterId)
+                              ? t('Jump to match in editor')
+                              : section.section_type === 'chapter_content' ||
+                                  section.section_type === 'chapter_metadata'
+                                ? t('Navigate to chapter')
+                                : section.section_type === 'story_metadata'
+                                  ? t('Open story metadata')
+                                  : section.section_type === 'sourcebook'
+                                    ? t('Open sourcebook entry')
+                                    : undefined;
+                          return (
+                            <li
+                              key={mi}
+                              role="button"
+                              tabIndex={0}
+                              className={
+                                isCurrentMatch
+                                  ? isLight
+                                    ? 'bg-brand-50 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-700 rounded-r cursor-pointer'
+                                    : 'bg-brand-950 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
+                                  : matchItemClass
+                              }
+                              onClick={() => {
+                                selectMatch(flatIdx);
+                                handleMatchClick(
+                                  section.section_type,
+                                  section.section_id,
+                                  section.field,
+                                  match.start,
+                                  match.end
+                                );
+                              }}
+                              onDoubleClick={() => close(true)}
+                              onKeyDown={(e: React.KeyboardEvent<HTMLLIElement>) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  selectMatch(flatIdx);
+                                  handleMatchClick(
+                                    section.section_type,
+                                    section.section_id,
+                                    section.field,
+                                    match.start,
+                                    match.end
+                                  );
+                                }
+                              }}
+                              title={clickTitle}
+                            >
+                              <span className="opacity-60">{match.context_before}</span>
+                              <mark
+                                className={
+                                  isLight
+                                    ? 'bg-yellow-200 text-brand-gray-900 rounded px-0.5'
+                                    : 'bg-yellow-800 text-yellow-100 rounded px-0.5'
+                                }
+                              >
+                                {match.match_text}
+                              </mark>
+                              <span className="opacity-60">{match.context_after}</span>
+                            </li>
+                          );
+                        }
+                      )}
+                    </ul>
+                  )}
+                </div>
+              );
             }
-
-            return (
-              <div key={sectionKey}>
-                <button
-                  type="button"
-                  onClick={() => toggleSection(sectionKey)}
-                  className={sectionHeaderClass}
-                >
-                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                  <span>
-                    {sectionLabel}
-                    {section.field_display ? ` · ${fieldLabel}` : ''}
-                  </span>
-                  <span className="ml-1 text-xs opacity-60">
-                    ({section.matches.length})
-                  </span>
-                </button>
-                {!isCollapsed && (
-                  <ul>
-                    {section.matches.map((match, mi) => {
-                      const flatIdx = firstFlatIdx + mi;
-                      const isCurrentMatch = flatIdx === currentMatchIndex;
-                      const clickTitle =
-                        section.section_type === 'chapter_content' &&
-                        activeChapterId !== null &&
-                        section.section_id === String(activeChapterId)
-                          ? t('Jump to match in editor')
-                          : section.section_type === 'chapter_content' ||
-                              section.section_type === 'chapter_metadata'
-                            ? t('Navigate to chapter')
-                            : section.section_type === 'story_metadata'
-                              ? t('Open story metadata')
-                              : section.section_type === 'sourcebook'
-                                ? t('Open sourcebook entry')
-                                : undefined;
-                      return (
-                        <li
-                          key={mi}
-                          role="button"
-                          tabIndex={0}
-                          className={
-                            isCurrentMatch
-                              ? isLight
-                                ? 'bg-brand-50 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-700 rounded-r cursor-pointer'
-                                : 'bg-brand-950 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
-                              : matchItemClass
-                          }
-                          onClick={() => {
-                            selectMatch(flatIdx);
-                            handleMatchClick(
-                              section.section_type,
-                              section.section_id,
-                              section.field,
-                              match.start,
-                              match.end
-                            );
-                          }}
-                          onDoubleClick={() => close(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              selectMatch(flatIdx);
-                              handleMatchClick(
-                                section.section_type,
-                                section.section_id,
-                                section.field,
-                                match.start,
-                                match.end
-                              );
-                            }
-                          }}
-                          title={clickTitle}
-                        >
-                          <span className="opacity-60">{match.context_before}</span>
-                          <mark
-                            className={
-                              isLight
-                                ? 'bg-yellow-200 text-brand-gray-900 rounded px-0.5'
-                                : 'bg-yellow-800 text-yellow-100 rounded px-0.5'
-                            }
-                          >
-                            {match.match_text}
-                          </mark>
-                          <span className="opacity-60">{match.context_after}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+          )}
         </div>
       </div>
     </div>

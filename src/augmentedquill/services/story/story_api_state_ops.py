@@ -34,6 +34,7 @@ get_chapter_locator = _chapter_by_id_or_404
 
 
 def read_text_or_raise(path: Path, message: str = "Failed to read chapter") -> str:
+    """Read text or raise."""
     try:
         return path.read_text(encoding="utf-8")
     except Exception as exc:
@@ -41,6 +42,7 @@ def read_text_or_raise(path: Path, message: str = "Failed to read chapter") -> s
 
 
 def get_normalized_chapters(story: dict) -> list[dict]:
+    """Return normalized chapters."""
     return [_normalize_chapter_entry(chapter) for chapter in story.get("chapters", [])]
 
 
@@ -61,6 +63,7 @@ def get_all_normalized_chapters(story: dict) -> list[dict]:
 
 
 def ensure_chapter_slot(chapters_data: list[dict], pos: int) -> None:
+    """Ensure chapter slot."""
     if pos >= len(chapters_data):
         chapters_data.extend(
             [{"title": "", "summary": ""}] * (pos - len(chapters_data) + 1)

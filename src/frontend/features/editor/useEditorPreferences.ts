@@ -22,7 +22,15 @@ const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   showDiff: true,
 };
 
-export function useEditorPreferences() {
+/** Custom React hook that manages editor preferences. */
+export function useEditorPreferences(): {
+  editorSettings: EditorSettings;
+  setEditorSettings: import('react').Dispatch<
+    import('react').SetStateAction<EditorSettings>
+  >;
+  currentTheme: AppTheme;
+  isLight: boolean;
+} {
   const [editorSettings, setEditorSettings] = useState<EditorSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_editor_settings');
     if (!saved) return DEFAULT_EDITOR_SETTINGS;

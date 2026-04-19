@@ -12,11 +12,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { machineApi } from './machine';
-import { fetchJson } from './shared';
+import { fetchJson, putJson, postJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
+  putJson: vi.fn(),
+  postJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
@@ -34,7 +36,7 @@ describe('machineApi', () => {
   });
 
   it('calls PUT /machine with serialized payload', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     const payload = {
       openai: {
@@ -52,19 +54,15 @@ describe('machineApi', () => {
 
     await machineApi.save(payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/machine',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to save machine config'
     );
   });
 
   it('calls POST /machine/test with connectivity payload', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, models: ['gpt-demo'] });
+    vi.mocked(postJson).mockResolvedValueOnce({ ok: true, models: ['gpt-demo'] });
 
     const payload = {
       base_url: 'https://example.invalid/v1',
@@ -74,19 +72,15 @@ describe('machineApi', () => {
 
     await machineApi.test(payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(postJson).toHaveBeenCalledWith(
       '/machine/test',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to test connection'
     );
   });
 
   it('calls POST /machine/test_model with model payload', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({
+    vi.mocked(postJson).mockResolvedValueOnce({
       ok: true,
       model_ok: true,
       models: ['gpt-demo'],
@@ -101,13 +95,9 @@ describe('machineApi', () => {
 
     await machineApi.testModel(payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(postJson).toHaveBeenCalledWith(
       '/machine/test_model',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to test model'
     );
   });

@@ -12,11 +12,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { sourcebookApi } from './sourcebook';
-import { fetchJson } from './shared';
+import { fetchJson, postJson, putJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
+  postJson: vi.fn(),
+  putJson: vi.fn(),
+  deleteJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
@@ -34,7 +37,7 @@ describe('sourcebookApi', () => {
   });
 
   it('calls POST /sourcebook', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ id: '1', name: 'n' });
+    vi.mocked(postJson).mockResolvedValueOnce({ id: '1', name: 'n' });
 
     const entry = {
       name: 'Entry',
@@ -46,36 +49,28 @@ describe('sourcebookApi', () => {
 
     await sourcebookApi.create(entry);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(postJson).toHaveBeenCalledWith(
       '/sourcebook',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-      },
+      entry,
       'Failed to create entry'
     );
   });
 
   it('calls PUT /sourcebook/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ id: '1', name: 'n' });
+    vi.mocked(putJson).mockResolvedValueOnce({ id: '1', name: 'n' });
 
     const updates = { description: 'Updated' };
     await sourcebookApi.update('entry-id', updates);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/sourcebook/entry-id',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      },
+      updates,
       'Failed to update entry'
     );
   });
 
   it('encodes slashes on PUT /sourcebook/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({
+    vi.mocked(putJson).mockResolvedValueOnce({
       id: 'Dennis/Denise',
       name: 'Dennis/Denise',
     });
@@ -83,43 +78,37 @@ describe('sourcebookApi', () => {
     const updates = { description: 'Updated' };
     await sourcebookApi.update('Dennis/Denise', updates);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/sourcebook/Dennis%2FDenise',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      },
+      updates,
       'Failed to update entry'
     );
   });
 
   it('calls DELETE /sourcebook/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ ok: true });
 
     await sourcebookApi.delete('entry-id');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(deleteJson).toHaveBeenCalledWith(
       '/sourcebook/entry-id',
-      { method: 'DELETE' },
       'Failed to delete entry'
     );
   });
 
   it('encodes slashes on DELETE /sourcebook/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ ok: true });
 
     await sourcebookApi.delete('Dennis/Denise');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(deleteJson).toHaveBeenCalledWith(
       '/sourcebook/Dennis%2FDenise',
-      { method: 'DELETE' },
       'Failed to delete entry'
     );
   });
 
   it('calls POST /sourcebook/keywords', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ keywords: ['a', 'b'] });
+    vi.mocked(postJson).mockResolvedValueOnce({ keywords: ['a', 'b'] });
 
     await sourcebookApi.generateKeywords({
       name: 'Entry',
@@ -127,16 +116,12 @@ describe('sourcebookApi', () => {
       synonyms: ['Alias'],
     });
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(postJson).toHaveBeenCalledWith(
       '/sourcebook/keywords',
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Entry',
-          description: 'Desc',
-          synonyms: ['Alias'],
-        }),
+        name: 'Entry',
+        description: 'Desc',
+        synonyms: ['Alias'],
       },
       'Failed to generate keywords'
     );

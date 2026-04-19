@@ -9,7 +9,10 @@
  * Defines the constants unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-export const PROMPT_GROUPS = [
+export const PROMPT_GROUPS: Array<{
+  title: string;
+  prompts: Array<{ id: string; label: string; type: 'CHAT' | 'WRITING' | 'EDITING' }>;
+}> = [
   {
     title: 'System Messages',
     prompts: [

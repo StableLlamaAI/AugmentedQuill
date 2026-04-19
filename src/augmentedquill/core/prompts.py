@@ -26,6 +26,7 @@ USER_PROMPTS_JSON_PATH = CONFIG_DIR / "prompts.json"
 
 
 def _load_prompts() -> Dict[str, Any]:
+    """Load prompts."""
     # Load internal defaults from the multi-language instructions file.  The
     # resulting dictionary contains *all* prompt templates at the top level;
     # there is no structural distinction between system vs user prompts.
@@ -106,6 +107,7 @@ def get_available_languages() -> list[str]:
 
 
 def ensure_string(v: Any) -> str:
+    """Ensure string."""
     if isinstance(v, list):
         return "\n".join(v)
     return str(v) if v is not None else ""
@@ -127,7 +129,7 @@ def get_system_message(
     message_type: str,
     model_overrides: Optional[Dict[str, Any]] = None,
     language: str | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> str:
     """
     Get a system message, checking for model-specific overrides first and
@@ -190,7 +192,9 @@ def get_system_message(
         return template
 
 
-def get_user_prompt(prompt_type: str, language: str | None = None, **kwargs) -> str:
+def get_user_prompt(
+    prompt_type: str, language: str | None = None, **kwargs: Any
+) -> str:
     """
     Get a formatted user prompt template in the requested language.
 

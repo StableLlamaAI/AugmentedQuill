@@ -19,14 +19,14 @@ import type { RefObject } from 'react';
  * @param delay The delay in milliseconds
  * @returns A debounced version of the callback
  */
-export function useDebounce<T extends (...args: any[]) => any>(
-  callback: T,
+export function useDebounce<T extends readonly unknown[]>(
+  callback: (...args: T) => unknown,
   delay: number
-): (...args: Parameters<T>) => void {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+): (...args: T) => void {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return useCallback(
-    (...args: Parameters<T>) => {
+    (...args: T): void => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -49,7 +49,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
 export function useClickOutside<T extends HTMLElement>(
   ref: RefObject<T | null>,
   callback: () => void,
-  enabled = true
+  enabled: boolean = true
 ): void {
   const callbackRef = useRef(callback);
   useEffect(() => {
@@ -58,7 +58,7 @@ export function useClickOutside<T extends HTMLElement>(
 
   useEffect(() => {
     if (!enabled) return;
-    const handler = (event: MouseEvent) => {
+    const handler = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         callbackRef.current();
       }

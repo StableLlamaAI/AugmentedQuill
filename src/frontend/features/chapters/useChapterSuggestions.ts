@@ -37,6 +37,7 @@ type UseChapterSuggestionsParams = {
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+/** Custom React hook that manages chapter suggestions. */
 export function useChapterSuggestions({
   currentUnit,
   story,
@@ -47,7 +48,29 @@ export function useChapterSuggestions({
   viewMode,
   setChatMessages,
   getErrorMessage,
-}: UseChapterSuggestionsParams) {
+}: UseChapterSuggestionsParams): {
+  continuations: string[];
+  isSuggesting: boolean;
+  isSuggestionMode: boolean;
+  suggestCursor: number | null;
+  handleTriggerSuggestions: (
+    cursor?: number,
+    contentOverride?: string,
+    enableSuggestionMode?: boolean
+  ) => Promise<void>;
+  handleKeyboardSuggestionAction: (
+    action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
+    cursor?: number,
+    contentOverride?: string
+  ) => Promise<void>;
+  handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
+  cancelSuggestions: () => void;
+  checkedEntries: Set<string>;
+  handleToggleEntry: (id: string, checked: boolean) => void;
+  isAutoSourcebookSelectionEnabled: boolean;
+  setIsAutoSourcebookSelectionEnabled: Dispatch<SetStateAction<boolean>>;
+  isSourcebookSelectionRunning: boolean;
+} {
   const [continuations, setContinuations] = useState<string[]>([]);
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
@@ -108,7 +131,7 @@ export function useChapterSuggestions({
   // on the next model recompute triggered by text changes or suggestion
   // acceptance.
   const handleToggleEntry = (id: string, checked: boolean) => {
-    setCheckedEntries((prev) => {
+    setCheckedEntries((prev: Set<string>) => {
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
@@ -126,7 +149,10 @@ export function useChapterSuggestions({
     return () => clearTimeout(timer);
   }, [currentUnit?.content, isAutoSourcebookSelectionEnabled]);
 
-  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const cancelSignalRef = useRef<{
+    cancelled: boolean;
+    reader?: ReadableStreamDefaultReader<Uint8Array>;
+  }>({ cancelled: false });
   const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
   const suggestionUpdateTimerRef = useRef<number | null>(null);
 
@@ -142,7 +168,7 @@ export function useChapterSuggestions({
     suggestionUpdateTimerRef.current = null;
 
     startTransition(() => {
-      setContinuations((previous) => {
+      setContinuations((previous: string[]) => {
         const next = [...previous];
         for (const [idxStr, text] of Object.entries(updates)) {
           const index = Number(idxStr);
@@ -213,7 +239,7 @@ export function useChapterSuggestions({
         Array.from(checkedEntries),
         {
           cancelSignal: cancelSignalRef.current,
-          onSuggestionUpdate: (index, text) => {
+          onSuggestionUpdate: (index: number, text: string) => {
             if (!text) return;
             scheduleSuggestionUpdate(index, text);
           },
@@ -232,7 +258,7 @@ export function useChapterSuggestions({
         text: `Suggestion Error: ${getErrorMessage(error, 'Failed to generate suggestions')}`,
         isError: true,
       };
-      setChatMessages((prev) => [...prev, errorMessage]);
+      setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
     } finally {
       if (isMountedRef.current) {
         setIsSuggesting(false);
@@ -269,7 +295,10 @@ export function useChapterSuggestions({
       viewMode
     );
 
-    setSuggestUndoStack((prev) => [...prev, { content: currentContent, cursor: c }]);
+    setSuggestUndoStack((prev: { content: string; cursor: number }[]) => [
+      ...prev,
+      { content: currentContent, cursor: c },
+    ]);
     await updateChapter(currentUnit.id, { content: newContent });
 
     const newCursor = c + separator.length + text.length;

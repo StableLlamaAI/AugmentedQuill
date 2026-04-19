@@ -22,7 +22,7 @@ type UseAppUiActionsParams = {
   activeFormats: string[];
   setIsFormatMenuOpen: (open: boolean) => void;
   setIsMobileFormatMenuOpen: (open: boolean) => void;
-  selectChapter: (id: string) => void;
+  selectChapter: (id: string | null) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
   story: StoryState;
@@ -36,6 +36,7 @@ type UseAppUiActionsParams = {
   }) => void;
 };
 
+/** Custom React hook that manages app ui actions. */
 export function useAppUiActions({
   editorRef,
   activeFormats,
@@ -49,7 +50,18 @@ export function useAppUiActions({
   refreshStory,
   getErrorMessage,
   recordHistoryEntry,
-}: UseAppUiActionsParams) {
+}: UseAppUiActionsParams): {
+  handleFormat: (type: string) => void;
+  handleChapterSelect: (id: string | null) => void;
+  getFormatButtonClass: (type: string) => string;
+  handleConvertProject: (newType: string) => Promise<void>;
+  handleBookCreate: (title: string) => Promise<void>;
+  handleBookDelete: (id: string) => Promise<void>;
+  handleReorderChapters: (chapterIds: number[], bookId?: string) => Promise<void>;
+  handleReorderBooks: (bookIds: string[]) => Promise<void>;
+  handleOpenImages: () => void;
+  setAppTheme: (theme: AppTheme) => void;
+} {
   const { buttonActive, isLight } = useTheme();
 
   const handleFormat = useCallback(
@@ -173,8 +185,10 @@ export function useAppUiActions({
     async (chapterIds: number[], bookId?: string) => {
       try {
         const previousChapterIds = story.chapters
-          .filter((chapter) => (bookId ? chapter.book_id === bookId : true))
-          .map((chapter) => Number(chapter.id));
+          .filter((chapter: import('../../types').Chapter) =>
+            bookId ? chapter.book_id === bookId : true
+          )
+          .map((chapter: import('../../types').Chapter) => Number(chapter.id));
 
         await api.chapters.reorder(chapterIds, bookId);
         await refreshStory();
@@ -202,7 +216,9 @@ export function useAppUiActions({
   const handleReorderBooks = useCallback(
     async (bookIds: string[]) => {
       try {
-        const previousBookIds = (story.books || []).map((book) => book.id);
+        const previousBookIds = (story.books || []).map(
+          (book: import('../../types').Book) => book.id
+        );
         await api.books.reorder(bookIds);
         await refreshStory();
         recordHistoryEntry?.({
@@ -234,7 +250,7 @@ export function useAppUiActions({
 
   const setAppTheme = useCallback(
     (theme: AppTheme) => {
-      setEditorSettings((previous) => ({ ...previous, theme }));
+      setEditorSettings((previous: EditorSettings) => ({ ...previous, theme }));
     },
     [setEditorSettings]
   );

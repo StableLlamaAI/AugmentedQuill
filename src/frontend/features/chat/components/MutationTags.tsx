@@ -29,7 +29,7 @@ interface MutationTagsProps {
 export const MutationTags: React.FC<MutationTagsProps> = ({
   mutations,
   onMutationClick,
-}) => {
+}: MutationTagsProps) => {
   const { isLight } = useTheme();
 
   if (mutations.length === 0) return null;
@@ -58,11 +58,11 @@ export const MutationTags: React.FC<MutationTagsProps> = ({
 
   return (
     <div className="flex flex-wrap gap-2 mb-3">
-      {mutations.map((m) => (
+      {mutations.map((m: SessionMutation) => (
         <button
           type="button"
           key={m.id}
-          onClick={(event) => {
+          onClick={(event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
             event.preventDefault();
             onMutationClick(m);
           }}

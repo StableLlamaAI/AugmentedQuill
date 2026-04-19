@@ -79,8 +79,21 @@ const hookWithStory = async (
   // mock that returns {content: ''}, which would silently overwrite the
   // content we just loaded.  Wire the mock to return the real content so the
   // overwrite is a no-op and baseline tests stay deterministic.
+  const hook = renderHook(() => baseHook());
   vi.mocked(api.chapters.get).mockImplementation(async (id: number) => {
-    const ch = chapters.find((c) => c.id === String(id));
+    const ch = chapters.find(
+      (c: {
+        id: string;
+        title: string;
+        summary: string;
+        content: string;
+        filename: string;
+        book_id: string | undefined;
+        notes: string;
+        private_notes: string;
+        conflicts: { id: string; description: string; resolution: string }[];
+      }) => c.id === String(id)
+    );
     return {
       content: ch?.content ?? '',
       notes: ch?.notes ?? '',
@@ -88,14 +101,8 @@ const hookWithStory = async (
       conflicts: ch?.conflicts ?? [],
       title: ch?.title ?? '',
       summary: ch?.summary ?? '',
-    } as any;
+    } as unknown as Awaited<ReturnType<typeof api.chapters.get>>;
   });
-
-  const hook = renderHook(baseHook);
-  // Use async act so React flushes both the synchronous loadStory state
-  // updates AND the async lazy-load useEffect (api.chapters.get) that fires
-  // when currentChapterId changes.  Without this, the lazy-load may complete
-  // after updateChapter and overwrite chapter content with a stale value.
   await act(async () => {
     hook.result.current.loadStory({
       ...buildStory(summary),
@@ -171,9 +178,13 @@ describe('buildInitialStoryState', () => {
     vi.mocked(api.projects.list).mockResolvedValue({
       available: [],
       current: null,
-    } as any);
-    vi.mocked(api.projects.select).mockResolvedValue({ ok: false } as any);
-    vi.mocked(api.chapters.list).mockResolvedValue([] as any);
+    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
+    vi.mocked(api.projects.select).mockResolvedValue({
+      ok: false,
+    } as unknown as Awaited<ReturnType<typeof api.projects.select>>);
+    vi.mocked(api.chapters.list).mockResolvedValue(
+      [] as unknown as Awaited<ReturnType<typeof api.chapters.list>>
+    );
     vi.mocked(api.chapters.get).mockResolvedValue({
       content: '',
       notes: '',
@@ -181,7 +192,7 @@ describe('buildInitialStoryState', () => {
       conflicts: [],
       title: 'Intro',
       summary: 'initial',
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof api.chapters.get>>);
 
     const { result } = renderHook(() =>
       useStory({
@@ -393,7 +404,9 @@ describe('buildInitialStoryState', () => {
   });
 
   it('persists short-story conflicts through story metadata updates', async () => {
-    vi.mocked(api.story.updateMetadata).mockResolvedValue({ ok: true } as any);
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof api.story.updateMetadata>>);
 
     const { result } = renderHook(() =>
       useStory({
@@ -449,7 +462,9 @@ describe('buildInitialStoryState', () => {
   });
 
   it('advances diff baseline on manual metadata updates so no diff is shown', async () => {
-    vi.mocked(api.story.updateMetadata).mockResolvedValue({ ok: true } as any);
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof api.story.updateMetadata>>);
 
     const { result } = await hookWithStory('Original summary');
 

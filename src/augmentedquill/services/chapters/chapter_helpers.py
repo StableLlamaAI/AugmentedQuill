@@ -119,6 +119,7 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, Any]:
     """
 
     def _sanitize_text(val: Any) -> str:
+        """Helper for text.."""
         s = str(val if val is not None else "").strip()
         if s.lower() == "[object object]":
             return ""

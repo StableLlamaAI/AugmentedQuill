@@ -29,7 +29,7 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
   count,
   theme,
   onResolve,
-}) => {
+}: ToolCallLimitDialogProps) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef, () => onResolve('stop'));
 

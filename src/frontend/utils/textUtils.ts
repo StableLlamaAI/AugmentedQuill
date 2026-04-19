@@ -11,6 +11,7 @@
 
 import { ViewMode } from '../types';
 
+/** Helper for content with separator. */
 export function computeContentWithSeparator(
   prefix: string,
   text: string,
@@ -88,7 +89,8 @@ let smartQuoteChars: SmartQuoteChars = {
   singleClose: '’',
 };
 
-export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>) {
+/** Set smart quote chars. */
+export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>): void {
   smartQuoteChars = {
     doubleOpen: chars.doubleOpen ?? smartQuoteChars.doubleOpen,
     doubleClose: chars.doubleClose ?? smartQuoteChars.doubleClose,
@@ -97,7 +99,8 @@ export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>) {
   };
 }
 
-export function resetSmartQuoteChars() {
+/** Helper for smart quote chars. */
+export function resetSmartQuoteChars(): void {
   smartQuoteChars = {
     doubleOpen: '“',
     doubleClose: '”',
@@ -106,6 +109,7 @@ export function resetSmartQuoteChars() {
   };
 }
 
+/** Apply smart quotes. */
 export function applySmartQuotes(
   text: string,
   overrideChars?: Partial<SmartQuoteChars>
@@ -128,13 +132,15 @@ export function applySmartQuotes(
   return result;
 }
 
-export function convertContentEditableQuotes(root: HTMLElement) {
+/** Helper for content editable quotes. */
+export function convertContentEditableQuotes(root: HTMLElement): void {
   const selection = window.getSelection();
   const savedRange =
     selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
+    /** Helper for node. */
+    acceptNode(node: Node): 2 | 1 {
       const value = node.nodeValue || '';
       return /["']/.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
@@ -172,6 +178,7 @@ function findContentEditableRoot(node: Node | null): HTMLElement | null {
   return null;
 }
 
+/** Return text offset. */
 function getTextOffset(root: Node, target: Node, offset: number): number | null {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let current = walker.nextNode() as Text | null;
@@ -188,10 +195,12 @@ function getTextOffset(root: Node, target: Node, offset: number): number | null 
   return null;
 }
 
+/** Return whether opening double quote context. */
 function isOpeningDoubleQuoteContext(prevChar: string | undefined): boolean {
   return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
 }
 
+/** Return whether opening single quote context. */
 function isOpeningSingleQuoteContext(
   prevChar: string | undefined,
   nextChar: string | undefined
@@ -205,6 +214,7 @@ function isOpeningSingleQuoteContext(
   return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
 }
 
+/** Return smart quote for insertion. */
 function getSmartQuoteForInsertion(
   quote: '"' | "'",
   leftText: string,
@@ -224,6 +234,7 @@ function getSmartQuoteForInsertion(
     : smartQuoteChars.singleClose;
 }
 
+/** Helper for replace inserted quote in content editable. */
 export function maybeReplaceInsertedQuoteInContentEditable(
   e: InputEvent,
   root: HTMLElement
@@ -279,11 +290,12 @@ export function maybeReplaceInsertedQuoteInContentEditable(
   return true;
 }
 
-export function setupSmartQuotesProxy() {
+/** Helper for smart quotes proxy. */
+export function setupSmartQuotesProxy(): void {
   if (typeof window === 'undefined') return;
   document.addEventListener(
     'input',
-    (e) => {
+    (e: InputEvent) => {
       const targetNode = e.target as Node | null;
       if (!targetNode) return;
 

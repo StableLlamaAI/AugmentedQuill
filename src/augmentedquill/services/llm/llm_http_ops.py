@@ -45,6 +45,7 @@ def _require_caller_id(caller_id: str) -> str:
 
 
 def _safe_log_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    """Return a safe log headers.."""
     return {
         str(k): (
             "REDACTED" if str(k).lower() in ("authorization", "x-api-key") else str(v)
@@ -54,6 +55,7 @@ def _safe_log_headers(headers: dict[str, str] | None) -> dict[str, str]:
 
 
 def _safe_log_body(body: Any) -> Any:
+    """Return a safe log body.."""
     if not isinstance(body, dict):
         return body
     import copy
@@ -66,6 +68,7 @@ def _safe_log_body(body: Any) -> Any:
 
 
 def _log_response_body(response: httpx.Response) -> Any:
+    """Helper for response body.."""
     content_type = str(response.headers.get("content-type") or "").lower()
     if "application/json" in content_type:
         try:

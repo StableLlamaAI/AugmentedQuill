@@ -18,24 +18,14 @@ import {
   keymap,
   placeholder as cmPlaceholder,
   Decoration,
-  WidgetType,
   ViewPlugin,
   ViewUpdate,
   DecorationSet,
 } from '@codemirror/view';
-import {
-  EditorState,
-  Compartment,
-  Prec,
-  Annotation,
-  Range,
-  Transaction,
-  Text,
-} from '@codemirror/state';
+import { EditorState, Compartment, Prec, Range, Transaction } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { diff_match_patch } from 'diff-match-patch';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import {
@@ -44,245 +34,9 @@ import {
   type DecorationViewMode,
 } from './markdownDecorations';
 import { buildClipboardExtension } from './clipboardExtension';
-
-// ─── Diff Highlight ──────────────────────────────────────────────────────────
-
-const dmp = new diff_match_patch();
-
-const diffMark = Decoration.mark({
-  class: 'cm-diff-inserted',
-});
-
-const deletedMark = Decoration.mark({
-  class: 'cm-diff-deleted',
-});
-
-class DeletedWidget extends WidgetType {
-  constructor(readonly text: string) {
-    super();
-  }
-  toDOM() {
-    const wrap = document.createElement('span');
-    wrap.className = 'cm-diff-deleted';
-    wrap.textContent = this.text;
-    return wrap;
-  }
-}
-
-/** Debounce delay before recomputing full diff decorations (ms). */
-const DIFF_DEBOUNCE_MS = 500;
-/** Documents smaller than this threshold are diffed immediately. */
-const DIFF_IMMEDIATE_THRESHOLD = 5000;
-
-const buildDiffPlugin = (baseline: string) =>
-  ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-      private pending: ReturnType<typeof setTimeout> | null = null;
-      constructor(view: EditorView) {
-        this.decorations = this.build(view);
-      }
-      update(u: ViewUpdate) {
-        if (!u.docChanged) return;
-
-        // External value syncs (undo/redo, AI insertion, chapter switch)
-        // are single atomic replacements — compute immediately so the
-        // user sees the diff result without delay.
-        const isExternalSync = u.transactions.some((tr) =>
-          tr.annotation(externalValueSyncAnnotation)
-        );
-
-        // For small documents or external syncs, compute immediately.
-        if (u.state.doc.length < DIFF_IMMEDIATE_THRESHOLD || isExternalSync) {
-          this.cancelPending();
-          this.decorations = this.build(u.view);
-          return;
-        }
-
-        // For large documents during normal typing, remap existing
-        // decorations immediately so positions stay correct, then
-        // schedule a full diff rebuild after the user pauses typing.
-        this.decorations = this.decorations.map(u.changes);
-        this.scheduleBuild(u.view);
-      }
-      destroy() {
-        this.cancelPending();
-      }
-      private cancelPending() {
-        if (this.pending !== null) {
-          clearTimeout(this.pending);
-          this.pending = null;
-        }
-      }
-      private scheduleBuild(view: EditorView) {
-        this.cancelPending();
-        this.pending = setTimeout(() => {
-          this.pending = null;
-          this.decorations = this.build(view);
-          view.dispatch(); // trigger decoration update
-        }, DIFF_DEBOUNCE_MS);
-      }
-      build(view: EditorView): DecorationSet {
-        const currentText = view.state.doc.toString();
-        if (baseline === currentText) return Decoration.none;
-
-        const diffs = dmp.diff_main(baseline, currentText);
-        dmp.diff_cleanupSemantic(diffs);
-
-        const decs: Range<Decoration>[] = [];
-        let pos = 0;
-
-        for (const [op, text] of diffs) {
-          if (op === 0) {
-            // UNCHANGED
-            pos += text.length;
-          } else if (op === 1) {
-            // INSERTED — decorate the added range in the current document.
-            decs.push(diffMark.range(pos, pos + text.length));
-            pos += text.length;
-          } else if (op === -1) {
-            // DELETED — exists in baseline only, inject as a widget in the current doc.
-            decs.push(
-              Decoration.widget({
-                widget: new DeletedWidget(text),
-                side: 0,
-              }).range(pos)
-            );
-          }
-        }
-
-        return Decoration.set(decs, true);
-      }
-    },
-    { decorations: (v) => v.decorations }
-  );
-
-// ─── Whitespace display ──────────────────────────────────────────────────────
-// These widgets replace spaces, tabs and newline-positions with a visible glyph
-// while keeping the document content unchanged.  contenteditable="false" on the
-// widget containers prevents the caret from landing inside them.
-
-class WsSpaceWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsMarker = '1';
-    el.textContent = ' ';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-class WsTabWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsTab = '1';
-    el.textContent = '→';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-class WsNlWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsNl = '1';
-    el.textContent = '¶';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-const wsSpaceWidget = new WsSpaceWidget();
-const wsTabWidget = new WsTabWidget();
-const wsNlWidget = new WsNlWidget();
-
-const buildWhitespacePlugin = () =>
-  ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-      constructor(view: EditorView) {
-        this.decorations = this.build(view);
-      }
-      update(u: ViewUpdate) {
-        if (u.viewportChanged || u.geometryChanged) {
-          this.decorations = this.build(u.view);
-        } else if (u.docChanged) {
-          // Fast path: remap positions for single inert-char insertions.
-          // Whitespace markers (space/tab/newline) require a full rebuild.
-          let safeInsert = true;
-          u.changes.iterChanges((fromA, toA, _fB, _tB, ins) => {
-            if (toA !== fromA || ins.length !== 1) {
-              safeInsert = false;
-              return;
-            }
-            const c = ins.sliceString(0, 1);
-            if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
-          });
-          this.decorations = safeInsert
-            ? this.decorations.map(u.changes)
-            : this.build(u.view);
-        }
-      }
-      build(view: EditorView): DecorationSet {
-        const decs: Range<Decoration>[] = [];
-        // Fall back to full document if the viewport hasn't been computed yet
-        // (can happen synchronously in the plugin constructor before first layout).
-        const vpFrom = view.viewport.from;
-        const vpTo =
-          view.viewport.to > view.viewport.from
-            ? view.viewport.to
-            : view.state.doc.length;
-        const doc = view.state.doc;
-
-        // ¶ widget at the end of every visible line (before the implicit newline)
-        const firstLine = doc.lineAt(vpFrom).number;
-        const lastLine = doc.lineAt(Math.min(vpTo, doc.length)).number;
-        for (let n = firstLine; n <= lastLine; n++) {
-          const line = doc.line(n);
-          // side: 1 places the widget after the position (at the line end,
-          // after the logical caret slot), so the cursor appears before the mark.
-          decs.push(Decoration.widget({ widget: wsNlWidget, side: 1 }).range(line.to));
-        }
-
-        // Space / tab replacements within the visible range
-        const text = doc.sliceString(vpFrom, vpTo);
-        for (let i = 0; i < text.length; i++) {
-          const ch = text[i];
-          if (ch === ' ') {
-            decs.push(
-              Decoration.replace({ widget: wsSpaceWidget }).range(
-                vpFrom + i,
-                vpFrom + i + 1
-              )
-            );
-          } else if (ch === '\t') {
-            decs.push(
-              Decoration.replace({ widget: wsTabWidget }).range(
-                vpFrom + i,
-                vpFrom + i + 1
-              )
-            );
-          }
-        }
-
-        // Decoration.set(decs, true) sorts by position automatically
-        return Decoration.set(decs, true);
-      }
-    },
-    { decorations: (v) => v.decorations }
-  );
+import { buildDiffPlugin, externalValueSyncAnnotation } from './codeMirrorDiffPlugin';
+import { buildWhitespacePlugin } from './codeMirrorWhitespacePlugin';
+import { buildEnterExtension, buildTabExtension } from './codeMirrorKeymap';
 
 // ─── Markdown syntax highlight style ────────────────────────────────────────
 // Maps Lezer markdown tokens to CSS properties so prose writers see inline
@@ -399,10 +153,6 @@ const baseTheme = EditorView.theme({
   },
 });
 
-// Marks transactions that mirror external prop updates so updateListener
-// can skip emitting onChange for those programmatic document replacements.
-const externalValueSyncAnnotation = Annotation.define<boolean>();
-
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface CodeMirrorEditorProps {
@@ -480,8 +230,8 @@ export const CodeMirrorEditor = React.forwardRef<
       language = 'en',
       spellCheck = false,
       onOpenSearch,
-    },
-    ref
+    }: CodeMirrorEditorProps,
+    ref: React.ForwardedRef<EditorView | null>
   ) => {
     // Resolve viewMode: new prop takes precedence, then legacy mode, then default
     const viewMode: DecorationViewMode =
@@ -558,24 +308,34 @@ export const CodeMirrorEditor = React.forwardRef<
           constructor(view: EditorView) {
             this.decorations = this.build(view);
           }
-          update(u: ViewUpdate) {
+          /** Update the requested value. */
+          update(u: ViewUpdate): void {
             if (u.viewportChanged || u.geometryChanged) {
               this.decorations = this.build(u.view);
             } else if (u.docChanged) {
               let safeInsert = true;
-              u.changes.iterChanges((fromA, toA, _fB, _tB, ins) => {
-                if (toA !== fromA || ins.length !== 1) {
-                  safeInsert = false;
-                  return;
+              u.changes.iterChanges(
+                (
+                  fromA: number,
+                  toA: number,
+                  _fB: number,
+                  _tB: number,
+                  ins: import('@codemirror/state').Text
+                ) => {
+                  if (toA !== fromA || ins.length !== 1) {
+                    safeInsert = false;
+                    return;
+                  }
+                  const c = ins.sliceString(0, 1);
+                  if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
                 }
-                const c = ins.sliceString(0, 1);
-                if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
-              });
+              );
               this.decorations = safeInsert
                 ? this.decorations.map(u.changes)
                 : this.build(u.view);
             }
           }
+          /** Build the requested value. */
           build(view: EditorView): DecorationSet {
             const decs: Range<Decoration>[] = [];
             const length = view.state.doc.length;
@@ -591,7 +351,7 @@ export const CodeMirrorEditor = React.forwardRef<
             return Decoration.set(decs, true);
           }
         },
-        { decorations: (v) => v.decorations }
+        { decorations: (v: { decorations: DecorationSet }) => v.decorations }
       );
 
     const buildSearchHighlightExtension = (
@@ -602,450 +362,13 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildDiffExtension = (bv: string | undefined, enabled: boolean): Extension =>
       enabled && bv != null ? buildDiffPlugin(bv) : [];
 
-    const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
-      if (eb === 'ignore') {
-        return keymap.of([
-          { key: 'Enter', run: () => true }, // swallow silently
-          { key: 'Shift-Enter', run: () => true },
-        ]);
-      }
-      if (eb === 'softbreak') {
-        // ── O(1) document-character helpers ──────────────────────────────────
-        // All position analysis is done with at most a fixed number of character
-        // peeks (doc.sliceString over 1–3 chars) so the keymap handlers run in
-        // O(1) regardless of document size.  No loops, no offset scanning.
-
-        /** One character at position p, or '' if out of bounds. */
-        const ch = (doc: Text, p: number): string =>
-          p >= 0 && p < doc.length ? doc.sliceString(p, p + 1) : '';
-
-        /**
-         * If the cursor (no selection) at `pos` is inside the "  \n" zone,
-         * return the index of the first space.  The zone covers:
-         *   pos === lb+0  before first space  (cursor about to Delete the lb)
-         *   pos === lb+1  between spaces
-         *   pos === lb+2  between 2nd space and \n
-         *   pos === lb+3  just after \n        (cursor about to Backspace the lb)
-         * Checks each of the four candidate starts in a fixed-length branch:
-         *   lb = pos-0: doc[pos..pos+3] === "  \n"
-         *   lb = pos-1: doc[pos-1..pos+2] === "  \n"
-         *   lb = pos-2: doc[pos-2..pos+1] === "  \n"
-         *   lb = pos-3: doc[pos-3..pos] === "  \n"
-         */
-        const lineBreakAt = (doc: Text, pos: number): number => {
-          // lb = pos (cursor before the sequence)
-          if (
-            ch(doc, pos) === ' ' &&
-            ch(doc, pos + 1) === ' ' &&
-            ch(doc, pos + 2) === '\n'
-          )
-            return pos;
-          // lb = pos-1 (cursor between the two spaces)
-          if (
-            pos >= 1 &&
-            ch(doc, pos - 1) === ' ' &&
-            ch(doc, pos) === ' ' &&
-            ch(doc, pos + 1) === '\n'
-          )
-            return pos - 1;
-          // lb = pos-2 (cursor between 2nd space and \n)
-          if (
-            pos >= 2 &&
-            ch(doc, pos - 2) === ' ' &&
-            ch(doc, pos - 1) === ' ' &&
-            ch(doc, pos) === '\n'
-          )
-            return pos - 2;
-          // lb = pos-3 (cursor just after the \n)
-          if (
-            pos >= 3 &&
-            ch(doc, pos - 3) === ' ' &&
-            ch(doc, pos - 2) === ' ' &&
-            ch(doc, pos - 1) === '\n'
-          )
-            return pos - 3;
-          return -1;
-        };
-
-        /**
-         * If the cursor at `pos` is inside the "\n\n" zone, return the index of
-         * the first \n.  Zone:
-         *   pos === pb+0  before first \n
-         *   pos === pb+1  between the two \n's
-         *   pos === pb+2  just after second \n
-         *
-         * NOTE: we only match a *bare* "\n\n" — if the sequence is "  \n\n" the
-         * lineBreakAt check above already matches the "  \n" part, so a "\n\n"
-         * check that would also match at pb = pos-1 (where "\n\n" starts at pos-1)
-         * must not accidentally fire when the \n before pos belongs to a "  \n".
-         * We therefore exclude the case where pb-1 and pb-2 are both spaces.
-         */
-        const paraBreakAt = (doc: Text, pos: number): number => {
-          // Helper: is the \n at `nlPos` the newline of a "  \n" sequence?
-          const isLineBreakNl = (nlPos: number): boolean =>
-            nlPos >= 2 && ch(doc, nlPos - 1) === ' ' && ch(doc, nlPos - 2) === ' ';
-
-          // pb = pos (cursor before first \n)
-          if (ch(doc, pos) === '\n' && ch(doc, pos + 1) === '\n' && !isLineBreakNl(pos))
-            return pos;
-          // pb = pos-1 (cursor between the two \n's)
-          if (pos >= 1 && ch(doc, pos - 1) === '\n' && ch(doc, pos) === '\n') {
-            // The first \n of the pair is at pos-1; if it belongs to a "  \n" we
-            // are actually in a line-break zone, not a paragraph-break zone.
-            if (!isLineBreakNl(pos - 1)) return pos - 1;
-          }
-          // pb = pos-2 (cursor just after second \n)
-          if (pos >= 2 && ch(doc, pos - 2) === '\n' && ch(doc, pos - 1) === '\n') {
-            if (!isLineBreakNl(pos - 2)) return pos - 2;
-          }
-          return -1;
-        };
-
-        return [
-          keymap.of([
-            {
-              // ── Enter ────────────────────────────────────────────────────
-              // • cursor in "  \n" zone   → upgrade to paragraph break "\n\n"
-              //   (strip the two leading spaces; cursor lands after second \n)
-              // • cursor in "\n\n" zone   → insert plain "\n" (no spaces added)
-              // • otherwise               → insert "  \n" as a line-break,
-              //   stripping at most the spaces that directly adjoin the cursor
-              //   so neither side of the split gets a spurious space.
-              key: 'Enter',
-              run: (view) => {
-                const { from, to } = view.state.selection.main;
-                const doc = view.state.doc;
-
-                if (from === to) {
-                  const lb = lineBreakAt(doc, from);
-                  if (lb !== -1) {
-                    view.dispatch({
-                      changes: { from: lb, to: lb + 3, insert: '\n\n' },
-                      selection: { anchor: lb + 2 },
-                    });
-                    return true;
-                  }
-
-                  const pb = paraBreakAt(doc, from);
-                  if (pb !== -1) {
-                    // Extra \n inside an existing paragraph break — no spaces
-                    view.dispatch({
-                      changes: { from, to, insert: '\n' },
-                      selection: { anchor: from + 1 },
-                    });
-                    return true;
-                  }
-                }
-
-                // Normal split: strip immediately-adjacent spaces (max 1 each side)
-                // so the resulting lines have no spurious leading/trailing space.
-                // We only strip a single space on each side to avoid clobbering
-                // intentional runs of spaces that are not part of a line-break.
-                const stripBefore = from > 0 && ch(doc, from - 1) === ' ' ? 1 : 0;
-                const stripAfter = to < doc.length && ch(doc, to) === ' ' ? 1 : 0;
-                const insertFrom = from - stripBefore;
-                const insertTo = to + stripAfter;
-                view.dispatch({
-                  changes: { from: insertFrom, to: insertTo, insert: '  \n' },
-                  selection: { anchor: insertFrom + 3 },
-                });
-                return true;
-              },
-            },
-
-            {
-              // ── Backspace ────────────────────────────────────────────────
-              // Inspect characters directly behind the cursor via fixed peeks.
-              //
-              // "  \n" — remove whole sequence when cursor at lb+1, lb+2, lb+3.
-              //
-              // "\n\n" — downgrade to "  \n" when cursor at:
-              //   • pb+1: between the two \n's (unconditional)
-              //   • pb+2: just after the pair, ONLY when no bare \n immediately
-              //     precedes it (ch(from-3)≠'\n') — guards against "\n\n\n" at
-              //     end being wrongly downgraded instead of just removing one \n.
-              key: 'Backspace',
-              run: (view) => {
-                const sel = view.state.selection.main;
-                if (!sel.empty) return false;
-                const from = sel.from;
-                if (from === 0) return false;
-                const doc = view.state.doc;
-
-                // lb+3: ' '' ''\n' behind cursor
-                if (
-                  from >= 3 &&
-                  ch(doc, from - 3) === ' ' &&
-                  ch(doc, from - 2) === ' ' &&
-                  ch(doc, from - 1) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from: from - 3, to: from, insert: '' },
-                    selection: { anchor: from - 3 },
-                  });
-                  return true;
-                }
-                // lb+2: ' '' ' behind, '\n' ahead
-                if (
-                  from >= 2 &&
-                  ch(doc, from - 2) === ' ' &&
-                  ch(doc, from - 1) === ' ' &&
-                  ch(doc, from) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from: from - 2, to: from + 1, insert: '' },
-                    selection: { anchor: from - 2 },
-                  });
-                  return true;
-                }
-                // lb+1: ' ' behind, ' ''\n' ahead
-                if (
-                  from >= 1 &&
-                  ch(doc, from - 1) === ' ' &&
-                  ch(doc, from) === ' ' &&
-                  ch(doc, from + 1) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from: from - 1, to: from + 2, insert: '' },
-                    selection: { anchor: from - 1 },
-                  });
-                  return true;
-                }
-
-                // Helper: is the \n at nlPos the trailing \n of a "  \n" sequence?
-                const isSoftNl = (nlPos: number): boolean =>
-                  nlPos >= 2 &&
-                  ch(doc, nlPos - 1) === ' ' &&
-                  ch(doc, nlPos - 2) === ' ';
-
-                // pb+1: cursor between the two \n's — downgrade only when the
-                // pair is isolated (no bare \n immediately before or after it).
-                if (
-                  from >= 1 &&
-                  ch(doc, from - 1) === '\n' &&
-                  ch(doc, from) === '\n' &&
-                  !isSoftNl(from - 1) &&
-                  ch(doc, from - 2) !== '\n' &&
-                  ch(doc, from + 1) !== '\n'
-                ) {
-                  const pb = from - 1;
-                  view.dispatch({
-                    changes: { from: pb, to: pb + 2, insert: '  \n' },
-                    selection: { anchor: pb + 3 },
-                  });
-                  return true;
-                }
-                // pb+2: cursor just after both \n's — guard against \n on either side
-                if (
-                  from >= 2 &&
-                  ch(doc, from - 2) === '\n' &&
-                  ch(doc, from - 1) === '\n' &&
-                  !isSoftNl(from - 2) &&
-                  ch(doc, from - 3) !== '\n' &&
-                  ch(doc, from) !== '\n'
-                ) {
-                  const pb = from - 2;
-                  view.dispatch({
-                    changes: { from: pb, to: pb + 2, insert: '  \n' },
-                    selection: { anchor: pb + 3 },
-                  });
-                  return true;
-                }
-
-                return false;
-              },
-            },
-
-            {
-              // ── Delete ───────────────────────────────────────────────────
-              // Mirror of Backspace — inspect characters directly ahead.
-              //
-              // "  \n" — remove whole sequence when cursor at lb+0, lb+1, lb+2.
-              //
-              // "\n\n" — downgrade to "  \n" when cursor at:
-              //   • pb+1: between the two \n's (unconditional)
-              //   • pb+0: before the first \n, ONLY when no bare \n immediately
-              //     follows the pair (ch(from+2)≠'\n').
-              key: 'Delete',
-              run: (view) => {
-                const sel = view.state.selection.main;
-                if (!sel.empty) return false;
-                const from = sel.from;
-                const doc = view.state.doc;
-                if (from >= doc.length) return false;
-
-                // lb+0: ' '' ''\n' ahead
-                if (
-                  ch(doc, from) === ' ' &&
-                  ch(doc, from + 1) === ' ' &&
-                  ch(doc, from + 2) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from, to: from + 3, insert: '' },
-                    selection: { anchor: from },
-                  });
-                  return true;
-                }
-                // lb+1: ' ' behind, ' ''\n' ahead
-                if (
-                  from >= 1 &&
-                  ch(doc, from - 1) === ' ' &&
-                  ch(doc, from) === ' ' &&
-                  ch(doc, from + 1) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from: from - 1, to: from + 2, insert: '' },
-                    selection: { anchor: from - 1 },
-                  });
-                  return true;
-                }
-                // lb+2: ' '' ' behind, '\n' ahead
-                if (
-                  from >= 2 &&
-                  ch(doc, from - 2) === ' ' &&
-                  ch(doc, from - 1) === ' ' &&
-                  ch(doc, from) === '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from: from - 2, to: from + 1, insert: '' },
-                    selection: { anchor: from - 2 },
-                  });
-                  return true;
-                }
-
-                const isSoftNl = (nlPos: number): boolean =>
-                  nlPos >= 2 &&
-                  ch(doc, nlPos - 1) === ' ' &&
-                  ch(doc, nlPos - 2) === ' ';
-
-                // pb+1: cursor between the two \n's — downgrade only when the
-                // pair is isolated (no bare \n immediately before or after it).
-                if (
-                  from >= 1 &&
-                  ch(doc, from - 1) === '\n' &&
-                  ch(doc, from) === '\n' &&
-                  !isSoftNl(from - 1) &&
-                  ch(doc, from - 2) !== '\n' &&
-                  ch(doc, from + 1) !== '\n'
-                ) {
-                  const pb = from - 1;
-                  view.dispatch({
-                    changes: { from: pb, to: pb + 2, insert: '  \n' },
-                    selection: { anchor: pb + 3 },
-                  });
-                  return true;
-                }
-                // pb+0: cursor before the first \n — guard against \n on either side
-                if (
-                  ch(doc, from) === '\n' &&
-                  ch(doc, from + 1) === '\n' &&
-                  !isSoftNl(from) &&
-                  ch(doc, from - 1) !== '\n' &&
-                  ch(doc, from + 2) !== '\n'
-                ) {
-                  view.dispatch({
-                    changes: { from, to: from + 2, insert: '  \n' },
-                    selection: { anchor: from + 3 },
-                  });
-                  return true;
-                }
-
-                return false;
-              },
-            },
-          ]),
-
-          // ── Typing / pasting inside "  \n" spaces ──────────────────────
-          // When the cursor sits between the two spaces (lb+1) or between the
-          // second space and the \n (lb+2) and the user types or pastes,
-          // redirect the insertion to just before the "  \n" so the line-break
-          // is preserved after the new text.
-          // This transaction filter is intentionally cheap: it performs at most
-          // three single-character peeks regardless of document size.
-          EditorState.transactionFilter.of((tr) => {
-            if (!tr.docChanged) return tr;
-            if (!tr.isUserEvent('input.type') && !tr.isUserEvent('input.paste'))
-              return tr;
-            const sel = tr.startState.selection.main;
-            if (!sel.empty) return tr;
-            const from = sel.from;
-            if (from < 1) return tr;
-            const doc = tr.startState.doc;
-
-            // Only redirect for positions lb+1 and lb+2 (inside the spaces),
-            // not lb+0 (before the line-break) or lb+3 (after it).
-            // lb+1: doc[from-1]==' ', doc[from]==' ', doc[from+1]=='\n'
-            // lb+2: doc[from-2]==' ', doc[from-1]==' ', doc[from]=='\n'
-            let lb = -1;
-            if (
-              from >= 1 &&
-              ch(doc, from - 1) === ' ' &&
-              ch(doc, from) === ' ' &&
-              ch(doc, from + 1) === '\n'
-            ) {
-              lb = from - 1; // cursor is at lb+1
-            } else if (
-              from >= 2 &&
-              ch(doc, from - 2) === ' ' &&
-              ch(doc, from - 1) === ' ' &&
-              ch(doc, from) === '\n'
-            ) {
-              lb = from - 2; // cursor is at lb+2
-            }
-            if (lb === -1) return tr;
-
-            let insertedText = '';
-            tr.changes.iterChanges((_fA, _tA, _fB, _tB, inserted) => {
-              insertedText += inserted.toString();
-            });
-            if (!insertedText) return tr;
-
-            return {
-              changes: { from: lb, to: lb, insert: insertedText },
-              selection: { anchor: lb + insertedText.length },
-              userEvent: 'input.type',
-            };
-          }),
-        ];
-      }
-      // 'newline' — let defaultKeymap handle Enter (inserts a single '\n')
-      return [];
-    };
-
-    const buildTabExtension = (): Extension =>
-      keymap.of([
-        {
-          key: 'Tab',
-          run: (view) => {
-            const { from, to } = view.state.selection.main;
-            view.dispatch({
-              changes: { from, to, insert: '\t' },
-              selection: { anchor: from + 1 },
-              userEvent: 'input.type',
-            });
-            return true;
-          },
-        },
-        {
-          key: 'Shift-Tab',
-          run: (view) => {
-            const { from, to } = view.state.selection.main;
-            view.dispatch({
-              changes: { from, to, insert: '\t' },
-              selection: { anchor: from + 1 },
-              userEvent: 'input.type',
-            });
-            return true;
-          },
-        },
-      ]);
-
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
 
     const buildMdDecorationExtension = (vm: DecorationViewMode): Extension =>
       buildMarkdownDecorationPlugin(vm);
 
+    // ── Mount / unmount ─────────────────────────────────────────────────────
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -1094,7 +417,7 @@ export const CodeMirrorEditor = React.forwardRef<
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
-            const isExternalSync = update.transactions.some((tx) =>
+            const isExternalSync = update.transactions.some((tx: Transaction) =>
               tx.annotation(externalValueSyncAnnotation)
             );
             if (isExternalSync) {
@@ -1103,7 +426,7 @@ export const CodeMirrorEditor = React.forwardRef<
             const val = update.state.doc.toString();
             lastEmittedRef.current = val;
             const isUndoRedo = update.transactions.some(
-              (tx) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
+              (tx: Transaction) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
             );
             onChangeRef.current(val, isUndoRedo);
           }

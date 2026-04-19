@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from pathlib import Path
 
 from augmentedquill.services.llm import llm
@@ -24,7 +25,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
 )
 
 
-def _ensure_tools_loaded():
+def _ensure_tools_loaded() -> Any:
     """Force load tool modules to ensure they are registered without causing circular imports at module level."""
     # We import here to avoid circular dependencies with story_generation_ops which imports us
     import augmentedquill.services.chat.chat_tools.chapter_tools  # noqa: F401
@@ -51,7 +52,7 @@ def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
     return [t for t in tools if t.get("function", {}).get("name") in relevant_names]
 
 
-def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
+def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path) -> Any:
     """Resolve runtime model credentials and prompt overrides for a request."""
     base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
         payload, model_type=model_type
@@ -76,7 +77,7 @@ def _build_messages(
     user_prompt_key: str,
     model_overrides: dict,
     language: str | None = None,
-    **prompt_kwargs,
+    **prompt_kwargs: Any,
 ) -> list[dict[str, str]]:
     """Build a two-message system/user prompt pair for story generation flows.
 
@@ -109,7 +110,7 @@ def build_chapter_summary_messages(
     story_tags: str = "",
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for creating or updating a chapter summary."""
     _ensure_tools_loaded()
     sys_parts = [
@@ -183,7 +184,7 @@ def build_story_summary_messages(
     model_overrides: dict,
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for creating or updating a story-level summary."""
     sys_parts = [
         get_system_message("story_summarizer", model_overrides, language=language)
@@ -249,7 +250,7 @@ def build_write_chapter_messages(
     chapter_notes: str,
     model_overrides: dict,
     language: str | None = None,
-):
+) -> Any:
     """Build messages for first-pass chapter drafting."""
     return _build_messages(
         system_message_key="story_writer",
@@ -282,7 +283,7 @@ def build_continue_chapter_messages(
     existing_text: str,
     model_overrides: dict,
     language: str | None = None,
-):
+) -> Any:
     """Build messages for continuing an existing chapter draft."""
     return _build_messages(
         system_message_key="story_continuer",
@@ -322,7 +323,7 @@ def build_ai_action_messages(
     model_overrides: dict,
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
     _ensure_tools_loaded()
     # Map target/action to prompt keys

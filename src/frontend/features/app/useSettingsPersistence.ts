@@ -26,12 +26,15 @@ type UseSettingsPersistenceParams = {
   refreshHealth: () => void;
 };
 
+/** Custom React hook that manages settings persistence. */
 export function useSettingsPersistence({
   appSettings,
   setAppSettings,
   pushExternalHistoryEntry,
   refreshHealth,
-}: UseSettingsPersistenceParams) {
+}: UseSettingsPersistenceParams): {
+  handleSaveSettings: (nextSettings: AppSettings) => Promise<void>;
+} {
   const handleSaveSettings = useCallback(
     async (nextSettings: AppSettings) => {
       const previousSettings = structuredClone(appSettings);

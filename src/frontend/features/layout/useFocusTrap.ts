@@ -28,7 +28,8 @@ const FOCUSABLE_SELECTOR = [
 const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
   const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
   return nodes.filter(
-    (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement
+    (el: HTMLElement) =>
+      el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement
   );
 };
 

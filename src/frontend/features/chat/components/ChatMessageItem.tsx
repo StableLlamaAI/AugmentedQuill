@@ -158,7 +158,9 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               lang={storyLanguage || 'en'}
               value={editContent}
               spellCheck={true}
-              onChange={(e) => onSetEditContent(e.target.value)}
+              onChange={(
+                e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+              ) => onSetEditContent(e.target.value)}
               className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
             />
             <div className="flex justify-end space-x-2 mt-2">
@@ -260,7 +262,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                         ? isThinkingExpanded
                         : isLoading && isLast
                     }
-                    onExpandedChange={(next) => onThinkingToggle(msg.id, next)}
+                    onExpandedChange={(next: boolean) => onThinkingToggle(msg.id, next)}
                   >
                     <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
                       {msg.thinking}
@@ -276,18 +278,20 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                         {t('Attachments')}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {msg.attachments.map((attachment) => (
-                          <div
-                            key={attachment.id}
-                            className="inline-flex items-center gap-2 rounded-full border border-brand-gray-300 bg-white px-3 py-1 text-xs text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-900 dark:text-brand-gray-200"
-                            title={attachment.name}
-                          >
-                            <FileText size={14} />
-                            <span className="truncate max-w-[10rem]">
-                              {attachment.name}
-                            </span>
-                          </div>
-                        ))}
+                        {msg.attachments.map(
+                          (attachment: import('../../../types').ChatAttachment) => (
+                            <div
+                              key={attachment.id}
+                              className="inline-flex items-center gap-2 rounded-full border border-brand-gray-300 bg-white px-3 py-1 text-xs text-brand-gray-700 dark:border-brand-gray-700 dark:bg-brand-gray-900 dark:text-brand-gray-200"
+                              title={attachment.name}
+                            >
+                              <FileText size={14} />
+                              <span className="truncate max-w-[10rem]">
+                                {attachment.name}
+                              </span>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
                   )}
@@ -309,22 +313,25 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                           ? '{{count}} Tool Calls'
                           : '{{count}} Tool Call',
                         { count: msg.tool_calls.length }
-                      ) + ` [${msg.tool_calls.map((tc) => tc.name).join(', ')}]`
+                      ) +
+                      ` [${msg.tool_calls.map((tc: import('../../../types').ChatToolCall) => tc.name).join(', ')}]`
                     }
                   >
                     <div className="space-y-2">
-                      {msg.tool_calls.map((tc, i) => (
-                        <div
-                          key={i}
-                          className="p-2 rounded bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 text-[10px] font-mono"
-                        >
-                          <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
-                            {t('Call: ')}
-                            {tc.name}
+                      {msg.tool_calls.map(
+                        (tc: import('../../../types').ChatToolCall, i: number) => (
+                          <div
+                            key={i}
+                            className="p-2 rounded bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 text-[10px] font-mono"
+                          >
+                            <div className="text-blue-600 dark:text-blue-400 font-bold mb-1">
+                              {t('Call: ')}
+                              {tc.name}
+                            </div>
+                            <ToolCallArguments args={tc.args} />
                           </div>
-                          <ToolCallArguments args={tc.args} />
-                        </div>
-                      ))}
+                        )
+                      )}
                     </div>
                   </CollapsibleToolSection>
                 )}

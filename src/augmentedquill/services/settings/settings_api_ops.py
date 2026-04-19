@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from pathlib import Path
 import json
 
@@ -16,7 +17,7 @@ from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.chapters.chapter_helpers import _normalize_chapter_entry
 
 
-def _to_optional_float(value) -> float | None:
+def _to_optional_float(value: Any) -> float | None:
     """Coerce *value* to float, returning None for empty/invalid input."""
     if value in (None, ""):
         return None
@@ -26,7 +27,7 @@ def _to_optional_float(value) -> float | None:
         return None
 
 
-def _to_optional_int(value) -> int | None:
+def _to_optional_int(value: Any) -> int | None:
     """Coerce *value* to int, returning None for empty/invalid input."""
     if value in (None, ""):
         return None
@@ -237,7 +238,7 @@ def clean_machine_openai_cfg_for_put(
     )
 
 
-def update_story_field(story_path: Path, field: str, value) -> None:
+def update_story_field(story_path: Path, field: str, value: Any) -> None:
     """Update one top-level story field and persist the story config."""
     story = load_story_config(story_path) or {}
     story[field] = value

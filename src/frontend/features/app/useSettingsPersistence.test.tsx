@@ -55,7 +55,7 @@ const mockAppSettings: AppSettings = {
 
 describe('useSettingsPersistence', () => {
   it('saves machine config and updates app state', async () => {
-    const saveSpy = vi.spyOn(api.machine, 'save').mockResolvedValue(undefined as any);
+    const saveSpy = vi.spyOn(api.machine, 'save').mockResolvedValue(undefined);
     const setAppSettings = vi.fn();
     const pushExternalHistoryEntry = vi.fn();
     const refreshHealth = vi.fn();

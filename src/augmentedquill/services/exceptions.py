@@ -26,7 +26,8 @@ class ServiceError(Exception):
 
     default_status_code: int = 500
 
-    def __init__(self, detail: str, status_code: int | None = None):
+    def __init__(self, detail: str, status_code: int | None = None) -> None:
+        """Helper for the requested value.."""
         super().__init__(detail)
         self.detail = detail
         self.status_code = (

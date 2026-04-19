@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
 
     # Dynamic CORS origin handler to support variable ports
     async def get_origins(request: Request) -> list[str]:
+        """Return origins."""
         origin = request.headers.get("origin")
         if not origin:
             return []
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     # Redirect root to the SPA entrypoint so `http://localhost:8000/` works.
     @app.get("/")
     async def _root_redirect() -> RedirectResponse:
+        """Helper for redirect.."""
         return RedirectResponse(url="/static/dist/index.html")
 
     # --------------- global exception handler ---------------
@@ -117,6 +119,7 @@ def create_app() -> FastAPI:
     async def _service_error_handler(
         _request: Request, exc: ServiceError
     ) -> JSONResponse:
+        """Handle ServiceError exceptions and return a structured JSON response."""
         return JSONResponse(
             status_code=exc.status_code,
             content={"ok": False, "detail": exc.detail},

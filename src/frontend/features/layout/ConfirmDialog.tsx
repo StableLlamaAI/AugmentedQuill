@@ -42,7 +42,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel,
   variant = 'primary',
   alertOnly = false,
-}) => {
+}: ConfirmDialogProps) => {
   const { isLight } = useTheme();
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);

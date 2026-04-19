@@ -28,6 +28,7 @@ export type EditorUIState = {
   setIsMobileFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
 };
 
+/** Custom React hook that manages editor uistate. */
 export function useEditorUIState(): EditorUIState {
   const [viewMode, setViewMode] = useState<ViewMode>('raw');
   const [showWhitespace, setShowWhitespace] = useState(false);

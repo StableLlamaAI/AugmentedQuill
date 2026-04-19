@@ -15,6 +15,7 @@ type AppErrorBoundaryState = {
   hasError: boolean;
 };
 
+/** Represents error boundary. */
 export class AppErrorBoundary extends React.Component<
   React.PropsWithChildren,
   AppErrorBoundaryState
@@ -23,15 +24,18 @@ export class AppErrorBoundary extends React.Component<
     hasError: false,
   };
 
+  /** Return derived state from error. */
   static getDerivedStateFromError(): AppErrorBoundaryState {
     return { hasError: true };
   }
 
+  /** Helper for did catch. */
   componentDidCatch(error: Error): void {
     console.error('Unhandled UI error', error);
   }
 
-  render() {
+  /** Render the requested value. */
+  render(): React.ReactNode {
     if (this.state.hasError) {
       const isDark =
         typeof window !== 'undefined' &&

@@ -9,12 +9,14 @@
 
 from __future__ import annotations
 
+from typing import Any
 from fastapi import Request
 
 from augmentedquill.services.exceptions import BadRequestError
 
 
 async def parse_json_body(request: Request) -> dict:
+    """Parse json body."""
     try:
         payload = await request.json()
     except Exception:
@@ -22,11 +24,13 @@ async def parse_json_body(request: Request) -> dict:
     return payload or {}
 
 
-def payload_value(payload: dict, key: str, default=None):
+def payload_value(payload: dict, key: str, default: Any = None) -> Any:
+    """Helper for value.."""
     return payload.get(key, default)
 
 
-def required_payload_value(payload: dict, key: str, error_detail: str):
+def required_payload_value(payload: dict, key: str, error_detail: str) -> Any:
+    """Helper for payload value.."""
     value = payload.get(key)
     if value in (None, ""):
         raise BadRequestError(error_detail)

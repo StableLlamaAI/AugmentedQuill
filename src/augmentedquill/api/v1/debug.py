@@ -7,6 +7,8 @@
 
 """Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from fastapi import APIRouter
 from augmentedquill.services.llm import llm_logging
 
@@ -18,7 +20,7 @@ router.add_api_route(
 
 
 @router.delete("/llm_logs")
-async def clear_llm_logs():
+async def clear_llm_logs() -> Any:
     """Clear the LLM communication logs."""
     llm_logging.llm_logs.clear()
     return {"status": "ok"}

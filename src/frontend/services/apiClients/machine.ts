@@ -10,7 +10,7 @@
  */
 
 import { MachineConfigResponse, MachinePresetsResponse } from '../apiTypes';
-import { fetchJson } from './shared';
+import { fetchJson, putJson, postJson } from './shared';
 
 export const machineApi = {
   get: async () => {
@@ -21,24 +21,16 @@ export const machineApi = {
     );
   },
   save: async (machine: MachineConfigResponse) => {
-    return fetchJson<{ ok: boolean; detail?: string }>(
+    return putJson<{ ok: boolean; detail?: string }>(
       '/machine',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(machine),
-      },
+      machine,
       'Failed to save machine config'
     );
   },
   test: async (payload: { base_url: string; api_key?: string; timeout_s?: number }) => {
-    return fetchJson<{ ok: boolean; models: string[]; detail?: string }>(
+    return postJson<{ ok: boolean; models: string[]; detail?: string }>(
       '/machine/test',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to test connection'
     );
   },
@@ -48,7 +40,7 @@ export const machineApi = {
     timeout_s?: number;
     model_id: string;
   }) => {
-    return fetchJson<{
+    return postJson<{
       ok: boolean;
       model_ok: boolean;
       models: string[];
@@ -57,15 +49,7 @@ export const machineApi = {
         is_multimodal: boolean;
         supports_function_calling: boolean;
       };
-    }>(
-      '/machine/test_model',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      'Failed to test model'
-    );
+    }>('/machine/test_model', payload, 'Failed to test model');
   },
   getPresets: async () => {
     return fetchJson<MachinePresetsResponse>(

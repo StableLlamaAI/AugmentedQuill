@@ -25,6 +25,12 @@ export const CollapsibleToolSection: React.FC<{
   defaultExpanded = false,
   isExpanded: isExpandedProp,
   onExpandedChange,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+  isExpanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) => {
   const { isExpanded, toggle } = useCollapsible(
     defaultExpanded,

@@ -15,18 +15,19 @@ import { useTheme } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
 import { CheckpointInfo } from '../../services/apiClients/checkpoints';
+import type { ConfirmOptions } from '../layout/useConfirmDialog';
 
 interface CheckpointsMenuProps {
   onStateChange?: () => void;
   hasUnsavedChanges?: boolean;
-  confirm: (input: string | any) => Promise<boolean>;
+  confirm: (input: string | ConfirmOptions) => Promise<boolean>;
 }
 
 export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
   onStateChange,
   hasUnsavedChanges = false,
   confirm,
-}) => {
+}: CheckpointsMenuProps) => {
   const { isLight, currentTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
@@ -137,7 +138,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
         theme={currentTheme}
         variant="ghost"
         size="sm"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => setIsOpen((open: boolean) => !open)}
         title="Checkpoints"
         className="px-2 border-l"
       >
@@ -168,7 +169,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                 No checkpoints yet
               </div>
             ) : (
-              checkpoints.map((cp) => (
+              checkpoints.map((cp: CheckpointInfo) => (
                 <div key={cp.timestamp} className={menuButtonClass} role="listitem">
                   <button
                     type="button"
@@ -181,7 +182,9 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                   <button
                     type="button"
                     className="p-1 hover:text-red-500 rounded-full flex-shrink-0"
-                    onClick={(e) => handleDelete(e, cp.timestamp)}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) =>
+                      handleDelete(e, cp.timestamp)
+                    }
                     title="Delete"
                   >
                     <Trash2 size={14} />

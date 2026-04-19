@@ -7,6 +7,8 @@
 
 """Defines the generation streaming unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import json
@@ -41,6 +43,7 @@ from augmentedquill.services.story.story_api_stream_ops import (
     stream_unified_chat_content,
 )
 from augmentedquill.services.exceptions import ServiceError
+from augmentedquill.services.chat.chat_tool_decorator import WRITING_ROLE
 from augmentedquill.api.v1.story_routes.common import parse_json_body
 
 router = APIRouter(tags=["Story"])
@@ -48,12 +51,12 @@ router = APIRouter(tags=["Story"])
 
 async def _with_parsed_payload(
     request: Request,
-    handler,
+    handler: Any,
     *,
     internal_error_prefix: str,
     include_exception_text: bool = True,
     use_raw_exception_detail: bool = False,
-):
+) -> Any:
     """Parse JSON body and normalize ServiceError/500 handling."""
     try:
         payload = await parse_json_body(request)
@@ -72,7 +75,7 @@ async def _with_parsed_payload(
         raise HTTPException(status_code=500, detail=detail) from e
 
 
-async def _create_gen_source_pure(prepared: dict):
+async def _create_gen_source_pure(prepared: dict) -> Any:
     """Create a generator source for streaming."""
     async for chunk_dict in stream_unified_chat_content(
         messages=prepared["messages"],
@@ -88,7 +91,7 @@ async def _create_gen_source_pure(prepared: dict):
         yield chunk_dict
 
 
-async def _create_gen_source(prepared: dict):
+async def _create_gen_source(prepared: dict) -> Any:
     """Create a generator source for streaming wrapped in SSE data events."""
     try:
         async for chunk_dict in _create_gen_source_pure(prepared):
@@ -109,12 +112,15 @@ async def _create_gen_source(prepared: dict):
             pass
 
 
-def _as_streaming_response(gen_factory, media_type: str = "text/event-stream"):
+def _as_streaming_response(
+    gen_factory: Any, media_type: str = "text/event-stream"
+) -> Any:
+    """Helper for streaming response.."""
     return StreamingResponse(gen_factory(), media_type=media_type)
 
 
 @router.post("/story/sourcebook/relevance")
-async def api_story_sourcebook_relevance(request: Request):
+async def api_story_sourcebook_relevance(request: Request) -> Any:
     """Ask the WRITING model which sourcebook entries are relevant.
 
     This is a lightweight helper used by the frontend to keep checkboxes
@@ -187,7 +193,7 @@ async def api_story_sourcebook_relevance(request: Request):
             _model_type,
         ) = resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
         # guarantee at least 120 seconds for background relevance requests to
@@ -203,7 +209,7 @@ async def api_story_sourcebook_relevance(request: Request):
         try:
             res = await llm.unified_chat_complete(
                 caller_id="api.story.sourcebook_relevance",
-                model_type="WRITING",
+                model_type=WRITING_ROLE,
                 messages=[
                     {
                         "role": "system",
@@ -308,7 +314,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             _model_type,
         ) = resolve_model_runtime(
             payload=payload,
-            model_type="WRITING",
+            model_type=WRITING_ROLE,
             base_dir=BASE_DIR,
         )
 
@@ -343,7 +349,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
         # placeholders.
         prompt = sanitize_prompt(prompt)
 
-        async def generate_suggestion():
+        async def generate_suggestion() -> Any:
             """Generate Suggestion."""
             try:
                 start_found = False
@@ -413,10 +419,11 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
 
 
 @router.post("/story/summary/stream")
-async def api_story_summary_stream(request: Request):
+async def api_story_summary_stream(request: Request) -> Any:
     """Api Story Summary Stream."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         prepared = prepare_chapter_summary_generation(
             payload,
             payload.get("chap_id"),
@@ -424,6 +431,7 @@ async def api_story_summary_stream(request: Request):
         )
 
         def _persist(new_summary: str) -> None:
+            """Persist the requested value.."""
             prepared["chapters_data"][prepared["pos"]]["summary"] = new_summary
             prepared["story"]["chapters"] = prepared["chapters_data"]
             save_story_config(prepared["story_path"], prepared["story"])
@@ -444,10 +452,11 @@ async def api_story_summary_stream(request: Request):
 
 
 @router.post("/story/write/stream")
-async def api_story_write_stream(request: Request):
+async def api_story_write_stream(request: Request) -> Any:
     """Api Story Write Stream."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
 
         return StreamingResponse(
@@ -468,10 +477,11 @@ async def api_story_write_stream(request: Request):
 
 
 @router.post("/story/continue/stream")
-async def api_story_continue_stream(request: Request):
+async def api_story_continue_stream(request: Request) -> Any:
     """Api Story Continue Stream."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
 
         return _as_streaming_response(
@@ -491,10 +501,11 @@ async def api_story_continue_stream(request: Request):
 
 
 @router.post("/story/story-summary/stream")
-async def api_story_story_summary_stream(request: Request):
+async def api_story_story_summary_stream(request: Request) -> Any:
     """Api Story Story Summary Stream."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         prepared = prepare_story_summary_generation(payload, payload.get("mode") or "")
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
@@ -507,10 +518,11 @@ async def api_story_story_summary_stream(request: Request):
 
 
 @router.post("/story/action/stream")
-async def api_story_action_stream(request: Request):
+async def api_story_action_stream(request: Request) -> Any:
     """Stream generic AI Actions (Extend/Rewrite/Summary update)."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         prepared = prepare_ai_action_generation(payload)
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))

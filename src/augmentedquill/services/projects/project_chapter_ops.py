@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from augmentedquill.core.config import load_story_config, save_story_config
 from augmentedquill.services.chapters.chapter_helpers import (
@@ -105,7 +105,8 @@ def update_chapter_metadata_in_project(
         )
 
 
-def _get_chapter_target_and_story(active: Path, chap_id: int):
+def _get_chapter_target_and_story(active: Path, chap_id: int) -> Any:
+    """Return chapter target and story."""
     _, path, _ = _chapter_by_id_or_404(chap_id)
     files = _scan_chapter_files()
     story_path = active / "story.json"

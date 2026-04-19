@@ -28,18 +28,25 @@ class StoryApiError(ServiceError):
 
 
 class StoryBadRequestError(StoryApiError):
+    """Represents the StoryBadRequestError type."""
+
     default_status_code = 400
 
 
 class StoryNotFoundError(StoryApiError):
+    """Represents the StoryNotFoundError type."""
+
     default_status_code = 404
 
 
 class StoryPersistenceError(StoryApiError):
+    """Represents the StoryPersistenceError type."""
+
     default_status_code = 500
 
 
 async def parse_json_body(request: Request) -> dict:
+    """Parse json body."""
     return await parse_json_object_body(
         request,
         error_factory=lambda _exc: StoryBadRequestError("Invalid JSON body"),
@@ -47,6 +54,7 @@ async def parse_json_body(request: Request) -> dict:
 
 
 def map_story_exception(exc: Exception) -> JSONResponse:
+    """Map story exception.."""
     if isinstance(exc, ServiceError):
         return error_json(exc.detail, exc.status_code)
     if isinstance(exc, HTTPException):

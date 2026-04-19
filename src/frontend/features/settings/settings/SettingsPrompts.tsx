@@ -30,17 +30,32 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
   defaultPrompts,
   onUpdateProvider,
   theme,
-}) => {
+}: SettingsPromptsProps) => {
   const { isLight } = useThemeClasses();
 
   const promptMetaById = React.useMemo(() => {
     const map: Record<string, { label: string; type: 'CHAT' | 'WRITING' | 'EDITING' }> =
       {};
-    PROMPT_GROUPS.forEach((group) => {
-      group.prompts.forEach((prompt) => {
-        map[prompt.id] = { label: prompt.label, type: prompt.type };
-      });
-    });
+    PROMPT_GROUPS.forEach(
+      (group: {
+        title: string;
+        prompts: Array<{
+          id: string;
+          label: string;
+          type: 'CHAT' | 'WRITING' | 'EDITING';
+        }>;
+      }) => {
+        group.prompts.forEach(
+          (prompt: {
+            id: string;
+            label: string;
+            type: 'CHAT' | 'WRITING' | 'EDITING';
+          }) => {
+            map[prompt.id] = { label: prompt.label, type: prompt.type };
+          }
+        );
+      }
+    );
     return map;
   }, []);
 
@@ -57,11 +72,11 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
   // The default config supplies empty strings for some legacy keys (e.g. "system",
   // "continuation", "summary"), which should not appear as active overrides.
   const overrideIds = Object.entries(overrides)
-    .filter(([, value]) => String(value || '').trim() !== '')
-    .map(([key]) => key);
+    .filter(([, value]: [string, string]) => String(value || '').trim() !== '')
+    .map(([key]: [string, string]) => key);
 
   const availablePromptIds = React.useMemo(
-    () => allPromptIds.filter((id) => !overrideIds.includes(id)),
+    () => allPromptIds.filter((id: string) => !overrideIds.includes(id)),
     [allPromptIds, overrideIds]
   );
 
@@ -144,7 +159,9 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
             </label>
             <select
               value={selectedPromptId}
-              onChange={(e) => setSelectedPromptId(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
+                setSelectedPromptId(e.target.value)
+              }
               className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
                 isLight
                   ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
@@ -155,7 +172,7 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
               {availablePromptIds.length === 0 ? (
                 <option value="">No more prompts to add</option>
               ) : (
-                availablePromptIds.map((id) => {
+                availablePromptIds.map((id: string) => {
                   const meta = getMeta(id);
                   return (
                     <option key={id} value={id}>
@@ -192,7 +209,7 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
           </div>
         ) : (
           <div className="space-y-4">
-            {overrideIds.map((promptId) => {
+            {overrideIds.map((promptId: string) => {
               const meta = getMeta(promptId);
               const Icon =
                 meta.type === 'CHAT'
@@ -263,7 +280,9 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
                     data-no-smart-quotes="true"
                     rows={5}
                     value={promptValue}
-                    onChange={(e) => updateOverride(promptId, e.target.value)}
+                    onChange={(
+                      e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                    ) => updateOverride(promptId, e.target.value)}
                     placeholder={getPromptDefault(promptId) || 'Default instruction...'}
                     className={`w-full border rounded p-2 text-[11px] focus:border-brand-500 focus:outline-none ${
                       isLight

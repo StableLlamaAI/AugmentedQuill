@@ -17,13 +17,17 @@ type UseChatMessageActionsParams = {
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
 };
 
+/** Custom React hook that manages chat message actions. */
 export function useChatMessageActions({
   setChatMessages,
-}: UseChatMessageActionsParams) {
+}: UseChatMessageActionsParams): {
+  handleEditMessage: (id: string, newText: string) => void;
+  handleDeleteMessage: (id: string) => void;
+} {
   const handleEditMessage = useCallback(
     (id: string, newText: string) => {
-      setChatMessages((previous) =>
-        previous.map((message) =>
+      setChatMessages((previous: ChatMessage[]) =>
+        previous.map((message: ChatMessage) =>
           message.id === id ? { ...message, text: newText } : message
         )
       );
@@ -33,7 +37,9 @@ export function useChatMessageActions({
 
   const handleDeleteMessage = useCallback(
     (id: string) => {
-      setChatMessages((previous) => previous.filter((message) => message.id !== id));
+      setChatMessages((previous: ChatMessage[]) =>
+        previous.filter((message: ChatMessage) => message.id !== id)
+      );
     },
     [setChatMessages]
   );

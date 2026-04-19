@@ -45,7 +45,7 @@ type UseProjectManagementParams = {
 };
 
 const mapProjectsList = (projects: ProjectListItem[]) =>
-  projects.map((project) => ({
+  projects.map((project: ProjectListItem) => ({
     id: project.name,
     title: project.title || project.name,
     type: project.type || 'novel',
@@ -53,6 +53,7 @@ const mapProjectsList = (projects: ProjectListItem[]) =>
     language: project.language || 'en',
   }));
 
+/** Custom React hook that manages project management. */
 export function useProjectManagement({
   story,
   refreshStory,
@@ -65,7 +66,28 @@ export function useProjectManagement({
   isSettingsOpen,
   setIsSettingsOpen,
   recordHistoryEntry,
-}: UseProjectManagementParams) {
+}: UseProjectManagementParams): {
+  projects: ProjectMetadata[];
+  setProjects: import('react').Dispatch<
+    import('react').SetStateAction<ProjectMetadata[]>
+  >;
+  refreshProjects: () => Promise<void>;
+  isCreateProjectOpen: boolean;
+  setIsCreateProjectOpen: import('react').Dispatch<
+    import('react').SetStateAction<boolean>
+  >;
+  instructionLanguages: string[];
+  handleLoadProject: (id: string) => Promise<void>;
+  handleImportProject: (file: File) => Promise<void>;
+  handleCreateProject: () => void;
+  handleCreateProjectConfirm: (
+    name: string,
+    type: CreateProjectType,
+    language?: string
+  ) => Promise<void>;
+  handleDeleteProject: (id: string) => Promise<void>;
+  handleRenameProject: (id: string, newName: string, newLang?: string) => void;
+} {
   const [projects, setProjects] = useState<ProjectMetadata[]>(() => {
     const saved = localStorage.getItem('augmentedquill_projects_meta');
     return saved
@@ -79,12 +101,32 @@ export function useProjectManagement({
     try {
       const data = await api.projects.list();
       if (data.available) {
-        setProjects(mapProjectsList(data.available));
+        const listedProjects = mapProjectsList(data.available);
+        setProjects((prev: ProjectMetadata[]) => {
+          const hasActiveStory = listedProjects.some(
+            (project: {
+              id: string;
+              title: string;
+              type: 'short-story' | 'novel' | 'series';
+              updatedAt: number;
+              language: string;
+            }) => project.id === story.id
+          );
+          if (hasActiveStory) {
+            return listedProjects;
+          }
+          const activeFromPreviousState = prev.find(
+            (project: ProjectMetadata) => project.id === story.id
+          );
+          return activeFromPreviousState
+            ? [...listedProjects, activeFromPreviousState]
+            : listedProjects;
+        });
       }
     } catch (error) {
       console.error('Failed to fetch projects', error);
     }
-  }, []);
+  }, [story.id]);
 
   useEffect(() => {
     refreshProjects();
@@ -98,8 +140,8 @@ export function useProjectManagement({
     if (!story || !story.id) return;
 
     localStorage.setItem(`project_${story.id}`, JSON.stringify(story));
-    setProjects((prev) => {
-      const exists = prev.find((project) => project.id === story.id);
+    setProjects((prev: ProjectMetadata[]) => {
+      const exists = prev.find((project: ProjectMetadata) => project.id === story.id);
       const language = story.language || 'en';
       if (
         exists &&
@@ -107,12 +149,12 @@ export function useProjectManagement({
         exists.type === story.projectType &&
         exists.language === language
       ) {
-        return prev.map((project) =>
+        return prev.map((project: ProjectMetadata) =>
           project.id === story.id ? { ...project, updatedAt: Date.now() } : project
         );
       }
       if (exists) {
-        return prev.map((project) =>
+        return prev.map((project: ProjectMetadata) =>
           project.id === story.id
             ? {
                 ...project,
@@ -143,7 +185,7 @@ export function useProjectManagement({
         const response = await api.projects.select(id);
         if (!response.ok) return;
 
-        await refreshStory(undefined, true);
+        await refreshStory();
         const chats = await api.chat.list();
         setChatHistoryList(chats);
         if (chats.length > 0) {
@@ -163,14 +205,16 @@ export function useProjectManagement({
       try {
         const previousActiveProjectId = story.id;
         const importedFileSnapshot = file;
-        const knownProjectIds = new Set(projects.map((project) => project.id));
+        const knownProjectIds = new Set(
+          projects.map((project: ProjectMetadata) => project.id)
+        );
         const response = await api.projects.import(file);
         if (response.ok && response.available) {
           setProjects(mapProjectsList(response.available));
 
           const importedNameFromList = response.available
-            .map((project) => project.name)
-            .find((name) => !knownProjectIds.has(name));
+            .map((project: ProjectListItem) => project.name)
+            .find((name: string) => !knownProjectIds.has(name));
           const importedNameFromMessage =
             typeof response.message === 'string'
               ? response.message.match(/Imported as\s+(.+)$/)?.[1]?.trim()
@@ -245,17 +289,30 @@ export function useProjectManagement({
           const mappedStory: StoryState = mapSelectStoryToState(
             name,
             result.story,
-            (result.story.chapters || []).map((chapter, index) => ({
-              id: String(index + 1),
-              title: chapter.title || '',
-              summary: chapter.summary || '',
-              content: '',
-              filename: chapter.filename,
-              book_id: chapter.book_id,
-              notes: chapter.notes,
-              private_notes: chapter.private_notes,
-              conflicts: chapter.conflicts,
-            })),
+            (result.story.chapters || []).map(
+              (
+                chapter: {
+                  title?: string;
+                  summary?: string;
+                  filename?: string;
+                  book_id?: string;
+                  notes?: string;
+                  private_notes?: string;
+                  conflicts?: import('../../types').Conflict[];
+                },
+                index: number
+              ) => ({
+                id: String(index + 1),
+                title: chapter.title || '',
+                summary: chapter.summary || '',
+                content: '',
+                filename: chapter.filename,
+                book_id: chapter.book_id,
+                notes: chapter.notes,
+                private_notes: chapter.private_notes,
+                conflicts: chapter.conflicts,
+              })
+            ),
             null,
             []
           );
@@ -326,7 +383,9 @@ export function useProjectManagement({
         }
 
         await api.projects.delete(id);
-        const newProjects = projects.filter((project) => project.id !== id);
+        const newProjects = projects.filter(
+          (project: ProjectMetadata) => project.id !== id
+        );
         setProjects(newProjects);
         localStorage.removeItem(`project_${id}`);
 
@@ -384,8 +443,8 @@ export function useProjectManagement({
         return;
       }
 
-      setProjects((prev) =>
-        prev.map((project) =>
+      setProjects((prev: ProjectMetadata[]) =>
+        prev.map((project: ProjectMetadata) =>
           project.id === id
             ? { ...project, title: newName, language: newLang || project.language }
             : project

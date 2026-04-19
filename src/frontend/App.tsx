@@ -18,32 +18,23 @@ import React, {
   startTransition,
 } from 'react';
 import { useStory } from './features/story/useStory';
-import { StoryMetadata } from './features/story/StoryMetadata';
-import { ChapterList } from './features/chapters/ChapterList';
 import { useChapterSuggestions } from './features/chapters/useChapterSuggestions';
-import { Editor, EditorHandle } from './features/editor/Editor';
+import { EditorHandle } from './features/editor/Editor';
 import { useAppUiActions } from './features/editor/useAppUiActions';
 import { useEditorPreferences } from './features/editor/useEditorPreferences';
 import { useAiActions } from './features/story/useAiActions';
-import { Chat } from './features/chat/Chat';
 import { useChatExecution } from './features/chat/useChatExecution';
 import { useChatMessageActions } from './features/chat/useChatMessageActions';
-import { ToolCallLimitDialog } from './features/chat/ToolCallLimitDialog';
 import { useChatSessionManagement } from './features/chat/useChatSessionManagement';
-import { AppDialogs } from './features/layout/AppDialogs';
-import { AppHeader } from './features/layout/AppHeader';
-import { AppMainLayout } from './features/layout/AppMainLayout';
-import { ConfirmDialog } from './features/layout/ConfirmDialog';
-import { ConfirmDialogProvider } from './features/layout/ConfirmDialogContext';
+import { AppLayout } from './features/layout/AppLayout';
 import { useConfirmDialog } from './features/layout/useConfirmDialog';
-import { ThemeProvider } from './features/layout/ThemeContext';
 import { useProjectManagement } from './features/projects/useProjectManagement';
-import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage, SourcebookEntry } from './types';
+import { ChatMessage, ChatAttachment, SourcebookEntry } from './types';
 import { SessionMutation } from './features/chat';
+import { ChatToolExecutionResponse } from './services/apiTypes';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
 import { useEditorUIState } from './features/app/useEditorUIState';
@@ -51,8 +42,7 @@ import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
 import { useSearchReplace } from './features/search/useSearchReplace';
-import { SearchReplaceDialog } from './features/search/SearchReplaceDialog';
-import { SearchHighlightProvider } from './features/search/SearchHighlightContext';
+import { useSidebarIntents } from './features/layout/sidebarIntents';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
@@ -62,177 +52,7 @@ import {
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
 import { applySmartQuotes } from './utils/textUtils';
-
-// ---------------------------------------------------------------------------
-// Mutation tool dispatch registry
-// Maps tool names to a factory that produces a SessionMutation from { args, result }.
-// Add new mutation-producing tools here instead of growing the if-chain.
-// ---------------------------------------------------------------------------
-type MutCallResult = { args: Record<string, unknown>; result: Record<string, unknown> };
-
-type MutFactory = (res: MutCallResult) => SessionMutation | SessionMutation[] | null;
-
-const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
-  // Sourcebook tools
-  create_sourcebook_entry: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
-    return {
-      id: `sb-${Date.now()}-${Math.random()}`,
-      type: 'sourcebook',
-      label,
-      targetId: id as string | undefined,
-    };
-  },
-  update_sourcebook_entry: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
-    return {
-      id: `sb-${Date.now()}-${Math.random()}`,
-      type: 'sourcebook',
-      label,
-      targetId: id as string | undefined,
-    };
-  },
-  delete_sourcebook_entry: ({ args, result }) => {
-    const id = result.id || args.name_or_id || args.name;
-    const label = (result.name ||
-      args.name ||
-      (id ? `SB: ${id}` : 'Sourcebook')) as string;
-    return {
-      id: `sb-${Date.now()}-${Math.random()}`,
-      type: 'sourcebook',
-      label,
-      targetId: id as string | undefined,
-    };
-  },
-  add_sourcebook_relation: ({ args, result }) => {
-    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
-    const targetId = args.target_id || args.targetId;
-    const label = sourceId
-      ? `SB: ${sourceId}`
-      : targetId
-        ? `SB: ${targetId}`
-        : 'Sourcebook';
-    return {
-      id: `sb-${Date.now()}-${Math.random()}`,
-      type: 'sourcebook',
-      label,
-      targetId: (sourceId || targetId) as string | undefined,
-    };
-  },
-  remove_sourcebook_relation: ({ args, result }) => {
-    const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
-    const targetId = args.target_id || args.targetId;
-    const label = sourceId
-      ? `SB: ${sourceId}`
-      : targetId
-        ? `SB: ${targetId}`
-        : 'Sourcebook';
-    return {
-      id: `sb-${Date.now()}-${Math.random()}`,
-      type: 'sourcebook',
-      label,
-      targetId: (sourceId || targetId) as string | undefined,
-    };
-  },
-  // Metadata tools – produce one tag per changed field
-  update_story_metadata: ({ args }) => {
-    const fields = buildMetadataFields(args, false);
-    return fields;
-  },
-  update_chapter_metadata: ({ args }) => buildMetadataFields(args, false),
-  update_book_metadata: ({ args }) => buildMetadataFields(args, false),
-  set_story_tags: () => buildMetadataFields({}, true),
-  set_story_summary: () => buildMetadataFields({}, true),
-  sync_story_summary: () => buildMetadataFields({}, true),
-  write_story_summary: () => buildMetadataFields({}, true),
-  // Chapter prose tools
-  write_chapter_content: ({ args, result }) => {
-    const chapId = result.chap_id || args.chap_id;
-    return {
-      id: `chap-${Date.now()}-${Math.random()}`,
-      type: 'chapter',
-      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
-      targetId: chapId ? String(chapId) : undefined,
-    };
-  },
-  replace_text_in_chapter: ({ args, result }) => {
-    const chapId = result.chap_id || args.chap_id;
-    return {
-      id: `chap-${Date.now()}-${Math.random()}`,
-      type: 'chapter',
-      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
-      targetId: chapId ? String(chapId) : undefined,
-    };
-  },
-  apply_chapter_replacements: ({ args, result }) => {
-    const chapId = result.chap_id || args.chap_id;
-    return {
-      id: `chap-${Date.now()}-${Math.random()}`,
-      type: 'chapter',
-      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
-      targetId: chapId ? String(chapId) : undefined,
-    };
-  },
-  write_chapter: ({ args, result }) => {
-    const chapId = result.chap_id || args.chap_id;
-    return {
-      id: `chap-${Date.now()}-${Math.random()}`,
-      type: 'chapter',
-      label: chapId ? `Chapter ${chapId}` : 'Chapter prose',
-      targetId: chapId ? String(chapId) : undefined,
-    };
-  },
-  // Story prose tools
-  write_story_content: () => ({
-    id: `story-${Date.now()}-${Math.random()}`,
-    type: 'story',
-    label: 'Story prose',
-  }),
-  call_editing_assistant: () => ({
-    id: `story-${Date.now()}-${Math.random()}`,
-    type: 'story',
-    label: 'Story prose',
-  }),
-  call_writing_llm: () => ({
-    id: `story-${Date.now()}-${Math.random()}`,
-    type: 'story',
-    label: 'Story prose',
-  }),
-  // Book tools
-  write_book_content: ({ args, result }) => {
-    const bookId = result.book_id || args.book_id;
-    return {
-      id: `book-${Date.now()}-${Math.random()}`,
-      type: 'book',
-      label: 'Book',
-      targetId: bookId as string | undefined,
-    };
-  },
-};
-
-function buildMetadataFields(
-  args: Record<string, unknown>,
-  forceSummary: boolean
-): SessionMutation[] {
-  const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
-  if (forceSummary || args.summary !== undefined) changedFields.push('summary');
-  if (args.notes !== undefined) changedFields.push('notes');
-  if (args.private_notes !== undefined) changedFields.push('private');
-  if (args.conflicts !== undefined) changedFields.push('conflicts');
-  if (changedFields.length === 0) changedFields.push('summary');
-  return changedFields.map((subType) => ({
-    id: `meta-${Date.now()}-${Math.random()}`,
-    type: 'metadata',
-    label: subType.charAt(0).toUpperCase() + subType.slice(1),
-    subType,
-  }));
-}
+import { MUTATION_TOOL_REGISTRY } from './features/chat/mutationToolRegistry';
 
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
@@ -240,7 +60,7 @@ const App: React.FC = () => {
 
   const addToast = useToast();
   useEffect(() => {
-    setErrorDispatcher((msg) => addToast(msg, 'error'));
+    setErrorDispatcher((msg: string) => addToast(msg, 'error'));
   }, [addToast]);
 
   const {
@@ -271,7 +91,7 @@ const App: React.FC = () => {
     advanceBaselineToCurrentStory,
     patchSourcebook,
     isChapterLoading,
-  } = useStory({ confirm, alert: (msg) => void alert(msg) });
+  } = useStory({ confirm, alert: (msg: string) => void alert(msg) });
 
   // Stable ref to avoid recreating callbacks that read story state during
   // streaming (e.g. onProseChunk).
@@ -288,7 +108,9 @@ const App: React.FC = () => {
     redo,
   });
 
-  const activeChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const activeChapter = story.chapters.find(
+    (c: import('./types').Chapter) => c.id === currentChapterId
+  );
   const currentChapter =
     story.projectType === 'short-story'
       ? story.draft
@@ -341,7 +163,7 @@ const App: React.FC = () => {
     () =>
       story.chapters
         .map(
-          (ch) =>
+          (ch: import('./types').Chapter) =>
             `${ch.id}:${ch.title}:${ch.summary ?? ''}:${ch.book_id ?? ''}:${
               ch.conflicts?.length ?? 0
             }`
@@ -352,7 +174,7 @@ const App: React.FC = () => {
 
   const sidebarStoryChapters = useMemo(
     () =>
-      story.chapters.map((ch) => ({
+      story.chapters.map((ch: import('./types').Chapter) => ({
         ...ch,
         content: '',
       })),
@@ -361,12 +183,15 @@ const App: React.FC = () => {
 
   const sidebarStoryBooks = useMemo(
     () =>
-      (story.books || []).map((book) => ({
+      (story.books || []).map((book: import('./types').Book) => ({
         ...book,
       })),
     [
       (story.books || [])
-        .map((book) => `${book.id}:${book.title}:${book.summary ?? ''}`)
+        .map(
+          (book: import('./types').Book) =>
+            `${book.id}:${book.title}:${book.summary ?? ''}`
+        )
         .join('|'),
     ]
   );
@@ -383,7 +208,7 @@ const App: React.FC = () => {
   // This prevents sidebarControls from rebuilding on every debounced keystroke,
   // which in turn keeps AppMainLayout.React.memo valid during editing.
   const baselineChaptersMetaKey = baselineState.chapters
-    .map((c) => `${c.id}:${c.title}:${c.summary ?? ''}`)
+    .map((c: import('./types').Chapter) => `${c.id}:${c.title}:${c.summary ?? ''}`)
     .join('|');
   const sidebarBaselineState = useMemo(
     () => baselineState,
@@ -512,6 +337,14 @@ const App: React.FC = () => {
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
+  const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
+    useSidebarIntents({
+      setIsSidebarOpen,
+      setEditorSettings,
+      setMetadataDialogTrigger,
+      setSourcebookDialogTrigger,
+    });
+
   const getSystemPrompt = useCallback(() => {
     return prompts.system_messages.chat_llm || '';
   }, [prompts]);
@@ -530,7 +363,6 @@ const App: React.FC = () => {
     onUpdateScratchpad,
     onDeleteScratchpad,
     incognitoSessions,
-    refreshChatList,
     handleNewChat,
     handleSelectChat,
     handleDeleteChat,
@@ -548,29 +380,42 @@ const App: React.FC = () => {
     advanceBaselineToCurrentStory();
   }, [advanceBaselineToCurrentStory]);
 
-  const onToolMutations = useCallback((muts: any) => {
+  type ToolMutationPayload = ChatToolExecutionResponse & {
+    _call_results?: Array<{
+      name: string;
+      args: Record<string, unknown>;
+      result: Record<string, unknown>;
+    }>;
+  };
+
+  const onToolMutations = useCallback((muts: ToolMutationPayload) => {
     if (!muts) return;
     const newMuts: SessionMutation[] = [];
-    const callResults =
-      (muts._call_results as Array<{ name: string; args: any; result: any }>) || [];
+    const callResults = muts._call_results || [];
 
-    callResults.forEach((res) => {
-      const factory = MUTATION_TOOL_REGISTRY[res.name];
-      if (!factory) return;
-      const produced = factory({ args: res.args || {}, result: res.result || {} });
-      if (!produced) return;
-      const items = Array.isArray(produced) ? produced : [produced];
-      newMuts.push(...items);
-    });
+    callResults.forEach(
+      (res: {
+        name: string;
+        args: Record<string, unknown>;
+        result: Record<string, unknown>;
+      }) => {
+        const factory = MUTATION_TOOL_REGISTRY[res.name];
+        if (!factory) return;
+        const produced = factory({ args: res.args || {}, result: res.result || {} });
+        if (!produced) return;
+        const items = Array.isArray(produced) ? produced : [produced];
+        newMuts.push(...items);
+      }
+    );
 
     if (newMuts.length > 0) {
-      setSessionMutations((prev) => {
+      setSessionMutations((prev: SessionMutation[]) => {
         const combined = [...prev];
-        newMuts.forEach((m) => {
+        newMuts.forEach((m: SessionMutation) => {
           // Avoid exact duplicates in the same session
           if (
             !combined.some(
-              (x) =>
+              (x: SessionMutation) =>
                 x.type === m.type && x.label === m.label && x.targetId === m.targetId
             )
           ) {
@@ -609,7 +454,7 @@ const App: React.FC = () => {
   });
 
   // Get Active LLM Configs
-  const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
+  const { activeChatConfig, activeWritingConfig } =
     resolveActiveProviderConfigs(appSettings);
 
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
@@ -620,7 +465,6 @@ const App: React.FC = () => {
     continuations,
     isSuggesting,
     isSuggestionMode,
-    suggestCursor,
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
@@ -684,8 +528,8 @@ const App: React.FC = () => {
   const sourcebookMutationEntryIds = useMemo(() => {
     return new Set(
       sessionMutations
-        .filter((m) => m.type === 'sourcebook' && m.targetId)
-        .map((m) => m.targetId as string)
+        .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)
+        .map((m: SessionMutation) => m.targetId as string)
     );
   }, [sessionMutations]);
 
@@ -700,36 +544,23 @@ const App: React.FC = () => {
           } else if (m.type === 'story') {
             handleChapterSelect(null);
           } else if (m.type === 'metadata') {
-            setIsSidebarOpen(true);
-            setMetadataDialogTrigger((prev) => ({
-              id: (prev?.id ?? 0) + 1,
-              initialTab: m.subType as any,
-            }));
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-            }));
+            openStoryMetadataDialog(
+              m.subType as 'summary' | 'notes' | 'private' | 'conflicts'
+            );
           } else if (m.type === 'sourcebook') {
-            setIsSidebarOpen(true);
-            setSourcebookDialogTrigger((prev) => ({
-              id: (prev?.id ?? 0) + 1,
-              entryId: m.targetId ?? '',
-            }));
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-            }));
+            openSourcebookEntryDialog(m.targetId ?? '');
           } else if (m.type === 'book') {
-            setIsSidebarOpen(true);
-            setEditorSettings((prev) => ({
-              ...prev,
-              sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-            }));
+            openAndExpandStory();
           }
         });
       });
     },
-    [handleChapterSelect, setIsSidebarOpen, setEditorSettings]
+    [
+      handleChapterSelect,
+      openAndExpandStory,
+      openSourcebookEntryDialog,
+      openStoryMetadataDialog,
+    ]
   );
 
   // Keep a stable base snapshot per prose stream so append-mode previews are
@@ -773,7 +604,9 @@ const App: React.FC = () => {
         if (currentStory.projectType === 'short-story' && currentStory.draft) {
           unit = currentStory.draft;
         } else {
-          const found = currentStory.chapters.find((c) => Number(c.id) === chapId);
+          const found = currentStory.chapters.find(
+            (c: import('./types').Chapter) => Number(c.id) === chapId
+          );
           unit = found ?? null;
         }
         if (!unit) return;
@@ -836,16 +669,20 @@ const App: React.FC = () => {
       [updateChapter]
     ),
     onMutations: onToolMutations,
-    pushExternalHistoryEntry: (params) => {
+    pushExternalHistoryEntry: (params: {
+      label: string;
+      onUndo?: () => Promise<void>;
+      onRedo?: () => Promise<void>;
+    }) => {
       pushExternalHistoryEntry?.(params);
     },
     requestToolCallLoopAccess,
   });
 
   const handleSendMessageWithReset = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: ChatAttachment[]) => {
       onChatNewMessageBegin();
-      await handleSendMessage(text);
+      await handleSendMessage(text, attachments);
     },
     [handleSendMessage, onChatNewMessageBegin]
   );
@@ -1042,7 +879,9 @@ const App: React.FC = () => {
     }) => {
       const entryExistsInBaseline = Boolean(
         params.entryExistsInBaseline ??
-        baselineState.sourcebook?.some((entry) => entry.id === params.entryId)
+        baselineState.sourcebook?.some(
+          (entry: SourcebookEntry) => entry.id === params.entryId
+        )
       );
 
       if (params.updatedEntry !== undefined) {
@@ -1094,7 +933,9 @@ const App: React.FC = () => {
     () =>
       currentChapter?.scope === 'story'
         ? baselineState.draft?.content
-        : baselineState.chapters.find((c) => c.id === currentChapter?.id)?.content,
+        : baselineState.chapters.find(
+            (c: import('./types').Chapter) => c.id === currentChapter?.id
+          )?.content,
     [
       currentChapter?.scope,
       currentChapter?.id,
@@ -1311,155 +1152,110 @@ const App: React.FC = () => {
   );
 
   return (
-    <ConfirmDialogProvider value={confirm}>
-      <SearchHighlightProvider value={searchHighlightValue}>
-        <ThemeProvider currentTheme={currentTheme}>
-          <ConfirmDialog
-            isOpen={confirmDialogState.isOpen}
-            title={confirmDialogState.title}
-            message={confirmDialogState.message}
-            confirmLabel={confirmDialogState.confirmLabel}
-            cancelLabel={confirmDialogState.cancelLabel}
-            variant={confirmDialogState.variant as any}
-            onConfirm={handleConfirm}
-            onCancel={handleCancel}
-          />
-          <div
-            id="aq-app-root"
-            className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
-            style={
-              {
-                '--sidebar-width': `${editorSettings.sidebarWidth}px`,
-              } as React.CSSProperties
-            }
-          >
-            <AppDialogs
-              isSettingsOpen={isSettingsOpen}
-              setIsSettingsOpen={setIsSettingsOpen}
-              appSettings={appSettings}
-              setAppSettings={handleSaveSettings}
-              projects={projects}
-              story={story}
-              handleLoadProject={handleLoadProject}
-              handleCreateProject={handleCreateProject}
-              handleImportProject={handleImportProject}
-              handleDeleteProject={handleDeleteProject}
-              handleRenameProject={handleRenameProject}
-              handleConvertProject={handleConvertProject}
-              refreshProjects={refreshProjects}
-              currentTheme={currentTheme}
-              prompts={prompts}
-              instructionLanguages={instructionLanguages}
-              isImagesOpen={isImagesOpen}
-              setIsImagesOpen={setIsImagesOpen}
-              updateStoryImageSettings={updateStoryImageSettings}
-              imageActionsAvailable={imageActionsAvailable}
-              recordHistoryEntry={pushExternalHistoryEntry}
-              editorRef={editorRef}
-              isCreateProjectOpen={isCreateProjectOpen}
-              setIsCreateProjectOpen={setIsCreateProjectOpen}
-              handleCreateProjectConfirm={handleCreateProjectConfirm}
-            />
-
-            <AppHeader
-              storyTitle={story.title}
-              sidebarControls={sidebarControls}
-              settingsControls={settingsControls}
-              historyControls={historyControls}
-              viewControls={viewControls}
-              formatControls={formatControls}
-              aiControls={headerAiControls}
-              modelControls={modelControls}
-              appearanceControls={appearanceControls}
-              chatPanelControls={chatPanelControls}
-              searchControls={searchControls}
-            />
-
-            <AppMainLayout
-              sidebarControls={sidebarControls}
-              editorControls={editorControls}
-              chatControls={chatControls}
-              instructionLanguages={instructionLanguages}
-            />
-
-            {isDebugLogsOpen && (
-              <DebugLogs
-                isOpen={isDebugLogsOpen}
-                onClose={() => setIsDebugLogsOpen(false)}
-                theme={currentTheme}
-              />
-            )}
-
-            <ToolCallLimitDialog
-              isOpen={!!toolCallLoopDialog}
-              count={toolCallLoopDialog?.count ?? 0}
-              theme={currentTheme}
-              onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-            />
-
-            {searchState.isOpen && (
-              <SearchReplaceDialog
-                searchState={searchState}
-                activeChapterId={
-                  currentChapterId !== null ? parseInt(currentChapterId, 10) : null
-                }
-                storyLanguage={story.language || 'en'}
-                onJumpToPosition={(start, end) => {
-                  editorRef.current?.jumpToPosition(start, end);
-                }}
-                onStoryChanged={() => void refreshStory()}
-                onNavigateToChapter={(chapId, jumpStart, jumpEnd) => {
-                  setMetadataDialogCloseTrigger((c) => c + 1);
-                  setSourcebookDialogCloseTrigger((c) => c + 1);
-                  if (jumpStart !== undefined && jumpEnd !== undefined) {
-                    pendingJumpRef.current = {
-                      chapterId: String(chapId),
-                      start: jumpStart,
-                      end: jumpEnd,
-                    };
-                  }
-                  handleChapterSelect(String(chapId));
-                }}
-                onNavigateToSourcebookEntry={(entryId) => {
-                  setMetadataDialogCloseTrigger((c) => c + 1);
-                  setIsSidebarOpen(true);
-                  setSourcebookDialogTrigger((prev) => ({
-                    id: (prev?.id ?? 0) + 1,
-                    entryId,
-                  }));
-                  setEditorSettings((prev) => ({
-                    ...prev,
-                    sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-                  }));
-                }}
-                onNavigateToStoryMetadata={(field) => {
-                  const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
-                    field === 'story_summary'
-                      ? 'summary'
-                      : field === 'notes'
-                        ? 'notes'
-                        : field === 'private_notes'
-                          ? 'private'
-                          : field.startsWith('conflicts')
-                            ? 'conflicts'
-                            : 'summary';
-                  setSourcebookDialogCloseTrigger((c) => c + 1);
-                  setIsSidebarOpen(true);
-                  setMetadataDialogTrigger((prev) => ({
-                    id: (prev?.id ?? 0) + 1,
-                    initialTab: tab,
-                  }));
-                  setEditorSettings((prev) => ({
-                    ...prev,
-                    sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-                  }));
-                }}
-              />
-            )}
-          </div>
-        </ThemeProvider>
-      </SearchHighlightProvider>
-    </ConfirmDialogProvider>
+    <AppLayout
+      confirm={confirm}
+      searchHighlightValue={searchHighlightValue}
+      currentTheme={currentTheme}
+      confirmDialogState={confirmDialogState}
+      handleConfirm={handleConfirm}
+      handleCancel={handleCancel}
+      bgMain={bgMain}
+      textMain={textMain}
+      sidebarWidth={editorSettings.sidebarWidth}
+      appDialogsProps={{
+        isSettingsOpen,
+        setIsSettingsOpen,
+        appSettings,
+        setAppSettings: handleSaveSettings,
+        projects,
+        story,
+        handleLoadProject,
+        handleCreateProject,
+        handleImportProject,
+        handleDeleteProject,
+        handleRenameProject,
+        handleConvertProject,
+        refreshProjects,
+        currentTheme,
+        prompts,
+        instructionLanguages,
+        isImagesOpen,
+        setIsImagesOpen,
+        updateStoryImageSettings,
+        imageActionsAvailable,
+        recordHistoryEntry: pushExternalHistoryEntry,
+        editorRef,
+        isCreateProjectOpen,
+        setIsCreateProjectOpen,
+        handleCreateProjectConfirm,
+      }}
+      appHeaderProps={{
+        storyTitle: story.title,
+        sidebarControls,
+        settingsControls,
+        historyControls,
+        viewControls,
+        formatControls,
+        aiControls: headerAiControls,
+        modelControls,
+        appearanceControls,
+        chatPanelControls,
+        searchControls,
+      }}
+      appMainLayoutProps={{
+        sidebarControls,
+        editorControls,
+        chatControls,
+        instructionLanguages,
+      }}
+      isDebugLogsOpen={isDebugLogsOpen}
+      setIsDebugLogsOpen={setIsDebugLogsOpen}
+      toolCallLoopDialog={toolCallLoopDialog}
+      searchReplaceDialogProps={{
+        searchState,
+        activeChapterId:
+          currentChapterId !== null ? parseInt(currentChapterId, 10) : null,
+        storyLanguage: story.language || 'en',
+        onJumpToPosition: (start: number, end: number) => {
+          editorRef.current?.jumpToPosition(start, end);
+        },
+        onStoryChanged: () => void refreshStory(),
+        onNavigateToChapter: (
+          chapId: number,
+          jumpStart: number | undefined,
+          jumpEnd: number | undefined
+        ) => {
+          setMetadataDialogCloseTrigger((c: number) => c + 1);
+          setSourcebookDialogCloseTrigger((c: number) => c + 1);
+          if (jumpStart !== undefined && jumpEnd !== undefined) {
+            pendingJumpRef.current = {
+              chapterId: String(chapId),
+              start: jumpStart,
+              end: jumpEnd,
+            };
+          }
+          handleChapterSelect(String(chapId));
+        },
+        onNavigateToSourcebookEntry: (entryId: string) => {
+          setMetadataDialogCloseTrigger((c: number) => c + 1);
+          openSourcebookEntryDialog(entryId);
+        },
+        onNavigateToStoryMetadata: (field: string) => {
+          const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
+            field === 'story_summary'
+              ? 'summary'
+              : field === 'notes'
+                ? 'notes'
+                : field === 'private_notes'
+                  ? 'private'
+                  : field.startsWith('conflicts')
+                    ? 'conflicts'
+                    : 'summary';
+          setSourcebookDialogCloseTrigger((c: number) => c + 1);
+          openStoryMetadataDialog(tab);
+        },
+      }}
+    />
   );
 };
 

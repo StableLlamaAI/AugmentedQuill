@@ -24,20 +24,23 @@ export type UseToolCallGateResult = {
   requestToolCallLoopAccess: (count: number) => Promise<ToolCallChoice>;
 };
 
+/** Custom React hook that manages tool call gate. */
 export function useToolCallGate(): UseToolCallGateResult {
   const [toolCallLoopDialog, setToolCallLoopDialog] =
     useState<ToolCallLoopDialogState>(null);
 
   const requestToolCallLoopAccess = (count: number): Promise<ToolCallChoice> =>
-    new Promise((resolve) => {
-      setToolCallLoopDialog({
-        count,
-        resolver: (choice) => {
-          setToolCallLoopDialog(null);
-          resolve(choice);
-        },
-      });
-    });
+    new Promise(
+      (resolve: (value: ToolCallChoice | PromiseLike<ToolCallChoice>) => void) => {
+        setToolCallLoopDialog({
+          count,
+          resolver: (choice: ToolCallChoice) => {
+            setToolCallLoopDialog(null);
+            resolve(choice);
+          },
+        });
+      }
+    );
 
   return { toolCallLoopDialog, requestToolCallLoopAccess };
 }

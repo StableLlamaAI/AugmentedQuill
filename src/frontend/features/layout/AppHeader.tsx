@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from './ThemeContext';
 import {
   ChevronDown,
@@ -68,7 +69,8 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
     appearanceControls,
     chatPanelControls,
     searchControls,
-  }) => {
+  }: AppHeaderProps) => {
+    const { t } = useTranslation();
     const {
       headerBg,
       iconColor,
@@ -82,7 +84,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
     } = useTheme();
 
     const { isSidebarOpen, setIsSidebarOpen } = sidebarControls;
-    const { setIsSettingsOpen, setIsImagesOpen, setIsDebugLogsOpen } = settingsControls;
+    const { setIsSettingsOpen, setIsDebugLogsOpen } = settingsControls;
     const {
       undo,
       redo,
@@ -131,7 +133,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
-            aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-label={isSidebarOpen ? t('Close sidebar') : t('Open sidebar')}
           >
             <Menu size={24} />
           </button>
@@ -140,7 +142,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
             type="button"
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center space-x-2"
-            aria-label="Open settings"
+            aria-label={t('Open settings')}
           >
             <div
               className={`rounded-md p-1 shadow-lg ${
@@ -177,8 +179,10 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 size="sm"
                 onClick={undo}
                 disabled={!canUndo}
-                title={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
-                aria-label={nextUndoLabel ? `Undo: ${nextUndoLabel}` : 'Undo'}
+                title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+                aria-label={
+                  nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')
+                }
                 className="rounded-r-none"
               >
                 <Undo size={16} />
@@ -187,10 +191,10 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsUndoMenuOpen((open) => !open)}
+                onClick={() => setIsUndoMenuOpen((open: boolean) => !open)}
                 disabled={!canUndo}
-                title="Undo multiple actions"
-                aria-label="Open undo actions list"
+                title={t('Undo multiple actions')}
+                aria-label={t('Open undo actions list')}
                 aria-haspopup="menu"
                 aria-expanded={isUndoMenuOpen}
                 className="px-2 rounded-l-none border-l"
@@ -204,23 +208,25 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                   aria-label="Undo actions"
                 >
                   <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
-                    Undo Actions
+                    {t('Undo Actions')}
                   </div>
-                  {undoOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="menuitem"
-                      className={menuButtonClass}
-                      onClick={() => {
-                        undoSteps(option.steps);
-                        setIsUndoMenuOpen(false);
-                      }}
-                      title={option.label}
-                    >
-                      Undo {option.steps}: {option.label}
-                    </button>
-                  ))}
+                  {undoOptions.map(
+                    (option: { id: string; label: string; steps: number }) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        className={menuButtonClass}
+                        onClick={() => {
+                          undoSteps(option.steps);
+                          setIsUndoMenuOpen(false);
+                        }}
+                        title={option.label}
+                      >
+                        {t('Undo')} {option.steps}: {option.label}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -232,8 +238,10 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 size="sm"
                 onClick={redo}
                 disabled={!canRedo}
-                title={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
-                aria-label={nextRedoLabel ? `Redo: ${nextRedoLabel}` : 'Redo'}
+                title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+                aria-label={
+                  nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')
+                }
                 className="rounded-r-none"
               >
                 <Redo size={16} />
@@ -242,10 +250,10 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsRedoMenuOpen((open) => !open)}
+                onClick={() => setIsRedoMenuOpen((open: boolean) => !open)}
                 disabled={!canRedo}
-                title="Redo multiple actions"
-                aria-label="Open redo actions list"
+                title={t('Redo multiple actions')}
+                aria-label={t('Open redo actions list')}
                 aria-haspopup="menu"
                 aria-expanded={isRedoMenuOpen}
                 className="px-2 rounded-l-none border-l"
@@ -259,23 +267,25 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                   aria-label="Redo actions"
                 >
                   <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
-                    Redo Actions
+                    {t('Redo Actions')}
                   </div>
-                  {redoOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="menuitem"
-                      className={menuButtonClass}
-                      onClick={() => {
-                        redoSteps(option.steps);
-                        setIsRedoMenuOpen(false);
-                      }}
-                      title={option.label}
-                    >
-                      Redo {option.steps}: {option.label}
-                    </button>
-                  ))}
+                  {redoOptions.map(
+                    (option: { id: string; label: string; steps: number }) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        className={menuButtonClass}
+                        onClick={() => {
+                          redoSteps(option.steps);
+                          setIsRedoMenuOpen(false);
+                        }}
+                        title={option.label}
+                      >
+                        {t('Redo')} {option.steps}: {option.label}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -285,8 +295,8 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
               variant="ghost"
               size="sm"
               onClick={onOpenSearch}
-              title="Search and Replace (Ctrl+F)"
-              aria-label="Search and Replace"
+              title={t('Search and Replace (Ctrl+F)')}
+              aria-label={t('Search and Replace')}
               className="ml-1"
             >
               <Search size={18} />
@@ -315,7 +325,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
             variant="ghost"
             size="sm"
             onClick={() => setIsSettingsOpen(true)}
-            title="Settings"
+            title={t('Settings')}
             className="mr-1"
           >
             <SettingsIcon size={18} />
@@ -344,7 +354,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
               isChatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />
             }
           >
-            {isChatOpen ? 'Hide' : 'AI'}
+            {isChatOpen ? t('Hide') : t('AI')}
           </Button>
         </div>
       </header>

@@ -54,7 +54,7 @@ def resolve_tool_role(payload: dict | None = None, tool_role: str | None = None)
     return CHAT_ROLE
 
 
-def _tool_message(name: str, call_id: str, content) -> dict:
+def _tool_message(name: str, call_id: str, content: Any) -> dict:
     """Format a tool response message."""
     return {
         "role": "tool",

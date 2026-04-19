@@ -7,6 +7,8 @@
 
 """Defines the project helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.config import load_story_config
 from augmentedquill.services.chapters.chapter_helpers import (
@@ -73,7 +75,7 @@ def normalize_story_for_frontend(story: dict) -> dict:
 
     # Conflict IDs are synthesized when missing so editing and reordering
     # remain stable in the frontend.
-    def _handle_chapters(chapters):
+    def _handle_chapters(chapters: Any) -> Any:
         """Handle Chapters."""
         if not isinstance(chapters, list):
             return

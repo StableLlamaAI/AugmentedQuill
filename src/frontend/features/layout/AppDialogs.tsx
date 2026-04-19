@@ -11,30 +11,46 @@
 
 import React, { RefObject } from 'react';
 
-import { CreateProjectDialog } from '../projects/CreateProjectDialog';
-import { SettingsDialog } from '../settings';
-import { ProjectImages } from '../projects/ProjectImages';
-import { AppTheme, Story } from '../../types';
+import { AppTheme, StoryState } from '../../types';
 import { EditorHandle } from '../editor/Editor';
 
-type SettingsValue = React.ComponentProps<typeof SettingsDialog>['settings'];
-type PromptsValue = React.ComponentProps<typeof SettingsDialog>['defaultPrompts'];
-type ProjectsValue = React.ComponentProps<typeof SettingsDialog>['projects'];
+type SettingsDialogProps = React.ComponentProps<
+  typeof import('../settings/SettingsDialog').SettingsDialog
+>;
+type ProjectImagesProps = React.ComponentProps<
+  typeof import('../projects/ProjectImages').ProjectImages
+>;
+
+const SettingsDialogLazy = React.lazy(async () => ({
+  default: (await import('../settings/SettingsDialog')).SettingsDialog,
+}));
+
+const ProjectImagesLazy = React.lazy(async () => ({
+  default: (await import('../projects/ProjectImages')).ProjectImages,
+}));
+
+const CreateProjectDialogLazy = React.lazy(async () => ({
+  default: (await import('../projects/CreateProjectDialog')).CreateProjectDialog,
+}));
+
+type SettingsValue = SettingsDialogProps['settings'];
+type PromptsValue = SettingsDialogProps['defaultPrompts'];
+type ProjectsValue = SettingsDialogProps['projects'];
 
 type AppDialogsProps = {
   isSettingsOpen: boolean;
   setIsSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   appSettings: SettingsValue;
-  setAppSettings: React.ComponentProps<typeof SettingsDialog>['onSaveSettings'];
+  setAppSettings: SettingsDialogProps['onSaveSettings'];
   projects: ProjectsValue;
-  story: Story;
-  handleLoadProject: React.ComponentProps<typeof SettingsDialog>['onLoadProject'];
-  handleCreateProject: React.ComponentProps<typeof SettingsDialog>['onCreateProject'];
-  handleImportProject: React.ComponentProps<typeof SettingsDialog>['onImportProject'];
-  handleDeleteProject: React.ComponentProps<typeof SettingsDialog>['onDeleteProject'];
-  handleRenameProject: React.ComponentProps<typeof SettingsDialog>['onRenameProject'];
-  handleConvertProject: React.ComponentProps<typeof SettingsDialog>['onConvertProject'];
-  refreshProjects: React.ComponentProps<typeof SettingsDialog>['onRefreshProjects'];
+  story: StoryState;
+  handleLoadProject: SettingsDialogProps['onLoadProject'];
+  handleCreateProject: SettingsDialogProps['onCreateProject'];
+  handleImportProject: SettingsDialogProps['onImportProject'];
+  handleDeleteProject: SettingsDialogProps['onDeleteProject'];
+  handleRenameProject: SettingsDialogProps['onRenameProject'];
+  handleConvertProject: SettingsDialogProps['onConvertProject'];
+  refreshProjects: SettingsDialogProps['onRefreshProjects'];
   currentTheme: AppTheme;
   prompts: PromptsValue;
   instructionLanguages: string[];
@@ -42,15 +58,19 @@ type AppDialogsProps = {
   isImagesOpen: boolean;
   setIsImagesOpen: React.Dispatch<React.SetStateAction<boolean>>;
   updateStoryImageSettings: React.ComponentProps<
-    typeof ProjectImages
+    typeof import('../projects/ProjectImages').ProjectImages
   >['onUpdateSettings'];
   imageActionsAvailable: boolean;
-  recordHistoryEntry?: React.ComponentProps<typeof ProjectImages>['onRecordHistory'];
+  recordHistoryEntry?: ProjectImagesProps['onRecordHistory'];
   editorRef: RefObject<EditorHandle | null>;
 
   isCreateProjectOpen: boolean;
   setIsCreateProjectOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  handleCreateProjectConfirm: (name: string, type: any, language?: string) => void;
+  handleCreateProjectConfirm: (
+    name: string,
+    type: 'short-story' | 'novel' | 'series',
+    language?: string
+  ) => Promise<void> | void;
 };
 
 export const AppDialogs: React.FC<AppDialogsProps> = ({
@@ -79,11 +99,11 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
   isCreateProjectOpen,
   setIsCreateProjectOpen,
   handleCreateProjectConfirm,
-}) => {
+}: AppDialogsProps) => {
   return (
-    <>
+    <React.Suspense fallback={null}>
       {isSettingsOpen && (
-        <SettingsDialog
+        <SettingsDialogLazy
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           settings={appSettings}
@@ -109,7 +129,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
       )}
 
       {isImagesOpen && (
-        <ProjectImages
+        <ProjectImagesLazy
           isOpen={isImagesOpen}
           projectLanguage={story.language || 'en'}
           onClose={() => setIsImagesOpen(false)}
@@ -121,7 +141,11 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
           imageStyle={story.image_style}
           imageAdditionalInfo={story.image_additional_info}
           onUpdateSettings={updateStoryImageSettings}
-          onInsert={(filename, url, altText) => {
+          onInsert={(
+            filename: string,
+            url: string | null,
+            altText: string | undefined
+          ) => {
             if (url && editorRef.current) {
               editorRef.current.insertImage(filename, url, altText);
               setIsImagesOpen(false);
@@ -131,14 +155,20 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
       )}
 
       {isCreateProjectOpen && (
-        <CreateProjectDialog
+        <CreateProjectDialogLazy
           isOpen={isCreateProjectOpen}
           onClose={() => setIsCreateProjectOpen(false)}
           languages={instructionLanguages}
-          onCreate={handleCreateProjectConfirm}
+          onCreate={(name: string, type: string, language: string) =>
+            handleCreateProjectConfirm(
+              name,
+              type as 'short-story' | 'novel' | 'series',
+              language
+            )
+          }
           theme={currentTheme}
         />
       )}
-    </>
+    </React.Suspense>
   );
 };

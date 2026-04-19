@@ -50,7 +50,7 @@ try {
 
 const nodeVersion = process.versions?.node ? `v${process.versions.node}` : 'unknown';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode }: import('vite').ConfigEnv) => {
   const env = loadEnv(mode, '.', '');
   const isDev = mode === 'development';
   return {

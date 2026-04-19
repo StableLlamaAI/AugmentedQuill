@@ -18,6 +18,39 @@ module.exports = [
     },
     rules: {
       quotes: ['error', 'single', { avoidEscape: true }],
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/typedef': [
+        'error',
+        {
+          arrayDestructuring: false,
+          arrowParameter: true,
+          memberVariableDeclaration: false,
+          objectDestructuring: false,
+          parameter: true,
+          propertyDeclaration: false,
+          variableDeclaration: false,
+          variableDeclarationIgnoreFunction: true,
+        },
+      ],
+      '@typescript-eslint/explicit-function-return-type': [
+        'warn',
+        {
+          allowExpressions: true,
+          allowTypedFunctionExpressions: true,
+          allowHigherOrderFunctions: true,
+          allowDirectConstAssertionInArrowFunctions: true,
+        },
+      ],
+      complexity: ['warn', 20],
+      'max-lines-per-function': [
+        'warn',
+        { max: 200, skipBlankLines: true, skipComments: true },
+      ],
       'jsx-a11y/no-autofocus': 'warn',
       'jsx-a11y/no-redundant-roles': 'error',
       'jsx-a11y/anchor-is-valid': 'error',
