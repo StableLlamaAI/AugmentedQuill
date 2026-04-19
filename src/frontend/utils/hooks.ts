@@ -19,14 +19,14 @@ import type { RefObject } from 'react';
  * @param delay The delay in milliseconds
  * @returns A debounced version of the callback
  */
-export function useDebounce<T extends (...args: unknown[]) => unknown>(
-  callback: T,
+export function useDebounce<T extends readonly unknown[]>(
+  callback: (...args: T) => unknown,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: T) => void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return useCallback(
-    (...args: Parameters<T>): void => {
+    (...args: T): void => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
