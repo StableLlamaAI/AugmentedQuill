@@ -20,6 +20,7 @@ from fastapi import Depends, HTTPException
 from fastapi import Path as FastAPIPath
 
 from augmentedquill.services.projects.projects import get_projects_root
+from augmentedquill.utils.path_utils import safe_child_path
 
 
 def require_project_path(
@@ -29,7 +30,13 @@ def require_project_path(
 
     Raises HTTP 404 if the project directory does not exist or has no story.json.
     """
-    project_dir = get_projects_root() / project_name
+    try:
+        project_dir = safe_child_path(get_projects_root(), project_name)
+    except ValueError:
+        raise HTTPException(
+            status_code=404, detail=f"Project '{project_name}' not found"
+        )
+
     if not project_dir.is_dir() or not (project_dir / "story.json").exists():
         raise HTTPException(
             status_code=404, detail=f"Project '{project_name}' not found"

@@ -40,6 +40,7 @@ from augmentedquill.services.projects.projects import (
     load_registry,
     select_project,
 )
+from augmentedquill.utils.path_utils import safe_child_path
 from augmentedquill.services.projects.projects_api_manage_ops import normalize_registry
 from augmentedquill.models.story import ProjectMutationResponse
 
@@ -318,7 +319,19 @@ async def import_project_response(file: UploadFile) -> ProjectMutationResponse:
                 member_path = Path(member.filename)
                 if member_path.is_absolute() or ".." in member_path.parts:
                     continue
-                zf.extract(member, temp_dir)
+
+                try:
+                    target_path = safe_child_path(temp_dir, *member_path.parts)
+                except ValueError:
+                    continue
+
+                if member.is_dir():
+                    target_path.mkdir(parents=True, exist_ok=True)
+                    continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as source, target_path.open("wb") as dest:
+                    shutil.copyfileobj(source, dest)
 
         if not (temp_dir / "story.json").exists():
             shutil.rmtree(temp_dir)
