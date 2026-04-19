@@ -15,6 +15,18 @@
       }
     },
     {
+      "label": "frontend: generate-types",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "generate:types"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/frontend"
+      },
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
       "label": "backend: clear-llm-log",
       "type": "shell",
       "command": "rm -f ${workspaceFolder}/data/logs/llm_raw.log",
@@ -22,6 +34,25 @@
         "reveal": "silent",
         "close": true
       }
+    },
+    {
+      "label": "backend: export-openapi",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv/bin/python",
+      "args": ["tools/export_openapi.py"],
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "backend: prepare",
+      "dependsOn": ["backend: clear-llm-log", "backend: export-openapi"],
+      "dependsOrder": "sequence"
+    },
+    {
+      "label": "frontend: prepare",
+      "dependsOn": ["frontend: install", "frontend: generate-types"],
+      "dependsOrder": "sequence"
     }
   ]
 }
