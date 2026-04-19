@@ -38,6 +38,7 @@ import { ChatToolExecutionResponse } from './services/apiTypes';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
 import { useEditorUIState } from './features/app/useEditorUIState';
+import { uiStoreActions } from './stores/uiStore';
 import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
@@ -134,96 +135,6 @@ const App: React.FC = () => {
   const searchState = useSearchReplace();
   const openSearch = useCallback(() => searchState.open(), [searchState]);
 
-  const sidebarStoryMetadata = useMemo(
-    () => ({
-      title: story.title,
-      summary: story.summary,
-      tags: story.styleTags,
-      notes: story.notes,
-      private_notes: story.private_notes,
-      conflicts: story.conflicts,
-      language: story.language,
-      projectType: story.projectType,
-      draft: story.draft,
-    }),
-    [
-      story.title,
-      story.summary,
-      story.styleTags,
-      story.notes,
-      story.private_notes,
-      story.conflicts,
-      story.language,
-      story.projectType,
-      story.draft,
-    ]
-  );
-
-  const chapterListChaptersKey = useMemo(
-    () =>
-      story.chapters
-        .map(
-          (ch: import('./types').Chapter) =>
-            `${ch.id}:${ch.title}:${ch.summary ?? ''}:${ch.book_id ?? ''}:${
-              ch.conflicts?.length ?? 0
-            }`
-        )
-        .join('|'),
-    [story.chapters]
-  );
-
-  const sidebarStoryChapters = useMemo(
-    () =>
-      story.chapters.map((ch: import('./types').Chapter) => ({
-        ...ch,
-        content: '',
-      })),
-    [chapterListChaptersKey]
-  );
-
-  const sidebarStoryBooks = useMemo(
-    () =>
-      (story.books || []).map((book: import('./types').Book) => ({
-        ...book,
-      })),
-    [
-      (story.books || [])
-        .map(
-          (book: import('./types').Book) =>
-            `${book.id}:${book.title}:${book.summary ?? ''}`
-        )
-        .join('|'),
-    ]
-  );
-
-  const sidebarSourcebookEntries = useMemo(
-    () => story.sourcebook || [],
-    [story.sourcebook]
-  );
-
-  // A stable snapshot of baselineState that only updates when sidebar-visible
-  // fields change — i.e. NOT when chapter content changes due to typing.
-  // The sidebar only diffs metadata (summary, notes, chapter title/summary,
-  // sourcebook); it never needs to diff raw prose content.
-  // This prevents sidebarControls from rebuilding on every debounced keystroke,
-  // which in turn keeps AppMainLayout.React.memo valid during editing.
-  const baselineChaptersMetaKey = baselineState.chapters
-    .map((c: import('./types').Chapter) => `${c.id}:${c.title}:${c.summary ?? ''}`)
-    .join('|');
-  const sidebarBaselineState = useMemo(
-    () => baselineState,
-    [
-      baselineState.summary,
-      baselineState.notes,
-      baselineState.private_notes,
-      baselineState.conflicts,
-      baselineState.sourcebook,
-      baselineState.draft?.summary,
-      baselineState.draft?.notes,
-      baselineChaptersMetaKey,
-    ]
-  );
-
   const openSearchWithKeyboard = useCallback(() => {
     openSearch();
   }, [openSearch]);
@@ -290,17 +201,6 @@ const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionMutations, setSessionMutations] = useState<SessionMutation[]>([]);
-  const [sourcebookDialogTrigger, setSourcebookDialogTrigger] = useState<{
-    id: number;
-    entryId: string;
-  } | null>(null);
-  const [metadataDialogTrigger, setMetadataDialogTrigger] = useState<{
-    id: number;
-    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
-  } | null>(null);
-  const [metadataDialogCloseTrigger, setMetadataDialogCloseTrigger] = useState(0);
-  const [sourcebookDialogCloseTrigger, setSourcebookDialogCloseTrigger] = useState(0);
-
   const {
     isChatOpen,
     setIsChatOpen,
@@ -339,10 +239,7 @@ const App: React.FC = () => {
 
   const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
     useSidebarIntents({
-      setIsSidebarOpen,
       setEditorSettings,
-      setMetadataDialogTrigger,
-      setSourcebookDialogTrigger,
     });
 
   const getSystemPrompt = useCallback(() => {
@@ -973,16 +870,6 @@ const App: React.FC = () => {
       onAppRedo: redo,
       canAppUndo: canUndo,
       canAppRedo: canRedo,
-      selectedSourcebookEntryId: sourcebookDialogTrigger?.entryId ?? null,
-      sourcebookDialogTrigger,
-      sourcebookDialogCloseTrigger,
-      metadataDialogTrigger,
-      metadataDialogCloseTrigger,
-      baselineState: sidebarBaselineState,
-      sidebarStoryMetadata,
-      sidebarStoryChapters,
-      sidebarStoryBooks,
-      sidebarSourcebookEntries,
     }),
     [
       isSidebarOpen,
@@ -1012,15 +899,6 @@ const App: React.FC = () => {
       redo,
       canUndo,
       canRedo,
-      sourcebookDialogTrigger,
-      sourcebookDialogCloseTrigger,
-      metadataDialogTrigger,
-      metadataDialogCloseTrigger,
-      sidebarBaselineState,
-      sidebarStoryMetadata,
-      sidebarStoryChapters,
-      sidebarStoryBooks,
-      sidebarSourcebookEntries,
     ]
   );
 
@@ -1225,8 +1103,8 @@ const App: React.FC = () => {
           jumpStart: number | undefined,
           jumpEnd: number | undefined
         ) => {
-          setMetadataDialogCloseTrigger((c: number) => c + 1);
-          setSourcebookDialogCloseTrigger((c: number) => c + 1);
+          uiStoreActions.closeMetadataDialog();
+          uiStoreActions.closeSourcebookDialog();
           if (jumpStart !== undefined && jumpEnd !== undefined) {
             pendingJumpRef.current = {
               chapterId: String(chapId),
@@ -1237,7 +1115,7 @@ const App: React.FC = () => {
           handleChapterSelect(String(chapId));
         },
         onNavigateToSourcebookEntry: (entryId: string) => {
-          setMetadataDialogCloseTrigger((c: number) => c + 1);
+          uiStoreActions.closeMetadataDialog();
           openSourcebookEntryDialog(entryId);
         },
         onNavigateToStoryMetadata: (field: string) => {
@@ -1251,7 +1129,7 @@ const App: React.FC = () => {
                   : field.startsWith('conflicts')
                     ? 'conflicts'
                     : 'summary';
-          setSourcebookDialogCloseTrigger((c: number) => c + 1);
+          uiStoreActions.closeSourcebookDialog();
           openStoryMetadataDialog(tab);
         },
       }}

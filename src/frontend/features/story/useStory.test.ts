@@ -9,11 +9,12 @@
  * Defines the useStory.test unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
 import { StoryState } from '../../types';
 import { api } from '../../services/api';
+import { resetStoryStore } from '../../stores/storyStore';
 import {
   buildInitialStoryState,
   resolveExternalHistorySourceState,
@@ -113,6 +114,11 @@ const hookWithStory = async (
   });
   return hook;
 };
+
+// Reset Zustand store between tests to prevent state leaking across test cases.
+beforeEach(() => {
+  resetStoryStore();
+});
 
 describe('resolveExternalHistorySourceState', () => {
   it('prefers latest in-memory story when explicit state is omitted', () => {

@@ -9,19 +9,19 @@
  * Defines the use story unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useState, useCallback, useEffect, useRef, startTransition } from 'react';
+import { useCallback, useEffect, useRef, startTransition } from 'react';
 import { StoryState, Chapter, Book, WritingUnit, SourcebookEntry } from '../../types';
 import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
 import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
 import { notifyError } from '../../services/errorNotifier';
 import {
-  StoryHistoryEntry,
   areStoriesEqual,
   buildChapterUpdateLabel,
   buildDraftUpdateLabel,
   createHistoryEntry,
 } from './historyUtils';
+import { useStoryStore, StoryStoreState } from '../../stores/storyStore';
 
 /** Maximum number of undo/redo states retained in memory. */
 const MAX_HISTORY = 50;
@@ -41,23 +41,7 @@ const defaultDialogs: StoryDialogs = {
   alert: (message: string) => notifyError(message),
 };
 
-const INITIAL_STORY: StoryState = {
-  id: '',
-  title: '',
-  summary: '',
-  styleTags: [],
-  image_style: '',
-  image_additional_info: '',
-  chapters: [],
-  draft: null,
-  projectType: 'novel',
-  books: [],
-  sourcebook: [],
-  conflicts: [],
-  currentChapterId: null,
-  lastUpdated: Date.now(),
-};
-
+// (INITIAL_STORY and initial history entry live in stores/storyStore.ts)
 export const resolveExternalHistorySourceState = (
   explicitState: StoryState | undefined,
   latestState: StoryState,
@@ -120,29 +104,22 @@ export const buildInitialStoryState = (
   lastUpdated: Date.now(),
 });
 
-const INITIAL_HISTORY_ENTRY: StoryHistoryEntry = {
-  id: `history-${Date.now()}`,
-  label: 'Initial story state',
-  state: INITIAL_STORY,
-};
-
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
-  const [story, setStory] = useState<StoryState>(INITIAL_STORY);
-  const [currentChapterId, setCurrentChapterId] = useState<string | null>(null);
-  const [history, setHistory] = useState<StoryHistoryEntry[]>([INITIAL_HISTORY_ENTRY]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  // Explicit baseline for diff highlights.  Updated at exactly the right
-  // moments: before an AI push (shows what changed), cleared to current state
-  // on user edits (no highlight), and set to the state we leave on undo/redo
-  // (so inserted/restored text is always highlighted).
-  const [baselineState, setBaselineState] = useState<StoryState>(
-    () => INITIAL_HISTORY_ENTRY.state
-  );
-  // Incrementing this counter explicitly requests a chapter content reload without
-  // depending on story.lastUpdated (which changes on every prose-streaming setStory
-  // call and would otherwise cause a React "Maximum update depth exceeded" loop).
-  const [loadChapterSignal, setLoadChapterSignal] = useState(0);
+  // --- State now lives in the Zustand storyStore --------------------------------
+  // Components that subscribe to the store with granular selectors only re-render
+  // when their specific slice changes, breaking the cascade that previously fired
+  // on every debounced keystroke.
+  const story = useStoryStore((s: StoryStoreState) => s.story);
+  const currentChapterId = useStoryStore((s: StoryStoreState) => s.currentChapterId);
+  const history = useStoryStore((s: StoryStoreState) => s.history);
+  const currentIndex = useStoryStore((s: StoryStoreState) => s.currentIndex);
+  const baselineState = useStoryStore((s: StoryStoreState) => s.baselineState);
+  const loadChapterSignal = useStoryStore((s: StoryStoreState) => s.loadChapterSignal);
+  const isChapterLoading = useStoryStore((s: StoryStoreState) => s.isChapterLoading);
+
   const hasFetchedRef = useRef(false);
+  // latestStoryRef provides a synchronous view of story state during streaming
+  // before React reconciles the Zustand store update into the component tree.
   const latestStoryRef = useRef(story);
   // Hold dialog callbacks in a ref so refreshStory callbacks never go stale.
   const dialogsRef = useRef(dialogs);
@@ -156,6 +133,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
   const pushState = useCallback(
     (newState: StoryState, label: string, isUserEdit: boolean = true) => {
+      const { history, currentIndex } = useStoryStore.getState();
       const updatedState = { ...newState, lastUpdated: Date.now() };
       const currentEntry = history[currentIndex];
       if (
@@ -164,7 +142,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         areStoriesEqual(currentEntry.state, updatedState)
       ) {
         // Avoid no-op history entries that cause apparent "double undo".
-        setStory(updatedState);
+        useStoryStore.setState({ story: updatedState });
         latestStoryRef.current = updatedState;
         return;
       }
@@ -172,17 +150,20 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       // Baseline for diff display:
       // - AI/external: capture state BEFORE the push so new text is highlighted
       // - User edits: advance baseline to new state so nothing is highlighted
-      setBaselineState(isUserEdit ? updatedState : history[currentIndex].state);
+      const newBaseline = isUserEdit ? updatedState : history[currentIndex].state;
 
       const trimmed = history.slice(0, currentIndex + 1);
       trimmed.push(createHistoryEntry(updatedState, label, { isUserEdit }));
       const bounded = trimmed.slice(-MAX_HISTORY);
-      setHistory(bounded);
-      setCurrentIndex(bounded.length - 1);
-      setStory(updatedState);
+      useStoryStore.getState().pushHistoryState({
+        story: updatedState,
+        history: bounded,
+        currentIndex: bounded.length - 1,
+        baselineState: newBaseline,
+      });
       latestStoryRef.current = updatedState;
     },
-    [history, currentIndex]
+    [] // empty – all state accessed via useStoryStore.getState()
   );
 
   // Stable ref to the latest pushState so mutation callbacks can hold empty
@@ -243,7 +224,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
             onUndo: updatedOnUndo,
             onRedo: updatedOnRedo,
           };
-          setHistory(updatedHistory);
+          useStoryStore.setState({ history: updatedHistory });
         }
         // Stories are equal in content; skip setStory to avoid a costly
         // full-app re-render when nothing meaningful changed.  The ref is
@@ -260,17 +241,22 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         })
       );
       const bounded = trimmed.slice(-MAX_HISTORY);
-      setHistory(bounded);
-      setCurrentIndex(bounded.length - 1);
-      setStory(updatedState);
+      useStoryStore.getState().pushHistoryState({
+        story: updatedState,
+        history: bounded,
+        currentIndex: bounded.length - 1,
+        baselineState: updatedState,
+      });
       latestStoryRef.current = updatedState;
-      setCurrentChapterId(updatedState.currentChapterId ?? null);
+      useStoryStore
+        .getState()
+        .setCurrentChapterId(updatedState.currentChapterId ?? null);
     },
     []
   );
 
   const lastLoadedChapterId = useRef<string | null>(null);
-  const [isChapterLoading, setIsChapterLoading] = useState(false);
+  // isChapterLoading is now read from the Zustand store (declared at top of hook).
 
   const refreshStory = useCallback(
     async (historyLabel?: string, resetHistory: boolean = false) => {
@@ -307,20 +293,25 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           }
 
           lastLoadedChapterId.current = null;
-          setLoadChapterSignal((s: number) => s + 1);
+          useStoryStore.getState().incrementLoadChapterSignal();
           if (historyLabel) {
             pushStateRef.current(newStory, historyLabel, false);
           } else if (resetHistory) {
-            setStory(newStory);
+            useStoryStore.setState({
+              story: newStory,
+              history: [createHistoryEntry(newStory, 'Load story')],
+              currentIndex: 0,
+              baselineState: newStory,
+              currentChapterId: newStory.currentChapterId,
+            });
             latestStoryRef.current = newStory;
-            setHistory([createHistoryEntry(newStory, 'Load story')]);
-            setCurrentIndex(0);
-            setBaselineState(newStory);
           } else {
-            setStory(newStory);
+            useStoryStore.setState({
+              story: newStory,
+              currentChapterId: newStory.currentChapterId,
+            });
             latestStoryRef.current = newStory;
           }
-          setCurrentChapterId(newStory.currentChapterId);
         }
       } catch (e) {
         console.error('Failed to refresh story', e);
@@ -329,51 +320,50 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     []
   );
 
-  const selectChapter = useCallback(
-    (id: string | null) => {
-      if (id !== currentChapterId) {
-        lastLoadedChapterId.current = null;
-        setCurrentChapterId(id);
-      }
-    },
-    [currentChapterId]
-  );
+  const selectChapter = useCallback((id: string | null) => {
+    if (id !== useStoryStore.getState().currentChapterId) {
+      lastLoadedChapterId.current = null;
+      useStoryStore.getState().setCurrentChapterId(id);
+    }
+  }, []);
 
   // Load chapter content lazily so list refreshes stay responsive.
   useEffect(() => {
     if (currentChapterId && currentChapterId !== lastLoadedChapterId.current) {
-      setIsChapterLoading(true);
+      useStoryStore.setState({ isChapterLoading: true });
       const loadContent = async () => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
           lastLoadedChapterId.current = currentChapterId;
           startTransition(() => {
-            setStory((prev: StoryState) => {
-              const updatedChapters = prev.chapters.map((c: Chapter) =>
-                c.id === currentChapterId
-                  ? {
-                      ...c,
-                      content: res.content,
-                      notes: res.notes,
-                      private_notes: res.private_notes,
-                      conflicts: res.conflicts,
-                      title: res.title,
-                      summary: res.summary,
-                    }
-                  : c
-              );
-              return { ...prev, chapters: updatedChapters };
-            });
-            setIsChapterLoading(false);
+            useStoryStore.setState((state: StoryStoreState) => ({
+              story: {
+                ...state.story,
+                chapters: state.story.chapters.map((c: Chapter) =>
+                  c.id === currentChapterId
+                    ? {
+                        ...c,
+                        content: res.content,
+                        notes: res.notes,
+                        private_notes: res.private_notes,
+                        conflicts: res.conflicts,
+                        title: res.title,
+                        summary: res.summary,
+                      }
+                    : c
+                ),
+              },
+              isChapterLoading: false,
+            }));
           });
         } catch (e) {
           console.error('Failed to load chapter content', e);
-          startTransition(() => setIsChapterLoading(false));
+          startTransition(() => useStoryStore.setState({ isChapterLoading: false }));
         }
       };
       loadContent();
     } else {
-      setIsChapterLoading(false);
+      useStoryStore.setState({ isChapterLoading: false });
     }
   }, [currentChapterId, loadChapterSignal]);
 
@@ -402,11 +392,13 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
           latestStoryRef.current = newStory;
           startTransition(() => {
-            setStory(newStory);
-            setHistory([createHistoryEntry(newStory, 'Load story')]);
-            setCurrentIndex(0);
-            setBaselineState(newStory); // no highlight after a fresh project load
-            setCurrentChapterId(newStory.currentChapterId);
+            useStoryStore.setState({
+              story: newStory,
+              history: [createHistoryEntry(newStory, 'Load story')],
+              currentIndex: 0,
+              baselineState: newStory,
+              currentChapterId: newStory.currentChapterId,
+            });
           });
         }
       }
@@ -505,7 +497,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         // startTransition so rapid streaming-preview calls (rAF-rate) cannot
         // exceed React 19's nested-update limit.
         latestStoryRef.current = newState;
-        startTransition(() => setStory(newState));
+        startTransition(() => useStoryStore.setState({ story: newState }));
       }
 
       if (!sync) return;
@@ -599,7 +591,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         );
       } else {
         latestStoryRef.current = newState;
-        startTransition(() => setStory(newState));
+        startTransition(() => useStoryStore.setState({ story: newState }));
       }
 
       if (!sync) return;
@@ -720,26 +712,27 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           .catch((e: unknown) => console.error('Failed to select project', e));
       }
 
-      setStory(newStory);
+      useStoryStore.setState({
+        story: newStory,
+        history: [createHistoryEntry(newStory, 'Load story')],
+        currentIndex: 0,
+        baselineState: newStory,
+        isChapterLoading: false,
+      });
       latestStoryRef.current = newStory;
-      setHistory([createHistoryEntry(newStory, 'Load story')]);
-      setCurrentIndex(0);
-      setBaselineState(newStory); // no highlight after a fresh project load
       lastLoadedChapterId.current = null;
-      setLoadChapterSignal((s: number) => s + 1);
-      if (newStory.currentChapterId) {
-        setCurrentChapterId(newStory.currentChapterId);
-      } else if (newStory.chapters.length > 0) {
-        setCurrentChapterId(newStory.chapters[0].id);
-      } else {
-        setCurrentChapterId(null);
-      }
+      useStoryStore.getState().incrementLoadChapterSignal();
+      const newChapterId =
+        newStory.currentChapterId ??
+        (newStory.chapters.length > 0 ? newStory.chapters[0].id : null);
+      useStoryStore.setState({ currentChapterId: newChapterId });
     },
     [story.id, fetchStory]
   );
 
   const undoSteps = useCallback(
     async (steps: number) => {
+      const { currentIndex, history } = useStoryStore.getState();
       if (steps <= 0 || currentIndex <= 0) return;
       const targetIndex = Math.max(0, currentIndex - steps);
       const callbacks: Array<() => Promise<void> | void> = [];
@@ -754,10 +747,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       // keeping the main thread responsive (avoids click-handler violations).
       startTransition(() => {
         // Baseline = the state we're leaving so undo-restored text is highlighted.
-        setBaselineState(history[currentIndex].state);
-        setCurrentIndex(targetIndex);
-        setStory(prevState);
-        setCurrentChapterId(prevState.currentChapterId ?? null);
+        useStoryStore.getState().jumpHistory({
+          story: prevState,
+          currentChapterId: prevState.currentChapterId ?? null,
+          currentIndex: targetIndex,
+          baselineState: history[currentIndex].state,
+        });
       });
       latestStoryRef.current = prevState;
 
@@ -765,11 +760,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         await callback();
       }
     },
-    [currentIndex, history]
+    [] // empty – reads fresh state via getState()
   );
 
   const redoSteps = useCallback(
     async (steps: number) => {
+      const { currentIndex, history } = useStoryStore.getState();
       if (steps <= 0 || currentIndex >= history.length - 1) return;
       const targetIndex = Math.min(history.length - 1, currentIndex + steps);
       const callbacks: Array<() => Promise<void> | void> = [];
@@ -784,10 +780,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       // keeping the main thread responsive (avoids click-handler violations).
       startTransition(() => {
         // Baseline = the state we're leaving so redo-restored text is highlighted.
-        setBaselineState(history[currentIndex].state);
-        setCurrentIndex(targetIndex);
-        setStory(nextState);
-        setCurrentChapterId(nextState.currentChapterId ?? null);
+        useStoryStore.getState().jumpHistory({
+          story: nextState,
+          currentChapterId: nextState.currentChapterId ?? null,
+          currentIndex: targetIndex,
+          baselineState: history[currentIndex].state,
+        });
       });
       latestStoryRef.current = nextState;
 
@@ -795,12 +793,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         await callback();
       }
     },
-    [currentIndex, history]
+    [] // empty – reads fresh state via getState()
   );
 
-  // Keep stable refs to undoSteps/redoSteps so the undo/redo callbacks never
-  // need to be recreated, preventing sidebarControls from invalidating on
-  // every history push (which happens on every debounced keystroke).
+  // With Zustand, undoSteps and redoSteps use getState() so they never need
+  // to be recreated. The stable ref wrappers below are kept for backward compat.
   const undoStepsRef = useRef(undoSteps);
   undoStepsRef.current = undoSteps;
   const redoStepsRef = useRef(redoSteps);
@@ -833,7 +830,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   // the NEXT AI operation's diff is relative to the post-previous-turn state
   // rather than the original load state.
   const advanceBaselineToCurrentStory = useCallback(() => {
-    setBaselineState(latestStoryRef.current);
+    useStoryStore.setState({ baselineState: latestStoryRef.current });
   }, []);
 
   /**

@@ -9,12 +9,11 @@
  * Defines shared layout control-bundle types so prop contracts stay consistent across layout components.
  */
 
-import type { ComponentProps, Dispatch, RefObject, SetStateAction } from 'react';
+import type { ComponentProps, RefObject } from 'react';
 
 import type {
   AppSettings,
   AppTheme,
-  Book,
   Chapter,
   ChatAttachment,
   ChatMessage,
@@ -22,7 +21,6 @@ import type {
   EditorSettings,
   LLMConfig,
   SourcebookEntry,
-  StoryState,
   ViewMode,
   WritingUnit,
 } from '../../types';
@@ -32,13 +30,13 @@ import type { SessionMutation } from '../chat/components/MutationTags';
 
 export type HeaderSidebarControls = {
   isSidebarOpen: boolean;
-  setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  setIsSidebarOpen: (v: boolean) => void;
 };
 
 export type HeaderSettingsControls = {
-  setIsSettingsOpen: Dispatch<SetStateAction<boolean>>;
-  setIsImagesOpen: Dispatch<SetStateAction<boolean>>;
-  setIsDebugLogsOpen: Dispatch<SetStateAction<boolean>>;
+  setIsSettingsOpen: (v: boolean) => void;
+  setIsImagesOpen: (v: boolean) => void;
+  setIsDebugLogsOpen: (v: boolean) => void;
 };
 
 export type HeaderHistoryControls = {
@@ -56,20 +54,20 @@ export type HeaderHistoryControls = {
 
 export type HeaderViewControls = {
   viewMode: ViewMode;
-  setViewMode: Dispatch<SetStateAction<ViewMode>>;
+  setViewMode: (v: ViewMode) => void;
   showWhitespace: boolean;
-  setShowWhitespace: Dispatch<SetStateAction<boolean>>;
+  setShowWhitespace: (v: boolean) => void;
   isViewMenuOpen: boolean;
-  setIsViewMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsViewMenuOpen: (v: boolean) => void;
 };
 
 export type HeaderFormatControls = {
   handleFormat: (type: string) => void;
   getFormatButtonClass: (type: string) => string;
   isFormatMenuOpen: boolean;
-  setIsFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsFormatMenuOpen: (v: boolean) => void;
   isMobileFormatMenuOpen: boolean;
-  setIsMobileFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsMobileFormatMenuOpen: (v: boolean) => void;
   onOpenImages: () => void;
 };
 
@@ -85,7 +83,7 @@ export type HeaderAiControls = {
 
 export type HeaderModelControls = {
   appSettings: AppSettings;
-  setAppSettings: Dispatch<SetStateAction<AppSettings>>;
+  setAppSettings: (v: AppSettings) => void;
   saveSettings?: (settings: AppSettings) => Promise<void>;
   modelConnectionStatus: ComponentProps<typeof ModelSelector>['connectionStatus'];
   detectedCapabilities: ComponentProps<typeof ModelSelector>['detectedCapabilities'];
@@ -95,10 +93,12 @@ export type HeaderModelControls = {
 export type HeaderAppearanceControlsState = {
   appearanceRef: RefObject<HTMLDivElement | null>;
   isAppearanceOpen: boolean;
-  setIsAppearanceOpen: Dispatch<SetStateAction<boolean>>;
+  setIsAppearanceOpen: (v: boolean) => void;
   setAppTheme: (theme: AppTheme) => void;
   editorSettings: EditorSettings;
-  setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
+  setEditorSettings: (
+    v: EditorSettings | ((prev: EditorSettings) => EditorSettings)
+  ) => void;
 };
 
 export type HeaderSearchControls = {
@@ -107,7 +107,7 @@ export type HeaderSearchControls = {
 
 export type HeaderChatPanelControls = {
   isChatOpen: boolean;
-  setIsChatOpen: Dispatch<SetStateAction<boolean>>;
+  setIsChatOpen: (v: boolean) => void;
 };
 
 export type HeaderThemeTokens = {
@@ -121,8 +121,7 @@ export type HeaderThemeTokens = {
 
 export type MainSidebarControls = {
   isSidebarOpen: boolean;
-  setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  story?: StoryState;
+  setIsSidebarOpen: (v: boolean) => void;
   currentChapterId: string | null;
   handleChapterSelect: (id: string | null) => void;
   deleteChapter: (id: string) => Promise<void>;
@@ -158,21 +157,6 @@ export type MainSidebarControls = {
     conflicts?: Array<{ id: string; description: string; resolution: string }>,
     language?: string
   ) => Promise<void>;
-  sidebarStoryMetadata?: {
-    title: string;
-    summary: string;
-    tags: string[];
-    notes?: string;
-    private_notes?: string;
-    conflicts?: Array<{ id: string; description: string; resolution: string }>;
-    language?: string;
-    projectType: 'short-story' | 'novel' | 'series';
-    draft?: WritingUnit | null;
-  };
-  sidebarStoryChapters?: Chapter[];
-  sidebarStoryBooks?: Book[];
-  sidebarSourcebookEntries?: SourcebookEntry[];
-  baselineState?: StoryState;
   // optional sourcebook relevance controls (provided by suggestions hook)
   checkedSourcebookIds?: string[];
   onToggleSourcebook?: (id: string, checked: boolean) => void;
@@ -195,14 +179,6 @@ export type MainSidebarControls = {
   onAppRedo?: () => Promise<void>;
   canAppUndo?: boolean;
   canAppRedo?: boolean;
-  selectedSourcebookEntryId?: string | null;
-  sourcebookDialogTrigger?: { id: number; entryId: string } | null;
-  sourcebookDialogCloseTrigger?: number;
-  metadataDialogTrigger?: {
-    id: number;
-    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
-  } | null;
-  metadataDialogCloseTrigger?: number;
 };
 
 export type MainEditorSuggestionControls = {
@@ -242,14 +218,16 @@ export type MainEditorControls = {
   editorRef: RefObject<EditorHandle | null>;
   editorSettings: EditorSettings;
   storyLanguage?: string;
-  setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
+  setEditorSettings: (
+    v: EditorSettings | ((prev: EditorSettings) => EditorSettings)
+  ) => void;
   viewMode: ViewMode;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;
   aiControls: MainEditorAiControls;
-  setActiveFormats: Dispatch<SetStateAction<string[]>>;
+  setActiveFormats: (v: string[]) => void;
   showWhitespace: boolean;
-  setShowWhitespace: Dispatch<SetStateAction<boolean>>;
+  setShowWhitespace: (v: boolean) => void;
   baselineContent?: string;
   onOpenSearch?: () => void;
 };
@@ -266,7 +244,7 @@ export type MainChatControls = {
   handleRegenerate: () => Promise<void>;
   handleEditMessage: (id: string, newText: string) => void;
   handleDeleteMessage: (id: string) => void;
-  setSystemPrompt: Dispatch<SetStateAction<string>>;
+  setSystemPrompt: (v: string | ((prev: string) => string)) => void;
   handleLoadProject: (projectId: string) => Promise<void>;
   incognitoSessions: ChatSession[];
   chatHistoryList: ChatSession[];
@@ -276,9 +254,9 @@ export type MainChatControls = {
   handleNewChat: (incognito?: boolean) => void;
   handleDeleteChat: (chatId: string) => Promise<void>;
   handleDeleteAllChats: () => Promise<void>;
-  setIsIncognito: Dispatch<SetStateAction<boolean>>;
+  setIsIncognito: (v: boolean) => void;
   allowWebSearch: boolean;
-  setAllowWebSearch: Dispatch<SetStateAction<boolean>>;
+  setAllowWebSearch: (v: boolean) => void;
   scratchpad: string;
   onUpdateScratchpad: (content: string) => void;
   onDeleteScratchpad: () => void;

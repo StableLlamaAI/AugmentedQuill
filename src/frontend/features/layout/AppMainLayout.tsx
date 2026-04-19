@@ -22,6 +22,7 @@ import {
   MainEditorControls,
   MainSidebarControls,
 } from './layoutControlTypes';
+import { useStoryMeta } from '../../stores/storyStore';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
@@ -59,37 +60,16 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       );
     }
 
-    const {
-      story,
-      addChapter,
-      isSidebarOpen,
-      setIsSidebarOpen,
-      onToggleSourcebook,
-      sidebarStoryMetadata,
-      sidebarStoryChapters,
-      sidebarStoryBooks,
-      sidebarSourcebookEntries,
-    } = sidebarControls;
+    const storyMeta = useStoryMeta();
+    const { addChapter, isSidebarOpen, setIsSidebarOpen, onToggleSourcebook } =
+      sidebarControls;
 
     const { editorSettings, setEditorSettings } = editorControls;
     const sidebarPrefs = editorSettings.sidebar || {};
     const sidebarRef = useRef<HTMLDivElement>(null);
 
-    const storyTitle = sidebarStoryMetadata?.title ?? story?.title ?? '';
-    const storySummary = sidebarStoryMetadata?.summary ?? story?.summary ?? '';
-    const storyTags = sidebarStoryMetadata?.tags ?? story?.styleTags ?? [];
-    const storyNotes = sidebarStoryMetadata?.notes ?? story?.notes;
-    const storyPrivateNotes =
-      sidebarStoryMetadata?.private_notes ?? story?.private_notes;
-    const storyConflicts = sidebarStoryMetadata?.conflicts ?? story?.conflicts;
-    const storyDraft = sidebarStoryMetadata?.draft ?? story?.draft;
-    const sidebarChapters = sidebarStoryChapters ?? story?.chapters ?? [];
-    const sidebarBooks = sidebarStoryBooks ?? story?.books ?? [];
-    const storySourcebookEntries = sidebarSourcebookEntries ?? story?.sourcebook ?? [];
-    const storyLanguage = sidebarStoryMetadata?.language ?? story?.language ?? 'en';
-    const storyProjectType =
-      sidebarStoryMetadata?.projectType ?? story?.projectType ?? 'novel';
-    const storyId = story?.id ?? '';
+    // storyId for the sidebar height initialization effect (avoids importing full story)
+    const storyId = sidebarControls.currentChapterId ? 'loaded' : '';
 
     useEffect(() => {
       const totalHeight = sidebarRef.current?.clientHeight || 0;
@@ -97,20 +77,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         totalHeight > 0 &&
         (!sidebarPrefs.storyHeight || !sidebarPrefs.chaptersHeight)
       ) {
-        const hasStorySummary = !!storySummary;
-        const chapterCount =
-          storyProjectType === 'short-story' ? 0 : sidebarChapters.length;
-
-        let storyRatio = storyProjectType === 'short-story' ? 0.5 : 0.33;
-        let chaptersRatio = storyProjectType === 'short-story' ? 0.15 : 0.33;
-
-        if (chapterCount < 2) {
-          chaptersRatio = 0.2;
-          storyRatio = hasStorySummary ? 0.4 : 0.3;
-        } else if (chapterCount > 10) {
-          chaptersRatio = 0.5;
-          storyRatio = 0.25;
-        }
+        // Use static ratios; sidebar now reads from storyStore directly.
+        const storyRatio = 0.33;
+        const chaptersRatio = 0.33;
 
         const sHeight = Math.round(totalHeight * storyRatio);
         const cHeight = Math.round(totalHeight * chaptersRatio);
@@ -190,19 +159,6 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
           isLight={isLight}
           currentTheme={currentTheme}
           instructionLanguages={instructionLanguages}
-          storyTitle={storyTitle}
-          storySummary={storySummary}
-          storyTags={storyTags}
-          storyNotes={storyNotes}
-          storyPrivateNotes={storyPrivateNotes}
-          storyConflicts={storyConflicts}
-          storyDraft={storyDraft}
-          sidebarChapters={sidebarChapters}
-          sidebarBooks={sidebarBooks}
-          storySourcebookEntries={storySourcebookEntries}
-          storyLanguage={storyLanguage}
-          storyProjectType={storyProjectType}
-          storyId={storyId}
           handleSourcebookToggle={handleSourcebookToggle}
           handleAddChapter={handleAddChapter}
           toggleCollapsed={toggleCollapsed}
@@ -278,9 +234,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 }}
                 onContextChange={setActiveFormats}
                 showWhitespace={showWhitespace}
-                onToggleShowWhitespace={() =>
-                  setShowWhitespace((value: boolean) => !value)
-                }
+                onToggleShowWhitespace={() => setShowWhitespace(!showWhitespace)}
                 baselineContent={editorControls.baselineContent}
                 spellCheck={true}
                 onOpenSearch={onOpenSearch}
@@ -307,7 +261,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         <AppChatPanel
           chatControls={chatControls}
           currentTheme={currentTheme}
-          storyLanguage={storyLanguage}
+          storyLanguage={storyMeta.language ?? 'en'}
         />
       </main>
     );

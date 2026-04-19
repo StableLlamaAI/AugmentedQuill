@@ -13,15 +13,14 @@ import React, { useEffect } from 'react';
 import { SourcebookEntry } from '../../../types';
 import { entryDiffSignature } from '../sourcebookUtils';
 import { listSourcebookEntries } from '../sourcebookApi';
+import { useSourcebookDialog, useUIStore } from '../../../stores/uiStore';
 
 export interface UseSourcebookDialogLifecycleArgs {
-  sourcebookDialogTrigger?: { id: number; entryId: string } | null;
   entries: SourcebookEntry[];
   setEntries: React.Dispatch<React.SetStateAction<SourcebookEntry[]>>;
   setSelectedEntry: React.Dispatch<React.SetStateAction<SourcebookEntry | null>>;
   setDialogOpenedViaTrigger: React.Dispatch<React.SetStateAction<boolean>>;
   setIsDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  closeDialogTrigger?: number;
   externalEntries?: SourcebookEntry[];
   isDialogOpen: boolean;
   selectedEntry: SourcebookEntry | null;
@@ -30,25 +29,25 @@ export interface UseSourcebookDialogLifecycleArgs {
 
 /** Custom React hook that manages sourcebook dialog lifecycle. */
 export function useSourcebookDialogLifecycle({
-  sourcebookDialogTrigger,
   entries,
   setEntries,
   setSelectedEntry,
   setDialogOpenedViaTrigger,
   setIsDialogOpen,
-  closeDialogTrigger,
   externalEntries,
   isDialogOpen,
   selectedEntry,
   setDialogKey,
 }: UseSourcebookDialogLifecycleArgs): void {
+  const sourcebookDialog = useSourcebookDialog();
+
   useEffect(() => {
-    if (!sourcebookDialogTrigger) {
+    if (!sourcebookDialog.isOpen || !sourcebookDialog.entryId) {
       return;
     }
 
     let cancelled = false;
-    const entryId = sourcebookDialogTrigger.entryId;
+    const entryId = sourcebookDialog.entryId;
     const findEntry = (entriesToSearch: SourcebookEntry[]) =>
       entriesToSearch.find((entry: SourcebookEntry) => entry.id === entryId);
 
@@ -88,14 +87,16 @@ export function useSourcebookDialogLifecycle({
     setEntries,
     setIsDialogOpen,
     setSelectedEntry,
-    sourcebookDialogTrigger,
+    sourcebookDialog.isOpen,
+    sourcebookDialog.entryId,
+    sourcebookDialog.version,
   ]);
 
   useEffect(() => {
-    if (closeDialogTrigger) {
+    if (!sourcebookDialog.isOpen) {
       setIsDialogOpen(false);
     }
-  }, [closeDialogTrigger, setIsDialogOpen]);
+  }, [sourcebookDialog.isOpen, setIsDialogOpen]);
 
   useEffect(() => {
     if (!isDialogOpen || !selectedEntry || !Array.isArray(externalEntries)) {

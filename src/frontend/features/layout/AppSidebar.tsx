@@ -8,6 +8,7 @@
 /**
  * Sidebar panel containing story metadata, chapter list, and sourcebook sections.
  * Extracted from AppMainLayout to keep each layout zone a focused single-responsibility unit.
+ * Story data is now read from storyStore; dialog state from uiStore.
  */
 
 import React from 'react';
@@ -18,35 +19,23 @@ import { SourcebookList } from '../sourcebook/SourcebookList';
 import { StoryMetadata } from '../story/StoryMetadata';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MainEditorControls, MainSidebarControls } from './layoutControlTypes';
-import type {
-  AppTheme,
-  Book,
-  Chapter,
-  SourcebookEntry,
-  WritingUnit,
-} from '../../types';
+import type { AppTheme } from '../../types';
+import {
+  useStoryBaseline,
+  useStoryBooks,
+  useStoryChaptersMeta,
+  useStoryMeta,
+  useStorySourcebook,
+} from '../../stores/storyStore';
 
 export interface AppSidebarProps {
   isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsSidebarOpen: (v: boolean) => void;
   sidebarControls: MainSidebarControls;
   sidebarPrefs: NonNullable<MainEditorControls['editorSettings']['sidebar']>;
   isLight: boolean;
   currentTheme: AppTheme;
   instructionLanguages: string[];
-  storyTitle: string;
-  storySummary: string;
-  storyTags: string[];
-  storyNotes?: string;
-  storyPrivateNotes?: string;
-  storyConflicts?: Array<{ id: string; description: string; resolution: string }>;
-  storyDraft?: WritingUnit | null;
-  sidebarChapters: Chapter[];
-  sidebarBooks: Book[];
-  storySourcebookEntries: SourcebookEntry[];
-  storyLanguage: string;
-  storyProjectType: 'short-story' | 'novel' | 'series';
-  storyId: string;
   handleSourcebookToggle: (id: string, checked: boolean) => void;
   handleAddChapter: (bookId?: string) => Promise<void>;
   toggleCollapsed: (
@@ -67,25 +56,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
     isLight,
     currentTheme,
     instructionLanguages,
-    storyTitle,
-    storySummary,
-    storyTags,
-    storyNotes,
-    storyPrivateNotes,
-    storyConflicts,
-    storyDraft,
-    sidebarChapters,
-    sidebarBooks,
-    storySourcebookEntries,
-    storyLanguage,
-    storyProjectType,
-    storyId,
     handleSourcebookToggle,
     handleAddChapter,
     toggleCollapsed,
     updateHeight,
   }: AppSidebarProps) => {
     const { t } = useTranslation();
+
+    // Story data from Zustand storyStore (granular subscriptions)
+    const storyMeta = useStoryMeta();
+    const chaptersMeta = useStoryChaptersMeta();
+    const books = useStoryBooks();
+    const sourcebook = useStorySourcebook();
+    const baseline = useStoryBaseline();
+
     const {
       currentChapterId,
       handleChapterSelect,
@@ -106,11 +90,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
       onAppRedo,
       canAppUndo,
       canAppRedo,
-      sourcebookDialogTrigger,
-      sourcebookDialogCloseTrigger,
-      metadataDialogTrigger,
-      metadataDialogCloseTrigger,
-      baselineState,
     } = sidebarControls;
 
     return (
@@ -143,18 +122,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
           isLight={isLight}
         >
           <StoryMetadata
-            title={storyTitle}
-            summary={storySummary}
-            tags={storyTags}
-            notes={storyNotes}
-            private_notes={storyPrivateNotes}
-            language={storyLanguage}
-            conflicts={storyConflicts}
-            projectType={storyProjectType}
-            baselineSummary={baselineState?.summary}
-            baselineNotes={baselineState?.notes}
-            baselinePrivateNotes={baselineState?.private_notes}
-            baselineConflicts={baselineState?.conflicts}
+            title={storyMeta.title}
+            summary={storyMeta.summary}
+            tags={storyMeta.styleTags}
+            notes={storyMeta.notes}
+            private_notes={storyMeta.private_notes}
+            language={storyMeta.language}
+            conflicts={storyMeta.conflicts}
+            projectType={storyMeta.projectType}
+            baselineSummary={baseline?.summary}
+            baselineNotes={baseline?.notes}
+            baselinePrivateNotes={baseline?.private_notes}
+            baselineConflicts={baseline?.conflicts}
             onAiGenerateSummary={(
               action: 'update' | 'rewrite' | 'write',
               onProgress: ((text: string) => void) | undefined,
@@ -164,7 +143,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             ) =>
               handleSidebarAiAction(
                 'story',
-                storyId,
+                storyMeta.id,
                 action,
                 onProgress,
                 currentText,
@@ -180,21 +159,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
                 : undefined
             }
             primarySourceAvailable={
-              storyProjectType === 'short-story' && storyDraft
-                ? !!storyDraft.content?.trim()
+              storyMeta.projectType === 'short-story' && storyMeta.draft
+                ? !!storyMeta.draft.content?.trim()
                 : undefined
             }
             onUpdate={updateStoryMetadata}
-            metadataDialogTrigger={metadataDialogTrigger}
-            closeDialogTrigger={metadataDialogCloseTrigger}
-            initialTab={metadataDialogTrigger?.initialTab}
             theme={currentTheme}
             languages={instructionLanguages}
             spellCheck={true}
           />
         </CollapsibleSection>
 
-        {storyProjectType !== 'short-story' && (
+        {storyMeta.projectType !== 'short-story' && (
           <CollapsibleSection
             title={t('Chapters')}
             isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
@@ -204,9 +180,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             isLight={isLight}
           >
             <ChapterList
-              chapters={sidebarChapters}
-              books={sidebarBooks}
-              projectType={storyProjectType}
+              chapters={chaptersMeta}
+              books={books}
+              projectType={storyMeta.projectType}
               currentChapterId={currentChapterId}
               onSelect={handleChapterSelect}
               onDelete={deleteChapter}
@@ -222,8 +198,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
               theme={currentTheme}
               onOpenImages={handleOpenImages}
               languages={instructionLanguages}
-              baselineChapters={baselineState?.chapters}
-              language={storyLanguage}
+              baselineChapters={baseline?.chapters}
+              language={storyMeta.language}
               spellCheck={true}
             />
           </CollapsibleSection>
@@ -238,8 +214,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
         >
           <SourcebookList
             theme={currentTheme}
-            language={storyLanguage}
-            externalEntries={storySourcebookEntries}
+            language={storyMeta.language}
+            externalEntries={sourcebook}
             checkedIds={checkedSourcebookIds || []}
             onToggle={handleSourcebookToggle}
             isAutoSelectionEnabled={sidebarControls.isAutoSourcebookSelectionEnabled}
@@ -251,9 +227,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             onAppRedo={onAppRedo}
             canAppUndo={canAppUndo}
             canAppRedo={canAppRedo}
-            sourcebookDialogTrigger={sourcebookDialogTrigger}
-            closeDialogTrigger={sourcebookDialogCloseTrigger}
-            baselineEntries={baselineState?.sourcebook}
+            baselineEntries={baseline?.sourcebook}
           />
         </CollapsibleSection>
       </nav>

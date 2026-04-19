@@ -8,34 +8,45 @@
 /**
  * Purpose: Owns the editor toolbar UI state (view mode, whitespace toggle,
  * active formats, and menu open/close flags) so App.tsx stays thin.
+ * State now lives in uiStore (Zustand) for granular subscriptions.
  */
 
-import { Dispatch, SetStateAction, useState } from 'react';
+import { useUIStore, UIStoreState } from '../../stores/uiStore';
 import { ViewMode } from '../../types';
 
 export type EditorUIState = {
   viewMode: ViewMode;
-  setViewMode: Dispatch<SetStateAction<ViewMode>>;
+  setViewMode: (v: ViewMode) => void;
   showWhitespace: boolean;
-  setShowWhitespace: Dispatch<SetStateAction<boolean>>;
+  setShowWhitespace: (v: boolean) => void;
   activeFormats: string[];
-  setActiveFormats: Dispatch<SetStateAction<string[]>>;
+  setActiveFormats: (v: string[]) => void;
   isViewMenuOpen: boolean;
-  setIsViewMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsViewMenuOpen: (v: boolean) => void;
   isFormatMenuOpen: boolean;
-  setIsFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsFormatMenuOpen: (v: boolean) => void;
   isMobileFormatMenuOpen: boolean;
-  setIsMobileFormatMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setIsMobileFormatMenuOpen: (v: boolean) => void;
 };
 
 /** Custom React hook that manages editor uistate. */
 export function useEditorUIState(): EditorUIState {
-  const [viewMode, setViewMode] = useState<ViewMode>('raw');
-  const [showWhitespace, setShowWhitespace] = useState(false);
-  const [activeFormats, setActiveFormats] = useState<string[]>([]);
-  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-  const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
-  const [isMobileFormatMenuOpen, setIsMobileFormatMenuOpen] = useState(false);
+  const viewMode = useUIStore((s: UIStoreState) => s.viewMode);
+  const setViewMode = useUIStore((s: UIStoreState) => s.setViewMode);
+  const showWhitespace = useUIStore((s: UIStoreState) => s.showWhitespace);
+  const setShowWhitespace = useUIStore((s: UIStoreState) => s.setShowWhitespace);
+  const activeFormats = useUIStore((s: UIStoreState) => s.activeFormats);
+  const setActiveFormats = useUIStore((s: UIStoreState) => s.setActiveFormats);
+  const isViewMenuOpen = useUIStore((s: UIStoreState) => s.isViewMenuOpen);
+  const setIsViewMenuOpen = useUIStore((s: UIStoreState) => s.setIsViewMenuOpen);
+  const isFormatMenuOpen = useUIStore((s: UIStoreState) => s.isFormatMenuOpen);
+  const setIsFormatMenuOpen = useUIStore((s: UIStoreState) => s.setIsFormatMenuOpen);
+  const isMobileFormatMenuOpen = useUIStore(
+    (s: UIStoreState) => s.isMobileFormatMenuOpen
+  );
+  const setIsMobileFormatMenuOpen = useUIStore(
+    (s: UIStoreState) => s.setIsMobileFormatMenuOpen
+  );
 
   return {
     viewMode,
