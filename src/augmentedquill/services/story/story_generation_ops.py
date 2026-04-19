@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from augmentedquill.core.config import save_story_config
 from augmentedquill.services.chat.chat_tool_decorator import (
     EDITING_ROLE,
@@ -94,11 +96,11 @@ async def _complete_with_tool_calls(
 
 
 async def generate_story_summary(
-    *, mode: str = "", payload: dict | None = None
+    *, mode: str = "", payload: dict | None = None, active: Path | None = None
 ) -> dict:
     """Generate Story Summary."""
     payload = payload or {}
-    prepared = prepare_story_summary_generation(payload, mode)
+    prepared = prepare_story_summary_generation(payload, mode, active=active)
 
     # When rewriting an existing summary, clear the current story summary first.
     # This avoids a race where the model calls tools like get_project_overview
@@ -133,11 +135,15 @@ async def generate_story_summary(
 
 
 async def generate_chapter_summary(
-    *, chap_id: int, mode: str = "", payload: dict | None = None
+    *,
+    chap_id: int,
+    mode: str = "",
+    payload: dict | None = None,
+    active: Path | None = None,
 ) -> dict:
     """Generate Chapter Summary."""
     payload = payload or {}
-    prepared = prepare_chapter_summary_generation(payload, chap_id, mode)
+    prepared = prepare_chapter_summary_generation(payload, chap_id, mode, active=active)
 
     backup_summary = None
     if mode.lower() == "discard":
@@ -185,11 +191,11 @@ async def generate_chapter_summary(
 
 
 async def write_chapter_from_summary(
-    *, chap_id: int, payload: dict | None = None
+    *, chap_id: int, payload: dict | None = None, active: Path | None = None
 ) -> dict:
     """Write Chapter From Summary."""
     payload = payload or {}
-    prepared = prepare_write_chapter_generation(payload, chap_id)
+    prepared = prepare_write_chapter_generation(payload, chap_id, active=active)
 
     data = await llm.unified_chat_complete(
         caller_id="story_generation.write_chapter_from_summary",
@@ -207,11 +213,11 @@ async def write_chapter_from_summary(
 
 
 async def continue_chapter_from_summary(
-    *, chap_id: int, payload: dict | None = None
+    *, chap_id: int, payload: dict | None = None, active: Path | None = None
 ) -> dict:
     """Continue Chapter From Summary."""
     payload = payload or {}
-    prepared = prepare_continue_chapter_generation(payload, chap_id)
+    prepared = prepare_continue_chapter_generation(payload, chap_id, active=active)
 
     data = await llm.unified_chat_complete(
         caller_id="story_generation.continue_chapter_from_summary",

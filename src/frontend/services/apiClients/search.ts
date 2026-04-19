@@ -10,7 +10,7 @@
  */
 
 import { components } from '../../types/api.generated';
-import { fetchJson } from './shared';
+import { fetchJson, projectEndpoint } from './shared';
 
 // ─── Re-export generated types ────────────────────────────────────────────────
 
@@ -32,10 +32,10 @@ export type ReplaceResponse = components['schemas']['ReplaceResponse'];
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 
-export const searchApi = {
+export const createSearchApi = (projectName: string) => ({
   search: (opts: SearchOptions): Promise<SearchResponse> =>
     fetchJson<SearchResponse>(
-      '/search',
+      projectEndpoint(projectName, '/search'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,7 +46,7 @@ export const searchApi = {
 
   replaceAll: (req: ReplaceAllRequest): Promise<ReplaceResponse> =>
     fetchJson<ReplaceResponse>(
-      '/search/replace-all',
+      projectEndpoint(projectName, '/search/replace-all'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,7 +57,7 @@ export const searchApi = {
 
   replaceSingle: (req: ReplaceSingleRequest): Promise<ReplaceResponse> =>
     fetchJson<ReplaceResponse>(
-      '/search/replace-single',
+      projectEndpoint(projectName, '/search/replace-single'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,4 +65,6 @@ export const searchApi = {
       },
       'Replace failed'
     ),
-};
+});
+
+export const searchApi = createSearchApi('');

@@ -13,7 +13,7 @@ API endpoints for managing the sourcebook (knowledge base) associated with a pro
 from typing import Any, List, Literal, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
     sourcebook_delete_entry,
@@ -31,7 +31,7 @@ from augmentedquill.models.sourcebook import (
     SourcebookKeywordsResponse,
 )
 
-router = APIRouter(tags=["Sourcebook"])
+router = APIRouter(prefix="/projects/{project_name}", tags=["Sourcebook"])
 
 
 @router.post("/sourcebook/keywords")
@@ -57,14 +57,12 @@ async def generate_sourcebook_keywords(
 
 @router.get("/sourcebook")
 async def get_sourcebook(
+    project_dir: ProjectDep,
     query: Optional[str] = None,
     match_mode: Literal["direct", "extensive"] = "extensive",
     split_query_fallback: bool = False,
 ) -> List[SourcebookEntry]:
     """Return sourcebook."""
-    active = get_active_project_dir()
-    if not active:
-        return []
     if query:
         return [
             SourcebookEntry(**entry)
@@ -73,20 +71,22 @@ async def get_sourcebook(
                 match_mode=match_mode,
                 split_query_fallback=split_query_fallback,
                 payload={},
+                active=project_dir,
             )
         ]
-    return [SourcebookEntry(**entry) for entry in sourcebook_list_entries()]
+    return [
+        SourcebookEntry(**entry)
+        for entry in sourcebook_list_entries(active=project_dir)
+    ]
 
 
 @router.post("/sourcebook")
 async def create_sourcebook_entry(
-    entry: SourcebookEntryCreate, background_tasks: BackgroundTasks
+    entry: SourcebookEntryCreate,
+    background_tasks: BackgroundTasks,
+    project_dir: ProjectDep,
 ) -> SourcebookEntry:
     """Create Sourcebook Entry."""
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
     created = sourcebook_create_entry(
         name=entry.name,
         description=entry.description,
@@ -94,25 +94,28 @@ async def create_sourcebook_entry(
         synonyms=entry.synonyms,
         relations=[r.model_dump() for r in entry.relations],
         images=entry.images,
+        active=project_dir,
     )
     if "error" in created:
         raise HTTPException(status_code=400, detail=created["error"])
 
     background_tasks.add_task(
-        sourcebook_refresh_entry_keywords, created["id"], payload={}
+        sourcebook_refresh_entry_keywords,
+        created["id"],
+        payload={},
+        active=project_dir,
     )
     return SourcebookEntry(**created)
 
 
 @router.put("/sourcebook/{entry_name:path}")
 async def update_sourcebook_entry(
-    entry_name: str, updates: SourcebookEntryUpdate, background_tasks: BackgroundTasks
+    entry_name: str,
+    updates: SourcebookEntryUpdate,
+    background_tasks: BackgroundTasks,
+    project_dir: ProjectDep,
 ) -> SourcebookEntry:
     """Update Sourcebook Entry."""
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
     result = sourcebook_update_entry(
         name_or_id=entry_name,
         name=updates.name,
@@ -125,24 +128,24 @@ async def update_sourcebook_entry(
             else None
         ),
         images=updates.images,
+        active=project_dir,
     )
     if "error" in result:
         detail = str(result["error"])
         status = 404 if "not found" in detail.lower() else 400
         raise HTTPException(status_code=status, detail=detail)
     background_tasks.add_task(
-        sourcebook_refresh_entry_keywords, result["id"], payload={}
+        sourcebook_refresh_entry_keywords,
+        result["id"],
+        payload={},
+        active=project_dir,
     )
     return SourcebookEntry(**result)
 
 
 @router.delete("/sourcebook/{entry_name:path}")
-async def delete_sourcebook_entry(entry_name: str) -> Any:
+async def delete_sourcebook_entry(entry_name: str, project_dir: ProjectDep) -> Any:
     """Delete Sourcebook Entry."""
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
-    if not sourcebook_delete_entry(entry_name):
+    if not sourcebook_delete_entry(entry_name, active=project_dir):
         raise HTTPException(status_code=404, detail="Entry not found")
     return {"ok": True}

@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.api.v1.http_responses import error_json
 from augmentedquill.models.chapters import (
     BooksReorderRequest,
@@ -30,31 +31,20 @@ from augmentedquill.services.chapters.chapters_api_ops import (
 from augmentedquill.services.projects.projects import (
     create_new_chapter,
     delete_chapter,
-    get_active_project_dir,
     update_chapter_metadata,
     write_chapter_title,
 )
 
-router = APIRouter(tags=["Chapters"])
-
-
-def _require_active_project_dir() -> Any:
-    """Return active project path or a standard error response."""
-    active = get_active_project_dir()
-    if not active:
-        return None, error_json("No active project", status_code=400)
-    return active, None
+router = APIRouter(prefix="/projects/{project_name}", tags=["Chapters"])
 
 
 @router.put("/chapters/{chap_id}/metadata")
 async def api_update_chapter_metadata(
-    body: ChapterMetadataUpdate, chap_id: int = FastAPIPath(..., ge=0)
+    body: ChapterMetadataUpdate,
+    project_dir: ProjectDep,
+    chap_id: int = FastAPIPath(..., ge=0),
 ) -> Any:
     """Api Update Chapter Metadata."""
-    _, err = _require_active_project_dir()
-    if err:
-        return err
-
     try:
         update_chapter_metadata(
             chap_id,
@@ -63,6 +53,7 @@ async def api_update_chapter_metadata(
             notes=body.notes,
             private_notes=body.private_notes,
             conflicts=body.conflicts,
+            active=project_dir,
         )
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
@@ -74,23 +65,21 @@ async def api_update_chapter_metadata(
 
 @router.put("/chapters/{chap_id}/title")
 async def api_update_chapter_title(
-    body: ChapterTitleUpdate, chap_id: int = FastAPIPath(..., ge=0)
+    body: ChapterTitleUpdate,
+    project_dir: ProjectDep,
+    chap_id: int = FastAPIPath(..., ge=0),
 ) -> Any:
     """Api Update Chapter Title."""
-    _, err = _require_active_project_dir()
-    if err:
-        return err
-
     new_title_str = body.title.strip()
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
     try:
-        write_chapter_title(chap_id, new_title_str)
+        write_chapter_title(chap_id, new_title_str, active=project_dir)
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=project_dir)
     return JSONResponse(
         content={
             "ok": True,
@@ -104,20 +93,16 @@ async def api_update_chapter_title(
 
 
 @router.post("/chapters")
-async def api_create_chapter(body: ChapterCreate) -> Any:
+async def api_create_chapter(body: ChapterCreate, project_dir: ProjectDep) -> Any:
     """Api Create Chapter."""
-    _, err = _require_active_project_dir()
-    if err:
-        return err
-
     title = body.title.strip()
 
     try:
-        chap_id = create_new_chapter(title, book_id=body.book_id)
+        chap_id = create_new_chapter(title, book_id=body.book_id, active=project_dir)
         if body.content:
             from augmentedquill.services.projects.projects import write_chapter_content
 
-            write_chapter_content(chap_id, body.content)
+            write_chapter_content(chap_id, body.content, active=project_dir)
     except ValueError as exc:
         return error_json(str(exc), status_code=400)
     except (OSError, RuntimeError, TypeError) as exc:
@@ -137,10 +122,12 @@ async def api_create_chapter(body: ChapterCreate) -> Any:
 
 @router.put("/chapters/{chap_id}/content")
 async def api_update_chapter_content(
-    body: ChapterContentUpdate, chap_id: int = FastAPIPath(..., ge=0)
+    body: ChapterContentUpdate,
+    project_dir: ProjectDep,
+    chap_id: int = FastAPIPath(..., ge=0),
 ) -> Any:
     """Api Update Chapter Content."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=project_dir)
 
     try:
         path.write_text(body.content, encoding="utf-8")
@@ -152,21 +139,19 @@ async def api_update_chapter_content(
 
 @router.put("/chapters/{chap_id}/summary")
 async def api_update_chapter_summary(
-    body: ChapterSummaryUpdate, chap_id: int = FastAPIPath(..., ge=0)
+    body: ChapterSummaryUpdate,
+    project_dir: ProjectDep,
+    chap_id: int = FastAPIPath(..., ge=0),
 ) -> Any:
     """Api Update Chapter Summary."""
-    _, err = _require_active_project_dir()
-    if err:
-        return err
-
     try:
         from augmentedquill.services.projects.projects import write_chapter_summary
 
-        write_chapter_summary(chap_id, body.summary.strip())
+        write_chapter_summary(chap_id, body.summary.strip(), active=project_dir)
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=project_dir)
     return JSONResponse(
         content={
             "ok": True,
@@ -180,10 +165,12 @@ async def api_update_chapter_summary(
 
 
 @router.delete("/chapters/{chap_id}")
-async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)) -> Any:
+async def api_delete_chapter(
+    project_dir: ProjectDep, chap_id: int = FastAPIPath(..., ge=0)
+) -> Any:
     """Api Delete Chapter."""
     try:
-        delete_chapter(chap_id)
+        delete_chapter(chap_id, active=project_dir)
         return JSONResponse(content={"ok": True})
     except ValueError as exc:
         return error_json(str(exc), status_code=404)
@@ -192,14 +179,12 @@ async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)) -> Any:
 
 
 @router.post("/chapters/reorder")
-async def api_reorder_chapters(body: ChaptersReorderRequest) -> Any:
+async def api_reorder_chapters(
+    body: ChaptersReorderRequest, project_dir: ProjectDep
+) -> Any:
     """Api Reorder Chapters."""
-    active, err = _require_active_project_dir()
-    if err:
-        return err
-
     try:
-        reorder_chapters_in_project(active, body.model_dump())
+        reorder_chapters_in_project(project_dir, body.model_dump())
     except LookupError as exc:
         return error_json(str(exc), status_code=404)
     except ValueError as exc:
@@ -214,14 +199,10 @@ async def api_reorder_chapters(body: ChaptersReorderRequest) -> Any:
 
 
 @router.post("/books/reorder")
-async def api_reorder_books(body: BooksReorderRequest) -> Any:
+async def api_reorder_books(body: BooksReorderRequest, project_dir: ProjectDep) -> Any:
     """Api Reorder Books."""
-    active, err = _require_active_project_dir()
-    if err:
-        return err
-
     try:
-        reorder_books_in_project(active, body.model_dump())
+        reorder_books_in_project(project_dir, body.model_dump())
     except ValueError as exc:
         return error_json(str(exc), status_code=400)
     except (OSError, RuntimeError, TypeError) as exc:

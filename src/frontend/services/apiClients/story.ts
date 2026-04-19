@@ -10,12 +10,12 @@
  */
 
 import { StoryContentResponse } from '../apiTypes';
-import { fetchJson, putJson } from './shared';
+import { fetchJson, putJson, projectEndpoint } from './shared';
 
-export const storyApi = {
+export const createStoryApi = (projectName: string) => ({
   updateTitle: async (title: string) => {
     return fetchJson<{ ok: boolean; detail?: string }>(
-      '/story/title',
+      projectEndpoint(projectName, '/story/title'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,7 +27,7 @@ export const storyApi = {
 
   updateSummary: async (summary: string) => {
     return putJson<{ ok: boolean; summary?: string }>(
-      '/story/summary',
+      projectEndpoint(projectName, '/story/summary'),
       { summary },
       'Failed to update story summary'
     );
@@ -35,7 +35,7 @@ export const storyApi = {
 
   updateTags: async (tags: string[]) => {
     return putJson<{ ok: boolean }>(
-      '/story/tags',
+      projectEndpoint(projectName, '/story/tags'),
       { tags },
       'Failed to update story tags'
     );
@@ -46,7 +46,7 @@ export const storyApi = {
     image_additional_info?: string;
   }) => {
     return fetchJson<{ ok: boolean; story?: unknown }>(
-      '/story/settings',
+      projectEndpoint(projectName, '/story/settings'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,7 +66,7 @@ export const storyApi = {
     language?: string;
   }) => {
     return fetchJson<{ ok: boolean; detail?: string }>(
-      '/story/metadata',
+      projectEndpoint(projectName, '/story/metadata'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,7 +78,7 @@ export const storyApi = {
 
   getContent: async () => {
     return fetchJson<StoryContentResponse>(
-      '/story/content',
+      projectEndpoint(projectName, '/story/content'),
       undefined,
       'Failed to get story content'
     );
@@ -86,7 +86,7 @@ export const storyApi = {
 
   updateContent: async (content: string) => {
     return fetchJson<{ ok: boolean }>(
-      '/story/content',
+      projectEndpoint(projectName, '/story/content'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export const storyApi = {
 
   computeSourcebookRelevance: async (chapId: string, currentText: string) => {
     return fetchJson<{ relevant: string[] }>(
-      '/story/sourcebook/relevance',
+      projectEndpoint(projectName, '/story/sourcebook/relevance'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,4 +111,6 @@ export const storyApi = {
       'Failed to compute sourcebook relevance'
     );
   },
-};
+});
+
+export const storyApi = createStoryApi('');

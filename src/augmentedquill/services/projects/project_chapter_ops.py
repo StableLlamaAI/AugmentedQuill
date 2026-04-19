@@ -21,9 +21,11 @@ from augmentedquill.services.chapters.chapter_helpers import (
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
-def write_chapter_content_in_project(chap_id: int, content: str) -> None:
+def write_chapter_content_in_project(
+    chap_id: int, content: str, active: Path | None = None
+) -> None:
     """Write content to a chapter by its ID."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
 
     story_root = path
     for _ in range(5):
@@ -55,10 +57,12 @@ def update_chapter_metadata_in_project(
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapter metadata")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
-    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target_entry = _get_chapter_metadata_entry(
+        story, chap_id, path, files, active=active
+    )
 
     if target_entry is None:
         p_type = story.get("project_type", "novel")
@@ -107,12 +111,12 @@ def update_chapter_metadata_in_project(
 
 def _get_chapter_target_and_story(active: Path, chap_id: int) -> Any:
     """Return chapter target and story."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
     story_path = active / "story.json"
 
     story = load_story_config(story_path) or {}
-    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target = _get_chapter_metadata_entry(story, chap_id, path, files, active=active)
     if target is None:
         raise ValueError(f"Chapter {chap_id} metadata not found.")
     return story, story_path, target
@@ -201,14 +205,16 @@ def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> No
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapter titles")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
     new_title_str = str(title).strip()
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
-    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target_entry = _get_chapter_metadata_entry(
+        story, chap_id, path, files, active=active
+    )
 
     if target_entry is not None:
         target_entry["title"] = new_title_str
@@ -224,8 +230,8 @@ def delete_chapter_in_project(active: Path, chap_id: int) -> None:
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapters")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
     path.unlink()
     p_type = story.get("project_type", "novel")

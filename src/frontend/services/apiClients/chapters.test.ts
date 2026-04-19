@@ -16,6 +16,11 @@ import { fetchJson, postJson, putJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
+  projectEndpoint: vi.fn((projectName: string, path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (!projectName) return normalizedPath;
+    return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
+  }),
   fetchJson: vi.fn(),
   postJson: vi.fn(),
   putJson: vi.fn(),

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, HTTPException
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.core.config import (
     load_machine_config,
     load_model_presets_config,
@@ -23,7 +24,6 @@ from augmentedquill.core.config import (
     DEFAULT_STORY_CONFIG_PATH,
     DEFAULT_MODEL_PRESETS_PATH,
 )
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.prompts import (
     get_system_message,
     load_model_prompt_overrides,
@@ -59,18 +59,15 @@ from augmentedquill.models.machine import (
 router = APIRouter(tags=["Settings"])
 
 
-def _resolve_story_path() -> Path:
-    """Return active project's story config path or the default path."""
-    active = get_active_project_dir()
-    return (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
+def _resolve_story_path(project_dir: Path | None = None) -> Path:
+    """Return project story config path or fallback default path."""
+    return (project_dir / "story.json") if project_dir else DEFAULT_STORY_CONFIG_PATH
 
 
-@router.post("/settings", response_model=OkResponse)
-async def api_settings_post(request: Request) -> OkResponse:
-    """Accept JSON body with {story: {...}, machine: {...}} and persist to config/.
-
-    Returns {ok: true} on success or {ok:false, detail: str} on error.
-    """
+async def _api_settings_post_impl(
+    request: Request, project_dir: Path | None
+) -> OkResponse:
+    """Accept JSON body with {story: {...}, machine: {...}} and persist to config/."""
     payload = await parse_json_object_body(request)
 
     story = (payload or {}).get("story") or {}
@@ -90,7 +87,7 @@ async def api_settings_post(request: Request) -> OkResponse:
     machine_cfg["openai"] = openai_cfg
 
     try:
-        story_path = _resolve_story_path()
+        story_path = _resolve_story_path(project_dir)
         machine_path = DEFAULT_MACHINE_CONFIG_PATH
         story_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,27 +99,32 @@ async def api_settings_post(request: Request) -> OkResponse:
     return OkResponse(ok=True)
 
 
-@router.get("/prompts", response_model=PromptsResponse)
-async def api_prompts_get(model_name: str | None = None) -> PromptsResponse:
-    """Get all resolved prompts (defaults + global overrides + model overrides).
+@router.post("/settings", response_model=OkResponse)
+async def api_settings_post_legacy(request: Request) -> OkResponse:
+    """Legacy settings endpoint that persists to default story config when no project path is provided."""
+    return await _api_settings_post_impl(request, project_dir=None)
 
-    The response now also includes the list of available languages as
-    determined by the bundled instructions file, and the values returned
-    for ``system_messages``/``user_prompts`` are resolved into the active
-    project's language (falling back to English).
-    """
+
+@router.post("/projects/{project_name}/settings", response_model=OkResponse)
+async def api_settings_post(request: Request, project_dir: ProjectDep) -> OkResponse:
+    """Project-scoped settings endpoint."""
+    return await _api_settings_post_impl(request, project_dir=project_dir)
+
+
+async def _api_prompts_get_impl(
+    project_dir: Path | None, model_name: str | None = None
+) -> PromptsResponse:
+    """Get all resolved prompts (defaults + global overrides + model overrides)."""
     machine_config = load_machine_config() or {}
     if not model_name:
         model_name = machine_config.get("openai", {}).get("selected")
 
     # figure out project language if there's an active project
-    from augmentedquill.services.projects.projects import get_active_project_dir
     from augmentedquill.core.config import load_story_config
 
     project_language = "en"
-    active = get_active_project_dir()
-    if active:
-        story = load_story_config(active / "story.json") or {}
+    if project_dir:
+        story = load_story_config(project_dir / "story.json") or {}
         project_language = str(story.get("language", "en") or "en")
 
     model_overrides = load_model_prompt_overrides(machine_config, model_name)
@@ -151,6 +153,20 @@ async def api_prompts_get(model_name: str | None = None) -> PromptsResponse:
         languages=get_available_languages(),
         project_language=project_language,
     )
+
+
+@router.get("/prompts", response_model=PromptsResponse)
+async def api_prompts_get_legacy(model_name: str | None = None) -> PromptsResponse:
+    """Legacy prompts endpoint resolved without explicit project path."""
+    return await _api_prompts_get_impl(project_dir=None, model_name=model_name)
+
+
+@router.get("/projects/{project_name}/prompts", response_model=PromptsResponse)
+async def api_prompts_get(
+    project_dir: ProjectDep, model_name: str | None = None
+) -> PromptsResponse:
+    """Project-scoped prompts endpoint."""
+    return await _api_prompts_get_impl(project_dir=project_dir, model_name=model_name)
 
 
 @router.post("/machine/test", response_model=MachineTestResponse)
@@ -270,14 +286,18 @@ async def api_machine_put(request: Request) -> OkSelectedResponse:
     return OkSelectedResponse(ok=True, selected=selected)
 
 
-@router.put("/story/summary", response_model=StorySummaryResponse)
-async def api_story_summary_put(request: Request) -> StorySummaryResponse:
+@router.put(
+    "/projects/{project_name}/story/summary", response_model=StorySummaryResponse
+)
+async def api_story_summary_put(
+    request: Request, project_dir: ProjectDep
+) -> StorySummaryResponse:
     """Update story summary in story.json."""
     payload = await parse_json_object_body(request)
 
     summary = payload.get("summary", "")
     try:
-        story_path = _resolve_story_path()
+        story_path = _resolve_story_path(project_dir)
         update_story_field(story_path, "story_summary", summary)
     except (OSError, TypeError, ValueError) as e:
         raise HTTPException(
@@ -287,8 +307,10 @@ async def api_story_summary_put(request: Request) -> StorySummaryResponse:
     return StorySummaryResponse(ok=True, story_summary=summary)
 
 
-@router.put("/story/tags", response_model=StoryTagsResponse)
-async def api_story_tags_put(request: Request) -> StoryTagsResponse:
+@router.put("/projects/{project_name}/story/tags", response_model=StoryTagsResponse)
+async def api_story_tags_put(
+    request: Request, project_dir: ProjectDep
+) -> StoryTagsResponse:
     """Update story tags in story.json."""
     payload = await parse_json_object_body(request)
 
@@ -297,7 +319,7 @@ async def api_story_tags_put(request: Request) -> StoryTagsResponse:
         raise HTTPException(status_code=400, detail="tags must be an array")
 
     try:
-        story_path = _resolve_story_path()
+        story_path = _resolve_story_path(project_dir)
         update_story_field(story_path, "tags", tags)
     except (OSError, TypeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Failed to update story tags: {e}")

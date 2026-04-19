@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 import json
 import re
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.core.config import BASE_DIR, save_story_config
 from augmentedquill.core.prompts import get_user_prompt, get_system_message
 from augmentedquill.services.llm import llm
@@ -46,7 +47,7 @@ from augmentedquill.services.exceptions import ServiceError
 from augmentedquill.services.chat.chat_tool_decorator import WRITING_ROLE
 from augmentedquill.api.v1.story_routes.common import parse_json_body
 
-router = APIRouter(tags=["Story"])
+router = APIRouter(prefix="/projects/{project_name}", tags=["Story"])
 
 
 async def _with_parsed_payload(
@@ -120,7 +121,9 @@ def _as_streaming_response(
 
 
 @router.post("/story/sourcebook/relevance")
-async def api_story_sourcebook_relevance(request: Request) -> Any:
+async def api_story_sourcebook_relevance(
+    request: Request, project_dir: ProjectDep
+) -> Any:
     """Ask the WRITING model which sourcebook entries are relevant.
 
     This is a lightweight helper used by the frontend to keep checkboxes
@@ -129,7 +132,7 @@ async def api_story_sourcebook_relevance(request: Request) -> Any:
     """
     try:
         payload = await parse_json_body(request)
-        _, _, story = get_active_story_or_raise()
+        _, _, story = get_active_story_or_raise(active=project_dir)
         scope = str(
             (payload or {}).get("scope")
             or ("story" if story.get("project_type") == "short-story" else "chapter")
@@ -143,11 +146,13 @@ async def api_story_sourcebook_relevance(request: Request) -> Any:
             if not isinstance(chap_id, int):
                 raise ServiceError("chap_id is required", status_code=400)
 
-            _, path, pos = get_chapter_locator(chap_id)
+            _, path, pos = get_chapter_locator(chap_id, active=project_dir)
         current_text = (payload or {}).get("current_text")
         if not isinstance(current_text, str):
             current_text = (
-                read_story_content() if scope == "story" else read_text_or_raise(path)
+                read_story_content(active=project_dir)
+                if scope == "story"
+                else read_text_or_raise(path)
             )
 
         # gather story and entries
@@ -157,7 +162,7 @@ async def api_story_sourcebook_relevance(request: Request) -> Any:
                 sourcebook_list_entries,
             )
 
-            all_entries = sourcebook_list_entries()
+            all_entries = sourcebook_list_entries(active=project_dir)
         except (ImportError, OSError, TypeError, ValueError, RuntimeError):
             # if sourcebook is unavailable, just return empty list
             return {"relevant": []}
@@ -270,11 +275,13 @@ async def api_story_sourcebook_relevance(request: Request) -> Any:
 
 
 @router.post("/story/suggest")
-async def api_story_suggest(request: Request) -> StreamingResponse:
+async def api_story_suggest(
+    request: Request, project_dir: ProjectDep
+) -> StreamingResponse:
     """Api Story Suggest."""
     try:
         payload = await parse_json_body(request)
-        _, _, story = get_active_story_or_raise()
+        _, _, story = get_active_story_or_raise(active=project_dir)
         scope = str(
             (payload or {}).get("scope")
             or ("story" if story.get("project_type") == "short-story" else "chapter")
@@ -285,7 +292,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             pos = None
             current_text = (payload or {}).get("current_text")
             if not isinstance(current_text, str):
-                current_text = read_story_content()
+                current_text = read_story_content(active=project_dir)
             chapters_data = []
             summary = story.get("story_summary", "")
             title = story.get("project_title") or ""
@@ -294,7 +301,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
             if not isinstance(chap_id, int):
                 raise ServiceError("chap_id is required", status_code=400)
 
-            _, path, pos = get_chapter_locator(chap_id)
+            _, path, pos = get_chapter_locator(chap_id, active=project_dir)
             current_text = (payload or {}).get("current_text")
             if not isinstance(current_text, str):
                 current_text = read_text_or_raise(path)
@@ -419,7 +426,7 @@ async def api_story_suggest(request: Request) -> StreamingResponse:
 
 
 @router.post("/story/summary/stream")
-async def api_story_summary_stream(request: Request) -> Any:
+async def api_story_summary_stream(request: Request, project_dir: ProjectDep) -> Any:
     """Api Story Summary Stream."""
 
     async def _handler(payload: dict) -> Any:
@@ -428,6 +435,7 @@ async def api_story_summary_stream(request: Request) -> Any:
             payload,
             payload.get("chap_id"),
             payload.get("mode") or "",
+            active=project_dir,
         )
 
         def _persist(new_summary: str) -> None:
@@ -452,12 +460,14 @@ async def api_story_summary_stream(request: Request) -> Any:
 
 
 @router.post("/story/write/stream")
-async def api_story_write_stream(request: Request) -> Any:
+async def api_story_write_stream(request: Request, project_dir: ProjectDep) -> Any:
     """Api Story Write Stream."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
-        prepared = prepare_write_chapter_generation(payload, payload.get("chap_id"))
+        prepared = prepare_write_chapter_generation(
+            payload, payload.get("chap_id"), active=project_dir
+        )
 
         return StreamingResponse(
             stream_collect_and_persist(
@@ -477,12 +487,16 @@ async def api_story_write_stream(request: Request) -> Any:
 
 
 @router.post("/story/continue/stream")
-async def api_story_continue_stream(request: Request) -> Any:
+async def api_story_continue_stream(request: Request, project_dir: ProjectDep) -> Any:
     """Api Story Continue Stream."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
-        prepared = prepare_continue_chapter_generation(payload, payload.get("chap_id"))
+        prepared = prepare_continue_chapter_generation(
+            payload,
+            payload.get("chap_id"),
+            active=project_dir,
+        )
 
         return _as_streaming_response(
             lambda: stream_collect_and_persist(
@@ -501,12 +515,18 @@ async def api_story_continue_stream(request: Request) -> Any:
 
 
 @router.post("/story/story-summary/stream")
-async def api_story_story_summary_stream(request: Request) -> Any:
+async def api_story_story_summary_stream(
+    request: Request, project_dir: ProjectDep
+) -> Any:
     """Api Story Story Summary Stream."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
-        prepared = prepare_story_summary_generation(payload, payload.get("mode") or "")
+        prepared = prepare_story_summary_generation(
+            payload,
+            payload.get("mode") or "",
+            active=project_dir,
+        )
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
 
@@ -518,12 +538,12 @@ async def api_story_story_summary_stream(request: Request) -> Any:
 
 
 @router.post("/story/action/stream")
-async def api_story_action_stream(request: Request) -> Any:
+async def api_story_action_stream(request: Request, project_dir: ProjectDep) -> Any:
     """Stream generic AI Actions (Extend/Rewrite/Summary update)."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
-        prepared = prepare_ai_action_generation(payload)
+        prepared = prepare_ai_action_generation(payload, active=project_dir)
 
         return _as_streaming_response(lambda: _create_gen_source(prepared))
 

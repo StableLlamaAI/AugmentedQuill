@@ -8,9 +8,9 @@
     "/api/v1/settings": {
       "post": {
         "tags": ["Settings"],
-        "summary": "Api Settings Post",
-        "description": "Accept JSON body with {story: {...}, machine: {...}} and persist to config/.\n\nReturns {ok: true} on success or {ok:false, detail: str} on error.",
-        "operationId": "api_settings_post_api_v1_settings_post",
+        "summary": "Api Settings Post Legacy",
+        "description": "Legacy settings endpoint that persists to default story config when no project path is provided.",
+        "operationId": "api_settings_post_legacy_api_v1_settings_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -25,13 +25,115 @@
         }
       }
     },
+    "/api/v1/projects/{project_name}/settings": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Api Settings Post",
+        "description": "Project-scoped settings endpoint.",
+        "operationId": "api_settings_post_api_v1_projects__project_name__settings_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__machine__OkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/prompts": {
       "get": {
         "tags": ["Settings"],
-        "summary": "Api Prompts Get",
-        "description": "Get all resolved prompts (defaults + global overrides + model overrides).\n\nThe response now also includes the list of available languages as\ndetermined by the bundled instructions file, and the values returned\nfor ``system_messages``/``user_prompts`` are resolved into the active\nproject's language (falling back to English).",
-        "operationId": "api_prompts_get_api_v1_prompts_get",
+        "summary": "Api Prompts Get Legacy",
+        "description": "Legacy prompts endpoint resolved without explicit project path.",
+        "operationId": "api_prompts_get_legacy_api_v1_prompts_get",
         "parameters": [
+          {
+            "name": "model_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/prompts": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Api Prompts Get",
+        "description": "Project-scoped prompts endpoint.",
+        "operationId": "api_prompts_get_api_v1_projects__project_name__prompts_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          },
           {
             "name": "model_name",
             "in": "query",
@@ -170,12 +272,25 @@
         }
       }
     },
-    "/api/v1/story/summary": {
+    "/api/v1/projects/{project_name}/story/summary": {
       "put": {
         "tags": ["Settings"],
         "summary": "Api Story Summary Put",
         "description": "Update story summary in story.json.",
-        "operationId": "api_story_summary_put_api_v1_story_summary_put",
+        "operationId": "api_story_summary_put_api_v1_projects__project_name__story_summary_put",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -186,6 +301,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       },
@@ -193,7 +318,20 @@
         "tags": ["Story", "Story"],
         "summary": "Api Story Summary",
         "description": "Api Story Summary.",
-        "operationId": "api_story_summary_api_v1_story_summary_post",
+        "operationId": "api_story_summary_api_v1_projects__project_name__story_summary_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -202,16 +340,39 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/story/tags": {
+    "/api/v1/projects/{project_name}/story/tags": {
       "put": {
         "tags": ["Settings"],
         "summary": "Api Story Tags Put",
         "description": "Update story tags in story.json.",
-        "operationId": "api_story_tags_put_api_v1_story_tags_put",
+        "operationId": "api_story_tags_put_api_v1_projects__project_name__story_tags_put",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -219,6 +380,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StoryTagsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -917,12 +1088,25 @@
         }
       }
     },
-    "/api/v1/chapters": {
+    "/api/v1/projects/{project_name}/chapters": {
       "get": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Chapters",
         "description": "Handle the API request to chapters.",
-        "operationId": "api_chapters_api_v1_chapters_get",
+        "operationId": "api_chapters_api_v1_projects__project_name__chapters_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -933,6 +1117,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       },
@@ -940,16 +1134,29 @@
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Create Chapter",
         "description": "Api Create Chapter.",
-        "operationId": "api_create_chapter_api_v1_chapters_post",
+        "operationId": "api_create_chapter_api_v1_projects__project_name__chapters_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChapterCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -957,7 +1164,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Create Chapter Api V1 Chapters Post"
+                  "title": "Response Api Create Chapter Api V1 Projects  Project Name  Chapters Post"
                 }
               }
             }
@@ -975,12 +1182,12 @@
         }
       }
     },
-    "/api/v1/chapters/{chap_id}": {
+    "/api/v1/projects/{project_name}/chapters/{chap_id}": {
       "get": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Chapter Content",
         "description": "Api Chapter Content.",
-        "operationId": "api_chapter_content_api_v1_chapters__chap_id__get",
+        "operationId": "api_chapter_content_api_v1_projects__project_name__chapters__chap_id__get",
         "parameters": [
           {
             "name": "chap_id",
@@ -991,6 +1198,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -1020,7 +1238,7 @@
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Delete Chapter",
         "description": "Api Delete Chapter.",
-        "operationId": "api_delete_chapter_api_v1_chapters__chap_id__delete",
+        "operationId": "api_delete_chapter_api_v1_projects__project_name__chapters__chap_id__delete",
         "parameters": [
           {
             "name": "chap_id",
@@ -1031,6 +1249,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -1039,7 +1268,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Delete Chapter Api V1 Chapters  Chap Id  Delete"
+                  "title": "Response Api Delete Chapter Api V1 Projects  Project Name  Chapters  Chap Id  Delete"
                 }
               }
             }
@@ -1057,12 +1286,12 @@
         }
       }
     },
-    "/api/v1/chapters/{chap_id}/metadata": {
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/metadata": {
       "put": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Update Chapter Metadata",
         "description": "Api Update Chapter Metadata.",
-        "operationId": "api_update_chapter_metadata_api_v1_chapters__chap_id__metadata_put",
+        "operationId": "api_update_chapter_metadata_api_v1_projects__project_name__chapters__chap_id__metadata_put",
         "parameters": [
           {
             "name": "chap_id",
@@ -1073,6 +1302,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "requestBody": {
@@ -1091,7 +1331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Update Chapter Metadata Api V1 Chapters  Chap Id  Metadata Put"
+                  "title": "Response Api Update Chapter Metadata Api V1 Projects  Project Name  Chapters  Chap Id  Metadata Put"
                 }
               }
             }
@@ -1109,12 +1349,12 @@
         }
       }
     },
-    "/api/v1/chapters/{chap_id}/title": {
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/title": {
       "put": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Update Chapter Title",
         "description": "Api Update Chapter Title.",
-        "operationId": "api_update_chapter_title_api_v1_chapters__chap_id__title_put",
+        "operationId": "api_update_chapter_title_api_v1_projects__project_name__chapters__chap_id__title_put",
         "parameters": [
           {
             "name": "chap_id",
@@ -1125,6 +1365,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "requestBody": {
@@ -1143,7 +1394,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Update Chapter Title Api V1 Chapters  Chap Id  Title Put"
+                  "title": "Response Api Update Chapter Title Api V1 Projects  Project Name  Chapters  Chap Id  Title Put"
                 }
               }
             }
@@ -1161,12 +1412,12 @@
         }
       }
     },
-    "/api/v1/chapters/{chap_id}/content": {
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/content": {
       "put": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Update Chapter Content",
         "description": "Api Update Chapter Content.",
-        "operationId": "api_update_chapter_content_api_v1_chapters__chap_id__content_put",
+        "operationId": "api_update_chapter_content_api_v1_projects__project_name__chapters__chap_id__content_put",
         "parameters": [
           {
             "name": "chap_id",
@@ -1177,6 +1428,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "requestBody": {
@@ -1195,7 +1457,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Update Chapter Content Api V1 Chapters  Chap Id  Content Put"
+                  "title": "Response Api Update Chapter Content Api V1 Projects  Project Name  Chapters  Chap Id  Content Put"
                 }
               }
             }
@@ -1213,12 +1475,12 @@
         }
       }
     },
-    "/api/v1/chapters/{chap_id}/summary": {
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/summary": {
       "put": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Update Chapter Summary",
         "description": "Api Update Chapter Summary.",
-        "operationId": "api_update_chapter_summary_api_v1_chapters__chap_id__summary_put",
+        "operationId": "api_update_chapter_summary_api_v1_projects__project_name__chapters__chap_id__summary_put",
         "parameters": [
           {
             "name": "chap_id",
@@ -1229,6 +1491,17 @@
               "minimum": 0,
               "title": "Chap Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "requestBody": {
@@ -1247,7 +1520,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Update Chapter Summary Api V1 Chapters  Chap Id  Summary Put"
+                  "title": "Response Api Update Chapter Summary Api V1 Projects  Project Name  Chapters  Chap Id  Summary Put"
                 }
               }
             }
@@ -1265,21 +1538,34 @@
         }
       }
     },
-    "/api/v1/chapters/reorder": {
+    "/api/v1/projects/{project_name}/chapters/reorder": {
       "post": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Reorder Chapters",
         "description": "Api Reorder Chapters.",
-        "operationId": "api_reorder_chapters_api_v1_chapters_reorder_post",
+        "operationId": "api_reorder_chapters_api_v1_projects__project_name__chapters_reorder_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChaptersReorderRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1287,7 +1573,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Reorder Chapters Api V1 Chapters Reorder Post"
+                  "title": "Response Api Reorder Chapters Api V1 Projects  Project Name  Chapters Reorder Post"
                 }
               }
             }
@@ -1305,21 +1591,34 @@
         }
       }
     },
-    "/api/v1/books/reorder": {
+    "/api/v1/projects/{project_name}/books/reorder": {
       "post": {
         "tags": ["Chapters", "Chapters"],
         "summary": "Api Reorder Books",
         "description": "Api Reorder Books.",
-        "operationId": "api_reorder_books_api_v1_books_reorder_post",
+        "operationId": "api_reorder_books_api_v1_projects__project_name__books_reorder_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BooksReorderRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1327,7 +1626,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Reorder Books Api V1 Books Reorder Post"
+                  "title": "Response Api Reorder Books Api V1 Projects  Project Name  Books Reorder Post"
                 }
               }
             }
@@ -1345,303 +1644,23 @@
         }
       }
     },
-    "/api/v1/story/story-summary": {
+    "/api/v1/projects/{project_name}/story/story-summary": {
       "post": {
         "tags": ["Story", "Story"],
         "summary": "Api Story Story Summary",
         "description": "Api Story Story Summary.",
-        "operationId": "api_story_story_summary_api_v1_story_story_summary_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/write": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Write",
-        "description": "Api Story Write.",
-        "operationId": "api_story_write_api_v1_story_write_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/continue": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Continue",
-        "description": "Api Story Continue.",
-        "operationId": "api_story_continue_api_v1_story_continue_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/sourcebook/relevance": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Sourcebook Relevance",
-        "description": "Ask the WRITING model which sourcebook entries are relevant.\n\nThis is a lightweight helper used by the frontend to keep checkboxes\nin sync.  It is deliberately separate from the prose suggestion call so\nthat we can run it in the background on every text change.",
-        "operationId": "api_story_sourcebook_relevance_api_v1_story_sourcebook_relevance_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Sourcebook Relevance Api V1 Story Sourcebook Relevance Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/suggest": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Suggest",
-        "description": "Api Story Suggest.",
-        "operationId": "api_story_suggest_api_v1_story_suggest_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/summary/stream": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Summary Stream",
-        "description": "Api Story Summary Stream.",
-        "operationId": "api_story_summary_stream_api_v1_story_summary_stream_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Summary Stream Api V1 Story Summary Stream Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/write/stream": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Write Stream",
-        "description": "Api Story Write Stream.",
-        "operationId": "api_story_write_stream_api_v1_story_write_stream_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Write Stream Api V1 Story Write Stream Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/continue/stream": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Continue Stream",
-        "description": "Api Story Continue Stream.",
-        "operationId": "api_story_continue_stream_api_v1_story_continue_stream_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Continue Stream Api V1 Story Continue Stream Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/story-summary/stream": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Story Summary Stream",
-        "description": "Api Story Story Summary Stream.",
-        "operationId": "api_story_story_summary_stream_api_v1_story_story_summary_stream_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Story Summary Stream Api V1 Story Story Summary Stream Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/action/stream": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Action Stream",
-        "description": "Stream generic AI Actions (Extend/Rewrite/Summary update).",
-        "operationId": "api_story_action_stream_api_v1_story_action_stream_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Api Story Action Stream Api V1 Story Action Stream Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/title": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Title",
-        "description": "Api Story Title.",
-        "operationId": "api_story_title_api_v1_story_title_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/settings": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Settings",
-        "description": "Api Story Settings.",
-        "operationId": "api_story_settings_api_v1_story_settings_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/metadata": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Metadata",
-        "description": "Api Story Metadata.",
-        "operationId": "api_story_metadata_api_v1_story_metadata_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/story/content": {
-      "get": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Content",
-        "description": "Api Story Content.",
-        "operationId": "api_story_content_api_v1_story_content_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StoryContentResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Story Content Update",
-        "description": "Api Story Content Update.",
-        "operationId": "api_story_content_update_api_v1_story_content_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/books/{book_id}/metadata": {
-      "post": {
-        "tags": ["Story", "Story"],
-        "summary": "Api Book Metadata",
-        "description": "Api Book Metadata.",
-        "operationId": "api_book_metadata_api_v1_books__book_id__metadata_post",
+        "operationId": "api_story_story_summary_api_v1_projects__project_name__story_story_summary_post",
         "parameters": [
           {
-            "name": "book_id",
+            "name": "project_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Book Id"
-            }
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -1666,12 +1685,661 @@
         }
       }
     },
-    "/api/v1/checkpoints": {
+    "/api/v1/projects/{project_name}/story/write": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Write",
+        "description": "Api Story Write.",
+        "operationId": "api_story_write_api_v1_projects__project_name__story_write_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/continue": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Continue",
+        "description": "Api Story Continue.",
+        "operationId": "api_story_continue_api_v1_projects__project_name__story_continue_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/sourcebook/relevance": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Sourcebook Relevance",
+        "description": "Ask the WRITING model which sourcebook entries are relevant.\n\nThis is a lightweight helper used by the frontend to keep checkboxes\nin sync.  It is deliberately separate from the prose suggestion call so\nthat we can run it in the background on every text change.",
+        "operationId": "api_story_sourcebook_relevance_api_v1_projects__project_name__story_sourcebook_relevance_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Sourcebook Relevance Api V1 Projects  Project Name  Story Sourcebook Relevance Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/suggest": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Suggest",
+        "description": "Api Story Suggest.",
+        "operationId": "api_story_suggest_api_v1_projects__project_name__story_suggest_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/summary/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Summary Stream",
+        "description": "Api Story Summary Stream.",
+        "operationId": "api_story_summary_stream_api_v1_projects__project_name__story_summary_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Summary Stream Api V1 Projects  Project Name  Story Summary Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/write/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Write Stream",
+        "description": "Api Story Write Stream.",
+        "operationId": "api_story_write_stream_api_v1_projects__project_name__story_write_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Write Stream Api V1 Projects  Project Name  Story Write Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/continue/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Continue Stream",
+        "description": "Api Story Continue Stream.",
+        "operationId": "api_story_continue_stream_api_v1_projects__project_name__story_continue_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Continue Stream Api V1 Projects  Project Name  Story Continue Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/story-summary/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Story Summary Stream",
+        "description": "Api Story Story Summary Stream.",
+        "operationId": "api_story_story_summary_stream_api_v1_projects__project_name__story_story_summary_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Story Summary Stream Api V1 Projects  Project Name  Story Story Summary Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/action/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Action Stream",
+        "description": "Stream generic AI Actions (Extend/Rewrite/Summary update).",
+        "operationId": "api_story_action_stream_api_v1_projects__project_name__story_action_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Action Stream Api V1 Projects  Project Name  Story Action Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/title": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Title",
+        "description": "Api Story Title.",
+        "operationId": "api_story_title_api_v1_projects__project_name__story_title_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/settings": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Settings",
+        "description": "Api Story Settings.",
+        "operationId": "api_story_settings_api_v1_projects__project_name__story_settings_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/metadata": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Metadata",
+        "description": "Api Story Metadata.",
+        "operationId": "api_story_metadata_api_v1_projects__project_name__story_metadata_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/content": {
+      "get": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Content",
+        "description": "Api Story Content.",
+        "operationId": "api_story_content_api_v1_projects__project_name__story_content_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Content Update",
+        "description": "Api Story Content Update.",
+        "operationId": "api_story_content_update_api_v1_projects__project_name__story_content_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/books/{book_id}/metadata": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Book Metadata",
+        "description": "Api Book Metadata.",
+        "operationId": "api_book_metadata_api_v1_projects__project_name__books__book_id__metadata_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/checkpoints": {
       "get": {
         "tags": ["Checkpoints"],
         "summary": "Api Get Checkpoints",
         "description": "Handle the API request to get checkpoints.",
-        "operationId": "api_get_checkpoints_api_v1_checkpoints_get",
+        "operationId": "api_get_checkpoints_api_v1_projects__project_name__checkpoints_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1682,16 +2350,39 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/checkpoints/create": {
+    "/api/v1/projects/{project_name}/checkpoints/create": {
       "post": {
         "tags": ["Checkpoints"],
         "summary": "Api Create Checkpoint",
         "description": "Handle the API request to create checkpoint.",
-        "operationId": "api_create_checkpoint_api_v1_checkpoints_create_post",
+        "operationId": "api_create_checkpoint_api_v1_projects__project_name__checkpoints_create_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1700,25 +2391,48 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/checkpoints/load": {
+    "/api/v1/projects/{project_name}/checkpoints/load": {
       "post": {
         "tags": ["Checkpoints"],
         "summary": "Api Load Checkpoint",
         "description": "Handle the API request to load checkpoint.",
-        "operationId": "api_load_checkpoint_api_v1_checkpoints_load_post",
+        "operationId": "api_load_checkpoint_api_v1_projects__project_name__checkpoints_load_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CheckpointLoadDeleteRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1742,21 +2456,34 @@
         }
       }
     },
-    "/api/v1/checkpoints/delete": {
+    "/api/v1/projects/{project_name}/checkpoints/delete": {
       "post": {
         "tags": ["Checkpoints"],
         "summary": "Api Delete Checkpoint",
         "description": "Handle the API request to delete checkpoint.",
-        "operationId": "api_delete_checkpoint_api_v1_checkpoints_delete_post",
+        "operationId": "api_delete_checkpoint_api_v1_projects__project_name__checkpoints_delete_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CheckpointLoadDeleteRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1800,12 +2527,25 @@
         }
       }
     },
-    "/api/v1/chat/tools": {
+    "/api/v1/projects/{project_name}/chat/tools": {
       "post": {
         "tags": ["Chat"],
         "summary": "Api Chat Tools",
         "description": "Execute OpenAI-style tool calls and stream tool messages as SSE.\n\nThe endpoint does not call the upstream LLM; it only executes provided\ntool_calls from the last assistant message and returns corresponding\n{role:\"tool\"} messages.  When call_writing_llm is among the tools, prose\nchunks are streamed as ``prose_chunk`` events before the final ``result``.\n\nBody JSON:\n  {\n    \"model_name\": str | null,\n    \"messages\": [\n      {\"role\":\"user|assistant|system|tool\", \"content\": str,\n       \"tool_calls\"?: [{\"id\":str, \"type\":\"function\",\n                        \"function\": {\"name\": str, \"arguments\": str}}],\n       \"tool_call_id\"?: str, \"name\"?: str}\n    ],\n    \"active_chapter_id\"?: int\n  }\n\nSSE events emitted:\n  {\"type\": \"prose_start\", \"chap_id\": N, \"write_mode\": str}  (optional)\n  {\"type\": \"prose_chunk\", \"accumulated\": str, \"chap_id\": N, \"write_mode\": str}\n  {\"type\": \"result\", \"ok\": true, \"appended_messages\": [...], \"mutations\": {...}}",
-        "operationId": "api_chat_tools_api_v1_chat_tools_post",
+        "operationId": "api_chat_tools_api_v1_projects__project_name__chat_tools_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1814,16 +2554,26 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/chat/tools/undo/{batch_id}": {
+    "/api/v1/projects/{project_name}/chat/tools/undo/{batch_id}": {
       "post": {
         "tags": ["Chat"],
         "summary": "Api Chat Tools Undo",
         "description": "Undo a previously executed chat-tool batch by restoring snapshot content.",
-        "operationId": "api_chat_tools_undo_api_v1_chat_tools_undo__batch_id__post",
+        "operationId": "api_chat_tools_undo_api_v1_projects__project_name__chat_tools_undo__batch_id__post",
         "parameters": [
           {
             "name": "batch_id",
@@ -1833,6 +2583,17 @@
               "type": "string",
               "title": "Batch Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -1859,12 +2620,12 @@
         }
       }
     },
-    "/api/v1/chat/tools/redo/{batch_id}": {
+    "/api/v1/projects/{project_name}/chat/tools/redo/{batch_id}": {
       "post": {
         "tags": ["Chat"],
         "summary": "Api Chat Tools Redo",
         "description": "Redo a previously undone chat-tool batch by restoring post-batch snapshot.",
-        "operationId": "api_chat_tools_redo_api_v1_chat_tools_redo__batch_id__post",
+        "operationId": "api_chat_tools_redo_api_v1_projects__project_name__chat_tools_redo__batch_id__post",
         "parameters": [
           {
             "name": "batch_id",
@@ -1874,6 +2635,17 @@
               "type": "string",
               "title": "Batch Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -1900,12 +2672,25 @@
         }
       }
     },
-    "/api/v1/chat/stream": {
+    "/api/v1/projects/{project_name}/chat/stream": {
       "post": {
         "tags": ["Chat"],
         "summary": "Api Chat Stream",
         "description": "Stream chat with the configured OpenAI-compatible model.\n\nBody JSON:\n  {\n    \"model_name\": \"name-of-configured-entry\" | null,\n    \"model_type\": \"CHAT\" | \"WRITING\" | \"EDITING\" | null,\n    \"messages\": [{\"role\": \"system|user|assistant\", \"content\": str}, ...],\n    // optional overrides (otherwise pulled from runtime user machine config)\n    \"base_url\": str,\n    \"api_key\": str,\n    \"model\": str,\n    \"timeout_s\": int\n  }\n\nReturns: Streaming text response with the assistant's message.",
-        "operationId": "api_chat_stream_api_v1_chat_stream_post",
+        "operationId": "api_chat_stream_api_v1_projects__project_name__chat_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1914,16 +2699,39 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/chats": {
+    "/api/v1/projects/{project_name}/chats": {
       "get": {
         "tags": ["Chat"],
         "summary": "Api List Chats",
         "description": "Handle the API request to list chats.",
-        "operationId": "api_list_chats_api_v1_chats_get",
+        "operationId": "api_list_chats_api_v1_projects__project_name__chats_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1934,6 +2742,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       },
@@ -1941,7 +2759,20 @@
         "tags": ["Chat"],
         "summary": "Api Delete All Chats",
         "description": "Handle the API request to delete all chats.",
-        "operationId": "api_delete_all_chats_api_v1_chats_delete",
+        "operationId": "api_delete_all_chats_api_v1_projects__project_name__chats_delete",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1952,16 +2783,26 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/v1/chats/{chat_id}": {
+    "/api/v1/projects/{project_name}/chats/{chat_id}": {
       "get": {
         "tags": ["Chat"],
         "summary": "Api Load Chat",
         "description": "Handle the API request to load chat.",
-        "operationId": "api_load_chat_api_v1_chats__chat_id__get",
+        "operationId": "api_load_chat_api_v1_projects__project_name__chats__chat_id__get",
         "parameters": [
           {
             "name": "chat_id",
@@ -1971,6 +2812,17 @@
               "type": "string",
               "title": "Chat Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -2000,7 +2852,7 @@
         "tags": ["Chat"],
         "summary": "Api Save Chat",
         "description": "Api Save Chat.",
-        "operationId": "api_save_chat_api_v1_chats__chat_id__post",
+        "operationId": "api_save_chat_api_v1_projects__project_name__chats__chat_id__post",
         "parameters": [
           {
             "name": "chat_id",
@@ -2010,6 +2862,17 @@
               "type": "string",
               "title": "Chat Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -2039,7 +2902,7 @@
         "tags": ["Chat"],
         "summary": "Api Delete Chat",
         "description": "Handle the API request to delete chat.",
-        "operationId": "api_delete_chat_api_v1_chats__chat_id__delete",
+        "operationId": "api_delete_chat_api_v1_projects__project_name__chats__chat_id__delete",
         "parameters": [
           {
             "name": "chat_id",
@@ -2049,6 +2912,17 @@
               "type": "string",
               "title": "Chat Id"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -2131,12 +3005,12 @@
         }
       }
     },
-    "/api/v1/sourcebook/keywords": {
+    "/api/v1/projects/{project_name}/sourcebook/keywords": {
       "post": {
         "tags": ["Sourcebook"],
         "summary": "Generate Sourcebook Keywords",
         "description": "Generate keywords from an entry description without persisting the entry.",
-        "operationId": "generate_sourcebook_keywords_api_v1_sourcebook_keywords_post",
+        "operationId": "generate_sourcebook_keywords_api_v1_projects__project_name__sourcebook_keywords_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2171,13 +3045,24 @@
         }
       }
     },
-    "/api/v1/sourcebook": {
+    "/api/v1/projects/{project_name}/sourcebook": {
       "get": {
         "tags": ["Sourcebook"],
         "summary": "Get Sourcebook",
         "description": "Return sourcebook.",
-        "operationId": "get_sourcebook_api_v1_sourcebook_get",
+        "operationId": "get_sourcebook_api_v1_projects__project_name__sourcebook_get",
         "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          },
           {
             "name": "query",
             "in": "query",
@@ -2226,7 +3111,7 @@
                   "items": {
                     "$ref": "#/components/schemas/SourcebookEntry"
                   },
-                  "title": "Response Get Sourcebook Api V1 Sourcebook Get"
+                  "title": "Response Get Sourcebook Api V1 Projects  Project Name  Sourcebook Get"
                 }
               }
             }
@@ -2247,7 +3132,20 @@
         "tags": ["Sourcebook"],
         "summary": "Create Sourcebook Entry",
         "description": "Create Sourcebook Entry.",
-        "operationId": "create_sourcebook_entry_api_v1_sourcebook_post",
+        "operationId": "create_sourcebook_entry_api_v1_projects__project_name__sourcebook_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2282,12 +3180,12 @@
         }
       }
     },
-    "/api/v1/sourcebook/{entry_name}": {
+    "/api/v1/projects/{project_name}/sourcebook/{entry_name}": {
       "put": {
         "tags": ["Sourcebook"],
         "summary": "Update Sourcebook Entry",
         "description": "Update Sourcebook Entry.",
-        "operationId": "update_sourcebook_entry_api_v1_sourcebook__entry_name__put",
+        "operationId": "update_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__put",
         "parameters": [
           {
             "name": "entry_name",
@@ -2297,6 +3195,17 @@
               "type": "string",
               "title": "Entry Name"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "requestBody": {
@@ -2336,7 +3245,7 @@
         "tags": ["Sourcebook"],
         "summary": "Delete Sourcebook Entry",
         "description": "Delete Sourcebook Entry.",
-        "operationId": "delete_sourcebook_entry_api_v1_sourcebook__entry_name__delete",
+        "operationId": "delete_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__delete",
         "parameters": [
           {
             "name": "entry_name",
@@ -2346,6 +3255,17 @@
               "type": "string",
               "title": "Entry Name"
             }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
           }
         ],
         "responses": {
@@ -2354,7 +3274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Delete Sourcebook Entry Api V1 Sourcebook  Entry Name  Delete"
+                  "title": "Response Delete Sourcebook Entry Api V1 Projects  Project Name  Sourcebook  Entry Name  Delete"
                 }
               }
             }
@@ -2372,21 +3292,34 @@
         }
       }
     },
-    "/api/v1/search": {
+    "/api/v1/projects/{project_name}/search": {
       "post": {
         "tags": ["Search"],
         "summary": "Search Project",
         "description": "Search across the active project.\n\nSupported scopes: current_chapter, all_chapters, sourcebook, metadata, all.\nSupported modes: literal (default), regex (is_regex=true), phonetic (is_phonetic=true).",
-        "operationId": "search_project_api_v1_search_post",
+        "operationId": "search_project_api_v1_projects__project_name__search_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SearchOptions"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2412,21 +3345,34 @@
         }
       }
     },
-    "/api/v1/search/replace-all": {
+    "/api/v1/projects/{project_name}/search/replace-all": {
       "post": {
         "tags": ["Search"],
         "summary": "Replace All In Project",
         "description": "Replace every occurrence of a query throughout the active project.\n\nAll matching text in the specified scope is substituted with *replacement*.\nAfter completion the frontend should refresh story/chapter state.",
-        "operationId": "replace_all_in_project_api_v1_search_replace_all_post",
+        "operationId": "replace_all_in_project_api_v1_projects__project_name__search_replace_all_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ReplaceAllRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2452,21 +3398,34 @@
         }
       }
     },
-    "/api/v1/search/replace-single": {
+    "/api/v1/projects/{project_name}/search/replace-single": {
       "post": {
         "tags": ["Search"],
         "summary": "Replace Single In Project",
         "description": "Replace a single specifically identified match.\n\nThe match is identified by section_type, section_id, field, and match_index\n(zero-based ordinal of the match within that field).",
-        "operationId": "replace_single_in_project_api_v1_search_replace_single_post",
+        "operationId": "replace_single_in_project_api_v1_projects__project_name__search_replace_single_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ReplaceSingleRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {

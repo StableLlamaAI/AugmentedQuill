@@ -27,12 +27,30 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Api Settings Post
-     * @description Accept JSON body with {story: {...}, machine: {...}} and persist to config/.
-     *
-     *     Returns {ok: true} on success or {ok:false, detail: str} on error.
+     * Api Settings Post Legacy
+     * @description Legacy settings endpoint that persists to default story config when no project path is provided.
      */
-    post: operations['api_settings_post_api_v1_settings_post'];
+    post: operations['api_settings_post_legacy_api_v1_settings_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Api Settings Post
+     * @description Project-scoped settings endpoint.
+     */
+    post: operations['api_settings_post_api_v1_projects__project_name__settings_post'];
     delete?: never;
     options?: never;
     head?: never;
@@ -47,15 +65,30 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Api Prompts Get
-     * @description Get all resolved prompts (defaults + global overrides + model overrides).
-     *
-     *     The response now also includes the list of available languages as
-     *     determined by the bundled instructions file, and the values returned
-     *     for ``system_messages``/``user_prompts`` are resolved into the active
-     *     project's language (falling back to English).
+     * Api Prompts Get Legacy
+     * @description Legacy prompts endpoint resolved without explicit project path.
      */
-    get: operations['api_prompts_get_api_v1_prompts_get'];
+    get: operations['api_prompts_get_legacy_api_v1_prompts_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/{project_name}/prompts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Api Prompts Get
+     * @description Project-scoped prompts endpoint.
+     */
+    get: operations['api_prompts_get_api_v1_projects__project_name__prompts_get'];
     put?: never;
     post?: never;
     delete?: never;
@@ -157,7 +190,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/summary': {
+  '/api/v1/projects/{project_name}/story/summary': {
     parameters: {
       query?: never;
       header?: never;
@@ -169,19 +202,19 @@ export interface paths {
      * Api Story Summary Put
      * @description Update story summary in story.json.
      */
-    put: operations['api_story_summary_put_api_v1_story_summary_put'];
+    put: operations['api_story_summary_put_api_v1_projects__project_name__story_summary_put'];
     /**
      * Api Story Summary
      * @description Api Story Summary.
      */
-    post: operations['api_story_summary_api_v1_story_summary_post'];
+    post: operations['api_story_summary_api_v1_projects__project_name__story_summary_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/tags': {
+  '/api/v1/projects/{project_name}/story/tags': {
     parameters: {
       query?: never;
       header?: never;
@@ -193,7 +226,7 @@ export interface paths {
      * Api Story Tags Put
      * @description Update story tags in story.json.
      */
-    put: operations['api_story_tags_put_api_v1_story_tags_put'];
+    put: operations['api_story_tags_put_api_v1_projects__project_name__story_tags_put'];
     post?: never;
     delete?: never;
     options?: never;
@@ -561,7 +594,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters': {
+  '/api/v1/projects/{project_name}/chapters': {
     parameters: {
       query?: never;
       header?: never;
@@ -572,20 +605,20 @@ export interface paths {
      * Api Chapters
      * @description Handle the API request to chapters.
      */
-    get: operations['api_chapters_api_v1_chapters_get'];
+    get: operations['api_chapters_api_v1_projects__project_name__chapters_get'];
     put?: never;
     /**
      * Api Create Chapter
      * @description Api Create Chapter.
      */
-    post: operations['api_create_chapter_api_v1_chapters_post'];
+    post: operations['api_create_chapter_api_v1_projects__project_name__chapters_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/{chap_id}': {
+  '/api/v1/projects/{project_name}/chapters/{chap_id}': {
     parameters: {
       query?: never;
       header?: never;
@@ -596,20 +629,20 @@ export interface paths {
      * Api Chapter Content
      * @description Api Chapter Content.
      */
-    get: operations['api_chapter_content_api_v1_chapters__chap_id__get'];
+    get: operations['api_chapter_content_api_v1_projects__project_name__chapters__chap_id__get'];
     put?: never;
     post?: never;
     /**
      * Api Delete Chapter
      * @description Api Delete Chapter.
      */
-    delete: operations['api_delete_chapter_api_v1_chapters__chap_id__delete'];
+    delete: operations['api_delete_chapter_api_v1_projects__project_name__chapters__chap_id__delete'];
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/{chap_id}/metadata': {
+  '/api/v1/projects/{project_name}/chapters/{chap_id}/metadata': {
     parameters: {
       query?: never;
       header?: never;
@@ -621,7 +654,7 @@ export interface paths {
      * Api Update Chapter Metadata
      * @description Api Update Chapter Metadata.
      */
-    put: operations['api_update_chapter_metadata_api_v1_chapters__chap_id__metadata_put'];
+    put: operations['api_update_chapter_metadata_api_v1_projects__project_name__chapters__chap_id__metadata_put'];
     post?: never;
     delete?: never;
     options?: never;
@@ -629,7 +662,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/{chap_id}/title': {
+  '/api/v1/projects/{project_name}/chapters/{chap_id}/title': {
     parameters: {
       query?: never;
       header?: never;
@@ -641,7 +674,7 @@ export interface paths {
      * Api Update Chapter Title
      * @description Api Update Chapter Title.
      */
-    put: operations['api_update_chapter_title_api_v1_chapters__chap_id__title_put'];
+    put: operations['api_update_chapter_title_api_v1_projects__project_name__chapters__chap_id__title_put'];
     post?: never;
     delete?: never;
     options?: never;
@@ -649,7 +682,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/{chap_id}/content': {
+  '/api/v1/projects/{project_name}/chapters/{chap_id}/content': {
     parameters: {
       query?: never;
       header?: never;
@@ -661,7 +694,7 @@ export interface paths {
      * Api Update Chapter Content
      * @description Api Update Chapter Content.
      */
-    put: operations['api_update_chapter_content_api_v1_chapters__chap_id__content_put'];
+    put: operations['api_update_chapter_content_api_v1_projects__project_name__chapters__chap_id__content_put'];
     post?: never;
     delete?: never;
     options?: never;
@@ -669,7 +702,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/{chap_id}/summary': {
+  '/api/v1/projects/{project_name}/chapters/{chap_id}/summary': {
     parameters: {
       query?: never;
       header?: never;
@@ -681,7 +714,7 @@ export interface paths {
      * Api Update Chapter Summary
      * @description Api Update Chapter Summary.
      */
-    put: operations['api_update_chapter_summary_api_v1_chapters__chap_id__summary_put'];
+    put: operations['api_update_chapter_summary_api_v1_projects__project_name__chapters__chap_id__summary_put'];
     post?: never;
     delete?: never;
     options?: never;
@@ -689,7 +722,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chapters/reorder': {
+  '/api/v1/projects/{project_name}/chapters/reorder': {
     parameters: {
       query?: never;
       header?: never;
@@ -702,14 +735,14 @@ export interface paths {
      * Api Reorder Chapters
      * @description Api Reorder Chapters.
      */
-    post: operations['api_reorder_chapters_api_v1_chapters_reorder_post'];
+    post: operations['api_reorder_chapters_api_v1_projects__project_name__chapters_reorder_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/books/reorder': {
+  '/api/v1/projects/{project_name}/books/reorder': {
     parameters: {
       query?: never;
       header?: never;
@@ -722,14 +755,14 @@ export interface paths {
      * Api Reorder Books
      * @description Api Reorder Books.
      */
-    post: operations['api_reorder_books_api_v1_books_reorder_post'];
+    post: operations['api_reorder_books_api_v1_projects__project_name__books_reorder_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/story-summary': {
+  '/api/v1/projects/{project_name}/story/story-summary': {
     parameters: {
       query?: never;
       header?: never;
@@ -742,14 +775,14 @@ export interface paths {
      * Api Story Story Summary
      * @description Api Story Story Summary.
      */
-    post: operations['api_story_story_summary_api_v1_story_story_summary_post'];
+    post: operations['api_story_story_summary_api_v1_projects__project_name__story_story_summary_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/write': {
+  '/api/v1/projects/{project_name}/story/write': {
     parameters: {
       query?: never;
       header?: never;
@@ -762,14 +795,14 @@ export interface paths {
      * Api Story Write
      * @description Api Story Write.
      */
-    post: operations['api_story_write_api_v1_story_write_post'];
+    post: operations['api_story_write_api_v1_projects__project_name__story_write_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/continue': {
+  '/api/v1/projects/{project_name}/story/continue': {
     parameters: {
       query?: never;
       header?: never;
@@ -782,14 +815,14 @@ export interface paths {
      * Api Story Continue
      * @description Api Story Continue.
      */
-    post: operations['api_story_continue_api_v1_story_continue_post'];
+    post: operations['api_story_continue_api_v1_projects__project_name__story_continue_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/sourcebook/relevance': {
+  '/api/v1/projects/{project_name}/story/sourcebook/relevance': {
     parameters: {
       query?: never;
       header?: never;
@@ -806,14 +839,14 @@ export interface paths {
      *     in sync.  It is deliberately separate from the prose suggestion call so
      *     that we can run it in the background on every text change.
      */
-    post: operations['api_story_sourcebook_relevance_api_v1_story_sourcebook_relevance_post'];
+    post: operations['api_story_sourcebook_relevance_api_v1_projects__project_name__story_sourcebook_relevance_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/suggest': {
+  '/api/v1/projects/{project_name}/story/suggest': {
     parameters: {
       query?: never;
       header?: never;
@@ -826,14 +859,14 @@ export interface paths {
      * Api Story Suggest
      * @description Api Story Suggest.
      */
-    post: operations['api_story_suggest_api_v1_story_suggest_post'];
+    post: operations['api_story_suggest_api_v1_projects__project_name__story_suggest_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/summary/stream': {
+  '/api/v1/projects/{project_name}/story/summary/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -846,14 +879,14 @@ export interface paths {
      * Api Story Summary Stream
      * @description Api Story Summary Stream.
      */
-    post: operations['api_story_summary_stream_api_v1_story_summary_stream_post'];
+    post: operations['api_story_summary_stream_api_v1_projects__project_name__story_summary_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/write/stream': {
+  '/api/v1/projects/{project_name}/story/write/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -866,14 +899,14 @@ export interface paths {
      * Api Story Write Stream
      * @description Api Story Write Stream.
      */
-    post: operations['api_story_write_stream_api_v1_story_write_stream_post'];
+    post: operations['api_story_write_stream_api_v1_projects__project_name__story_write_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/continue/stream': {
+  '/api/v1/projects/{project_name}/story/continue/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -886,14 +919,14 @@ export interface paths {
      * Api Story Continue Stream
      * @description Api Story Continue Stream.
      */
-    post: operations['api_story_continue_stream_api_v1_story_continue_stream_post'];
+    post: operations['api_story_continue_stream_api_v1_projects__project_name__story_continue_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/story-summary/stream': {
+  '/api/v1/projects/{project_name}/story/story-summary/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -906,14 +939,14 @@ export interface paths {
      * Api Story Story Summary Stream
      * @description Api Story Story Summary Stream.
      */
-    post: operations['api_story_story_summary_stream_api_v1_story_story_summary_stream_post'];
+    post: operations['api_story_story_summary_stream_api_v1_projects__project_name__story_story_summary_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/action/stream': {
+  '/api/v1/projects/{project_name}/story/action/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -926,14 +959,14 @@ export interface paths {
      * Api Story Action Stream
      * @description Stream generic AI Actions (Extend/Rewrite/Summary update).
      */
-    post: operations['api_story_action_stream_api_v1_story_action_stream_post'];
+    post: operations['api_story_action_stream_api_v1_projects__project_name__story_action_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/title': {
+  '/api/v1/projects/{project_name}/story/title': {
     parameters: {
       query?: never;
       header?: never;
@@ -946,14 +979,14 @@ export interface paths {
      * Api Story Title
      * @description Api Story Title.
      */
-    post: operations['api_story_title_api_v1_story_title_post'];
+    post: operations['api_story_title_api_v1_projects__project_name__story_title_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/settings': {
+  '/api/v1/projects/{project_name}/story/settings': {
     parameters: {
       query?: never;
       header?: never;
@@ -966,14 +999,14 @@ export interface paths {
      * Api Story Settings
      * @description Api Story Settings.
      */
-    post: operations['api_story_settings_api_v1_story_settings_post'];
+    post: operations['api_story_settings_api_v1_projects__project_name__story_settings_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/metadata': {
+  '/api/v1/projects/{project_name}/story/metadata': {
     parameters: {
       query?: never;
       header?: never;
@@ -986,14 +1019,14 @@ export interface paths {
      * Api Story Metadata
      * @description Api Story Metadata.
      */
-    post: operations['api_story_metadata_api_v1_story_metadata_post'];
+    post: operations['api_story_metadata_api_v1_projects__project_name__story_metadata_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/story/content': {
+  '/api/v1/projects/{project_name}/story/content': {
     parameters: {
       query?: never;
       header?: never;
@@ -1004,20 +1037,20 @@ export interface paths {
      * Api Story Content
      * @description Api Story Content.
      */
-    get: operations['api_story_content_api_v1_story_content_get'];
+    get: operations['api_story_content_api_v1_projects__project_name__story_content_get'];
     put?: never;
     /**
      * Api Story Content Update
      * @description Api Story Content Update.
      */
-    post: operations['api_story_content_update_api_v1_story_content_post'];
+    post: operations['api_story_content_update_api_v1_projects__project_name__story_content_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/books/{book_id}/metadata': {
+  '/api/v1/projects/{project_name}/books/{book_id}/metadata': {
     parameters: {
       query?: never;
       header?: never;
@@ -1030,14 +1063,14 @@ export interface paths {
      * Api Book Metadata
      * @description Api Book Metadata.
      */
-    post: operations['api_book_metadata_api_v1_books__book_id__metadata_post'];
+    post: operations['api_book_metadata_api_v1_projects__project_name__books__book_id__metadata_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/checkpoints': {
+  '/api/v1/projects/{project_name}/checkpoints': {
     parameters: {
       query?: never;
       header?: never;
@@ -1048,7 +1081,7 @@ export interface paths {
      * Api Get Checkpoints
      * @description Handle the API request to get checkpoints.
      */
-    get: operations['api_get_checkpoints_api_v1_checkpoints_get'];
+    get: operations['api_get_checkpoints_api_v1_projects__project_name__checkpoints_get'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1057,7 +1090,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/checkpoints/create': {
+  '/api/v1/projects/{project_name}/checkpoints/create': {
     parameters: {
       query?: never;
       header?: never;
@@ -1070,14 +1103,14 @@ export interface paths {
      * Api Create Checkpoint
      * @description Handle the API request to create checkpoint.
      */
-    post: operations['api_create_checkpoint_api_v1_checkpoints_create_post'];
+    post: operations['api_create_checkpoint_api_v1_projects__project_name__checkpoints_create_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/checkpoints/load': {
+  '/api/v1/projects/{project_name}/checkpoints/load': {
     parameters: {
       query?: never;
       header?: never;
@@ -1090,14 +1123,14 @@ export interface paths {
      * Api Load Checkpoint
      * @description Handle the API request to load checkpoint.
      */
-    post: operations['api_load_checkpoint_api_v1_checkpoints_load_post'];
+    post: operations['api_load_checkpoint_api_v1_projects__project_name__checkpoints_load_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/checkpoints/delete': {
+  '/api/v1/projects/{project_name}/checkpoints/delete': {
     parameters: {
       query?: never;
       header?: never;
@@ -1110,7 +1143,7 @@ export interface paths {
      * Api Delete Checkpoint
      * @description Handle the API request to delete checkpoint.
      */
-    post: operations['api_delete_checkpoint_api_v1_checkpoints_delete_post'];
+    post: operations['api_delete_checkpoint_api_v1_projects__project_name__checkpoints_delete_post'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1137,7 +1170,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chat/tools': {
+  '/api/v1/projects/{project_name}/chat/tools': {
     parameters: {
       query?: never;
       header?: never;
@@ -1172,14 +1205,14 @@ export interface paths {
      *       {"type": "prose_chunk", "accumulated": str, "chap_id": N, "write_mode": str}
      *       {"type": "result", "ok": true, "appended_messages": [...], "mutations": {...}}
      */
-    post: operations['api_chat_tools_api_v1_chat_tools_post'];
+    post: operations['api_chat_tools_api_v1_projects__project_name__chat_tools_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chat/tools/undo/{batch_id}': {
+  '/api/v1/projects/{project_name}/chat/tools/undo/{batch_id}': {
     parameters: {
       query?: never;
       header?: never;
@@ -1192,14 +1225,14 @@ export interface paths {
      * Api Chat Tools Undo
      * @description Undo a previously executed chat-tool batch by restoring snapshot content.
      */
-    post: operations['api_chat_tools_undo_api_v1_chat_tools_undo__batch_id__post'];
+    post: operations['api_chat_tools_undo_api_v1_projects__project_name__chat_tools_undo__batch_id__post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chat/tools/redo/{batch_id}': {
+  '/api/v1/projects/{project_name}/chat/tools/redo/{batch_id}': {
     parameters: {
       query?: never;
       header?: never;
@@ -1212,14 +1245,14 @@ export interface paths {
      * Api Chat Tools Redo
      * @description Redo a previously undone chat-tool batch by restoring post-batch snapshot.
      */
-    post: operations['api_chat_tools_redo_api_v1_chat_tools_redo__batch_id__post'];
+    post: operations['api_chat_tools_redo_api_v1_projects__project_name__chat_tools_redo__batch_id__post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chat/stream': {
+  '/api/v1/projects/{project_name}/chat/stream': {
     parameters: {
       query?: never;
       header?: never;
@@ -1246,14 +1279,14 @@ export interface paths {
      *
      *     Returns: Streaming text response with the assistant's message.
      */
-    post: operations['api_chat_stream_api_v1_chat_stream_post'];
+    post: operations['api_chat_stream_api_v1_projects__project_name__chat_stream_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chats': {
+  '/api/v1/projects/{project_name}/chats': {
     parameters: {
       query?: never;
       header?: never;
@@ -1264,20 +1297,20 @@ export interface paths {
      * Api List Chats
      * @description Handle the API request to list chats.
      */
-    get: operations['api_list_chats_api_v1_chats_get'];
+    get: operations['api_list_chats_api_v1_projects__project_name__chats_get'];
     put?: never;
     post?: never;
     /**
      * Api Delete All Chats
      * @description Handle the API request to delete all chats.
      */
-    delete: operations['api_delete_all_chats_api_v1_chats_delete'];
+    delete: operations['api_delete_all_chats_api_v1_projects__project_name__chats_delete'];
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/chats/{chat_id}': {
+  '/api/v1/projects/{project_name}/chats/{chat_id}': {
     parameters: {
       query?: never;
       header?: never;
@@ -1288,18 +1321,18 @@ export interface paths {
      * Api Load Chat
      * @description Handle the API request to load chat.
      */
-    get: operations['api_load_chat_api_v1_chats__chat_id__get'];
+    get: operations['api_load_chat_api_v1_projects__project_name__chats__chat_id__get'];
     put?: never;
     /**
      * Api Save Chat
      * @description Api Save Chat.
      */
-    post: operations['api_save_chat_api_v1_chats__chat_id__post'];
+    post: operations['api_save_chat_api_v1_projects__project_name__chats__chat_id__post'];
     /**
      * Api Delete Chat
      * @description Handle the API request to delete chat.
      */
-    delete: operations['api_delete_chat_api_v1_chats__chat_id__delete'];
+    delete: operations['api_delete_chat_api_v1_projects__project_name__chats__chat_id__delete'];
     options?: never;
     head?: never;
     patch?: never;
@@ -1354,7 +1387,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/sourcebook/keywords': {
+  '/api/v1/projects/{project_name}/sourcebook/keywords': {
     parameters: {
       query?: never;
       header?: never;
@@ -1367,14 +1400,14 @@ export interface paths {
      * Generate Sourcebook Keywords
      * @description Generate keywords from an entry description without persisting the entry.
      */
-    post: operations['generate_sourcebook_keywords_api_v1_sourcebook_keywords_post'];
+    post: operations['generate_sourcebook_keywords_api_v1_projects__project_name__sourcebook_keywords_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/sourcebook': {
+  '/api/v1/projects/{project_name}/sourcebook': {
     parameters: {
       query?: never;
       header?: never;
@@ -1385,20 +1418,20 @@ export interface paths {
      * Get Sourcebook
      * @description Return sourcebook.
      */
-    get: operations['get_sourcebook_api_v1_sourcebook_get'];
+    get: operations['get_sourcebook_api_v1_projects__project_name__sourcebook_get'];
     put?: never;
     /**
      * Create Sourcebook Entry
      * @description Create Sourcebook Entry.
      */
-    post: operations['create_sourcebook_entry_api_v1_sourcebook_post'];
+    post: operations['create_sourcebook_entry_api_v1_projects__project_name__sourcebook_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/sourcebook/{entry_name}': {
+  '/api/v1/projects/{project_name}/sourcebook/{entry_name}': {
     parameters: {
       query?: never;
       header?: never;
@@ -1410,19 +1443,19 @@ export interface paths {
      * Update Sourcebook Entry
      * @description Update Sourcebook Entry.
      */
-    put: operations['update_sourcebook_entry_api_v1_sourcebook__entry_name__put'];
+    put: operations['update_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__put'];
     post?: never;
     /**
      * Delete Sourcebook Entry
      * @description Delete Sourcebook Entry.
      */
-    delete: operations['delete_sourcebook_entry_api_v1_sourcebook__entry_name__delete'];
+    delete: operations['delete_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__delete'];
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/search': {
+  '/api/v1/projects/{project_name}/search': {
     parameters: {
       query?: never;
       header?: never;
@@ -1438,14 +1471,14 @@ export interface paths {
      *     Supported scopes: current_chapter, all_chapters, sourcebook, metadata, all.
      *     Supported modes: literal (default), regex (is_regex=true), phonetic (is_phonetic=true).
      */
-    post: operations['search_project_api_v1_search_post'];
+    post: operations['search_project_api_v1_projects__project_name__search_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/search/replace-all': {
+  '/api/v1/projects/{project_name}/search/replace-all': {
     parameters: {
       query?: never;
       header?: never;
@@ -1461,14 +1494,14 @@ export interface paths {
      *     All matching text in the specified scope is substituted with *replacement*.
      *     After completion the frontend should refresh story/chapter state.
      */
-    post: operations['replace_all_in_project_api_v1_search_replace_all_post'];
+    post: operations['replace_all_in_project_api_v1_projects__project_name__search_replace_all_post'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/api/v1/search/replace-single': {
+  '/api/v1/projects/{project_name}/search/replace-single': {
     parameters: {
       query?: never;
       header?: never;
@@ -1484,7 +1517,7 @@ export interface paths {
      *     The match is identified by section_type, section_id, field, and match_index
      *     (zero-based ordinal of the match within that field).
      */
-    post: operations['replace_single_in_project_api_v1_search_replace_single_post'];
+    post: operations['replace_single_in_project_api_v1_projects__project_name__search_replace_single_post'];
     delete?: never;
     options?: never;
     head?: never;
@@ -2821,7 +2854,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  api_settings_post_api_v1_settings_post: {
+  api_settings_post_legacy_api_v1_settings_post: {
     parameters: {
       query?: never;
       header?: never;
@@ -2841,13 +2874,79 @@ export interface operations {
       };
     };
   };
-  api_prompts_get_api_v1_prompts_get: {
+  api_settings_post_api_v1_projects__project_name__settings_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['augmentedquill__models__machine__OkResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_prompts_get_legacy_api_v1_prompts_get: {
     parameters: {
       query?: {
         model_name?: string | null;
       };
       header?: never;
       path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromptsResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_prompts_get_api_v1_projects__project_name__prompts_get: {
+    parameters: {
+      query?: {
+        model_name?: string | null;
+      };
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -2972,11 +3071,14 @@ export interface operations {
       };
     };
   };
-  api_story_summary_put_api_v1_story_summary_put: {
+  api_story_summary_put_api_v1_projects__project_name__story_summary_put: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -2990,13 +3092,25 @@ export interface operations {
           'application/json': components['schemas']['StorySummaryResponse'];
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_story_summary_api_v1_story_summary_post: {
+  api_story_summary_api_v1_projects__project_name__story_summary_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -3010,13 +3124,25 @@ export interface operations {
           'application/json': unknown;
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_story_tags_put_api_v1_story_tags_put: {
+  api_story_tags_put_api_v1_projects__project_name__story_tags_put: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -3028,6 +3154,15 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['StoryTagsResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };
@@ -3596,11 +3731,14 @@ export interface operations {
       };
     };
   };
-  api_chapters_api_v1_chapters_get: {
+  api_chapters_api_v1_projects__project_name__chapters_get: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -3614,13 +3752,25 @@ export interface operations {
           'application/json': components['schemas']['ChaptersListResponse'];
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_create_chapter_api_v1_chapters_post: {
+  api_create_chapter_api_v1_projects__project_name__chapters_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -3649,12 +3799,14 @@ export interface operations {
       };
     };
   };
-  api_chapter_content_api_v1_chapters__chap_id__get: {
+  api_chapter_content_api_v1_projects__project_name__chapters__chap_id__get: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3680,12 +3832,14 @@ export interface operations {
       };
     };
   };
-  api_delete_chapter_api_v1_chapters__chap_id__delete: {
+  api_delete_chapter_api_v1_projects__project_name__chapters__chap_id__delete: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3711,12 +3865,14 @@ export interface operations {
       };
     };
   };
-  api_update_chapter_metadata_api_v1_chapters__chap_id__metadata_put: {
+  api_update_chapter_metadata_api_v1_projects__project_name__chapters__chap_id__metadata_put: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3746,12 +3902,14 @@ export interface operations {
       };
     };
   };
-  api_update_chapter_title_api_v1_chapters__chap_id__title_put: {
+  api_update_chapter_title_api_v1_projects__project_name__chapters__chap_id__title_put: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3781,12 +3939,14 @@ export interface operations {
       };
     };
   };
-  api_update_chapter_content_api_v1_chapters__chap_id__content_put: {
+  api_update_chapter_content_api_v1_projects__project_name__chapters__chap_id__content_put: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3816,12 +3976,14 @@ export interface operations {
       };
     };
   };
-  api_update_chapter_summary_api_v1_chapters__chap_id__summary_put: {
+  api_update_chapter_summary_api_v1_projects__project_name__chapters__chap_id__summary_put: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chap_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -3851,11 +4013,14 @@ export interface operations {
       };
     };
   };
-  api_reorder_chapters_api_v1_chapters_reorder_post: {
+  api_reorder_chapters_api_v1_projects__project_name__chapters_reorder_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -3884,11 +4049,14 @@ export interface operations {
       };
     };
   };
-  api_reorder_books_api_v1_books_reorder_post: {
+  api_reorder_books_api_v1_projects__project_name__books_reorder_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -3917,312 +4085,13 @@ export interface operations {
       };
     };
   };
-  api_story_story_summary_api_v1_story_story_summary_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_write_api_v1_story_write_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_continue_api_v1_story_continue_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_sourcebook_relevance_api_v1_story_sourcebook_relevance_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_suggest_api_v1_story_suggest_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_summary_stream_api_v1_story_summary_stream_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_write_stream_api_v1_story_write_stream_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_continue_stream_api_v1_story_continue_stream_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_story_summary_stream_api_v1_story_story_summary_stream_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_action_stream_api_v1_story_action_stream_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_title_api_v1_story_title_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_settings_api_v1_story_settings_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_metadata_api_v1_story_metadata_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_story_content_api_v1_story_content_get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['StoryContentResponse'];
-        };
-      };
-    };
-  };
-  api_story_content_update_api_v1_story_content_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': unknown;
-        };
-      };
-    };
-  };
-  api_book_metadata_api_v1_books__book_id__metadata_post: {
+  api_story_story_summary_api_v1_projects__project_name__story_story_summary_post: {
     parameters: {
       query?: never;
       header?: never;
       path: {
-        book_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4248,31 +4117,14 @@ export interface operations {
       };
     };
   };
-  api_get_checkpoints_api_v1_checkpoints_get: {
+  api_story_write_api_v1_projects__project_name__story_write_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['CheckpointListResponse'];
-        };
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
       };
-    };
-  };
-  api_create_checkpoint_api_v1_checkpoints_create_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
       cookie?: never;
     };
     requestBody?: never;
@@ -4286,13 +4138,538 @@ export interface operations {
           'application/json': unknown;
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_load_checkpoint_api_v1_checkpoints_load_post: {
+  api_story_continue_api_v1_projects__project_name__story_continue_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_sourcebook_relevance_api_v1_projects__project_name__story_sourcebook_relevance_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_suggest_api_v1_projects__project_name__story_suggest_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_summary_stream_api_v1_projects__project_name__story_summary_stream_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_write_stream_api_v1_projects__project_name__story_write_stream_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_continue_stream_api_v1_projects__project_name__story_continue_stream_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_story_summary_stream_api_v1_projects__project_name__story_story_summary_stream_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_action_stream_api_v1_projects__project_name__story_action_stream_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_title_api_v1_projects__project_name__story_title_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_settings_api_v1_projects__project_name__story_settings_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_metadata_api_v1_projects__project_name__story_metadata_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_content_api_v1_projects__project_name__story_content_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StoryContentResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_story_content_update_api_v1_projects__project_name__story_content_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_book_metadata_api_v1_projects__project_name__books__book_id__metadata_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        book_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_get_checkpoints_api_v1_projects__project_name__checkpoints_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckpointListResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_create_checkpoint_api_v1_projects__project_name__checkpoints_create_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_load_checkpoint_api_v1_projects__project_name__checkpoints_load_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -4321,11 +4698,14 @@ export interface operations {
       };
     };
   };
-  api_delete_checkpoint_api_v1_checkpoints_delete_post: {
+  api_delete_checkpoint_api_v1_projects__project_name__checkpoints_delete_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -4374,11 +4754,14 @@ export interface operations {
       };
     };
   };
-  api_chat_tools_api_v1_chat_tools_post: {
+  api_chat_tools_api_v1_projects__project_name__chat_tools_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -4392,14 +4775,25 @@ export interface operations {
           'application/json': unknown;
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_chat_tools_undo_api_v1_chat_tools_undo__batch_id__post: {
+  api_chat_tools_undo_api_v1_projects__project_name__chat_tools_undo__batch_id__post: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         batch_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4425,12 +4819,14 @@ export interface operations {
       };
     };
   };
-  api_chat_tools_redo_api_v1_chat_tools_redo__batch_id__post: {
+  api_chat_tools_redo_api_v1_projects__project_name__chat_tools_redo__batch_id__post: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         batch_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4456,11 +4852,14 @@ export interface operations {
       };
     };
   };
-  api_chat_stream_api_v1_chat_stream_post: {
+  api_chat_stream_api_v1_projects__project_name__chat_stream_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -4474,13 +4873,25 @@ export interface operations {
           'application/json': unknown;
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_list_chats_api_v1_chats_get: {
+  api_list_chats_api_v1_projects__project_name__chats_get: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -4494,13 +4905,25 @@ export interface operations {
           'application/json': components['schemas']['ChatListResponse'];
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_delete_all_chats_api_v1_chats_delete: {
+  api_delete_all_chats_api_v1_projects__project_name__chats_delete: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -4514,14 +4937,25 @@ export interface operations {
           'application/json': components['schemas']['augmentedquill__models__chat__OkResponse'];
         };
       };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
   };
-  api_load_chat_api_v1_chats__chat_id__get: {
+  api_load_chat_api_v1_projects__project_name__chats__chat_id__get: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chat_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4547,12 +4981,14 @@ export interface operations {
       };
     };
   };
-  api_save_chat_api_v1_chats__chat_id__post: {
+  api_save_chat_api_v1_projects__project_name__chats__chat_id__post: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chat_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4578,12 +5014,14 @@ export interface operations {
       };
     };
   };
-  api_delete_chat_api_v1_chats__chat_id__delete: {
+  api_delete_chat_api_v1_projects__project_name__chats__chat_id__delete: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         chat_id: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4669,7 +5107,7 @@ export interface operations {
       };
     };
   };
-  generate_sourcebook_keywords_api_v1_sourcebook_keywords_post: {
+  generate_sourcebook_keywords_api_v1_projects__project_name__sourcebook_keywords_post: {
     parameters: {
       query?: never;
       header?: never;
@@ -4702,7 +5140,7 @@ export interface operations {
       };
     };
   };
-  get_sourcebook_api_v1_sourcebook_get: {
+  get_sourcebook_api_v1_projects__project_name__sourcebook_get: {
     parameters: {
       query?: {
         query?: string | null;
@@ -4710,7 +5148,10 @@ export interface operations {
         split_query_fallback?: boolean;
       };
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -4735,11 +5176,14 @@ export interface operations {
       };
     };
   };
-  create_sourcebook_entry_api_v1_sourcebook_post: {
+  create_sourcebook_entry_api_v1_projects__project_name__sourcebook_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -4768,12 +5212,14 @@ export interface operations {
       };
     };
   };
-  update_sourcebook_entry_api_v1_sourcebook__entry_name__put: {
+  update_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__put: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         entry_name: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4803,12 +5249,14 @@ export interface operations {
       };
     };
   };
-  delete_sourcebook_entry_api_v1_sourcebook__entry_name__delete: {
+  delete_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__delete: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         entry_name: string;
+        /** @description Directory name of the project */
+        project_name: string;
       };
       cookie?: never;
     };
@@ -4834,11 +5282,14 @@ export interface operations {
       };
     };
   };
-  search_project_api_v1_search_post: {
+  search_project_api_v1_projects__project_name__search_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -4867,11 +5318,14 @@ export interface operations {
       };
     };
   };
-  replace_all_in_project_api_v1_search_replace_all_post: {
+  replace_all_in_project_api_v1_projects__project_name__search_replace_all_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
@@ -4900,11 +5354,14 @@ export interface operations {
       };
     };
   };
-  replace_single_in_project_api_v1_search_replace_single_post: {
+  replace_single_in_project_api_v1_projects__project_name__search_replace_single_post: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description Directory name of the project */
+        project_name: string;
+      };
       cookie?: never;
     };
     requestBody: {
