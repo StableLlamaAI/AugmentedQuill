@@ -39,9 +39,9 @@ export interface ChatToolCall {
 
 export interface ChatSession {
   id: string;
-  name: string;
-  created_at?: string;
-  updated_at?: string;
+  name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   messages?: ChatMessage[];
   systemPrompt?: string;
   isIncognito?: boolean;

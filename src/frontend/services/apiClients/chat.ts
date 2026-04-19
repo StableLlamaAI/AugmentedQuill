@@ -12,14 +12,21 @@
 import { ChatSession } from '../../types';
 import {
   ChatApiMessage,
+  ChatListResponse,
   ChatToolBatchMutationResponse,
   ChatToolExecutionResponse,
 } from '../apiTypes';
 import { fetchJson, postJson, deleteJson } from './shared';
 
 export const chatApi = {
-  list: async () =>
-    fetchJson<ChatSession[]>('/chats', undefined, 'Failed to list chats'),
+  list: async () => {
+    const response = await fetchJson<ChatListResponse>(
+      '/chats',
+      undefined,
+      'Failed to list chats'
+    );
+    return response.chats ?? [];
+  },
 
   load: async (id: string) => {
     return fetchJson<ChatSession>(`/chats/${id}`, undefined, 'Failed to load chat');

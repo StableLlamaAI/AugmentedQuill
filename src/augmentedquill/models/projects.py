@@ -100,6 +100,7 @@ class ProjectInfo(BaseModel):
     is_valid: bool
     title: str
     type: str = "novel"
+    language: Optional[str] = None
 
 
 class ProjectListResponse(BaseModel):

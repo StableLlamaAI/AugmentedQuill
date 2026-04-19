@@ -12,7 +12,6 @@ API endpoints for managing the sourcebook (knowledge base) associated with a pro
 
 from typing import Any, List, Literal, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
@@ -24,69 +23,15 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
 )
+from augmentedquill.models.sourcebook import (
+    SourcebookEntry,
+    SourcebookEntryCreate,
+    SourcebookEntryUpdate,
+    SourcebookKeywordsRequest,
+    SourcebookKeywordsResponse,
+)
 
 router = APIRouter(tags=["Sourcebook"])
-
-
-class SourcebookRelation(BaseModel):
-    """Represents the SourcebookRelation type."""
-
-    target_id: str
-    relation: str
-    direction: Optional[str] = "forward"
-    start_chapter: Optional[str] = None
-    start_book: Optional[str] = None
-    end_chapter: Optional[str] = None
-    end_book: Optional[str] = None
-
-
-class SourcebookEntry(BaseModel):
-    """Represents the SourcebookEntry type."""
-
-    id: str
-    name: str
-    synonyms: List[str] = []
-    category: Optional[str] = None
-    description: str
-    images: List[str] = []
-    keywords: List[str] = []
-    relations: List[SourcebookRelation] = []
-
-
-class SourcebookEntryCreate(BaseModel):
-    """Represents the SourcebookEntryCreate type."""
-
-    name: str
-    synonyms: List[str] = []
-    category: Optional[str] = None
-    description: str
-    images: List[str] = []
-    relations: List[SourcebookRelation] = []
-
-
-class SourcebookEntryUpdate(BaseModel):
-    """Represents the SourcebookEntryUpdate type."""
-
-    name: Optional[str] = None
-    synonyms: Optional[List[str]] = None
-    category: Optional[str] = None
-    description: Optional[str] = None
-    images: Optional[List[str]] = None
-    relations: Optional[List[SourcebookRelation]] = None
-
-
-class SourcebookKeywordsRequest(BaseModel):
-    """Request payload for generating keywords from an entry description."""
-
-    name: Optional[str] = None
-    description: Optional[str] = None
-    synonyms: Optional[List[str]] = None
-
-
-class SourcebookKeywordsResponse(BaseModel):
-    """Represents the SourcebookKeywordsResponse type."""
-
-    keywords: List[str]
 
 
 @router.post("/sourcebook/keywords")

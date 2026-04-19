@@ -149,6 +149,8 @@ export function useSourcebookListMutations({
             category: previous.category,
             description: previous.description,
             images: previous.images,
+            relations: (previous.relations ??
+              []) as SourcebookUpsertPayload['relations'],
           });
           activeId = reverted.id;
           await loadEntries();
@@ -160,6 +162,7 @@ export function useSourcebookListMutations({
             category: entry.category,
             description: entry.description,
             images: entry.images,
+            relations: entry.relations ?? [],
           });
           activeId = redone.id;
           await loadEntries();
@@ -207,6 +210,8 @@ export function useSourcebookListMutations({
             category: deletedEntry.category,
             description: deletedEntry.description,
             images: deletedEntry.images,
+            relations: (deletedEntry.relations ??
+              []) as SourcebookUpsertPayload['relations'],
           });
           activeId = restored.id;
           await loadEntries();

@@ -16,7 +16,7 @@ import base64
 from uuid import uuid4
 from pathlib import Path
 
-from fastapi.responses import JSONResponse
+from fastapi import HTTPException
 
 from augmentedquill.services.exceptions import BadRequestError
 
@@ -33,6 +33,12 @@ from augmentedquill.services.projects.projects import (
     list_projects,
     load_registry,
     select_project,
+)
+from augmentedquill.models.story import (
+    BookMutationResponse,
+    ProjectMutationResponse,
+    ProjectSelectResponse,
+    StoryPayload,
 )
 
 _BOOK_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
@@ -83,31 +89,27 @@ def projects_listing_payload() -> dict:
     }
 
 
-def delete_project_response(name: str) -> JSONResponse:
+def delete_project_response(name: str) -> ProjectMutationResponse:
     """Delete Project Response."""
     ok, msg = delete_project(name)
     if not ok:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
+        raise HTTPException(status_code=400, detail=msg)
 
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
     available = list_projects()
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": msg,
-            "registry": normalized_reg,
-            "available": available,
-        },
+    return ProjectMutationResponse(
+        ok=True,
+        message=msg,
+        registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"], "available": available},  # type: ignore[arg-type]
     )
 
 
-def select_project_response(name: str) -> JSONResponse:
+def select_project_response(name: str) -> ProjectSelectResponse:
     """Select Project Response."""
     ok, msg = select_project(name)
     if not ok:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
+        raise HTTPException(status_code=400, detail=msg)
 
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
@@ -117,75 +119,63 @@ def select_project_response(name: str) -> JSONResponse:
     except ValueError as e:
         error_msg = str(e)
         if "Invalid story config" in error_msg or "unknown version" in error_msg:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "ok": True,
-                    "message": msg,
-                    "registry": normalized_reg,
-                    "story": None,
-                    "error": "invalid_config",
-                    "error_message": error_msg,
-                },
+            return ProjectSelectResponse(
+                ok=True,
+                message=msg,
+                registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"]},  # type: ignore[arg-type]
+                story=None,
+                error="invalid_config",
+                error_message=error_msg,
             )
         raise
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": msg,
-            "registry": normalized_reg,
-            "story": normalize_story_for_frontend(story),
-        },
+    return ProjectSelectResponse(
+        ok=True,
+        message=msg,
+        registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"]},  # type: ignore[arg-type]
+        story=StoryPayload(**normalize_story_for_frontend(story)),
     )
 
 
 def create_project_response(
     name: str, project_type: str, language: str = "en"
-) -> JSONResponse:
+) -> ProjectMutationResponse:
     """Create Project Response."""
     ok, msg = create_project(name, project_type=project_type, language=language)
     if not ok:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
+        raise HTTPException(status_code=400, detail=msg)
 
     reg = load_registry()
     normalized_reg = normalize_registry(reg)
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None)
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": msg,
-            "registry": normalized_reg,
-            "story": normalize_story_for_frontend(story),
-        },
+    return ProjectMutationResponse(
+        ok=True,
+        message=msg,
+        registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"]},  # type: ignore[arg-type]
+        story=StoryPayload(**normalize_story_for_frontend(story)),
     )
 
 
-def convert_project_response(new_type: str) -> JSONResponse:
+def convert_project_response(new_type: str) -> ProjectMutationResponse:
     """Convert Project Response."""
     if not new_type:
         raise BadRequestError("new_type is required")
 
     ok, msg = change_project_type(new_type)
     if not ok:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": msg})
+        raise HTTPException(status_code=400, detail=msg)
 
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None)
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": msg,
-            "story": normalize_story_for_frontend(story),
-        },
+    return ProjectMutationResponse(
+        ok=True,
+        message=msg,
+        story=StoryPayload(**normalize_story_for_frontend(story)),
     )
 
 
-def create_book_response(title: str) -> JSONResponse:
+def create_book_response(title: str) -> BookMutationResponse:
     """Create Book Response."""
     if not title:
         raise BadRequestError("Book title is required")
@@ -194,17 +184,14 @@ def create_book_response(title: str) -> JSONResponse:
         bid = create_new_book(title)
         active = get_active_project_dir()
         story = load_story_config((active / "story.json") if active else None)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "message": "Book created",
-                "book_id": bid,
-                "story": normalize_story_for_frontend(story),
-            },
+        return BookMutationResponse(
+            ok=True,
+            message="Book created",
+            book_id=bid,
+            story=StoryPayload(**normalize_story_for_frontend(story)),
         )
     except ValueError as e:
-        return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def _deleted_books_dir(active: Path) -> Path:
@@ -248,7 +235,7 @@ def _snapshot_book_for_restore(active: Path, story: dict, book_id: str) -> str:
     return restore_id
 
 
-def delete_book_response(book_id: str) -> JSONResponse:
+def delete_book_response(book_id: str) -> BookMutationResponse:
     """Delete Book Response."""
     if not book_id:
         raise BadRequestError("book_id is required")
@@ -264,9 +251,7 @@ def delete_book_response(book_id: str) -> JSONResponse:
 
     exists = any(str(b.get("id")) == book_id for b in books)
     if not exists:
-        return JSONResponse(
-            status_code=404, content={"ok": False, "detail": "Book not found"}
-        )
+        raise HTTPException(status_code=404, detail="Book not found")
 
     restore_id = _snapshot_book_for_restore(active, story, book_id)
 
@@ -277,18 +262,15 @@ def delete_book_response(book_id: str) -> JSONResponse:
     if book_dir.exists():
         shutil.rmtree(book_dir)
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": "Book deleted",
-            "story": normalize_story_for_frontend(story),
-            "restore_id": restore_id,
-        },
+    return BookMutationResponse(
+        ok=True,
+        message="Book deleted",
+        restore_id=restore_id,
+        story=StoryPayload(**normalize_story_for_frontend(story)),
     )
 
 
-def restore_book_response(restore_id: str) -> JSONResponse:
+def restore_book_response(restore_id: str) -> BookMutationResponse:
     """Restore a previously deleted book from a snapshot."""
     if not restore_id:
         raise BadRequestError("restore_id is required")
@@ -300,10 +282,7 @@ def restore_book_response(restore_id: str) -> JSONResponse:
 
     snapshot_path = _safe_child_path(_deleted_books_dir(active), f"{restore_id}.json")
     if not snapshot_path.exists():
-        return JSONResponse(
-            status_code=404,
-            content={"ok": False, "detail": "Restore snapshot not found"},
-        )
+        raise HTTPException(status_code=404, detail="Restore snapshot not found")
 
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     book_id = str(snapshot.get("book_id") or "")
@@ -312,20 +291,14 @@ def restore_book_response(restore_id: str) -> JSONResponse:
     files: dict[str, str] = snapshot.get("files") or {}
 
     if not book_id or not isinstance(book_data, dict):
-        return JSONResponse(
-            status_code=400,
-            content={"ok": False, "detail": "Invalid restore snapshot payload"},
-        )
+        raise HTTPException(status_code=400, detail="Invalid restore snapshot payload")
 
     story_path = active / "story.json"
     story = load_story_config(story_path) or {}
     books = story.get("books") or []
 
     if any(str(book.get("id")) == book_id for book in books):
-        return JSONResponse(
-            status_code=409,
-            content={"ok": False, "detail": "Book already exists"},
-        )
+        raise HTTPException(status_code=409, detail="Book already exists")
 
     safe_index = max(0, min(insert_index, len(books)))
     books.insert(safe_index, book_data)
@@ -343,12 +316,9 @@ def restore_book_response(restore_id: str) -> JSONResponse:
 
     snapshot_path.unlink(missing_ok=True)
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "message": "Book restored",
-            "book_id": book_id,
-            "story": normalize_story_for_frontend(story),
-        },
+    return BookMutationResponse(
+        ok=True,
+        message="Book restored",
+        book_id=book_id,
+        story=StoryPayload(**normalize_story_for_frontend(story)),
     )

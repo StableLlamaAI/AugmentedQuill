@@ -16,7 +16,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__machine__OkResponse"
+                }
               }
             }
           }
@@ -52,7 +54,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
               }
             }
           },
@@ -80,7 +84,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MachineTestResponse"
+                }
               }
             }
           }
@@ -98,7 +104,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePresetsResponse"
+                }
               }
             }
           }
@@ -116,7 +124,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MachineTestModelResponse"
+                }
               }
             }
           }
@@ -125,14 +135,17 @@
     },
     "/api/v1/machine": {
       "get": {
-        "summary": "<Lambda>",
-        "operationId": "_lambda__api_v1_machine_get",
+        "summary": " Get Machine",
+        "description": "Return the current machine configuration.",
+        "operationId": "_get_machine_api_v1_machine_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MachineConfigResponse"
+                }
               }
             }
           }
@@ -148,7 +161,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OkSelectedResponse"
+                }
               }
             }
           }
@@ -166,7 +181,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StorySummaryResponse"
+                }
               }
             }
           }
@@ -200,7 +217,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StoryTagsResponse"
+                }
               }
             }
           }
@@ -248,7 +267,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
               }
             }
           },
@@ -286,7 +307,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSelectResponse"
+                }
               }
             }
           },
@@ -324,7 +347,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
               }
             }
           },
@@ -362,7 +387,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
               }
             }
           },
@@ -400,7 +427,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
               }
             }
           },
@@ -438,7 +467,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
               }
             }
           },
@@ -476,7 +507,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
               }
             }
           },
@@ -504,7 +537,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ListImagesResponse"
+                }
               }
             }
           }
@@ -864,7 +899,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Projects Import Api V1 Projects Import Post"
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
                 }
               }
             }
@@ -1567,7 +1602,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StoryContentResponse"
+                }
               }
             }
           }
@@ -1803,7 +1840,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatToolBatchMutationResponse"
+                }
               }
             }
           },
@@ -1842,7 +1881,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatToolBatchMutationResponse"
+                }
               }
             }
           },
@@ -1889,7 +1930,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api List Chats Api V1 Chats Get"
+                  "$ref": "#/components/schemas/ChatListResponse"
                 }
               }
             }
@@ -1907,7 +1948,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Delete All Chats Api V1 Chats Delete"
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
                 }
               }
             }
@@ -1938,7 +1979,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Load Chat Api V1 Chats  Chat Id  Get"
+                  "$ref": "#/components/schemas/ChatDetailResponse"
                 }
               }
             }
@@ -1977,7 +2018,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Save Chat Api V1 Chats  Chat Id  Post"
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
                 }
               }
             }
@@ -2016,7 +2057,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Api Delete Chat Api V1 Chats  Chat Id  Delete"
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
                 }
               }
             }
@@ -2055,14 +2096,17 @@
     "/api/v1/debug/llm_logs": {
       "get": {
         "tags": ["debug"],
-        "summary": "<Lambda>",
-        "operationId": "_lambda__api_v1_debug_llm_logs_get",
+        "summary": "Get Llm Logs",
+        "description": "Return the in-memory LLM communication logs.",
+        "operationId": "get_llm_logs_api_v1_debug_llm_logs_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DebugLogsResponse"
+                }
               }
             }
           }
@@ -2532,6 +2576,72 @@
         "title": "BookDeleteRequest",
         "description": "Represents the BookDeleteRequest type."
       },
+      "BookMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "restore_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Id"
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "BookMutationResponse",
+        "description": "Response body for book create/delete/restore endpoints."
+      },
       "BookRestoreRequest": {
         "properties": {
           "restore_id": {
@@ -2840,6 +2950,63 @@
         "title": "ChaptersReorderRequest",
         "description": "Request body for reordering chapters."
       },
+      "ChatDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "messages": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatDetailResponse",
+        "description": "Response body for ``GET /api/v1/chats/{chat_id}``."
+      },
       "ChatInitialStateResponse": {
         "properties": {
           "models": {
@@ -2863,6 +3030,100 @@
         "required": ["models", "current_model", "messages"],
         "title": "ChatInitialStateResponse",
         "description": "Response body for ``GET /api/v1/chat``.\n\nReturns the available LLM models and initial (empty) message history so\nthe frontend can initialise the chat panel without a separate request."
+      },
+      "ChatListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatListItem",
+        "description": "Summary of a saved chat session returned in the chat list."
+      },
+      "ChatListResponse": {
+        "properties": {
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ChatListItem"
+            },
+            "type": "array",
+            "title": "Chats"
+          }
+        },
+        "type": "object",
+        "required": ["chats"],
+        "title": "ChatListResponse",
+        "description": "Response body for ``GET /api/v1/chats`` (list of saved chats)."
+      },
+      "ChatToolBatchMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ChatToolBatchMutationResponse",
+        "description": "Response body for ``POST /api/v1/chat/tools/undo/{batch_id}``\nand ``POST /api/v1/chat/tools/redo/{batch_id}``."
       },
       "CheckpointInfo": {
         "properties": {
@@ -2902,6 +3163,83 @@
         "required": ["timestamp"],
         "title": "CheckpointLoadDeleteRequest",
         "description": "Represents the CheckpointLoadDeleteRequest type."
+      },
+      "DebugLogEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Id"
+          },
+          "model_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Type"
+          },
+          "timestamp_start": {
+            "type": "string",
+            "title": "Timestamp Start"
+          },
+          "timestamp_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp End"
+          },
+          "request": {
+            "$ref": "#/components/schemas/LLMLogRequest"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMLogResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["id", "timestamp_start", "request"],
+        "title": "DebugLogEntry",
+        "description": "A single LLM communication log entry."
+      },
+      "DebugLogsResponse": {
+        "properties": {
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/DebugLogEntry"
+            },
+            "type": "array",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": ["logs"],
+        "title": "DebugLogsResponse",
+        "description": "Response body for ``GET /api/v1/debug/llm_logs``."
       },
       "HTTPValidationError": {
         "properties": {
@@ -3019,6 +3357,780 @@
         "title": "ImageRestoreRequest",
         "description": "Represents the ImageRestoreRequest type."
       },
+      "LLMLogRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers"
+          },
+          "body": {
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": ["url", "method", "headers", "body"],
+        "title": "LLMLogRequest",
+        "description": "Shape of the request portion of an LLM log entry."
+      },
+      "LLMLogResponse": {
+        "properties": {
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          },
+          "body": {
+            "title": "Body"
+          },
+          "streaming": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Streaming"
+          },
+          "chunks": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunks"
+          },
+          "full_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Content"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking"
+          },
+          "error": {
+            "title": "Error"
+          },
+          "error_detail": {
+            "title": "Error Detail"
+          },
+          "tool_calls": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Calls"
+          }
+        },
+        "type": "object",
+        "title": "LLMLogResponse",
+        "description": "Shape of the response portion of an LLM log entry."
+      },
+      "ListImagesResponse": {
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectImageInfo"
+            },
+            "type": "array",
+            "title": "Images"
+          }
+        },
+        "type": "object",
+        "required": ["images"],
+        "title": "ListImagesResponse",
+        "description": "Response body for ``GET /api/v1/projects/images/list``."
+      },
+      "MachineConfigResponse": {
+        "properties": {
+          "gui_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gui Language"
+          },
+          "openai": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineOpenAIConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "MachineConfigResponse",
+        "description": "Response body for ``GET /api/v1/machine``."
+      },
+      "MachineModelConfig": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "context_window_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window Tokens"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty"
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min P"
+          },
+          "extra_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Body"
+          },
+          "preset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Id"
+          },
+          "writing_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writing Warning"
+          },
+          "is_multimodal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Multimodal"
+          },
+          "supports_function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Function Calling"
+          },
+          "prompt_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Overrides"
+          }
+        },
+        "type": "object",
+        "required": ["name", "base_url", "model"],
+        "title": "MachineModelConfig",
+        "description": "Configuration for a single LLM provider / model entry."
+      },
+      "MachineOpenAIConfig": {
+        "properties": {
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MachineModelConfig"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          },
+          "selected_chat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Chat"
+          },
+          "selected_writing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Writing"
+          },
+          "selected_editing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Editing"
+          }
+        },
+        "type": "object",
+        "title": "MachineOpenAIConfig",
+        "description": "The ``openai`` section of the machine config."
+      },
+      "MachinePresetsResponse": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/ModelPresetEntry"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": ["presets"],
+        "title": "MachinePresetsResponse",
+        "description": "Response body for ``GET /api/v1/machine/presets``."
+      },
+      "MachineTestModelResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "model_ok": {
+            "type": "boolean",
+            "title": "Model Ok"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["ok", "model_ok"],
+        "title": "MachineTestModelResponse",
+        "description": "Response body for ``POST /api/v1/machine/test_model``."
+      },
+      "MachineTestResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "MachineTestResponse",
+        "description": "Response body for ``POST /api/v1/machine/test``."
+      },
+      "ModelCapabilities": {
+        "properties": {
+          "multimodal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multimodal"
+          },
+          "function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Function Calling"
+          }
+        },
+        "type": "object",
+        "title": "ModelCapabilities",
+        "description": "Subset of capabilities detected for a model (optional fields)."
+      },
+      "ModelPresetEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "model_id_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Id Patterns"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ModelPresetParameters"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelPresetWarning"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "description", "model_id_patterns", "parameters"],
+        "title": "ModelPresetEntry",
+        "description": "A single model-preset entry as loaded from *model_presets.json*."
+      },
+      "ModelPresetParameters": {
+        "properties": {
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty"
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min P"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "extra_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Body"
+          }
+        },
+        "type": "object",
+        "title": "ModelPresetParameters",
+        "description": "Typed parameters for a model preset."
+      },
+      "ModelPresetWarning": {
+        "properties": {
+          "writing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writing"
+          }
+        },
+        "type": "object",
+        "title": "ModelPresetWarning",
+        "description": "Warnings that should be surfaced to the user for a preset."
+      },
+      "OkSelectedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkSelectedResponse",
+        "description": "Response for ``PUT /api/v1/machine`` \u2013 returns the new selected model name."
+      },
       "ProjectConvertRequest": {
         "properties": {
           "target_type": {
@@ -3071,6 +4183,62 @@
         "title": "ProjectDeleteRequest",
         "description": "Represents the ProjectDeleteRequest type."
       },
+      "ProjectImageInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "is_placeholder": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Placeholder"
+          }
+        },
+        "type": "object",
+        "required": ["filename"],
+        "title": "ProjectImageInfo",
+        "description": "Describes a single project image or image placeholder."
+      },
       "ProjectInfo": {
         "properties": {
           "id": {
@@ -3097,6 +4265,17 @@
             "type": "string",
             "title": "Type",
             "default": "novel"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           }
         },
         "type": "object",
@@ -3130,6 +4309,127 @@
         "title": "ProjectListResponse",
         "description": "Response body for ``GET /api/v1/projects``."
       },
+      "ProjectMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "registry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRegistry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ProjectMutationResponse",
+        "description": "Generic response for project create/delete/convert operations."
+      },
+      "ProjectRegistry": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "recent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProjectRegistryEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          }
+        },
+        "type": "object",
+        "title": "ProjectRegistry",
+        "description": "Registry summary returned alongside project mutations."
+      },
+      "ProjectRegistryEntry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "is_valid": {
+            "type": "boolean",
+            "title": "Is Valid",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "ProjectRegistryEntry",
+        "description": "A single project registry entry embedded in mutation responses."
+      },
       "ProjectSelectRequest": {
         "properties": {
           "name": {
@@ -3141,6 +4441,136 @@
         "required": ["name"],
         "title": "ProjectSelectRequest",
         "description": "Represents the ProjectSelectRequest type."
+      },
+      "ProjectSelectResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "registry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRegistry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ProjectSelectResponse",
+        "description": "Response body for ``POST /api/v1/projects/select``."
+      },
+      "PromptsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "system_messages": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Messages"
+          },
+          "user_prompts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Prompts"
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Languages"
+          },
+          "project_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Language"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "PromptsResponse",
+        "description": "Response for ``GET /api/v1/prompts``."
       },
       "ReplaceAllRequest": {
         "properties": {
@@ -3766,6 +5196,553 @@
         "title": "SourcebookRelation",
         "description": "Represents the SourcebookRelation type."
       },
+      "StoryBook": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "chapters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryChapterSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters"
+          }
+        },
+        "type": "object",
+        "title": "StoryBook",
+        "description": "Book descriptor embedded in the story payload."
+      },
+      "StoryChapterSummary": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "private_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Notes"
+          },
+          "conflicts": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "title": "StoryChapterSummary",
+        "description": "Lightweight chapter descriptor embedded in the story payload."
+      },
+      "StoryContentResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": ["ok", "content"],
+        "title": "StoryContentResponse",
+        "description": "Response body for ``GET /api/v1/story/content``."
+      },
+      "StoryLLMPrefs": {
+        "properties": {
+          "prompt_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Overrides"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          }
+        },
+        "type": "object",
+        "title": "StoryLLMPrefs",
+        "description": "Per-project LLM preference overrides embedded in story data."
+      },
+      "StoryPayload": {
+        "properties": {
+          "project_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Title"
+          },
+          "story_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Summary"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "private_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Notes"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "image_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Style"
+          },
+          "image_additional_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Additional Info"
+          },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
+          "books": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryBook"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Books"
+          },
+          "sourcebook": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StorySourcebookEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcebook"
+          },
+          "conflicts": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts"
+          },
+          "llm_prefs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryLLMPrefs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chapters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryChapterSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters"
+          }
+        },
+        "type": "object",
+        "title": "StoryPayload",
+        "description": "Story data as returned by project selection and mutation endpoints.\n\nThis matches the shape produced by\n``services.projects.project_helpers.normalize_story_for_frontend``.\nAll fields are optional because the payload depends on what the author\nhas filled in for a given project."
+      },
+      "StorySourcebookEntry": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "synonyms": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synonyms"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keywords"
+          },
+          "relations": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relations"
+          }
+        },
+        "type": "object",
+        "title": "StorySourcebookEntry",
+        "description": "Minimal sourcebook entry embedded in the story payload."
+      },
+      "StorySummaryResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "story_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Summary"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "StorySummaryResponse",
+        "description": "Response for ``PUT /api/v1/story/summary``."
+      },
+      "StoryTagsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "StoryTagsResponse",
+        "description": "Response for ``PUT /api/v1/story/tags``."
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -3801,6 +5778,41 @@
         "type": "object",
         "required": ["loc", "msg", "type"],
         "title": "ValidationError"
+      },
+      "augmentedquill__models__chat__OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkResponse",
+        "description": "Generic ``{ok: true}`` response used by save/delete chat endpoints."
+      },
+      "augmentedquill__models__machine__OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkResponse",
+        "description": "Generic success response used by endpoints that return ``{ok: true}``."
       }
     }
   }

@@ -418,7 +418,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               // Compute flat index for this section's first match
               let firstFlatIdx = 0;
               for (let i = 0; i < si; i++) {
-                firstFlatIdx += results[i].matches.length;
+                firstFlatIdx += (results[i].matches ?? []).length;
               }
 
               return (
@@ -438,12 +438,12 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                       {section.field_display ? ` · ${fieldLabel}` : ''}
                     </span>
                     <span className="ml-1 text-xs opacity-60">
-                      ({section.matches.length})
+                      ({(section.matches ?? []).length})
                     </span>
                   </button>
                   {!isCollapsed && (
                     <ul>
-                      {section.matches.map(
+                      {(section.matches ?? []).map(
                         (
                           match: import('../../services/apiClients/search').SearchMatch,
                           mi: number

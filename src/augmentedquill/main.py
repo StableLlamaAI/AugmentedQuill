@@ -29,6 +29,7 @@ from augmentedquill.core.config import (
 )
 from augmentedquill.services.exceptions import ServiceError
 from augmentedquill.services.chat.chat_tool_decorator import write_tools_json_tempfile
+from augmentedquill.models.machine import MachineConfigResponse
 
 # Import API routers
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
@@ -100,11 +101,12 @@ def create_app() -> FastAPI:
     api_v1_router.add_api_route(
         "/health", endpoint=lambda: {"status": "ok"}, methods=["GET"]
     )
-    api_v1_router.add_api_route(
-        "/machine",
-        endpoint=lambda: load_machine_config() or {},
-        methods=["GET"],
-    )
+
+    @api_v1_router.get("/machine", response_model=MachineConfigResponse)
+    async def _get_machine() -> MachineConfigResponse:
+        """Return the current machine configuration."""
+        cfg = load_machine_config() or {}
+        return MachineConfigResponse(**cfg)
 
     app.include_router(api_v1_router)
 

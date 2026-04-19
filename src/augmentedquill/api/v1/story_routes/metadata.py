@@ -23,6 +23,7 @@ from augmentedquill.services.projects.projects import (
     update_book_metadata,
     update_story_metadata,
 )
+from augmentedquill.models.story import StoryContentResponse
 from augmentedquill.services.story.story_api_state_ops import (
     get_active_story_or_raise,
 )
@@ -129,12 +130,12 @@ async def api_story_metadata(request: Request) -> JSONResponse:
     return await _dispatch_metadata_request(request, _handler)
 
 
-@router.get("/story/content")
-async def api_story_content() -> JSONResponse:
+@router.get("/story/content", response_model=StoryContentResponse)
+async def api_story_content() -> StoryContentResponse:
     """Api Story Content."""
     try:
         _require_active_story_context()
-        return JSONResponse(content={"ok": True, "content": read_story_content()})
+        return StoryContentResponse(ok=True, content=read_story_content())
     except Exception as exc:
         return map_story_exception(exc)
 

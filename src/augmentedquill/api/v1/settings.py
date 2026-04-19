@@ -14,7 +14,6 @@ import json as _json
 from pathlib import Path
 
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse
 
 from augmentedquill.core.config import (
     load_machine_config,
@@ -44,8 +43,18 @@ from augmentedquill.services.settings.settings_machine_ops import (
     remote_model_exists,
 )
 from augmentedquill.utils.llm_utils import verify_model_capabilities
-from augmentedquill.api.v1.http_responses import error_json
 from augmentedquill.api.v1.request_body import parse_json_object_body
+from augmentedquill.models.machine import (
+    MachinePresetsResponse,
+    MachineTestResponse,
+    MachineTestModelResponse,
+    ModelCapabilities,
+    OkResponse,
+    OkSelectedResponse,
+    PromptsResponse,
+    StorySummaryResponse,
+    StoryTagsResponse,
+)
 
 router = APIRouter(tags=["Settings"])
 
@@ -56,8 +65,8 @@ def _resolve_story_path() -> Path:
     return (active / "story.json") if active else DEFAULT_STORY_CONFIG_PATH
 
 
-@router.post("/settings")
-async def api_settings_post(request: Request) -> JSONResponse:
+@router.post("/settings", response_model=OkResponse)
+async def api_settings_post(request: Request) -> OkResponse:
     """Accept JSON body with {story: {...}, machine: {...}} and persist to config/.
 
     Returns {ok: true} on success or {ok:false, detail: str} on error.
@@ -75,10 +84,7 @@ async def api_settings_post(request: Request) -> JSONResponse:
     openai_cfg = (machine or {}).get("openai") or {}
     openai_cfg, error_detail = validate_and_fill_openai_cfg_for_settings(openai_cfg)
     if error_detail:
-        return JSONResponse(
-            status_code=400,
-            content={"ok": False, "detail": error_detail},
-        )
+        raise HTTPException(status_code=400, detail=error_detail)
 
     machine_cfg = dict(machine or {})
     machine_cfg["openai"] = openai_cfg
@@ -91,13 +97,13 @@ async def api_settings_post(request: Request) -> JSONResponse:
         save_story_config(story_path, story_cfg)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except (OSError, TypeError, ValueError) as e:
-        return error_json(f"Failed to write configs: {e}", status_code=500)
+        raise HTTPException(status_code=500, detail=f"Failed to write configs: {e}")
 
-    return JSONResponse(content={"ok": True})
+    return OkResponse(ok=True)
 
 
-@router.get("/prompts")
-async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
+@router.get("/prompts", response_model=PromptsResponse)
+async def api_prompts_get(model_name: str | None = None) -> PromptsResponse:
     """Get all resolved prompts (defaults + global overrides + model overrides).
 
     The response now also includes the list of available languages as
@@ -125,9 +131,6 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
     system_messages = {}
     user_prompts = {}
     for key in DEFAULT_PROMPTS.keys():
-        # fill both maps with identical raw templates; the frontend can
-        # display them separately if desired but they originate from the
-        # same source.
         system_messages[key] = get_system_message(
             key, model_overrides, language=project_language
         )
@@ -141,20 +144,17 @@ async def api_prompts_get(model_name: str | None = None) -> JSONResponse:
             template = ensure_string(model_overrides[key])
         user_prompts[key] = template
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": True,
-            "system_messages": system_messages,
-            "user_prompts": user_prompts,
-            "languages": get_available_languages(),
-            "project_language": project_language,
-        },
+    return PromptsResponse(
+        ok=True,
+        system_messages=system_messages,
+        user_prompts=user_prompts,
+        languages=get_available_languages(),
+        project_language=project_language,
     )
 
 
-@router.post("/machine/test")
-async def api_machine_test(request: Request) -> JSONResponse:
+@router.post("/machine/test", response_model=MachineTestResponse)
+async def api_machine_test(request: Request) -> MachineTestResponse:
     """Test base_url + api_key and return available remote model ids.
 
     Body: { base_url: str, api_key?: str, timeout_s?: int }
@@ -165,34 +165,28 @@ async def api_machine_test(request: Request) -> JSONResponse:
     base_url, api_key, timeout_s = parse_connection_payload(payload)
 
     if not str(base_url).strip():
-        return JSONResponse(
-            status_code=200,
-            content={"ok": False, "models": [], "detail": "Missing base_url"},
-        )
+        return MachineTestResponse(ok=False, models=[], detail="Missing base_url")
 
     ok, models, detail = await list_remote_models(
         base_url=base_url,
         api_key=api_key,
         timeout_s=timeout_s,
     )
-    return JSONResponse(
-        status_code=200,
-        content={"ok": ok, "models": models, **({"detail": detail} if detail else {})},
-    )
+    return MachineTestResponse(ok=ok, models=models, detail=detail)
 
 
-@router.get("/machine/presets")
-async def api_machine_presets_get() -> JSONResponse:
+@router.get("/machine/presets", response_model=MachinePresetsResponse)
+async def api_machine_presets_get() -> MachinePresetsResponse:
     """Return model preset database used by Machine Settings UI."""
     data = load_model_presets_config(DEFAULT_MODEL_PRESETS_PATH) or {}
     presets = data.get("presets") if isinstance(data, dict) else []
     if not isinstance(presets, list):
         presets = []
-    return JSONResponse(status_code=200, content={"presets": presets})
+    return MachinePresetsResponse(presets=presets)
 
 
-@router.post("/machine/test_model")
-async def api_machine_test_model(request: Request) -> JSONResponse:
+@router.post("/machine/test_model", response_model=MachineTestModelResponse)
+async def api_machine_test_model(request: Request) -> MachineTestModelResponse:
     """Test whether a model is available for base_url + api_key.
 
     Body: { base_url: str, api_key?: str, timeout_s?: int, model_id: str }
@@ -204,30 +198,17 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
     model_id = (payload or {}).get("model_id") or ""
 
     if not str(base_url).strip():
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": False,
-                "model_ok": False,
-                "models": [],
-                "detail": "Missing base_url",
-            },
+        return MachineTestModelResponse(
+            ok=False, model_ok=False, models=[], detail="Missing base_url"
         )
 
     model_id_str = str(model_id or "").strip()
 
     if not model_id_str:
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": False,
-                "model_ok": False,
-                "models": [],
-                "detail": "Missing model_id",
-            },
+        return MachineTestModelResponse(
+            ok=False, model_ok=False, models=[], detail="Missing model_id"
         )
 
-    # existence check implicitly exercises base_url validation.
     model_ok, model_detail = await remote_model_exists(
         base_url=base_url,
         api_key=api_key,
@@ -235,8 +216,6 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
         timeout_s=timeout_s,
     )
 
-    # capabilities are fetched via a cached helper; cost is negligible
-    # after the initial probe.
     caps = await verify_model_capabilities(
         base_url=base_url,
         api_key=api_key,
@@ -244,21 +223,17 @@ async def api_machine_test_model(request: Request) -> JSONResponse:
         timeout_s=timeout_s,
     )
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "ok": model_ok,
-            "model_ok": model_ok,
-            # include only the single model; callers don't generally use the list
-            "models": [model_id_str] if model_ok else [],
-            **({"detail": model_detail} if model_detail and not model_ok else {}),
-            **({"capabilities": caps} if caps else {}),
-        },
+    return MachineTestModelResponse(
+        ok=model_ok,
+        model_ok=model_ok,
+        models=[model_id_str] if model_ok else [],
+        detail=model_detail if model_detail and not model_ok else None,
+        capabilities=ModelCapabilities(**caps) if caps else None,
     )
 
 
-@router.put("/machine")
-async def api_machine_put(request: Request) -> JSONResponse:
+@router.put("/machine", response_model=OkSelectedResponse)
+async def api_machine_put(request: Request) -> OkSelectedResponse:
     """Persist machine config to runtime user config path.
 
     Body: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }
@@ -274,9 +249,7 @@ async def api_machine_put(request: Request) -> JSONResponse:
         openai_cfg
     )
     if error_detail:
-        return JSONResponse(
-            status_code=400, content={"ok": False, "detail": error_detail}
-        )
+        raise HTTPException(status_code=400, detail=error_detail)
 
     machine_cfg["openai"] = cleaned_openai_cfg["openai"]
 
@@ -290,16 +263,15 @@ async def api_machine_put(request: Request) -> JSONResponse:
         machine_path.parent.mkdir(parents=True, exist_ok=True)
         machine_path.write_text(_json.dumps(machine_cfg, indent=2), encoding="utf-8")
     except (OSError, TypeError, ValueError) as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to write machine config: {e}"},
+        raise HTTPException(
+            status_code=500, detail=f"Failed to write machine config: {e}"
         )
 
-    return JSONResponse(status_code=200, content={"ok": True, "selected": selected})
+    return OkSelectedResponse(ok=True, selected=selected)
 
 
-@router.put("/story/summary")
-async def api_story_summary_put(request: Request) -> JSONResponse:
+@router.put("/story/summary", response_model=StorySummaryResponse)
+async def api_story_summary_put(request: Request) -> StorySummaryResponse:
     """Update story summary in story.json."""
     payload = await parse_json_object_body(request)
 
@@ -308,27 +280,26 @@ async def api_story_summary_put(request: Request) -> JSONResponse:
         story_path = _resolve_story_path()
         update_story_field(story_path, "story_summary", summary)
     except (OSError, TypeError, ValueError) as e:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "detail": f"Failed to update story summary: {e}"},
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update story summary: {e}"
         )
 
-    return JSONResponse(status_code=200, content={"ok": True, "story_summary": summary})
+    return StorySummaryResponse(ok=True, story_summary=summary)
 
 
-@router.put("/story/tags")
-async def api_story_tags_put(request: Request) -> JSONResponse:
+@router.put("/story/tags", response_model=StoryTagsResponse)
+async def api_story_tags_put(request: Request) -> StoryTagsResponse:
     """Update story tags in story.json."""
     payload = await parse_json_object_body(request)
 
     tags = payload.get("tags")
     if not isinstance(tags, list):
-        return error_json("tags must be an array", status_code=400)
+        raise HTTPException(status_code=400, detail="tags must be an array")
 
     try:
         story_path = _resolve_story_path()
         update_story_field(story_path, "tags", tags)
     except (OSError, TypeError, ValueError) as e:
-        return error_json(f"Failed to update story tags: {e}", status_code=500)
+        raise HTTPException(status_code=500, detail=f"Failed to update story tags: {e}")
 
-    return JSONResponse(content={"ok": True, "tags": tags})
+    return StoryTagsResponse(ok=True, tags=tags)

@@ -10,10 +10,23 @@
  */
 
 import { useCallback, useEffect, useRef, startTransition } from 'react';
-import { StoryState, Chapter, Book, WritingUnit, SourcebookEntry } from '../../types';
+import {
+  StoryState,
+  Chapter,
+  Book,
+  Conflict,
+  WritingUnit,
+  SourcebookEntry,
+} from '../../types';
 import { api } from '../../services/api';
 import { StoryApiPayload } from '../../services/apiTypes';
-import { mapApiChapters, mapSelectStoryToState } from './storyMappers';
+import {
+  mapApiChapters,
+  mapSelectStoryToState,
+  mapStoryBooks,
+  mapStorySourcebook,
+  normalizeProjectType,
+} from './storyMappers';
 import { notifyError } from '../../services/errorNotifier';
 import {
   areStoriesEqual,
@@ -69,7 +82,7 @@ const buildStoryDraft = (
   content,
   notes: story.notes || '',
   private_notes: story.private_notes || '',
-  conflicts: story.conflicts || [],
+  conflicts: (story.conflicts ?? []) as Conflict[],
   filename: 'content.md',
 });
 
@@ -89,12 +102,14 @@ export const buildInitialStoryState = (
   chapters,
   draft:
     story.project_type === 'short-story' ? buildStoryDraft(projectId, story) : null,
-  projectType: story.project_type || 'novel',
+  projectType: normalizeProjectType(story.project_type ?? undefined),
   language: story.language || 'en',
-  books: story.books || [],
-  sourcebook: story.sourcebook || [],
-  conflicts: story.conflicts || [],
-  llm_prefs: story.llm_prefs,
+  books: mapStoryBooks(story.books),
+  sourcebook: mapStorySourcebook(story.sourcebook),
+  conflicts: (story.conflicts ?? []) as Conflict[],
+  llm_prefs: story.llm_prefs
+    ? { prompt_overrides: story.llm_prefs.prompt_overrides ?? undefined }
+    : undefined,
   currentChapterId:
     story.project_type === 'short-story'
       ? null
@@ -344,11 +359,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
                     ? {
                         ...c,
                         content: res.content,
-                        notes: res.notes,
-                        private_notes: res.private_notes,
-                        conflicts: res.conflicts,
-                        title: res.title,
-                        summary: res.summary,
+                        notes: res.notes ?? undefined,
+                        private_notes: res.private_notes ?? undefined,
+                        conflicts: (res.conflicts ?? []) as Conflict[],
+                        title: res.title ?? undefined,
+                        summary: res.summary ?? undefined,
                       }
                     : c
                 ),

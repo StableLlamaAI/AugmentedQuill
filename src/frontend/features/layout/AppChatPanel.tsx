@@ -60,7 +60,7 @@ export const AppChatPanel: React.FC<AppChatPanelProps> = React.memo(
     // Memoize merged session list so Chat's React.memo isn't defeated by a
     // new array reference on every parent render.
     const chatSessions = useMemo(
-      () => [...incognitoSessions, ...chatHistoryList],
+      () => [...incognitoSessions, ...(chatHistoryList ?? [])],
       [incognitoSessions, chatHistoryList]
     );
 

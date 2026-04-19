@@ -9,12 +9,50 @@
  * Defines the story mappers unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Chapter, StoryState } from '../../types';
+import { Book, Chapter, Conflict, SourcebookEntry, StoryState } from '../../types';
 import {
   ChapterListItem,
   StoryApiPayload,
   mapChapterListItemToChapter,
 } from '../../services/apiTypes';
+import { components } from '../../types/api.generated';
+
+type StoryBook = components['schemas']['StoryBook'];
+type StorySourcebookEntry = components['schemas']['StorySourcebookEntry'];
+
+const VALID_PROJECT_TYPES = ['short-story', 'novel', 'series'] as const;
+
+export const normalizeProjectType = (
+  t: string | undefined
+): 'short-story' | 'novel' | 'series' => {
+  if (VALID_PROJECT_TYPES.includes(t as 'short-story' | 'novel' | 'series')) {
+    return t as 'short-story' | 'novel' | 'series';
+  }
+  return 'novel';
+};
+
+const mapStoryBook = (b: StoryBook): Book => ({
+  id: b.id ?? '',
+  title: b.title ?? '',
+  chapters: [],
+});
+
+const mapStorySourcebookEntry = (e: StorySourcebookEntry): SourcebookEntry => ({
+  id: e.id ?? '',
+  name: e.name ?? '',
+  synonyms: e.synonyms ?? [],
+  category: e.category ?? undefined,
+  description: e.description ?? '',
+  images: e.images ?? [],
+  keywords: e.keywords ?? undefined,
+});
+
+export const mapStoryBooks = (books: StoryBook[] | null | undefined): Book[] =>
+  (books ?? []).map(mapStoryBook);
+
+export const mapStorySourcebook = (
+  entries: StorySourcebookEntry[] | null | undefined
+): SourcebookEntry[] => (entries ?? []).map(mapStorySourcebookEntry);
 
 export const mapApiChapters = (chapters: ChapterListItem[]): Chapter[] =>
   chapters.map(mapChapterListItemToChapter);
@@ -79,12 +117,14 @@ export const mapSelectStoryToState = (
     image_additional_info: story.image_additional_info || '',
     chapters: chaptersWithPreservedState,
     draft: null,
-    projectType: story.project_type || 'novel',
+    projectType: normalizeProjectType(story.project_type ?? undefined),
     language: story.language || 'en',
-    books: story.books || [],
-    sourcebook: story.sourcebook || [],
-    conflicts: story.conflicts || [],
-    llm_prefs: story.llm_prefs,
+    books: mapStoryBooks(story.books),
+    sourcebook: mapStorySourcebook(story.sourcebook),
+    conflicts: (story.conflicts ?? []) as Conflict[],
+    llm_prefs: story.llm_prefs
+      ? { prompt_overrides: story.llm_prefs.prompt_overrides ?? undefined }
+      : undefined,
     currentChapterId: newSelection,
     lastUpdated: Date.now(),
   };

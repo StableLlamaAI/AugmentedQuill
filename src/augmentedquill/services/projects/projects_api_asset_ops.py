@@ -41,6 +41,7 @@ from augmentedquill.services.projects.projects import (
     select_project,
 )
 from augmentedquill.services.projects.projects_api_manage_ops import normalize_registry
+from augmentedquill.models.story import ProjectMutationResponse
 
 _RESTORE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
@@ -300,7 +301,7 @@ def export_project_response(name: str | None = None) -> Response:
     )
 
 
-async def import_project_response(file: UploadFile) -> JSONResponse:
+async def import_project_response(file: UploadFile) -> ProjectMutationResponse:
     """Import Project Response."""
     if not file.filename.endswith(".zip"):
         raise BadRequestError("File must be a ZIP archive")
@@ -345,14 +346,10 @@ async def import_project_response(file: UploadFile) -> JSONResponse:
         normalized_reg = normalize_registry(reg)
         available = list_projects()
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "message": f"Imported as {final_name}",
-                "registry": normalized_reg,
-                "available": available,
-            },
+        return ProjectMutationResponse(
+            ok=True,
+            message=f"Imported as {final_name}",
+            registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"], "available": available},  # type: ignore[arg-type]
         )
     except Exception as e:
         if temp_dir.exists():

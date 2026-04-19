@@ -111,8 +111,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const mapApiImageToEntry = (img: ProjectImage): ImageEntry => ({
     filename: img.filename,
     url: img.url ?? null,
-    description: img.description || '',
-    title: img.title,
+    description: img.description ?? '',
+    title: img.title ?? undefined,
     is_placeholder: Boolean(img.is_placeholder),
   });
 

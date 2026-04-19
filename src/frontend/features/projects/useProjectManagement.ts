@@ -44,13 +44,24 @@ type UseProjectManagementParams = {
   }) => void;
 };
 
+const VALID_PROJECT_TYPES = ['short-story', 'novel', 'series'] as const;
+
+const normalizeProjectType = (
+  t: string | undefined
+): 'short-story' | 'novel' | 'series' => {
+  if (VALID_PROJECT_TYPES.includes(t as 'short-story' | 'novel' | 'series')) {
+    return t as 'short-story' | 'novel' | 'series';
+  }
+  return 'novel';
+};
+
 const mapProjectsList = (projects: ProjectListItem[]) =>
   projects.map((project: ProjectListItem) => ({
     id: project.name,
     title: project.title || project.name,
-    type: project.type || 'novel',
+    type: normalizeProjectType(project.type),
     updatedAt: Date.now(),
-    language: project.language || 'en',
+    language: project.language ?? 'en',
   }));
 
 /** Custom React hook that manages project management. */
@@ -209,10 +220,13 @@ export function useProjectManagement({
           projects.map((project: ProjectMetadata) => project.id)
         );
         const response = await api.projects.import(file);
-        if (response.ok && response.available) {
-          setProjects(mapProjectsList(response.available));
+        if (response.ok) {
+          // Fetch the full project listing (which includes title, type, language)
+          // rather than using the minimal registry snapshot in the mutation response.
+          const listing = await api.projects.list();
+          setProjects(mapProjectsList(listing.available));
 
-          const importedNameFromList = response.available
+          const importedNameFromList = listing.available
             .map((project: ProjectListItem) => project.name)
             .find((name: string) => !knownProjectIds.has(name));
           const importedNameFromMessage =
@@ -281,36 +295,29 @@ export function useProjectManagement({
         if (!result.ok) return;
 
         const listing = await api.projects.list();
-        if (listing.projects) {
-          setProjects(mapProjectsList(listing.projects));
+        if (listing.available) {
+          setProjects(mapProjectsList(listing.available));
         }
 
         if (result.story) {
           const mappedStory: StoryState = mapSelectStoryToState(
             name,
             result.story,
-            (result.story.chapters || []).map(
+            (result.story.chapters ?? []).map(
               (
-                chapter: {
-                  title?: string;
-                  summary?: string;
-                  filename?: string;
-                  book_id?: string;
-                  notes?: string;
-                  private_notes?: string;
-                  conflicts?: import('../../types').Conflict[];
-                },
+                chapter: import('../../types/api.generated').components['schemas']['StoryChapterSummary'],
                 index: number
               ) => ({
                 id: String(index + 1),
-                title: chapter.title || '',
-                summary: chapter.summary || '',
+                title: chapter.title ?? '',
+                summary: chapter.summary ?? '',
                 content: '',
-                filename: chapter.filename,
-                book_id: chapter.book_id,
-                notes: chapter.notes,
-                private_notes: chapter.private_notes,
-                conflicts: chapter.conflicts,
+                filename: chapter.filename ?? undefined,
+                book_id: chapter.book_id ?? undefined,
+                notes: chapter.notes ?? undefined,
+                private_notes: chapter.private_notes ?? undefined,
+                conflicts: (chapter.conflicts ??
+                  []) as import('../../types').Conflict[],
               })
             ),
             null,

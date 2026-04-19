@@ -109,7 +109,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                     ? 'hover:bg-brand-gray-200/50'
                     : 'hover:bg-brand-gray-800/50'
               } ${isDisabled ? 'opacity-60 overflow-hidden' : 'overflow-hidden'}`}
-              title={isDisabled ? reason : session.name}
+              title={isDisabled ? reason : (session.name ?? '')}
             >
               <button
                 className={`flex-1 flex flex-col items-start overflow-hidden text-left ${

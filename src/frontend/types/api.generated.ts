@@ -137,8 +137,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** <Lambda> */
-    get: operations['_lambda__api_v1_machine_get'];
+    /**
+     * Get Machine
+     * @description Return the current machine configuration.
+     */
+    get: operations['_get_machine_api_v1_machine_get'];
     /**
      * Api Machine Put
      * @description Persist machine config to runtime user config path.
@@ -1334,8 +1337,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** <Lambda> */
-    get: operations['_lambda__api_v1_debug_llm_logs_get'];
+    /**
+     * Get Llm Logs
+     * @description Return the in-memory LLM communication logs.
+     */
+    get: operations['get_llm_logs_api_v1_debug_llm_logs_get'];
     put?: never;
     post?: never;
     /**
@@ -1553,6 +1559,23 @@ export interface components {
       name: string;
     };
     /**
+     * BookMutationResponse
+     * @description Response body for book create/delete/restore endpoints.
+     */
+    BookMutationResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Message */
+      message?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Restore Id */
+      restore_id?: string | null;
+      story?: components['schemas']['StoryPayload'] | null;
+      /** Detail */
+      detail?: string | null;
+    };
+    /**
      * BookRestoreRequest
      * @description Represents the BookRestoreRequest type.
      */
@@ -1686,6 +1709,22 @@ export interface components {
       book_id?: string | null;
     };
     /**
+     * ChatDetailResponse
+     * @description Response body for ``GET /api/v1/chats/{chat_id}``.
+     */
+    ChatDetailResponse: {
+      /** Id */
+      id: string;
+      /** Name */
+      name?: string | null;
+      /** Messages */
+      messages?: unknown[] | null;
+      /** Created At */
+      created_at?: string | null;
+      /** Updated At */
+      updated_at?: string | null;
+    };
+    /**
      * ChatInitialStateResponse
      * @description Response body for ``GET /api/v1/chat``.
      *
@@ -1699,6 +1738,41 @@ export interface components {
       current_model: string;
       /** Messages */
       messages: unknown[];
+    };
+    /**
+     * ChatListItem
+     * @description Summary of a saved chat session returned in the chat list.
+     */
+    ChatListItem: {
+      /** Id */
+      id: string;
+      /** Name */
+      name?: string | null;
+      /** Created At */
+      created_at?: string | null;
+      /** Updated At */
+      updated_at?: string | null;
+    };
+    /**
+     * ChatListResponse
+     * @description Response body for ``GET /api/v1/chats`` (list of saved chats).
+     */
+    ChatListResponse: {
+      /** Chats */
+      chats: components['schemas']['ChatListItem'][];
+    };
+    /**
+     * ChatToolBatchMutationResponse
+     * @description Response body for ``POST /api/v1/chat/tools/undo/{batch_id}``
+     *     and ``POST /api/v1/chat/tools/redo/{batch_id}``.
+     */
+    ChatToolBatchMutationResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Batch Id */
+      batch_id?: string | null;
+      /** Detail */
+      detail?: string | null;
     };
     /**
      * CheckpointInfo
@@ -1723,6 +1797,32 @@ export interface components {
     CheckpointLoadDeleteRequest: {
       /** Timestamp */
       timestamp: string;
+    };
+    /**
+     * DebugLogEntry
+     * @description A single LLM communication log entry.
+     */
+    DebugLogEntry: {
+      /** Id */
+      id: string;
+      /** Caller Id */
+      caller_id?: string | null;
+      /** Model Type */
+      model_type?: string | null;
+      /** Timestamp Start */
+      timestamp_start: string;
+      /** Timestamp End */
+      timestamp_end?: string | null;
+      request: components['schemas']['LLMLogRequest'];
+      response?: components['schemas']['LLMLogResponse'] | null;
+    };
+    /**
+     * DebugLogsResponse
+     * @description Response body for ``GET /api/v1/debug/llm_logs``.
+     */
+    DebugLogsResponse: {
+      /** Logs */
+      logs: components['schemas']['DebugLogEntry'][];
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -1785,6 +1885,242 @@ export interface components {
       restore_id: string;
     };
     /**
+     * LLMLogRequest
+     * @description Shape of the request portion of an LLM log entry.
+     */
+    LLMLogRequest: {
+      /** Url */
+      url: string;
+      /** Method */
+      method: string;
+      /** Headers */
+      headers: {
+        [key: string]: string;
+      };
+      /** Body */
+      body: unknown;
+    };
+    /**
+     * LLMLogResponse
+     * @description Shape of the response portion of an LLM log entry.
+     */
+    LLMLogResponse: {
+      /** Status Code */
+      status_code?: number | null;
+      /** Body */
+      body?: unknown;
+      /** Streaming */
+      streaming?: boolean | null;
+      /** Chunks */
+      chunks?: unknown[] | null;
+      /** Full Content */
+      full_content?: string | null;
+      /** Thinking */
+      thinking?: string | null;
+      /** Error */
+      error?: unknown;
+      /** Error Detail */
+      error_detail?: unknown;
+      /** Tool Calls */
+      tool_calls?: unknown[] | null;
+    };
+    /**
+     * ListImagesResponse
+     * @description Response body for ``GET /api/v1/projects/images/list``.
+     */
+    ListImagesResponse: {
+      /** Images */
+      images: components['schemas']['ProjectImageInfo'][];
+    };
+    /**
+     * MachineConfigResponse
+     * @description Response body for ``GET /api/v1/machine``.
+     */
+    MachineConfigResponse: {
+      /** Gui Language */
+      gui_language?: string | null;
+      openai?: components['schemas']['MachineOpenAIConfig'] | null;
+    };
+    /**
+     * MachineModelConfig
+     * @description Configuration for a single LLM provider / model entry.
+     */
+    MachineModelConfig: {
+      /** Name */
+      name: string;
+      /** Base Url */
+      base_url: string;
+      /** Api Key */
+      api_key?: string | null;
+      /** Model */
+      model: string;
+      /** Timeout S */
+      timeout_s?: number | null;
+      /** Context Window Tokens */
+      context_window_tokens?: number | null;
+      /** Temperature */
+      temperature?: number | null;
+      /** Top P */
+      top_p?: number | null;
+      /** Max Tokens */
+      max_tokens?: number | null;
+      /** Presence Penalty */
+      presence_penalty?: number | null;
+      /** Frequency Penalty */
+      frequency_penalty?: number | null;
+      /** Stop */
+      stop?: string[] | null;
+      /** Seed */
+      seed?: number | null;
+      /** Top K */
+      top_k?: number | null;
+      /** Min P */
+      min_p?: number | null;
+      /** Extra Body */
+      extra_body?: string | null;
+      /** Preset Id */
+      preset_id?: string | null;
+      /** Writing Warning */
+      writing_warning?: string | null;
+      /** Is Multimodal */
+      is_multimodal?: boolean | null;
+      /** Supports Function Calling */
+      supports_function_calling?: boolean | null;
+      /** Prompt Overrides */
+      prompt_overrides?: {
+        [key: string]: string;
+      } | null;
+    };
+    /**
+     * MachineOpenAIConfig
+     * @description The ``openai`` section of the machine config.
+     */
+    MachineOpenAIConfig: {
+      /** Models */
+      models?: components['schemas']['MachineModelConfig'][] | null;
+      /** Selected */
+      selected?: string | null;
+      /** Selected Chat */
+      selected_chat?: string | null;
+      /** Selected Writing */
+      selected_writing?: string | null;
+      /** Selected Editing */
+      selected_editing?: string | null;
+    };
+    /**
+     * MachinePresetsResponse
+     * @description Response body for ``GET /api/v1/machine/presets``.
+     */
+    MachinePresetsResponse: {
+      /** Presets */
+      presets: components['schemas']['ModelPresetEntry'][];
+    };
+    /**
+     * MachineTestModelResponse
+     * @description Response body for ``POST /api/v1/machine/test_model``.
+     */
+    MachineTestModelResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Model Ok */
+      model_ok: boolean;
+      /**
+       * Models
+       * @default []
+       */
+      models: string[];
+      /** Detail */
+      detail?: string | null;
+      capabilities?: components['schemas']['ModelCapabilities'] | null;
+    };
+    /**
+     * MachineTestResponse
+     * @description Response body for ``POST /api/v1/machine/test``.
+     */
+    MachineTestResponse: {
+      /** Ok */
+      ok: boolean;
+      /**
+       * Models
+       * @default []
+       */
+      models: string[];
+      /** Detail */
+      detail?: string | null;
+    };
+    /**
+     * ModelCapabilities
+     * @description Subset of capabilities detected for a model (optional fields).
+     */
+    ModelCapabilities: {
+      /** Multimodal */
+      multimodal?: boolean | null;
+      /** Function Calling */
+      function_calling?: boolean | null;
+    };
+    /**
+     * ModelPresetEntry
+     * @description A single model-preset entry as loaded from *model_presets.json*.
+     */
+    ModelPresetEntry: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string;
+      /** Model Id Patterns */
+      model_id_patterns: string[];
+      parameters: components['schemas']['ModelPresetParameters'];
+      warnings?: components['schemas']['ModelPresetWarning'] | null;
+    };
+    /**
+     * ModelPresetParameters
+     * @description Typed parameters for a model preset.
+     */
+    ModelPresetParameters: {
+      /** Temperature */
+      temperature?: number | null;
+      /** Top P */
+      top_p?: number | null;
+      /** Max Tokens */
+      max_tokens?: number | null;
+      /** Presence Penalty */
+      presence_penalty?: number | null;
+      /** Frequency Penalty */
+      frequency_penalty?: number | null;
+      /** Seed */
+      seed?: number | null;
+      /** Top K */
+      top_k?: number | null;
+      /** Min P */
+      min_p?: number | null;
+      /** Stop */
+      stop?: string[] | null;
+      /** Extra Body */
+      extra_body?: string | null;
+    };
+    /**
+     * ModelPresetWarning
+     * @description Warnings that should be surfaced to the user for a preset.
+     */
+    ModelPresetWarning: {
+      /** Writing */
+      writing?: string | null;
+    };
+    /**
+     * OkSelectedResponse
+     * @description Response for ``PUT /api/v1/machine`` – returns the new selected model name.
+     */
+    OkSelectedResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Selected */
+      selected?: string | null;
+      /** Detail */
+      detail?: string | null;
+    };
+    /**
      * ProjectConvertRequest
      * @description Represents the ProjectConvertRequest type.
      */
@@ -1816,6 +2152,22 @@ export interface components {
       name: string;
     };
     /**
+     * ProjectImageInfo
+     * @description Describes a single project image or image placeholder.
+     */
+    ProjectImageInfo: {
+      /** Filename */
+      filename: string;
+      /** Url */
+      url?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Title */
+      title?: string | null;
+      /** Is Placeholder */
+      is_placeholder?: boolean | null;
+    };
+    /**
      * ProjectInfo
      * @description Describes a single project entry returned by the listing endpoint.
      */
@@ -1835,6 +2187,8 @@ export interface components {
        * @default novel
        */
       type: string;
+      /** Language */
+      language?: string | null;
     };
     /**
      * ProjectListResponse
@@ -1849,12 +2203,89 @@ export interface components {
       available: components['schemas']['ProjectInfo'][];
     };
     /**
+     * ProjectMutationResponse
+     * @description Generic response for project create/delete/convert operations.
+     */
+    ProjectMutationResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Message */
+      message?: string | null;
+      /** Detail */
+      detail?: string | null;
+      registry?: components['schemas']['ProjectRegistry'] | null;
+      story?: components['schemas']['StoryPayload'] | null;
+    };
+    /**
+     * ProjectRegistry
+     * @description Registry summary returned alongside project mutations.
+     */
+    ProjectRegistry: {
+      /** Current */
+      current?: string | null;
+      /** Recent */
+      recent?: string[] | null;
+      /** Available */
+      available?: components['schemas']['ProjectRegistryEntry'][] | null;
+    };
+    /**
+     * ProjectRegistryEntry
+     * @description A single project registry entry embedded in mutation responses.
+     */
+    ProjectRegistryEntry: {
+      /** Name */
+      name: string;
+      /** Path */
+      path: string;
+      /**
+       * Is Valid
+       * @default true
+       */
+      is_valid: boolean;
+    };
+    /**
      * ProjectSelectRequest
      * @description Represents the ProjectSelectRequest type.
      */
     ProjectSelectRequest: {
       /** Name */
       name: string;
+    };
+    /**
+     * ProjectSelectResponse
+     * @description Response body for ``POST /api/v1/projects/select``.
+     */
+    ProjectSelectResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Message */
+      message?: string | null;
+      registry?: components['schemas']['ProjectRegistry'] | null;
+      story?: components['schemas']['StoryPayload'] | null;
+      /** Error */
+      error?: string | null;
+      /** Error Message */
+      error_message?: string | null;
+    };
+    /**
+     * PromptsResponse
+     * @description Response for ``GET /api/v1/prompts``.
+     */
+    PromptsResponse: {
+      /** Ok */
+      ok: boolean;
+      /** System Messages */
+      system_messages?: {
+        [key: string]: string;
+      } | null;
+      /** User Prompts */
+      user_prompts?: {
+        [key: string]: string;
+      } | null;
+      /** Languages */
+      languages?: string[] | null;
+      /** Project Language */
+      project_language?: string | null;
     };
     /**
      * ReplaceAllRequest
@@ -2208,6 +2639,148 @@ export interface components {
       /** End Book */
       end_book?: string | null;
     };
+    /**
+     * StoryBook
+     * @description Book descriptor embedded in the story payload.
+     */
+    StoryBook: {
+      /** Id */
+      id?: string | null;
+      /** Folder */
+      folder?: string | null;
+      /** Title */
+      title?: string | null;
+      /** Chapters */
+      chapters?: components['schemas']['StoryChapterSummary'][] | null;
+    };
+    /**
+     * StoryChapterSummary
+     * @description Lightweight chapter descriptor embedded in the story payload.
+     */
+    StoryChapterSummary: {
+      /** Title */
+      title?: string | null;
+      /** Summary */
+      summary?: string | null;
+      /** Filename */
+      filename?: string | null;
+      /** Book Id */
+      book_id?: string | null;
+      /** Notes */
+      notes?: string | null;
+      /** Private Notes */
+      private_notes?: string | null;
+      /** Conflicts */
+      conflicts?: unknown[] | null;
+    };
+    /**
+     * StoryContentResponse
+     * @description Response body for ``GET /api/v1/story/content``.
+     */
+    StoryContentResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Content */
+      content: string;
+    };
+    /**
+     * StoryLLMPrefs
+     * @description Per-project LLM preference overrides embedded in story data.
+     */
+    StoryLLMPrefs: {
+      /** Prompt Overrides */
+      prompt_overrides?: {
+        [key: string]: string;
+      } | null;
+      /** Temperature */
+      temperature?: number | null;
+      /** Max Tokens */
+      max_tokens?: number | null;
+    };
+    /**
+     * StoryPayload
+     * @description Story data as returned by project selection and mutation endpoints.
+     *
+     *     This matches the shape produced by
+     *     ``services.projects.project_helpers.normalize_story_for_frontend``.
+     *     All fields are optional because the payload depends on what the author
+     *     has filled in for a given project.
+     */
+    StoryPayload: {
+      /** Project Title */
+      project_title?: string | null;
+      /** Story Summary */
+      story_summary?: string | null;
+      /** Language */
+      language?: string | null;
+      /** Notes */
+      notes?: string | null;
+      /** Private Notes */
+      private_notes?: string | null;
+      /** Tags */
+      tags?: string[] | null;
+      /** Image Style */
+      image_style?: string | null;
+      /** Image Additional Info */
+      image_additional_info?: string | null;
+      /** Project Type */
+      project_type?: string | null;
+      /** Books */
+      books?: components['schemas']['StoryBook'][] | null;
+      /** Sourcebook */
+      sourcebook?: components['schemas']['StorySourcebookEntry'][] | null;
+      /** Conflicts */
+      conflicts?: unknown[] | null;
+      llm_prefs?: components['schemas']['StoryLLMPrefs'] | null;
+      /** Chapters */
+      chapters?: components['schemas']['StoryChapterSummary'][] | null;
+    };
+    /**
+     * StorySourcebookEntry
+     * @description Minimal sourcebook entry embedded in the story payload.
+     */
+    StorySourcebookEntry: {
+      /** Id */
+      id?: string | null;
+      /** Name */
+      name?: string | null;
+      /** Category */
+      category?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Synonyms */
+      synonyms?: string[] | null;
+      /** Images */
+      images?: string[] | null;
+      /** Keywords */
+      keywords?: string[] | null;
+      /** Relations */
+      relations?: unknown[] | null;
+    };
+    /**
+     * StorySummaryResponse
+     * @description Response for ``PUT /api/v1/story/summary``.
+     */
+    StorySummaryResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Story Summary */
+      story_summary?: string | null;
+      /** Detail */
+      detail?: string | null;
+    };
+    /**
+     * StoryTagsResponse
+     * @description Response for ``PUT /api/v1/story/tags``.
+     */
+    StoryTagsResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Tags */
+      tags?: string[] | null;
+      /** Detail */
+      detail?: string | null;
+    };
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -2220,6 +2793,24 @@ export interface components {
       input?: unknown;
       /** Context */
       ctx?: Record<string, never>;
+    };
+    /**
+     * OkResponse
+     * @description Generic ``{ok: true}`` response used by save/delete chat endpoints.
+     */
+    augmentedquill__models__chat__OkResponse: {
+      /** Ok */
+      ok: boolean;
+    };
+    /**
+     * OkResponse
+     * @description Generic success response used by endpoints that return ``{ok: true}``.
+     */
+    augmentedquill__models__machine__OkResponse: {
+      /** Ok */
+      ok: boolean;
+      /** Detail */
+      detail?: string | null;
     };
   };
   responses: never;
@@ -2245,7 +2836,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['augmentedquill__models__machine__OkResponse'];
         };
       };
     };
@@ -2267,7 +2858,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['PromptsResponse'];
         };
       };
       /** @description Validation Error */
@@ -2296,7 +2887,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['MachineTestResponse'];
         };
       };
     };
@@ -2316,7 +2907,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['MachinePresetsResponse'];
         };
       };
     };
@@ -2336,12 +2927,12 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['MachineTestModelResponse'];
         };
       };
     };
   };
-  _lambda__api_v1_machine_get: {
+  _get_machine_api_v1_machine_get: {
     parameters: {
       query?: never;
       header?: never;
@@ -2356,7 +2947,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['MachineConfigResponse'];
         };
       };
     };
@@ -2376,7 +2967,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['OkSelectedResponse'];
         };
       };
     };
@@ -2396,7 +2987,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['StorySummaryResponse'];
         };
       };
     };
@@ -2436,7 +3027,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['StoryTagsResponse'];
         };
       };
     };
@@ -2480,7 +3071,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ProjectMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2513,7 +3104,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ProjectSelectResponse'];
         };
       };
       /** @description Validation Error */
@@ -2546,7 +3137,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ProjectMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2579,7 +3170,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ProjectMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2612,7 +3203,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['BookMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2645,7 +3236,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['BookMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2678,7 +3269,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['BookMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -2707,7 +3298,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ListImagesResponse'];
         };
       };
     };
@@ -2991,7 +3582,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ProjectMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -3601,7 +4192,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['StoryContentResponse'];
         };
       };
     };
@@ -3820,7 +4411,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ChatToolBatchMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -3851,7 +4442,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ChatToolBatchMutationResponse'];
         };
       };
       /** @description Validation Error */
@@ -3900,7 +4491,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ChatListResponse'];
         };
       };
     };
@@ -3920,7 +4511,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['augmentedquill__models__chat__OkResponse'];
         };
       };
     };
@@ -3942,7 +4533,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['ChatDetailResponse'];
         };
       };
       /** @description Validation Error */
@@ -3973,7 +4564,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['augmentedquill__models__chat__OkResponse'];
         };
       };
       /** @description Validation Error */
@@ -4004,7 +4595,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['augmentedquill__models__chat__OkResponse'];
         };
       };
       /** @description Validation Error */
@@ -4038,7 +4629,7 @@ export interface operations {
       };
     };
   };
-  _lambda__api_v1_debug_llm_logs_get: {
+  get_llm_logs_api_v1_debug_llm_logs_get: {
     parameters: {
       query?: never;
       header?: never;
@@ -4053,7 +4644,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['DebugLogsResponse'];
         };
       };
     };

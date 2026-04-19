@@ -24,7 +24,6 @@ from augmentedquill.core.config import (
     load_story_config,
     DEFAULT_STORY_CONFIG_PATH,
 )
-from augmentedquill.api.v1.http_responses import error_json, ok_json
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -59,7 +58,14 @@ from augmentedquill.services.chat.chat_api_session_ops import (
 import augmentedquill.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
-from augmentedquill.models.chat import ChatInitialStateResponse
+from augmentedquill.models.chat import (
+    ChatInitialStateResponse,
+    ChatToolBatchMutationResponse,
+    ChatListItem,
+    ChatListResponse,
+    ChatDetailResponse,
+    OkResponse,
+)
 from augmentedquill.utils.json_repair import try_parse_json_robust
 from augmentedquill.api.v1.request_body import parse_json_object_body
 from augmentedquill.utils.path_utils import safe_child_path
@@ -362,36 +368,40 @@ async def api_chat_tools(request: Request) -> StreamingResponse:
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
-@router.post("/chat/tools/undo/{batch_id}")
-async def api_chat_tools_undo(batch_id: str) -> JSONResponse:
+@router.post(
+    "/chat/tools/undo/{batch_id}", response_model=ChatToolBatchMutationResponse
+)
+async def api_chat_tools_undo(batch_id: str) -> ChatToolBatchMutationResponse:
     """Undo a previously executed chat-tool batch by restoring snapshot content."""
     project_dir = get_active_project_dir()
     if not project_dir:
-        return error_json("No active project selected", status_code=400)
+        raise HTTPException(status_code=400, detail="No active project selected")
 
     batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
     before_snapshot = batch.get("before")
     if not isinstance(before_snapshot, dict):
-        return error_json("Invalid chat tool batch snapshot", status_code=500)
+        raise HTTPException(status_code=500, detail="Invalid chat tool batch snapshot")
 
     restore_project_snapshot(project_dir, before_snapshot)
-    return ok_json(ok=True, batch_id=batch_id)
+    return ChatToolBatchMutationResponse(ok=True, batch_id=batch_id)
 
 
-@router.post("/chat/tools/redo/{batch_id}")
-async def api_chat_tools_redo(batch_id: str) -> JSONResponse:
+@router.post(
+    "/chat/tools/redo/{batch_id}", response_model=ChatToolBatchMutationResponse
+)
+async def api_chat_tools_redo(batch_id: str) -> ChatToolBatchMutationResponse:
     """Redo a previously undone chat-tool batch by restoring post-batch snapshot."""
     project_dir = get_active_project_dir()
     if not project_dir:
-        return error_json("No active project selected", status_code=400)
+        raise HTTPException(status_code=400, detail="No active project selected")
 
     batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
     after_snapshot = batch.get("after")
     if not isinstance(after_snapshot, dict):
-        return error_json("Invalid chat tool batch snapshot", status_code=500)
+        raise HTTPException(status_code=500, detail="Invalid chat tool batch snapshot")
 
     restore_project_snapshot(project_dir, after_snapshot)
-    return ok_json(ok=True, batch_id=batch_id)
+    return ChatToolBatchMutationResponse(ok=True, batch_id=batch_id)
 
 
 @router.post("/chat/stream")
@@ -620,38 +630,40 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
-@router.get("/chats")
-async def api_list_chats() -> Any:
+@router.get("/chats", response_model=ChatListResponse)
+async def api_list_chats() -> ChatListResponse:
     """Handle the API request to list chats."""
-    return list_active_chats()
+    items = list_active_chats()
+    return ChatListResponse(chats=[ChatListItem(**item) for item in items])
 
 
-@router.get("/chats/{chat_id}")
-async def api_load_chat(chat_id: str) -> Any:
+@router.get("/chats/{chat_id}", response_model=ChatDetailResponse)
+async def api_load_chat(chat_id: str) -> ChatDetailResponse:
     """Handle the API request to load chat."""
-    return load_active_chat(chat_id)
+    data = load_active_chat(chat_id)
+    return ChatDetailResponse(**data)
 
 
-@router.post("/chats/{chat_id}")
-async def api_save_chat(chat_id: str, request: Request) -> Any:
+@router.post("/chats/{chat_id}", response_model=OkResponse)
+async def api_save_chat(chat_id: str, request: Request) -> OkResponse:
     """Api Save Chat."""
     data = await parse_json_object_body(request)
     save_active_chat(chat_id, data)
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
-@router.delete("/chats/{chat_id}")
-async def api_delete_chat(chat_id: str) -> Any:
+@router.delete("/chats/{chat_id}", response_model=OkResponse)
+async def api_delete_chat(chat_id: str) -> OkResponse:
     """Handle the API request to delete chat."""
     delete_active_chat(chat_id)
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
-@router.delete("/chats")
-async def api_delete_all_chats() -> Any:
+@router.delete("/chats", response_model=OkResponse)
+async def api_delete_all_chats() -> OkResponse:
     """Handle the API request to delete all chats."""
     delete_all_active_chats()
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
 @router.post("/openai/models")
