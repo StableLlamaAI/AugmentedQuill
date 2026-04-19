@@ -5,7 +5,7 @@
       "label": "frontend: install",
       "type": "shell",
       "command": "npm",
-      "args": ["install"],
+      "args": ["install", "--legacy-peer-deps"],
       "options": {
         "cwd": "${workspaceFolder}/src/frontend"
       },
