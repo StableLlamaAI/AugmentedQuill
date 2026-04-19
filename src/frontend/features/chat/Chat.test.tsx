@@ -75,8 +75,11 @@ const renderWithI18n = (contextOverrides: Partial<ChatContextValue> = {}) =>
 
 describe('Chat', () => {
   beforeAll(() => {
-    if (!(window.HTMLElement.prototype as any).scrollTo) {
-      (window.HTMLElement.prototype as any).scrollTo = () => {};
+    const htmlProto = window.HTMLElement.prototype as unknown as {
+      scrollTo?: () => void;
+    };
+    if (!htmlProto.scrollTo) {
+      htmlProto.scrollTo = () => {};
     }
   });
 

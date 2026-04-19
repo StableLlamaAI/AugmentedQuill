@@ -18,6 +18,7 @@ import { renderToString } from 'react-dom/server';
 
 import { DebugLogs } from './DebugLogs';
 import { api } from '../../services/api';
+import type { DebugLogEntry } from '../../services/apiTypes';
 
 describe('DebugLogs component', () => {
   afterEach(() => {
@@ -38,8 +39,8 @@ describe('DebugLogs component', () => {
       {
         // note: deliberately omit `id` to simulate unstructured log
         timestamp_start: now,
-      } as any,
-    ];
+      },
+    ] as DebugLogEntry[];
 
     vi.spyOn(api.debug, 'getLogs').mockResolvedValue(logs);
 

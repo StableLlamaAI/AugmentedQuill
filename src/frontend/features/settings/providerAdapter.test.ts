@@ -17,6 +17,7 @@ import {
   toPromptOverrides,
 } from './providerAdapter';
 import { DEFAULT_LLM_CONFIG } from '../../types';
+import type { MachineModelConfig } from '../../services/apiTypes';
 
 describe('normalizeProviderPrompts', () => {
   it('fills missing required prompt keys from fallback values', () => {
@@ -58,7 +59,7 @@ describe('provider mapping roundtrip', () => {
       prompt_overrides: {
         system: 'S',
       },
-    } as any;
+    } as unknown as MachineModelConfig;
 
     const provider = machineModelToProvider(model, {
       ...DEFAULT_LLM_CONFIG,

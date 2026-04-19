@@ -16,6 +16,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { useChatSessionManagement } from './useChatSessionManagement';
 import { api } from '../../services/api';
+import type { ChatSession } from '../../types/chat';
 
 vi.mock('uuid', () => ({
   v4: () => 'incognito-session-id',
@@ -37,7 +38,7 @@ describe('useChatSessionManagement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.chat.list).mockResolvedValue([]);
-    vi.mocked(api.chat.load).mockResolvedValue(null as any);
+    vi.mocked(api.chat.load).mockResolvedValue(null);
   });
 
   it('creates an incognito session with expected defaults', async () => {
@@ -78,7 +79,7 @@ describe('useChatSessionManagement', () => {
       systemPrompt: 'Saved prompt',
       allowWebSearch: true,
       scratchpad: 'My Scratch',
-    } as any);
+    } as ChatSession);
 
     const { result } = renderHook(() =>
       useChatSessionManagement({
