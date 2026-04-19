@@ -17,6 +17,8 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "noImplicitAny": true,
+    "strict": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },

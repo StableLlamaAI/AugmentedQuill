@@ -18,7 +18,7 @@ from typing import List, Dict
 class ChannelFilter:
     """Stateful filter to separate thinking/analysis from final content."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Init  ."""
         self.current_channel = "final"
         self.buffer = ""

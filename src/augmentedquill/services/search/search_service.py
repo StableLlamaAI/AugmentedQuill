@@ -173,6 +173,7 @@ def _search_chapter_content(
     is_regex: bool,
     is_phonetic: bool,
 ) -> list[SearchResultSection]:
+    """Search chapter content for the query and return matching sections."""
     sections = []
     for chap_id in chapter_ids:
         content = _read_chapter_content(chap_id)
@@ -199,6 +200,7 @@ def _search_chapter_metadata(
     is_regex: bool,
     is_phonetic: bool,
 ) -> list[SearchResultSection]:
+    """Search chapter metadata fields for the query and return matching sections."""
     sections = []
     metadata_entries = _get_chapter_metadata_entries(active)
 
@@ -264,6 +266,7 @@ def _search_story_metadata(
     is_regex: bool,
     is_phonetic: bool,
 ) -> list[SearchResultSection]:
+    """Search story metadata fields for the query and return matching sections."""
     sections = []
     try:
         from augmentedquill.core.config import load_story_config
@@ -353,6 +356,7 @@ def _search_sourcebook(
     is_regex: bool,
     is_phonetic: bool,
 ) -> list[SearchResultSection]:
+    """Search sourcebook entries for the query and return matching sections."""
     sections = []
     try:
         from augmentedquill.services.sourcebook.sourcebook_helpers import (

@@ -21,7 +21,9 @@ import {
 import { Range } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 
+/** Represents space widget. */
 class WsSpaceWidget extends WidgetType {
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
@@ -30,12 +32,15 @@ class WsSpaceWidget extends WidgetType {
     el.textContent = ' ';
     return el;
   }
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
 
+/** Represents tab widget. */
 class WsTabWidget extends WidgetType {
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
@@ -44,12 +49,15 @@ class WsTabWidget extends WidgetType {
     el.textContent = '→';
     return el;
   }
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
 
+/** Represents nl widget. */
 class WsNlWidget extends WidgetType {
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const el = document.createElement('span');
     el.setAttribute('aria-hidden', 'true');
@@ -58,7 +66,8 @@ class WsNlWidget extends WidgetType {
     el.textContent = '¶';
     return el;
   }
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
@@ -74,26 +83,36 @@ export const buildWhitespacePlugin = (): Extension =>
       constructor(view: EditorView) {
         this.decorations = this.build(view);
       }
-      update(u: ViewUpdate) {
+      /** Update the requested value. */
+      update(u: ViewUpdate): void {
         if (u.viewportChanged || u.geometryChanged) {
           this.decorations = this.build(u.view);
         } else if (u.docChanged) {
           // Fast path: remap positions for single inert-char insertions.
           // Whitespace markers (space/tab/newline) require a full rebuild.
           let safeInsert = true;
-          u.changes.iterChanges((fromA, toA, _fB, _tB, ins) => {
-            if (toA !== fromA || ins.length !== 1) {
-              safeInsert = false;
-              return;
+          u.changes.iterChanges(
+            (
+              fromA: number,
+              toA: number,
+              _fB: number,
+              _tB: number,
+              ins: import('@codemirror/state').Text
+            ) => {
+              if (toA !== fromA || ins.length !== 1) {
+                safeInsert = false;
+                return;
+              }
+              const c = ins.sliceString(0, 1);
+              if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
             }
-            const c = ins.sliceString(0, 1);
-            if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
-          });
+          );
           this.decorations = safeInsert
             ? this.decorations.map(u.changes)
             : this.build(u.view);
         }
       }
+      /** Build the requested value. */
       build(view: EditorView): DecorationSet {
         const decs: Range<Decoration>[] = [];
         // Fall back to full document if the viewport hasn't been computed yet
@@ -140,5 +159,5 @@ export const buildWhitespacePlugin = (): Extension =>
         return Decoration.set(decs, true);
       }
     },
-    { decorations: (v) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
   );

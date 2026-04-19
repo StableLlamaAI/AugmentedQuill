@@ -27,14 +27,20 @@ router = APIRouter(tags=["Checkpoints"])
 
 
 class CheckpointInfo(BaseModel):
+    """Represents the CheckpointInfo type."""
+
     timestamp: str
 
 
 class CheckpointListResponse(BaseModel):
+    """Represents the CheckpointListResponse type."""
+
     checkpoints: list[CheckpointInfo]
 
 
 class CheckpointLoadDeleteRequest(BaseModel):
+    """Represents the CheckpointLoadDeleteRequest type."""
+
     timestamp: str
 
 
@@ -45,6 +51,7 @@ _CHECKPOINT_NAME_RE = r"^[A-Za-z0-9_\-T]+$"
 
 
 def _get_checkpoints_dir(project_dir: Path) -> Path:
+    """Return checkpoints dir."""
     d = project_dir / _CHECKPOINTS_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -68,6 +75,7 @@ def _resolve_checkpoint_dir(project_dir: Path, name: str) -> Path:
 
 @router.get("/checkpoints", response_model=CheckpointListResponse)
 async def api_get_checkpoints() -> CheckpointListResponse:
+    """Handle the API request to get checkpoints."""
     project_dir = get_active_project_dir()
     if not project_dir:
         return CheckpointListResponse(checkpoints=[])
@@ -86,6 +94,7 @@ async def api_get_checkpoints() -> CheckpointListResponse:
 
 @router.post("/checkpoints/create")
 async def api_create_checkpoint() -> JSONResponse:
+    """Handle the API request to create checkpoint."""
     project_dir = get_active_project_dir()
     if not project_dir:
         return error_json("No active project selected", status_code=400)
@@ -107,6 +116,7 @@ async def api_create_checkpoint() -> JSONResponse:
 
 @router.post("/checkpoints/load")
 async def api_load_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONResponse:
+    """Handle the API request to load checkpoint."""
     project_dir = get_active_project_dir()
     if not project_dir:
         return error_json("No active project selected", status_code=400)
@@ -128,6 +138,7 @@ async def api_load_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONResponse
 
 @router.post("/checkpoints/delete")
 async def api_delete_checkpoint(body: CheckpointLoadDeleteRequest) -> JSONResponse:
+    """Handle the API request to delete checkpoint."""
     project_dir = get_active_project_dir()
     if not project_dir:
         return error_json("No active project selected", status_code=400)

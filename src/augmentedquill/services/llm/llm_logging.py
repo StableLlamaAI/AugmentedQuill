@@ -152,7 +152,7 @@ def _prepare_dump_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     return prepared
 
 
-def add_llm_log(log_entry: Dict[str, Any]):
+def add_llm_log(log_entry: Dict[str, Any]) -> Any:
     """Add a log entry to the global list, keeping only the last 100 entries.
 
     If AUGQ_LLM_DUMP is set, also append the raw log to a file.

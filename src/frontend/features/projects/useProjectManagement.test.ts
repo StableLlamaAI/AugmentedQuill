@@ -71,10 +71,10 @@ describe('useProjectManagement', () => {
     });
     vi.mocked(api.projects.list).mockResolvedValue({
       available: [{ name: 'p1', title: 'Project One', type: 'novel', language: 'en' }],
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
     vi.mocked(api.settings.getPrompts).mockResolvedValue({
       languages: ['en', 'de'],
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof api.settings.getPrompts>>);
   });
 
   it('loads project list and instruction languages on mount', async () => {
@@ -94,14 +94,22 @@ describe('useProjectManagement', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.projects.some((project) => project.id === 'p1')).toBe(true);
+      expect(
+        result.current.projects.some(
+          (project: import('../../types').ProjectMetadata) => project.id === 'p1'
+        )
+      ).toBe(true);
     });
     expect(result.current.instructionLanguages).toEqual(['en', 'de']);
   });
 
   it('resets undo history when the user switches projects', async () => {
-    vi.mocked(api.projects.select).mockResolvedValue({ ok: true } as any);
-    vi.mocked(api.chat.list).mockResolvedValue([] as any);
+    vi.mocked(api.projects.select).mockResolvedValue({ ok: true } as unknown as Awaited<
+      ReturnType<typeof api.projects.select>
+    >);
+    vi.mocked(api.chat.list).mockResolvedValue(
+      [] as unknown as Awaited<ReturnType<typeof api.chat.list>>
+    );
 
     const refreshStory = vi.fn().mockResolvedValue(undefined);
     const handleNewChat = vi.fn();
@@ -180,7 +188,30 @@ describe('useProjectManagement', () => {
       language: 'en',
     };
     const { result, rerender } = renderHook(
-      ({ story }) =>
+      ({
+        story,
+      }: {
+        story: {
+          language: string;
+          id: string;
+          currentChapterId: string | null;
+          lastUpdated?: number;
+          conflicts?: import('../../types').Conflict[];
+          title: string;
+          summary: string;
+          notes?: string;
+          private_notes?: string;
+          styleTags: string[];
+          image_style?: string;
+          image_additional_info?: string;
+          chapters: import('../../types').Chapter[];
+          draft: import('../../types').WritingUnit | null;
+          projectType: 'short-story' | 'novel' | 'series';
+          books?: import('../../types').Book[];
+          sourcebook?: import('../../types').SourcebookEntry[];
+          llm_prefs?: { prompt_overrides?: Record<string, string> };
+        };
+      }) =>
         useProjectManagement({
           story,
           refreshStory: vi.fn().mockResolvedValue(undefined),
@@ -198,7 +229,10 @@ describe('useProjectManagement', () => {
 
     await waitFor(() => {
       expect(
-        result.current.projects.some((project) => project.id === 'active-story')
+        result.current.projects.some(
+          (project: import('../../types').ProjectMetadata) =>
+            project.id === 'active-story'
+        )
       ).toBe(true);
     });
 
@@ -212,7 +246,10 @@ describe('useProjectManagement', () => {
     });
 
     expect(
-      result.current.projects.find((project) => project.id === 'active-story')?.language
+      result.current.projects.find(
+        (project: import('../../types').ProjectMetadata) =>
+          project.id === 'active-story'
+      )?.language
     ).toBe('de');
   });
 
@@ -239,7 +276,36 @@ describe('useProjectManagement', () => {
       .mockReturnValueOnce(5000);
 
     const { result, rerender } = renderHook(
-      ({ story }) =>
+      ({
+        story,
+      }: {
+        story: {
+          chapters: {
+            id: string;
+            title: string;
+            summary: string;
+            content: string;
+            filename: string;
+          }[];
+          language: string;
+          id: string;
+          currentChapterId: string | null;
+          lastUpdated?: number;
+          conflicts?: import('../../types').Conflict[];
+          title: string;
+          summary: string;
+          notes?: string;
+          private_notes?: string;
+          styleTags: string[];
+          image_style?: string;
+          image_additional_info?: string;
+          draft: import('../../types').WritingUnit | null;
+          projectType: 'short-story' | 'novel' | 'series';
+          books?: import('../../types').Book[];
+          sourcebook?: import('../../types').SourcebookEntry[];
+          llm_prefs?: { prompt_overrides?: Record<string, string> };
+        };
+      }) =>
         useProjectManagement({
           story,
           refreshStory: vi.fn().mockResolvedValue(undefined),
@@ -257,12 +323,15 @@ describe('useProjectManagement', () => {
 
     await waitFor(() => {
       expect(
-        result.current.projects.some((project) => project.id === 'active-story')
+        result.current.projects.some(
+          (project: import('../../types').ProjectMetadata) =>
+            project.id === 'active-story'
+        )
       ).toBe(true);
     });
 
     const before = result.current.projects.find(
-      (project) => project.id === 'active-story'
+      (project: import('../../types').ProjectMetadata) => project.id === 'active-story'
     );
 
     act(() => {
@@ -280,7 +349,7 @@ describe('useProjectManagement', () => {
     });
 
     const after = result.current.projects.find(
-      (project) => project.id === 'active-story'
+      (project: import('../../types').ProjectMetadata) => project.id === 'active-story'
     );
     expect(after?.updatedAt).toBe(before?.updatedAt);
     expect(after?.title).toBe(before?.title);

@@ -88,7 +88,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   baselinePrivateNotes = '',
   baselineConflicts = [],
   spellCheck = true,
-}) => {
+}: StoryMetadataProps) => {
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
 
   React.useEffect(() => {
@@ -219,7 +219,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
-        {tags.map((tag, i) => (
+        {tags.map((tag: string, i: number) => (
           <span key={i} className={`px-2 py-1 text-xs rounded-full border ${tagClass}`}>
             {tag}
           </span>

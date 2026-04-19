@@ -34,7 +34,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   onHeightChange,
   isLast,
   isLight,
-}) => {
+}: CollapsibleSectionProps) => {
   const [isResizing, setIsResizing] = useState(false);
   const [minHeaderHeight, setMinHeaderHeight] = useState(50);
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -215,7 +215,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           type="button"
           className={`h-1.5 w-full flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
           style={{ cursor: 'row-resize' }}
-          onMouseDown={(e) => {
+          onMouseDown={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
             e.preventDefault();
             startResizing(e);
           }}

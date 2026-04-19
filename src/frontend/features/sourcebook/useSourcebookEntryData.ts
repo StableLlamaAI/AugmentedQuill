@@ -47,7 +47,7 @@ export const useSourcebookEntryData = ({
     if (!isOpen) return;
     api.projects
       .listImages()
-      .then((data) => {
+      .then((data: import('../../services/apiTypes').ListImagesResponse) => {
         setAvailableImages(data.images || []);
       })
       .catch(console.error);
@@ -59,7 +59,7 @@ export const useSourcebookEntryData = ({
 
     api.projects
       .listImages()
-      .then((data) => {
+      .then((data: import('../../services/apiTypes').ListImagesResponse) => {
         setAvailableImages(data.images || []);
       })
       .catch(console.error);
@@ -132,7 +132,7 @@ export const useSourcebookEntryData = ({
   }, [keywordInputs.name, keywordInputs.description, keywordInputs.synonyms]);
 
   const selectedImagesList = useMemo(
-    () => availableImages.filter((img) => images.includes(img.filename)),
+    () => availableImages.filter((img: ProjectImage) => images.includes(img.filename)),
     [availableImages, images]
   );
 

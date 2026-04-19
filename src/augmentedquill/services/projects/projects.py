@@ -72,18 +72,25 @@ def get_projects_root() -> Path:
 
 @dataclass
 class ProjectInfo:
+    """Holds project discovery metadata used during project validation."""
+
     path: Path
     is_valid: bool
     reason: str = ""
 
 
 def load_registry() -> Dict:
+    """Represents the ProjectInfo type."""
+    """Represents the ProjectInfo type."""
+    """Load registry."""
+    """Represents the ProjectInfo type."""
     return load_registry_from_path(
         Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH)))
     )
 
 
 def set_active_project(path: Path) -> None:
+    """Set active project."""
     reg = load_registry()
     current, recent = set_active_project_in_registry(
         Path(os.getenv("AUGQ_PROJECTS_REGISTRY", str(DEFAULT_PROJECTS_REGISTRY_PATH))),
@@ -98,10 +105,12 @@ def set_active_project(path: Path) -> None:
 
 
 def get_active_project_dir() -> Path | None:
+    """Return active project dir."""
     return get_active_project_dir_from_registry(load_registry())
 
 
 def _require_active_project() -> Path:
+    """Helper for active project.."""
     active = get_active_project_dir()
     if not active:
         raise ValueError("No active project")

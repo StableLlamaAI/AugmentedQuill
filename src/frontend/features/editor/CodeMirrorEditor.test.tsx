@@ -252,7 +252,7 @@ describe('CodeMirrorEditor', () => {
     const docText = ref.current?.state.doc.toString() ?? '';
     expect(docText).toBe('a\tb');
     const markers = Array.from(container.querySelectorAll('.cm-ws-marker'));
-    const marker = markers.find((el) => el.textContent === '→');
+    const marker = markers.find((el: Element) => el.textContent === '→');
     expect(marker).toBeDefined();
     expect(marker?.textContent).toBe('→');
   });

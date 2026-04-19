@@ -32,17 +32,20 @@ export const useSourcebookRelationData = ({
 
     api.sourcebook
       .list()
-      .then((data) => {
-        setEntries(data.filter((e) => e.id !== currentEntryId));
+      .then((data: SourcebookEntry[]) => {
+        setEntries(data.filter((e: SourcebookEntry) => e.id !== currentEntryId));
       })
       .catch(console.error);
 
     api.projects
       .list()
-      .then((res) => {
+      .then((res: import('../../services/apiTypes').ProjectsListResponse) => {
         const currentName = res.current;
         const allProjects = res.projects || res.available || [];
-        const currentProj = allProjects.find((p) => p.name === currentName);
+        const currentProj = allProjects.find(
+          (p: import('../../services/apiTypes').ProjectListItem) =>
+            p.name === currentName
+        );
         if (currentProj && currentProj.type) {
           setProjectType(currentProj.type);
         }

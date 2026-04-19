@@ -59,7 +59,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   aiControls,
   modelControls,
   themeTokens,
-}) => {
+}: HeaderCenterControlsProps) => {
   const {
     viewMode,
     setViewMode,
@@ -98,7 +98,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const updateAppSettings = (nextSettings: typeof appSettings) => {
     setAppSettings(nextSettings);
     if (saveSettings) {
-      void saveSettings(nextSettings).catch((error) => {
+      void saveSettings(nextSettings).catch((error: unknown) => {
         console.error('Failed to persist model selection', error);
       });
     }
@@ -276,7 +276,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             }`}
           />
           <button
-            onClick={() => setShowWhitespace((value) => !value)}
+            onClick={() => setShowWhitespace((value: boolean) => !value)}
             title="Toggle whitespace characters"
             className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
               showWhitespace ? buttonActive : `${iconColor} ${iconHover}`
@@ -385,16 +385,26 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         <div className="hidden lg:flex items-center space-x-0.5">
           <div className={`w-px h-4 mx-2 ${dividerColor}`}></div>
 
-          {allFormatButtons.slice(0, inlineCount).map((btn) => (
-            <button
-              key={btn.key}
-              onClick={btn.onClick}
-              className={getFormatButtonClass(btn.key)}
-              title={btn.label}
-            >
-              {btn.icon}
-            </button>
-          ))}
+          {allFormatButtons
+            .slice(0, inlineCount)
+            .map(
+              (btn: {
+                key: string;
+                icon: React.ReactNode;
+                label: string;
+                onClick: () => void;
+                extraClass?: string;
+              }) => (
+                <button
+                  key={btn.key}
+                  onClick={btn.onClick}
+                  className={getFormatButtonClass(btn.key)}
+                  title={btn.label}
+                >
+                  {btn.icon}
+                </button>
+              )
+            )}
 
           {/* Formatting dropdown: collects buttons that don't fit inline */}
           {inlineCount < allFormatButtons.length && (
@@ -427,19 +437,29 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                         : 'bg-brand-gray-800 border-brand-gray-700'
                     }`}
                   >
-                    {allFormatButtons.slice(inlineCount).map((btn) => (
-                      <button
-                        key={btn.key}
-                        onClick={() => {
-                          btn.onClick();
-                          setIsFormatMenuOpen(false);
-                        }}
-                        className={getFormatButtonClass(btn.key)}
-                        title={btn.label}
-                      >
-                        {btn.icon}
-                      </button>
-                    ))}
+                    {allFormatButtons
+                      .slice(inlineCount)
+                      .map(
+                        (btn: {
+                          key: string;
+                          icon: React.ReactNode;
+                          label: string;
+                          onClick: () => void;
+                          extraClass?: string;
+                        }) => (
+                          <button
+                            key={btn.key}
+                            onClick={() => {
+                              btn.onClick();
+                              setIsFormatMenuOpen(false);
+                            }}
+                            className={getFormatButtonClass(btn.key)}
+                            title={btn.label}
+                          >
+                            {btn.icon}
+                          </button>
+                        )
+                      )}
                   </div>
                 </>
               )}
@@ -478,19 +498,27 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                   : 'bg-brand-gray-900 border-brand-gray-700'
               }`}
             >
-              {allFormatButtons.map((btn) => (
-                <button
-                  key={btn.key}
-                  onClick={() => {
-                    btn.onClick();
-                    setIsMobileFormatMenuOpen(false);
-                  }}
-                  className={`flex-1 min-w-[2.5rem] flex justify-center ${getFormatButtonClass(btn.key)}`}
-                  title={btn.label}
-                >
-                  {btn.icon}
-                </button>
-              ))}
+              {allFormatButtons.map(
+                (btn: {
+                  key: string;
+                  icon: React.ReactNode;
+                  label: string;
+                  onClick: () => void;
+                  extraClass?: string;
+                }) => (
+                  <button
+                    key={btn.key}
+                    onClick={() => {
+                      btn.onClick();
+                      setIsMobileFormatMenuOpen(false);
+                    }}
+                    className={`flex-1 min-w-[2.5rem] flex justify-center ${getFormatButtonClass(btn.key)}`}
+                    title={btn.label}
+                  >
+                    {btn.icon}
+                  </button>
+                )
+              )}
             </div>
           </>
         )}
@@ -591,7 +619,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                       appSettings.activeWritingProviderId
                     );
                   }}
-                  onChange={(value) =>
+                  onChange={(value: string) =>
                     updateAppSettings({
                       ...appSettings,
                       activeWritingProviderId: value,
@@ -611,7 +639,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                       appSettings.activeEditingProviderId
                     );
                   }}
-                  onChange={(value) =>
+                  onChange={(value: string) =>
                     updateAppSettings({
                       ...appSettings,
                       activeEditingProviderId: value,
@@ -631,7 +659,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                       appSettings.activeChatProviderId
                     );
                   }}
-                  onChange={(value) =>
+                  onChange={(value: string) =>
                     updateAppSettings({
                       ...appSettings,
                       activeChatProviderId: value,
@@ -658,7 +686,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 appSettings.activeWritingProviderId
               );
             }}
-            onChange={(value) =>
+            onChange={(value: string) =>
               updateAppSettings({
                 ...appSettings,
                 activeWritingProviderId: value,
@@ -678,7 +706,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 appSettings.activeEditingProviderId
               );
             }}
-            onChange={(value) =>
+            onChange={(value: string) =>
               updateAppSettings({
                 ...appSettings,
                 activeEditingProviderId: value,
@@ -696,7 +724,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             onSelectorClick={() => {
               void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
             }}
-            onChange={(value) =>
+            onChange={(value: string) =>
               updateAppSettings({
                 ...appSettings,
                 activeChatProviderId: value,

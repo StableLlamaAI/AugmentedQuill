@@ -10,7 +10,7 @@
 API endpoints for managing the sourcebook (knowledge base) associated with a project.
 """
 
-from typing import List, Optional, Literal
+from typing import Any, List, Literal, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
@@ -29,6 +29,8 @@ router = APIRouter(tags=["Sourcebook"])
 
 
 class SourcebookRelation(BaseModel):
+    """Represents the SourcebookRelation type."""
+
     target_id: str
     relation: str
     direction: Optional[str] = "forward"
@@ -39,6 +41,7 @@ class SourcebookRelation(BaseModel):
 
 
 class SourcebookEntry(BaseModel):
+    """Represents the SourcebookEntry type."""
 
     id: str
     name: str
@@ -51,6 +54,8 @@ class SourcebookEntry(BaseModel):
 
 
 class SourcebookEntryCreate(BaseModel):
+    """Represents the SourcebookEntryCreate type."""
+
     name: str
     synonyms: List[str] = []
     category: Optional[str] = None
@@ -60,6 +65,8 @@ class SourcebookEntryCreate(BaseModel):
 
 
 class SourcebookEntryUpdate(BaseModel):
+    """Represents the SourcebookEntryUpdate type."""
+
     name: Optional[str] = None
     synonyms: Optional[List[str]] = None
     category: Optional[str] = None
@@ -77,6 +84,8 @@ class SourcebookKeywordsRequest(BaseModel):
 
 
 class SourcebookKeywordsResponse(BaseModel):
+    """Represents the SourcebookKeywordsResponse type."""
+
     keywords: List[str]
 
 
@@ -107,6 +116,7 @@ async def get_sourcebook(
     match_mode: Literal["direct", "extensive"] = "extensive",
     split_query_fallback: bool = False,
 ) -> List[SourcebookEntry]:
+    """Return sourcebook."""
     active = get_active_project_dir()
     if not active:
         return []
@@ -182,7 +192,7 @@ async def update_sourcebook_entry(
 
 
 @router.delete("/sourcebook/{entry_name:path}")
-async def delete_sourcebook_entry(entry_name: str):
+async def delete_sourcebook_entry(entry_name: str) -> Any:
     """Delete Sourcebook Entry."""
     active = get_active_project_dir()
     if not active:

@@ -148,7 +148,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
   onUpdateConflict,
   onMoveConflict,
   onEditorUndoRedo,
-}) => {
+}: MetadataEditorDialogViewProps) => {
   const modalContent = (
     <div
       ref={dialogRef}
@@ -230,7 +230,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 <MessageSquareDiff size={16} />
               </button>
               <button
-                onClick={() => onSetIsFullscreen((value) => !value)}
+                onClick={() => onSetIsFullscreen((value: boolean) => !value)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
                   isFullscreen ? 'Switch to Sidebar View' : 'Switch to Full Screen'
@@ -265,7 +265,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 value={data.title || ''}
                 lang={data.language || 'en'}
                 spellCheck={true}
-                onChange={(event) => onSetData({ ...data, title: event.target.value })}
+                onChange={(
+                  event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ) => onSetData({ ...data, title: event.target.value })}
                 className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
               />
 
@@ -280,9 +282,13 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                         value={data.tags ? data.tags.join(', ') : ''}
                         lang={data.language || 'en'}
                         spellCheck={true}
-                        onChange={(event) => {
+                        onChange={(
+                          event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                        ) => {
                           const val = event.target.value;
-                          const tags = val.split(',').map((item) => item.trimStart());
+                          const tags = val
+                            .split(',')
+                            .map((item: string) => item.trimStart());
                           onSetData({ ...data, tags });
                         }}
                         className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
@@ -296,12 +302,15 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                         </label>
                         <select
                           value={data.language || ''}
-                          onChange={(event) =>
-                            onSetData({ ...data, language: event.target.value })
-                          }
+                          onChange={(
+                            event: React.ChangeEvent<
+                              HTMLSelectElement,
+                              HTMLSelectElement
+                            >
+                          ) => onSetData({ ...data, language: event.target.value })}
                           className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
                         >
-                          {languages.map((lng) => (
+                          {languages.map((lng: string) => (
                             <option key={lng} value={lng}>
                               {lng.toUpperCase()}
                             </option>
@@ -380,7 +389,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                         <div className="flex items-center gap-2">
                           {aiThinking && (
                             <button
-                              onClick={() => onSetIsThinkingExpanded((value) => !value)}
+                              onClick={() =>
+                                onSetIsThinkingExpanded((value: boolean) => !value)
+                              }
                               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors bg-brand-500/10 text-brand-600 hover:bg-brand-500/20 dark:bg-brand-500/20 dark:text-brand-400 dark:hover:bg-brand-500/30"
                               title={
                                 isThinkingExpanded ? 'Hide thinking' : 'Show thinking'
@@ -653,9 +664,15 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   )}
                   <CodeMirrorEditor
                     value={data.summary || ''}
-                    onChange={(value) => {
-                      onSetBaselineData((prev) => ({ ...prev, summary: value }));
-                      onSetData((prev) => ({ ...prev, summary: value }));
+                    onChange={(value: string) => {
+                      onSetBaselineData((prev: MetadataParams) => ({
+                        ...prev,
+                        summary: value,
+                      }));
+                      onSetData((prev: MetadataParams) => ({
+                        ...prev,
+                        summary: value,
+                      }));
                     }}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
@@ -678,9 +695,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   </div>
                   <CodeMirrorEditor
                     value={data.notes || ''}
-                    onChange={(value) => {
-                      onSetBaselineData((prev) => ({ ...prev, notes: value }));
-                      onSetData((prev) => ({ ...prev, notes: value }));
+                    onChange={(value: string) => {
+                      onSetBaselineData((prev: MetadataParams) => ({
+                        ...prev,
+                        notes: value,
+                      }));
+                      onSetData((prev: MetadataParams) => ({ ...prev, notes: value }));
                     }}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
@@ -705,9 +725,15 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   </div>
                   <CodeMirrorEditor
                     value={data.private_notes || ''}
-                    onChange={(value) => {
-                      onSetBaselineData((prev) => ({ ...prev, private_notes: value }));
-                      onSetData((prev) => ({ ...prev, private_notes: value }));
+                    onChange={(value: string) => {
+                      onSetBaselineData((prev: MetadataParams) => ({
+                        ...prev,
+                        private_notes: value,
+                      }));
+                      onSetData((prev: MetadataParams) => ({
+                        ...prev,
+                        private_notes: value,
+                      }));
                     }}
                     language={effectiveLanguage}
                     spellCheck={spellCheck}
@@ -732,9 +758,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     + Add Conflict
                   </Button>
                   <div className="space-y-4">
-                    {conflicts.map((conflict, idx) => {
+                    {conflicts.map((conflict: Conflict, idx: number) => {
                       const baselineConflict = (baselineData.conflicts || []).find(
-                        (baselineItem) => baselineItem.id === conflict.id
+                        (baselineItem: Conflict) => baselineItem.id === conflict.id
                       );
                       const isNewConflict = showDiff && baselineConflict === undefined;
 
@@ -789,12 +815,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.description}
-                                onChange={(value) => {
+                                onChange={(value: string) => {
                                   onUpdateConflict(conflict.id, 'description', value);
-                                  onSetBaselineData((prev) => ({
+                                  onSetBaselineData((prev: MetadataParams) => ({
                                     ...prev,
                                     conflicts: (prev.conflicts || []).map(
-                                      (baselineItem) =>
+                                      (baselineItem: Conflict) =>
                                         baselineItem.id === conflict.id
                                           ? { ...baselineItem, description: value }
                                           : baselineItem
@@ -823,12 +849,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.resolution}
-                                onChange={(value) => {
+                                onChange={(value: string) => {
                                   onUpdateConflict(conflict.id, 'resolution', value);
-                                  onSetBaselineData((prev) => ({
+                                  onSetBaselineData((prev: MetadataParams) => ({
                                     ...prev,
                                     conflicts: (prev.conflicts || []).map(
-                                      (baselineItem) =>
+                                      (baselineItem: Conflict) =>
                                         baselineItem.id === conflict.id
                                           ? { ...baselineItem, resolution: value }
                                           : baselineItem

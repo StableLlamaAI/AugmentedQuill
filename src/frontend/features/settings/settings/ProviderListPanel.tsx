@@ -55,7 +55,7 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
   onSelectProvider,
   onAddProvider,
   onDuplicateProvider,
-}) => {
+}: ProviderListPanelProps) => {
   return (
     <div
       className={`w-full md:w-1/3 h-48 md:h-full border-b md:border-b-0 md:border-r md:pr-6 overflow-y-auto shrink-0 ${
@@ -83,13 +83,13 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
         </button>
       </div>
       <div className="space-y-2">
-        {providers.map((p) => (
+        {providers.map((p: LLMConfig) => (
           <div
             key={p.id}
             role="button"
             tabIndex={0}
             onClick={() => onSelectProvider(p.id)}
-            onKeyDown={(e) => {
+            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 onSelectProvider(p.id);
@@ -184,7 +184,7 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
               </div>
               <button
                 type="button"
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   e.stopPropagation();
                   onDuplicateProvider(p.id);
                 }}

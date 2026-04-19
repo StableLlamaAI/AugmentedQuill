@@ -16,7 +16,7 @@ const escapeTableCell = (text: string): string =>
   text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
 const renderTableRow = (cells: Element[]): string => {
-  const cellTexts = cells.map((cell) =>
+  const cellTexts = cells.map((cell: Element) =>
     escapeTableCell((cell.textContent || '').trim())
   );
   return `| ${cellTexts.join(' | ')} |`;
@@ -46,7 +46,7 @@ const renderTable = (table: Element): string => {
     )
   );
 
-  sourceBodyRows.forEach((row) => {
+  sourceBodyRows.forEach((row: Element) => {
     const rowCells = Array.from(row.querySelectorAll('th,td'));
     lines.push(renderTableRow(rowCells));
   });
@@ -54,6 +54,7 @@ const renderTable = (table: Element): string => {
   return lines.join('\n') + '\n\n';
 };
 
+/** Create editor turndown service. */
 export function createEditorTurndownService(): TurndownService {
   const td = new TurndownService({
     headingStyle: 'atx',

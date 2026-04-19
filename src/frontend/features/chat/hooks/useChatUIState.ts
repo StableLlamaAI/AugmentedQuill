@@ -22,6 +22,7 @@ interface UseChatUIStateResult {
   handleThinkingToggle: (id: string, next: boolean) => void;
 }
 
+/** Custom React hook that manages chat uistate. */
 export function useChatUIState(): UseChatUIStateResult {
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -31,7 +32,10 @@ export function useChatUIState(): UseChatUIStateResult {
   >({});
 
   const handleThinkingToggle = useCallback((id: string, next: boolean) => {
-    setThinkingProcessExpanded((prev) => ({ ...prev, [id]: next }));
+    setThinkingProcessExpanded((prev: Record<string, boolean>) => ({
+      ...prev,
+      [id]: next,
+    }));
   }, []);
 
   return {

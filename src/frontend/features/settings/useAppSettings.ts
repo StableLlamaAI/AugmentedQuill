@@ -16,7 +16,11 @@ import { api } from '../../services/api';
 import { MachineModelConfig } from '../../services/apiTypes';
 import { machineModelToProvider } from './providerAdapter';
 
-export function useAppSettings(defaultSettings: AppSettings) {
+/** Custom React hook that manages app settings. */
+export function useAppSettings(defaultSettings: AppSettings): {
+  appSettings: AppSettings;
+  setAppSettings: import('react').Dispatch<import('react').SetStateAction<AppSettings>>;
+} {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_settings');
     const base = defaultSettings;
@@ -51,12 +55,13 @@ export function useAppSettings(defaultSettings: AppSettings) {
 
         if (models.length > 0) {
           const fallbackProvider = defaultSettings.providers[0] as LLMConfig;
-          const providers: LLMConfig[] = (models as MachineModelConfig[]).map((model) =>
-            machineModelToProvider(model, fallbackProvider)
+          const providers: LLMConfig[] = (models as MachineModelConfig[]).map(
+            (model: MachineModelConfig) =>
+              machineModelToProvider(model, fallbackProvider)
           );
 
           startTransition(() =>
-            setAppSettings((prev) => {
+            setAppSettings((prev: AppSettings) => {
               const next = { ...prev, providers };
               const selectedName = (openai?.selected || '') as string;
               const selectedChat = (openai?.selected_chat || selectedName) as string;
@@ -89,7 +94,7 @@ export function useAppSettings(defaultSettings: AppSettings) {
               }
 
               const exists = (id: string) =>
-                providers.some((provider) => provider.id === id);
+                providers.some((provider: LLMConfig) => provider.id === id);
               if (!exists(next.activeChatProviderId)) {
                 next.activeChatProviderId = providers[0].id;
               }

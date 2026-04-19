@@ -39,6 +39,7 @@ export type UIPanels = {
   appearanceRef: RefObject<HTMLDivElement | null>;
 };
 
+/** Custom React hook that manages uipanels. */
 export function useUIPanels(): UIPanels {
   const [isChatOpen, setIsChatOpen] = useState(() => {
     try {

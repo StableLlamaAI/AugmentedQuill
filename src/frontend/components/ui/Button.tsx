@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
   title,
   'aria-label': ariaLabel,
   ...props
-}) => {
+}: ButtonProps) => {
   const computedAriaLabel =
     ariaLabel ??
     (typeof title === 'string' && !children ? title : undefined) ??

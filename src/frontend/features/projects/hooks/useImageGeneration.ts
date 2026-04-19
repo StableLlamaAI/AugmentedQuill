@@ -21,7 +21,7 @@ interface ImageEntry {
   is_placeholder: boolean;
 }
 
-interface PromptPopupState {
+export interface PromptPopupState {
   isOpen: boolean;
   content: string;
   loading: boolean;
@@ -46,6 +46,7 @@ export interface UseImageGenerationArgs {
   setError: (msg: string | null) => void;
 }
 
+/** Custom React hook that manages image generation. */
 export function useImageGeneration({
   images,
   imageStyle,
@@ -56,7 +57,18 @@ export function useImageGeneration({
   onMetadataChange,
   getErrorMessage,
   setError,
-}: UseImageGenerationArgs) {
+}: UseImageGenerationArgs): {
+  generating: string | null;
+  promptPopup: PromptPopupState;
+  setPromptPopup: import('react').Dispatch<
+    import('react').SetStateAction<PromptPopupState>
+  >;
+  copied: boolean;
+  setCopied: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+  handleGenerateDescription: (img: ImageEntry) => Promise<void>;
+  handleCreatePrompt: (img: ImageEntry) => Promise<void>;
+  handleGenerateAllPrompts: () => Promise<void>;
+} {
   const [generating, setGenerating] = useState<string | null>(null);
   const [promptPopup, setPromptPopup] = useState<PromptPopupState>({
     isOpen: false,
@@ -99,7 +111,8 @@ export function useImageGeneration({
     setError(null);
     try {
       const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
+        (p: import('../../../types').LLMConfig) =>
+          p.id === settings.activeChatProviderId
       );
       if (!activeProvider) throw new Error('No active chat provider configured');
 
@@ -138,7 +151,8 @@ export function useImageGeneration({
 
     try {
       const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
+        (p: import('../../../types').LLMConfig) =>
+          p.id === settings.activeChatProviderId
       );
 
       if (!activeProvider) throw new Error('No active chat provider configured');
@@ -146,12 +160,12 @@ export function useImageGeneration({
       const system = prompts?.system_messages?.image_prompt_generator || '';
 
       await generateImagePrompt(img, activeProvider, system, (text: string) => {
-        setPromptPopup((prev) => ({ ...prev, content: text }));
+        setPromptPopup((prev: PromptPopupState) => ({ ...prev, content: text }));
       });
 
-      setPromptPopup((prev) => ({ ...prev, loading: false }));
+      setPromptPopup((prev: PromptPopupState) => ({ ...prev, loading: false }));
     } catch (err: unknown) {
-      setPromptPopup((prev) => ({
+      setPromptPopup((prev: PromptPopupState) => ({
         ...prev,
         content: 'Error creating prompt: ' + getErrorMessage(err, 'Unknown error'),
         loading: false,
@@ -161,14 +175,15 @@ export function useImageGeneration({
 
   const handleGenerateAllPrompts = async () => {
     if (!imageActionsAvailable) return;
-    const placeholders = images.filter((i) => i.is_placeholder);
+    const placeholders = images.filter((i: ImageEntry) => i.is_placeholder);
     if (placeholders.length === 0) return;
 
     setPromptPopup({ isOpen: true, content: '', loading: true });
 
     try {
       const activeProvider = settings.providers.find(
-        (p) => p.id === settings.activeChatProviderId
+        (p: import('../../../types').LLMConfig) =>
+          p.id === settings.activeChatProviderId
       );
       if (!activeProvider) throw new Error('No active chat provider configured');
 
@@ -182,22 +197,25 @@ export function useImageGeneration({
         let currentItemText = '';
         await generateImagePrompt(img, activeProvider, system, (text: string) => {
           currentItemText = text.replace(/[\r\n]+/g, ' ');
-          setPromptPopup((prev) => ({
+          setPromptPopup((prev: PromptPopupState) => ({
             ...prev,
             content: completedOutput + currentItemText,
           }));
         });
 
         completedOutput += currentItemText + '\n';
-        setPromptPopup((prev) => ({ ...prev, content: completedOutput }));
+        setPromptPopup((prev: PromptPopupState) => ({
+          ...prev,
+          content: completedOutput,
+        }));
       }
-      setPromptPopup((prev) => ({
+      setPromptPopup((prev: PromptPopupState) => ({
         ...prev,
         content: prev.content.trimEnd(),
         loading: false,
       }));
     } catch (err: unknown) {
-      setPromptPopup((prev) => ({
+      setPromptPopup((prev: PromptPopupState) => ({
         ...prev,
         content: prev.content + '\nError: ' + getErrorMessage(err, 'Unknown error'),
         loading: false,

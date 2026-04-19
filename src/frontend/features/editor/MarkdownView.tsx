@@ -27,6 +27,7 @@ const dmp = new diff_match_patch();
 // switched back to; populated lazily the first time each content string is seen.
 const htmlCache = new Map<string, string>();
 
+/** Parse and sanitize. */
 function parseAndSanitize(contentToParse: string): string {
   const rawHtml = marked.parse(contentToParse) as string;
   return DOMPurify.sanitize(rawHtml, {
@@ -47,7 +48,7 @@ interface MarkdownViewProps {
 // Configure markdown rendering once to keep parsing behavior stable.
 const renderer = new marked.Renderer();
 // @ts-ignore
-renderer.image = function (token) {
+renderer.image = function (token: import('marked').Tokens.Image) {
   let href = typeof token === 'object' && token !== null ? token.href : arguments[0];
   let title = typeof token === 'object' && token !== null ? token.title : arguments[1];
   let text = typeof token === 'object' && token !== null ? token.text : arguments[2];
@@ -71,7 +72,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   baseline = '',
   language,
   searchHighlightRanges,
-}) => {
+}: MarkdownViewProps) => {
   const safeContent = typeof content === 'string' ? content : '';
 
   // Diff case (editor diff viewer, one instance at a time): render synchronously so
@@ -120,7 +121,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     if (simple || hasDiff) return;
     if (htmlCache.has(safeContent)) {
       const cached = htmlCache.get(safeContent)!;
-      setAsyncHtml((prev) => (prev === cached ? prev : cached));
+      setAsyncHtml((prev: string) => (prev === cached ? prev : cached));
       return;
     }
     // Defer expensive markdown parsing off the synchronous render path.
@@ -170,12 +171,15 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     if (!ranges || ranges.length === 0) return [{ text: line, highlight: false }];
 
     const normalized = ranges
-      .map((range) => ({
+      .map((range: { start: number; end: number }) => ({
         start: Math.max(0, range.start - lineStart),
         end: Math.max(0, range.end - lineStart),
       }))
-      .filter((range) => range.start < range.end)
-      .sort((a, b) => a.start - b.start);
+      .filter((range: { start: number; end: number }) => range.start < range.end)
+      .sort(
+        (a: { start: number; end: number }, b: { start: number; end: number }) =>
+          a.start - b.start
+      );
 
     const fragments: Array<{ text: string; highlight: boolean }> = [];
     let cursor = 0;
@@ -199,7 +203,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     return fragments;
   };
 
-  const renderLine = (line: string, i: number, la?: string, lineStart = 0) => {
+  const renderLine = (line: string, i: number, la?: string, lineStart: number = 0) => {
     // Simple mode preserves source for complex markdown to avoid misleading preview fidelity.
     if (!searchHighlightRanges?.length) {
       return (
@@ -213,20 +217,22 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
 
     return (
       <div key={i} className="min-h-[1.5em]" lang={la}>
-        {fragments.map((fragment, idx) => {
-          const inline = renderInline(fragment.text);
-          return fragment.highlight ? (
-            <mark
-              key={idx}
-              className="search-highlight rounded"
-              style={{ backgroundColor: 'rgba(245, 158, 11, 0.25)' }}
-            >
-              {inline}
-            </mark>
-          ) : (
-            <React.Fragment key={idx}>{inline}</React.Fragment>
-          );
-        })}
+        {fragments.map(
+          (fragment: { text: string; highlight: boolean }, idx: number) => {
+            const inline = renderInline(fragment.text);
+            return fragment.highlight ? (
+              <mark
+                key={idx}
+                className="search-highlight rounded"
+                style={{ backgroundColor: 'rgba(245, 158, 11, 0.25)' }}
+              >
+                {inline}
+              </mark>
+            ) : (
+              <React.Fragment key={idx}>{inline}</React.Fragment>
+            );
+          }
+        )}
       </div>
     );
   };
@@ -238,7 +244,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     const regex = /(`.*?`|\*\*.*?\*\*|__.*?__|\*.*?\*|_.*?_)/g;
     const parts = text.split(regex);
 
-    return parts.map((part, index) => {
+    return parts.map((part: string, index: number) => {
       if (!part) return null;
 
       // Bold
@@ -284,7 +290,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   return (
     <div className={className} lang={language}>
       {simpleDiff
-        ? simpleDiff.map(([op, text], i) => {
+        ? simpleDiff.map(([op, text]: import('diff-match-patch').Diff, i: number) => {
             if (op === 0) return <React.Fragment key={i}>{text}</React.Fragment>;
             if (op === 1)
               return (
@@ -294,11 +300,11 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
               );
             return null; // deletions: not shown
           })
-        : safeContent.split('\n').map((line, i, all) => {
+        : safeContent.split('\n').map((line: string, i: number, all: string[]) => {
             const lineStart = safeContent
               .split('\n')
               .slice(0, i)
-              .reduce((sum, current) => sum + current.length + 1, 0);
+              .reduce((sum: number, current: string) => sum + current.length + 1, 0);
             return renderLine(line, i, language, lineStart);
           })}
     </div>

@@ -27,10 +27,16 @@ const toConnectionTestKey = (provider: LLMConfig): string => {
   return `${baseUrl}|${apiKey}|${timeoutS}`;
 };
 
+/** Custom React hook that manages settings dialog provider validation. */
 export function useSettingsDialogProviderValidation({
   isOpen,
   providers,
-}: UseSettingsDialogProviderValidationParams) {
+}: UseSettingsDialogProviderValidationParams): {
+  connectionStatus: Record<string, ProviderStatus>;
+  modelStatus: Record<string, ProviderStatus>;
+  modelLists: Record<string, string[]>;
+  detectedCapabilities: Record<string, ProviderCapabilities>;
+} {
   const [connectionStatus, setConnectionStatus] = useState<
     Record<string, ProviderStatus>
   >({});
@@ -57,7 +63,7 @@ export function useSettingsDialogProviderValidation({
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    providers.forEach((provider) => {
+    providers.forEach((provider: LLMConfig) => {
       const providerId = provider.id;
       const baseUrl = (provider.baseUrl || '').trim();
       const apiKey = (provider.apiKey || '').trim();
@@ -65,9 +71,18 @@ export function useSettingsDialogProviderValidation({
       const testKey = toConnectionTestKey(provider);
 
       if (!baseUrl || !apiKey) {
-        setConnectionStatus((state) => ({ ...state, [providerId]: 'idle' }));
-        setModelStatus((state) => ({ ...state, [providerId]: 'idle' }));
-        setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+        setConnectionStatus((state: Record<string, ProviderStatus>) => ({
+          ...state,
+          [providerId]: 'idle',
+        }));
+        setModelStatus((state: Record<string, ProviderStatus>) => ({
+          ...state,
+          [providerId]: 'idle',
+        }));
+        setModelLists((prev: Record<string, string[]>) => ({
+          ...prev,
+          [providerId]: [],
+        }));
         return;
       }
 
@@ -77,7 +92,10 @@ export function useSettingsDialogProviderValidation({
 
       const run = async () => {
         if (cancelled) return;
-        setConnectionStatus((state) => ({ ...state, [providerId]: 'loading' }));
+        setConnectionStatus((state: Record<string, ProviderStatus>) => ({
+          ...state,
+          [providerId]: 'loading',
+        }));
         try {
           const response = await api.machine.test({
             base_url: baseUrl,
@@ -87,11 +105,11 @@ export function useSettingsDialogProviderValidation({
           if (cancelled) return;
 
           lastConnTestKeyRef.current[providerId] = testKey;
-          setConnectionStatus((state) => ({
+          setConnectionStatus((state: Record<string, ProviderStatus>) => ({
             ...state,
             [providerId]: response?.ok ? 'success' : 'error',
           }));
-          setModelLists((prev) => ({
+          setModelLists((prev: Record<string, string[]>) => ({
             ...prev,
             [providerId]: response?.ok ? response.models || [] : [],
           }));
@@ -99,8 +117,14 @@ export function useSettingsDialogProviderValidation({
           if (cancelled) return;
           console.error('Failed to test machine config', error);
           lastConnTestKeyRef.current[providerId] = testKey;
-          setConnectionStatus((state) => ({ ...state, [providerId]: 'error' }));
-          setModelLists((prev) => ({ ...prev, [providerId]: [] }));
+          setConnectionStatus((state: Record<string, ProviderStatus>) => ({
+            ...state,
+            [providerId]: 'error',
+          }));
+          setModelLists((prev: Record<string, string[]>) => ({
+            ...prev,
+            [providerId]: [],
+          }));
         }
       };
 
@@ -120,7 +144,7 @@ export function useSettingsDialogProviderValidation({
     let cancelled = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    providers.forEach((provider) => {
+    providers.forEach((provider: LLMConfig) => {
       const providerId = provider.id;
       const modelId = (provider.modelId || '').trim();
       const previousModelId = prevModelIdRef.current[providerId];
@@ -135,7 +159,10 @@ export function useSettingsDialogProviderValidation({
 
       if (!modelId) {
         prevModelIdRef.current[providerId] = modelId;
-        setModelStatus((state) => ({ ...state, [providerId]: 'idle' }));
+        setModelStatus((state: Record<string, ProviderStatus>) => ({
+          ...state,
+          [providerId]: 'idle',
+        }));
         return;
       }
 
@@ -149,7 +176,10 @@ export function useSettingsDialogProviderValidation({
 
       const run = async () => {
         if (cancelled) return;
-        setModelStatus((state) => ({ ...state, [providerId]: 'loading' }));
+        setModelStatus((state: Record<string, ProviderStatus>) => ({
+          ...state,
+          [providerId]: 'loading',
+        }));
         try {
           const response = await api.machine.testModel({
             base_url: baseUrl,
@@ -161,12 +191,12 @@ export function useSettingsDialogProviderValidation({
 
           prevModelIdRef.current[providerId] = modelId;
           if (response?.capabilities) {
-            setDetectedCapabilities((prev) => ({
+            setDetectedCapabilities((prev: Record<string, ProviderCapabilities>) => ({
               ...prev,
               [providerId]: response.capabilities!,
             }));
           }
-          setModelStatus((state) => ({
+          setModelStatus((state: Record<string, ProviderStatus>) => ({
             ...state,
             [providerId]: response?.ok && response?.model_ok ? 'success' : 'error',
           }));
@@ -174,7 +204,10 @@ export function useSettingsDialogProviderValidation({
           if (cancelled) return;
           console.error('Failed to test model id', error);
           prevModelIdRef.current[providerId] = modelId;
-          setModelStatus((state) => ({ ...state, [providerId]: 'error' }));
+          setModelStatus((state: Record<string, ProviderStatus>) => ({
+            ...state,
+            [providerId]: 'error',
+          }));
         }
       };
 

@@ -95,7 +95,7 @@ interface SourcebookEntryDialogViewProps {
 }
 
 export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps> = (
-  props
+  props: SourcebookEntryDialogViewProps
 ) => {
   const {
     entry,

@@ -84,7 +84,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
     handleAddChapter,
     toggleCollapsed,
     updateHeight,
-  }) => {
+  }: AppSidebarProps) => {
     const { t } = useTranslation();
     const {
       currentChapterId,
@@ -139,7 +139,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
           isCollapsed={!!sidebarPrefs.isStoryCollapsed}
           onToggle={() => toggleCollapsed('isStoryCollapsed')}
           height={sidebarPrefs.storyHeight}
-          onHeightChange={(h) => updateHeight('storyHeight', h)}
+          onHeightChange={(h: number) => updateHeight('storyHeight', h)}
           isLight={isLight}
         >
           <StoryMetadata
@@ -156,11 +156,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             baselinePrivateNotes={baselineState?.private_notes}
             baselineConflicts={baselineState?.conflicts}
             onAiGenerateSummary={(
-              action,
-              onProgress,
-              currentText,
-              onThinking,
-              source
+              action: 'update' | 'rewrite' | 'write',
+              onProgress: ((text: string) => void) | undefined,
+              currentText: string | undefined,
+              onThinking: ((thinking: string) => void) | undefined,
+              source: 'notes' | 'chapter' | undefined
             ) =>
               handleSidebarAiAction(
                 'story',
@@ -200,7 +200,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
             isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
             onToggle={() => toggleCollapsed('isChaptersCollapsed')}
             height={sidebarPrefs.chaptersHeight}
-            onHeightChange={(h) => updateHeight('chaptersHeight', h)}
+            onHeightChange={(h: number) => updateHeight('chaptersHeight', h)}
             isLight={isLight}
           >
             <ChapterList

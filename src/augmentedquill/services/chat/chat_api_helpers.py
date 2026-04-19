@@ -188,7 +188,7 @@ def normalize_chat_messages(val: Any) -> list[dict]:
     return out
 
 
-async def inject_project_images(messages: list[dict]):
+async def inject_project_images(messages: list[dict]) -> Any:
     """Inject Project Images."""
     if not messages:
         return

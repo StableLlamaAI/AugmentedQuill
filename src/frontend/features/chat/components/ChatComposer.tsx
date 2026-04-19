@@ -40,7 +40,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   language,
   onAttachmentsChange,
   onSubmit,
-}) => {
+}: ChatComposerProps) => {
   const [input, setInput] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
   const { isLight } = useTheme();
@@ -93,7 +93,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     if (!files?.length) return;
 
     const nextAttachments: ChatAttachment[] = await Promise.all(
-      Array.from(files).map(async (file) => {
+      Array.from(files).map(async (file: File) => {
         const attachment: ChatAttachment = {
           id: `${file.name}-${file.size}-${Date.now()}-${Math.random()
             .toString(36)
@@ -155,10 +155,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   };
 
   const handleRemoveAttachment = async (attachmentId: string) => {
-    const attachment = attachments.find((item) => item.id === attachmentId);
+    const attachment = attachments.find(
+      (item: ChatAttachment) => item.id === attachmentId
+    );
     if (!attachment) return;
     if (!(await confirm(`Remove attachment “${attachment.name}”?`))) return;
-    onAttachmentsChange(attachments.filter((item) => item.id !== attachmentId));
+    onAttachmentsChange(
+      attachments.filter((item: ChatAttachment) => item.id !== attachmentId)
+    );
   };
 
   const confirm = useConfirm();
@@ -214,7 +218,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     >
       {attachments.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          {attachments.map((attachment) => (
+          {attachments.map((attachment: ChatAttachment) => (
             <button
               key={attachment.id}
               type="button"
@@ -264,7 +268,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         value={input}
         lang={language || undefined}
         spellCheck={true}
-        onChange={(e) => {
+        onChange={(e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>) => {
           setInput(e.target.value);
           adjustTextareaHeight();
         }}

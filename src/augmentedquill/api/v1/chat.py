@@ -130,6 +130,7 @@ async def _run_tool_calls(
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    """Return a safe child path.."""
     try:
         return safe_child_path(base_dir, *parts)
     except ValueError:
@@ -137,12 +138,14 @@ def _safe_child_path(base_dir: Path, *parts: str) -> Path:
 
 
 def _validated_batch_id(batch_id: str) -> str:
+    """Return a validated batch id.."""
     if not _BATCH_ID_PATTERN.fullmatch(batch_id or ""):
         raise HTTPException(status_code=400, detail="Invalid batch id")
     return batch_id
 
 
 def _snapshot_storage_dir(project_dir: Path, batch_id: str) -> Path:
+    """Create a snapshot storage dir.."""
     safe_batch_id = _validated_batch_id(batch_id)
     return _safe_child_path(project_dir, _CHAT_TOOL_BATCH_DIR, safe_batch_id)
 
@@ -153,7 +156,7 @@ def _store_chat_tool_batch_snapshot(
     before_snapshot: Dict[str, str],
     after_snapshot: Dict[str, str],
     tool_names: list[str],
-):
+) -> Any:
     """Persist before/after snapshots for reversible tool-call batches."""
     target_dir = _snapshot_storage_dir(project_dir, batch_id)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -168,6 +171,7 @@ def _store_chat_tool_batch_snapshot(
 
 
 def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str, Any]:
+    """Load chat tool batch snapshot."""
     batch_file = _snapshot_storage_dir(project_dir, batch_id) / "batch.json"
     if not batch_file.exists():
         raise HTTPException(
@@ -177,6 +181,7 @@ def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str
 
 
 def _build_chat_tool_batch_label(tool_names: list[str]) -> str:
+    """Build chat tool batch label."""
     if not tool_names:
         return "AI tool batch"
     if len(tool_names) == 1:
@@ -262,7 +267,8 @@ async def api_chat_tools(request: Request) -> StreamingResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
-    async def _gen():
+    async def _gen() -> Any:
+        """Helper for the requested value.."""
         stream_queue: asyncio.Queue = asyncio.Queue()
         initial_mutations: dict = {
             "story_changed": False,
@@ -271,7 +277,8 @@ async def api_chat_tools(request: Request) -> StreamingResponse:
 
         result_holder: list = []
 
-        async def _run_and_signal():
+        async def _run_and_signal() -> Any:
+            """Helper for and signal.."""
             try:
                 appended_inner, mutations_inner, names_inner = await _run_tool_calls(
                     tool_calls,
@@ -489,7 +496,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         active_project_dir=get_active_project_dir(),
     )
 
-    def _to_float(value):
+    def _to_float(value: Any) -> None:
+        """Convert float."""
         try:
             if value is None or value == "":
                 return None
@@ -497,7 +505,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         except (TypeError, ValueError):
             return None
 
-    def _to_int(value):
+    def _to_int(value: Any) -> None:
+        """Convert int."""
         try:
             if value is None or value == "":
                 return None
@@ -572,7 +581,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         tool_choice = None
         supports_function_calling = False
 
-    async def _gen():
+    async def _gen() -> Any:
         """Gen."""
         try:
             async for chunk in llm.unified_chat_stream(
@@ -612,17 +621,19 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
 
 @router.get("/chats")
-async def api_list_chats():
+async def api_list_chats() -> Any:
+    """Handle the API request to list chats."""
     return list_active_chats()
 
 
 @router.get("/chats/{chat_id}")
-async def api_load_chat(chat_id: str):
+async def api_load_chat(chat_id: str) -> Any:
+    """Handle the API request to load chat."""
     return load_active_chat(chat_id)
 
 
 @router.post("/chats/{chat_id}")
-async def api_save_chat(chat_id: str, request: Request):
+async def api_save_chat(chat_id: str, request: Request) -> Any:
     """Api Save Chat."""
     data = await parse_json_object_body(request)
     save_active_chat(chat_id, data)
@@ -630,13 +641,15 @@ async def api_save_chat(chat_id: str, request: Request):
 
 
 @router.delete("/chats/{chat_id}")
-async def api_delete_chat(chat_id: str):
+async def api_delete_chat(chat_id: str) -> Any:
+    """Handle the API request to delete chat."""
     delete_active_chat(chat_id)
     return {"ok": True}
 
 
 @router.delete("/chats")
-async def api_delete_all_chats():
+async def api_delete_all_chats() -> Any:
+    """Handle the API request to delete all chats."""
     delete_all_active_chats()
     return {"ok": True}
 

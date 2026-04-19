@@ -51,6 +51,9 @@ interface EditorProviderProps {
   children: React.ReactNode;
 }
 
-export const EditorProvider: React.FC<EditorProviderProps> = ({ value, children }) => {
+export const EditorProvider: React.FC<EditorProviderProps> = ({
+  value,
+  children,
+}: EditorProviderProps) => {
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 };

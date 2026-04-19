@@ -33,12 +33,14 @@ export type DecorationViewMode = 'raw' | 'markdown' | 'visual';
 
 /** Renders nothing — used to hide syntax markers in visual mode. */
 class HiddenWidget extends WidgetType {
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.style.display = 'none';
     return span;
   }
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
@@ -54,10 +56,12 @@ class ImageWidget extends WidgetType {
     super();
   }
 
+  /** Helper for the requested value. */
   eq(other: ImageWidget): boolean {
     return other.src === this.src && other.alt === this.alt;
   }
 
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const wrap = document.createElement('span');
     wrap.className = 'cm-image-widget';
@@ -85,12 +89,14 @@ class ImageWidget extends WidgetType {
     return wrap;
   }
 
+  /** Resolve url. */
   private resolveUrl(url: string): string {
     if (url.startsWith('http') || url.startsWith('/')) return url;
     return `/api/v1/projects/images/${url}`;
   }
 
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
@@ -104,10 +110,12 @@ class ListBulletWidget extends WidgetType {
     super();
   }
 
+  /** Helper for the requested value. */
   eq(other: ListBulletWidget): boolean {
     return other.marker === this.marker;
   }
 
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'cm-list-bullet';
@@ -119,13 +127,15 @@ class ListBulletWidget extends WidgetType {
     return span;
   }
 
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
 
 /** Horizontal rule widget for visual mode. */
 class HrWidget extends WidgetType {
+  /** Convert dom. */
   toDOM(): HTMLElement {
     const hr = document.createElement('hr');
     hr.className = 'cm-hr-widget';
@@ -135,10 +145,12 @@ class HrWidget extends WidgetType {
     hr.style.margin = '1em 0';
     return hr;
   }
-  eq() {
+  /** Helper for the requested value. */
+  eq(): boolean {
     return true;
   }
-  ignoreEvent() {
+  /** Helper for event. */
+  ignoreEvent(): boolean {
     return true;
   }
 }
@@ -179,6 +191,7 @@ const HIDDEN_MARKER_NAMES = new Set([
 
 // ─── Decoration builder ─────────────────────────────────────────────────────
 
+/** Build decorations. */
 function buildDecorations(view: EditorView, mode: DecorationViewMode): DecorationSet {
   if (mode === 'raw') return Decoration.none;
 
@@ -191,7 +204,8 @@ function buildDecorations(view: EditorView, mode: DecorationViewMode): Decoratio
     tree.iterate({
       from,
       to,
-      enter(node) {
+      /** Helper for the requested value. */
+      enter(node: import('@lezer/common').SyntaxNodeRef): false | undefined {
         const { name } = node;
 
         // ── Hide syntax markers in visual mode ──────────────────────
@@ -440,6 +454,7 @@ function buildDecorations(view: EditorView, mode: DecorationViewMode): Decoratio
 
 // ─── Plugin factory ──────────────────────────────────────────────────────────
 
+/** Build markdown decoration plugin. */
 export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extension {
   if (mode === 'raw') return [];
 
@@ -449,7 +464,8 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
       constructor(view: EditorView) {
         this.decorations = buildDecorations(view, mode);
       }
-      update(u: ViewUpdate) {
+      /** Update the requested value. */
+      update(u: ViewUpdate): void {
         if (u.viewportChanged) {
           // Viewport scroll/resize: always rebuild to cover newly visible lines.
           this.decorations = buildDecorations(u.view, mode);
@@ -464,21 +480,29 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
         // Any deletion, multi-char change, or markdown-significant character
         // falls through to a full rebuild.
         let isSafeInsert = true;
-        u.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-          if (toA !== fromA) {
-            isSafeInsert = false; // deletion present
-            return;
+        u.changes.iterChanges(
+          (
+            fromA: number,
+            toA: number,
+            _fromB: number,
+            _toB: number,
+            inserted: import('@codemirror/state').Text
+          ) => {
+            if (toA !== fromA) {
+              isSafeInsert = false; // deletion present
+              return;
+            }
+            if (inserted.length !== 1) {
+              isSafeInsert = false; // multi-char or empty
+              return;
+            }
+            // Characters that can begin or alter markdown structure
+            const c = inserted.sliceString(0, 1);
+            if (/[*_#[\]()~`>!\\\-\n\r\t ]/.test(c)) {
+              isSafeInsert = false;
+            }
           }
-          if (inserted.length !== 1) {
-            isSafeInsert = false; // multi-char or empty
-            return;
-          }
-          // Characters that can begin or alter markdown structure
-          const c = inserted.sliceString(0, 1);
-          if (/[*_#[\]()~`>!\\\-\n\r\t ]/.test(c)) {
-            isSafeInsert = false;
-          }
-        });
+        );
 
         if (isSafeInsert) {
           // Positions shift by the inserted character; map without rebuild.
@@ -488,7 +512,7 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
         }
       }
     },
-    { decorations: (v) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
   );
 }
 

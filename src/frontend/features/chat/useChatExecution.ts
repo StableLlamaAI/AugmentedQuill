@@ -57,6 +57,7 @@ type UseChatExecutionParams = {
   requestToolCallLoopAccess: (count: number) => Promise<ToolLoopChoice>;
 };
 
+/** Custom React hook that manages chat execution. */
 export function useChatExecution({
   systemPrompt,
   activeChatConfig,
@@ -75,7 +76,12 @@ export function useChatExecution({
   onMutations,
   pushExternalHistoryEntry,
   requestToolCallLoopAccess,
-}: UseChatExecutionParams) {
+}: UseChatExecutionParams): {
+  isChatLoading: boolean;
+  handleSendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;
+  handleStopChat: () => void;
+  handleRegenerate: () => Promise<void>;
+} {
   const stopSignalRef = useRef(false);
   const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
   const updateFlushFrameRef = useRef<number | null>(null);
@@ -150,7 +156,7 @@ export function useChatExecution({
       ? [...historyBefore, contextMsg]
       : historyBefore;
 
-    setChatMessages((prev) => [
+    setChatMessages((prev: ChatMessage[]) => [
       ...prev,
       ...(contextMsg ? [contextMsg] : []),
       { id: userMsgId, role: 'user', text, attachments },

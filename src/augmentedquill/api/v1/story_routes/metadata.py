@@ -7,6 +7,8 @@
 
 """Defines the metadata unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from fastapi import APIRouter, Request, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
@@ -41,7 +43,7 @@ def _require_active_story_context() -> tuple[str, object, dict]:
         raise StoryBadRequestError("No active project")
 
 
-async def _dispatch_metadata_request(request: Request, handler) -> JSONResponse:
+async def _dispatch_metadata_request(request: Request, handler: Any) -> JSONResponse:
     """Parse body, execute handler, and map story exceptions."""
     try:
         payload = await parse_json_body(request)
@@ -55,6 +57,7 @@ async def api_story_title(request: Request) -> JSONResponse:
     """Api Story Title."""
 
     async def _handler(payload: dict) -> JSONResponse:
+        """Helper for the requested value.."""
         title = str(payload.get("title", "")).strip()
         if not title:
             raise StoryBadRequestError("Title cannot be empty")
@@ -73,6 +76,7 @@ async def api_story_settings(request: Request) -> JSONResponse:
     """Api Story Settings."""
 
     async def _handler(payload: dict) -> JSONResponse:
+        """Helper for the requested value.."""
         _, story_path, story = _require_active_story_context()
 
         if "image_style" in payload:
@@ -95,6 +99,7 @@ async def api_story_metadata(request: Request) -> JSONResponse:
     """Api Story Metadata."""
 
     async def _handler(payload: dict) -> JSONResponse:
+        """Helper for the requested value.."""
         _require_active_story_context()
 
         title = payload.get("title")
@@ -139,6 +144,7 @@ async def api_story_content_update(request: Request) -> JSONResponse:
     """Api Story Content Update."""
 
     async def _handler(payload: dict) -> JSONResponse:
+        """Helper for the requested value.."""
         _require_active_story_context()
 
         content = payload.get("content")
@@ -158,6 +164,7 @@ async def api_book_metadata(
     """Api Book Metadata."""
 
     async def _handler(payload: dict) -> JSONResponse:
+        """Helper for the requested value.."""
         _require_active_story_context()
 
         title = payload.get("title")

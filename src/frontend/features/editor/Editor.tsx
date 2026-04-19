@@ -104,8 +104,8 @@ export const Editor = React.memo(
         spellCheck,
         onContextChange,
         onOpenSearch,
-      },
-      ref
+      }: EditorProps,
+      ref: React.ForwardedRef<EditorHandle>
     ) => {
       // CodeMirror EditorView — persists across all view modes
       const editorViewRef = useRef<EditorView | null>(null);
@@ -603,7 +603,7 @@ export const Editor = React.memo(
           ? 'bg-brand-gray-50 border-t border-brand-gray-200'
           : 'bg-brand-gray-900 border-t border-brand-gray-800';
       const hasContinuationOptions = continuations.some(
-        (option) => option && option.trim().length > 0
+        (option: string) => option && option.trim().length > 0
       );
       const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
       const displayedContinuations =
@@ -669,7 +669,7 @@ export const Editor = React.memo(
             localContentRef,
             onSuggestionButtonClick: handleSuggestionButtonClick,
             onAcceptContinuation,
-            onRegenerate: (cursor, content) =>
+            onRegenerate: (cursor: number, content: string) =>
               suggestionControls.onKeyboardSuggestionAction?.(
                 'regenerate',
                 cursor,
@@ -722,7 +722,9 @@ export const Editor = React.memo(
                   <div className="flex items-start gap-3 mb-8">
                     <textarea
                       value={localTitle}
-                      onChange={(e) => {
+                      onChange={(
+                        e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                      ) => {
                         const val = e.target.value.replace(/\n/g, '');
                         setLocalTitle(val);
                         if (titleDebounceRef.current)

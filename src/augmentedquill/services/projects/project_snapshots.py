@@ -10,10 +10,10 @@
 import base64
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 
-def iter_project_files(project_dir: Path):
+def iter_project_files(project_dir: Path) -> Any:
     """Yield relative file paths for snapshot-able project files."""
     for path in project_dir.rglob("*"):
         if not path.is_file():
@@ -56,7 +56,7 @@ def capture_project_snapshot(project_dir: Path) -> Dict[str, str]:
     return snapshot
 
 
-def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
+def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]) -> Any:
     """Replace project files with the exact snapshot content."""
     resolved_root = project_dir.resolve()
     expected = set(snapshot.keys())
@@ -81,7 +81,7 @@ def restore_project_snapshot(project_dir: Path, snapshot: Dict[str, str]):
         dst_path.write_bytes(base64.b64decode(encoded.encode("ascii")))
 
 
-def snapshot_to_directory(project_dir: Path, target_dir: Path):
+def snapshot_to_directory(project_dir: Path, target_dir: Path) -> Any:
     """Copy all snapshot-able project files to a target directory structure."""
     # Resolve the project root and target directory for safety comparisons.
     resolved_root = project_dir.resolve()
@@ -118,7 +118,7 @@ def snapshot_to_directory(project_dir: Path, target_dir: Path):
         shutil.copy2(src_path, dst_path)
 
 
-def restore_from_directory(project_dir: Path, source_dir: Path):
+def restore_from_directory(project_dir: Path, source_dir: Path) -> Any:
     """Restore project state from a checkpoint directory."""
     # Resolve the project root and source directory for safety comparisons.
     resolved_root = project_dir.resolve()

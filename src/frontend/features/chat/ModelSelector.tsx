@@ -40,12 +40,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   connectionStatus = {},
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',
-}) => {
+}: ModelSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isLight } = useThemeClasses();
 
-  const selectedOption = options.find((o) => o.id === value);
+  const selectedOption = options.find((o: LLMConfig) => o.id === value);
 
   // If the provided value (ID) is not in our current options (e.g., after duplication or name change),
   // but we find an option with the same name, we should probably switch to that ID.
@@ -53,7 +53,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   useEffect(() => {
     if (value && options.length > 0 && !selectedOption) {
       // Try finding by name if ID mismatch (common if names are used as human-readable IDs in some places)
-      const byName = options.find((o) => o.name === value);
+      const byName = options.find((o: LLMConfig) => o.name === value);
       if (byName && byName.id !== value) {
         onChange(byName.id);
       }
@@ -140,7 +140,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               : 'bg-brand-gray-900 border-brand-gray-700'
           }`}
         >
-          {options.map((opt) => (
+          {options.map((opt: LLMConfig) => (
             <button
               key={opt.id}
               onClick={() => {

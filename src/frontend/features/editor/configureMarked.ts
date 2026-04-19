@@ -15,8 +15,11 @@
 // @ts-ignore
 import { marked } from 'marked';
 
+type MarkedToken = { id?: string; text: string };
+
 let configured = false;
 
+/** Helper for marked. */
 export function configureMarked(): void {
   if (configured) return;
   configured = true;
@@ -26,10 +29,12 @@ export function configureMarked(): void {
   const footnoteRefExtension = {
     name: 'footnoteRef',
     level: 'inline' as const,
-    start(src: string) {
+    /** Helper for the requested value. */
+    start(src: string): number {
       return src.indexOf('[^');
     },
-    tokenizer(src: string) {
+    /** Helper for the requested value. */
+    tokenizer(src: string): { type: string; raw: string; id: string } | undefined {
       // Match [^label] but NOT [^label]: (that is a definition)
       const match = /^\[\^([^\]\n]+?)\](?!\s*:)/.exec(src);
       if (match) {
@@ -37,7 +42,8 @@ export function configureMarked(): void {
       }
       return undefined;
     },
-    renderer(token: any) {
+    /** Helper for the requested value. */
+    renderer(token: MarkedToken): string {
       return `<sup class="footnote-ref" id="fnref-${token.id}"><a href="#fn-${token.id}">[${token.id}]</a></sup>`;
     },
   };
@@ -46,17 +52,22 @@ export function configureMarked(): void {
   const footnoteDefExtension = {
     name: 'footnoteDef',
     level: 'block' as const,
-    start(src: string) {
+    /** Helper for the requested value. */
+    start(src: string): number {
       return src.search(/^\[\^/m);
     },
-    tokenizer(src: string) {
+    /** Helper for the requested value. */
+    tokenizer(
+      src: string
+    ): { type: string; raw: string; id: string; text: string } | undefined {
       const match = /^\[\^([^\]\n]+?)\]:\s+([^\n]+)/.exec(src);
       if (match) {
         return { type: 'footnoteDef', raw: match[0], id: match[1], text: match[2] };
       }
       return undefined;
     },
-    renderer(token: any) {
+    /** Helper for the requested value. */
+    renderer(token: MarkedToken): string {
       return `<p class="footnote-def" id="fn-${token.id}"><sup>[${token.id}]</sup>\u00a0${token.text} <a href="#fnref-${token.id}" class="footnote-backref">\u21a9</a></p>\n`;
     },
   };
@@ -66,10 +77,12 @@ export function configureMarked(): void {
   const subscriptExtension = {
     name: 'subscript',
     level: 'inline' as const,
-    start(src: string) {
+    /** Helper for the requested value. */
+    start(src: string): number {
       return src.indexOf('~');
     },
-    tokenizer(src: string) {
+    /** Helper for the requested value. */
+    tokenizer(src: string): { type: string; raw: string; text: string } | undefined {
       // Single ~ not preceded/followed by another ~
       const match = /^~(?!~)([^~\n]+?)~(?!~)/.exec(src);
       if (match) {
@@ -77,7 +90,8 @@ export function configureMarked(): void {
       }
       return undefined;
     },
-    renderer(token: any) {
+    /** Helper for the requested value. */
+    renderer(token: MarkedToken): string {
       return `<sub>${token.text}</sub>`;
     },
   };
@@ -87,12 +101,14 @@ export function configureMarked(): void {
   const superscriptExtension = {
     name: 'superscript',
     level: 'inline' as const,
-    start(src: string) {
+    /** Helper for the requested value. */
+    start(src: string): number {
       // Exclude [^ (footnote ref starting with bracket)
       const idx = src.indexOf('^');
       return idx;
     },
-    tokenizer(src: string) {
+    /** Helper for the requested value. */
+    tokenizer(src: string): { type: string; raw: string; text: string } | undefined {
       // ^ not preceded by [ (that would be [^…] footnote ref already consumed above)
       const match = /^\^([^^+\n]+?)\^/.exec(src);
       if (match) {
@@ -100,7 +116,8 @@ export function configureMarked(): void {
       }
       return undefined;
     },
-    renderer(token: any) {
+    /** Helper for the requested value. */
+    renderer(token: MarkedToken): string {
       return `<sup>${token.text}</sup>`;
     },
   };

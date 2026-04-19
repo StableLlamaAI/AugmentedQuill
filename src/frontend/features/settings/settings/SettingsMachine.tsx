@@ -57,11 +57,11 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   onDuplicateProvider,
   onUpdateProvider,
   onRemoveProvider,
-}) => {
+}: SettingsMachineProps) => {
   const { isLight } = useThemeClasses();
 
   const activeProvider = localSettings.providers.find(
-    (p) => p.id === editingProviderId
+    (p: LLMConfig) => p.id === editingProviderId
   );
   const isActiveProviderAvailable =
     !!activeProvider &&
@@ -99,14 +99,20 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
           theme={theme}
           defaultPrompts={defaultPrompts}
           isLight={isLight}
-          onSetActiveWritingProvider={(id) =>
-            setLocalSettings((s) => ({ ...s, activeWritingProviderId: id }))
+          onSetActiveWritingProvider={(id: string) =>
+            setLocalSettings((s: AppSettings) => ({
+              ...s,
+              activeWritingProviderId: id,
+            }))
           }
-          onSetActiveEditingProvider={(id) =>
-            setLocalSettings((s) => ({ ...s, activeEditingProviderId: id }))
+          onSetActiveEditingProvider={(id: string) =>
+            setLocalSettings((s: AppSettings) => ({
+              ...s,
+              activeEditingProviderId: id,
+            }))
           }
-          onSetActiveChatProvider={(id) =>
-            setLocalSettings((s) => ({ ...s, activeChatProviderId: id }))
+          onSetActiveChatProvider={(id: string) =>
+            setLocalSettings((s: AppSettings) => ({ ...s, activeChatProviderId: id }))
           }
           onUpdateProvider={onUpdateProvider}
           onRemoveProvider={onRemoveProvider}

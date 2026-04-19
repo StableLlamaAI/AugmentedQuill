@@ -24,7 +24,8 @@ const EMPTY_PROMPTS: PromptsState = {
   user_prompts: {},
 };
 
-export function usePrompts(storyId: string) {
+/** Custom React hook that manages prompts. */
+export function usePrompts(storyId: string): PromptsState {
   const [prompts, setPrompts] = useState<PromptsState>(EMPTY_PROMPTS);
 
   useEffect(() => {

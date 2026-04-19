@@ -37,8 +37,8 @@ export interface StoryDialogs {
 }
 
 const defaultDialogs: StoryDialogs = {
-  confirm: (message) => Promise.resolve(window.confirm(message)),
-  alert: (message) => notifyError(message),
+  confirm: (message: string) => Promise.resolve(window.confirm(message)),
+  alert: (message: string) => notifyError(message),
 };
 
 const INITIAL_STORY: StoryState = {
@@ -307,7 +307,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           }
 
           lastLoadedChapterId.current = null;
-          setLoadChapterSignal((s) => s + 1);
+          setLoadChapterSignal((s: number) => s + 1);
           if (historyLabel) {
             pushStateRef.current(newStory, historyLabel, false);
           } else if (resetHistory) {
@@ -348,8 +348,8 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           const res = await api.chapters.get(Number(currentChapterId));
           lastLoadedChapterId.current = currentChapterId;
           startTransition(() => {
-            setStory((prev) => {
-              const updatedChapters = prev.chapters.map((c) =>
+            setStory((prev: StoryState) => {
+              const updatedChapters = prev.chapters.map((c: Chapter) =>
                 c.id === currentChapterId
                   ? {
                       ...c,
@@ -571,16 +571,18 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       // useCallback — the ref is always current since it is updated on every render.
       const currentStory = latestStoryRef.current;
 
-      const chapter = currentStory.chapters.find((ch) => ch.id === id);
+      const chapter = currentStory.chapters.find((ch: Chapter) => ch.id === id);
       if (!chapter) return;
 
-      const isDifferent = Object.entries(partial).some(([key, value]) => {
-        if (value === undefined) return false;
-        const old = (chapter as any)[key];
-        return value !== old;
-      });
+      const isDifferent = Object.entries(partial).some(
+        ([key, value]: [string, string | import('../../types').Conflict[]]) => {
+          if (value === undefined) return false;
+          const old = (chapter as Record<string, unknown>)[key];
+          return value !== old;
+        }
+      );
 
-      const newChapters = currentStory.chapters.map((ch) =>
+      const newChapters = currentStory.chapters.map((ch: Chapter) =>
         ch.id === id ? { ...ch, ...partial } : ch
       );
       const newState = {
@@ -624,10 +626,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   const updateBook = useCallback(async (id: string, partial: Partial<Book>) => {
     const story = latestStoryRef.current;
     const newBooks =
-      story.books?.map((b) => (b.id === id ? { ...b, ...partial } : b)) || [];
+      story.books?.map((b: Book) => (b.id === id ? { ...b, ...partial } : b)) || [];
     const newState = { ...story, books: newBooks };
     const bookTitle =
-      story.books?.find((book) => book.id === id)?.title || partial.title || 'Untitled';
+      story.books?.find((book: Book) => book.id === id)?.title ||
+      partial.title ||
+      'Untitled';
     pushStateRef.current(newState, `Update book: ${bookTitle}`);
     // Book persistence stays at call sites that own the surrounding workflow
     // (rename, reorder, metadata edit) to keep this hook narrowly scoped.
@@ -640,7 +644,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         const chaptersRes = await api.chapters.list();
         const newChapters: Chapter[] = mapApiChapters(chaptersRes.chapters);
 
-        const newChapter = newChapters.find((c) => c.id === String(res.id));
+        const newChapter = newChapters.find((c: Chapter) => c.id === String(res.id));
         if (!newChapter) {
           throw new Error('Created chapter not found in refreshed chapter list');
         }
@@ -664,8 +668,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     try {
       const story = latestStoryRef.current;
       const currentChapterId = currentChapterIdRef.current;
-      const deletedChapter = story.chapters.find((c) => c.id === id);
-      const currentChap = story.chapters.find((c) => c.id === currentChapterId);
+      const deletedChapter = story.chapters.find((c: Chapter) => c.id === id);
+      const currentChap = story.chapters.find(
+        (c: Chapter) => c.id === currentChapterId
+      );
 
       await api.chapters.delete(Number(id));
 
@@ -677,7 +683,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       let newSelection = null;
       if (currentChapterId !== id && currentChap) {
         const matching = newChapters.find(
-          (c) =>
+          (c: Chapter) =>
             c.filename === currentChap.filename && c.book_id === currentChap.book_id
         );
         if (matching) {
@@ -687,7 +693,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
       // Keep editor continuity by selecting a nearby chapter when possible.
       if (!newSelection && newChapters.length > 0) {
-        const oldIndex = story.chapters.findIndex((c) => c.id === id);
+        const oldIndex = story.chapters.findIndex((c: Chapter) => c.id === id);
         newSelection =
           newChapters[oldIndex]?.id || newChapters[newChapters.length - 1].id;
       }
@@ -711,7 +717,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         api.projects
           .select(newStory.id)
           .then(() => fetchStory())
-          .catch((e) => console.error('Failed to select project', e));
+          .catch((e: unknown) => console.error('Failed to select project', e));
       }
 
       setStory(newStory);
@@ -720,7 +726,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       setCurrentIndex(0);
       setBaselineState(newStory); // no highlight after a fresh project load
       lastLoadedChapterId.current = null;
-      setLoadChapterSignal((s) => s + 1);
+      setLoadChapterSignal((s: number) => s + 1);
       if (newStory.currentChapterId) {
         setCurrentChapterId(newStory.currentChapterId);
       } else if (newStory.chapters.length > 0) {
@@ -849,10 +855,10 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       const prev = latestStoryRef.current.sourcebook ?? [];
       let next: SourcebookEntry[];
       if (entry === null) {
-        next = prev.filter((e) => e.id !== entryId);
+        next = prev.filter((e: SourcebookEntry) => e.id !== entryId);
         if (next.length === prev.length) return false; // entry not found
       } else {
-        const idx = prev.findIndex((e) => e.id === entry.id);
+        const idx = prev.findIndex((e: SourcebookEntry) => e.id === entry.id);
         if (idx >= 0) {
           // Compare only user-editable fields; keywords are auto-generated and
           // must not cause a spurious content-changed detection.

@@ -17,7 +17,7 @@ export const sourcebookApi = {
   list: async (
     query?: string,
     matchMode: 'direct' | 'extensive' = 'extensive',
-    splitQueryFallback = false
+    splitQueryFallback: boolean = false
   ) => {
     const params = new URLSearchParams();
     if (query !== undefined) {

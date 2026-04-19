@@ -7,7 +7,7 @@
 
 """Defines the sourcebook helpers unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from typing import List, Optional, Dict, Literal
+from typing import Any, Dict, List, Literal, Optional
 import re
 from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.core.config import (
@@ -45,6 +45,7 @@ SOURCEBOOK_SEARCH_MODE = Literal["direct", "extensive"]
 
 
 def _get_entry_relations(entry_id: str, story: dict) -> list[dict]:
+    """Return entry relations."""
     global_rels = story.get("sourcebook_relations") or []
     out = []
     for r in global_rels:
@@ -65,7 +66,8 @@ def _get_entry_relations(entry_id: str, story: dict) -> list[dict]:
 
 def _update_global_relations(
     entry_id: str, new_relations: list[dict] | None, story: dict
-):
+) -> Any:
+    """Update global relations."""
     if new_relations is None:
         return
 
@@ -225,7 +227,7 @@ def _normalize_entry_data(e_data: dict) -> dict:
     }
 
 
-def _get_story_data():
+def _get_story_data() -> Any:
     """Get Story Data."""
     active = get_active_project_dir()
     if not active:

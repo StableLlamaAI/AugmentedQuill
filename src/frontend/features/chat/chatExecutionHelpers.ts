@@ -70,7 +70,7 @@ export type ExecuteChatRequestContext = {
 
 export const ensureUniqueMessages = (messages: ChatMessage[]): ChatMessage[] => {
   const seen = new Set<string>();
-  return messages.filter((message) => {
+  return messages.filter((message: ChatMessage) => {
     if (!message.id) return true;
     if (seen.has(message.id)) return false;
     seen.add(message.id);
@@ -84,8 +84,8 @@ export const upsertChatMessage = (
   msgId: string,
   messageUpdate: Partial<ChatMessage>
 ) => {
-  setChatMessages((prev) => {
-    const messageIndex = prev.findIndex((item) => item.id === msgId);
+  setChatMessages((prev: ChatMessage[]) => {
+    const messageIndex = prev.findIndex((item: ChatMessage) => item.id === msgId);
     if (messageIndex !== -1) {
       const next = [...prev];
       next[messageIndex] = {
@@ -127,11 +127,11 @@ export const flushPendingMessageUpdates = (
 
   pendingMessageUpdatesRef.current = {};
 
-  setChatMessages((prev) => {
+  setChatMessages((prev: ChatMessage[]) => {
     const next = [...prev];
     const messageIndexById = new Map<string, number>();
 
-    next.forEach((message, index) => {
+    next.forEach((message: ChatMessage, index: number) => {
       messageIndexById.set(message.id, index);
     });
 
@@ -208,7 +208,7 @@ const parseToolCallResults = (
 
   for (const message of messages) {
     const toolCall = assistantMessage.tool_calls?.find(
-      (tc) => tc.id === message.tool_call_id
+      (tc: import('../../types').ChatToolCall) => tc.id === message.tool_call_id
     );
     if (!toolCall) continue;
 
@@ -262,35 +262,39 @@ const normalizeFunctionCalls = (
     args: Record<string, unknown> | string;
   }>
 ): Array<ChatToolFunctionCall> | undefined =>
-  functionCalls?.map((call) => ({
-    id: call.id,
-    name: call.name,
-    args: typeof call.args === 'string' ? { raw: call.args } : call.args,
-  }));
+  functionCalls?.map(
+    (call: { id: string; name: string; args: Record<string, unknown> | string }) => ({
+      id: call.id,
+      name: call.name,
+      args: typeof call.args === 'string' ? { raw: call.args } : call.args,
+    })
+  );
 
 const buildToolPayload = (
   currentHistory: ChatMessage[],
   currentChapterId: string | null,
   currentChatId: string | null
 ) => ({
-  messages: currentHistory.map((message) => ({
+  messages: currentHistory.map((message: ChatMessage) => ({
     role: (message.role === 'model' ? 'assistant' : message.role) as
       | 'user'
       | 'assistant'
       | 'system'
       | 'tool',
     content: message.text || null,
-    tool_calls: message.tool_calls?.map((toolCall) => ({
-      id: toolCall.id,
-      type: 'function' as const,
-      function: {
-        name: toolCall.name,
-        arguments:
-          typeof toolCall.args === 'string'
-            ? toolCall.args
-            : JSON.stringify(toolCall.args),
-      },
-    })),
+    tool_calls: message.tool_calls?.map(
+      (toolCall: import('../../types').ChatToolCall) => ({
+        id: toolCall.id,
+        type: 'function' as const,
+        function: {
+          name: toolCall.name,
+          arguments:
+            typeof toolCall.args === 'string'
+              ? toolCall.args
+              : JSON.stringify(toolCall.args),
+        },
+      })
+    ),
   })),
   active_chapter_id: currentChapterId ? Number(currentChapterId) : undefined,
   chat_id: currentChatId || undefined,
@@ -518,7 +522,7 @@ const executeChatRequestImpl = async (
     );
 
     const effectiveUserMsgId = userMsgId || uuidv4();
-    if (!currentHistory.some((msg) => msg.id === effectiveUserMsgId)) {
+    if (!currentHistory.some((msg: ChatMessage) => msg.id === effectiveUserMsgId)) {
       currentHistory.push({
         id: effectiveUserMsgId,
         role: 'user',
@@ -550,7 +554,13 @@ const executeChatRequestImpl = async (
         accumulatedToolBatches.length === 1
           ? accumulatedToolBatches[0].label
           : `AI tools: ${accumulatedToolBatches
-              .map((batch) => batch.label)
+              .map(
+                (batch: {
+                  batch_id: string;
+                  label: string;
+                  operation_count?: number;
+                }) => batch.label
+              )
               .join(', ')}`;
 
       await context.pushExternalHistoryEntry?.({
@@ -614,7 +624,7 @@ const executeChatRequestImpl = async (
       isError: true,
       traceback: detailedError.traceback,
     };
-    context.setChatMessages((prev) => [...prev, errorMessage]);
+    context.setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
   } finally {
     flushPendingMessageUpdates(
       context.pendingMessageUpdatesRef,

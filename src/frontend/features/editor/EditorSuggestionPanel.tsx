@@ -74,7 +74,7 @@ export const EditorSuggestionPanel: React.FC = () => {
             className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar"
             role="list"
           >
-            {displayedContinuations.map((option, idx) => {
+            {displayedContinuations.map((option: string, idx: number) => {
               const isEmpty = !option || option.trim().length === 0;
               return (
                 <button

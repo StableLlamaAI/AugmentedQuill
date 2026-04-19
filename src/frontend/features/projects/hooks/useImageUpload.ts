@@ -33,6 +33,7 @@ export interface UseImageUploadArgs {
   confirm: (message: string) => Promise<boolean>;
 }
 
+/** Custom React hook that manages image upload. */
 export function useImageUpload({
   images,
   loadImages,
@@ -40,7 +41,15 @@ export function useImageUpload({
   setError,
   onRecordHistory,
   confirm,
-}: UseImageUploadArgs) {
+}: UseImageUploadArgs): {
+  fileInputRef: import('react').RefObject<HTMLInputElement | null>;
+  replaceTarget: string | null;
+  handleUploadClick: (targetName?: string) => void;
+  handleUploadFile: (file: File, replaceTargetName: string | null) => Promise<void>;
+  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  handleDelete: (filename: string) => Promise<void>;
+  handleCreatePlaceholder: () => Promise<void>;
+} {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
 
@@ -79,7 +88,9 @@ export function useImageUpload({
           const res = await api.projects.uploadImage(file);
           const newFilename = res.filename;
 
-          const oldImage = images.find((i) => i.filename === replaceTargetName);
+          const oldImage = images.find(
+            (i: ImageEntry) => i.filename === replaceTargetName
+          );
           if (oldImage) {
             await api.projects.updateImage(
               newFilename,

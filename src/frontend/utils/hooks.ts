@@ -19,7 +19,7 @@ import type { RefObject } from 'react';
  * @param delay The delay in milliseconds
  * @returns A debounced version of the callback
  */
-export function useDebounce<T extends (...args: any[]) => any>(
+export function useDebounce<T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number
 ): (...args: Parameters<T>) => void {
@@ -49,7 +49,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
 export function useClickOutside<T extends HTMLElement>(
   ref: RefObject<T | null>,
   callback: () => void,
-  enabled = true
+  enabled: boolean = true
 ): void {
   const callbackRef = useRef(callback);
   useEffect(() => {

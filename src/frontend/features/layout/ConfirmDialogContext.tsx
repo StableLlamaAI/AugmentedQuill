@@ -15,7 +15,7 @@ import { ConfirmOptions } from './useConfirmDialog';
 
 export type ConfirmFn = (input: string | ConfirmOptions) => Promise<boolean>;
 
-const fallbackConfirm: ConfirmFn = async (input) => {
+const fallbackConfirm: ConfirmFn = async (input: string | ConfirmOptions) => {
   const normalized = typeof input === 'string' ? { message: input } : input;
   // This only runs when a component is rendered outside <ConfirmDialogProvider>.
   // Signal the issue clearly so it is not silently swallowed.

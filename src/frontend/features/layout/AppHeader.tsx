@@ -69,7 +69,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
     appearanceControls,
     chatPanelControls,
     searchControls,
-  }) => {
+  }: AppHeaderProps) => {
     const { t } = useTranslation();
     const {
       headerBg,
@@ -191,7 +191,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsUndoMenuOpen((open) => !open)}
+                onClick={() => setIsUndoMenuOpen((open: boolean) => !open)}
                 disabled={!canUndo}
                 title={t('Undo multiple actions')}
                 aria-label={t('Open undo actions list')}
@@ -210,21 +210,23 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                   <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                     {t('Undo Actions')}
                   </div>
-                  {undoOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="menuitem"
-                      className={menuButtonClass}
-                      onClick={() => {
-                        undoSteps(option.steps);
-                        setIsUndoMenuOpen(false);
-                      }}
-                      title={option.label}
-                    >
-                      {t('Undo')} {option.steps}: {option.label}
-                    </button>
-                  ))}
+                  {undoOptions.map(
+                    (option: { id: string; label: string; steps: number }) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        className={menuButtonClass}
+                        onClick={() => {
+                          undoSteps(option.steps);
+                          setIsUndoMenuOpen(false);
+                        }}
+                        title={option.label}
+                      >
+                        {t('Undo')} {option.steps}: {option.label}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -248,7 +250,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsRedoMenuOpen((open) => !open)}
+                onClick={() => setIsRedoMenuOpen((open: boolean) => !open)}
                 disabled={!canRedo}
                 title={t('Redo multiple actions')}
                 aria-label={t('Open redo actions list')}
@@ -267,21 +269,23 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                   <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
                     {t('Redo Actions')}
                   </div>
-                  {redoOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="menuitem"
-                      className={menuButtonClass}
-                      onClick={() => {
-                        redoSteps(option.steps);
-                        setIsRedoMenuOpen(false);
-                      }}
-                      title={option.label}
-                    >
-                      {t('Redo')} {option.steps}: {option.label}
-                    </button>
-                  ))}
+                  {redoOptions.map(
+                    (option: { id: string; label: string; steps: number }) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        className={menuButtonClass}
+                        onClick={() => {
+                          redoSteps(option.steps);
+                          setIsRedoMenuOpen(false);
+                        }}
+                        title={option.label}
+                      >
+                        {t('Redo')} {option.steps}: {option.label}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>

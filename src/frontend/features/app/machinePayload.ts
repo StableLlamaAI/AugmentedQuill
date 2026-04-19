@@ -13,17 +13,33 @@
 import { AppSettings } from '../../types';
 import { providerToMachineModel } from '../settings/providerAdapter';
 
-export function buildMachinePayload(settings: AppSettings) {
+/** Build machine payload. */
+export function buildMachinePayload(settings: AppSettings): {
+  gui_language: string | undefined;
+  openai: {
+    selected: string;
+    selected_chat: string;
+    selected_writing: string;
+    selected_editing: string;
+    models: import('../../services/apiTypes').MachineModelConfig[];
+  };
+} {
   const providers = settings.providers || [];
   const activeChat =
-    providers.find((provider) => provider.id === settings.activeChatProviderId) ||
-    providers[0];
+    providers.find(
+      (provider: import('../../types').LLMConfig) =>
+        provider.id === settings.activeChatProviderId
+    ) || providers[0];
   const activeWriting =
-    providers.find((provider) => provider.id === settings.activeWritingProviderId) ||
-    providers[0];
+    providers.find(
+      (provider: import('../../types').LLMConfig) =>
+        provider.id === settings.activeWritingProviderId
+    ) || providers[0];
   const activeEditing =
-    providers.find((provider) => provider.id === settings.activeEditingProviderId) ||
-    providers[0];
+    providers.find(
+      (provider: import('../../types').LLMConfig) =>
+        provider.id === settings.activeEditingProviderId
+    ) || providers[0];
 
   return {
     gui_language: settings.guiLanguage,

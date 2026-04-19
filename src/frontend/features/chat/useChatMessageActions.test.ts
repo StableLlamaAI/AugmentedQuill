@@ -58,7 +58,10 @@ describe('useChatMessageActions', () => {
     });
 
     expect(result.current.messages).toHaveLength(2);
-    expect(result.current.messages.map((message) => message.id)).toEqual(['m1', 'm3']);
+    expect(result.current.messages.map((message: ChatMessage) => message.id)).toEqual([
+      'm1',
+      'm3',
+    ]);
   });
 
   it('keeps action identities stable across message updates', () => {

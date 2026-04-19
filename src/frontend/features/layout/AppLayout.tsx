@@ -15,7 +15,7 @@ import React from 'react';
 import { AppDialogs } from './AppDialogs';
 import { AppHeader } from './AppHeader';
 import { AppMainLayout } from './AppMainLayout';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 import { ConfirmDialogProvider, ConfirmFn } from './ConfirmDialogContext';
 import { ThemeProvider } from './ThemeContext';
 import { DebugLogs } from '../debug/DebugLogs';
@@ -97,7 +97,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   setIsDebugLogsOpen,
   toolCallLoopDialog,
   searchReplaceDialogProps,
-}) => (
+}: AppLayoutProps) => (
   <ConfirmDialogProvider value={confirm}>
     <SearchHighlightProvider value={searchHighlightValue}>
       <ThemeProvider currentTheme={currentTheme}>
@@ -107,7 +107,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           message={confirmDialogState.message}
           confirmLabel={confirmDialogState.confirmLabel}
           cancelLabel={confirmDialogState.cancelLabel}
-          variant={confirmDialogState.variant as any}
+          variant={confirmDialogState.variant as ConfirmDialogProps['variant']}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
         />
@@ -138,7 +138,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             isOpen={!!toolCallLoopDialog}
             count={toolCallLoopDialog?.count ?? 0}
             theme={currentTheme}
-            onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
+            onResolve={(choice: 'stop' | 'continue' | 'unlimited') =>
+              toolCallLoopDialog?.resolver(choice)
+            }
           />
 
           {searchReplaceDialogProps.searchState.isOpen && (

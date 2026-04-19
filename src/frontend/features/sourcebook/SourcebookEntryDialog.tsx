@@ -56,7 +56,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   canAppRedo = false,
   onAppUndo,
   onAppRedo,
-}) => {
+}: SourcebookEntryDialogProps) => {
   const { t } = useTranslation();
   const state = useSourcebookEntryDialogState({
     entry,
@@ -182,35 +182,43 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       t={t}
       onUndo={handleUndo}
       onRedo={handleRedo}
-      onToggleDiff={() => state.setShowDiff((value) => !value)}
+      onToggleDiff={() => state.setShowDiff((value: boolean) => !value)}
       onClose={onClose}
       onNameChange={state.setName}
       onCategoryChange={state.setCategory}
       onSynonymInputChange={state.setNewSynonym}
       onAddSynonym={state.addSynonym}
       onRemoveSynonym={state.removeSynonym}
-      onToggleImagesExpanded={() => state.setIsImagesExpanded((value) => !value)}
+      onToggleImagesExpanded={() =>
+        state.setIsImagesExpanded((value: boolean) => !value)
+      }
       onOpenImagePicker={() => state.setIsImagePickerOpen(true)}
       onToggleImage={state.toggleImage}
-      onToggleRelationsExpanded={() => state.setIsRelationsExpanded((value) => !value)}
+      onToggleRelationsExpanded={() =>
+        state.setIsRelationsExpanded((value: boolean) => !value)
+      }
       onOpenAddRelation={() => (
         state.setEditingRelationIndex(null),
         state.setIsRelationDialogVisible(true)
       )}
-      onEditRelation={(index) => (
+      onEditRelation={(index: number) => (
         state.setEditingRelationIndex(index),
         state.setIsRelationDialogVisible(true)
       )}
-      onDeleteRelation={(index) =>
+      onDeleteRelation={(index: number) =>
         state.setRelations(
-          state.relations.filter((_, relationIndex) => relationIndex !== index)
+          state.relations.filter(
+            (_: SourcebookRelation, relationIndex: number) => relationIndex !== index
+          )
         )
       }
-      onDescriptionChange={(value) => (
+      onDescriptionChange={(value: string) => (
         state.setDescriptionBaseline(value),
         state.setDescription(value)
       )}
-      onToggleKeywordsPanel={() => state.setShowKeywordsPanel((value) => !value)}
+      onToggleKeywordsPanel={() =>
+        state.setShowKeywordsPanel((value: boolean) => !value)
+      }
       onDeleteEntry={handleDeleteEntry}
       onSaveEntry={state.handleSave}
       onSaveRelation={handleRelationSave}

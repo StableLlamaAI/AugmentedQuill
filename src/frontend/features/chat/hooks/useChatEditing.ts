@@ -21,6 +21,7 @@ interface UseChatEditingResult {
   handleCancelEdit: () => void;
 }
 
+/** Custom React hook that manages chat editing. */
 export function useChatEditing(
   onEditMessage: (id: string, text: string) => void
 ): UseChatEditingResult {

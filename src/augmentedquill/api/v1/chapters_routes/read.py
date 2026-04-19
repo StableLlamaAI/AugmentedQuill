@@ -22,6 +22,7 @@ router = APIRouter(tags=["Chapters"])
 
 @router.get("/chapters", response_model=ChaptersListResponse)
 async def api_chapters() -> ChaptersListResponse:
+    """Handle the API request to chapters."""
     active = get_active_project_dir()
     return {"chapters": list_chapters_payload(active)}
 

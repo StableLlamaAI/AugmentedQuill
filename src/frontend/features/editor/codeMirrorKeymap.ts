@@ -98,7 +98,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // • cursor in "\n\n" zone   → insert plain "\n"
           // • otherwise               → insert "  \n" as a line-break
           key: 'Enter',
-          run: (view) => {
+          run: (view: import('@codemirror/view').EditorView) => {
             const { from, to } = view.state.selection.main;
             const doc = view.state.doc;
 
@@ -139,7 +139,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // "  \n" — remove whole sequence when cursor at lb+1, lb+2, lb+3.
           // "\n\n" — downgrade to "  \n" when cursor at pb+1 or pb+2.
           key: 'Backspace',
-          run: (view) => {
+          run: (view: import('@codemirror/view').EditorView) => {
             const sel = view.state.selection.main;
             if (!sel.empty) return false;
             const from = sel.from;
@@ -226,7 +226,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // "  \n" — remove whole sequence when cursor at lb+0, lb+1, lb+2.
           // "\n\n" — downgrade to "  \n" when cursor at pb+1 or pb+0.
           key: 'Delete',
-          run: (view) => {
+          run: (view: import('@codemirror/view').EditorView) => {
             const sel = view.state.selection.main;
             if (!sel.empty) return false;
             const from = sel.from;
@@ -311,48 +311,53 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
       // second space and the \n (lb+2) and the user types or pastes,
       // redirect the insertion to just before the "  \n" so the line-break
       // is preserved after the new text.
-      EditorState.transactionFilter.of((tr) => {
-        if (!tr.docChanged) return tr;
-        if (!tr.isUserEvent('input.type') && !tr.isUserEvent('input.paste')) return tr;
-        const sel = tr.startState.selection.main;
-        if (!sel.empty) return tr;
-        const from = sel.from;
-        if (from < 1) return tr;
-        const doc = tr.startState.doc;
+      EditorState.transactionFilter.of(
+        (tr: import('@codemirror/state').Transaction) => {
+          if (!tr.docChanged) return tr;
+          if (!tr.isUserEvent('input.type') && !tr.isUserEvent('input.paste'))
+            return tr;
+          const sel = tr.startState.selection.main;
+          if (!sel.empty) return tr;
+          const from = sel.from;
+          if (from < 1) return tr;
+          const doc = tr.startState.doc;
 
-        const ch = (d: Text, p: number): string =>
-          p >= 0 && p < d.length ? d.sliceString(p, p + 1) : '';
+          const ch = (d: Text, p: number): string =>
+            p >= 0 && p < d.length ? d.sliceString(p, p + 1) : '';
 
-        let lb = -1;
-        if (
-          from >= 1 &&
-          ch(doc, from - 1) === ' ' &&
-          ch(doc, from) === ' ' &&
-          ch(doc, from + 1) === '\n'
-        ) {
-          lb = from - 1;
-        } else if (
-          from >= 2 &&
-          ch(doc, from - 2) === ' ' &&
-          ch(doc, from - 1) === ' ' &&
-          ch(doc, from) === '\n'
-        ) {
-          lb = from - 2;
+          let lb = -1;
+          if (
+            from >= 1 &&
+            ch(doc, from - 1) === ' ' &&
+            ch(doc, from) === ' ' &&
+            ch(doc, from + 1) === '\n'
+          ) {
+            lb = from - 1;
+          } else if (
+            from >= 2 &&
+            ch(doc, from - 2) === ' ' &&
+            ch(doc, from - 1) === ' ' &&
+            ch(doc, from) === '\n'
+          ) {
+            lb = from - 2;
+          }
+          if (lb === -1) return tr;
+
+          let insertedText = '';
+          tr.changes.iterChanges(
+            (_fA: number, _tA: number, _fB: number, _tB: number, inserted: Text) => {
+              insertedText += inserted.toString();
+            }
+          );
+          if (!insertedText) return tr;
+
+          return {
+            changes: { from: lb, to: lb, insert: insertedText },
+            selection: { anchor: lb + insertedText.length },
+            userEvent: 'input.type',
+          };
         }
-        if (lb === -1) return tr;
-
-        let insertedText = '';
-        tr.changes.iterChanges((_fA, _tA, _fB, _tB, inserted) => {
-          insertedText += inserted.toString();
-        });
-        if (!insertedText) return tr;
-
-        return {
-          changes: { from: lb, to: lb, insert: insertedText },
-          selection: { anchor: lb + insertedText.length },
-          userEvent: 'input.type',
-        };
-      }),
+      ),
     ];
   }
   // 'newline' — let defaultKeymap handle Enter (inserts a single '\n')
@@ -363,7 +368,7 @@ export const buildTabExtension = (): Extension =>
   keymap.of([
     {
       key: 'Tab',
-      run: (view) => {
+      run: (view: import('@codemirror/view').EditorView) => {
         const { from, to } = view.state.selection.main;
         view.dispatch({
           changes: { from, to, insert: '\t' },
@@ -375,7 +380,7 @@ export const buildTabExtension = (): Extension =>
     },
     {
       key: 'Shift-Tab',
-      run: (view) => {
+      run: (view: import('@codemirror/view').EditorView) => {
         const { from, to } = view.state.selection.main;
         view.dispatch({
           changes: { from, to, insert: '\t' },

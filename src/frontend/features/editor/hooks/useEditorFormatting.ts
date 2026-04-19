@@ -33,6 +33,7 @@ export interface UseEditorFormattingResult {
   toggleBlockAtCaret: (type: MarkdownBlockType) => void;
 }
 
+/** Custom React hook that manages editor formatting. */
 export function useEditorFormatting({
   editorViewRef,
   onContextChange,
@@ -94,7 +95,8 @@ export function useEditorFormatting({
     // App.tsx doesn't re-render on every cursor move within plain text.
     const prev = lastReportedFormatsRef.current;
     const changed =
-      prev.length !== formats.length || formats.some((f, i) => f !== prev[i]);
+      prev.length !== formats.length ||
+      formats.some((f: string, i: number) => f !== prev[i]);
     if (changed) {
       lastReportedFormatsRef.current = formats;
       onContextChange(formats);

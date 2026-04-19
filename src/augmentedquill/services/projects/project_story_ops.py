@@ -55,6 +55,7 @@ def update_book_metadata_in_project(
 
 
 def read_book_content_in_project(active: Path, book_id: str) -> str:
+    """Read book content in project."""
     # Security: Prevent path traversal by ensuring book_id is a simple name
     if not book_id:
         return ""
@@ -71,6 +72,7 @@ def read_book_content_in_project(active: Path, book_id: str) -> str:
 
 
 def write_book_content_in_project(active: Path, book_id: str, content: str) -> None:
+    """Write book content in project."""
     # Security: Prevent path traversal by ensuring book_id is a simple name
     if not book_id:
         raise ValueError("book_id is required")

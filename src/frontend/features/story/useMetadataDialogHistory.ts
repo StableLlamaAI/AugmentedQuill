@@ -78,20 +78,22 @@ export const useMetadataDialogHistory = ({
       }
 
       const snapshotJson = JSON.stringify(snapshot);
-      const historyJson = currentHistory.map((entry) => JSON.stringify(entry));
+      const historyJson = currentHistory.map((entry: MetadataParams) =>
+        JSON.stringify(entry)
+      );
       const matchedIndex = historyJson.findIndex(
-        (entryJson) => entryJson === snapshotJson
+        (entryJson: string) => entryJson === snapshotJson
       );
       if (matchedIndex !== -1) {
         setHistoryIndex(matchedIndex);
         return;
       }
 
-      setHistory((prev) => {
+      setHistory((prev: MetadataParams[]) => {
         const next = [...prev.slice(0, currentIndex + 1), snapshot];
         return next.length > 100 ? next.slice(next.length - 100) : next;
       });
-      setHistoryIndex((prev) => Math.min(prev + 1, 99));
+      setHistoryIndex((prev: number) => Math.min(prev + 1, 99));
     };
 
     if (historyDebounceRef.current) {

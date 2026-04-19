@@ -41,6 +41,7 @@ interface Props {
   aiDisabledReason?: string;
 }
 
+/** React component for metadata editor. */
 export function MetadataEditorDialog({
   type,
   initialData,
@@ -58,7 +59,7 @@ export function MetadataEditorDialog({
   initialTab,
   onAiGenerate,
   aiDisabledReason,
-}: Props) {
+}: Props): import('react/jsx-runtime').JSX.Element {
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(true, dialogRef, onClose);
 
@@ -138,7 +139,7 @@ export function MetadataEditorDialog({
       privateNotesHighlightRanges={state.privateNotesHighlightRanges}
       getConflictRanges={state.getConflictRanges}
       onSetIsFullscreen={state.setIsFullscreen}
-      onToggleShowDiff={() => state.setShowDiff((value) => !value)}
+      onToggleShowDiff={() => state.setShowDiff((value: boolean) => !value)}
       onRestoreHistory={state.restoreMetadataHistory}
       onClose={state.handleClose}
       onSetActiveTab={state.setActiveTab}

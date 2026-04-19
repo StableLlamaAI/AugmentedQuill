@@ -37,6 +37,7 @@ type UseAiActionsParams = {
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+/** Custom React hook that manages ai actions. */
 export function useAiActions({
   currentUnit,
   isEditingAvailable,
@@ -44,7 +45,23 @@ export function useAiActions({
   checkedSourcebookIds,
   updateChapter,
   getErrorMessage,
-}: UseAiActionsParams) {
+}: UseAiActionsParams): {
+  isAiActionLoading: boolean;
+  handleAiAction: (
+    target: 'summary' | 'chapter',
+    action: 'update' | 'rewrite' | 'extend'
+  ) => Promise<void>;
+  handleSidebarAiAction: (
+    type: 'chapter' | 'book' | 'story',
+    id: string,
+    action: 'write' | 'update' | 'rewrite',
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
+  ) => Promise<string | undefined>;
+  cancelAiAction: () => void;
+} {
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
   const cancelSignalRef = useRef<{
     cancelled: boolean;
@@ -116,8 +133,15 @@ export function useAiActions({
         }
       };
 
+      const selectedTarget: 'summary' | 'book_summary' | 'story_summary' =
+        target === 'chapter'
+          ? 'summary'
+          : type === 'book'
+            ? 'book_summary'
+            : 'story_summary';
+
       const result = await streamAiAction(
-        target as any,
+        selectedTarget,
         action,
         currentUnit.id,
         currentUnit.content,
@@ -182,7 +206,7 @@ export function useAiActions({
         return text.replace(/^(\*\*?|##\s*)?(Updated )?Summary:?\**\s*/i, '');
       };
 
-      const target: any =
+      const target: 'summary' | 'book_summary' | 'story_summary' =
         type === 'chapter'
           ? 'summary'
           : type === 'book'
@@ -194,7 +218,7 @@ export function useAiActions({
         action,
         type === 'story' ? 'story' : id,
         currentText ?? '',
-        onProgress ? (partial) => onProgress(cleanText(partial)) : undefined,
+        onProgress ? (partial: string) => onProgress(cleanText(partial)) : undefined,
         onThinking,
         source,
         undefined,

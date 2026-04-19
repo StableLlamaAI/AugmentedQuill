@@ -74,11 +74,11 @@ describe('prepareChatContext', () => {
   });
 
   it('compacts oversized tool output before sending', () => {
-    const chapters = Array.from({ length: 20 }, (_, index) => ({
+    const chapters = Array.from({ length: 20 }, (_: unknown, index: number) => ({
       id: index + 1,
       title: `Chapter ${index + 1}`,
       summary: 'Very long summary '.repeat(40),
-      conflicts: Array.from({ length: 8 }, (_, conflictIndex) => ({
+      conflicts: Array.from({ length: 8 }, (_: unknown, conflictIndex: number) => ({
         id: `${index}-${conflictIndex}`,
         description: 'Conflict detail '.repeat(30),
       })),
@@ -115,7 +115,10 @@ describe('prepareChatContext', () => {
       userMessageText: 'Continue.',
     });
 
-    const toolMessage = prepared.messages.find((message) => message.role === 'tool');
+    const toolMessage = prepared.messages.find(
+      (message: import('./chatContextBudget').ChatApiPreparedMessage) =>
+        message.role === 'tool'
+    );
     expect(prepared.usage.compactionApplied).toBe(true);
     expect(toolMessage?.content).toContain('Earlier tool result');
     expect(toolMessage?.content?.length).toBeLessThan(2000);
@@ -171,7 +174,7 @@ describe('prepareChatContext', () => {
             '[Earlier tool result: get_project_overview] ' +
             JSON.stringify({
               project_title: 'Huge Project',
-              chapters: Array.from({ length: 20 }, (_, index) => ({
+              chapters: Array.from({ length: 20 }, (_: unknown, index: number) => ({
                 id: index + 1,
                 title: `Chapter ${index + 1}`,
                 summary: 'Long summary '.repeat(30),
@@ -210,7 +213,7 @@ describe('prepareChatContext', () => {
           tool_call_id: 'call_project_overview',
           text: JSON.stringify({
             project_title: 'Huge Project',
-            chapters: Array.from({ length: 50 }, (_, index) => ({
+            chapters: Array.from({ length: 50 }, (_: unknown, index: number) => ({
               id: index + 1,
               title: `Chapter ${index + 1}`,
               summary: 'Very long summary '.repeat(40),
@@ -223,14 +226,16 @@ describe('prepareChatContext', () => {
     });
 
     const currentChapterMessage = prepared.messages.find(
-      (m) => m.role === 'tool' && m.name === 'get_current_chapter_id'
+      (m: import('./chatContextBudget').ChatApiPreparedMessage) =>
+        m.role === 'tool' && m.name === 'get_current_chapter_id'
     );
     expect(currentChapterMessage).toBeDefined();
     expect(currentChapterMessage?.content).toContain('"chapter_id":123');
     expect(currentChapterMessage?.content).toContain('"chapter_title":"Current Scene"');
 
     const otherToolMessage = prepared.messages.find(
-      (m) => m.role === 'tool' && m.name === 'get_project_overview'
+      (m: import('./chatContextBudget').ChatApiPreparedMessage) =>
+        m.role === 'tool' && m.name === 'get_project_overview'
     );
     expect(otherToolMessage?.content).toContain('Earlier tool result');
   });

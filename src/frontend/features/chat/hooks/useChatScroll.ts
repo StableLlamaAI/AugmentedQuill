@@ -25,6 +25,7 @@ interface UseChatScrollResult {
   scrollToBottom: (behavior?: ScrollBehavior) => void;
 }
 
+/** Custom React hook that manages chat scroll. */
 export function useChatScroll({
   messages,
   isLoading,

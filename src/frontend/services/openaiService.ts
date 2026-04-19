@@ -65,6 +65,7 @@ type ParsedFunctionCall = {
   args: Record<string, unknown> | string;
 };
 
+/** Represents error. */
 export class ChatError extends Error {
   traceback?: string;
   status?: number;
@@ -103,6 +104,7 @@ export type CancelSignal = {
   reader?: ReadableStreamDefaultReader<Uint8Array>;
 };
 
+/** Read ssestream. */
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onToolCalls?: (toolCalls: ToolCallChunk[]) => void,
@@ -203,7 +205,12 @@ export const createChatSession = (
   }
 ): UnifiedChat => {
   return {
-    sendMessage: async (msg, onUpdate) => {
+    sendMessage: async (
+      msg: UserMessageInput,
+      onUpdate:
+        | ((update: { text?: string; thinking?: string; traceback?: string }) => void)
+        | undefined
+    ) => {
       const userMsgText = typeof msg === 'string' ? msg : msg.message;
       const preparedContext = prepareChatContext({
         systemInstruction,
@@ -244,7 +251,7 @@ export const createChatSession = (
         let fullText = '';
         const text = await readSSEStream(
           reader,
-          (calls) => {
+          (calls: ToolCallChunk[]) => {
             for (const call of calls) {
               const index = call.index ?? 0;
               if (!toolCallsAccumulator[index]) {
@@ -264,19 +271,21 @@ export const createChatSession = (
               }
             }
           },
-          (t) => {
+          (t: string) => {
             thinking += t;
             if (onUpdate) onUpdate({ thinking: applySmartQuotes(thinking) });
           },
-          (chunk) => {
+          (chunk: string) => {
             fullText += chunk;
             if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
           }
         );
 
         const functionCalls = toolCallsAccumulator
-          .filter((c) => c && (c.name || c.args))
-          .map((c) => ({
+          .filter(
+            (c: { id: string; name: string; args: string }) => c && (c.name || c.args)
+          )
+          .map((c: { id: string; name: string; args: string }) => ({
             id: c.id,
             name: c.name,
             args: c.args ? parseToolArguments(c.args) : {},
@@ -328,10 +337,15 @@ export const generateSimpleContent = async (
     if (!reader) return '';
 
     let accumulated = '';
-    const finalResult = await readSSEStream(reader, undefined, undefined, (delta) => {
-      accumulated += delta;
-      options?.onUpdate?.(applySmartQuotes(accumulated));
-    });
+    const finalResult = await readSSEStream(
+      reader,
+      undefined,
+      undefined,
+      (delta: string) => {
+        accumulated += delta;
+        options?.onUpdate?.(applySmartQuotes(accumulated));
+      }
+    );
     return applySmartQuotes(finalResult);
   } catch (e: unknown) {
     // Re-throw so the caller can handle it and show it to the user
@@ -351,7 +365,7 @@ export const streamAiAction = async (
   cancelSignal?: CancelSignal
 ): Promise<string> => {
   const scope = targetId === 'story' ? 'story' : 'chapter';
-  const body: any = {
+  const body: Record<string, unknown> = {
     target,
     action,
     scope,
@@ -383,11 +397,11 @@ export const streamAiAction = async (
   const finalResult = await readSSEStream(
     reader,
     undefined,
-    (t) => {
+    (t: string) => {
       thinking += t;
       onThinking?.(thinking);
     },
-    (delta) => {
+    (delta: string) => {
       accumulated += delta;
       onUpdate?.(applySmartQuotes(accumulated));
     },
@@ -418,7 +432,7 @@ export const generateContinuations = async (
 
   const fetchSuggestion = async (index: number) => {
     try {
-      const body: any = {
+      const body: Record<string, unknown> = {
         scope,
         chap_id: scope === 'chapter' ? Number(chapterId) : undefined,
         model_name: config.name || config.id,

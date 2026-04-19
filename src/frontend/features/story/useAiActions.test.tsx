@@ -36,23 +36,25 @@ describe('useAiActions', () => {
 
     const streamDeferred = (() => {
       let resolve!: (value: string) => void;
-      const promise = new Promise<string>((res) => {
-        resolve = res;
-      });
+      const promise = new Promise<string>(
+        (res: (value: string | PromiseLike<string>) => void) => {
+          resolve = res;
+        }
+      );
       return { promise, resolve };
     })();
 
     vi.mocked(streamAiAction).mockImplementation(
       async (
-        _target,
-        _action,
-        _chapId,
-        _currentText,
-        _onUpdate,
-        _onThinking,
-        _source,
-        _checked,
-        cancelSignal
+        _target: 'summary' | 'chapter' | 'book_summary' | 'story_summary',
+        _action: 'update' | 'rewrite' | 'extend' | 'write',
+        _chapId: string,
+        _currentText: string,
+        _onUpdate: ((fullText: string) => void) | undefined,
+        _onThinking: ((thinking: string) => void) | undefined,
+        _source: 'notes' | 'chapter' | undefined,
+        _checked: string[] | undefined,
+        cancelSignal: import('../../services/openaiService').CancelSignal | undefined
       ) => {
         const value = await streamDeferred.promise;
         if (cancelSignal?.cancelled) {

@@ -5,8 +5,9 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""Defines the chapter prose tools unit (WRITING and EDITING delegation tools) so this responsibility stays isolated, testable, and easy to evolve."""
+"""Defines the chapter prose tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
 import json
 
 from pydantic import BaseModel, Field
@@ -31,6 +32,8 @@ from augmentedquill.services.chat.chat_tools.chapter_tools import MARKER
 
 
 class CallWritingLlmParams(BaseModel):
+    """Represents the CallWritingLlmParams type."""
+
     instruction: str = Field(
         ...,
         description="The task for the WRITING LLM for the active draft or chapter (e.g. 'Rewrite this paragraph to be more descriptive').",
@@ -56,7 +59,8 @@ class CallWritingLlmParams(BaseModel):
 )
 async def call_writing_llm(
     params: CallWritingLlmParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Execute the writing LLM tool with provided parameters and return the generated prose."""
     from augmentedquill.core.config import BASE_DIR, load_machine_config
     from augmentedquill.core.prompts import (
         get_system_message,
@@ -268,6 +272,8 @@ async def call_writing_llm(
 
 
 class CallEditingAssistantParams(BaseModel):
+    """Represents the CallEditingAssistantParams type."""
+
     task: str = Field(
         ...,
         description="The task the user wants the editor to perform on existing project prose (e.g., 'Fix the grammar in the current draft', 'Rewrite paragraph 2 to be more descriptive').",
@@ -290,7 +296,8 @@ class CallEditingAssistantParams(BaseModel):
 )
 async def call_editing_assistant(
     params: CallEditingAssistantParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Execute the editing assistant tool and return revised prose based on the provided instructions."""
     from augmentedquill.services.llm import llm
     from augmentedquill.services.chat.chat_tool_decorator import (
         execute_registered_tool,

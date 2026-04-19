@@ -32,7 +32,12 @@ type AppMainLayoutProps = {
 };
 
 export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
-  ({ sidebarControls, editorControls, chatControls, instructionLanguages }) => {
+  ({
+    sidebarControls,
+    editorControls,
+    chatControls,
+    instructionLanguages,
+  }: AppMainLayoutProps) => {
     const { bgMain, isLight, currentTheme } = useTheme();
     const { t } = useTranslation();
 
@@ -110,7 +115,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         const sHeight = Math.round(totalHeight * storyRatio);
         const cHeight = Math.round(totalHeight * chaptersRatio);
 
-        setEditorSettings((prev) => ({
+        setEditorSettings((prev: import('../../types').EditorSettings) => ({
           ...prev,
           sidebar: {
             ...prev.sidebar,
@@ -127,7 +132,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     ]);
 
     const toggleCollapsed = (key: keyof NonNullable<typeof editorSettings.sidebar>) => {
-      setEditorSettings((prev) => ({
+      setEditorSettings((prev: import('../../types').EditorSettings) => ({
         ...prev,
         sidebar: {
           ...prev.sidebar,
@@ -140,7 +145,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       key: keyof NonNullable<typeof editorSettings.sidebar>,
       height: number
     ) => {
-      setEditorSettings((prev) => ({
+      setEditorSettings((prev: import('../../types').EditorSettings) => ({
         ...prev,
         sidebar: {
           ...prev.sidebar,
@@ -273,7 +278,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 }}
                 onContextChange={setActiveFormats}
                 showWhitespace={showWhitespace}
-                onToggleShowWhitespace={() => setShowWhitespace((value) => !value)}
+                onToggleShowWhitespace={() =>
+                  setShowWhitespace((value: boolean) => !value)
+                }
                 baselineContent={editorControls.baselineContent}
                 spellCheck={true}
                 onOpenSearch={onOpenSearch}

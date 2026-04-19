@@ -39,11 +39,13 @@ const deletedMark = Decoration.mark({
   class: 'cm-diff-deleted',
 });
 
+/** Represents widget. */
 class DeletedWidget extends WidgetType {
   constructor(readonly text: string) {
     super();
   }
-  toDOM() {
+  /** Convert dom. */
+  toDOM(): HTMLSpanElement {
     const wrap = document.createElement('span');
     wrap.className = 'cm-diff-deleted';
     wrap.textContent = this.text;
@@ -64,14 +66,16 @@ export const buildDiffPlugin = (baseline: string): Extension =>
       constructor(view: EditorView) {
         this.decorations = this.build(view);
       }
-      update(u: ViewUpdate) {
+      /** Update the requested value. */
+      update(u: ViewUpdate): void {
         if (!u.docChanged) return;
 
         // External value syncs (undo/redo, AI insertion, chapter switch)
         // are single atomic replacements — compute immediately so the
         // user sees the diff result without delay.
-        const isExternalSync = u.transactions.some((tr) =>
-          tr.annotation(externalValueSyncAnnotation)
+        const isExternalSync = u.transactions.some(
+          (tr: import('@codemirror/state').Transaction) =>
+            tr.annotation(externalValueSyncAnnotation)
         );
 
         // For small documents or external syncs, compute immediately.
@@ -87,16 +91,19 @@ export const buildDiffPlugin = (baseline: string): Extension =>
         this.decorations = this.decorations.map(u.changes);
         this.scheduleBuild(u.view);
       }
-      destroy() {
+      /** Helper for the requested value. */
+      destroy(): void {
         this.cancelPending();
       }
-      private cancelPending() {
+      /** Helper for pending. */
+      private cancelPending(): void {
         if (this.pending !== null) {
           clearTimeout(this.pending);
           this.pending = null;
         }
       }
-      private scheduleBuild(view: EditorView) {
+      /** Schedule build. */
+      private scheduleBuild(view: EditorView): void {
         this.cancelPending();
         this.pending = setTimeout(() => {
           this.pending = null;
@@ -104,6 +111,7 @@ export const buildDiffPlugin = (baseline: string): Extension =>
           view.dispatch(); // trigger decoration update
         }, DIFF_DEBOUNCE_MS);
       }
+      /** Build the requested value. */
       build(view: EditorView): DecorationSet {
         const currentText = view.state.doc.toString();
         if (baseline === currentText) return Decoration.none;
@@ -136,5 +144,5 @@ export const buildDiffPlugin = (baseline: string): Extension =>
         return Decoration.set(decs, true);
       }
     },
-    { decorations: (v) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
   );

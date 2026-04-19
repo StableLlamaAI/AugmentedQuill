@@ -11,11 +11,13 @@
 
 const API_BASE = '/api/v1';
 
+/** Helper for the requested value. */
 function endpoint(path: string): string {
   if (path.startsWith('/')) return `${API_BASE}${path}`;
   return `${API_BASE}/${path}`;
 }
 
+/** Read error message. */
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const data = (await response.json()) as {
@@ -32,6 +34,7 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
   }
 }
 
+/** Fetch json. */
 export async function fetchJson<T>(
   path: string,
   init: RequestInit | undefined,
@@ -44,6 +47,7 @@ export async function fetchJson<T>(
   return response.json() as Promise<T>;
 }
 
+/** Fetch blob. */
 export async function fetchBlob(
   path: string,
   init: RequestInit | undefined,
@@ -56,6 +60,7 @@ export async function fetchBlob(
   return response.blob();
 }
 
+/** Send json. */
 export async function postJson<T>(
   path: string,
   body: unknown,
@@ -72,6 +77,7 @@ export async function postJson<T>(
   );
 }
 
+/** Send json. */
 export async function putJson<T>(
   path: string,
   body: unknown,
@@ -88,6 +94,7 @@ export async function putJson<T>(
   );
 }
 
+/** Delete json. */
 export async function deleteJson<T>(path: string, fallbackError: string): Promise<T> {
   return fetchJson<T>(path, { method: 'DELETE' }, fallbackError);
 }

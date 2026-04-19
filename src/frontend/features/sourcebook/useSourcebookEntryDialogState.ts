@@ -106,7 +106,7 @@ export const useSourcebookEntryDialogState = ({
 
   const relationNameMap = useMemo(() => {
     const map: Record<string, string> = {};
-    allEntries.forEach((item) => {
+    allEntries.forEach((item: SourcebookEntry) => {
       map[item.id] = item.name;
     });
     return map;
@@ -198,12 +198,14 @@ export const useSourcebookEntryDialogState = ({
   };
 
   const removeSynonym = (index: number) => {
-    setSynonyms(synonyms.filter((_, currentIndex) => currentIndex !== index));
+    setSynonyms(
+      synonyms.filter((_: string, currentIndex: number) => currentIndex !== index)
+    );
   };
 
   const toggleImage = (filename: string) => {
     if (images.includes(filename)) {
-      setImages(images.filter((value) => value !== filename));
+      setImages(images.filter((value: string) => value !== filename));
       return;
     }
 
@@ -211,7 +213,7 @@ export const useSourcebookEntryDialogState = ({
   };
 
   const restoreFromHistory = (index: number) => {
-    restoreSourcebookHistory(index, (snapshot) => {
+    restoreSourcebookHistory(index, (snapshot: SourcebookEntryHistoryState) => {
       setName(snapshot.name);
       setDescription(snapshot.description);
       setCategory(snapshot.category);

@@ -40,7 +40,17 @@ const JsonView: React.FC<{
   theme: AppTheme;
   depth?: number;
   label?: string;
-}> = ({ data, theme, depth = 0, label }) => {
+}> = ({
+  data,
+  theme,
+  depth = 0,
+  label,
+}: {
+  data: unknown;
+  theme: AppTheme;
+  depth?: number;
+  label?: string;
+}) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (label === 'tools') return true;
     return false;
@@ -100,7 +110,7 @@ const JsonView: React.FC<{
       </button>
       {!isCollapsed && (
         <div className="space-y-0.5 mt-0.5">
-          {keys.map((key) => (
+          {keys.map((key: string) => (
             <div key={key} className="flex flex-col">
               <JsonView
                 data={(data as Record<string, unknown>)[key]}
@@ -133,7 +143,11 @@ const getCallerOrigin = (caller_id?: string) => {
   return 'Internal';
 };
 
-export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) => {
+export const DebugLogs: React.FC<DebugLogsProps> = ({
+  isOpen,
+  onClose,
+  theme,
+}: DebugLogsProps) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -194,7 +208,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
   }, [isOpen, logs.length]);
 
   const toggleExpand = (id: string) => {
-    setExpandedLogs((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedLogs((prev: Record<string, boolean>) => ({ ...prev, [id]: !prev[id] }));
   };
 
   if (!isOpen) return null;
@@ -294,7 +308,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               <p>No LLM communications logged yet.</p>
             </div>
           ) : (
-            logs.map((log, idx) => (
+            logs.map((log: DebugLogEntry, idx: number) => (
               <div
                 key={`${log.id ?? 'log'}-${idx}`}
                 className={`border rounded-lg overflow-hidden ${borderMain} ${

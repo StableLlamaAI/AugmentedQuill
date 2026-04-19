@@ -33,7 +33,7 @@ export interface CollapsibleState {
  * @param onExpandedChange Controlled change handler (opt).
  */
 export function useCollapsible(
-  defaultExpanded = false,
+  defaultExpanded: boolean = false,
   isExpandedProp?: boolean,
   onExpandedChange?: (expanded: boolean) => void
 ): CollapsibleState {

@@ -103,8 +103,15 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
 
 
 def _prepare_llm_request(
-    base_url, api_key, model_id, messages, temperature, max_tokens, extra_body=None
-):
+    base_url: Any,
+    api_key: Any,
+    model_id: Any,
+    messages: Any,
+    temperature: Any,
+    max_tokens: Any,
+    extra_body: Any = None,
+) -> Any:
+    """Prepare llm request."""
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -296,8 +303,14 @@ async def unified_chat_complete(
 
 
 async def _execute_llm_request(
-    caller_id, url, headers, body, timeout_s, model_type=None
-):
+    caller_id: Any,
+    url: Any,
+    headers: Any,
+    body: Any,
+    timeout_s: Any,
+    model_type: Any = None,
+) -> Any:
+    """Send a request to the configured LLM backend and return the decoded response."""
     timeout_obj = build_timeout(timeout_s)
     response = await logged_request(
         caller_id=caller_id,

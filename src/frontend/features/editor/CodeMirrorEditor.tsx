@@ -230,8 +230,8 @@ export const CodeMirrorEditor = React.forwardRef<
       language = 'en',
       spellCheck = false,
       onOpenSearch,
-    },
-    ref
+    }: CodeMirrorEditorProps,
+    ref: React.ForwardedRef<EditorView | null>
   ) => {
     // Resolve viewMode: new prop takes precedence, then legacy mode, then default
     const viewMode: DecorationViewMode =
@@ -308,24 +308,34 @@ export const CodeMirrorEditor = React.forwardRef<
           constructor(view: EditorView) {
             this.decorations = this.build(view);
           }
-          update(u: ViewUpdate) {
+          /** Update the requested value. */
+          update(u: ViewUpdate): void {
             if (u.viewportChanged || u.geometryChanged) {
               this.decorations = this.build(u.view);
             } else if (u.docChanged) {
               let safeInsert = true;
-              u.changes.iterChanges((fromA, toA, _fB, _tB, ins) => {
-                if (toA !== fromA || ins.length !== 1) {
-                  safeInsert = false;
-                  return;
+              u.changes.iterChanges(
+                (
+                  fromA: number,
+                  toA: number,
+                  _fB: number,
+                  _tB: number,
+                  ins: import('@codemirror/state').Text
+                ) => {
+                  if (toA !== fromA || ins.length !== 1) {
+                    safeInsert = false;
+                    return;
+                  }
+                  const c = ins.sliceString(0, 1);
+                  if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
                 }
-                const c = ins.sliceString(0, 1);
-                if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
-              });
+              );
               this.decorations = safeInsert
                 ? this.decorations.map(u.changes)
                 : this.build(u.view);
             }
           }
+          /** Build the requested value. */
           build(view: EditorView): DecorationSet {
             const decs: Range<Decoration>[] = [];
             const length = view.state.doc.length;
@@ -341,7 +351,7 @@ export const CodeMirrorEditor = React.forwardRef<
             return Decoration.set(decs, true);
           }
         },
-        { decorations: (v) => v.decorations }
+        { decorations: (v: { decorations: DecorationSet }) => v.decorations }
       );
 
     const buildSearchHighlightExtension = (
@@ -407,7 +417,7 @@ export const CodeMirrorEditor = React.forwardRef<
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
-            const isExternalSync = update.transactions.some((tx) =>
+            const isExternalSync = update.transactions.some((tx: Transaction) =>
               tx.annotation(externalValueSyncAnnotation)
             );
             if (isExternalSync) {
@@ -416,7 +426,7 @@ export const CodeMirrorEditor = React.forwardRef<
             const val = update.state.doc.toString();
             lastEmittedRef.current = val;
             const isUndoRedo = update.transactions.some(
-              (tx) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
+              (tx: Transaction) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
             );
             onChangeRef.current(val, isUndoRedo);
           }

@@ -53,7 +53,7 @@ const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
   onFilterChange,
   onTargetSelect,
   t,
-}) => {
+}: TargetEntrySectionProps) => {
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium">{t('Target Entry')}</label>
@@ -64,7 +64,9 @@ const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
             type="text"
             placeholder={t('Filter entries...')}
             value={filter}
-            onChange={(e) => onFilterChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onFilterChange(e.target.value)
+            }
             className={`w-full pl-9 pr-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         </div>
@@ -74,24 +76,26 @@ const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
               {t('No entries found.')}
             </p>
           ) : (
-            filteredEntries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => onTargetSelect(entry.id)}
-                className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
-                  targetId === entry.id
-                    ? 'bg-brand-500 text-white border-brand-500'
-                    : 'border-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
-                }`}
-                aria-label={t('Select target entry {{name}}', {
-                  name: entry.name,
-                })}
-              >
-                <div className="font-medium">{entry.name}</div>
-                <div className="text-xs opacity-70 truncate">{entry.description}</div>
-              </button>
-            ))
+            filteredEntries.map(
+              (entry: { id: string; name: string; description?: string }) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => onTargetSelect(entry.id)}
+                  className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
+                    targetId === entry.id
+                      ? 'bg-brand-500 text-white border-brand-500'
+                      : 'border-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
+                  }`}
+                  aria-label={t('Select target entry {{name}}', {
+                    name: entry.name,
+                  })}
+                >
+                  <div className="font-medium">{entry.name}</div>
+                  <div className="text-xs opacity-70 truncate">{entry.description}</div>
+                </button>
+              )
+            )
           )}
         </div>
       </div>
@@ -125,7 +129,7 @@ const RelationLogicSection: React.FC<RelationLogicSectionProps> = ({
   onToggleDirection,
   onRelationStatementChange,
   t,
-}) => {
+}: RelationLogicSectionProps) => {
   return (
     <div className="space-y-3 p-4 border rounded-md bg-opacity-50 bg-brand-gray-500/5 border-brand-500/20">
       <div className="flex items-center justify-between">
@@ -150,7 +154,9 @@ const RelationLogicSection: React.FC<RelationLogicSectionProps> = ({
           type="text"
           placeholder={t("e.g. 'owns', 'is married to'")}
           value={relationStatement}
-          onChange={(e) => onRelationStatementChange(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+            onRelationStatementChange(e.target.value)
+          }
           className={`w-full md:w-1/3 px-3 flex-shrink-0 text-center py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
         />
         <div
@@ -198,7 +204,7 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
   onStartBookChange,
   onEndBookChange,
   t,
-}) => {
+}: ConstraintSectionProps) => {
   if (!showChapters && !showBooks) {
     return null;
   }
@@ -212,7 +218,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Chapter 3')}
             value={startChapter}
-            onChange={(e) => onStartChapterChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onStartChapterChange(e.target.value)
+            }
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
           />
         )}
@@ -221,7 +229,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Book 1')}
             value={startBook}
-            onChange={(e) => onStartBookChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onStartBookChange(e.target.value)
+            }
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         )}
@@ -234,7 +244,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Chapter 10')}
             value={endChapter}
-            onChange={(e) => onEndChapterChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onEndChapterChange(e.target.value)
+            }
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
           />
         )}
@@ -243,7 +255,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Book 1')}
             value={endBook}
-            onChange={(e) => onEndBookChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onEndBookChange(e.target.value)
+            }
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         )}
@@ -260,7 +274,7 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   currentEntryName,
   theme = 'mixed',
   initialRelation,
-}) => {
+}: SourcebookRelationDialogProps) => {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('');
   const { entries, projectType } = useSourcebookRelationData({
@@ -314,12 +328,14 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   if (!isOpen) return null;
 
   const filteredEntries = entries.filter(
-    (e) =>
+    (e: import('../../types').SourcebookEntry) =>
       e.name.toLowerCase().includes(filter.toLowerCase()) ||
       (e.description && e.description.toLowerCase().includes(filter.toLowerCase()))
   );
 
-  const targetName = entries.find((e) => e.id === targetId)?.name || t('Target Entry');
+  const targetName =
+    entries.find((e: import('../../types').SourcebookEntry) => e.id === targetId)
+      ?.name || t('Target Entry');
   const mainName = currentEntryName || t('Current Entry');
 
   const handleSave = () => {
@@ -394,7 +410,9 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
             textClass={textClass}
             theme={theme}
             onToggleDirection={() =>
-              setDirection((d) => (d === 'forward' ? 'reverse' : 'forward'))
+              setDirection((d: 'reverse' | 'forward') =>
+                d === 'forward' ? 'reverse' : 'forward'
+              )
             }
             onRelationStatementChange={setRelationStatement}
             t={t}

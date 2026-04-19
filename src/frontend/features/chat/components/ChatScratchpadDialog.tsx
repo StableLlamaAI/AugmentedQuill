@@ -33,7 +33,7 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
   onClose,
   onDelete,
   onSave,
-}) => {
+}: ChatScratchpadDialogProps) => {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(scratchpad);
@@ -84,7 +84,9 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
         <textarea
           lang={storyLanguage || 'en'}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>) =>
+            setDraft(e.target.value)
+          }
           className={`w-full min-h-[220px] rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${
             isLight
               ? 'bg-white border-brand-gray-300 text-brand-gray-900'

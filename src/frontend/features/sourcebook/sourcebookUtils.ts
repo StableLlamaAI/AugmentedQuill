@@ -50,7 +50,9 @@ export const updateSourcebookEntryInList = (
   previousId: string,
   updated: SourcebookEntry
 ): SourcebookEntry[] => {
-  return entries.map((value) => (value.id === previousId ? updated : value));
+  return entries.map((value: SourcebookEntry) =>
+    value.id === previousId ? updated : value
+  );
 };
 
 /**
@@ -67,18 +69,22 @@ export const filterSourcebookEntries = (
     return entries;
   }
 
-  return entries.filter((entry) => {
+  return entries.filter((entry: SourcebookEntry) => {
     const description = (entry.description || '').toLowerCase();
     if (entry.name.toLowerCase().includes(normalizedQuery)) {
       return true;
     }
     if (
-      (entry.synonyms || []).some((syn) => syn.toLowerCase().includes(normalizedQuery))
+      (entry.synonyms || []).some((syn: string) =>
+        syn.toLowerCase().includes(normalizedQuery)
+      )
     ) {
       return true;
     }
     if (
-      (entry.keywords || []).some((kw) => kw.toLowerCase().includes(normalizedQuery))
+      (entry.keywords || []).some((kw: string) =>
+        kw.toLowerCase().includes(normalizedQuery)
+      )
     ) {
       return true;
     }
@@ -98,8 +104,10 @@ export const filterSourcebookEntries = (
       ...(entry.synonyms || []),
       ...(entry.keywords || []),
       entry.description || '',
-    ].map((value) => value.toLowerCase());
+    ].map((value: string) => value.toLowerCase());
 
-    return tokens.every((token) => fields.some((field) => field.includes(token)));
+    return tokens.every((token: string) =>
+      fields.some((field: string) => field.includes(token))
+    );
   });
 };

@@ -5,8 +5,9 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""Defines web search tools (opt-in) for the CHAT model when web search is enabled."""
+"""Defines the web search tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
 import asyncio
 
 from pydantic import BaseModel, Field
@@ -42,13 +43,14 @@ class WikipediaSearchParams(BaseModel):
     capability="web-search",
     opt_in=True,
 )
-async def web_search(params: WebSearchParams, payload: dict, mutations: dict):
+async def web_search(params: WebSearchParams, payload: dict, mutations: dict) -> Any:
     """Execute a web search and return results."""
     query = params.query
     try:
         from ddgs import DDGS
 
-        def _run_search():
+        def _run_search() -> Any:
+            """Helper for search.."""
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=8))
                 if not results:
@@ -67,7 +69,7 @@ async def web_search(params: WebSearchParams, payload: dict, mutations: dict):
     capability="web-search",
     opt_in=True,
 )
-async def visit_page(params: VisitPageParams, payload: dict, mutations: dict):
+async def visit_page(params: VisitPageParams, payload: dict, mutations: dict) -> Any:
     """Fetch a web page and return its text content (max 10 000 chars)."""
     url = params.url
     try:
@@ -108,7 +110,7 @@ async def visit_page(params: VisitPageParams, payload: dict, mutations: dict):
 )
 async def wikipedia_search(
     params: WikipediaSearchParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Query the Wikipedia opensearch API and return matching article titles and URLs."""
     query = params.query
     try:

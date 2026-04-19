@@ -73,7 +73,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   onSetActiveChatProvider,
   onUpdateProvider,
   onRemoveProvider,
-}) => {
+}: ProviderConfigFormProps) => {
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
   const [suggestedPresetByProvider, setSuggestedPresetByProvider] = useState<
     Record<string, string | null>
@@ -81,7 +81,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
 
   const getPresetById = (id?: string | null) => {
     if (!id) return null;
-    return modelPresets.find((preset) => preset.id === id) || null;
+    return modelPresets.find((preset: ModelPresetEntry) => preset.id === id) || null;
   };
 
   const suggestPresetForModelId = (modelId: string): ModelPresetEntry | null => {
@@ -89,7 +89,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     if (!modelIdTrimmed) return null;
     for (const preset of modelPresets) {
       if (!Array.isArray(preset.model_id_patterns)) continue;
-      const matches = preset.model_id_patterns.some((pattern) => {
+      const matches = preset.model_id_patterns.some((pattern: string) => {
         try {
           return new RegExp(pattern, 'i').test(modelIdTrimmed);
         } catch {
@@ -104,7 +104,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   const applyPreset = (providerId: string, preset: ModelPresetEntry | null) => {
     if (!preset) return;
     const p = preset.parameters || {};
-    const nextStop = Array.isArray(p.stop) ? p.stop.map((entry) => String(entry)) : [];
+    const nextStop = Array.isArray(p.stop)
+      ? p.stop.map((entry: string) => String(entry))
+      : [];
     onUpdateProvider(providerId, {
       temperature: p.temperature,
       topP: p.top_p,
@@ -119,7 +121,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       presetId: preset.id,
       writingWarning: preset.warnings?.writing || null,
     });
-    setSuggestedPresetByProvider((previous) => ({
+    setSuggestedPresetByProvider((previous: Record<string, string | null>) => ({
       ...previous,
       [providerId]: null,
     }));
@@ -145,7 +147,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         <select
           id={id}
           value={val === true ? 'true' : val === false ? 'false' : 'auto'}
-          onChange={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) => {
             const v = e.target.value;
             onUpdateProvider(activeProvider.id, {
               [field]: v === 'auto' ? null : v === 'true',
@@ -207,7 +209,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           step={step}
           value={activeProvider[field] ?? 0}
           disabled={disabled}
-          onChange={(e) =>
+          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
             onUpdateProvider(activeProvider.id, {
               [field]: Number(e.target.value),
             })
@@ -227,7 +229,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       | 'frequencyPenalty'
       | 'seed'
       | 'topK',
-    placeholder = '',
+    placeholder: string = '',
     tooltip?: string
   ) => {
     if (!activeProvider) return null;
@@ -260,7 +262,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
           disabled={disabled}
-          onChange={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) => {
             const raw = e.target.value;
             onUpdateProvider(activeProvider.id, {
               [field]: raw === '' ? undefined : Number(raw),
@@ -398,7 +400,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               <input
                 data-no-smart-quotes="true"
                 value={activeProvider.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
                   onUpdateProvider(activeProvider.id, { name: e.target.value })
                 }
                 className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
@@ -417,7 +419,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             <input
               data-no-smart-quotes="true"
               value={activeProvider.baseUrl}
-              onChange={(e) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
                 onUpdateProvider(activeProvider.id, { baseUrl: e.target.value })
               }
               placeholder="https://api.openai.com/v1"
@@ -438,7 +440,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 data-no-smart-quotes="true"
                 type="text"
                 value={activeProvider.apiKey}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
                   onUpdateProvider(activeProvider.id, { apiKey: e.target.value })
                 }
                 placeholder="sk... (visible)"
@@ -494,14 +496,18 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 onBlur={() => {
                   setTimeout(() => setModelPickerOpenFor(null), 120);
                 }}
-                onChange={(e) => {
+                onChange={(
+                  e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ) => {
                   const nextModelId = e.target.value;
                   onUpdateProvider(activeProvider.id, { modelId: nextModelId });
                   const suggested = suggestPresetForModelId(nextModelId);
-                  setSuggestedPresetByProvider((previous) => ({
-                    ...previous,
-                    [activeProvider.id]: suggested?.id || null,
-                  }));
+                  setSuggestedPresetByProvider(
+                    (previous: Record<string, string | null>) => ({
+                      ...previous,
+                      [activeProvider.id]: suggested?.id || null,
+                    })
+                  );
                 }}
                 placeholder="Select or type a model id"
                 className={`w-full border rounded p-2 pr-9 text-sm focus:border-brand-500 focus:outline-none ${
@@ -512,11 +518,11 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               />
               <button
                 type="button"
-                onMouseDown={(e) => {
+                onMouseDown={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   e.preventDefault();
                   const models = modelLists[activeProvider.id] || [];
                   if (models.length === 0) return;
-                  setModelPickerOpenFor((cur) =>
+                  setModelPickerOpenFor((cur: string | null) =>
                     cur === activeProvider.id ? null : activeProvider.id
                   );
                 }}
@@ -551,7 +557,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                           type="button"
                           key={m}
                           title={m}
-                          onMouseDown={(e) => {
+                          onMouseDown={(
+                            e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+                          ) => {
                             e.preventDefault();
                             onUpdateProvider(activeProvider.id, { modelId: m });
                             setModelPickerOpenFor(null);
@@ -651,7 +659,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               <input
                 type="number"
                 value={activeProvider.timeout}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
                   onUpdateProvider(activeProvider.id, {
                     timeout: Number(e.target.value),
                   })
@@ -676,7 +684,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 type="number"
                 step={1}
                 value={activeProvider.maxTokens ?? ''}
-                onChange={(e) => {
+                onChange={(
+                  e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ) => {
                   const raw = e.target.value;
                   onUpdateProvider(activeProvider.id, {
                     maxTokens: raw === '' ? undefined : Number(raw),
@@ -698,7 +708,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             </label>
             <select
               value={activeProvider.presetId || ''}
-              onChange={(e) => {
+              onChange={(
+                e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+              ) => {
                 const preset = getPresetById(e.target.value || null);
                 if (!preset) {
                   onUpdateProvider(activeProvider.id, {
@@ -720,7 +732,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               }
             >
               <option value="">No preset — edit parameters manually</option>
-              {modelPresets.map((preset) => (
+              {modelPresets.map((preset: ModelPresetEntry) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.name}
                 </option>
@@ -824,11 +836,13 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   rows={3}
                   value={(activeProvider.stop || []).join('\n')}
                   disabled={!!activeProvider.presetId}
-                  onChange={(e) =>
+                  onChange={(
+                    e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                  ) =>
                     onUpdateProvider(activeProvider.id, {
                       stop: e.target.value
                         .split('\n')
-                        .map((line) => line.trim())
+                        .map((line: string) => line.trim())
                         .filter(Boolean),
                     })
                   }
@@ -859,7 +873,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   rows={4}
                   value={activeProvider.extraBody || ''}
                   disabled={!!activeProvider.presetId}
-                  onChange={(e) =>
+                  onChange={(
+                    e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                  ) =>
                     onUpdateProvider(activeProvider.id, {
                       extraBody: e.target.value,
                     })

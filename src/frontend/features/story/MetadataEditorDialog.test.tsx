@@ -115,8 +115,12 @@ describe('MetadataEditorDialog', () => {
     const titleInputs = screen.getAllByDisplayValue('Chapter 1');
     const tagsInputs = screen.getAllByDisplayValue('tag1');
 
-    expect(titleInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
-    expect(tagsInputs.some((input) => input.getAttribute('lang') === 'de')).toBe(true);
+    expect(
+      titleInputs.some((input: HTMLElement) => input.getAttribute('lang') === 'de')
+    ).toBe(true);
+    expect(
+      tagsInputs.some((input: HTMLElement) => input.getAttribute('lang') === 'de')
+    ).toBe(true);
     // Summary is now a CodeMirrorEditor which does not expose an HTML lang attribute;
     // spellchecking language is passed via the `language` prop to the editor.
   });
@@ -139,7 +143,7 @@ describe('MetadataEditorDialog', () => {
 
     const dialog = screen
       .getAllByRole('dialog')
-      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+      .find((node: HTMLElement) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
     const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
@@ -184,7 +188,7 @@ describe('MetadataEditorDialog', () => {
 
     const dialog = screen
       .getAllByRole('dialog')
-      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+      .find((node: HTMLElement) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
     const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
@@ -233,7 +237,7 @@ describe('MetadataEditorDialog', () => {
 
     const dialog = screen
       .getAllByRole('dialog')
-      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+      .find((node: HTMLElement) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
     const titleInput = within(dialog!).getByLabelText('Title') as HTMLInputElement;
@@ -286,7 +290,7 @@ describe('MetadataEditorDialog', () => {
 
     const dialog = screen
       .getAllByRole('dialog')
-      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+      .find((node: HTMLElement) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
     // Diff toggle button should be present and active (diff view on by default).
@@ -387,11 +391,11 @@ describe('MetadataEditorDialog', () => {
       name: 'Notes summary actions',
     });
 
-    const chapterLabelActive = chapterGroups.some((group) => {
+    const chapterLabelActive = chapterGroups.some((group: HTMLElement) => {
       const label = within(group).getByText('from Chapter');
       return label.className.includes('text-brand-gray-500');
     });
-    const notesLabelActive = notesGroups.some((group) => {
+    const notesLabelActive = notesGroups.some((group: HTMLElement) => {
       const label = within(group).getByText('from Notes');
       return label.className.includes('bg-primary/20');
     });
@@ -443,7 +447,7 @@ describe('MetadataEditorDialog', () => {
 
     const dialog = screen
       .getAllByRole('dialog')
-      .find((node) => within(node).queryByText('Edit Chapter Metadata'));
+      .find((node: HTMLElement) => within(node).queryByText('Edit Chapter Metadata'));
     expect(dialog).toBeTruthy();
 
     const undoButton = within(dialog!).getByRole('button', {

@@ -39,7 +39,7 @@ export const useConfirmDialog = () => {
     const normalizedOptions: ConfirmOptions =
       typeof input === 'string' ? { message: input } : input;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve: (value: boolean | PromiseLike<boolean>) => void) => {
       pendingRef.current = { options: normalizedOptions, resolve };
       setOptions(normalizedOptions);
       setIsOpen(true);

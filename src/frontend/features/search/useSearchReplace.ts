@@ -81,18 +81,20 @@ export interface UseSearchReplaceResult {
 
 const buildFlatMatches = (results: SearchResultSection[]): FlatMatch[] => {
   const flat: FlatMatch[] = [];
-  results.forEach((section, si) => {
-    section.matches.forEach((match, mi) => {
-      flat.push({
-        sectionIndex: si,
-        matchIndex: mi,
-        sectionType: section.section_type,
-        sectionId: section.section_id,
-        field: section.field,
-        start: match.start,
-        end: match.end,
-      });
-    });
+  results.forEach((section: SearchResultSection, si: number) => {
+    section.matches.forEach(
+      (match: import('../../services/apiClients/search').SearchMatch, mi: number) => {
+        flat.push({
+          sectionIndex: si,
+          matchIndex: mi,
+          sectionType: section.section_type,
+          sectionId: section.section_id,
+          field: section.field,
+          start: match.start,
+          end: match.end,
+        });
+      }
+    );
   });
   return flat;
 };
@@ -106,24 +108,32 @@ const buildHighlightMaps = (
   const ranges: SearchHighlightMap = {};
   const texts: SearchHighlightTextMap = {};
 
-  results.forEach((section) => {
+  results.forEach((section: SearchResultSection) => {
     const key = buildSearchSectionKey(
       section.section_type,
       section.section_id,
       section.field
     );
-    ranges[key] = section.matches.map((match) => ({
-      start: match.start,
-      end: match.end,
-    }));
+    ranges[key] = section.matches.map(
+      (match: import('../../services/apiClients/search').SearchMatch) => ({
+        start: match.start,
+        end: match.end,
+      })
+    );
     const seen = new Set<string>();
-    texts[key] = section.matches.reduce<string[]>((acc, match) => {
-      if (!seen.has(match.match_text)) {
-        seen.add(match.match_text);
-        acc.push(match.match_text);
-      }
-      return acc;
-    }, []);
+    texts[key] = section.matches.reduce<string[]>(
+      (
+        acc: string[],
+        match: import('../../services/apiClients/search').SearchMatch
+      ) => {
+        if (!seen.has(match.match_text)) {
+          seen.add(match.match_text);
+          acc.push(match.match_text);
+        }
+        return acc;
+      },
+      []
+    );
   });
 
   return { ranges, texts };
@@ -155,7 +165,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   searchParamsRef.current = { query, scope, caseSensitive, isRegex, isPhonetic };
 
   const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback((keepHighlight = false) => {
+  const close = useCallback((keepHighlight: boolean | undefined = false) => {
     setIsOpen(false);
     setError(null);
     if (!keepHighlight) {
@@ -221,7 +231,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
 
   const navigateNext = useCallback(() => {
     if (flatMatches.length === 0) return;
-    setCurrentMatchIndex((prev) => {
+    setCurrentMatchIndex((prev: number | null) => {
       if (prev === null) return 0;
       return (prev + 1) % flatMatches.length;
     });
@@ -229,7 +239,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
 
   const navigatePrev = useCallback(() => {
     if (flatMatches.length === 0) return;
-    setCurrentMatchIndex((prev) => {
+    setCurrentMatchIndex((prev: number | null) => {
       if (prev === null) return flatMatches.length - 1;
       return (prev - 1 + flatMatches.length) % flatMatches.length;
     });
@@ -278,7 +288,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         const flat = buildFlatMatches(resp.results);
         setFlatMatches(flat);
         if (flat.length > 0) {
-          setCurrentMatchIndex((prev) =>
+          setCurrentMatchIndex((prev: number | null) =>
             prev === null ? 0 : Math.min(prev, flat.length - 1)
           );
         } else {
@@ -380,7 +390,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
           setResults(resp.results);
           setTotalMatches(resp.total_matches);
           setFlatMatches(flat);
-          setCurrentMatchIndex((prev) =>
+          setCurrentMatchIndex((prev: number | null) =>
             flat.length === 0
               ? null
               : prev === null

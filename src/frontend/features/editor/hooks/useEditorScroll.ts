@@ -39,6 +39,7 @@ export interface UseEditorScrollResult {
   distanceFromBottomRef: React.MutableRefObject<number>;
 }
 
+/** Custom React hook that manages editor scroll. */
 export function useEditorScroll({
   localContent,
   isProseStreaming,

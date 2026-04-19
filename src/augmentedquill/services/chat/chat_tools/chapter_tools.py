@@ -7,6 +7,8 @@
 
 """Defines the chapter tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 import json as _json
 
 from pydantic import BaseModel, Field
@@ -44,7 +46,7 @@ from augmentedquill.services.projects.projects import (
 _MAX_CHAPTER_CHARS = 8000
 
 
-def _overview_chapters():
+def _overview_chapters() -> Any:
     """Overview Chapters."""
     ov = _project_overview()
     chapters = []
@@ -56,7 +58,9 @@ def _overview_chapters():
     return ov, chapters
 
 
-def _find_chapter(ov: dict, chap_id: int | None = None, book_id: str | None = None):
+def _find_chapter(
+    ov: dict, chap_id: int | None = None, book_id: str | None = None
+) -> Any:
     """Find a chapter record by ID and optional book_id."""
     if chap_id is None:
         return None, None
@@ -139,6 +143,8 @@ def compose_current_chapter_state(payload: dict) -> dict | None:
 
 
 class GetChapterMetadataParams(BaseModel):
+    """Represents the GetChapterMetadataParams type."""
+
     chap_id: int | None = Field(
         None,
         description="The chapter ID to get metadata for. If omitted and current is true, the active chapter is used.",
@@ -154,6 +160,8 @@ class GetChapterMetadataParams(BaseModel):
 
 
 class UpdateChapterMetadataParams(BaseModel):
+    """Represents the UpdateChapterMetadataParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to update metadata for")
     title: str | None = Field(None, description="The chapter title")
     summary: str | None = Field(None, description="The chapter summary")
@@ -168,10 +176,14 @@ class UpdateChapterMetadataParams(BaseModel):
 
 
 class GetChapterSummariesParams(BaseModel):
+    """Represents the GetChapterSummariesParams type."""
+
     pass
 
 
 class GetChapterContentParams(BaseModel):
+    """Represents the GetChapterContentParams type."""
+
     chap_id: int | None = Field(
         None,
         description="The chapter ID to get content for. If not provided, uses active chapter.",
@@ -190,22 +202,30 @@ class GetCurrentChapterParams(BaseModel):
 
 
 class WriteChapterContentParams(BaseModel):
+    """Represents the WriteChapterContentParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to write content to")
     content: str = Field(..., description="The content to write")
 
 
 class ReplaceTextInChapterParams(BaseModel):
+    """Represents the ReplaceTextInChapterParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to edit")
     old_text: str = Field(..., description="The exact literal text to replace")
     new_text: str = Field(..., description="The new text to insert instead")
 
 
 class WriteChapterSummaryParams(BaseModel):
+    """Represents the WriteChapterSummaryParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to write summary to")
     summary: str = Field(..., description="The summary to write")
 
 
 class SyncSummaryParams(BaseModel):
+    """Represents the SyncSummaryParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to generate summary for")
     mode: str = Field(
         "",
@@ -214,16 +234,22 @@ class SyncSummaryParams(BaseModel):
 
 
 class WriteChapterParams(BaseModel):
+    """Represents the WriteChapterParams type."""
+
     chap_id: int = Field(
         ..., description="The chapter ID to write full chapter content for"
     )
 
 
 class ContinueChapterParams(BaseModel):
+    """Represents the ContinueChapterParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to continue writing")
 
 
 class CreateNewChapterParams(BaseModel):
+    """Represents the CreateNewChapterParams type."""
+
     title: str = Field("", description="The title for the new chapter")
     book_id: str | None = Field(
         None, description="The book ID (UUID) if project is a series"
@@ -231,24 +257,34 @@ class CreateNewChapterParams(BaseModel):
 
 
 class GetChapterHeadingParams(BaseModel):
+    """Represents the GetChapterHeadingParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to get heading for")
 
 
 class WriteChapterHeadingParams(BaseModel):
+    """Represents the WriteChapterHeadingParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to write heading to")
     heading: str = Field(..., description="The heading to write")
 
 
 class GetChapterSummaryParams(BaseModel):
+    """Represents the GetChapterSummaryParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to get summary for")
 
 
 class DeleteChapterParams(BaseModel):
+    """Represents the DeleteChapterParams type."""
+
     chap_id: int = Field(..., description="The chapter ID to delete")
     confirm: bool = Field(False, description="Set to true to confirm deletion")
 
 
 class RecommendMetadataUpdatesParams(BaseModel):
+    """Represents the RecommendMetadataUpdatesParams type."""
+
     story_summary: str | None = Field(
         None,
         description="Suggested replacement or refinement for the story summary.",
@@ -290,7 +326,7 @@ class RecommendMetadataUpdatesParams(BaseModel):
 )
 async def get_chapter_metadata(
     params: GetChapterMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Chapter Metadata."""
     ov, _ = _overview_chapters()
 
@@ -355,7 +391,7 @@ async def get_chapter_metadata(
 )
 async def update_chapter_metadata(
     params: UpdateChapterMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Update Chapter Metadata."""
     conflicts = params.conflicts
     if isinstance(conflicts, str):
@@ -382,7 +418,7 @@ async def update_chapter_metadata(
 )
 async def get_chapter_summaries(
     params: GetChapterSummariesParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Chapter Summaries."""
     ov = _project_overview()
     p_type = ov.get("project_type", "novel")
@@ -413,7 +449,7 @@ async def get_chapter_summaries(
 )
 async def get_chapter_content(
     params: GetChapterContentParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Chapter Content."""
     chap_id = params.chap_id
     if chap_id is None:
@@ -437,7 +473,7 @@ async def get_chapter_content(
 )
 async def get_current_chapter_id(
     params: GetCurrentChapterParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Current Chapter ID state."""
     state = compose_current_chapter_state(payload)
     if not state:
@@ -456,7 +492,8 @@ async def get_current_chapter_id(
 )
 async def write_chapter_content(
     params: WriteChapterContentParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Write chapter content."""
     _write_chapter_content(params.chap_id, params.content)
     mutations["story_changed"] = True
     return {"message": f"Content written to chapter {params.chap_id} successfully"}
@@ -469,7 +506,8 @@ async def write_chapter_content(
 )
 async def replace_text_in_chapter(
     params: ReplaceTextInChapterParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Replace text in chapter."""
     # Retrieve current text
     _, path, _pos = _chapter_by_id_or_404(params.chap_id)
     text = path.read_text(encoding="utf-8")
@@ -512,7 +550,8 @@ class InsertTextAtMarkerParams(BaseModel):
 )
 async def insert_text_at_marker(
     params: InsertTextAtMarkerParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Insert text at marker."""
     _, path, _pos = _chapter_by_id_or_404(params.chap_id)
     text = path.read_text(encoding="utf-8")
 
@@ -563,7 +602,8 @@ class ApplyChapterReplacementsParams(BaseModel):
 )
 async def apply_chapter_replacements(
     params: ApplyChapterReplacementsParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Apply chapter replacements."""
     _, path, _pos = _chapter_by_id_or_404(params.chap_id)
     text = path.read_text(encoding="utf-8")
 
@@ -602,7 +642,8 @@ async def apply_chapter_replacements(
 )
 async def write_chapter_summary(
     params: WriteChapterSummaryParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Write chapter summary."""
     _write_chapter_summary(params.chap_id, params.summary)
     mutations["story_changed"] = True
     return {
@@ -616,7 +657,10 @@ async def write_chapter_summary(
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
-async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict):
+async def sync_summary(
+    params: SyncSummaryParams, payload: dict, mutations: dict
+) -> Any:
+    """Helper for summary.."""
     mode = str(params.mode).lower()
     data = await generate_chapter_summary(chap_id=params.chap_id, mode=mode)
     mutations["story_changed"] = True
@@ -628,7 +672,10 @@ async def sync_summary(params: SyncSummaryParams, payload: dict, mutations: dict
     allowed_roles=(WRITING_ROLE,),
     capability="prose-write",
 )
-async def write_chapter(params: WriteChapterParams, payload: dict, mutations: dict):
+async def write_chapter(
+    params: WriteChapterParams, payload: dict, mutations: dict
+) -> Any:
+    """Write chapter."""
     data = await write_chapter_from_summary(chap_id=params.chap_id)
     mutations["story_changed"] = True
     return data
@@ -641,7 +688,8 @@ async def write_chapter(params: WriteChapterParams, payload: dict, mutations: di
 )
 async def continue_chapter(
     params: ContinueChapterParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Continue the current chapter from its summary and persist the resulting text."""
     data = await continue_chapter_from_summary(chap_id=params.chap_id)
     mutations["story_changed"] = True
     return data
@@ -654,7 +702,7 @@ async def continue_chapter(
 )
 async def create_new_chapter(
     params: CreateNewChapterParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Create New Chapter."""
     active = get_active_project_dir()
     if not active:
@@ -672,7 +720,7 @@ async def create_new_chapter(
 
 async def get_chapter_heading(
     params: GetChapterHeadingParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Chapter Heading — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
@@ -688,7 +736,7 @@ async def get_chapter_heading(
 )
 async def write_chapter_heading(
     params: WriteChapterHeadingParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Write Chapter Heading."""
     heading = params.heading.strip()
     write_chapter_title(params.chap_id, heading)
@@ -701,7 +749,7 @@ async def write_chapter_heading(
 
 async def get_chapter_summary(
     params: GetChapterSummaryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Chapter Summary — internal helper; use get_chapter_metadata."""
     _chapter_by_id_or_404(params.chap_id)
     _, chapters = _overview_chapters()
@@ -715,7 +763,9 @@ async def get_chapter_summary(
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
 )
-async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: dict):
+async def delete_chapter(
+    params: DeleteChapterParams, payload: dict, mutations: dict
+) -> Any:
     """Delete Chapter."""
     if not params.confirm:
         return {
@@ -801,7 +851,8 @@ async def delete_chapter(params: DeleteChapterParams, payload: dict, mutations: 
 )
 async def recommend_metadata_updates(
     params: RecommendMetadataUpdatesParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Recommend structured metadata updates based on story content and return them for review."""
     return {
         "recommended_updates": {
             "story_summary": params.story_summary,

@@ -24,7 +24,7 @@ export interface AppChatPanelProps {
 }
 
 export const AppChatPanel: React.FC<AppChatPanelProps> = React.memo(
-  ({ chatControls, currentTheme, storyLanguage }) => {
+  ({ chatControls, currentTheme, storyLanguage }: AppChatPanelProps) => {
     const {
       isChatOpen,
       chatMessages,

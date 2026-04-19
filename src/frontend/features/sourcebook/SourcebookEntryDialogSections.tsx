@@ -106,7 +106,7 @@ export const SourcebookEntryHeader: React.FC<HeaderProps> = ({
   onToggleDiff,
   onClose,
   t,
-}) => (
+}: HeaderProps) => (
   <div
     className={`flex items-center justify-between px-6 py-4 border-b ${borderClass}`}
   >
@@ -209,7 +209,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
   onSynonymInputChange,
   onAddSynonym,
   onRemoveSynonym,
-}) => (
+}: BasicSectionProps) => (
   <>
     <div className="space-y-4">
       <div className="space-y-2">
@@ -226,7 +226,9 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
           <input
             type="text"
             value={name}
-            onChange={(e) => onNameChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onNameChange(e.target.value)
+            }
             lang={language}
             spellCheck={true}
             className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
@@ -242,27 +244,32 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
           {t('Category')}
         </label>
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-          {Object.entries(CATEGORY_DETAILS).map(([cat, details]) => {
-            const Icon = details.icon;
-            const isSelected = category === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => onCategoryChange(cat)}
-                title={details.description}
-                className={`flex flex-col items-center justify-center p-2 rounded-md border transition-all ${
-                  isSelected
-                    ? 'bg-brand-500 text-white border-brand-600 ring-2 ring-brand-500/20'
-                    : `${inputBgClass} ${inputBorderClass} hover:border-brand-500/50 opacity-70 hover:opacity-100`
-                }`}
-              >
-                <Icon size={20} className="mb-1" />
-                <span className="text-[10px] uppercase font-bold tracking-tight">
-                  {cat}
-                </span>
-              </button>
-            );
-          })}
+          {Object.entries(CATEGORY_DETAILS).map(
+            ([cat, details]: [
+              string,
+              { icon: React.ElementType; description: string },
+            ]) => {
+              const Icon = details.icon;
+              const isSelected = category === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => onCategoryChange(cat)}
+                  title={details.description}
+                  className={`flex flex-col items-center justify-center p-2 rounded-md border transition-all ${
+                    isSelected
+                      ? 'bg-brand-500 text-white border-brand-600 ring-2 ring-brand-500/20'
+                      : `${inputBgClass} ${inputBorderClass} hover:border-brand-500/50 opacity-70 hover:opacity-100`
+                  }`}
+                >
+                  <Icon size={20} className="mb-1" />
+                  <span className="text-[10px] uppercase font-bold tracking-tight">
+                    {cat}
+                  </span>
+                </button>
+              );
+            }
+          )}
         </div>
         <p
           className={`text-xs mt-1 min-h-[1.5em] ${isLight ? 'text-brand-700' : 'text-brand-300'}`}
@@ -280,7 +287,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
         className={`p-3 rounded-md border ${inputBorderClass} ${inputBgClass} min-h-[60px]`}
       >
         <div className="flex flex-wrap gap-2 mb-2">
-          {synonyms.map((syn, idx) => (
+          {synonyms.map((syn: string, idx: number) => (
             <span
               key={idx}
               className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${
@@ -302,10 +309,12 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
             <input
               type="text"
               value={newSynonym}
-              onChange={(e) => onSynonymInputChange(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                onSynonymInputChange(e.target.value)
+              }
               lang={language}
               spellCheck={true}
-              onKeyDown={(e) => {
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   onAddSynonym();
@@ -345,7 +354,7 @@ export const SourcebookEntryImagesSection: React.FC<ImagesSectionProps> = ({
   onToggleExpanded,
   onOpenPicker,
   onToggleImage,
-}) => (
+}: ImagesSectionProps) => (
   <div className="space-y-2">
     <div className="flex justify-between items-end">
       <button
@@ -386,7 +395,7 @@ export const SourcebookEntryImagesSection: React.FC<ImagesSectionProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-            {selectedImagesList.map((img) => {
+            {selectedImagesList.map((img: ProjectImage) => {
               const tooltip = `${img.title || img.filename}\n${img.description || ''}`;
               return (
                 <div
@@ -449,7 +458,7 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
   onOpenAddRelation,
   onEditRelation,
   onDeleteRelation,
-}) => (
+}: RelationsSectionProps) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between">
       <button
@@ -482,7 +491,7 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
     {isRelationsExpanded &&
       (relations.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {relations.map((rel, idx) => (
+          {relations.map((rel: SourcebookRelation, idx: number) => (
             <div
               key={idx}
               className={`flex items-center justify-between p-2 rounded-md border ${inputBorderClass} ${inputBgClass}`}
@@ -590,7 +599,7 @@ export const SourcebookEntryDescriptionSection: React.FC<DescriptionSectionProps
   t,
   onDescriptionChange,
   onToggleKeywordsPanel,
-}) => (
+}: DescriptionSectionProps) => (
   <div className="space-y-2 flex-1 flex flex-col min-h-[320px]">
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1">
@@ -632,7 +641,7 @@ export const SourcebookEntryDescriptionSection: React.FC<DescriptionSectionProps
             <div className="italic opacity-70">{t('Generating...')}</div>
           ) : keywords.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {keywords.map((kw) => (
+              {keywords.map((kw: string) => (
                 <span
                   key={kw}
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
@@ -700,7 +709,7 @@ export const SourcebookEntryFooter: React.FC<FooterProps> = ({
   onCancel,
   onSave,
   disableSave,
-}) => (
+}: FooterProps) => (
   <div
     className={`flex justify-between items-center px-6 py-4 border-t ${borderClass} bg-opacity-50 ${
       isLight ? 'bg-brand-gray-50' : 'bg-black/20'
@@ -767,7 +776,7 @@ export const SourcebookImagePickerModal: React.FC<ImagePickerProps> = ({
   t,
   onClose,
   onToggleImage,
-}) => {
+}: ImagePickerProps) => {
   if (!isOpen) {
     return null;
   }
@@ -806,7 +815,7 @@ export const SourcebookImagePickerModal: React.FC<ImagePickerProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
-              {availableImages.map((img) => {
+              {availableImages.map((img: ProjectImage) => {
                 const isSelected = selectedImageNames.includes(img.filename);
                 const tooltip = `${img.title || img.filename}\n${img.description || ''}`;
                 return (

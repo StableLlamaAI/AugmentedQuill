@@ -61,7 +61,7 @@ type ThemeProviderProps = {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   currentTheme,
   children,
-}) => {
+}: ThemeProviderProps) => {
   const isLight = currentTheme === 'light';
 
   const value = useMemo<ThemeContextValue>(() => {

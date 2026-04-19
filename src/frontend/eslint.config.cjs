@@ -23,7 +23,29 @@ module.exports = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/typedef': [
+        'error',
+        {
+          arrayDestructuring: false,
+          arrowParameter: true,
+          memberVariableDeclaration: false,
+          objectDestructuring: false,
+          parameter: true,
+          propertyDeclaration: false,
+          variableDeclaration: false,
+          variableDeclarationIgnoreFunction: true,
+        },
+      ],
+      '@typescript-eslint/explicit-function-return-type': [
+        'warn',
+        {
+          allowExpressions: true,
+          allowTypedFunctionExpressions: true,
+          allowHigherOrderFunctions: true,
+          allowDirectConstAssertionInArrowFunctions: true,
+        },
+      ],
       complexity: ['warn', 20],
       'max-lines-per-function': [
         'warn',

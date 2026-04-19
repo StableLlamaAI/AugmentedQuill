@@ -13,4 +13,5 @@ from augmentedquill.api.v1.request_body import parse_json_object_body
 
 
 async def parse_json_body(request: Request) -> dict:
+    """Parse json body."""
     return await parse_json_object_body(request)

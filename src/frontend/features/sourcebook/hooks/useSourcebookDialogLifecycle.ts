@@ -28,6 +28,7 @@ export interface UseSourcebookDialogLifecycleArgs {
   setDialogKey: React.Dispatch<React.SetStateAction<number>>;
 }
 
+/** Custom React hook that manages sourcebook dialog lifecycle. */
 export function useSourcebookDialogLifecycle({
   sourcebookDialogTrigger,
   entries,
@@ -40,7 +41,7 @@ export function useSourcebookDialogLifecycle({
   isDialogOpen,
   selectedEntry,
   setDialogKey,
-}: UseSourcebookDialogLifecycleArgs) {
+}: UseSourcebookDialogLifecycleArgs): void {
   useEffect(() => {
     if (!sourcebookDialogTrigger) {
       return;
@@ -49,7 +50,7 @@ export function useSourcebookDialogLifecycle({
     let cancelled = false;
     const entryId = sourcebookDialogTrigger.entryId;
     const findEntry = (entriesToSearch: SourcebookEntry[]) =>
-      entriesToSearch.find((entry) => entry.id === entryId);
+      entriesToSearch.find((entry: SourcebookEntry) => entry.id === entryId);
 
     const openTriggeredEntry = async () => {
       const existing = findEntry(entries);
@@ -101,7 +102,9 @@ export function useSourcebookDialogLifecycle({
       return;
     }
 
-    const updated = externalEntries.find((entry) => entry.id === selectedEntry.id);
+    const updated = externalEntries.find(
+      (entry: SourcebookEntry) => entry.id === selectedEntry.id
+    );
     if (!updated) {
       setIsDialogOpen(false);
       setSelectedEntry(null);
@@ -110,7 +113,7 @@ export function useSourcebookDialogLifecycle({
     }
     if (entryDiffSignature(updated) !== entryDiffSignature(selectedEntry)) {
       setSelectedEntry(updated);
-      setDialogKey((value) => value + 1);
+      setDialogKey((value: number) => value + 1);
     }
   }, [
     externalEntries,

@@ -26,6 +26,7 @@ configureMarked();
 
 // Lazily create a single turndown instance for clipboard paste.
 let turndown: { turndown: (html: string) => string } | null = null;
+/** Return turndown. */
 function getTurndown(): { turndown: (html: string) => string } {
   if (!turndown) turndown = createEditorTurndownService();
   return turndown as { turndown: (html: string) => string };
@@ -36,13 +37,16 @@ function getTurndown(): { turndown: (html: string) => string } {
  */
 export function buildClipboardExtension(): Extension {
   return EditorView.domEventHandlers({
-    copy(event, view) {
+    /** Copy the requested value. */
+    copy(event: ClipboardEvent, view: EditorView): boolean {
       return handleCopyOrCut(event, view, false);
     },
-    cut(event, view) {
+    /** Cut the requested value. */
+    cut(event: ClipboardEvent, view: EditorView): boolean {
       return handleCopyOrCut(event, view, true);
     },
-    paste(event, view) {
+    /** Paste the requested value. */
+    paste(event: ClipboardEvent, view: EditorView): boolean {
       return handlePaste(event, view);
     },
   });
@@ -50,6 +54,7 @@ export function buildClipboardExtension(): Extension {
 
 // ─── Copy / Cut ──────────────────────────────────────────────────────────────
 
+/** Handle copy or cut. */
 function handleCopyOrCut(
   event: ClipboardEvent,
   view: EditorView,
@@ -88,6 +93,7 @@ function handleCopyOrCut(
 
 // ─── Paste ───────────────────────────────────────────────────────────────────
 
+/** Handle paste. */
 function handlePaste(event: ClipboardEvent, view: EditorView): boolean {
   const dt = event.clipboardData;
   if (!dt) return false;

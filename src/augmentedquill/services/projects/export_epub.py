@@ -12,7 +12,7 @@ import re
 import markdown
 from pathlib import Path
 from fastapi import Response
-from typing import List, Tuple
+from typing import Any, List, Tuple
 from ebooklib import epub
 
 from augmentedquill.services.exceptions import BadRequestError
@@ -144,7 +144,10 @@ def export_project_epub_response(name: str | None = None) -> Response:
     added_images = set()
 
     def process_html_images(html_text: str) -> str:
-        def replacer(match):
+        """Helper for html images.."""
+
+        def replacer(match: Any) -> Any:
+            """Helper for the requested value.."""
             img_filename = match.group(1)
             # Prevent path traversal
             if ".." in img_filename or "/" in img_filename or "\\" in img_filename:

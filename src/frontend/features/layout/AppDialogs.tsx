@@ -99,7 +99,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
   isCreateProjectOpen,
   setIsCreateProjectOpen,
   handleCreateProjectConfirm,
-}) => {
+}: AppDialogsProps) => {
   return (
     <React.Suspense fallback={null}>
       {isSettingsOpen && (
@@ -141,7 +141,11 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
           imageStyle={story.image_style}
           imageAdditionalInfo={story.image_additional_info}
           onUpdateSettings={updateStoryImageSettings}
-          onInsert={(filename, url, altText) => {
+          onInsert={(
+            filename: string,
+            url: string | null,
+            altText: string | undefined
+          ) => {
             if (url && editorRef.current) {
               editorRef.current.insertImage(filename, url, altText);
               setIsImagesOpen(false);
@@ -155,7 +159,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
           isOpen={isCreateProjectOpen}
           onClose={() => setIsCreateProjectOpen(false)}
           languages={instructionLanguages}
-          onCreate={(name, type, language) =>
+          onCreate={(name: string, type: string, language: string) =>
             handleCreateProjectConfirm(
               name,
               type as 'short-story' | 'novel' | 'series',

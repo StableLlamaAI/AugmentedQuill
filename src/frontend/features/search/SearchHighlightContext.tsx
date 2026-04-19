@@ -31,7 +31,13 @@ const SearchHighlightContext = createContext<SearchHighlightContextValue | null>
 export const SearchHighlightProvider: React.FC<{
   value: SearchHighlightContextValue;
   children: React.ReactNode;
-}> = ({ value, children }) => (
+}> = ({
+  value,
+  children,
+}: {
+  value: SearchHighlightContextValue;
+  children: React.ReactNode;
+}) => (
   <SearchHighlightContext.Provider value={value}>
     {children}
   </SearchHighlightContext.Provider>

@@ -33,7 +33,7 @@ export const toPromptOverrides = (
 ): Record<string, string> | undefined => {
   const cleaned = Object.fromEntries(
     Object.entries(prompts || {}).filter(
-      ([, value]) => String(value || '').trim() !== ''
+      ([, value]: [string, string]) => String(value || '').trim() !== ''
     )
   );
   return Object.keys(cleaned).length > 0 ? cleaned : undefined;
@@ -78,7 +78,9 @@ export const machineModelToProvider = (
       model.frequency_penalty === null || model.frequency_penalty === undefined
         ? fallbackProvider.frequencyPenalty
         : Number(model.frequency_penalty),
-    stop: Array.isArray(model.stop) ? model.stop.map((entry) => String(entry)) : [],
+    stop: Array.isArray(model.stop)
+      ? model.stop.map((entry: string) => String(entry))
+      : [],
     seed:
       model.seed === null || model.seed === undefined ? undefined : Number(model.seed),
     topK:

@@ -69,6 +69,9 @@ interface ChatProviderProps {
   children: React.ReactNode;
 }
 
-export const ChatProvider: React.FC<ChatProviderProps> = ({ value, children }) => (
+export const ChatProvider: React.FC<ChatProviderProps> = ({
+  value,
+  children,
+}: ChatProviderProps) => (
   <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 );

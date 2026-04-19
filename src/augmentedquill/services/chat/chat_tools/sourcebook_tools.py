@@ -7,7 +7,7 @@
 
 """Defines the sourcebook tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from typing import List, Union
+from typing import Any, List, Union
 
 from pydantic import BaseModel, Field
 
@@ -192,7 +192,7 @@ class DeleteSourcebookEntryParams(BaseModel):
 )
 async def get_sourcebook_entry(
     params: GetSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Sourcebook Entry.
 
     Accepts either a single string (name/ID) or a list of strings.
@@ -220,7 +220,7 @@ async def get_sourcebook_entry(
 )
 async def create_sourcebook_entry(
     params: CreateSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Create Sourcebook Entry."""
     new_entry = sourcebook_create_entry(
         name=params.name,
@@ -249,7 +249,7 @@ async def create_sourcebook_entry(
 )
 async def update_sourcebook_entry(
     params: UpdateSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Update Sourcebook Entry."""
     if (
         params.name is None
@@ -285,7 +285,7 @@ async def update_sourcebook_entry(
 )
 async def delete_sourcebook_entry(
     params: DeleteSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Delete Sourcebook Entry."""
     deleted = sourcebook_delete_entry(params.name_or_id)
     if deleted:
@@ -321,7 +321,7 @@ class ListSourcebookEntriesParams(BaseModel):
 )
 async def list_sourcebook_entries(
     params: ListSourcebookEntriesParams, payload: dict, mutations: dict
-):
+) -> Any:
     """List all sourcebook entries with optional category filter."""
     entries = sourcebook_list_entries()
     if params.category:
@@ -379,7 +379,7 @@ class RemoveSourcebookRelationParams(BaseModel):
 )
 async def add_sourcebook_relation(
     params: AddSourcebookRelationParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Add Sourcebook Relation."""
     result = sourcebook_add_relation(
         source_id=params.source_id,
@@ -405,7 +405,7 @@ async def add_sourcebook_relation(
 )
 async def remove_sourcebook_relation(
     params: RemoveSourcebookRelationParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Remove Sourcebook Relation."""
     result = sourcebook_remove_relation(
         source_id=params.source_id,

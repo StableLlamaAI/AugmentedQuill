@@ -25,6 +25,7 @@ type ToastFn = (message: string, variant?: ToastVariant) => void;
 
 const ToastContext = createContext<ToastFn>(() => {});
 
+/** Custom React hook that returns a toast dispatch function. */
 export function useToast(): ToastFn {
   return useContext(ToastContext);
 }
@@ -47,13 +48,14 @@ const BG_CLASS: Record<ToastVariant, string> = {
   info: 'bg-brand-gray-900 border-blue-700/50',
 };
 
+/** React component that renders a toast item. */
 function ToastItem({
   toast,
   onDismiss,
 }: {
   toast: Toast;
   onDismiss: (id: string) => void;
-}) {
+}): import('react/jsx-runtime').JSX.Element {
   return (
     <div
       role="alert"
@@ -72,12 +74,17 @@ function ToastItem({
   );
 }
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+/** React provider component for toast. */
+export function ToastProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): import('react/jsx-runtime').JSX.Element {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev: Toast[]) => prev.filter((t: Toast) => t.id !== id));
     const t = timers.current.get(id);
     if (t) {
       clearTimeout(t);
@@ -88,7 +95,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const addToast = useCallback(
     (message: string, variant: ToastVariant = 'info') => {
       const id = `toast-${Date.now()}-${Math.random()}`;
-      setToasts((prev) => [...prev, { id, message, variant }]);
+      setToasts((prev: Toast[]) => [...prev, { id, message, variant }]);
       const timer = setTimeout(() => dismiss(id), AUTO_DISMISS_MS[variant]);
       timers.current.set(id, timer);
     },
@@ -103,7 +110,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         aria-atomic="false"
         className="fixed bottom-4 right-4 z-[10100] flex flex-col gap-2 items-end pointer-events-none"
       >
-        {toasts.map((t) => (
+        {toasts.map((t: Toast) => (
           <div key={t.id} className="pointer-events-auto">
             <ToastItem toast={t} onDismiss={dismiss} />
           </div>

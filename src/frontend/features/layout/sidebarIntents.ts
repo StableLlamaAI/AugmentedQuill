@@ -38,7 +38,7 @@ export const useSidebarIntents = ({
 }: UseSidebarIntentsParams) => {
   const openAndExpandStory = useCallback(() => {
     setIsSidebarOpen(true);
-    setEditorSettings((prev) => ({
+    setEditorSettings((prev: EditorSettings) => ({
       ...prev,
       sidebar: { ...prev.sidebar, isStoryCollapsed: false },
     }));
@@ -46,7 +46,7 @@ export const useSidebarIntents = ({
 
   const openAndExpandSourcebook = useCallback(() => {
     setIsSidebarOpen(true);
-    setEditorSettings((prev) => ({
+    setEditorSettings((prev: EditorSettings) => ({
       ...prev,
       sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
     }));
@@ -55,7 +55,7 @@ export const useSidebarIntents = ({
   const openStoryMetadataDialog = useCallback(
     (initialTab?: MetadataTab) => {
       openAndExpandStory();
-      setMetadataDialogTrigger((prev) => ({
+      setMetadataDialogTrigger((prev: MetadataDialogTrigger) => ({
         id: (prev?.id ?? 0) + 1,
         initialTab,
       }));
@@ -66,7 +66,7 @@ export const useSidebarIntents = ({
   const openSourcebookEntryDialog = useCallback(
     (entryId: string) => {
       openAndExpandSourcebook();
-      setSourcebookDialogTrigger((prev) => ({
+      setSourcebookDialogTrigger((prev: SourcebookDialogTrigger) => ({
         id: (prev?.id ?? 0) + 1,
         entryId,
       }));

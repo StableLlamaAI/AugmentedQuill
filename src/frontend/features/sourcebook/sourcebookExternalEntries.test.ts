@@ -302,7 +302,9 @@ describe('onMutated async sequencing', () => {
     const baselineSourcebook: Entry[] = []; // reflects post-deletion state
     const currentEntry: Entry = { id: 'hero', description: 'A brave hero' };
 
-    const baselineEntry = baselineSourcebook.find((e) => e.id === currentEntry.id);
+    const baselineEntry = baselineSourcebook.find(
+      (e: { id: string; description: string }) => e.id === currentEntry.id
+    );
 
     // showDiffForNew=true because the dialog was opened via mutation tag.
     const showDiffForNew = true;
@@ -418,7 +420,7 @@ describe('sourcebook list diff indicators', () => {
     relations?: { target_id: string; relation: string }[];
   };
 
-  const makeEntry = (id: string, description: string, name = id): Entry => ({
+  const makeEntry = (id: string, description: string, name: string = id): Entry => ({
     id,
     name,
     description,
@@ -426,8 +428,47 @@ describe('sourcebook list diff indicators', () => {
 
   /** Mirrors the createdEntryIds computation in SourcebookList. */
   const computeCreatedIds = (current: Entry[], baseline: Entry[]): Set<string> => {
-    const baselineIds = new Set(baseline.map((b) => b.id));
-    return new Set(current.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
+    const baselineIds = new Set(
+      baseline.map(
+        (b: {
+          id: string;
+          name: string;
+          description: string;
+          category?: string;
+          synonyms?: string[];
+          images?: string[];
+          keywords?: string[];
+          relations?: { target_id: string; relation: string }[];
+        }) => b.id
+      )
+    );
+    return new Set(
+      current
+        .filter(
+          (e: {
+            id: string;
+            name: string;
+            description: string;
+            category?: string;
+            synonyms?: string[];
+            images?: string[];
+            keywords?: string[];
+            relations?: { target_id: string; relation: string }[];
+          }) => !baselineIds.has(e.id)
+        )
+        .map(
+          (e: {
+            id: string;
+            name: string;
+            description: string;
+            category?: string;
+            synonyms?: string[];
+            images?: string[];
+            keywords?: string[];
+            relations?: { target_id: string; relation: string }[];
+          }) => e.id
+        )
+    );
   };
 
   /**
@@ -449,18 +490,75 @@ describe('sourcebook list diff indicators', () => {
   const computeModifiedIds = (current: Entry[], baseline: Entry[]): Set<string> => {
     return new Set(
       current
-        .filter((e) => {
-          const b = baseline.find((x) => x.id === e.id);
-          return b && entryDiffSignature(b) !== entryDiffSignature(e);
-        })
-        .map((e) => e.id)
+        .filter(
+          (e: {
+            id: string;
+            name: string;
+            description: string;
+            category?: string;
+            synonyms?: string[];
+            images?: string[];
+            keywords?: string[];
+            relations?: { target_id: string; relation: string }[];
+          }) => {
+            const b = baseline.find(
+              (x: {
+                id: string;
+                name: string;
+                description: string;
+                category?: string;
+                synonyms?: string[];
+                images?: string[];
+                keywords?: string[];
+                relations?: { target_id: string; relation: string }[];
+              }) => x.id === e.id
+            );
+            return b && entryDiffSignature(b) !== entryDiffSignature(e);
+          }
+        )
+        .map(
+          (e: {
+            id: string;
+            name: string;
+            description: string;
+            category?: string;
+            synonyms?: string[];
+            images?: string[];
+            keywords?: string[];
+            relations?: { target_id: string; relation: string }[];
+          }) => e.id
+        )
     );
   };
 
   /** Mirrors the deletedEntries computation in SourcebookList. */
   const computeDeletedEntries = (current: Entry[], baseline: Entry[]): Entry[] => {
-    const currentIds = new Set(current.map((e) => e.id));
-    return baseline.filter((b) => !currentIds.has(b.id));
+    const currentIds = new Set(
+      current.map(
+        (e: {
+          id: string;
+          name: string;
+          description: string;
+          category?: string;
+          synonyms?: string[];
+          images?: string[];
+          keywords?: string[];
+          relations?: { target_id: string; relation: string }[];
+        }) => e.id
+      )
+    );
+    return baseline.filter(
+      (b: {
+        id: string;
+        name: string;
+        description: string;
+        category?: string;
+        synonyms?: string[];
+        images?: string[];
+        keywords?: string[];
+        relations?: { target_id: string; relation: string }[];
+      }) => !currentIds.has(b.id)
+    );
   };
 
   it('no diff when baseline and current are identical', () => {
@@ -659,8 +757,14 @@ describe('sourcebook baseline advance on manual save', () => {
     current: HistoryEntry[],
     baseline: HistoryEntry[]
   ): Set<string> => {
-    const baselineIds = new Set(baseline.map((b) => b.id));
-    return new Set(current.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
+    const baselineIds = new Set(
+      baseline.map((b: { id: string; description: string }) => b.id)
+    );
+    return new Set(
+      current
+        .filter((e: { id: string; description: string }) => !baselineIds.has(e.id))
+        .map((e: { id: string; description: string }) => e.id)
+    );
   };
 
   const computeModifiedIds = (
@@ -669,11 +773,13 @@ describe('sourcebook baseline advance on manual save', () => {
   ): Set<string> => {
     return new Set(
       current
-        .filter((e) => {
-          const b = baseline.find((x) => x.id === e.id);
+        .filter((e: { id: string; description: string }) => {
+          const b = baseline.find(
+            (x: { id: string; description: string }) => x.id === e.id
+          );
           return b && JSON.stringify(b) !== JSON.stringify(e);
         })
-        .map((e) => e.id)
+        .map((e: { id: string; description: string }) => e.id)
     );
   };
 
@@ -801,7 +907,9 @@ describe('sourcebook list-click diff for created entries', () => {
   it('showDiffForNew=true + no baselineEntry → descriptionBaseline is empty string (all-green)', () => {
     const baselineSourcebook: { id: string; description: string }[] = [];
     const openedEntry = { id: 'hero', description: 'A brave hero' };
-    const baselineEntry = baselineSourcebook.find((b) => b.id === openedEntry.id);
+    const baselineEntry = baselineSourcebook.find(
+      (b: { id: string; description: string }) => b.id === openedEntry.id
+    );
 
     const showDiffForNew = true; // entry is in createdEntryIds
     const baseline =
@@ -830,7 +938,9 @@ describe('sourcebook dialog external refresh / close', () => {
     const selected: MinEntry = { id: 'hero', description: 'brave' };
     const newExternal: MinEntry[] = []; // entry removed by undo
 
-    const found = newExternal.find((e) => e.id === selected.id);
+    const found = newExternal.find(
+      (e: { id: string; description: string }) => e.id === selected.id
+    );
     expect(found).toBeUndefined(); // → should close dialog
   });
 
@@ -838,7 +948,9 @@ describe('sourcebook dialog external refresh / close', () => {
     const selected: MinEntry = { id: 'hero', description: 'brave' };
     const newExternal: MinEntry[] = [{ id: 'hero', description: 'old content' }];
 
-    const updated = newExternal.find((e) => e.id === selected.id)!;
+    const updated = newExternal.find(
+      (e: { id: string; description: string }) => e.id === selected.id
+    )!;
     const shouldRemount = signatureFn(updated) !== signatureFn(selected);
     expect(shouldRemount).toBe(true); // → should remount dialog with new content
   });
@@ -847,7 +959,9 @@ describe('sourcebook dialog external refresh / close', () => {
     const selected: MinEntry = { id: 'hero', description: 'brave' };
     const newExternal: MinEntry[] = [{ id: 'hero', description: 'brave' }];
 
-    const updated = newExternal.find((e) => e.id === selected.id)!;
+    const updated = newExternal.find(
+      (e: { id: string; description: string }) => e.id === selected.id
+    )!;
     const shouldRemount = signatureFn(updated) !== signatureFn(selected);
     expect(shouldRemount).toBe(false); // → no remount needed
   });

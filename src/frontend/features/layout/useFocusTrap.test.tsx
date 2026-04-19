@@ -31,7 +31,7 @@ interface TrapProps {
   onDismiss: () => void;
 }
 
-const TrapDialog: React.FC<TrapProps> = ({ id, isActive, onDismiss }) => {
+const TrapDialog: React.FC<TrapProps> = ({ id, isActive, onDismiss }: TrapProps) => {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(isActive, ref, onDismiss);
   return (
@@ -48,7 +48,15 @@ const TwoDialogHost: React.FC<{
   onDismissFirst: () => void;
   onDismissSecond: () => void;
   showSecond: boolean;
-}> = ({ onDismissFirst, onDismissSecond, showSecond }) => (
+}> = ({
+  onDismissFirst,
+  onDismissSecond,
+  showSecond,
+}: {
+  onDismissFirst: () => void;
+  onDismissSecond: () => void;
+  showSecond: boolean;
+}) => (
   <>
     <TrapDialog id="first" isActive={true} onDismiss={onDismissFirst} />
     {showSecond && (

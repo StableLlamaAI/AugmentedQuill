@@ -45,7 +45,9 @@ const normalizeConflict = (value: Partial<Conflict> | undefined | null): Conflic
 
 const normalizeMetadataParams = (value: MetadataParams): MetadataParams => ({
   ...value,
-  conflicts: (value.conflicts || []).map((conflict) => normalizeConflict(conflict)),
+  conflicts: (value.conflicts || []).map((conflict: Conflict) =>
+    normalizeConflict(conflict)
+  ),
 });
 
 const diffFieldsEqual = (a: MetadataParams, b: MetadataParams): boolean =>
@@ -54,6 +56,7 @@ const diffFieldsEqual = (a: MetadataParams, b: MetadataParams): boolean =>
   (a.private_notes || '') === (b.private_notes || '') &&
   JSON.stringify(a.conflicts || []) === JSON.stringify(b.conflicts || []);
 
+/** Custom React hook that manages metadata data state. */
 function useMetadataDataState({
   initialData,
   baseline,
@@ -62,14 +65,43 @@ function useMetadataDataState({
 }: Pick<
   UseMetadataEditorDialogStateArgs,
   'initialData' | 'baseline' | 'language' | 'initialTab'
->) {
+>): {
+  data: MetadataParams;
+  setData: React.Dispatch<React.SetStateAction<MetadataParams>>;
+  effectiveLanguage: string;
+  activeTab: MetadataTab;
+  setActiveTab: React.Dispatch<React.SetStateAction<MetadataTab>>;
+  isFullscreen: boolean;
+  setIsFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
+  showDiff: boolean;
+  setShowDiff: React.Dispatch<React.SetStateAction<boolean>>;
+  conflicts: Conflict[];
+  baselineData: MetadataParams;
+  setBaselineData: React.Dispatch<React.SetStateAction<MetadataParams>>;
+  history: MetadataParams[];
+  historyIndex: number;
+  restoreMetadataHistory: (index: number) => void;
+  summaryHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  notesHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  privateNotesHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  getConflictRanges: (
+    index: number,
+    field: 'description' | 'resolution'
+  ) => import('../search/useSearchReplace').SearchHighlightRange[];
+  addConflict: () => void;
+  deleteConflict: (id: string) => void;
+  updateConflict: (id: string, field: keyof Conflict, value: string) => void;
+  moveConflict: (index: number, direction: 'up' | 'down') => void;
+} {
   const [data, setData] = useState<MetadataParams>(initialData);
   const effectiveLanguage = data.language || language || 'en';
   const [activeTab, setActiveTab] = useState<MetadataTab>(initialTab || 'summary');
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [showDiff, setShowDiff] = useState(true);
   const [conflicts, setConflicts] = useState<Conflict[]>(
-    (initialData.conflicts || []).map((conflict) => normalizeConflict(conflict))
+    (initialData.conflicts || []).map((conflict: Conflict) =>
+      normalizeConflict(conflict)
+    )
   );
 
   const { getRanges } = useSearchHighlight();
@@ -102,7 +134,9 @@ function useMetadataDataState({
     const raw = baseline || initialData;
     return {
       ...raw,
-      conflicts: (raw.conflicts || []).map((conflict) => normalizeConflict(conflict)),
+      conflicts: (raw.conflicts || []).map((conflict: Conflict) =>
+        normalizeConflict(conflict)
+      ),
     };
   });
 
@@ -110,14 +144,14 @@ function useMetadataDataState({
     const normalizedBaseline = baseline
       ? {
           ...baseline,
-          conflicts: (baseline.conflicts || []).map((conflict) =>
+          conflicts: (baseline.conflicts || []).map((conflict: Conflict) =>
             normalizeConflict(conflict)
           ),
         }
       : null;
 
     if (normalizedBaseline) {
-      setBaselineData((prev) => {
+      setBaselineData((prev: MetadataParams) => {
         const currentData = dataRef.current;
         const isSaveRoundTrip =
           diffFieldsEqual(normalizedBaseline, currentData) &&
@@ -131,11 +165,11 @@ function useMetadataDataState({
       return;
     }
 
-    setBaselineData((prev) => {
+    setBaselineData((prev: MetadataParams) => {
       const currentData = dataRef.current;
       const next: MetadataParams = {
         ...initialData,
-        conflicts: (initialData.conflicts || []).map((conflict) =>
+        conflicts: (initialData.conflicts || []).map((conflict: Conflict) =>
           normalizeConflict(conflict)
         ),
       };
@@ -165,14 +199,16 @@ function useMetadataDataState({
       return;
     }
 
-    setData((prev) => ({ ...prev, ...updates }));
+    setData((prev: MetadataParams) => ({ ...prev, ...updates }));
     if (updates.conflicts) {
-      setConflicts(updates.conflicts.map((conflict) => normalizeConflict(conflict)));
+      setConflicts(
+        updates.conflicts.map((conflict: Conflict) => normalizeConflict(conflict))
+      );
     }
   }, [initialData]);
 
   useEffect(() => {
-    setData((prev) => {
+    setData((prev: MetadataParams) => {
       if (JSON.stringify(prev.conflicts) === JSON.stringify(conflicts)) return prev;
       return { ...prev, conflicts };
     });
@@ -185,19 +221,19 @@ function useMetadataDataState({
       resolution: '',
     };
     setConflicts([...conflicts, newConflict]);
-    setBaselineData((prev) => ({
+    setBaselineData((prev: MetadataParams) => ({
       ...prev,
       conflicts: [...(prev.conflicts || []), newConflict],
     }));
   };
 
   const deleteConflict = (id: string) => {
-    setConflicts(conflicts.filter((conflict) => conflict.id !== id));
+    setConflicts(conflicts.filter((conflict: Conflict) => conflict.id !== id));
   };
 
   const updateConflict = (id: string, field: keyof Conflict, value: string) => {
     setConflicts(
-      conflicts.map((conflict) =>
+      conflicts.map((conflict: Conflict) =>
         conflict.id === id ? { ...conflict, [field]: value } : conflict
       )
     );
@@ -250,6 +286,7 @@ function useMetadataDataState({
   };
 }
 
+/** Custom React hook that manages metadata autosave state. */
 function useMetadataAutosaveState({
   data,
   initialData,
@@ -260,7 +297,7 @@ function useMetadataAutosaveState({
   initialData: MetadataParams;
   onSave: (data: MetadataParams) => Promise<void>;
   onClose: () => void;
-}) {
+}): { saveStatus: 'error' | 'saved' | 'saving'; handleClose: () => Promise<void> } {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const onSaveRef = useRef(onSave);
   const isFirstRun = useRef(true);
@@ -329,6 +366,7 @@ function useMetadataAutosaveState({
   return { saveStatus, handleClose };
 }
 
+/** Custom React hook that manages metadata ai state. */
 function useMetadataAiState({
   data,
   setData,
@@ -347,7 +385,26 @@ function useMetadataAiState({
 > & {
   data: MetadataParams;
   setData: React.Dispatch<React.SetStateAction<MetadataParams>>;
-}) {
+}): {
+  isAiGenerating: boolean;
+  aiThinking: string | null;
+  isThinkingExpanded: boolean;
+  setIsThinkingExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  aiWriteSource: MetadataAiSource;
+  setAiWriteSource: React.Dispatch<React.SetStateAction<MetadataAiSource>>;
+  handleAiGenerate: (
+    action: MetadataAction,
+    source?: MetadataAiSource
+  ) => Promise<void>;
+  isDarkMode: boolean;
+  hasAiSummaryControls: boolean;
+  primarySourceTitle: string;
+  regeneratePrimaryTitle: string;
+  updatePrimaryTitle: string;
+  rewritePrimaryTitle: string;
+  hasNotesSource: boolean;
+  hasPrimarySource: boolean;
+} {
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiThinking, setAiThinking] = useState<string | null>(null);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -370,20 +427,20 @@ function useMetadataAiState({
       let lastProgressAt = 0;
       const result = await onAiGenerate(
         action,
-        (partialText) => {
+        (partialText: string) => {
           const now = Date.now();
           if (now - lastProgressAt < 50) return;
           lastProgressAt = now;
-          setData((prev) => ({ ...prev, summary: partialText }));
+          setData((prev: MetadataParams) => ({ ...prev, summary: partialText }));
         },
         sourceText,
-        (thinking) => {
+        (thinking: string) => {
           setAiThinking(thinking);
         },
         source
       );
       if (result) {
-        setData((prev) => ({ ...prev, summary: result }));
+        setData((prev: MetadataParams) => ({ ...prev, summary: result }));
       }
     } catch (error) {
       console.error('AI Generation failed', error);
@@ -430,7 +487,55 @@ function useMetadataAiState({
   };
 }
 
-export function useMetadataEditorDialogState(args: UseMetadataEditorDialogStateArgs) {
+/** Custom React hook that manages metadata editor dialog state. */
+export function useMetadataEditorDialogState(args: UseMetadataEditorDialogStateArgs): {
+  isAiGenerating: boolean;
+  aiThinking: string | null;
+  isThinkingExpanded: boolean;
+  setIsThinkingExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  aiWriteSource: MetadataAiSource;
+  setAiWriteSource: React.Dispatch<React.SetStateAction<MetadataAiSource>>;
+  handleAiGenerate: (
+    action: MetadataAction,
+    source?: MetadataAiSource
+  ) => Promise<void>;
+  isDarkMode: boolean;
+  hasAiSummaryControls: boolean;
+  primarySourceTitle: string;
+  regeneratePrimaryTitle: string;
+  updatePrimaryTitle: string;
+  rewritePrimaryTitle: string;
+  hasNotesSource: boolean;
+  hasPrimarySource: boolean;
+  saveStatus: 'error' | 'saved' | 'saving';
+  handleClose: () => Promise<void>;
+  data: MetadataParams;
+  setData: React.Dispatch<React.SetStateAction<MetadataParams>>;
+  effectiveLanguage: string;
+  activeTab: MetadataTab;
+  setActiveTab: React.Dispatch<React.SetStateAction<MetadataTab>>;
+  isFullscreen: boolean;
+  setIsFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
+  showDiff: boolean;
+  setShowDiff: React.Dispatch<React.SetStateAction<boolean>>;
+  conflicts: Conflict[];
+  baselineData: MetadataParams;
+  setBaselineData: React.Dispatch<React.SetStateAction<MetadataParams>>;
+  history: MetadataParams[];
+  historyIndex: number;
+  restoreMetadataHistory: (index: number) => void;
+  summaryHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  notesHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  privateNotesHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  getConflictRanges: (
+    index: number,
+    field: 'description' | 'resolution'
+  ) => import('../search/useSearchReplace').SearchHighlightRange[];
+  addConflict: () => void;
+  deleteConflict: (id: string) => void;
+  updateConflict: (id: string, field: keyof Conflict, value: string) => void;
+  moveConflict: (index: number, direction: 'up' | 'down') => void;
+} {
   const dataState = useMetadataDataState(args);
   const autosaveState = useMetadataAutosaveState({
     data: dataState.data,

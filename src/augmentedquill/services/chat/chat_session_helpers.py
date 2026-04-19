@@ -66,6 +66,7 @@ def save_chat(project_path: Path, chat_id: str, chat_data: Dict) -> None:
 
 
 def delete_chat(project_path: Path, chat_id: str) -> bool:
+    """Delete chat."""
     chat_file = project_path / "chats" / f"{chat_id}.json"
     if not chat_file.exists():
         return False
@@ -74,6 +75,7 @@ def delete_chat(project_path: Path, chat_id: str) -> bool:
 
 
 def delete_all_chats(project_path: Path) -> None:
+    """Delete all chats."""
     chats_dir = project_path / "chats"
     if chats_dir.exists():
         shutil.rmtree(chats_dir)

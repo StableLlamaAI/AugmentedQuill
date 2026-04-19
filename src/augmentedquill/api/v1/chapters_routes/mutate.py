@@ -7,6 +7,8 @@
 
 """Defines the mutate unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from fastapi import APIRouter, Path as FastAPIPath
 from fastapi.responses import JSONResponse
 
@@ -36,7 +38,7 @@ from augmentedquill.services.projects.projects import (
 router = APIRouter(tags=["Chapters"])
 
 
-def _require_active_project_dir():
+def _require_active_project_dir() -> Any:
     """Return active project path or a standard error response."""
     active = get_active_project_dir()
     if not active:
@@ -47,7 +49,7 @@ def _require_active_project_dir():
 @router.put("/chapters/{chap_id}/metadata")
 async def api_update_chapter_metadata(
     body: ChapterMetadataUpdate, chap_id: int = FastAPIPath(..., ge=0)
-):
+) -> Any:
     """Api Update Chapter Metadata."""
     _, err = _require_active_project_dir()
     if err:
@@ -73,7 +75,7 @@ async def api_update_chapter_metadata(
 @router.put("/chapters/{chap_id}/title")
 async def api_update_chapter_title(
     body: ChapterTitleUpdate, chap_id: int = FastAPIPath(..., ge=0)
-):
+) -> Any:
     """Api Update Chapter Title."""
     _, err = _require_active_project_dir()
     if err:
@@ -102,7 +104,7 @@ async def api_update_chapter_title(
 
 
 @router.post("/chapters")
-async def api_create_chapter(body: ChapterCreate):
+async def api_create_chapter(body: ChapterCreate) -> Any:
     """Api Create Chapter."""
     _, err = _require_active_project_dir()
     if err:
@@ -136,7 +138,7 @@ async def api_create_chapter(body: ChapterCreate):
 @router.put("/chapters/{chap_id}/content")
 async def api_update_chapter_content(
     body: ChapterContentUpdate, chap_id: int = FastAPIPath(..., ge=0)
-):
+) -> Any:
     """Api Update Chapter Content."""
     _, path, _ = _chapter_by_id_or_404(chap_id)
 
@@ -151,7 +153,7 @@ async def api_update_chapter_content(
 @router.put("/chapters/{chap_id}/summary")
 async def api_update_chapter_summary(
     body: ChapterSummaryUpdate, chap_id: int = FastAPIPath(..., ge=0)
-):
+) -> Any:
     """Api Update Chapter Summary."""
     _, err = _require_active_project_dir()
     if err:
@@ -178,7 +180,7 @@ async def api_update_chapter_summary(
 
 
 @router.delete("/chapters/{chap_id}")
-async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)):
+async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)) -> Any:
     """Api Delete Chapter."""
     try:
         delete_chapter(chap_id)
@@ -190,7 +192,7 @@ async def api_delete_chapter(chap_id: int = FastAPIPath(..., ge=0)):
 
 
 @router.post("/chapters/reorder")
-async def api_reorder_chapters(body: ChaptersReorderRequest):
+async def api_reorder_chapters(body: ChaptersReorderRequest) -> Any:
     """Api Reorder Chapters."""
     active, err = _require_active_project_dir()
     if err:
@@ -212,7 +214,7 @@ async def api_reorder_chapters(body: ChaptersReorderRequest):
 
 
 @router.post("/books/reorder")
-async def api_reorder_books(body: BooksReorderRequest):
+async def api_reorder_books(body: BooksReorderRequest) -> Any:
     """Api Reorder Books."""
     active, err = _require_active_project_dir()
     if err:

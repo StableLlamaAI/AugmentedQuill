@@ -62,7 +62,7 @@ const SourcebookListHeader: React.FC<SourcebookListHeaderProps> = ({
   isLight,
   onOpenCreate,
   onToggleAutoSelection,
-}) => {
+}: SourcebookListHeaderProps) => {
   return (
     <div className="flex items-center justify-between px-4 py-4 border-b border-transparent gap-3">
       <div className="flex items-center gap-1.5 min-w-0">
@@ -141,7 +141,15 @@ const DeletedEntryRow: React.FC<{
   entry: SourcebookEntry;
   isLight: boolean;
   t: TFunction;
-}> = ({ entry, isLight, t }) => {
+}> = ({
+  entry,
+  isLight,
+  t,
+}: {
+  entry: SourcebookEntry;
+  isLight: boolean;
+  t: TFunction;
+}) => {
   const CategoryIcon =
     (entry.category && CATEGORY_DETAILS[entry.category]?.icon) || HelpCircle;
   return (
@@ -185,7 +193,7 @@ const SourcebookEntriesPanel: React.FC<SourcebookEntriesPanelProps> = ({
   onEntryHover,
   onEntryHoverLeave,
   onToggleEntry,
-}) => {
+}: SourcebookEntriesPanelProps) => {
   const showDeletedOnly =
     entries.length === 0 && !search.trim() && deletedEntries.length > 0;
 
@@ -210,7 +218,7 @@ const SourcebookEntriesPanel: React.FC<SourcebookEntriesPanelProps> = ({
 
       {entries.length > 0 && (
         <div className="space-y-0.5" role="list">
-          {entries.map((entry) => {
+          {entries.map((entry: SourcebookEntry) => {
             const CategoryIcon =
               (entry.category && CATEGORY_DETAILS[entry.category]?.icon) || HelpCircle;
             const isChecked = checkedIds.includes(entry.id);
@@ -241,7 +249,7 @@ const SourcebookEntriesPanel: React.FC<SourcebookEntriesPanelProps> = ({
             );
           })}
           {!search.trim() &&
-            deletedEntries.map((entry) => (
+            deletedEntries.map((entry: SourcebookEntry) => (
               <DeletedEntryRow
                 key={`deleted-${entry.id}`}
                 entry={entry}
@@ -254,7 +262,7 @@ const SourcebookEntriesPanel: React.FC<SourcebookEntriesPanelProps> = ({
 
       {showDeletedOnly && (
         <div className="space-y-0.5" role="list">
-          {deletedEntries.map((entry) => (
+          {deletedEntries.map((entry: SourcebookEntry) => (
             <DeletedEntryRow
               key={`deleted-${entry.id}`}
               entry={entry}
@@ -367,7 +375,7 @@ export const SourcebookListView: React.FC<SourcebookListViewProps> = ({
   inputBorder,
   inputPlace,
   btnHover,
-}) => {
+}: SourcebookListViewProps) => {
   return (
     <div
       id="sourcebook-list"
@@ -391,7 +399,9 @@ export const SourcebookListView: React.FC<SourcebookListViewProps> = ({
           <input
             type="text"
             value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
+            onChange={(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onSearchChange(event.target.value)
+            }
             placeholder={t('Filter entries...')}
             className={`w-full pl-8 pr-2 py-1.5 text-xs rounded border ${inputBorder} ${inputBg} ${textClass} ${inputPlace} focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors`}
           />
@@ -430,7 +440,9 @@ export const SourcebookListView: React.FC<SourcebookListViewProps> = ({
         onDelete={selectedEntry ? onDeleteEntry : undefined}
         theme={theme}
         baselineEntry={
-          baselineEntries?.find((entry) => entry.id === selectedEntry?.id) ?? null
+          baselineEntries?.find(
+            (entry: SourcebookEntry) => entry.id === selectedEntry?.id
+          ) ?? null
         }
         showDiffForNew={dialogOpenedViaTrigger}
         canAppUndo={canAppUndo}

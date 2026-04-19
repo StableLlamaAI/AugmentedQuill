@@ -88,7 +88,7 @@ const SettingsTabButton: React.FC<SettingsTabButtonProps> = ({
   activeTab,
   isLight,
   onSelectTab,
-}) => (
+}: SettingsTabButtonProps) => (
   <button
     onClick={() => onSelectTab(id)}
     className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
@@ -118,7 +118,7 @@ const GeneralSettingsTab: React.FC<GeneralSettingsTabProps> = ({
   guiLanguage,
   onChangeGuiLanguage,
   t,
-}) => (
+}: GeneralSettingsTabProps) => (
   <div className="flex flex-col space-y-6">
     <div>
       <h3
@@ -141,14 +141,16 @@ const GeneralSettingsTab: React.FC<GeneralSettingsTabProps> = ({
           <select
             id="guiLanguage"
             value={guiLanguage || ''}
-            onChange={(e) => onChangeGuiLanguage(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
+              onChangeGuiLanguage(e.target.value)
+            }
             className={`w-full px-3 py-2 text-sm rounded ${
               isLight
                 ? 'bg-brand-gray-100 text-brand-gray-900 border-brand-gray-200'
                 : 'bg-brand-gray-900 text-brand-gray-100 border-brand-gray-700'
             } border focus:outline-none focus:ring-1 focus:ring-brand-gray-400`}
           >
-            {GUI_LANGUAGE_OPTIONS.map((option) => (
+            {GUI_LANGUAGE_OPTIONS.map((option: { code: string; labelKey: string }) => (
               <option key={option.code} value={option.code}>
                 {t(option.labelKey)}
               </option>
@@ -179,7 +181,7 @@ const AboutSettingsTab: React.FC<AboutSettingsTabProps> = ({
   isLight,
   currentYear,
   browserVersion,
-}) => (
+}: AboutSettingsTabProps) => (
   <div>
     <h3
       className={`text-xl font-semibold mb-4 ${
@@ -246,7 +248,7 @@ const SettingsDialogFooter: React.FC<SettingsDialogFooterProps> = ({
   saveError,
   saveLoading,
   onSave,
-}) => (
+}: SettingsDialogFooterProps) => (
   <div
     className={`p-4 border-t shrink-0 flex justify-end ${
       isLight
@@ -328,7 +330,7 @@ interface SettingsDialogHeaderProps {
 const SettingsDialogHeader: React.FC<SettingsDialogHeaderProps> = ({
   isLight,
   onClose,
-}) => (
+}: SettingsDialogHeaderProps) => (
   <div
     className={`flex items-center justify-between p-4 border-b shrink-0 ${
       isLight
@@ -379,7 +381,7 @@ const SettingsDialogSidebar: React.FC<SettingsDialogSidebarProps> = ({
   activeTab,
   setActiveTab,
   t,
-}) => (
+}: SettingsDialogSidebarProps) => (
   <div
     className={`w-full md:w-64 border-b md:border-b-0 md:border-r p-2 md:p-4 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto ${
       isLight
@@ -498,7 +500,7 @@ const SettingsDialogContent: React.FC<SettingsDialogContentProps> = ({
   currentYear,
   browserVersion,
   t,
-}) => (
+}: SettingsDialogContentProps) => (
   <div
     className={`flex-1 overflow-y-auto p-4 md:p-8 ${
       isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900'
@@ -527,8 +529,8 @@ const SettingsDialogContent: React.FC<SettingsDialogContentProps> = ({
       <GeneralSettingsTab
         isLight={isLight}
         guiLanguage={localSettings.guiLanguage}
-        onChangeGuiLanguage={(language) =>
-          setLocalSettings((prev) => ({ ...prev, guiLanguage: language }))
+        onChangeGuiLanguage={(language: string) =>
+          setLocalSettings((prev: AppSettings) => ({ ...prev, guiLanguage: language }))
         }
         t={t}
       />
@@ -603,7 +605,7 @@ const SettingsDialogLayout: React.FC<SettingsDialogLayoutProps> = ({
   saveError,
   saveLoading,
   onSave,
-}) => (
+}: SettingsDialogLayoutProps) => (
   <div
     ref={dialogRef}
     id="settings-dialog"
@@ -697,7 +699,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   theme,
   defaultPrompts = { system_messages: {}, user_prompts: {} },
   projectLanguages,
-}) => {
+}: SettingsDialogProps) => {
   const [activeTab, setActiveTab] = useState<SettingsTabId>('projects');
   const [saveError, setSaveError] = useState<string>('');
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
@@ -740,7 +742,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setSaveLoading(true);
     try {
       const providers = localSettings.providers || [];
-      const cleanedProviders = providers.map((p) => ({
+      const cleanedProviders = providers.map((p: import('../../types').LLMConfig) => ({
         ...p,
         prompts: normalizeProviderPrompts(p.prompts, DEFAULT_LLM_CONFIG.prompts),
       }));

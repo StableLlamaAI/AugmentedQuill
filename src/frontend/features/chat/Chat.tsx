@@ -126,7 +126,9 @@ export const Chat: React.FC = React.memo(() => {
     setTimeout(() => scrollToBottom('auto'), 0);
   };
 
-  const hasUserMessage = messages.some((msg) => msg.role === 'user');
+  const hasUserMessage = messages.some(
+    (msg: import('../../types').ChatMessage) => msg.role === 'user'
+  );
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
   const contextUsage = useMemo(
     () =>
@@ -231,7 +233,7 @@ export const Chat: React.FC = React.memo(() => {
           </div>
         )}
 
-        {visibleMessages.map((msg, i) => (
+        {visibleMessages.map((msg: import('../../types').ChatMessage, i: number) => (
           <ChatMessageItem
             key={msg.id || `msg-${i}`}
             msg={msg}

@@ -53,6 +53,7 @@ def _apply_replace(
             count = 0
 
             def _replace_word(m: re.Match) -> str:
+                """Replace word."""
                 nonlocal count
                 if jellyfish.soundex(m.group()) == target_code:
                     count += 1
@@ -92,6 +93,7 @@ def _apply_replace_nth(
             current_idx = 0
 
             def _replace_nth_word(m: re.Match) -> str:
+                """Replace nth word."""
                 nonlocal current_idx
                 if jellyfish.soundex(m.group()) == target_code:
                     if current_idx == match_index:
@@ -108,6 +110,7 @@ def _apply_replace_nth(
         current_idx = 0
 
         def _replace_nth(m: re.Match) -> str:
+            """Replace nth."""
             nonlocal current_idx
             if current_idx == match_index:
                 current_idx += 1
@@ -277,6 +280,7 @@ def _replace_in_story_metadata(
     target_field: str | None = None,
     match_index: int | None = None,
 ) -> tuple[int, list[str]]:
+    """Replace in story metadata."""
     from augmentedquill.core.config import load_story_config, save_story_config
 
     story_path = active / "story.json"

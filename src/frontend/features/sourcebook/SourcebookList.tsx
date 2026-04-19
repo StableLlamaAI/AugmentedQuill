@@ -100,7 +100,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     mutatedEntryIds,
     language = 'en',
     baselineEntries,
-  }) => {
+  }: SourcebookListProps) => {
     const { t } = useTranslation();
     const [entries, setEntries] = useState<SourcebookEntry[]>(
       resolveExternalSourcebookEntries(externalEntries, [])
@@ -191,8 +191,12 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     // Compute diff status for each entry relative to the baseline snapshot.
     const createdEntryIds = useMemo<Set<string>>(() => {
       if (!baselineEntries) return new Set();
-      const baselineIds = new Set(baselineEntries.map((b) => b.id));
-      return new Set(entries.filter((e) => !baselineIds.has(e.id)).map((e) => e.id));
+      const baselineIds = new Set(baselineEntries.map((b: SourcebookEntry) => b.id));
+      return new Set(
+        entries
+          .filter((e: SourcebookEntry) => !baselineIds.has(e.id))
+          .map((e: SourcebookEntry) => e.id)
+      );
     }, [entries, baselineEntries]);
 
     useEffect(() => {
@@ -203,23 +207,25 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       if (!baselineEntries) return new Set();
       return new Set(
         entries
-          .filter((e) => {
-            const baseline = baselineEntries.find((b) => b.id === e.id);
+          .filter((e: SourcebookEntry) => {
+            const baseline = baselineEntries.find(
+              (b: SourcebookEntry) => b.id === e.id
+            );
             // Use entryDiffSignature to normalize optional arrays and field
             // ordering so that semantically identical entries stored at different
             // times (e.g. before and after an API refresh) are never falsely
             // flagged as modified.
             return baseline && entryDiffSignature(baseline) !== entryDiffSignature(e);
           })
-          .map((e) => e.id)
+          .map((e: SourcebookEntry) => e.id)
       );
     }, [entries, baselineEntries]);
     const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
 
     const deletedEntries = useMemo<SourcebookEntry[]>(() => {
       if (!baselineEntries) return [];
-      const currentIds = new Set(entries.map((e) => e.id));
-      return baselineEntries.filter((b) => !currentIds.has(b.id));
+      const currentIds = new Set(entries.map((e: SourcebookEntry) => e.id));
+      return baselineEntries.filter((b: SourcebookEntry) => !currentIds.has(b.id));
     }, [entries, baselineEntries]);
 
     const { handleCreate, handleUpdate, handleDelete } = useSourcebookListMutations({

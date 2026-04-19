@@ -61,7 +61,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onNewSession,
   onScratchpadOpen,
   onToggleWebSearch,
-}) => {
+}: ChatHeaderProps) => {
   const reason =
     disabledReason ||
     'Chat is unavailable because no working CHAT model is configured.';

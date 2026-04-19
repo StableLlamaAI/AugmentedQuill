@@ -18,10 +18,32 @@ interface UseSettingsDialogMachineParams {
   settings: AppSettings;
 }
 
+/** Custom React hook that manages settings dialog machine. */
 export function useSettingsDialogMachine({
   isOpen,
   settings,
-}: UseSettingsDialogMachineParams) {
+}: UseSettingsDialogMachineParams): {
+  connectionStatus: Record<string, 'error' | 'idle' | 'success' | 'loading'>;
+  modelStatus: Record<string, 'error' | 'idle' | 'success' | 'loading'>;
+  modelLists: Record<string, string[]>;
+  detectedCapabilities: Record<string, import('../../types').ProviderCapabilities>;
+  localSettings: AppSettings;
+  setLocalSettings: import('react').Dispatch<
+    import('react').SetStateAction<AppSettings>
+  >;
+  editingProviderId: string | null;
+  setEditingProviderId: import('react').Dispatch<
+    import('react').SetStateAction<string | null>
+  >;
+  modelPresets: import('../../services/apiTypes').ModelPresetEntry[];
+  addProvider: () => void;
+  duplicateProvider: (id: string) => void;
+  updateProvider: (
+    id: string,
+    updates: Partial<import('../../types').LLMConfig>
+  ) => void;
+  removeProvider: (id: string) => void;
+} {
   const providerState = useSettingsDialogProviderState({ isOpen, settings });
   const validationState = useSettingsDialogProviderValidation({
     isOpen,

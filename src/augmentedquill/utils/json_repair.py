@@ -58,6 +58,7 @@ def apply_typographic_quotes(text: str, language: str = "en") -> str:
     def _smart_replace(
         text_value: str, quote_char: str, open_q: str, close_q: str
     ) -> str:
+        """Perform a context-aware replacement of straight quotes with typographic quotes."""
         # Preserve escaped quote sequences (e.g. \" or \\') by splitting on
         # unescaped quote characters.
         pattern = r"(?<!\\)" + re.escape(quote_char)
@@ -99,6 +100,7 @@ def repair_json_quotes(json_str: str, language: str = "en") -> str:
         pass
 
     def convert_to_typographic(match: re.Match) -> str:
+        """Helper for to typographic.."""
         prefix = match.group(1)  # e.g., '"text": "'
         content = match.group(2)  # e.g., 'He said "Hello" to me'
         suffix = match.group(3)  # e.g., '"' or '",'

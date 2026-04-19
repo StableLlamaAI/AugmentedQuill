@@ -46,6 +46,7 @@ _RESTORE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    """Return a safe child path.."""
     base_resolved = base_dir.resolve()
     candidate = base_resolved.joinpath(*parts).resolve()
     if not candidate.is_relative_to(base_resolved):
@@ -54,12 +55,14 @@ def _safe_child_path(base_dir: Path, *parts: str) -> Path:
 
 
 def _validate_restore_id(restore_id: str) -> str:
+    """Validate restore id."""
     if not _RESTORE_ID_PATTERN.fullmatch(restore_id or ""):
         raise BadRequestError("Invalid restore_id")
     return restore_id
 
 
 def list_images_response() -> JSONResponse:
+    """List images response."""
     images = get_project_images()
     return JSONResponse(status_code=200, content={"images": images})
 
@@ -96,10 +99,12 @@ def create_image_placeholder_response(payload: dict) -> JSONResponse:
 
 
 def _sanitize_target_name(raw: str) -> str:
+    """Helper for target name.."""
     return "".join(c for c in raw if c.isalnum() or c in "._-").strip()
 
 
 def _get_deleted_images_dir(active: Path) -> Path:
+    """Return deleted images dir."""
     deleted_dir = active / ".aq_history" / "deleted_images"
     deleted_dir.mkdir(parents=True, exist_ok=True)
     return deleted_dir

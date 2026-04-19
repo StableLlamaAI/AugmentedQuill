@@ -30,13 +30,36 @@ type UseChatSessionManagementParams = {
   isChatLoading: boolean;
 };
 
+/** Custom React hook that manages chat session management. */
 export function useChatSessionManagement({
   storyId,
   getSystemPrompt,
   chatMessages,
   setChatMessages,
   isChatLoading,
-}: UseChatSessionManagementParams) {
+}: UseChatSessionManagementParams): {
+  chatHistoryList: ChatSession[];
+  setChatHistoryList: Dispatch<SetStateAction<ChatSession[]>>;
+  currentChatId: string | null;
+  setCurrentChatId: Dispatch<SetStateAction<string | null>>;
+  isIncognito: boolean;
+  setIsIncognito: Dispatch<SetStateAction<boolean>>;
+  allowWebSearch: boolean;
+  setAllowWebSearch: Dispatch<SetStateAction<boolean>>;
+  systemPrompt: string;
+  setSystemPrompt: Dispatch<SetStateAction<string>>;
+  scratchpad: string;
+  setScratchpad: Dispatch<SetStateAction<string>>;
+  incognitoSessions: ChatSession[];
+  setIncognitoSessions: Dispatch<SetStateAction<ChatSession[]>>;
+  refreshChatList: () => Promise<void>;
+  handleNewChat: (incognito?: boolean) => void;
+  handleSelectChat: (id: string) => Promise<void>;
+  handleDeleteChat: (id: string) => Promise<void>;
+  handleDeleteAllChats: () => Promise<void>;
+  onUpdateScratchpad: (content: string) => void;
+  onDeleteScratchpad: () => void;
+} {
   const [chatHistoryList, setChatHistoryList] = useState<ChatSession[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isIncognito, setIsIncognito] = useState(false);
@@ -72,7 +95,7 @@ export function useChatSessionManagement({
           allowWebSearch: false,
           scratchpad: '',
         };
-        setIncognitoSessions((prev) => [newSession, ...prev]);
+        setIncognitoSessions((prev: ChatSession[]) => [newSession, ...prev]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
@@ -92,7 +115,9 @@ export function useChatSessionManagement({
 
   const handleSelectChat = useCallback(
     async (id: string) => {
-      const incognito = incognitoSessions.find((session) => session.id === id);
+      const incognito = incognitoSessions.find(
+        (session: ChatSession) => session.id === id
+      );
       if (incognito) {
         setChatMessages(incognito.messages || []);
         setCurrentChatId(id);
@@ -130,8 +155,8 @@ export function useChatSessionManagement({
       setScratchpad(content);
 
       if (isIncognito && currentChatId) {
-        setIncognitoSessions((prev) =>
-          prev.map((session) =>
+        setIncognitoSessions((prev: ChatSession[]) =>
+          prev.map((session: ChatSession) =>
             session.id === currentChatId ? { ...session, scratchpad: content } : session
           )
         );
@@ -146,8 +171,10 @@ export function useChatSessionManagement({
 
   const handleDeleteChat = useCallback(
     async (id: string) => {
-      if (incognitoSessions.some((session) => session.id === id)) {
-        setIncognitoSessions((prev) => prev.filter((session) => session.id !== id));
+      if (incognitoSessions.some((session: ChatSession) => session.id === id)) {
+        setIncognitoSessions((prev: ChatSession[]) =>
+          prev.filter((session: ChatSession) => session.id !== id)
+        );
         if (currentChatId === id) {
           handleNewChat();
         }
@@ -210,10 +237,12 @@ export function useChatSessionManagement({
 
     if (currentChatId && chatMessages.length > 0 && !isChatLoading) {
       if (isIncognito) {
-        const firstUserMsg = chatMessages.find((message) => message.role === 'user');
+        const firstUserMsg = chatMessages.find(
+          (message: ChatMessage) => message.role === 'user'
+        );
         const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
-        setIncognitoSessions((prev) =>
-          prev.map((session) =>
+        setIncognitoSessions((prev: ChatSession[]) =>
+          prev.map((session: ChatSession) =>
             session.id === currentChatId
               ? {
                   ...session,
@@ -230,7 +259,7 @@ export function useChatSessionManagement({
         timeout = setTimeout(async () => {
           try {
             const firstUserMsg = chatMessages.find(
-              (message) => message.role === 'user'
+              (message: ChatMessage) => message.role === 'user'
             );
             const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
             await api.chat.save(currentChatId, {

@@ -24,6 +24,7 @@ export interface UseSourcebookEntryInteractionsArgs {
   setIsDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+/** Custom React hook that manages sourcebook entry interactions. */
 export function useSourcebookEntryInteractions({
   isAutoSelectionEnabled,
   onToggle,
@@ -32,7 +33,19 @@ export function useSourcebookEntryInteractions({
   setSelectedEntry,
   setDialogOpenedViaTrigger,
   setIsDialogOpen,
-}: UseSourcebookEntryInteractionsArgs) {
+}: UseSourcebookEntryInteractionsArgs): {
+  isLoadingEntry: boolean;
+  hoveredEntry: SourcebookEntry | null;
+  tooltipPos: { x: number; y: number };
+  availableImages: ProjectImage[];
+  handleEntryHover: (
+    event: React.MouseEvent<HTMLButtonElement>,
+    entry: SourcebookEntry
+  ) => void;
+  handleEntryHoverLeave: () => void;
+  handleEntryClick: (entry: SourcebookEntry) => Promise<void>;
+  handleToggleEntry: (id: string, checked: boolean) => void;
+} {
   const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [hoveredEntry, setHoveredEntry] = useState<SourcebookEntry | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -58,7 +71,7 @@ export function useSourcebookEntryInteractions({
       setIsLoadingEntry(true);
       try {
         const all = await listSourcebookEntries();
-        const full = all.find((x) => x.id === entry.id) || entry;
+        const full = all.find((x: SourcebookEntry) => x.id === entry.id) || entry;
         setEntries(all);
         setSelectedEntry(full);
         setDialogOpenedViaTrigger(createdEntryIdsRef.current.has(entry.id));
@@ -88,7 +101,7 @@ export function useSourcebookEntryInteractions({
 
   useEffect(() => {
     if (hoveredEntry && hoveredEntry.images?.length > 0) {
-      listProjectImages().then((images) => {
+      listProjectImages().then((images: ProjectImage[]) => {
         setAvailableImages(images);
       });
     }

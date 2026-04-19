@@ -5,11 +5,11 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-"""Shared generation preparation helpers used by streaming and non-streaming
-story flows."""
+"""Defines the story generation common unit so this responsibility stays isolated, testable, and easy to evolve."""
 
 from __future__ import annotations
 
+from typing import Any
 import re
 from pathlib import Path
 
@@ -42,7 +42,8 @@ from augmentedquill.services.story.story_api_state_ops import (
 )
 
 
-def _resolve_story_draft_path(active, story: dict):
+def _resolve_story_draft_path(active: Any, story: dict) -> Any:
+    """Resolve story draft path."""
     return active / str(story.get("content_file") or "content.md")
 
 
@@ -201,6 +202,7 @@ def gather_writing_context(
 
 
 def _clear_summary_for_rewrite(prepared: dict, active: Path) -> None:
+    """Helper for summary for rewrite.."""
     target = prepared.get("target")
     action = prepared.get("action")
     if action != "rewrite" or target not in (
@@ -243,6 +245,7 @@ def _clear_summary_for_rewrite(prepared: dict, active: Path) -> None:
 
 
 def _restore_summary_for_rewrite(prepared: dict) -> None:
+    """Helper for summary for rewrite.."""
     backup = prepared.get("_summary_rewrite_backup")
     if not backup:
         return

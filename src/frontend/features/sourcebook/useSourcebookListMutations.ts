@@ -44,6 +44,7 @@ interface UseSourcebookListMutationsArgs {
   loadEntries: (query?: string) => Promise<void>;
 }
 
+/** Custom React hook that manages sourcebook list mutations. */
 export function useSourcebookListMutations({
   entries,
   selectedEntry,
@@ -54,7 +55,11 @@ export function useSourcebookListMutations({
   baselineEntries,
   onMutated,
   loadEntries,
-}: UseSourcebookListMutationsArgs) {
+}: UseSourcebookListMutationsArgs): {
+  handleCreate: (entry: SourcebookUpsertPayload) => Promise<void>;
+  handleUpdate: (entry: SourcebookUpsertPayload) => Promise<void>;
+  handleDelete: (id: string) => Promise<void>;
+} {
   const syncEntries = useCallback(
     async (updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]) => {
       if (Array.isArray(externalEntries)) {
@@ -64,9 +69,11 @@ export function useSourcebookListMutations({
         }
 
         if (updater) {
-          setEntries((prev) => filterSourcebookEntries(updater(prev), search));
+          setEntries((prev: SourcebookEntry[]) =>
+            filterSourcebookEntries(updater(prev), search)
+          );
         } else {
-          setEntries((prev) => {
+          setEntries((prev: SourcebookEntry[]) => {
             const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
             return filterSourcebookEntries(resolved, search);
           });
@@ -82,7 +89,7 @@ export function useSourcebookListMutations({
   const handleCreate = useCallback(
     async (entry: SourcebookUpsertPayload) => {
       const created = await createSourcebookEntry(entry);
-      await syncEntries((prev) => [...prev, created]);
+      await syncEntries((prev: SourcebookEntry[]) => [...prev, created]);
       let createdId = created.id;
       await onMutated?.({
         label: `Create sourcebook entry: ${entry.name}`,
@@ -97,7 +104,9 @@ export function useSourcebookListMutations({
         },
         entryId: created.id,
         entryExistsInBaseline: Boolean(
-          baselineEntries?.some((baselineEntry) => baselineEntry.id === created.id)
+          baselineEntries?.some(
+            (baselineEntry: SourcebookEntry) => baselineEntry.id === created.id
+          )
         ),
         updatedEntry: created,
       });
@@ -111,10 +120,10 @@ export function useSourcebookListMutations({
         return;
       }
 
-      const previous = entries.find((value) => value.id === entry.id);
+      const previous = entries.find((value: SourcebookEntry) => value.id === entry.id);
       const previousId = entry.id;
       const updated = await updateSourcebookEntry(entry.id, entry);
-      await syncEntries((prev) =>
+      await syncEntries((prev: SourcebookEntry[]) =>
         updateSourcebookEntryInList(prev, previousId, updated)
       );
 
@@ -126,7 +135,9 @@ export function useSourcebookListMutations({
       }
 
       const entryExistsInBaseline = Boolean(
-        baselineEntries?.some((baselineEntry) => baselineEntry.id === entry.id)
+        baselineEntries?.some(
+          (baselineEntry: SourcebookEntry) => baselineEntry.id === entry.id
+        )
       );
       let activeId = updated.id;
       await onMutated?.({
@@ -171,15 +182,19 @@ export function useSourcebookListMutations({
 
   const handleDelete = useCallback(
     async (id: string) => {
-      const deletedEntry = entries.find((entry) => entry.id === id);
+      const deletedEntry = entries.find((entry: SourcebookEntry) => entry.id === id);
       await deleteSourcebookEntry(id);
-      await syncEntries((prev) => prev.filter((entry) => entry.id !== id));
+      await syncEntries((prev: SourcebookEntry[]) =>
+        prev.filter((entry: SourcebookEntry) => entry.id !== id)
+      );
       if (!deletedEntry) {
         return;
       }
 
       const entryExistsInBaseline = Boolean(
-        baselineEntries?.some((baselineEntry) => baselineEntry.id === deletedEntry.id)
+        baselineEntries?.some(
+          (baselineEntry: SourcebookEntry) => baselineEntry.id === deletedEntry.id
+        )
       );
       let activeId = deletedEntry.id;
       await onMutated?.({

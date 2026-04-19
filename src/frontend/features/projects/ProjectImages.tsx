@@ -35,6 +35,7 @@ import { AppTheme, AppSettings } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
+import type { PromptPopupState } from './hooks/useImageGeneration';
 import { useImageGeneration } from './hooks/useImageGeneration';
 import { useImageUpload } from './hooks/useImageUpload';
 
@@ -81,7 +82,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   onUpdateSettings,
   onInsert,
   onRecordHistory,
-}) => {
+}: ProjectImagesProps) => {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [edits, setEdits] = useState<
@@ -134,7 +135,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     field: 'description' | 'title',
     val: string
   ) => {
-    setEdits((prev) => ({
+    setEdits((prev: Record<string, { description?: string; title?: string }>) => ({
       ...prev,
       [filename]: {
         ...prev[filename],
@@ -171,7 +172,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   });
 
   useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
-    setPromptPopup((prev) => ({ ...prev, isOpen: false }))
+    setPromptPopup((prev: PromptPopupState) => ({ ...prev, isOpen: false }))
   );
 
   const {
@@ -195,7 +196,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     if (!edit) return;
 
     // Preserve existing fields when only one metadata field is edited.
-    const original = images.find((i) => i.filename === filename);
+    const original = images.find((i: ImageEntry) => i.filename === filename);
     if (!original) return;
 
     const newDesc =
@@ -207,14 +208,14 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     try {
       await api.projects.updateImage(filename, newDesc, newTitle);
       // Mirror persisted metadata immediately for responsive editing feedback.
-      setImages((prev) =>
-        prev.map((img) =>
+      setImages((prev: ImageEntry[]) =>
+        prev.map((img: ImageEntry) =>
           img.filename === filename
             ? { ...img, description: newDesc, title: newTitle }
             : img
         )
       );
-      setEdits((prev) => {
+      setEdits((prev: Record<string, { description?: string; title?: string }>) => {
         const next = { ...prev };
         delete next[filename];
         return next;
@@ -289,7 +290,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         role="button"
         tabIndex={0}
         aria-label="Project images drop zone"
-        onKeyDown={(e) => {
+        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             handleUploadClick();
@@ -370,9 +371,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500`}
                     placeholder="Generic style for all images..."
                     value={imageStyle}
-                    onChange={(e) =>
-                      onUpdateSettings?.(e.target.value, imageAdditionalInfo)
-                    }
+                    onChange={(
+                      e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                    ) => onUpdateSettings?.(e.target.value, imageAdditionalInfo)}
                   />
                 </div>
                 <div>
@@ -385,7 +386,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500 min-h-[60px] resize-y`}
                     placeholder="Extra details passed to the prompt generator..."
                     value={imageAdditionalInfo}
-                    onChange={(e) => onUpdateSettings?.(imageStyle, e.target.value)}
+                    onChange={(
+                      e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                    ) => onUpdateSettings?.(imageStyle, e.target.value)}
                   />
                 </div>
               </div>
@@ -431,13 +434,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {images.map((img) => (
+              {images.map((img: ImageEntry) => (
                 <div
                   key={img.filename}
                   role="button"
                   tabIndex={0}
                   aria-label={`Image card ${img.filename}`}
-                  onKeyDown={(e) => {
+                  onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       handleUploadClick(img.filename);
@@ -448,22 +451,24 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       ? 'border-4 border-dashed border-brand-blue-500 bg-brand-blue-50 dark:bg-brand-blue-900/20 z-10'
                       : `border ${borderClass} hover:border-brand-gray-300 dark:hover:border-brand-gray-600`
                   }`}
-                  onDragOver={(e) => {
+                  onDragOver={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     e.stopPropagation();
                   }}
-                  onDragEnter={(e) => {
+                  onDragEnter={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     setDragTarget(img.filename);
                   }}
-                  onDragLeave={(e) => {
+                  onDragLeave={(e: React.DragEvent<HTMLDivElement>) => {
                     e.preventDefault();
                     // Only clear if we're actually leaving the container, not entering a child
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                       setDragTarget(null);
                     }
                   }}
-                  onDrop={(e) => handleCardDrop(e, img.filename)}
+                  onDrop={(e: React.DragEvent<HTMLDivElement>) =>
+                    handleCardDrop(e, img.filename)
+                  }
                 >
                   {dragTarget === img.filename && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-brand-blue-500/10 backdrop-blur-[1px] rounded-lg pointer-events-none">
@@ -539,9 +544,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           ? edits[img.filename].title
                           : img.title || ''
                       }
-                      onChange={(e) =>
-                        handleMetadataChange(img.filename, 'title', e.target.value)
-                      }
+                      onChange={(
+                        e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                      ) => handleMetadataChange(img.filename, 'title', e.target.value)}
                     />
                     <textarea
                       lang={projectLanguage}
@@ -552,7 +557,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           ? edits[img.filename].description
                           : img.description
                       }
-                      onChange={(e) =>
+                      onChange={(
+                        e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                      ) =>
                         handleMetadataChange(
                           img.filename,
                           'description',
@@ -648,8 +655,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label={`Preview of ${selectedImage.filename}`}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
+            onClick={(e: React.MouseEvent<HTMLDivElement, MouseEvent>) =>
+              e.stopPropagation()
+            }
+            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
               if (e.key === 'Escape') {
                 e.preventDefault();
                 setSelectedImage(null);

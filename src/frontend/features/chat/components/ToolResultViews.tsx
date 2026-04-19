@@ -24,6 +24,9 @@ type SearchResult = {
 export const WebSearchResults: React.FC<{ content: string; name: string }> = ({
   content,
   name,
+}: {
+  content: string;
+  name: string;
 }) => {
   try {
     const data = JSON.parse(content);
@@ -80,7 +83,11 @@ export const WebSearchResults: React.FC<{ content: string; name: string }> = ({
   }
 };
 
-export const VisitPageResult: React.FC<{ content: string }> = ({ content }) => {
+export const VisitPageResult: React.FC<{ content: string }> = ({
+  content,
+}: {
+  content: string;
+}) => {
   try {
     const data = JSON.parse(content);
     return (

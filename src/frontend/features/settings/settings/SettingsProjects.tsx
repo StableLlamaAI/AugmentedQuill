@@ -66,7 +66,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   activeProjectStats,
   theme,
   languages,
-}) => {
+}: SettingsProjectsProps) => {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
   const [tempLang, setTempLang] = useState('');
@@ -171,14 +171,14 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
             ref={fileInputRef}
             className="hidden"
             accept=".zip"
-            onChange={(e) => {
+            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) => {
               if (e.target.files?.[0]) onImportProject(e.target.files[0]);
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}
           />
           <Button
             theme={theme}
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
               e.currentTarget.blur();
               onRefreshProjects();
             }}
@@ -202,7 +202,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {projects.map((proj) => (
+        {projects.map((proj: ProjectMetadata) => (
           <div
             key={proj.id}
             className={`group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-all gap-3 ${
@@ -228,13 +228,15 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                   <div className="flex items-center space-x-2">
                     <input
                       value={tempName}
-                      onChange={(e) => setTempName(e.target.value)}
+                      onChange={(
+                        e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                      ) => setTempName(e.target.value)}
                       className={`border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 w-full ${
                         isLight
                           ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
                           : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
                       }`}
-                      onKeyDown={(e) => {
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                         if (e.key === 'Enter') {
                           onRenameProject(proj.id, tempName, tempLang);
                           setEditingNameId(null);
@@ -243,14 +245,16 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                     />
                     <select
                       value={tempLang}
-                      onChange={(e) => setTempLang(e.target.value)}
+                      onChange={(
+                        e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                      ) => setTempLang(e.target.value)}
                       className={`ml-2 border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 ${
                         isLight
                           ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
                           : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
                       }`}
                     >
-                      {languages.map((lng) => (
+                      {languages.map((lng: string) => (
                         <option key={lng} value={lng}>
                           {lng.toUpperCase()}
                         </option>
@@ -374,7 +378,9 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                             : 'bg-brand-gray-950 border-brand-gray-700'
                         }`}
                         value={activeProjectType}
-                        onChange={(e) => {
+                        onChange={(
+                          e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                        ) => {
                           onConvertProject(e.target.value);
                         }}
                       >

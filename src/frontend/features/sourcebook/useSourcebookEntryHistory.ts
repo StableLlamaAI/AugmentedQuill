@@ -57,7 +57,7 @@ export const useSourcebookEntryHistory = ({
       return;
     }
 
-    setHistory((prev) => {
+    setHistory((prev: SourcebookEntryHistoryState[]) => {
       const next = [...prev.slice(0, idx + 1), currentState];
       return next.length > 100 ? next.slice(next.length - 100) : next;
     });

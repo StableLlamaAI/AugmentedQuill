@@ -39,6 +39,7 @@ def _normalize_model_type(model_type: str | None) -> str:
 def _resolve_stream_selected_name(
     payload: dict, machine: dict, model_type: str
 ) -> str | None:
+    """Resolve stream selected name."""
     selected_name = (payload or {}).get("model_name")
     if selected_name:
         return selected_name

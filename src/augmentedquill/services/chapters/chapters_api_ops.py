@@ -31,6 +31,7 @@ def _resolve_title(path: Path, chapter_entry: dict) -> str:
 
 
 def _normalize_conflicts(conflicts: list) -> list:
+    """Normalize conflicts."""
     normalized = conflicts or []
     for index, conflict in enumerate(normalized):
         if isinstance(conflict, dict) and "id" not in conflict:
@@ -62,6 +63,7 @@ def build_chapter_entry(
 
 
 def list_chapters_payload(active: Path | None) -> list[dict]:
+    """List chapters payload."""
     files = _scan_chapter_files()
     if not active:
         return []

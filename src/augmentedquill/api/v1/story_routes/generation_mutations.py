@@ -7,6 +7,8 @@
 
 """Defines the generation mutations unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -25,7 +27,7 @@ from augmentedquill.services.story.story_generation_ops import (
 router = APIRouter(tags=["Story"])
 
 
-async def _dispatch_generation(request: Request, handler):
+async def _dispatch_generation(request: Request, handler: Any) -> Any:
     """Parse body, call generation handler, and map domain exceptions."""
     try:
         payload = await parse_json_body(request)
@@ -39,7 +41,8 @@ async def _dispatch_generation(request: Request, handler):
 async def api_story_story_summary(request: Request) -> JSONResponse:
     """Api Story Story Summary."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         mode = (payload.get("mode") or "").lower()
         return await generate_story_summary(mode=mode, payload=payload)
 
@@ -50,7 +53,8 @@ async def api_story_story_summary(request: Request) -> JSONResponse:
 async def api_story_summary(request: Request) -> JSONResponse:
     """Api Story Summary."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         chap_id = payload.get("chap_id")
         mode = (payload.get("mode") or "").lower()
         return await generate_chapter_summary(
@@ -64,7 +68,8 @@ async def api_story_summary(request: Request) -> JSONResponse:
 async def api_story_write(request: Request) -> JSONResponse:
     """Api Story Write."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         chap_id = payload.get("chap_id")
         return await write_chapter_from_summary(chap_id=chap_id, payload=payload)
 
@@ -75,7 +80,8 @@ async def api_story_write(request: Request) -> JSONResponse:
 async def api_story_continue(request: Request) -> JSONResponse:
     """Api Story Continue."""
 
-    async def _handler(payload: dict):
+    async def _handler(payload: dict) -> Any:
+        """Helper for the requested value.."""
         chap_id = payload.get("chap_id")
         return await continue_chapter_from_summary(chap_id=chap_id, payload=payload)
 

@@ -174,6 +174,7 @@ def _rank_and_limit_keywords(
     lowered_description = (description or "").lower()
 
     def _score(keyword: str) -> int:
+        """Helper for the requested value.."""
         score = 0
         if keyword == lowered_name:
             score += 200

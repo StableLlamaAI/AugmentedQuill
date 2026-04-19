@@ -11,12 +11,14 @@ from fastapi.responses import JSONResponse
 
 
 def ok_json(status_code: int = 200, **extra: object) -> JSONResponse:
+    """Helper for json.."""
     body: dict[str, object] = {"ok": True}
     body.update(extra)
     return JSONResponse(status_code=status_code, content=body)
 
 
 def error_json(detail: str, status_code: int = 400, **extra: object) -> JSONResponse:
+    """Helper for json.."""
     body: dict[str, object] = {"ok": False, "detail": detail}
     body.update(extra)
     return JSONResponse(status_code=status_code, content=body)

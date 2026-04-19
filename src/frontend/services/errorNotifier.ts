@@ -9,7 +9,10 @@
  * Defines the error notifier unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-export function formatError(error: unknown, fallback = 'Unknown error'): string {
+export function formatError(
+  error: unknown,
+  fallback: string = 'Unknown error'
+): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error.trim()) return error;
   return fallback;
@@ -21,10 +24,12 @@ export function formatError(error: unknown, fallback = 'Unknown error'): string 
  */
 let _dispatch: ((message: string) => void) | null = null;
 
+/** Set error dispatcher. */
 export function setErrorDispatcher(fn: (message: string) => void): void {
   _dispatch = fn;
 }
 
+/** Helper for error. */
 export function notifyError(message: string, error?: unknown): void {
   if (error !== undefined) {
     console.error(message, error);

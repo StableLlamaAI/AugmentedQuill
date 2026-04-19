@@ -23,6 +23,7 @@ interface UseChatMessagesResult {
   visibleMessages: ChatMessage[];
 }
 
+/** Custom React hook that manages chat messages. */
 export function useChatMessages(
   messages: ChatMessage[],
   currentSessionId: string | null | undefined
@@ -37,7 +38,7 @@ export function useChatMessages(
   useEffect(() => {
     if (displayCount >= deferredMessages.length) return;
     const raf = requestAnimationFrame(() => {
-      setDisplayCount((prev) =>
+      setDisplayCount((prev: number) =>
         Math.min(prev + INITIAL_DISPLAY, deferredMessages.length)
       );
     });

@@ -60,7 +60,7 @@ const App: React.FC = () => {
 
   const addToast = useToast();
   useEffect(() => {
-    setErrorDispatcher((msg) => addToast(msg, 'error'));
+    setErrorDispatcher((msg: string) => addToast(msg, 'error'));
   }, [addToast]);
 
   const {
@@ -91,7 +91,7 @@ const App: React.FC = () => {
     advanceBaselineToCurrentStory,
     patchSourcebook,
     isChapterLoading,
-  } = useStory({ confirm, alert: (msg) => void alert(msg) });
+  } = useStory({ confirm, alert: (msg: string) => void alert(msg) });
 
   // Stable ref to avoid recreating callbacks that read story state during
   // streaming (e.g. onProseChunk).
@@ -108,7 +108,9 @@ const App: React.FC = () => {
     redo,
   });
 
-  const activeChapter = story.chapters.find((c) => c.id === currentChapterId);
+  const activeChapter = story.chapters.find(
+    (c: import('./types').Chapter) => c.id === currentChapterId
+  );
   const currentChapter =
     story.projectType === 'short-story'
       ? story.draft
@@ -161,7 +163,7 @@ const App: React.FC = () => {
     () =>
       story.chapters
         .map(
-          (ch) =>
+          (ch: import('./types').Chapter) =>
             `${ch.id}:${ch.title}:${ch.summary ?? ''}:${ch.book_id ?? ''}:${
               ch.conflicts?.length ?? 0
             }`
@@ -172,7 +174,7 @@ const App: React.FC = () => {
 
   const sidebarStoryChapters = useMemo(
     () =>
-      story.chapters.map((ch) => ({
+      story.chapters.map((ch: import('./types').Chapter) => ({
         ...ch,
         content: '',
       })),
@@ -181,12 +183,15 @@ const App: React.FC = () => {
 
   const sidebarStoryBooks = useMemo(
     () =>
-      (story.books || []).map((book) => ({
+      (story.books || []).map((book: import('./types').Book) => ({
         ...book,
       })),
     [
       (story.books || [])
-        .map((book) => `${book.id}:${book.title}:${book.summary ?? ''}`)
+        .map(
+          (book: import('./types').Book) =>
+            `${book.id}:${book.title}:${book.summary ?? ''}`
+        )
         .join('|'),
     ]
   );
@@ -203,7 +208,7 @@ const App: React.FC = () => {
   // This prevents sidebarControls from rebuilding on every debounced keystroke,
   // which in turn keeps AppMainLayout.React.memo valid during editing.
   const baselineChaptersMetaKey = baselineState.chapters
-    .map((c) => `${c.id}:${c.title}:${c.summary ?? ''}`)
+    .map((c: import('./types').Chapter) => `${c.id}:${c.title}:${c.summary ?? ''}`)
     .join('|');
   const sidebarBaselineState = useMemo(
     () => baselineState,
@@ -388,23 +393,29 @@ const App: React.FC = () => {
     const newMuts: SessionMutation[] = [];
     const callResults = muts._call_results || [];
 
-    callResults.forEach((res) => {
-      const factory = MUTATION_TOOL_REGISTRY[res.name];
-      if (!factory) return;
-      const produced = factory({ args: res.args || {}, result: res.result || {} });
-      if (!produced) return;
-      const items = Array.isArray(produced) ? produced : [produced];
-      newMuts.push(...items);
-    });
+    callResults.forEach(
+      (res: {
+        name: string;
+        args: Record<string, unknown>;
+        result: Record<string, unknown>;
+      }) => {
+        const factory = MUTATION_TOOL_REGISTRY[res.name];
+        if (!factory) return;
+        const produced = factory({ args: res.args || {}, result: res.result || {} });
+        if (!produced) return;
+        const items = Array.isArray(produced) ? produced : [produced];
+        newMuts.push(...items);
+      }
+    );
 
     if (newMuts.length > 0) {
-      setSessionMutations((prev) => {
+      setSessionMutations((prev: SessionMutation[]) => {
         const combined = [...prev];
-        newMuts.forEach((m) => {
+        newMuts.forEach((m: SessionMutation) => {
           // Avoid exact duplicates in the same session
           if (
             !combined.some(
-              (x) =>
+              (x: SessionMutation) =>
                 x.type === m.type && x.label === m.label && x.targetId === m.targetId
             )
           ) {
@@ -517,8 +528,8 @@ const App: React.FC = () => {
   const sourcebookMutationEntryIds = useMemo(() => {
     return new Set(
       sessionMutations
-        .filter((m) => m.type === 'sourcebook' && m.targetId)
-        .map((m) => m.targetId as string)
+        .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)
+        .map((m: SessionMutation) => m.targetId as string)
     );
   }, [sessionMutations]);
 
@@ -593,7 +604,9 @@ const App: React.FC = () => {
         if (currentStory.projectType === 'short-story' && currentStory.draft) {
           unit = currentStory.draft;
         } else {
-          const found = currentStory.chapters.find((c) => Number(c.id) === chapId);
+          const found = currentStory.chapters.find(
+            (c: import('./types').Chapter) => Number(c.id) === chapId
+          );
           unit = found ?? null;
         }
         if (!unit) return;
@@ -656,7 +669,11 @@ const App: React.FC = () => {
       [updateChapter]
     ),
     onMutations: onToolMutations,
-    pushExternalHistoryEntry: (params) => {
+    pushExternalHistoryEntry: (params: {
+      label: string;
+      onUndo?: () => Promise<void>;
+      onRedo?: () => Promise<void>;
+    }) => {
       pushExternalHistoryEntry?.(params);
     },
     requestToolCallLoopAccess,
@@ -862,7 +879,9 @@ const App: React.FC = () => {
     }) => {
       const entryExistsInBaseline = Boolean(
         params.entryExistsInBaseline ??
-        baselineState.sourcebook?.some((entry) => entry.id === params.entryId)
+        baselineState.sourcebook?.some(
+          (entry: SourcebookEntry) => entry.id === params.entryId
+        )
       );
 
       if (params.updatedEntry !== undefined) {
@@ -914,7 +933,9 @@ const App: React.FC = () => {
     () =>
       currentChapter?.scope === 'story'
         ? baselineState.draft?.content
-        : baselineState.chapters.find((c) => c.id === currentChapter?.id)?.content,
+        : baselineState.chapters.find(
+            (c: import('./types').Chapter) => c.id === currentChapter?.id
+          )?.content,
     [
       currentChapter?.scope,
       currentChapter?.id,
@@ -1195,13 +1216,17 @@ const App: React.FC = () => {
         activeChapterId:
           currentChapterId !== null ? parseInt(currentChapterId, 10) : null,
         storyLanguage: story.language || 'en',
-        onJumpToPosition: (start, end) => {
+        onJumpToPosition: (start: number, end: number) => {
           editorRef.current?.jumpToPosition(start, end);
         },
         onStoryChanged: () => void refreshStory(),
-        onNavigateToChapter: (chapId, jumpStart, jumpEnd) => {
-          setMetadataDialogCloseTrigger((c) => c + 1);
-          setSourcebookDialogCloseTrigger((c) => c + 1);
+        onNavigateToChapter: (
+          chapId: number,
+          jumpStart: number | undefined,
+          jumpEnd: number | undefined
+        ) => {
+          setMetadataDialogCloseTrigger((c: number) => c + 1);
+          setSourcebookDialogCloseTrigger((c: number) => c + 1);
           if (jumpStart !== undefined && jumpEnd !== undefined) {
             pendingJumpRef.current = {
               chapterId: String(chapId),
@@ -1211,11 +1236,11 @@ const App: React.FC = () => {
           }
           handleChapterSelect(String(chapId));
         },
-        onNavigateToSourcebookEntry: (entryId) => {
-          setMetadataDialogCloseTrigger((c) => c + 1);
+        onNavigateToSourcebookEntry: (entryId: string) => {
+          setMetadataDialogCloseTrigger((c: number) => c + 1);
           openSourcebookEntryDialog(entryId);
         },
-        onNavigateToStoryMetadata: (field) => {
+        onNavigateToStoryMetadata: (field: string) => {
           const tab: 'summary' | 'notes' | 'private' | 'conflicts' =
             field === 'story_summary'
               ? 'summary'
@@ -1226,7 +1251,7 @@ const App: React.FC = () => {
                   : field.startsWith('conflicts')
                     ? 'conflicts'
                     : 'summary';
-          setSourcebookDialogCloseTrigger((c) => c + 1);
+          setSourcebookDialogCloseTrigger((c: number) => c + 1);
           openStoryMetadataDialog(tab);
         },
       }}
