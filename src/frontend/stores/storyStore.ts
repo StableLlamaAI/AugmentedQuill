@@ -13,6 +13,7 @@
  */
 
 import { create, StoreApi } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { StoryState, SourcebookEntry } from '../types';
 import type { StoryHistoryEntry } from '../features/story/historyUtils';
 
@@ -223,53 +224,108 @@ export const useStoryStore = create<StoryStoreState>()(
 // slice they need, avoiding re-renders when unrelated story data changes.
 // ---------------------------------------------------------------------------
 
+export type StoryMetadataSnapshot = Pick<
+  StoryState,
+  | 'id'
+  | 'title'
+  | 'summary'
+  | 'notes'
+  | 'private_notes'
+  | 'styleTags'
+  | 'draft'
+  | 'projectType'
+  | 'language'
+  | 'conflicts'
+>;
+
+type StoryHistorySnapshot = {
+  canUndo: boolean;
+  canRedo: boolean;
+  historyIndex: number;
+  historySize: number;
+  nextUndoLabel: string | null;
+  nextRedoLabel: string | null;
+  undoOptions: Array<{
+    id: string;
+    label: string;
+    steps: number;
+  }>;
+  redoOptions: Array<{
+    id: string;
+    label: string;
+    steps: number;
+  }>;
+};
+
 /** Subscribe to story metadata only (title, summary, tags, notes, language, etc.). */
-export function useStoryMeta() {
-  return useStoryStore((s: StoryStoreState) => s.story);
+export function useStoryMeta(): StoryMetadataSnapshot {
+  return useStoryStore(
+    useShallow(
+      (s: StoryStoreState): StoryMetadataSnapshot => ({
+        id: s.story.id,
+        title: s.story.title,
+        summary: s.story.summary,
+        notes: s.story.notes,
+        private_notes: s.story.private_notes,
+        styleTags: s.story.styleTags,
+        draft: s.story.draft,
+        projectType: s.story.projectType,
+        language: s.story.language,
+        conflicts: s.story.conflicts,
+      })
+    )
+  );
+}
+
+/** Subscribe only to the current project language. */
+export function useStoryLanguage(): StoryState['language'] {
+  return useStoryStore((s: StoryStoreState) => s.story.language);
 }
 
 /** Subscribe to the chapter list. */
-export function useStoryChaptersMeta() {
+export function useStoryChaptersMeta(): StoryState['chapters'] {
   return useStoryStore((s: StoryStoreState) => s.story.chapters);
 }
 
 /** Subscribe to the books list. */
-export function useStoryBooks() {
+export function useStoryBooks(): StoryState['books'] {
   return useStoryStore((s: StoryStoreState) => s.story.books);
 }
 
 /** Subscribe to the sourcebook entries list. */
-export function useStorySourcebook() {
+export function useStorySourcebook(): StoryState['sourcebook'] {
   return useStoryStore((s: StoryStoreState) => s.story.sourcebook);
 }
 
 /** Subscribe to the baseline state (for diff highlighting). */
-export function useStoryBaseline() {
+export function useStoryBaseline(): StoryState {
   return useStoryStore((s: StoryStoreState) => s.baselineState);
 }
 
 /** Subscribe to undo/redo availability. */
-export function useStoryHistoryState() {
-  return useStoryStore((s: StoryStoreState) => ({
-    canUndo: s.currentIndex > 0,
-    canRedo: s.currentIndex < s.history.length - 1,
-    historyIndex: s.currentIndex,
-    historySize: s.history.length,
-    nextUndoLabel: s.currentIndex > 0 ? s.history[s.currentIndex].label : null,
-    nextRedoLabel:
-      s.currentIndex < s.history.length - 1
-        ? s.history[s.currentIndex + 1].label
-        : null,
-    undoOptions: buildHistoryOptions(s.history, s.currentIndex, 'undo'),
-    redoOptions: buildHistoryOptions(s.history, s.currentIndex, 'redo'),
-  }));
+export function useStoryHistoryState(): StoryHistorySnapshot {
+  return useStoryStore(
+    useShallow((s: StoryStoreState) => ({
+      canUndo: s.currentIndex > 0,
+      canRedo: s.currentIndex < s.history.length - 1,
+      historyIndex: s.currentIndex,
+      historySize: s.history.length,
+      nextUndoLabel: s.currentIndex > 0 ? s.history[s.currentIndex].label : null,
+      nextRedoLabel:
+        s.currentIndex < s.history.length - 1
+          ? s.history[s.currentIndex + 1].label
+          : null,
+      undoOptions: buildHistoryOptions(s.history, s.currentIndex, 'undo'),
+      redoOptions: buildHistoryOptions(s.history, s.currentIndex, 'redo'),
+    }))
+  );
 }
 
 function buildHistoryOptions(
   history: StoryHistoryEntry[],
   currentIndex: number,
   direction: 'undo' | 'redo'
-) {
+): Array<{ id: string; label: string; steps: number }> {
   const options: Array<{ id: string; label: string; steps: number }> = [];
   if (direction === 'undo') {
     for (let idx = currentIndex; idx > 0 && options.length < 10; idx -= 1) {
@@ -300,6 +356,6 @@ function buildHistoryOptions(
 // ---------------------------------------------------------------------------
 
 /** Reset the store to initial state. Use in beforeEach in unit tests. */
-export function resetStoryStore() {
+export function resetStoryStore(): void {
   useStoryStore.setState(buildInitialState());
 }

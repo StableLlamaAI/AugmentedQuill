@@ -16,7 +16,7 @@
 
 import { create, StoreApi } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ViewMode, EditorSettings, MetadataTab } from '../types';
+import type { ViewMode, MetadataTab } from '../types';
 
 // ---------------------------------------------------------------------------
 // Dialog state types
@@ -99,7 +99,7 @@ export const useUIStore = create<UIStoreState>()(
   persist(
     (
       set: StoreApi<UIStoreState>['setState'],
-      get: StoreApi<UIStoreState>['getState']
+      _get: StoreApi<UIStoreState>['getState']
     ) => ({
       // ── Panel state (persisted) ──────────────────────────────────────────
       isChatOpen: false,
@@ -215,7 +215,7 @@ export function useSourcebookDialog(): SourcebookDialogState {
 // ---------------------------------------------------------------------------
 
 /** Reset the UI store to its initial state. Use in beforeEach in unit tests. */
-export function resetUIStore() {
+export function resetUIStore(): void {
   useUIStore.setState({
     isChatOpen: false,
     isSidebarOpen: false,

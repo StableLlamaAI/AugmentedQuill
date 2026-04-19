@@ -22,7 +22,7 @@ import {
   MainEditorControls,
   MainSidebarControls,
 } from './layoutControlTypes';
-import { useStoryMeta } from '../../stores/storyStore';
+import { useStoryLanguage } from '../../stores/storyStore';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
@@ -60,7 +60,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       );
     }
 
-    const storyMeta = useStoryMeta();
+    const storyLanguage = useStoryLanguage();
     const { addChapter, isSidebarOpen, setIsSidebarOpen, onToggleSourcebook } =
       sidebarControls;
 
@@ -100,7 +100,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       sidebarPrefs.chaptersHeight,
     ]);
 
-    const toggleCollapsed = (key: keyof NonNullable<typeof editorSettings.sidebar>) => {
+    const toggleCollapsed = (
+      key: keyof NonNullable<typeof editorSettings.sidebar>
+    ): void => {
       setEditorSettings((prev: import('../../types').EditorSettings) => ({
         ...prev,
         sidebar: {
@@ -113,7 +115,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     const updateHeight = (
       key: keyof NonNullable<typeof editorSettings.sidebar>,
       height: number
-    ) => {
+    ): void => {
       setEditorSettings((prev: import('../../types').EditorSettings) => ({
         ...prev,
         sidebar: {
@@ -139,11 +141,11 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     // Stable callbacks so memoized sidebar sub-components don't re-render on
     // every AppMainLayout render caused by sidebarControls reference churn.
     const handleSourcebookToggle = useCallback(
-      (id: string, checked: boolean) => onToggleSourcebook?.(id, checked),
+      (id: string, checked: boolean): void => onToggleSourcebook?.(id, checked),
       [onToggleSourcebook]
     );
     const handleAddChapter = useCallback(
-      (bookId?: string) => addChapter('New Chapter', '', bookId),
+      (bookId?: string): void => addChapter('New Chapter', '', bookId),
       [addChapter]
     );
 
@@ -261,7 +263,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         <AppChatPanel
           chatControls={chatControls}
           currentTheme={currentTheme}
-          storyLanguage={storyMeta.language ?? 'en'}
+          storyLanguage={storyLanguage ?? 'en'}
         />
       </main>
     );
