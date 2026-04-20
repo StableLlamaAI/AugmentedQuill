@@ -23,8 +23,9 @@ import type { AppTheme } from '../../types';
 import {
   useStoryBaseline,
   useStoryBooks,
+  useStoryCanRedo,
+  useStoryCanUndo,
   useStoryChaptersListMeta,
-  useStoryUndoRedoAvailability,
   useStoryMeta,
   useStorySourcebook,
 } from '../../stores/storyStore';
@@ -72,7 +73,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
     // Read undo/redo availability directly from storyStore so these boolean
     // values are not part of sidebarControls — keeping sidebarControls stable
     // during content-only edits and preventing AppMainLayout from re-rendering.
-    const { canUndo: canAppUndo, canRedo: canAppRedo } = useStoryUndoRedoAvailability();
+    const canAppUndo = useStoryCanUndo();
+    const canAppRedo = useStoryCanRedo();
     const books = useStoryBooks();
     const sourcebook = useStorySourcebook();
     const baseline = useStoryBaseline();

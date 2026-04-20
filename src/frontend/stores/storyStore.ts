@@ -12,6 +12,7 @@
  * monolithic React useState approach in useStory / App.tsx.
  */
 
+import { useCallback, useRef } from 'react';
 import { create, StoreApi } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import type { StoryState, SourcebookEntry } from '../types';
@@ -310,13 +311,26 @@ function chaptersStructuralEqual(
  *  (add / remove / rename / reorder / book assignment).  Content-only
  *  changes (typing) do NOT trigger a re-render.
  *
- *  Uses a module-level equality function (stable reference) so React 18's
- *  useSyncExternalStore consistency checks do not produce an infinite loop. */
+ *  Caches the previous array reference inside the selector (same technique
+ *  as useShallow) so React 18's useSyncExternalStore consistency checks
+ *  always receive the same reference when nothing structural changed. */
 export function useStoryChaptersListMeta(): StoryState['chapters'] {
-  return useStoryStore(
-    (s: StoryStoreState) => s.story.chapters,
-    chaptersStructuralEqual
+  const prevRef = useRef<StoryState['chapters'] | undefined>(undefined);
+  const stableSelector = useCallback(
+    (s: StoryStoreState): StoryState['chapters'] => {
+      const next = s.story.chapters;
+      if (
+        prevRef.current !== undefined &&
+        chaptersStructuralEqual(prevRef.current, next)
+      ) {
+        return prevRef.current;
+      }
+      prevRef.current = next;
+      return next;
+    },
+    [] // prevRef is captured once; selector identity is stable
   );
+  return useStoryStore(stableSelector);
 }
 
 /** Subscribe to the books list. */
@@ -353,15 +367,14 @@ export function useStoryHistoryState(): StoryHistorySnapshot {
   );
 }
 
-/** Subscribe only to undo/redo availability booleans.  Cheaper than
- *  useStoryHistoryState because it never builds the options arrays. */
-export function useStoryUndoRedoAvailability(): { canUndo: boolean; canRedo: boolean } {
-  return useStoryStore(
-    useShallow((s: StoryStoreState) => ({
-      canUndo: s.currentIndex > 0,
-      canRedo: s.currentIndex < s.history.length - 1,
-    }))
-  );
+/** Subscribe only to whether undo is available. */
+export function useStoryCanUndo(): boolean {
+  return useStoryStore((s: StoryStoreState) => s.currentIndex > 0);
+}
+
+/** Subscribe only to whether redo is available. */
+export function useStoryCanRedo(): boolean {
+  return useStoryStore((s: StoryStoreState) => s.currentIndex < s.history.length - 1);
 }
 
 function buildHistoryOptions(
