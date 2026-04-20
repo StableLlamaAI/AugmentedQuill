@@ -10,11 +10,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ProjectMetadata, ChatSession, StoryState } from '../../types';
+import { ProjectMetadata, StoryState } from '../../types';
 import { api } from '../../services/api';
 import { ProjectListItem } from '../../services/apiTypes';
 import { mapSelectStoryToState } from '../story/storyMappers';
 import { formatError, notifyError } from '../../services/errorNotifier';
+import { useChatStore } from '../../stores/chatStore';
 
 type CreateProjectType = 'short-story' | 'novel' | 'series';
 
@@ -39,7 +40,6 @@ type UseProjectManagementParams = {
   ) => Promise<void>;
   handleSelectChat: (id: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
-  setChatHistoryList: (list: ChatSession[]) => void;
   getErrorMessage: (error: unknown, fallback: string) => string;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
@@ -84,7 +84,6 @@ export function useProjectManagement({
   updateStoryMetadata,
   handleSelectChat,
   handleNewChat,
-  setChatHistoryList,
   getErrorMessage,
   isSettingsOpen,
   setIsSettingsOpen,
@@ -218,7 +217,7 @@ export function useProjectManagement({
 
         await refreshStory();
         const chats = await api.chat.list();
-        setChatHistoryList(chats);
+        useChatStore.getState().setChatHistoryList(chats);
         if (chats.length > 0) {
           await handleSelectChat(chats[0].id);
         } else {
@@ -228,7 +227,7 @@ export function useProjectManagement({
         console.error('Failed to load project', error);
       }
     },
-    [refreshStory, setChatHistoryList, handleSelectChat, handleNewChat]
+    [refreshStory, handleSelectChat, handleNewChat]
   );
 
   const handleImportProject = useCallback(

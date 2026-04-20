@@ -9,9 +9,9 @@
  * Defines the use ai actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ChatMessage, WritingUnit } from '../../types';
+import { WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
@@ -32,7 +32,6 @@ type UseAiActionsParams = {
     partial: Partial<WritingUnit>,
     sync?: boolean
   ) => Promise<void>;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 

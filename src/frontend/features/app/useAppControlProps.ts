@@ -135,7 +135,6 @@ type UseAppMainLayoutPropsParams = {
   cancelAiAction: () => void;
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
-  isChatLoading: boolean;
   setActiveFormats: (formats: string[]) => void;
   showWhitespace: boolean;
   setShowWhitespace: (show: boolean) => void;
@@ -393,7 +392,6 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     cancelAiAction,
     isAiActionLoading,
     isWritingAvailable,
-    isChatLoading,
     setActiveFormats,
     showWhitespace,
     setShowWhitespace,
@@ -554,7 +552,7 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
         cancelAiAction,
         isAiActionLoading,
         isWritingAvailable,
-        isProseStreaming: isChatLoading || isAiActionLoading,
+        isProseStreaming: isAiActionLoading,
         isChapterEmpty: !currentChapter?.content?.trim(),
       },
       setActiveFormats,
@@ -583,7 +581,6 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       cancelAiAction,
       isAiActionLoading,
       isWritingAvailable,
-      isChatLoading,
       setActiveFormats,
       showWhitespace,
       setShowWhitespace,

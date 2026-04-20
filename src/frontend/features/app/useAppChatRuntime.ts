@@ -9,14 +9,7 @@
  * Purpose: Own App-level chat/session orchestration so App.tsx only coordinates features.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  startTransition,
-} from 'react';
+import { useCallback, useEffect, useRef, startTransition } from 'react';
 
 import { useChatExecution } from '../chat/useChatExecution';
 import { useChatMessageActions } from '../chat/useChatMessageActions';
@@ -33,6 +26,7 @@ import type {
   StoryState,
 } from '../../types';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
+import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 
 type CurrentChapterContext = {
   id: string;
@@ -73,11 +67,6 @@ type UseAppChatRuntimeParams = {
 };
 
 type UseAppChatRuntimeResult = ReturnType<typeof useChatSessionManagement> & {
-  chatMessages: ChatMessage[];
-  setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
-  isChatLoading: boolean;
-  sessionMutations: SessionMutation[];
-  sourcebookMutationEntryIds: Set<string>;
   onMutationClick: (mutation: SessionMutation) => void;
   handleSendMessageWithReset: (
     text: string,
@@ -116,9 +105,7 @@ export function useAppChatRuntime({
   openSourcebookEntryDialog,
   openStoryMetadataDialog,
 }: UseAppChatRuntimeParams): UseAppChatRuntimeResult {
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [sessionMutations, setSessionMutations] = useState<SessionMutation[]>([]);
+  const { setChatMessages, setIsChatLoading, setSessionMutations } = useChatStore();
 
   const getSystemPrompt = useCallback(
     () => prompts.system_messages.chat_llm || '',
@@ -128,9 +115,6 @@ export function useAppChatRuntime({
   const sessionState = useChatSessionManagement({
     storyId,
     getSystemPrompt,
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
   });
 
   const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
@@ -140,7 +124,7 @@ export function useAppChatRuntime({
   const onChatNewMessageBegin = useCallback(() => {
     setSessionMutations([]);
     advanceBaselineToCurrentStory();
-  }, [advanceBaselineToCurrentStory]);
+  }, [advanceBaselineToCurrentStory, setSessionMutations]);
 
   const onToolMutations = useCallback((muts: ToolMutationPayload) => {
     const newMuts: SessionMutation[] = [];
@@ -192,23 +176,28 @@ export function useAppChatRuntime({
   >({});
 
   useEffect(() => {
-    if (!isChatLoading) {
+    if (!useChatStore.getState().isChatLoading) {
       prosePreviewStateRef.current = {};
     }
-  }, [isChatLoading]);
+    // Subscribe to isChatLoading changes imperatively to reset prose preview state
+    const unsubscribe = useChatStore.subscribe(
+      (state: ChatStoreState, prevState: ChatStoreState) => {
+        if (prevState.isChatLoading && !state.isChatLoading) {
+          prosePreviewStateRef.current = {};
+        }
+      }
+    );
+    return unsubscribe;
+  }, []);
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
-    systemPrompt: sessionState.systemPrompt,
+    systemPrompt: useChatStore.getState().systemPrompt,
     activeChatConfig,
     isChatAvailable,
-    allowWebSearch: sessionState.allowWebSearch,
+    allowWebSearch: useChatStore.getState().allowWebSearch,
     currentChapterId,
-    currentChatId: sessionState.currentChatId,
+    currentChatId: useChatStore.getState().currentChatId,
     currentChapter: currentChapterContext,
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
-    setIsChatLoading,
     refreshProjects,
     refreshStory,
     onProseChunk: useCallback(
@@ -282,19 +271,6 @@ export function useAppChatRuntime({
     await handleRegenerate();
   }, [handleRegenerate, onChatNewMessageBegin]);
 
-  const sourcebookMutationEntryIds = useMemo(
-    () =>
-      new Set(
-        sessionMutations
-          .filter(
-            (mutation: SessionMutation) =>
-              mutation.type === 'sourcebook' && mutation.targetId
-          )
-          .map((mutation: SessionMutation) => mutation.targetId as string)
-      ),
-    [sessionMutations]
-  );
-
   const onMutationClick = useCallback(
     (mutation: SessionMutation) => {
       startTransition(() => {
@@ -323,11 +299,6 @@ export function useAppChatRuntime({
 
   return {
     ...sessionState,
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
-    sessionMutations,
-    sourcebookMutationEntryIds,
     onMutationClick,
     handleSendMessageWithReset,
     handleStopChat,

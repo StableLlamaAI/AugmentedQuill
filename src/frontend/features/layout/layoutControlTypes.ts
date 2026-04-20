@@ -16,8 +16,6 @@ import type {
   AppTheme,
   Chapter,
   ChatAttachment,
-  ChatMessage,
-  ChatSession,
   EditorSettings,
   LLMConfig,
   SourcebookEntry,
@@ -234,32 +232,19 @@ export type MainEditorControls = {
 
 export type MainChatControls = {
   isChatOpen: boolean;
-  chatMessages: ChatMessage[];
-  isChatLoading: boolean;
   isChatAvailable: boolean;
   activeChatConfig: LLMConfig;
-  systemPrompt: string;
   handleSendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;
   handleStopChat: () => void;
   handleRegenerate: () => Promise<void>;
   handleEditMessage: (id: string, newText: string) => void;
   handleDeleteMessage: (id: string) => void;
-  setSystemPrompt: (v: string | ((prev: string) => string)) => void;
   handleLoadProject: (projectId: string) => Promise<void>;
-  incognitoSessions: ChatSession[];
-  chatHistoryList: ChatSession[];
-  currentChatId: string | null;
-  isIncognito: boolean;
   handleSelectChat: (chatId: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
   handleDeleteChat: (chatId: string) => Promise<void>;
   handleDeleteAllChats: () => Promise<void>;
-  setIsIncognito: (v: boolean) => void;
-  allowWebSearch: boolean;
-  setAllowWebSearch: (v: boolean) => void;
-  scratchpad: string;
   onUpdateScratchpad: (content: string) => void;
   onDeleteScratchpad: () => void;
-  sessionMutations: SessionMutation[];
   onMutationClick: (m: SessionMutation) => void;
 };

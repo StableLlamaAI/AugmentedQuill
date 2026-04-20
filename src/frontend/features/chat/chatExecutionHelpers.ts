@@ -11,7 +11,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { MutableRefObject } from 'react';
 
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
@@ -49,8 +49,10 @@ export type ExecuteChatRequestContext = {
     onRedo?: () => Promise<void>;
     forceNewHistory?: boolean;
   }) => void;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
-  setIsChatLoading: Dispatch<SetStateAction<boolean>>;
+  setChatMessages: (
+    v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
+  ) => void;
+  setIsChatLoading: (v: boolean) => void;
   stopSignalRef: MutableRefObject<boolean>;
   pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>;
   updateFlushFrameRef: MutableRefObject<number | null>;
@@ -79,7 +81,9 @@ export const ensureUniqueMessages = (messages: ChatMessage[]): ChatMessage[] => 
 };
 
 export const upsertChatMessage = (
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  setChatMessages: (
+    v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
+  ) => void,
   ensureUniqueMessagesFn: (messages: ChatMessage[]) => ChatMessage[],
   msgId: string,
   messageUpdate: Partial<ChatMessage>
@@ -114,7 +118,7 @@ export const upsertChatMessage = (
 export const flushPendingMessageUpdates = (
   pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>,
   updateFlushFrameRef: MutableRefObject<number | null>,
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>
+  setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
 ) => {
   if (updateFlushFrameRef.current !== null) {
     cancelAnimationFrame(updateFlushFrameRef.current);

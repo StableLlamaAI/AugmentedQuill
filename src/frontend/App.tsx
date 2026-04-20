@@ -44,6 +44,8 @@ import {
 } from './features/app/appSelectors';
 import { useToast } from './components/ui/Toast';
 import { setErrorDispatcher } from './services/errorNotifier';
+import { useChatStore, ChatStoreState } from './stores/chatStore';
+import type { SessionMutation } from './features/chat';
 
 // eslint-disable-next-line max-lines-per-function
 const App: React.FC = () => {
@@ -218,34 +220,19 @@ const App: React.FC = () => {
   });
 
   const {
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
-    chatHistoryList,
-    setChatHistoryList,
-    currentChatId,
-    isIncognito,
-    setIsIncognito,
-    allowWebSearch,
-    setAllowWebSearch,
-    systemPrompt,
-    setSystemPrompt,
-    scratchpad,
-    onUpdateScratchpad,
-    onDeleteScratchpad,
-    incognitoSessions,
-    handleNewChat,
-    handleSelectChat,
-    handleDeleteChat,
-    handleDeleteAllChats,
-    sessionMutations,
-    sourcebookMutationEntryIds,
     onMutationClick,
     handleSendMessageWithReset,
     handleStopChat,
     handleRegenerateWithReset,
     handleEditMessage,
     handleDeleteMessage,
+    handleNewChat,
+    handleSelectChat,
+    handleDeleteChat,
+    handleDeleteAllChats,
+    onUpdateScratchpad,
+    onDeleteScratchpad,
+    refreshChatList,
   } = useAppChatRuntime({
     storyId: story.id,
 
@@ -269,10 +256,26 @@ const App: React.FC = () => {
     openStoryMetadataDialog,
   });
 
+  // sessionMutations changes only when LLM tool calls complete (a few times per
+  // conversation turn, not per streaming token) – subscribing here is intentional
+  // and per the explicit-mutation exception in the architecture decision.
+  const sessionMutations = useChatStore((s: ChatStoreState) => s.sessionMutations);
+  const systemPrompt = useChatStore((s: ChatStoreState) => s.systemPrompt);
+  const sourcebookMutationEntryIds = useMemo(
+    () =>
+      new Set(
+        sessionMutations
+          .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)
+          .map((m: SessionMutation) => m.targetId as string)
+      ),
+    [sessionMutations]
+  );
+
   const {
     continuations,
     isSuggesting,
     isSuggestionMode,
+    suggestCursor,
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
@@ -292,7 +295,6 @@ const App: React.FC = () => {
     isWritingAvailable: roleAvailability.writing,
     updateChapter,
     viewMode,
-    setChatMessages,
     getErrorMessage,
   });
 
@@ -311,7 +313,6 @@ const App: React.FC = () => {
       isWritingAvailable: roleAvailability.writing,
       checkedSourcebookIds: checkedSourcebookIdsMemo,
       updateChapter,
-      setChatMessages,
       getErrorMessage,
     });
 
@@ -340,7 +341,6 @@ const App: React.FC = () => {
     updateStoryMetadata,
     handleSelectChat,
     handleNewChat,
-    setChatHistoryList,
     getErrorMessage,
     isSettingsOpen,
     setIsSettingsOpen,
@@ -372,64 +372,38 @@ const App: React.FC = () => {
   const chatControls = useMemo(
     () => ({
       isChatOpen,
-      chatMessages,
-      isChatLoading,
       isChatAvailable: roleAvailability.chat,
       activeChatConfig,
-      systemPrompt,
       handleSendMessage: handleSendMessageWithReset,
       handleStopChat,
       handleRegenerate: handleRegenerateWithReset,
       handleEditMessage,
       handleDeleteMessage,
-      setSystemPrompt,
       handleLoadProject,
-      incognitoSessions,
-      chatHistoryList,
-      currentChatId,
-      isIncognito,
       handleSelectChat,
       handleNewChat,
       handleDeleteChat,
       handleDeleteAllChats,
-      setIsIncognito,
-      allowWebSearch,
-      setAllowWebSearch,
-      scratchpad,
       onUpdateScratchpad,
       onDeleteScratchpad,
-      sessionMutations,
       onMutationClick,
     }),
     [
       isChatOpen,
-      chatMessages,
-      isChatLoading,
       roleAvailability.chat,
       activeChatConfig,
-      systemPrompt,
       handleSendMessageWithReset,
       handleStopChat,
       handleRegenerateWithReset,
       handleEditMessage,
       handleDeleteMessage,
-      setSystemPrompt,
       handleLoadProject,
-      incognitoSessions,
-      chatHistoryList,
-      currentChatId,
-      isIncognito,
       handleSelectChat,
       handleNewChat,
       handleDeleteChat,
       handleDeleteAllChats,
-      setIsIncognito,
-      allowWebSearch,
-      setAllowWebSearch,
-      scratchpad,
       onUpdateScratchpad,
       onDeleteScratchpad,
-      sessionMutations,
       onMutationClick,
     ]
   );
@@ -486,7 +460,6 @@ const App: React.FC = () => {
     cancelAiAction,
     isAiActionLoading,
     isWritingAvailable: roleAvailability.writing,
-    isChatLoading,
     setActiveFormats,
     showWhitespace,
     setShowWhitespace,

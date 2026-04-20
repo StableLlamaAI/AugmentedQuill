@@ -24,6 +24,7 @@ import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { useChatStore } from '../../stores/chatStore';
 
 type UseChapterSuggestionsParams = {
   currentUnit?: WritingUnit;
@@ -35,7 +36,6 @@ type UseChapterSuggestionsParams = {
   isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   viewMode: ViewMode;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
@@ -50,7 +50,6 @@ export function useChapterSuggestions({
   isWritingAvailable,
   updateChapter,
   viewMode,
-  setChatMessages,
   getErrorMessage,
 }: UseChapterSuggestionsParams): {
   continuations: string[];
@@ -262,7 +261,9 @@ export function useChapterSuggestions({
         text: `Suggestion Error: ${getErrorMessage(error, 'Failed to generate suggestions')}`,
         isError: true,
       };
-      setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
+      useChatStore
+        .getState()
+        .setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
     } finally {
       if (isMountedRef.current) {
         setIsSuggesting(false);
