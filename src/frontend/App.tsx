@@ -260,7 +260,6 @@ const App: React.FC = () => {
   // conversation turn, not per streaming token) – subscribing here is intentional
   // and per the explicit-mutation exception in the architecture decision.
   const sessionMutations = useChatStore((s: ChatStoreState) => s.sessionMutations);
-  const systemPrompt = useChatStore((s: ChatStoreState) => s.systemPrompt);
   const sourcebookMutationEntryIds = useMemo(
     () =>
       new Set(
@@ -290,7 +289,6 @@ const App: React.FC = () => {
     storyTitle: story.title,
     storySummary: story.summary,
     storyStyleTags: story.styleTags,
-    systemPrompt,
     activeWritingConfig,
     isWritingAvailable: roleAvailability.writing,
     updateChapter,

@@ -106,7 +106,10 @@ export function useAppChatRuntime({
   openSourcebookEntryDialog,
   openStoryMetadataDialog,
 }: UseAppChatRuntimeParams): UseAppChatRuntimeResult {
-  const { setChatMessages, setIsChatLoading, setSessionMutations } = useChatStore();
+  // Setters are stable function references — use getState() to avoid subscribing
+  // this hook (and its App.tsx caller) to every streaming token update.
+  const { setChatMessages, setIsChatLoading, setSessionMutations } =
+    useChatStore.getState();
 
   const getSystemPrompt = useCallback(
     () => prompts.system_messages.chat_llm || '',
@@ -185,6 +188,7 @@ export function useAppChatRuntime({
       (state: ChatStoreState, prevState: ChatStoreState) => {
         if (prevState.isChatLoading && !state.isChatLoading) {
           prosePreviewStateRef.current = {};
+          useChatStore.getState().setIsProseStreamingFromChat(false);
         }
       }
     );
@@ -249,6 +253,7 @@ export function useAppChatRuntime({
         }
 
         void updateChapter(unit.id, { content: newContent }, false, false);
+        useChatStore.getState().setIsProseStreamingFromChat(true);
       },
       [storyRef, updateChapter]
     ),

@@ -74,7 +74,9 @@ export function useChatExecution({
   handleStopChat: () => void;
   handleRegenerate: () => Promise<void>;
 } {
-  const { setChatMessages, setIsChatLoading } = useChatStore();
+  // Setters are stable — read via getState() so this hook does not subscribe to
+  // every per-token chatMessages change.
+  const { setChatMessages, setIsChatLoading } = useChatStore.getState();
   const stopSignalRef = useRef(false);
   const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
   const updateFlushFrameRef = useRef<number | null>(null);

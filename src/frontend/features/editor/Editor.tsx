@@ -156,7 +156,9 @@ export const Editor = React.memo(
         }
       }
 
-      const isChatStreaming = useChatStore((s: ChatStoreState) => s.isChatLoading);
+      const isChatStreaming = useChatStore(
+        (s: ChatStoreState) => s.isProseStreamingFromChat
+      );
       const proseStreamingActive =
         (aiControls.isProseStreaming ?? false) || isChatStreaming;
 

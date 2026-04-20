@@ -41,6 +41,10 @@ export interface ChatStoreState {
   isChatLoading: boolean;
   sessionMutations: SessionMutation[];
 
+  // ── Prose streaming flag (only flips at turn start/end) ──────────────────
+  /** True only while chat is actively writing prose into the editor. */
+  isProseStreamingFromChat: boolean;
+
   // ── Session management ────────────────────────────────────────────────────
   chatHistoryList: ChatSession[];
   currentChatId: string | null;
@@ -57,6 +61,7 @@ export interface ChatStoreState {
     v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
   ) => void;
   setIsChatLoading: (v: boolean) => void;
+  setIsProseStreamingFromChat: (v: boolean) => void;
   setSessionMutations: (
     v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
   ) => void;
@@ -81,6 +86,7 @@ export const useChatStore = create<ChatStoreState>()(
   (set: StoreApi<ChatStoreState>['setState']) => ({
     chatMessages: [],
     isChatLoading: false,
+    isProseStreamingFromChat: false,
     sessionMutations: [],
     chatHistoryList: [],
     currentChatId: null,
@@ -93,6 +99,8 @@ export const useChatStore = create<ChatStoreState>()(
     setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) =>
       set((s: ChatStoreState) => ({ chatMessages: resolve(v, s.chatMessages) })),
     setIsChatLoading: (v: boolean) => set(() => ({ isChatLoading: v })),
+    setIsProseStreamingFromChat: (v: boolean) =>
+      set(() => ({ isProseStreamingFromChat: v })),
     setSessionMutations: (
       v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
     ) =>

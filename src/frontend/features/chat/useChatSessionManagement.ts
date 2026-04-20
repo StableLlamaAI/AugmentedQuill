@@ -52,7 +52,8 @@ export function useChatSessionManagement({
     setSystemPrompt,
     setScratchpad,
     setIncognitoSessions,
-  } = useChatStore();
+    // Setters are stable — read via getState() to avoid subscribing to every token.
+  } = useChatStore.getState();
 
   // Update systemPrompt when the project changes.
   useEffect(() => {

@@ -31,7 +31,6 @@ type UseChapterSuggestionsParams = {
   storyTitle: string;
   storySummary: string;
   storyStyleTags: string[];
-  systemPrompt: string;
   activeWritingConfig: LLMConfig;
   isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
@@ -45,7 +44,6 @@ export function useChapterSuggestions({
   storyTitle,
   storySummary,
   storyStyleTags,
-  systemPrompt,
   activeWritingConfig,
   isWritingAvailable,
   updateChapter,
@@ -236,7 +234,7 @@ export function useChapterSuggestions({
       const options = await generateContinuations(
         baseContent.slice(0, c),
         storyContext,
-        systemPrompt,
+        useChatStore.getState().systemPrompt,
         activeWritingConfig,
         currentUnit.id,
         Array.from(checkedEntries),
