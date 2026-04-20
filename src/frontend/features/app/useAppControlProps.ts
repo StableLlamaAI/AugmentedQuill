@@ -463,6 +463,18 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     },
     [updateChapter]
   );
+
+  // Stable wrappers — undo/redo have empty deps in useStory, so these are
+  // stable too.  Extracting them before the sidebarControls useMemo means
+  // canUndo/canRedo are no longer dependencies of sidebarControls: the
+  // object no longer gets a new reference on every debounced keystroke.
+  const onAppUndo = useCallback(async (): Promise<void> => {
+    undo();
+  }, [undo]);
+  const onAppRedo = useCallback(async (): Promise<void> => {
+    redo();
+  }, [redo]);
+
   const sidebarControls = useMemo(
     () => ({
       isSidebarOpen,
@@ -488,14 +500,12 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       isSourcebookSelectionRunning,
       mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
       onSourcebookMutated: handleSourcebookMutated,
-      onAppUndo: async () => {
-        undo();
-      },
-      onAppRedo: async () => {
-        redo();
-      },
-      canAppUndo: canUndo,
-      canAppRedo: canRedo,
+      onAppUndo,
+      onAppRedo,
+      // canAppUndo / canAppRedo intentionally omitted: they change on every
+      // debounced keystroke and would destabilise this object, propagating
+      // unnecessary re-renders to AppMainLayout and all its children.
+      // AppSidebar reads them directly from storyStore via useStoryHistoryState.
     }),
     [
       isSidebarOpen,
@@ -521,10 +531,8 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       isSourcebookSelectionRunning,
       sourcebookMutationEntryIds,
       handleSourcebookMutated,
-      undo,
-      redo,
-      canUndo,
-      canRedo,
+      onAppUndo,
+      onAppRedo,
     ]
   );
   const editorControls = useMemo(

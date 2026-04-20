@@ -23,7 +23,8 @@ import type { AppTheme } from '../../types';
 import {
   useStoryBaseline,
   useStoryBooks,
-  useStoryChaptersMeta,
+  useStoryChaptersListMeta,
+  useStoryUndoRedoAvailability,
   useStoryMeta,
   useStorySourcebook,
 } from '../../stores/storyStore';
@@ -65,7 +66,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
 
     // Story data from Zustand storyStore (granular subscriptions)
     const storyMeta = useStoryMeta();
-    const chaptersMeta = useStoryChaptersMeta();
+    // useStoryChaptersListMeta uses structural equality so typing in a chapter
+    // does not cause the sidebar to re-render on every debounced keystroke.
+    const chaptersMeta = useStoryChaptersListMeta();
+    // Read undo/redo availability directly from storyStore so these boolean
+    // values are not part of sidebarControls — keeping sidebarControls stable
+    // during content-only edits and preventing AppMainLayout from re-rendering.
+    const { canUndo: canAppUndo, canRedo: canAppRedo } = useStoryUndoRedoAvailability();
     const books = useStoryBooks();
     const sourcebook = useStorySourcebook();
     const baseline = useStoryBaseline();
@@ -88,9 +95,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
       onSourcebookMutated,
       onAppUndo,
       onAppRedo,
-      canAppUndo,
-      canAppRedo,
     } = sidebarControls;
+
+    // canAppUndo / canAppRedo are read from storyStore above, not from sidebarControls.
 
     return (
       <nav
@@ -159,8 +166,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
                 : undefined
             }
             primarySourceAvailable={
-              storyMeta.projectType === 'short-story' && storyMeta.draft
-                ? !!storyMeta.draft.content?.trim()
+              storyMeta.projectType === 'short-story'
+                ? !storyMeta.draftIsEmpty
                 : undefined
             }
             onUpdate={updateStoryMetadata}

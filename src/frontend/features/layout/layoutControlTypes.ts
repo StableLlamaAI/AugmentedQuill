@@ -175,8 +175,8 @@ export type MainSidebarControls = {
   }) => Promise<void>;
   onAppUndo?: () => Promise<void>;
   onAppRedo?: () => Promise<void>;
-  canAppUndo?: boolean;
-  canAppRedo?: boolean;
+  // canAppUndo / canAppRedo removed: AppSidebar reads them from storyStore
+  // via useStoryHistoryState() to avoid destabilising sidebarControls.
 };
 
 export type MainEditorSuggestionControls = {

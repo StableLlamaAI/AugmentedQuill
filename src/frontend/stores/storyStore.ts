@@ -232,11 +232,15 @@ export type StoryMetadataSnapshot = Pick<
   | 'notes'
   | 'private_notes'
   | 'styleTags'
-  | 'draft'
   | 'projectType'
   | 'language'
   | 'conflicts'
->;
+> & {
+  /** True when the short-story draft has no content.  Replaces the full
+   *  `draft` object so that typing in short-story mode does not cause the
+   *  sidebar to re-render on every debounced keystroke. */
+  draftIsEmpty: boolean;
+};
 
 type StoryHistorySnapshot = {
   canUndo: boolean;
@@ -268,7 +272,7 @@ export function useStoryMeta(): StoryMetadataSnapshot {
         notes: s.story.notes,
         private_notes: s.story.private_notes,
         styleTags: s.story.styleTags,
-        draft: s.story.draft,
+        draftIsEmpty: !s.story.draft?.content?.trim(),
         projectType: s.story.projectType,
         language: s.story.language,
         conflicts: s.story.conflicts,
@@ -285,6 +289,34 @@ export function useStoryLanguage(): StoryState['language'] {
 /** Subscribe to the chapter list. */
 export function useStoryChaptersMeta(): StoryState['chapters'] {
   return useStoryStore((s: StoryStoreState) => s.story.chapters);
+}
+
+/** Structural equality for chapter list: ignores content-only changes. */
+function chaptersStructuralEqual(
+  a: StoryState['chapters'],
+  b: StoryState['chapters']
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (ch: Chapter, i: number) =>
+      ch.id === b[i].id &&
+      ch.title === b[i].title &&
+      ch.book_id === b[i].book_id &&
+      ch.scope === b[i].scope
+  );
+}
+
+/** Subscribe to the chapter list — only re-renders when structure changes
+ *  (add / remove / rename / reorder / book assignment).  Content-only
+ *  changes (typing) do NOT trigger a re-render.
+ *
+ *  Uses a module-level equality function (stable reference) so React 18's
+ *  useSyncExternalStore consistency checks do not produce an infinite loop. */
+export function useStoryChaptersListMeta(): StoryState['chapters'] {
+  return useStoryStore(
+    (s: StoryStoreState) => s.story.chapters,
+    chaptersStructuralEqual
+  );
 }
 
 /** Subscribe to the books list. */
@@ -317,6 +349,17 @@ export function useStoryHistoryState(): StoryHistorySnapshot {
           : null,
       undoOptions: buildHistoryOptions(s.history, s.currentIndex, 'undo'),
       redoOptions: buildHistoryOptions(s.history, s.currentIndex, 'redo'),
+    }))
+  );
+}
+
+/** Subscribe only to undo/redo availability booleans.  Cheaper than
+ *  useStoryHistoryState because it never builds the options arrays. */
+export function useStoryUndoRedoAvailability(): { canUndo: boolean; canRedo: boolean } {
+  return useStoryStore(
+    useShallow((s: StoryStoreState) => ({
+      canUndo: s.currentIndex > 0,
+      canRedo: s.currentIndex < s.history.length - 1,
     }))
   );
 }

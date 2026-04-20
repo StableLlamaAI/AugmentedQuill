@@ -100,30 +100,34 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       sidebarPrefs.chaptersHeight,
     ]);
 
-    const toggleCollapsed = (
-      key: keyof NonNullable<typeof editorSettings.sidebar>
-    ): void => {
-      setEditorSettings((prev: import('../../types').EditorSettings) => ({
-        ...prev,
-        sidebar: {
-          ...prev.sidebar,
-          [key]: !prev.sidebar?.[key],
-        },
-      }));
-    };
+    // Stable callbacks \u2014 setEditorSettings is a useState setter (always stable)
+    // so these will never be recreated, preventing AppSidebar from re-rendering
+    // just because AppMainLayout re-rendered (e.g. when editorControls changes).
+    const toggleCollapsed = useCallback(
+      (key: keyof NonNullable<typeof editorSettings.sidebar>): void => {
+        setEditorSettings((prev: import('../../types').EditorSettings) => ({
+          ...prev,
+          sidebar: {
+            ...prev.sidebar,
+            [key]: !prev.sidebar?.[key],
+          },
+        }));
+      },
+      [setEditorSettings]
+    );
 
-    const updateHeight = (
-      key: keyof NonNullable<typeof editorSettings.sidebar>,
-      height: number
-    ): void => {
-      setEditorSettings((prev: import('../../types').EditorSettings) => ({
-        ...prev,
-        sidebar: {
-          ...prev.sidebar,
-          [key]: height,
-        },
-      }));
-    };
+    const updateHeight = useCallback(
+      (key: keyof NonNullable<typeof editorSettings.sidebar>, height: number): void => {
+        setEditorSettings((prev: import('../../types').EditorSettings) => ({
+          ...prev,
+          sidebar: {
+            ...prev.sidebar,
+            [key]: height,
+          },
+        }));
+      },
+      [setEditorSettings]
+    );
 
     const {
       currentChapter,
