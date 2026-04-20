@@ -19,7 +19,7 @@ import {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, LLMConfig, StoryState, ViewMode, WritingUnit } from '../../types';
+import { ChatMessage, LLMConfig, ViewMode, WritingUnit } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
 import { api } from '../../services/api';
@@ -27,7 +27,9 @@ import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 
 type UseChapterSuggestionsParams = {
   currentUnit?: WritingUnit;
-  story: StoryState;
+  storyTitle: string;
+  storySummary: string;
+  storyStyleTags: string[];
   systemPrompt: string;
   activeWritingConfig: LLMConfig;
   isWritingAvailable: boolean;
@@ -40,7 +42,9 @@ type UseChapterSuggestionsParams = {
 /** Custom React hook that manages chapter suggestions. */
 export function useChapterSuggestions({
   currentUnit,
-  story,
+  storyTitle,
+  storySummary,
+  storyStyleTags,
   systemPrompt,
   activeWritingConfig,
   isWritingAvailable,
@@ -229,7 +233,7 @@ export function useChapterSuggestions({
     cancelSignalRef.current = { cancelled: false };
 
     try {
-      const storyContext = `Title: ${story.title}\nSummary: ${story.summary}\nTags: ${story.styleTags.join(', ')}`;
+      const storyContext = `Title: ${storyTitle}\nSummary: ${storySummary}\nTags: ${storyStyleTags.join(', ')}`;
       const options = await generateContinuations(
         baseContent.slice(0, c),
         storyContext,

@@ -9,7 +9,7 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useStory } from './features/story/useStory';
 import { useChapterSuggestions } from './features/chapters/useChapterSuggestions';
 import { EditorHandle } from './features/editor/Editor';
@@ -131,11 +131,14 @@ const App: React.FC = () => {
     refreshHealth,
   });
 
-  const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
-  const imageActionsAvailable = supportsImageActions(
-    appSettings,
-    detectedCapabilities,
-    modelConnectionStatus
+  const roleAvailability = useMemo(
+    () => resolveRoleAvailability(appSettings, modelConnectionStatus),
+    [appSettings, modelConnectionStatus]
+  );
+  const imageActionsAvailable = useMemo(
+    () =>
+      supportsImageActions(appSettings, detectedCapabilities, modelConnectionStatus),
+    [appSettings, detectedCapabilities, modelConnectionStatus]
   );
 
   const { toolCallLoopDialog, requestToolCallLoopAccess } = useToolCallGate();
@@ -181,9 +184,12 @@ const App: React.FC = () => {
       setEditorSettings,
     });
 
-  // Get Active LLM Configs
-  const { activeChatConfig, activeWritingConfig } =
-    resolveActiveProviderConfigs(appSettings);
+  // Get Active LLM Configs — memoized so hooks that receive these as params
+  // don't re-run unnecessarily when unrelated appSettings fields change.
+  const { activeChatConfig, activeWritingConfig } = useMemo(
+    () => resolveActiveProviderConfigs(appSettings),
+    [appSettings]
+  );
 
   const {
     handleFormat,
@@ -242,6 +248,7 @@ const App: React.FC = () => {
     handleDeleteMessage,
   } = useAppChatRuntime({
     storyId: story.id,
+
     storyRef,
     prompts,
     activeChatConfig,
@@ -277,7 +284,9 @@ const App: React.FC = () => {
     isSourcebookSelectionRunning,
   } = useChapterSuggestions({
     currentUnit: currentChapter || undefined,
-    story,
+    storyTitle: story.title,
+    storySummary: story.summary,
+    storyStyleTags: story.styleTags,
     systemPrompt,
     activeWritingConfig,
     isWritingAvailable: roleAvailability.writing,
@@ -287,14 +296,20 @@ const App: React.FC = () => {
     getErrorMessage,
   });
 
+  // Stabilize checkedSourcebookIds so useAiActions does not receive a new
+  // array reference on every render when checkedEntries hasn't changed.
+  const checkedSourcebookIdsMemo = useMemo(
+    () => Array.from(checkedEntries),
+    [checkedEntries]
+  );
+
   const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
     useAiActions({
       currentUnit: currentChapter || undefined,
-      story,
       prompts,
       isEditingAvailable: roleAvailability.editing,
       isWritingAvailable: roleAvailability.writing,
-      checkedSourcebookIds: Array.from(checkedEntries),
+      checkedSourcebookIds: checkedSourcebookIdsMemo,
       updateChapter,
       setChatMessages,
       getErrorMessage,
@@ -313,7 +328,13 @@ const App: React.FC = () => {
     handleDeleteProject,
     handleRenameProject,
   } = useProjectManagement({
-    story,
+    storyId: story.id,
+    storyTitle: story.title,
+    storyProjectType: story.projectType,
+    storyLanguage: story.language ?? 'en',
+    storySummary: story.summary,
+    storyStyleTags: story.styleTags,
+    storyConflicts: story.conflicts,
     refreshStory,
     loadStory,
     updateStoryMetadata,
@@ -345,37 +366,73 @@ const App: React.FC = () => {
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
 
-  const chatControls = {
-    isChatOpen,
-    chatMessages,
-    isChatLoading,
-    isChatAvailable: roleAvailability.chat,
-    activeChatConfig,
-    systemPrompt,
-    handleSendMessage: handleSendMessageWithReset,
-    handleStopChat,
-    handleRegenerate: handleRegenerateWithReset,
-    handleEditMessage,
-    handleDeleteMessage,
-    setSystemPrompt,
-    handleLoadProject,
-    incognitoSessions,
-    chatHistoryList,
-    currentChatId,
-    isIncognito,
-    handleSelectChat,
-    handleNewChat,
-    handleDeleteChat,
-    handleDeleteAllChats,
-    setIsIncognito,
-    allowWebSearch,
-    setAllowWebSearch,
-    scratchpad,
-    onUpdateScratchpad,
-    onDeleteScratchpad,
-    sessionMutations,
-    onMutationClick,
-  };
+  // Memoize so AppChatPanel's React.memo actually fires; without this the
+  // chat panel re-renders on every App update even when nothing chat-related
+  // changed.
+  const chatControls = useMemo(
+    () => ({
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      isChatAvailable: roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessage: handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerate: handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    }),
+    [
+      isChatOpen,
+      chatMessages,
+      isChatLoading,
+      roleAvailability.chat,
+      activeChatConfig,
+      systemPrompt,
+      handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      setSystemPrompt,
+      handleLoadProject,
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+      isIncognito,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      setIsIncognito,
+      allowWebSearch,
+      setAllowWebSearch,
+      scratchpad,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      sessionMutations,
+      onMutationClick,
+    ]
+  );
 
   const { sidebarControls, appMainLayoutProps } = useAppMainLayoutProps({
     isSidebarOpen,

@@ -7,16 +7,20 @@
 
 /**
  * Purpose: Assemble stable header and main-layout control props outside App.tsx.
+ *
+ * Stability contract: every useMemo / useCallback in this file must list
+ * individual field deps (never a whole params object), and every value that is
+ * "read at call time" inside a callback is accessed via a ref so the callback
+ * itself stays stable even when those values change.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import { AppHeader } from '../layout/AppHeader';
 import { AppMainLayout } from '../layout/AppMainLayout';
 import type {
   ChapterContinuation,
   EditorSettings,
-  SessionMutation,
   SourcebookEntry,
   StoryState,
 } from '../../types';
@@ -142,89 +146,192 @@ type UseAppMainLayoutPropsParams = {
 };
 
 export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderProps {
-  const searchControls = useMemo(
-    () => ({ onOpenSearch: params.openSearch }),
-    [params.openSearch]
-  );
+  const {
+    storyTitle,
+    sidebarControls,
+    undo,
+    redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    canUndo,
+    canRedo,
+    viewMode,
+    setViewMode,
+    showWhitespace,
+    setShowWhitespace,
+    isViewMenuOpen,
+    setIsViewMenuOpen,
+    isFormatMenuOpen,
+    setIsFormatMenuOpen,
+    isMobileFormatMenuOpen,
+    setIsMobileFormatMenuOpen,
+    handleFormat,
+    getFormatButtonClass,
+    openImagesDialog,
+    setIsSettingsOpen,
+    setIsImagesOpen,
+    setIsDebugLogsOpen,
+    appearanceRef,
+    isAppearanceOpen,
+    setIsAppearanceOpen,
+    setAppTheme,
+    editorSettings,
+    setEditorSettings,
+    appSettings,
+    setAppSettings,
+    handleSaveSettings,
+    modelConnectionStatus,
+    detectedCapabilities,
+    recheckUnavailableProviderIfStale,
+    handleAiAction,
+    isAiActionLoading,
+    isWritingAvailable,
+    isCurrentChapterEmpty,
+    isChatOpen,
+    setIsChatOpen,
+    openSearch,
+  } = params;
+
+  const searchControls = useMemo(() => ({ onOpenSearch: openSearch }), [openSearch]);
   const historyControls = useMemo(
     () => ({
-      undo: params.undo,
-      redo: params.redo,
-      undoSteps: params.undoSteps,
-      redoSteps: params.redoSteps,
-      undoOptions: params.undoOptions,
-      redoOptions: params.redoOptions,
-      nextUndoLabel: params.nextUndoLabel,
-      nextRedoLabel: params.nextRedoLabel,
-      canUndo: params.canUndo,
-      canRedo: params.canRedo,
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
     }),
-    [params]
+    [
+      undo,
+      redo,
+      undoSteps,
+      redoSteps,
+      undoOptions,
+      redoOptions,
+      nextUndoLabel,
+      nextRedoLabel,
+      canUndo,
+      canRedo,
+    ]
   );
   const viewControls = useMemo(
     () => ({
-      viewMode: params.viewMode,
-      setViewMode: params.setViewMode,
-      showWhitespace: params.showWhitespace,
-      setShowWhitespace: params.setShowWhitespace,
-      isViewMenuOpen: params.isViewMenuOpen,
-      setIsViewMenuOpen: params.setIsViewMenuOpen,
-      isFormatMenuOpen: params.isFormatMenuOpen,
-      setIsFormatMenuOpen: params.setIsFormatMenuOpen,
-      isMobileFormatMenuOpen: params.isMobileFormatMenuOpen,
-      setIsMobileFormatMenuOpen: params.setIsMobileFormatMenuOpen,
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
     }),
-    [params]
+    [
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+    ]
   );
   return useMemo(
     () => ({
-      storyTitle: params.storyTitle,
-      sidebarControls: params.sidebarControls,
+      storyTitle,
+      sidebarControls,
       settingsControls: {
-        setIsSettingsOpen: params.setIsSettingsOpen,
-        setIsImagesOpen: params.setIsImagesOpen,
-        setIsDebugLogsOpen: params.setIsDebugLogsOpen,
+        setIsSettingsOpen,
+        setIsImagesOpen,
+        setIsDebugLogsOpen,
       },
       historyControls,
       viewControls,
       formatControls: {
-        handleFormat: params.handleFormat,
-        getFormatButtonClass: params.getFormatButtonClass,
-        isFormatMenuOpen: params.isFormatMenuOpen,
-        setIsFormatMenuOpen: params.setIsFormatMenuOpen,
-        isMobileFormatMenuOpen: params.isMobileFormatMenuOpen,
-        setIsMobileFormatMenuOpen: params.setIsMobileFormatMenuOpen,
-        onOpenImages: params.openImagesDialog,
+        handleFormat,
+        getFormatButtonClass,
+        isFormatMenuOpen,
+        setIsFormatMenuOpen,
+        isMobileFormatMenuOpen,
+        setIsMobileFormatMenuOpen,
+        onOpenImages: openImagesDialog,
       },
       aiControls: {
-        handleAiAction: params.handleAiAction,
-        isAiActionLoading: params.isAiActionLoading,
-        isWritingAvailable: params.isWritingAvailable,
-        isChapterEmpty: params.isCurrentChapterEmpty,
+        handleAiAction,
+        isAiActionLoading,
+        isWritingAvailable,
+        isChapterEmpty: isCurrentChapterEmpty,
       },
       modelControls: {
-        appSettings: params.appSettings,
-        setAppSettings: params.setAppSettings,
-        saveSettings: params.handleSaveSettings,
-        modelConnectionStatus: params.modelConnectionStatus,
-        detectedCapabilities: params.detectedCapabilities,
-        recheckUnavailableProviderIfStale: params.recheckUnavailableProviderIfStale,
+        appSettings,
+        setAppSettings,
+        saveSettings: handleSaveSettings,
+        modelConnectionStatus,
+        detectedCapabilities,
+        recheckUnavailableProviderIfStale,
       },
       appearanceControls: {
-        appearanceRef: params.appearanceRef,
-        isAppearanceOpen: params.isAppearanceOpen,
-        setIsAppearanceOpen: params.setIsAppearanceOpen,
-        setAppTheme: params.setAppTheme,
-        editorSettings: params.editorSettings,
-        setEditorSettings: params.setEditorSettings,
+        appearanceRef,
+        isAppearanceOpen,
+        setIsAppearanceOpen,
+        setAppTheme,
+        editorSettings,
+        setEditorSettings,
       },
       chatPanelControls: {
-        isChatOpen: params.isChatOpen,
-        setIsChatOpen: params.setIsChatOpen,
+        isChatOpen,
+        setIsChatOpen,
       },
       searchControls,
     }),
-    [historyControls, params, searchControls, viewControls]
+    [
+      historyControls,
+      viewControls,
+      searchControls,
+      storyTitle,
+      sidebarControls,
+      setIsSettingsOpen,
+      setIsImagesOpen,
+      setIsDebugLogsOpen,
+      handleFormat,
+      getFormatButtonClass,
+      openImagesDialog,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      handleAiAction,
+      isAiActionLoading,
+      isWritingAvailable,
+      isCurrentChapterEmpty,
+      appSettings,
+      setAppSettings,
+      handleSaveSettings,
+      modelConnectionStatus,
+      detectedCapabilities,
+      recheckUnavailableProviderIfStale,
+      appearanceRef,
+      isAppearanceOpen,
+      setIsAppearanceOpen,
+      setAppTheme,
+      editorSettings,
+      setEditorSettings,
+      isChatOpen,
+      setIsChatOpen,
+    ]
   );
 }
 
@@ -233,9 +340,82 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   editorControls: AppMainLayoutProps['editorControls'];
   appMainLayoutProps: AppMainLayoutProps;
 } {
+  // Destructure all params so useMemo / useCallback deps are individual stable
+  // values rather than the whole params object (which is a new reference every
+  // render and would defeat all memoization).
+  const {
+    isSidebarOpen,
+    setIsSidebarOpen,
+    currentChapterId,
+    handleChapterSelect,
+    deleteChapter,
+    updateChapter,
+    updateBook,
+    addChapter,
+    handleBookCreate,
+    handleBookDelete,
+    handleReorderChapters,
+    handleReorderBooks,
+    handleSidebarAiAction,
+    isEditingAvailable,
+    handleOpenImages,
+    updateStoryMetadata,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
+    sourcebookMutationEntryIds,
+    advanceBaselineToCurrentStory,
+    patchSourcebook,
+    pushExternalHistoryEntry,
+    refreshStory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    searchState,
+    currentChapter,
+    isChapterLoading,
+    editorRef,
+    editorSettings,
+    storyLanguage,
+    setEditorSettings,
+    viewMode,
+    continuations,
+    isSuggesting,
+    handleTriggerSuggestions,
+    cancelSuggestions,
+    handleAcceptContinuation,
+    isSuggestionMode,
+    handleKeyboardSuggestionAction,
+    handleAiAction,
+    cancelAiAction,
+    isAiActionLoading,
+    isWritingAvailable,
+    isChatLoading,
+    setActiveFormats,
+    showWhitespace,
+    setShowWhitespace,
+    editorBaselineContent,
+    openSearch,
+    chatControls,
+    instructionLanguages,
+  } = params;
+
+  // Keep a ref to baselineState so handleSourcebookMutated reads the
+  // latest value at call time without having it in its deps (which would
+  // make it unstable on every history change).
+  const baselineStateRef = useRef(params.baselineState);
+  baselineStateRef.current = params.baselineState;
+
+  // Keep a ref to searchState for the same reason.
+  const searchStateRef = useRef(searchState);
+  searchStateRef.current = searchState;
+
   const checkedSourcebookIds = useMemo(
-    () => Array.from(params.checkedEntries),
-    [params.checkedEntries]
+    () => Array.from(checkedEntries),
+    [checkedEntries]
   );
   const handleSourcebookMutated = useCallback(
     async (mutation: {
@@ -248,118 +428,180 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     }) => {
       const existsInBaseline = Boolean(
         mutation.entryExistsInBaseline ??
-        params.baselineState.sourcebook?.some(
+        baselineStateRef.current.sourcebook?.some(
           (entry: SourcebookEntry) => entry.id === mutation.entryId
         )
       );
       if (mutation.updatedEntry !== undefined) {
         if (!existsInBaseline) {
-          params.advanceBaselineToCurrentStory();
+          advanceBaselineToCurrentStory();
         }
-        if (!params.patchSourcebook(mutation.updatedEntry, mutation.entryId)) {
+        if (!patchSourcebook(mutation.updatedEntry, mutation.entryId)) {
           return;
         }
         if (existsInBaseline) {
-          params.advanceBaselineToCurrentStory();
+          advanceBaselineToCurrentStory();
         }
-        params.pushExternalHistoryEntry({ ...mutation, forceNewHistory: true });
+        pushExternalHistoryEntry({ ...mutation, forceNewHistory: true });
         return;
       }
       if (!existsInBaseline) {
-        params.advanceBaselineToCurrentStory();
+        advanceBaselineToCurrentStory();
       }
-      await params.refreshStory();
+      await refreshStory();
       if (existsInBaseline) {
-        params.advanceBaselineToCurrentStory();
+        advanceBaselineToCurrentStory();
       }
-      params.pushExternalHistoryEntry(mutation);
+      pushExternalHistoryEntry(mutation);
     },
-    [params]
+    [
+      advanceBaselineToCurrentStory,
+      patchSourcebook,
+      pushExternalHistoryEntry,
+      refreshStory,
+    ]
   );
   const editorUpdateChapter = useCallback(
     (id: string, partial: Record<string, unknown>) => {
       if ('content' in partial) {
-        params.searchState.notifyContentChanged(Number.parseInt(id, 10));
+        searchStateRef.current.notifyContentChanged(Number.parseInt(id, 10));
       }
-      return params.updateChapter(id, partial);
+      return updateChapter(id, partial);
     },
-    [params]
+    [updateChapter]
   );
   const sidebarControls = useMemo(
     () => ({
-      isSidebarOpen: params.isSidebarOpen,
-      setIsSidebarOpen: params.setIsSidebarOpen,
-      currentChapterId: params.currentChapterId,
-      handleChapterSelect: params.handleChapterSelect,
-      deleteChapter: params.deleteChapter,
-      updateChapter: params.updateChapter,
-      updateBook: params.updateBook,
-      addChapter: params.addChapter,
-      handleBookCreate: params.handleBookCreate,
-      handleBookDelete: params.handleBookDelete,
-      handleReorderChapters: params.handleReorderChapters,
-      handleReorderBooks: params.handleReorderBooks,
-      handleSidebarAiAction: params.handleSidebarAiAction,
-      isEditingAvailable: params.isEditingAvailable,
-      handleOpenImages: params.handleOpenImages,
-      updateStoryMetadata: params.updateStoryMetadata,
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable,
+      handleOpenImages,
+      updateStoryMetadata,
       checkedSourcebookIds,
-      onToggleSourcebook: params.handleToggleEntry,
-      isAutoSourcebookSelectionEnabled: params.isAutoSourcebookSelectionEnabled,
-      onToggleAutoSourcebookSelection: params.setIsAutoSourcebookSelectionEnabled,
-      isSourcebookSelectionRunning: params.isSourcebookSelectionRunning,
-      mutatedSourcebookEntryIds: params.sourcebookMutationEntryIds,
+      onToggleSourcebook: handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
       onSourcebookMutated: handleSourcebookMutated,
-      onAppUndo: params.undo,
-      onAppRedo: params.redo,
-      canAppUndo: params.canUndo,
-      canAppRedo: params.canRedo,
+      onAppUndo: undo,
+      onAppRedo: redo,
+      canAppUndo: canUndo,
+      canAppRedo: canRedo,
     }),
-    [checkedSourcebookIds, handleSourcebookMutated, params]
+    [
+      isSidebarOpen,
+      setIsSidebarOpen,
+      currentChapterId,
+      handleChapterSelect,
+      deleteChapter,
+      updateChapter,
+      updateBook,
+      addChapter,
+      handleBookCreate,
+      handleBookDelete,
+      handleReorderChapters,
+      handleReorderBooks,
+      handleSidebarAiAction,
+      isEditingAvailable,
+      handleOpenImages,
+      updateStoryMetadata,
+      checkedSourcebookIds,
+      handleToggleEntry,
+      isAutoSourcebookSelectionEnabled,
+      setIsAutoSourcebookSelectionEnabled,
+      isSourcebookSelectionRunning,
+      sourcebookMutationEntryIds,
+      handleSourcebookMutated,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+    ]
   );
   const editorControls = useMemo(
     () => ({
-      currentChapter: params.currentChapter,
-      isChapterLoading: params.isChapterLoading,
-      editorRef: params.editorRef,
-      editorSettings: params.editorSettings,
-      storyLanguage: params.storyLanguage || 'en',
-      setEditorSettings: params.setEditorSettings,
-      viewMode: params.viewMode,
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      storyLanguage: storyLanguage || 'en',
+      setEditorSettings,
+      viewMode,
       updateChapter: editorUpdateChapter,
       suggestionControls: {
-        continuations: params.continuations,
-        isSuggesting: params.isSuggesting,
-        handleTriggerSuggestions: params.handleTriggerSuggestions,
-        handleCancelSuggestions: params.cancelSuggestions,
-        handleAcceptContinuation: params.handleAcceptContinuation,
-        isSuggestionMode: params.isSuggestionMode,
-        handleKeyboardSuggestionAction: params.handleKeyboardSuggestionAction,
+        continuations,
+        isSuggesting,
+        handleTriggerSuggestions,
+        handleCancelSuggestions: cancelSuggestions,
+        handleAcceptContinuation,
+        isSuggestionMode,
+        handleKeyboardSuggestionAction,
       },
       aiControls: {
-        handleAiAction: params.handleAiAction,
-        cancelAiAction: params.cancelAiAction,
-        isAiActionLoading: params.isAiActionLoading,
-        isWritingAvailable: params.isWritingAvailable,
-        isProseStreaming: params.isChatLoading || params.isAiActionLoading,
-        isChapterEmpty: !params.currentChapter?.content?.trim(),
+        handleAiAction,
+        cancelAiAction,
+        isAiActionLoading,
+        isWritingAvailable,
+        isProseStreaming: isChatLoading || isAiActionLoading,
+        isChapterEmpty: !currentChapter?.content?.trim(),
       },
-      setActiveFormats: params.setActiveFormats,
-      showWhitespace: params.showWhitespace,
-      setShowWhitespace: params.setShowWhitespace,
-      baselineContent: params.editorBaselineContent,
-      onOpenSearch: params.openSearch,
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      baselineContent: editorBaselineContent,
+      onOpenSearch: openSearch,
     }),
-    [editorUpdateChapter, params]
+    [
+      editorUpdateChapter,
+      currentChapter,
+      isChapterLoading,
+      editorRef,
+      editorSettings,
+      storyLanguage,
+      setEditorSettings,
+      viewMode,
+      continuations,
+      isSuggesting,
+      handleTriggerSuggestions,
+      cancelSuggestions,
+      handleAcceptContinuation,
+      isSuggestionMode,
+      handleKeyboardSuggestionAction,
+      handleAiAction,
+      cancelAiAction,
+      isAiActionLoading,
+      isWritingAvailable,
+      isChatLoading,
+      setActiveFormats,
+      showWhitespace,
+      setShowWhitespace,
+      editorBaselineContent,
+      openSearch,
+    ]
   );
   return {
     sidebarControls,
     editorControls,
-    appMainLayoutProps: {
-      sidebarControls,
-      editorControls,
-      chatControls: params.chatControls,
-      instructionLanguages: params.instructionLanguages,
-    },
+    appMainLayoutProps: useMemo(
+      () => ({
+        sidebarControls,
+        editorControls,
+        chatControls,
+        instructionLanguages,
+      }),
+      [sidebarControls, editorControls, chatControls, instructionLanguages]
+    ),
   };
 }

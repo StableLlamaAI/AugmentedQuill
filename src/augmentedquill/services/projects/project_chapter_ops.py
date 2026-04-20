@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, List
 
 from augmentedquill.core.config import load_story_config, save_story_config
+from augmentedquill.services.projects.project_locks import run_locked
 from augmentedquill.services.chapters.chapter_helpers import (
     _chapter_by_id_or_404,
     _get_chapter_metadata_entry,
@@ -312,3 +313,70 @@ def delete_chapter_in_project(active: Path, chap_id: int) -> None:
             story["chapters"] = [c for c in chapters_data if id(c) != target_id]
 
     save_story_config(story_path, story)
+
+
+# ---------------------------------------------------------------------------
+# Async locked wrappers — preferred for use inside FastAPI route handlers
+# ---------------------------------------------------------------------------
+
+
+async def async_write_chapter_content_in_project(
+    chap_id: int, content: str, active: Path | None = None
+) -> None:
+    """Async, per-project-locked variant of write_chapter_content_in_project."""
+    if active is None:
+        # Determine the project root the same way the sync function would.
+        from augmentedquill.services.chapters.chapter_helpers import (
+            _chapter_by_id_or_404,
+        )
+
+        _, path, _ = _chapter_by_id_or_404(chap_id, active=None)
+        project_dir = path.parent
+        while project_dir != project_dir.parent:
+            if (project_dir / "story.json").exists():
+                break
+            project_dir = project_dir.parent
+    else:
+        project_dir = active
+    await run_locked(
+        project_dir,
+        lambda: write_chapter_content_in_project(chap_id, content, active=active),
+    )
+
+
+async def async_update_chapter_metadata_in_project(
+    active: Path,
+    chap_id: int,
+    title: str | None = None,
+    summary: str | None = None,
+    notes: str | None = None,
+    private_notes: str | None = None,
+    conflicts: list | None = None,
+) -> None:
+    """Async, per-project-locked variant of update_chapter_metadata_in_project."""
+    await run_locked(
+        active,
+        lambda: update_chapter_metadata_in_project(
+            active,
+            chap_id,
+            title=title,
+            summary=summary,
+            notes=notes,
+            private_notes=private_notes,
+            conflicts=conflicts,
+        ),
+    )
+
+
+async def async_write_chapter_title_in_project(
+    active: Path, chap_id: int, title: str
+) -> None:
+    """Async, per-project-locked variant of write_chapter_title_in_project."""
+    await run_locked(
+        active, lambda: write_chapter_title_in_project(active, chap_id, title)
+    )
+
+
+async def async_delete_chapter_in_project(active: Path, chap_id: int) -> None:
+    """Async, per-project-locked variant of delete_chapter_in_project."""
+    await run_locked(active, lambda: delete_chapter_in_project(active, chap_id))

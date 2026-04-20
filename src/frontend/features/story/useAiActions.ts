@@ -11,7 +11,7 @@
 
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 
-import { ChatMessage, StoryState, WritingUnit } from '../../types';
+import { ChatMessage, WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
@@ -23,7 +23,6 @@ type PromptsState = {
 
 type UseAiActionsParams = {
   currentUnit?: WritingUnit;
-  story: StoryState;
   prompts: PromptsState;
   isEditingAvailable: boolean;
   isWritingAvailable: boolean;
