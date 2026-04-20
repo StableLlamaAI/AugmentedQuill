@@ -15,7 +15,7 @@
 import { useCallback, useRef } from 'react';
 import { create, StoreApi } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { StoryState, SourcebookEntry } from '../types';
+import type { Chapter, StoryState, SourcebookEntry } from '../types';
 import type { StoryHistoryEntry } from '../features/story/historyUtils';
 
 // ---------------------------------------------------------------------------
@@ -300,10 +300,7 @@ function chaptersStructuralEqual(
   if (a.length !== b.length) return false;
   return a.every(
     (ch: Chapter, i: number) =>
-      ch.id === b[i].id &&
-      ch.title === b[i].title &&
-      ch.book_id === b[i].book_id &&
-      ch.scope === b[i].scope
+      ch.id === b[i].id && ch.title === b[i].title && ch.book_id === b[i].book_id
   );
 }
 
