@@ -145,7 +145,9 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       [onToggleSourcebook]
     );
     const handleAddChapter = useCallback(
-      (bookId?: string): void => addChapter('New Chapter', '', bookId),
+      async (bookId?: string): Promise<void> => {
+        await addChapter('New Chapter', '', bookId);
+      },
       [addChapter]
     );
 

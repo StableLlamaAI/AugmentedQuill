@@ -21,10 +21,11 @@ import type {
   AppSettings,
   ChatAttachment,
   ChatMessage,
+  LLMConfig,
   MetadataTab,
-  PromptsData,
   StoryState,
 } from '../../types';
+import type { PromptsState } from '../settings/usePrompts';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 
@@ -37,8 +38,8 @@ type CurrentChapterContext = {
 type UseAppChatRuntimeParams = {
   storyId: string;
   storyRef: React.MutableRefObject<StoryState>;
-  prompts: PromptsData;
-  activeChatConfig: AppSettings['llm_config'] | null;
+  prompts: PromptsState;
+  activeChatConfig: LLMConfig;
   isChatAvailable: boolean;
   currentChapterId: string | null;
   currentChapterContext: CurrentChapterContext;

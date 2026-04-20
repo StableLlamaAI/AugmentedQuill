@@ -18,12 +18,7 @@ import { useCallback, useMemo, useRef } from 'react';
 
 import { AppHeader } from '../layout/AppHeader';
 import { AppMainLayout } from '../layout/AppMainLayout';
-import type {
-  ChapterContinuation,
-  EditorSettings,
-  SourcebookEntry,
-  StoryState,
-} from '../../types';
+import type { EditorSettings, SourcebookEntry, StoryState } from '../../types';
 
 type AppHeaderProps = React.ComponentProps<typeof AppHeader>;
 type AppMainLayoutProps = React.ComponentProps<typeof AppMainLayout>;
@@ -62,7 +57,7 @@ type UseAppHeaderPropsParams = {
   setIsAppearanceOpen: (open: boolean) => void;
   setAppTheme: (theme: EditorSettings['theme']) => void;
   editorSettings: EditorSettings;
-  setEditorSettings: (updater: (prev: EditorSettings) => EditorSettings) => void;
+  setEditorSettings: AppHeaderProps['appearanceControls']['setEditorSettings'];
   appSettings: AppHeaderProps['modelControls']['appSettings'];
   setAppSettings: AppHeaderProps['modelControls']['setAppSettings'];
   handleSaveSettings: AppHeaderProps['modelControls']['saveSettings'];
@@ -84,9 +79,9 @@ type UseAppMainLayoutPropsParams = {
   currentChapterId: string | null;
   handleChapterSelect: (chapterId: string | null) => void;
   deleteChapter: (chapterId: string) => Promise<void>;
-  updateChapter: (id: string, partial: Record<string, unknown>) => Promise<unknown>;
+  updateChapter: (id: string, partial: Record<string, unknown>) => Promise<void>;
   updateBook: (id: string, partial: Record<string, unknown>) => Promise<void>;
-  addChapter: (title: string, content?: string, bookId?: string) => Promise<void>;
+  addChapter: (title?: string, content?: string, bookId?: string) => Promise<void>;
   handleBookCreate: (title: string) => Promise<void>;
   handleBookDelete: (bookId: string) => Promise<void>;
   handleReorderChapters: AppMainLayoutProps['sidebarControls']['handleReorderChapters'];
@@ -124,11 +119,11 @@ type UseAppMainLayoutPropsParams = {
   storyLanguage?: string;
   setEditorSettings: AppHeaderProps['appearanceControls']['setEditorSettings'];
   viewMode: AppMainLayoutProps['editorControls']['viewMode'];
-  continuations: ChapterContinuation[];
+  continuations: string[];
   isSuggesting: boolean;
-  handleTriggerSuggestions: () => void;
+  handleTriggerSuggestions: () => Promise<void>;
   cancelSuggestions: () => void;
-  handleAcceptContinuation: (continuation: ChapterContinuation) => void;
+  handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
   isSuggestionMode: boolean;
   handleKeyboardSuggestionAction: AppMainLayoutProps['editorControls']['suggestionControls']['handleKeyboardSuggestionAction'];
   handleAiAction: AppHeaderProps['aiControls']['handleAiAction'];
@@ -204,8 +199,8 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
       redoSteps,
       undoOptions,
       redoOptions,
-      nextUndoLabel,
-      nextRedoLabel,
+      nextUndoLabel: nextUndoLabel ?? null,
+      nextRedoLabel: nextRedoLabel ?? null,
       canUndo,
       canRedo,
     }),
@@ -493,8 +488,12 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       isSourcebookSelectionRunning,
       mutatedSourcebookEntryIds: sourcebookMutationEntryIds,
       onSourcebookMutated: handleSourcebookMutated,
-      onAppUndo: undo,
-      onAppRedo: redo,
+      onAppUndo: async () => {
+        undo();
+      },
+      onAppRedo: async () => {
+        redo();
+      },
       canAppUndo: canUndo,
       canAppRedo: canRedo,
     }),

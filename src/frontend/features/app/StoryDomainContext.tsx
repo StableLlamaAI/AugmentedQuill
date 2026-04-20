@@ -45,7 +45,7 @@ export interface StoryMutations {
     sync?: boolean,
     pushHistory?: boolean,
     forceNewHistory?: boolean
-  ) => Promise<unknown>;
+  ) => Promise<void>;
   updateBook: (id: string, partial: Record<string, unknown>) => Promise<void>;
   addChapter: (title: string, content?: string, bookId?: string) => Promise<void>;
   deleteChapter: (chapterId: string) => Promise<void>;
@@ -322,7 +322,7 @@ export function useStoryDomain(): StoryMutations & StoryReactiveState {
 export function useSidebarUpdateChapter(): (
   id: string,
   partial: Record<string, unknown>
-) => Promise<unknown> {
+) => Promise<void> {
   const { updateChapter } = useStoryMutations();
   return useCallback(
     (id: string, partial: Record<string, unknown>) =>
