@@ -30,7 +30,7 @@ import { AppTheme, EditorSettings } from '../../types';
 type HeaderAppearanceControlsProps = {
   appearanceRef: RefObject<HTMLDivElement | null>;
   isAppearanceOpen: boolean;
-  setIsAppearanceOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsAppearanceOpen: (v: boolean) => void;
   isLight: boolean;
   textMain: string;
   buttonActive: string;
@@ -39,7 +39,7 @@ type HeaderAppearanceControlsProps = {
   editorSettings: EditorSettings;
   setEditorSettings: React.Dispatch<React.SetStateAction<EditorSettings>>;
   sliderClass: string;
-  setIsDebugLogsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsDebugLogsOpen: (v: boolean) => void;
 };
 
 export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> = ({

@@ -10,16 +10,23 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { StoryState, ProjectMetadata, ChatSession } from '../../types';
+import { ProjectMetadata, StoryState } from '../../types';
 import { api } from '../../services/api';
 import { ProjectListItem } from '../../services/apiTypes';
 import { mapSelectStoryToState } from '../story/storyMappers';
 import { formatError, notifyError } from '../../services/errorNotifier';
+import { useChatStore } from '../../stores/chatStore';
 
 type CreateProjectType = 'short-story' | 'novel' | 'series';
 
 type UseProjectManagementParams = {
-  story: StoryState;
+  storyId: string;
+  storyTitle: string;
+  storyProjectType: 'short-story' | 'novel' | 'series';
+  storyLanguage: string;
+  storySummary: string;
+  storyStyleTags: string[];
+  storyConflicts: StoryState['conflicts'];
   refreshStory: () => Promise<void>;
   loadStory: (story: StoryState) => void;
   updateStoryMetadata: (
@@ -33,7 +40,6 @@ type UseProjectManagementParams = {
   ) => Promise<void>;
   handleSelectChat: (id: string) => Promise<void>;
   handleNewChat: (incognito?: boolean) => void;
-  setChatHistoryList: (list: ChatSession[]) => void;
   getErrorMessage: (error: unknown, fallback: string) => string;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
@@ -44,24 +50,40 @@ type UseProjectManagementParams = {
   }) => void;
 };
 
+const VALID_PROJECT_TYPES = ['short-story', 'novel', 'series'] as const;
+
+const normalizeProjectType = (
+  t: string | undefined
+): 'short-story' | 'novel' | 'series' => {
+  if (VALID_PROJECT_TYPES.includes(t as 'short-story' | 'novel' | 'series')) {
+    return t as 'short-story' | 'novel' | 'series';
+  }
+  return 'novel';
+};
+
 const mapProjectsList = (projects: ProjectListItem[]) =>
   projects.map((project: ProjectListItem) => ({
     id: project.name,
     title: project.title || project.name,
-    type: project.type || 'novel',
+    type: normalizeProjectType(project.type),
     updatedAt: Date.now(),
-    language: project.language || 'en',
+    language: project.language ?? 'en',
   }));
 
 /** Custom React hook that manages project management. */
 export function useProjectManagement({
-  story,
+  storyId,
+  storyTitle,
+  storyProjectType,
+  storyLanguage,
+  storySummary,
+  storyStyleTags,
+  storyConflicts,
   refreshStory,
   loadStory,
   updateStoryMetadata,
   handleSelectChat,
   handleNewChat,
-  setChatHistoryList,
   getErrorMessage,
   isSettingsOpen,
   setIsSettingsOpen,
@@ -92,7 +114,7 @@ export function useProjectManagement({
     const saved = localStorage.getItem('augmentedquill_projects_meta');
     return saved
       ? JSON.parse(saved)
-      : [{ id: story.id, title: story.title, updatedAt: Date.now() }];
+      : [{ id: storyId, title: storyTitle, updatedAt: Date.now() }];
   });
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [instructionLanguages, setInstructionLanguages] = useState<string[]>(['en']);
@@ -110,13 +132,13 @@ export function useProjectManagement({
               type: 'short-story' | 'novel' | 'series';
               updatedAt: number;
               language: string;
-            }) => project.id === story.id
+            }) => project.id === storyId
           );
           if (hasActiveStory) {
             return listedProjects;
           }
           const activeFromPreviousState = prev.find(
-            (project: ProjectMetadata) => project.id === story.id
+            (project: ProjectMetadata) => project.id === storyId
           );
           return activeFromPreviousState
             ? [...listedProjects, activeFromPreviousState]
@@ -126,7 +148,7 @@ export function useProjectManagement({
     } catch (error) {
       console.error('Failed to fetch projects', error);
     }
-  }, [story.id]);
+  }, [storyId]);
 
   useEffect(() => {
     refreshProjects();
@@ -137,29 +159,37 @@ export function useProjectManagement({
   }, [projects]);
 
   useEffect(() => {
-    if (!story || !story.id) return;
+    if (!storyId) return;
 
-    localStorage.setItem(`project_${story.id}`, JSON.stringify(story));
+    localStorage.setItem(
+      `project_${storyId}`,
+      JSON.stringify({
+        id: storyId,
+        title: storyTitle,
+        projectType: storyProjectType,
+        language: storyLanguage,
+      })
+    );
     setProjects((prev: ProjectMetadata[]) => {
-      const exists = prev.find((project: ProjectMetadata) => project.id === story.id);
-      const language = story.language || 'en';
+      const exists = prev.find((project: ProjectMetadata) => project.id === storyId);
+      const language = storyLanguage || 'en';
       if (
         exists &&
-        exists.title === story.title &&
-        exists.type === story.projectType &&
+        exists.title === storyTitle &&
+        exists.type === storyProjectType &&
         exists.language === language
       ) {
         return prev.map((project: ProjectMetadata) =>
-          project.id === story.id ? { ...project, updatedAt: Date.now() } : project
+          project.id === storyId ? { ...project, updatedAt: Date.now() } : project
         );
       }
       if (exists) {
         return prev.map((project: ProjectMetadata) =>
-          project.id === story.id
+          project.id === storyId
             ? {
                 ...project,
-                title: story.title,
-                type: story.projectType,
+                title: storyTitle,
+                type: storyProjectType,
                 language,
                 updatedAt: Date.now(),
               }
@@ -169,15 +199,15 @@ export function useProjectManagement({
       return [
         ...prev,
         {
-          id: story.id,
-          title: story.title,
-          type: story.projectType,
+          id: storyId,
+          title: storyTitle,
+          type: storyProjectType,
           language,
           updatedAt: Date.now(),
         },
       ];
     });
-  }, [story.id, story.title, story.projectType, story.language]);
+  }, [storyId, storyTitle, storyProjectType, storyLanguage]);
 
   const handleLoadProject = useCallback(
     async (id: string) => {
@@ -187,7 +217,7 @@ export function useProjectManagement({
 
         await refreshStory();
         const chats = await api.chat.list();
-        setChatHistoryList(chats);
+        useChatStore.getState().setChatHistoryList(chats);
         if (chats.length > 0) {
           await handleSelectChat(chats[0].id);
         } else {
@@ -197,22 +227,25 @@ export function useProjectManagement({
         console.error('Failed to load project', error);
       }
     },
-    [refreshStory, setChatHistoryList, handleSelectChat, handleNewChat]
+    [refreshStory, handleSelectChat, handleNewChat]
   );
 
   const handleImportProject = useCallback(
     async (file: File) => {
       try {
-        const previousActiveProjectId = story.id;
+        const previousActiveProjectId = storyId;
         const importedFileSnapshot = file;
         const knownProjectIds = new Set(
           projects.map((project: ProjectMetadata) => project.id)
         );
         const response = await api.projects.import(file);
-        if (response.ok && response.available) {
-          setProjects(mapProjectsList(response.available));
+        if (response.ok) {
+          // Fetch the full project listing (which includes title, type, language)
+          // rather than using the minimal registry snapshot in the mutation response.
+          const listing = await api.projects.list();
+          setProjects(mapProjectsList(listing.available));
 
-          const importedNameFromList = response.available
+          const importedNameFromList = listing.available
             .map((project: ProjectListItem) => project.name)
             .find((name: string) => !knownProjectIds.has(name));
           const importedNameFromMessage =
@@ -245,7 +278,7 @@ export function useProjectManagement({
       }
     },
     [
-      story.id,
+      storyId,
       projects,
       recordHistoryEntry,
       refreshProjects,
@@ -276,41 +309,34 @@ export function useProjectManagement({
   const handleCreateProjectConfirm = useCallback(
     async (name: string, type: CreateProjectType, language: string = 'en') => {
       try {
-        const previousProjectId = story.id;
+        const previousProjectId = storyId;
         const result = await api.projects.create(name, type, language);
         if (!result.ok) return;
 
         const listing = await api.projects.list();
-        if (listing.projects) {
-          setProjects(mapProjectsList(listing.projects));
+        if (listing.available) {
+          setProjects(mapProjectsList(listing.available));
         }
 
         if (result.story) {
           const mappedStory: StoryState = mapSelectStoryToState(
             name,
             result.story,
-            (result.story.chapters || []).map(
+            (result.story.chapters ?? []).map(
               (
-                chapter: {
-                  title?: string;
-                  summary?: string;
-                  filename?: string;
-                  book_id?: string;
-                  notes?: string;
-                  private_notes?: string;
-                  conflicts?: import('../../types').Conflict[];
-                },
+                chapter: import('../../types/api.generated').components['schemas']['StoryChapterSummary'],
                 index: number
               ) => ({
                 id: String(index + 1),
-                title: chapter.title || '',
-                summary: chapter.summary || '',
+                title: chapter.title ?? '',
+                summary: chapter.summary ?? '',
                 content: '',
-                filename: chapter.filename,
-                book_id: chapter.book_id,
-                notes: chapter.notes,
-                private_notes: chapter.private_notes,
-                conflicts: chapter.conflicts,
+                filename: chapter.filename ?? undefined,
+                book_id: chapter.book_id ?? undefined,
+                notes: chapter.notes ?? undefined,
+                private_notes: chapter.private_notes ?? undefined,
+                conflicts: (chapter.conflicts ??
+                  []) as import('../../types').Conflict[],
               })
             ),
             null,
@@ -359,7 +385,7 @@ export function useProjectManagement({
       }
     },
     [
-      story.id,
+      storyId,
       loadStory,
       handleNewChat,
       refreshProjects,
@@ -389,7 +415,7 @@ export function useProjectManagement({
         setProjects(newProjects);
         localStorage.removeItem(`project_${id}`);
 
-        if (id === story.id && newProjects.length > 0) {
+        if (id === storyId && newProjects.length > 0) {
           await handleLoadProject(newProjects[0].id);
         }
 
@@ -419,7 +445,7 @@ export function useProjectManagement({
     },
     [
       projects,
-      story.id,
+      storyId,
       handleLoadProject,
       refreshProjects,
       recordHistoryEntry,
@@ -429,15 +455,15 @@ export function useProjectManagement({
 
   const handleRenameProject = useCallback(
     (id: string, newName: string, newLang?: string) => {
-      if (id === story.id) {
+      if (id === storyId) {
         // if the active project is renamed, update story metadata
         updateStoryMetadata(
           newName,
-          story.summary,
-          story.styleTags,
+          storySummary,
+          storyStyleTags,
           undefined,
           undefined,
-          story.conflicts,
+          storyConflicts,
           newLang
         );
         return;
@@ -457,7 +483,7 @@ export function useProjectManagement({
       if (newLang) loaded.language = newLang;
       localStorage.setItem(`project_${id}`, JSON.stringify(loaded));
     },
-    [story.id, story.summary, story.styleTags, updateStoryMetadata]
+    [storyId, storySummary, storyStyleTags, storyConflicts, updateStoryMetadata]
   );
 
   return {

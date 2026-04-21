@@ -9,7 +9,7 @@
  * Defines the story metadata unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Edit } from 'lucide-react';
 import {
   MarkdownView,
@@ -18,6 +18,7 @@ import {
 } from '../editor/MarkdownView';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, Conflict } from '../../types';
+import { useMetadataDialog, useUIStore } from '../../stores/uiStore';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
 import { MetadataParams } from './metadataSync';
@@ -42,10 +43,6 @@ interface StoryMetadataProps {
     conflicts?: Conflict[],
     language?: string
   ) => Promise<void>;
-  metadataDialogTrigger?: {
-    id: number;
-    initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
-  } | null;
   onAiGenerateSummary?: (
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
@@ -55,8 +52,6 @@ interface StoryMetadataProps {
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
   primarySourceAvailable?: boolean;
-  initialTab?: 'summary' | 'notes' | 'private' | 'conflicts';
-  closeDialogTrigger?: number;
   theme?: AppTheme;
   baselineSummary?: string;
   baselineNotes?: string;
@@ -76,12 +71,9 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   projectType = 'novel',
   languages,
   onUpdate,
-  metadataDialogTrigger,
   onAiGenerateSummary,
   summaryAiDisabledReason,
   primarySourceAvailable,
-  initialTab,
-  closeDialogTrigger,
   theme = 'mixed',
   baselineSummary = '',
   baselineNotes = '',
@@ -89,19 +81,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   baselineConflicts = [],
   spellCheck = true,
 }: StoryMetadataProps) => {
-  const [metadataModalOpen, setMetadataModalOpen] = useState(false);
-
-  React.useEffect(() => {
-    if (metadataDialogTrigger) {
-      setMetadataModalOpen(true);
-    }
-  }, [metadataDialogTrigger]);
-
-  React.useEffect(() => {
-    if (closeDialogTrigger) {
-      setMetadataModalOpen(false);
-    }
-  }, [closeDialogTrigger]);
+  const metadataDialog = useMetadataDialog();
 
   const { isLight } = useThemeClasses();
   const { getRanges } = useSearchHighlight();
@@ -137,9 +117,9 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       id="story-metadata"
       className={`p-6 flex-1 overflow-y-auto custom-scrollbar ${containerClass}`}
     >
-      {metadataModalOpen && (
+      {metadataDialog.isOpen && (
         <MetadataEditorDialog
-          key={metadataDialogTrigger?.id ?? 0}
+          key={metadataDialog.version}
           type="story"
           title="Edit Story Metadata"
           language={language}
@@ -163,10 +143,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           }}
           languages={languages}
           onSave={handleMetadataSave}
-          onClose={() => setMetadataModalOpen(false)}
+          onClose={() => useUIStore.getState().closeMetadataDialog()}
           allowConflicts={usesStoryDraftSource}
           primarySourceLabel={primarySourceLabel}
-          initialTab={initialTab}
+          initialTab={metadataDialog.initialTab}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
           primarySourceAvailable={primarySourceAvailable}
@@ -194,7 +174,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           )}
         </div>
         <button
-          onClick={() => setMetadataModalOpen(true)}
+          onClick={() => useUIStore.getState().openMetadataDialog()}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"
           aria-label="Edit story metadata"
           title="Edit story metadata"

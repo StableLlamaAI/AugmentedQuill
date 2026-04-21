@@ -11,10 +11,12 @@
  */
 
 import React, { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { Chat } from '../chat/Chat';
 import { ChatProvider } from '../chat/ChatContext';
 import { MainChatControls } from './layoutControlTypes';
+import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 import type { AppTheme } from '../../types';
 
 export interface AppChatPanelProps {
@@ -27,40 +29,62 @@ export const AppChatPanel: React.FC<AppChatPanelProps> = React.memo(
   ({ chatControls, currentTheme, storyLanguage }: AppChatPanelProps) => {
     const {
       isChatOpen,
-      chatMessages,
-      isChatLoading,
       isChatAvailable,
       activeChatConfig,
-      systemPrompt,
       handleSendMessage,
       handleStopChat,
       handleRegenerate,
       handleEditMessage,
       handleDeleteMessage,
-      setSystemPrompt,
       handleLoadProject,
-      incognitoSessions,
-      chatHistoryList,
-      currentChatId,
-      isIncognito,
       handleSelectChat,
       handleNewChat,
       handleDeleteChat,
       handleDeleteAllChats,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      onMutationClick,
+    } = chatControls;
+
+    // Read all frequently-changing chat state directly from the store so that
+    // AppMainLayout (and its Editor + Sidebar siblings) are never re-rendered
+    // by chat message updates.
+    const {
+      chatMessages,
+      isChatLoading,
+      sessionMutations,
+      systemPrompt,
+      setSystemPrompt,
+      isIncognito,
       setIsIncognito,
       allowWebSearch,
       setAllowWebSearch,
       scratchpad,
-      onUpdateScratchpad,
-      onDeleteScratchpad,
-      sessionMutations,
-      onMutationClick,
-    } = chatControls;
+      incognitoSessions,
+      chatHistoryList,
+      currentChatId,
+    } = useChatStore(
+      useShallow((s: ChatStoreState) => ({
+        chatMessages: s.chatMessages,
+        isChatLoading: s.isChatLoading,
+        sessionMutations: s.sessionMutations,
+        systemPrompt: s.systemPrompt,
+        setSystemPrompt: s.setSystemPrompt,
+        isIncognito: s.isIncognito,
+        setIsIncognito: s.setIsIncognito,
+        allowWebSearch: s.allowWebSearch,
+        setAllowWebSearch: s.setAllowWebSearch,
+        scratchpad: s.scratchpad,
+        incognitoSessions: s.incognitoSessions,
+        chatHistoryList: s.chatHistoryList,
+        currentChatId: s.currentChatId,
+      }))
+    );
 
     // Memoize merged session list so Chat's React.memo isn't defeated by a
     // new array reference on every parent render.
     const chatSessions = useMemo(
-      () => [...incognitoSessions, ...chatHistoryList],
+      () => [...incognitoSessions, ...(chatHistoryList ?? [])],
       [incognitoSessions, chatHistoryList]
     );
 

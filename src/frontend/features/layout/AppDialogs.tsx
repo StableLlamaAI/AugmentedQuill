@@ -39,7 +39,7 @@ type ProjectsValue = SettingsDialogProps['projects'];
 
 type AppDialogsProps = {
   isSettingsOpen: boolean;
-  setIsSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsSettingsOpen: (v: boolean) => void;
   appSettings: SettingsValue;
   setAppSettings: SettingsDialogProps['onSaveSettings'];
   projects: ProjectsValue;
@@ -56,7 +56,7 @@ type AppDialogsProps = {
   instructionLanguages: string[];
 
   isImagesOpen: boolean;
-  setIsImagesOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsImagesOpen: (v: boolean) => void;
   updateStoryImageSettings: React.ComponentProps<
     typeof import('../projects/ProjectImages').ProjectImages
   >['onUpdateSettings'];
@@ -65,7 +65,7 @@ type AppDialogsProps = {
   editorRef: RefObject<EditorHandle | null>;
 
   isCreateProjectOpen: boolean;
-  setIsCreateProjectOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsCreateProjectOpen: (v: boolean) => void;
   handleCreateProjectConfirm: (
     name: string,
     type: 'short-story' | 'novel' | 'series',

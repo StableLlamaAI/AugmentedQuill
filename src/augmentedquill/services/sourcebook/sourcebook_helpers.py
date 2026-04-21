@@ -227,9 +227,9 @@ def _normalize_entry_data(e_data: dict) -> dict:
     }
 
 
-def _get_story_data() -> Any:
+def _get_story_data(active: Any = None) -> Any:
     """Get Story Data."""
-    active = get_active_project_dir()
+    active = active or get_active_project_dir()
     if not active:
         return None, None
     story_path = active / "story.json"
@@ -237,9 +237,9 @@ def _get_story_data() -> Any:
     return story, story_path
 
 
-def sourcebook_list_entries() -> List[Dict]:
+def sourcebook_list_entries(active: Any = None) -> List[Dict]:
     """Sourcebook List Entries."""
-    story, _ = _get_story_data()
+    story, _ = _get_story_data(active)
     if not story:
         return []
 
@@ -282,15 +282,16 @@ def sourcebook_search_entries(
     query: str,
     match_mode: SOURCEBOOK_SEARCH_MODE = "extensive",
     split_query_fallback: bool = False,
+    active: Any = None,
 ) -> List[Dict]:
     """Search sourcebook entries with direct/extensive matching and optional split fallback."""
-    story, _ = _get_story_data()
+    story, _ = _get_story_data(active)
     if not story:
         return []
 
     normalized_query = _normalize_keyword_value(query)
     if not normalized_query:
-        return sourcebook_list_entries()
+        return sourcebook_list_entries(active)
 
     sb_dict = story.get("sourcebook", {})
     all_entries: list[dict] = []
@@ -335,12 +336,12 @@ def sourcebook_search_entries(
     return fallback_results
 
 
-def sourcebook_get_entry(name_or_id: str) -> Optional[Dict]:
+def sourcebook_get_entry(name_or_id: str, active: Any = None) -> Optional[Dict]:
     """Sourcebook Get Entry."""
     if not name_or_id:
         return None
 
-    story, _ = _get_story_data()
+    story, _ = _get_story_data(active)
     if not story:
         return None
     sb_dict = story.get("sourcebook", {})
@@ -369,6 +370,7 @@ def sourcebook_create_entry(
     images: List[str] | object = _UNSET,
     keywords: List[str] | object = _UNSET,
     relations: List[dict] | object = _UNSET,
+    active: Any = None,
 ) -> Dict:
     """Create a sourcebook entry for the active project."""
     if not name or not isinstance(name, str) or not name.strip():
@@ -437,7 +439,7 @@ def sourcebook_create_entry(
                 }
             cleaned_relations.append(rel)
 
-    story, story_path = _get_story_data()
+    story, story_path = _get_story_data(active)
     if not story:
         return {"error": "No active project"}
 
@@ -461,12 +463,12 @@ def sourcebook_create_entry(
     return {"id": name, "name": name, **new_entry_data}
 
 
-def sourcebook_delete_entry(name_or_id: str) -> bool:
+def sourcebook_delete_entry(name_or_id: str, active: Any = None) -> bool:
     """Sourcebook Delete Entry."""
     if not name_or_id:
         return False
 
-    story, story_path = _get_story_data()
+    story, story_path = _get_story_data(active)
     if not story:
         return False
     sb_dict = story.get("sourcebook", {})
@@ -497,12 +499,13 @@ def sourcebook_update_entry(
     images: List[str] = None,
     keywords: List[str] = None,
     relations: List[Dict] = None,
+    active: Any = None,
 ) -> Dict:
     """Sourcebook Update Entry."""
     if not name_or_id:
         return {"error": "Invalid identifier: name_or_id is required."}
 
-    story, story_path = _get_story_data()
+    story, story_path = _get_story_data(active)
     if not story:
         return {"error": "No active project"}
 

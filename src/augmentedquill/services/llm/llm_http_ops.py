@@ -12,6 +12,7 @@ Purpose: centralize LLM HTTP communication and guarantee logging for every reque
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 import datetime
@@ -76,6 +77,29 @@ def _log_response_body(response: httpx.Response) -> Any:
         except Exception:
             return {"raw": response.text}
     return {"raw": response.text}
+
+
+# ---------------------------------------------------------------------------
+# Retry helpers
+# ---------------------------------------------------------------------------
+
+#: Maximum number of automatic retry attempts for transient LLM failures.
+_MAX_RETRIES = 3
+#: Initial delay in seconds before the first retry; doubles with each attempt.
+_RETRY_BACKOFF_BASE_S = 1.0
+#: HTTP status codes considered transient and eligible for retry.
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+#: Transport-level exception types eligible for retry.
+_RETRYABLE_TRANSPORT_ERRORS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True when *exc* represents a transient failure worth retrying."""
+    return isinstance(exc, _RETRYABLE_TRANSPORT_ERRORS)
 
 
 def _finalize_log_entry(
@@ -147,10 +171,32 @@ async def logged_request(
     add_llm_log(log_entry)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.request(
-                method=method, url=url, headers=headers, json=body
-            )
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            if attempt > 0:
+                delay = _RETRY_BACKOFF_BASE_S * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.request(
+                        method=method, url=url, headers=headers, json=body
+                    )
+                if (
+                    response.status_code in _RETRYABLE_STATUS_CODES
+                    and attempt < _MAX_RETRIES
+                ):
+                    last_exc = None
+                    continue
+                break
+            except Exception as exc:
+                last_exc = exc
+                if not _is_retryable(exc) or attempt >= _MAX_RETRIES:
+                    raise
+        else:
+            # All retries exhausted via status code path — use last response.
+            pass
+        if last_exc is not None:
+            raise last_exc
     except Exception as exc:
         # For the common case of a ReadTimeout or other transport-level
         # error, we don't need the entire Python traceback in the log; the

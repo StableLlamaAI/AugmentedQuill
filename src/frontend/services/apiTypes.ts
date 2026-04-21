@@ -7,161 +7,81 @@
 
 /**
  * Defines the api types unit so this responsibility stays isolated, testable, and easy to evolve.
+ *
+ * All types here are re-exported aliases of the auto-generated TypeScript types derived from the
+ * backend's OpenAPI schema. Do NOT hand-edit these definitions; update the backend Pydantic models
+ * instead and then run `npm run generate:types` to regenerate `types/api.generated.ts`.
  */
 
-import { Book, Chapter, Conflict, SourcebookEntry, SourcebookRelation } from '../types';
+import { Chapter } from '../types';
+import { components } from '../types/api.generated';
 
-export interface MachineModelConfig {
-  name: string;
-  base_url: string;
-  api_key?: string;
-  model: string;
-  timeout_s?: number;
-  context_window_tokens?: number;
-  temperature?: number;
-  top_p?: number;
-  max_tokens?: number;
-  presence_penalty?: number;
-  frequency_penalty?: number;
-  stop?: string[];
-  seed?: number;
-  top_k?: number;
-  min_p?: number;
-  extra_body?: string;
-  preset_id?: string;
-  writing_warning?: string;
-  is_multimodal?: boolean;
-  supports_function_calling?: boolean;
-  prompt_overrides?: Record<string, string>;
-}
+// ---------------------------------------------------------------------------
+// Machine / settings types
+// ---------------------------------------------------------------------------
 
-export interface MachineOpenAIConfig {
-  models?: MachineModelConfig[];
-  selected?: string;
-  selected_chat?: string;
-  selected_writing?: string;
-  selected_editing?: string;
-}
+export type MachineModelConfig = components['schemas']['MachineModelConfig'];
+export type MachineOpenAIConfig = components['schemas']['MachineOpenAIConfig'];
+export type MachineConfigResponse = components['schemas']['MachineConfigResponse'];
+export type ModelPresetWarning = components['schemas']['ModelPresetWarning'];
+export type ModelPresetEntry = components['schemas']['ModelPresetEntry'];
+export type MachinePresetsResponse = components['schemas']['MachinePresetsResponse'];
+export type MachineTestResponse = components['schemas']['MachineTestResponse'];
+export type MachineTestModelResponse =
+  components['schemas']['MachineTestModelResponse'];
+export type PromptsResponse = components['schemas']['PromptsResponse'];
+export type StorySummaryResponse = components['schemas']['StorySummaryResponse'];
+export type StoryTagsResponse = components['schemas']['StoryTagsResponse'];
 
-export interface ModelPresetWarning {
-  writing?: string;
-}
+// ---------------------------------------------------------------------------
+// Project types
+// ---------------------------------------------------------------------------
 
-export interface ModelPresetEntry {
-  id: string;
-  name: string;
-  description: string;
-  model_id_patterns: string[];
-  parameters: Partial<MachineModelConfig>;
-  warnings?: ModelPresetWarning;
-}
+/** @deprecated Use ProjectInfo from the generated types directly. */
+export type ProjectListItem = components['schemas']['ProjectInfo'];
+export type ProjectsListResponse = components['schemas']['ProjectListResponse'];
+export type ProjectSelectResponse = components['schemas']['ProjectSelectResponse'];
+export type ProjectMutationResponse = components['schemas']['ProjectMutationResponse'];
+export type StoryApiPayload = components['schemas']['StoryPayload'];
+export type BookMutationResponse = components['schemas']['BookMutationResponse'];
 
-export interface MachinePresetsResponse {
-  presets: ModelPresetEntry[];
-}
+// ---------------------------------------------------------------------------
+// Story content
+// ---------------------------------------------------------------------------
 
-export interface MachineConfigResponse {
-  gui_language?: string;
-  openai?: MachineOpenAIConfig;
-}
+export type StoryContentResponse = components['schemas']['StoryContentResponse'];
 
-export interface ProjectListItem {
-  name: string;
-  title?: string;
-  type?: 'short-story' | 'novel' | 'series';
-  path?: string;
-  is_valid?: boolean;
-  language?: string;
-}
+// ---------------------------------------------------------------------------
+// Chapter types
+// ---------------------------------------------------------------------------
 
-export interface StoryApiPayload {
-  project_title?: string;
-  story_summary?: string;
-  language?: string;
-  notes?: string;
-  private_notes?: string;
-  tags?: string[];
-  image_style?: string;
-  image_additional_info?: string;
-  project_type?: 'short-story' | 'novel' | 'series';
-  books?: Book[];
-  sourcebook?: SourcebookEntry[];
-  conflicts?: Conflict[];
-  llm_prefs?: {
-    prompt_overrides?: Record<string, string>;
-    temperature?: number;
-    max_tokens?: number;
-  };
-  chapters?: Array<{
-    title?: string;
-    summary?: string;
-    filename?: string;
-    book_id?: string;
-    notes?: string;
-    private_notes?: string;
-    conflicts?: Conflict[];
-  }>;
-}
+/** @deprecated Use ChapterSummary from the generated types directly. */
+export type ChapterListItem = components['schemas']['ChapterSummary'];
+/** @deprecated Use ChaptersListResponse from the generated types directly. */
+export type ChapterListResponse = components['schemas']['ChaptersListResponse'];
+export type ChapterDetailResponse = components['schemas']['ChapterDetailResponse'];
 
-export interface ProjectsListResponse {
-  current?: string;
-  recent?: string[];
-  available?: ProjectListItem[];
-  projects?: ProjectListItem[];
-}
+// ---------------------------------------------------------------------------
+// Chat types
+// ---------------------------------------------------------------------------
 
-export interface ProjectSelectResponse {
-  ok?: boolean;
-  message?: string;
-  story?: StoryApiPayload | null;
-  error?: 'invalid_config' | string;
-  error_message?: string;
-}
+export type ChatToolBatchMutationResponse =
+  components['schemas']['ChatToolBatchMutationResponse'];
+export type ChatListItem = components['schemas']['ChatListItem'];
+export type ChatListResponse = components['schemas']['ChatListResponse'];
+export type ChatDetailResponse = components['schemas']['ChatDetailResponse'];
 
-export interface ProjectMutationResponse {
-  ok: boolean;
-  message?: string;
-  detail?: string;
-  available?: ProjectListItem[];
-  story?: StoryApiPayload;
-}
+// ---------------------------------------------------------------------------
+// Image types
+// ---------------------------------------------------------------------------
 
-export interface StoryContentResponse {
-  ok: boolean;
-  content: string;
-}
+/** @deprecated Use ProjectImageInfo from the generated types directly. */
+export type ProjectImage = components['schemas']['ProjectImageInfo'];
+export type ListImagesResponse = components['schemas']['ListImagesResponse'];
 
-export interface ChapterListItem {
-  id: number;
-  title: string;
-  summary: string;
-  filename?: string;
-  book_id?: string;
-  notes?: string;
-  private_notes?: string;
-  conflicts?: Conflict[];
-}
-
-export interface ChapterListResponse {
-  chapters: ChapterListItem[];
-}
-
-export interface ChapterDetailResponse {
-  id: number;
-  title: string;
-  filename: string;
-  content: string;
-  summary: string;
-  notes?: string;
-  private_notes?: string;
-  conflicts?: Conflict[];
-}
-
-export interface ChatToolFunctionCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-}
+// ---------------------------------------------------------------------------
+// Chat streaming / tool-call types (not FastAPI response models — hand-written)
+// ---------------------------------------------------------------------------
 
 export interface ChatApiMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -173,6 +93,12 @@ export interface ChatApiMessage {
   }>;
   tool_call_id?: string;
   name?: string;
+}
+
+export interface ChatToolFunctionCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
 }
 
 export interface ChatToolExecutionResponse {
@@ -194,66 +120,38 @@ export interface ChatToolExecutionResponse {
   };
 }
 
-export interface ChatToolBatchMutationResponse {
-  ok: boolean;
-  batch_id: string;
-}
+// ---------------------------------------------------------------------------
+// Sourcebook types
+// ---------------------------------------------------------------------------
 
-export interface ProjectImage {
-  filename: string;
-  title?: string;
-  description?: string;
-  url?: string;
-  is_placeholder?: boolean;
-}
-
-export interface ListImagesResponse {
-  images: ProjectImage[];
-}
-
-export interface SourcebookUpsertPayload {
+/**
+ * Upsert payload for sourcebook entries.
+ * Extends SourcebookEntryCreate with an optional `id` so the same type can
+ * describe both create (no id) and update (with id) operations.
+ */
+export type SourcebookUpsertPayload = components['schemas']['SourcebookEntryCreate'] & {
   id?: string;
-  name: string;
-  synonyms: string[];
-  category?: string;
-  description: string;
-  images: string[];
-  keywords?: string[];
-  relations?: SourcebookRelation[];
-}
+};
 
-export interface DebugLogEntry {
-  id: string;
-  caller_id?: string;
-  model_type?: string;
-  timestamp_start: string;
-  timestamp_end: string | null;
-  request: {
-    url: string;
-    method: string;
-    headers: Record<string, string>;
-    body: unknown;
-  };
-  response: {
-    status_code: number | null;
-    body?: unknown;
-    streaming?: boolean;
-    chunks?: unknown[];
-    full_content?: string;
-    thinking?: string;
-    error?: unknown;
-    tool_calls?: unknown[];
-  } | null;
-}
+// ---------------------------------------------------------------------------
+// Debug types
+// ---------------------------------------------------------------------------
+
+export type DebugLogEntry = components['schemas']['DebugLogEntry'];
+export type DebugLogsResponse = components['schemas']['DebugLogsResponse'];
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
 
 export const mapChapterListItemToChapter = (item: ChapterListItem): Chapter => ({
   id: String(item.id),
-  title: item.title,
-  summary: item.summary,
+  title: item.title ?? undefined,
+  summary: item.summary ?? undefined,
   content: '',
-  filename: item.filename,
-  book_id: item.book_id,
-  notes: item.notes,
-  private_notes: item.private_notes,
-  conflicts: item.conflicts,
+  filename: item.filename ?? undefined,
+  book_id: item.book_id ?? undefined,
+  notes: item.notes ?? undefined,
+  private_notes: item.private_notes ?? undefined,
+  conflicts: (item.conflicts ?? []) as Chapter['conflicts'],
 });

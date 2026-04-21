@@ -46,7 +46,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd src/frontend
-        npm ci
+        npm ci --legacy-peer-deps
     - name: Run ESLint
       run: |
         cd src/frontend
@@ -55,6 +55,10 @@ jobs:
       run: |
         cd src/frontend
         npm run typecheck
+    - name: Check generated API types are up-to-date
+      run: |
+        cd src/frontend
+        npm run check:generated-types
     - name: Run Prettier
       run: |
         cd src/frontend

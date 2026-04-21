@@ -16,7 +16,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProjectManagement } from './useProjectManagement';
 import { api } from '../../services/api';
-import { StoryState } from '../../types';
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -37,18 +36,14 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-const baseStory: StoryState = {
+const baseStory = {
   id: 'active-story',
   title: 'Active Story',
+  projectType: 'novel' as const,
+  language: 'en' as string | undefined,
   summary: '',
-  styleTags: [],
-  chapters: [],
-  projectType: 'novel',
-  currentChapterId: null,
-  image_style: '',
-  image_additional_info: '',
-  books: [],
-  sourcebook: [],
+  styleTags: [] as string[],
+  conflicts: [] as import('../../types').Conflict[],
 };
 
 describe('useProjectManagement', () => {
@@ -80,7 +75,13 @@ describe('useProjectManagement', () => {
   it('loads project list and instruction languages on mount', async () => {
     const { result } = renderHook(() =>
       useProjectManagement({
-        story: baseStory,
+        storyId: baseStory.id,
+        storyTitle: baseStory.title,
+        storyProjectType: baseStory.projectType,
+        storyLanguage: baseStory.language ?? 'en',
+        storySummary: baseStory.summary,
+        storyStyleTags: baseStory.styleTags,
+        storyConflicts: baseStory.conflicts,
         refreshStory: vi.fn().mockResolvedValue(undefined),
         loadStory: vi.fn(),
         updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
@@ -116,7 +117,13 @@ describe('useProjectManagement', () => {
 
     const { result } = renderHook(() =>
       useProjectManagement({
-        story: baseStory,
+        storyId: baseStory.id,
+        storyTitle: baseStory.title,
+        storyProjectType: baseStory.projectType,
+        storyLanguage: baseStory.language ?? 'en',
+        storySummary: baseStory.summary,
+        storyStyleTags: baseStory.styleTags,
+        storyConflicts: baseStory.conflicts,
         refreshStory,
         loadStory: vi.fn(),
         updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
@@ -145,7 +152,13 @@ describe('useProjectManagement', () => {
 
     const { result } = renderHook(() =>
       useProjectManagement({
-        story: baseStory,
+        storyId: baseStory.id,
+        storyTitle: baseStory.title,
+        storyProjectType: baseStory.projectType,
+        storyLanguage: baseStory.language ?? 'en',
+        storySummary: baseStory.summary,
+        storyStyleTags: baseStory.styleTags,
+        storyConflicts: baseStory.conflicts,
         refreshStory: vi.fn().mockResolvedValue(undefined),
         loadStory: vi.fn(),
         updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
@@ -183,37 +196,41 @@ describe('useProjectManagement', () => {
   });
 
   it('syncs active project language when story metadata updates', async () => {
-    const initialStory = {
-      ...baseStory,
-      language: 'en',
+    const initialProps = {
+      storyId: baseStory.id,
+      storyTitle: baseStory.title,
+      storyProjectType: baseStory.projectType,
+      storyLanguage: 'en',
+      storySummary: baseStory.summary,
+      storyStyleTags: baseStory.styleTags,
+      storyConflicts: baseStory.conflicts,
     };
     const { result, rerender } = renderHook(
       ({
-        story,
+        storyId,
+        storyTitle,
+        storyProjectType,
+        storyLanguage,
+        storySummary,
+        storyStyleTags,
+        storyConflicts,
       }: {
-        story: {
-          language: string;
-          id: string;
-          currentChapterId: string | null;
-          lastUpdated?: number;
-          conflicts?: import('../../types').Conflict[];
-          title: string;
-          summary: string;
-          notes?: string;
-          private_notes?: string;
-          styleTags: string[];
-          image_style?: string;
-          image_additional_info?: string;
-          chapters: import('../../types').Chapter[];
-          draft: import('../../types').WritingUnit | null;
-          projectType: 'short-story' | 'novel' | 'series';
-          books?: import('../../types').Book[];
-          sourcebook?: import('../../types').SourcebookEntry[];
-          llm_prefs?: { prompt_overrides?: Record<string, string> };
-        };
+        storyId: string;
+        storyTitle: string;
+        storyProjectType: 'short-story' | 'novel' | 'series';
+        storyLanguage: string;
+        storySummary: string;
+        storyStyleTags: string[];
+        storyConflicts: import('../../types').Conflict[];
       }) =>
         useProjectManagement({
-          story,
+          storyId,
+          storyTitle,
+          storyProjectType,
+          storyLanguage,
+          storySummary,
+          storyStyleTags,
+          storyConflicts,
           refreshStory: vi.fn().mockResolvedValue(undefined),
           loadStory: vi.fn(),
           updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
@@ -224,7 +241,7 @@ describe('useProjectManagement', () => {
           isSettingsOpen: false,
           setIsSettingsOpen: vi.fn(),
         }),
-      { initialProps: { story: initialStory } }
+      { initialProps }
     );
 
     await waitFor(() => {
@@ -238,10 +255,13 @@ describe('useProjectManagement', () => {
 
     act(() => {
       rerender({
-        story: {
-          ...initialStory,
-          language: 'de',
-        },
+        storyId: baseStory.id,
+        storyTitle: baseStory.title,
+        storyProjectType: baseStory.projectType,
+        storyLanguage: 'de',
+        storySummary: baseStory.summary,
+        storyStyleTags: baseStory.styleTags,
+        storyConflicts: baseStory.conflicts,
       });
     });
 
@@ -253,19 +273,15 @@ describe('useProjectManagement', () => {
     ).toBe('de');
   });
 
-  it('does not resync project metadata for chapter content-only edits', async () => {
-    const initialStory = {
-      ...baseStory,
-      chapters: [
-        {
-          id: '1',
-          title: 'Chapter 1',
-          summary: '',
-          content: 'Before',
-          filename: '01.md',
-        },
-      ],
-      language: 'en',
+  it('does not resync project metadata when only non-tracked fields change', async () => {
+    const initialProps = {
+      storyId: baseStory.id,
+      storyTitle: baseStory.title,
+      storyProjectType: baseStory.projectType,
+      storyLanguage: 'en',
+      storySummary: baseStory.summary,
+      storyStyleTags: baseStory.styleTags,
+      storyConflicts: baseStory.conflicts,
     };
 
     vi.spyOn(Date, 'now')
@@ -277,37 +293,30 @@ describe('useProjectManagement', () => {
 
     const { result, rerender } = renderHook(
       ({
-        story,
+        storyId,
+        storyTitle,
+        storyProjectType,
+        storyLanguage,
+        storySummary,
+        storyStyleTags,
+        storyConflicts,
       }: {
-        story: {
-          chapters: {
-            id: string;
-            title: string;
-            summary: string;
-            content: string;
-            filename: string;
-          }[];
-          language: string;
-          id: string;
-          currentChapterId: string | null;
-          lastUpdated?: number;
-          conflicts?: import('../../types').Conflict[];
-          title: string;
-          summary: string;
-          notes?: string;
-          private_notes?: string;
-          styleTags: string[];
-          image_style?: string;
-          image_additional_info?: string;
-          draft: import('../../types').WritingUnit | null;
-          projectType: 'short-story' | 'novel' | 'series';
-          books?: import('../../types').Book[];
-          sourcebook?: import('../../types').SourcebookEntry[];
-          llm_prefs?: { prompt_overrides?: Record<string, string> };
-        };
+        storyId: string;
+        storyTitle: string;
+        storyProjectType: 'short-story' | 'novel' | 'series';
+        storyLanguage: string;
+        storySummary: string;
+        storyStyleTags: string[];
+        storyConflicts: import('../../types').Conflict[];
       }) =>
         useProjectManagement({
-          story,
+          storyId,
+          storyTitle,
+          storyProjectType,
+          storyLanguage,
+          storySummary,
+          storyStyleTags,
+          storyConflicts,
           refreshStory: vi.fn().mockResolvedValue(undefined),
           loadStory: vi.fn(),
           updateStoryMetadata: vi.fn().mockResolvedValue(undefined),
@@ -318,7 +327,7 @@ describe('useProjectManagement', () => {
           isSettingsOpen: false,
           setIsSettingsOpen: vi.fn(),
         }),
-      { initialProps: { story: initialStory } }
+      { initialProps }
     );
 
     await waitFor(() => {
@@ -334,18 +343,9 @@ describe('useProjectManagement', () => {
       (project: import('../../types').ProjectMetadata) => project.id === 'active-story'
     );
 
+    // Rerender with same metadata values — no change should be applied.
     act(() => {
-      rerender({
-        story: {
-          ...initialStory,
-          chapters: [
-            {
-              ...initialStory.chapters[0],
-              content: 'After',
-            },
-          ],
-        },
-      });
+      rerender({ ...initialProps });
     });
 
     const after = result.current.projects.find(

@@ -177,14 +177,18 @@ def list_projects() -> List[Dict[str, str | bool]]:
     return list_projects_under_root(get_projects_root(), validate_project_dir)
 
 
-def write_chapter_content(chap_id: int, content: str) -> None:
+def write_chapter_content(
+    chap_id: int, content: str, active: Path | None = None
+) -> None:
     """Write content to a chapter by its ID."""
-    write_chapter_content_in_project(chap_id=chap_id, content=content)
+    write_chapter_content_in_project(chap_id=chap_id, content=content, active=active)
 
 
-def write_chapter_summary(chap_id: int, summary: str) -> None:
+def write_chapter_summary(
+    chap_id: int, summary: str, active: Path | None = None
+) -> None:
     """Write summary to a chapter by its ID across all project types."""
-    update_chapter_metadata(chap_id, summary=summary)
+    update_chapter_metadata(chap_id, summary=summary, active=active)
 
 
 def update_chapter_metadata(
@@ -194,9 +198,10 @@ def update_chapter_metadata(
     notes: str = None,
     private_notes: str = None,
     conflicts: list = None,
+    active: Path | None = None,
 ) -> None:
     """Update metadata fields for a chapter by its ID across all project types."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     update_chapter_metadata_in_project(
         active=active,
         chap_id=chap_id,
@@ -209,10 +214,14 @@ def update_chapter_metadata(
 
 
 def add_chapter_conflict(
-    chap_id: int, description: str, resolution: str, index: int = None
+    chap_id: int,
+    description: str,
+    resolution: str,
+    index: int = None,
+    active: Path | None = None,
 ) -> None:
     """Add a conflict to a chapter. If index is provided, inserts there; else appends."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     add_chapter_conflict_in_project(
         active=active,
         chap_id=chap_id,
@@ -223,10 +232,14 @@ def add_chapter_conflict(
 
 
 def update_chapter_conflict(
-    chap_id: int, index: int, description: str = None, resolution: str = None
+    chap_id: int,
+    index: int,
+    description: str = None,
+    resolution: str = None,
+    active: Path | None = None,
 ) -> None:
     """Update a specific conflict in a chapter by its index."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     update_chapter_conflict_in_project(
         active=active,
         chap_id=chap_id,
@@ -236,15 +249,19 @@ def update_chapter_conflict(
     )
 
 
-def remove_chapter_conflict(chap_id: int, index: int) -> None:
+def remove_chapter_conflict(
+    chap_id: int, index: int, active: Path | None = None
+) -> None:
     """Remove a conflict from a chapter by its index."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     remove_chapter_conflict_in_project(active=active, chap_id=chap_id, index=index)
 
 
-def reorder_chapter_conflicts(chap_id: int, new_indices: List[int]) -> None:
+def reorder_chapter_conflicts(
+    chap_id: int, new_indices: List[int], active: Path | None = None
+) -> None:
     """Reorder conflicts in a chapter providing the new sequence of indices."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     reorder_chapter_conflicts_in_project(
         active=active,
         chap_id=chap_id,
@@ -252,15 +269,15 @@ def reorder_chapter_conflicts(chap_id: int, new_indices: List[int]) -> None:
     )
 
 
-def write_chapter_title(chap_id: int, title: str) -> None:
+def write_chapter_title(chap_id: int, title: str, active: Path | None = None) -> None:
     """Update the title of a chapter in the story.json across all project types."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     write_chapter_title_in_project(active=active, chap_id=chap_id, title=title)
 
 
-def delete_chapter(chap_id: int) -> None:
+def delete_chapter(chap_id: int, active: Path | None = None) -> None:
     """Delete a chapter file and remove its metadata from story.json."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     delete_chapter_in_project(active=active, chap_id=chap_id)
 
 
@@ -304,7 +321,9 @@ def select_project(name: str) -> Tuple[bool, str]:
     return ok, msg
 
 
-def create_new_chapter(title: str = "", book_id: str = None) -> int:
+def create_new_chapter(
+    title: str = "", book_id: str = None, active: Path | None = None
+) -> int:
     """Create a new chapter file and update story.json.
 
     For Series projects with books:
@@ -316,13 +335,13 @@ def create_new_chapter(title: str = "", book_id: str = None) -> int:
       - Appends to chapters dir.
       - Returns filename index.
     """
-    active = _require_active_project()
+    active = active or _require_active_project()
     return create_new_chapter_in_project(active=active, title=title, book_id=book_id)
 
 
-def create_new_book(title: str) -> str:
+def create_new_book(title: str, active: Path | None = None) -> str:
     """Create a new book in a Series project."""
-    active = get_active_project_dir()
+    active = active or get_active_project_dir()
     return create_new_book_in_project(active=active, title=title)
 
 
@@ -332,9 +351,10 @@ def update_book_metadata(
     summary: str = None,
     notes: str = None,
     private_notes: str = None,
+    active: Path | None = None,
 ) -> None:
     """Update title or metadata for a book in a series project."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     update_book_metadata_in_project(
         active=active,
         book_id=book_id,
@@ -345,15 +365,15 @@ def update_book_metadata(
     )
 
 
-def read_book_content(book_id: str) -> str:
+def read_book_content(book_id: str, active: Path | None = None) -> str:
     """Read the overall intro/content for a book from its book_content.md."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     return read_book_content_in_project(active=active, book_id=book_id)
 
 
-def write_book_content(book_id: str, content: str) -> None:
+def write_book_content(book_id: str, content: str, active: Path | None = None) -> None:
     """Write the overall intro/content for a book to its book_content.md."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     write_book_content_in_project(active=active, book_id=book_id, content=content)
 
 
@@ -365,9 +385,10 @@ def update_story_metadata(
     private_notes: str = None,
     conflicts: list | None = None,
     language: str = None,
+    active: Path | None = None,
 ) -> None:
     """Update general story metadata."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     update_story_metadata_in_project(
         active=active,
         title=title,
@@ -380,45 +401,45 @@ def update_story_metadata(
     )
 
 
-def read_story_content() -> str:
+def read_story_content(active: Path | None = None) -> str:
     """Read the story-level content/introduction."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     return read_story_content_in_project(active=active)
 
 
-def write_story_content(content: str) -> None:
+def write_story_content(content: str, active: Path | None = None) -> None:
     """Write the story-level content/introduction."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     write_story_content_in_project(active=active, content=content)
 
 
-def read_scratchpad() -> str:
+def read_scratchpad(active: Path | None = None) -> str:
     """Read the project-level scratchpad/TODO list."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     return read_scratchpad_in_project(active=active)
 
 
-def write_scratchpad(content: str) -> None:
+def write_scratchpad(content: str, active: Path | None = None) -> None:
     """Write the project-level scratchpad/TODO list."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     write_scratchpad_in_project(active=active, content=content)
 
 
-def read_editing_scratchpad() -> str:
+def read_editing_scratchpad(active: Path | None = None) -> str:
     """Read the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     return read_editing_scratchpad_in_project(active=active)
 
 
-def write_editing_scratchpad(content: str) -> None:
+def write_editing_scratchpad(content: str, active: Path | None = None) -> None:
     """Write the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
-    active = _require_active_project()
+    active = active or _require_active_project()
     write_editing_scratchpad_in_project(active=active, content=content)
 
 
-def change_project_type(new_type: str) -> Tuple[bool, str]:
+def change_project_type(new_type: str, active: Path | None = None) -> Tuple[bool, str]:
     """Convert the active project to a new type."""
-    active = get_active_project_dir()
+    active = active or get_active_project_dir()
     if not active:
         return False, "No active project"
     return change_project_type_in_project(active=active, new_type=new_type)

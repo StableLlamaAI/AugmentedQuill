@@ -96,15 +96,15 @@ export function useSettingsDialogProviderState({
           providers[0].id;
 
         setLocalSettings((prev: AppSettings) => {
-          const selectedChat = openai.selected_chat;
-          const selectedWriting = openai.selected_writing;
-          const selectedEditing = openai.selected_editing;
+          const selectedChat = openai.selected_chat ?? undefined;
+          const selectedWriting = openai.selected_writing ?? undefined;
+          const selectedEditing = openai.selected_editing ?? undefined;
 
           const nextChatId = resolveProviderId(
             providers,
             fallbackId,
             prev.activeChatProviderId,
-            selectedChat
+            selectedChat ?? undefined
           );
 
           setEditingProviderId((currentEditId: string | null) => {
@@ -125,13 +125,13 @@ export function useSettingsDialogProviderState({
               providers,
               fallbackId,
               prev.activeWritingProviderId,
-              selectedWriting
+              selectedWriting ?? undefined
             ),
             activeEditingProviderId: resolveProviderId(
               providers,
               fallbackId,
               prev.activeEditingProviderId,
-              selectedEditing
+              selectedEditing ?? undefined
             ),
           };
         });

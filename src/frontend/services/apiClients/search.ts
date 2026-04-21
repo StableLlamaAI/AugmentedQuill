@@ -9,75 +9,33 @@
  * Purpose: API client for project-wide search and replace operations.
  */
 
-import { fetchJson } from './shared';
+import { components } from '../../types/api.generated';
+import { fetchJson, projectEndpoint } from './shared';
 
-// ─── Request / response types ────────────────────────────────────────────────
+// ─── Re-export generated types ────────────────────────────────────────────────
 
-export type SearchScope =
-  | 'current_chapter'
-  | 'all_chapters'
-  | 'sourcebook'
-  | 'metadata'
-  | 'all';
-
-export interface SearchOptions {
-  query: string;
-  scope: SearchScope;
-  case_sensitive: boolean;
-  is_regex: boolean;
-  is_phonetic: boolean;
-  active_chapter_id?: number | null;
-}
-
-export interface SearchMatch {
-  start: number;
-  end: number;
-  match_text: string;
-  context_before: string;
-  context_after: string;
-}
-
-export interface SearchResultSection {
-  section_type:
-    | 'chapter_content'
-    | 'chapter_metadata'
-    | 'story_metadata'
-    | 'sourcebook';
-  section_id: string;
-  section_title: string;
-  field: string;
-  field_display: string;
-  matches: SearchMatch[];
-}
-
-export interface SearchResponse {
+export type SearchScope = components['schemas']['SearchScope'];
+export type SearchOptions = components['schemas']['SearchOptions'];
+export type SearchMatch = components['schemas']['SearchMatch'];
+export type SearchResultSection = components['schemas']['SearchResultSection'];
+// SearchResponse.results is optional in the generated schema; we narrow it here
+// so that existing consumers that destructure results directly continue to work.
+export type SearchResponse = Omit<
+  components['schemas']['SearchResponse'],
+  'results'
+> & {
   results: SearchResultSection[];
-  total_matches: number;
-}
-
-export interface ReplaceAllRequest extends SearchOptions {
-  replacement: string;
-}
-
-export interface ReplaceSingleRequest extends SearchOptions {
-  replacement: string;
-  section_type: string;
-  section_id: string;
-  field: string;
-  match_index: number;
-}
-
-export interface ReplaceResponse {
-  replacements_made: number;
-  changed_sections: string[];
-}
+};
+export type ReplaceAllRequest = components['schemas']['ReplaceAllRequest'];
+export type ReplaceSingleRequest = components['schemas']['ReplaceSingleRequest'];
+export type ReplaceResponse = components['schemas']['ReplaceResponse'];
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 
-export const searchApi = {
+export const createSearchApi = (projectName: string) => ({
   search: (opts: SearchOptions): Promise<SearchResponse> =>
     fetchJson<SearchResponse>(
-      '/search',
+      projectEndpoint(projectName, '/search'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +46,7 @@ export const searchApi = {
 
   replaceAll: (req: ReplaceAllRequest): Promise<ReplaceResponse> =>
     fetchJson<ReplaceResponse>(
-      '/search/replace-all',
+      projectEndpoint(projectName, '/search/replace-all'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +57,7 @@ export const searchApi = {
 
   replaceSingle: (req: ReplaceSingleRequest): Promise<ReplaceResponse> =>
     fetchJson<ReplaceResponse>(
-      '/search/replace-single',
+      projectEndpoint(projectName, '/search/replace-single'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,4 +65,6 @@ export const searchApi = {
       },
       'Replace failed'
     ),
-};
+});
+
+export const searchApi = createSearchApi('');

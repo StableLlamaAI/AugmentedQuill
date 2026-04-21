@@ -261,13 +261,15 @@ def _restore_summary_for_rewrite(prepared: dict) -> None:
         save_story_config(prepared["story_path"], prepared["story"])
 
 
-def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
+def prepare_story_summary_generation(
+    payload: dict, mode: str, active: Path | None = None
+) -> dict:
     """Prepare Story Summary Generation."""
     mode = (mode or "").lower()
     if mode not in ("discard", "update", ""):
         raise BadRequestError("mode must be discard|update")
 
-    active, story_path, story = get_active_story_or_raise()
+    active, story_path, story = get_active_story_or_raise(active=active)
     if story.get("project_type") == "short-story":
         content_path = _resolve_story_draft_path(active, story)
         story_text = read_text_or_raise(content_path, message="Failed to read story")
@@ -373,7 +375,9 @@ def prepare_story_summary_generation(payload: dict, mode: str) -> dict:
     }
 
 
-def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -> dict:
+def prepare_chapter_summary_generation(
+    payload: dict, chap_id: int, mode: str, active: Path | None = None
+) -> dict:
     """Prepare Chapter Summary Generation."""
     if not isinstance(chap_id, int):
         raise BadRequestError("chap_id is required")
@@ -382,9 +386,9 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     if mode not in ("discard", "update", ""):
         raise BadRequestError("mode must be discard|update")
 
-    _, path, pos = get_chapter_locator(chap_id)
+    _, path, pos = get_chapter_locator(chap_id, active=active)
     chapter_text = read_text_or_raise(path)
-    _, story_path, story = get_active_story_or_raise()
+    _, story_path, story = get_active_story_or_raise(active=active)
 
     chapters_data = get_normalized_chapters(story)
     ensure_chapter_slot(chapters_data, pos)
@@ -435,13 +439,15 @@ def prepare_chapter_summary_generation(payload: dict, chap_id: int, mode: str) -
     }
 
 
-def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
+def prepare_write_chapter_generation(
+    payload: dict, chap_id: int, active: Path | None = None
+) -> dict:
     """Prepare Write Chapter Generation."""
     if not isinstance(chap_id, int):
         raise BadRequestError("chap_id is required")
 
-    _, path, pos = get_chapter_locator(chap_id)
-    _, _, story = get_active_story_or_raise()
+    _, path, pos = get_chapter_locator(chap_id, active=active)
+    _, _, story = get_active_story_or_raise(active=active)
 
     chapters_data = get_normalized_chapters(story)
     if pos >= len(chapters_data):
@@ -493,15 +499,17 @@ def prepare_write_chapter_generation(payload: dict, chap_id: int) -> dict:
     }
 
 
-def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
+def prepare_continue_chapter_generation(
+    payload: dict, chap_id: int, active: Path | None = None
+) -> dict:
     """Prepare Continue Chapter Generation."""
     if not isinstance(chap_id, int):
         raise BadRequestError("chap_id is required")
 
-    _, path, pos = get_chapter_locator(chap_id)
+    _, path, pos = get_chapter_locator(chap_id, active=active)
     existing = read_text_or_raise(path)
 
-    _, _, story = get_active_story_or_raise()
+    _, _, story = get_active_story_or_raise(active=active)
     chapters_data = get_normalized_chapters(story)
     if pos >= len(chapters_data):
         raise BadRequestError("No summary available for this chapter")
@@ -553,13 +561,13 @@ def prepare_continue_chapter_generation(payload: dict, chap_id: int) -> dict:
     }
 
 
-def prepare_ai_action_generation(payload: dict) -> dict:
+def prepare_ai_action_generation(payload: dict, active: Path | None = None) -> dict:
     """Prepare generic AI action generation (Extend/Rewrite/Summary)."""
     target = payload.get("target")  # 'summary' | 'chapter' | 'story'
     action = payload.get("action")  # 'update' | 'rewrite' | 'extend'
     chap_id = payload.get("chap_id")
 
-    active, story_path, story = get_active_story_or_raise()
+    active, story_path, story = get_active_story_or_raise(active=active)
     project_type = story.get("project_type", "novel")
 
     # For story_summary the correct scope is determined entirely by project_type:
@@ -581,7 +589,7 @@ def prepare_ai_action_generation(payload: dict) -> dict:
         if target in ("summary", "chapter") and not chap_id:
             raise BadRequestError("chap_id is required for chapter-level actions")
         if chap_id:
-            _, path, pos = get_chapter_locator(chap_id)
+            _, path, pos = get_chapter_locator(chap_id, active=active)
         else:
             path, pos = None, None
 

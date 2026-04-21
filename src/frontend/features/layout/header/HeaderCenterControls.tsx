@@ -276,7 +276,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             }`}
           />
           <button
-            onClick={() => setShowWhitespace((value: boolean) => !value)}
+            onClick={() => setShowWhitespace(!showWhitespace)}
             title="Toggle whitespace characters"
             className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
               showWhitespace ? buttonActive : `${iconColor} ${iconHover}`

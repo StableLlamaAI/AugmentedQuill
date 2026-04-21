@@ -74,7 +74,7 @@ class RestContractsTest(ApiTestCase):
 
         r_logs = self.client.get("/api/v1/debug/llm_logs")
         self.assertEqual(r_logs.status_code, 200)
-        self.assertIsInstance(r_logs.json(), list)
+        self.assertIsInstance(r_logs.json()["logs"], list)
 
         r_clear = self.client.delete("/api/v1/debug/llm_logs")
         self.assertEqual(r_clear.status_code, 200)

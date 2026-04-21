@@ -111,12 +111,16 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
 
     // Server-confirmed props always win over optimistic previews.
     useEffect(() => {
-      setOptimisticChapters(null);
-    }, [chapters]);
+      if (optimisticChapters !== null) {
+        setOptimisticChapters(null);
+      }
+    }, [chapters, optimisticChapters]);
 
     useEffect(() => {
-      setOptimisticBooks(null);
-    }, [books]);
+      if (optimisticBooks !== null) {
+        setOptimisticBooks(null);
+      }
+    }, [books, optimisticBooks]);
 
     // Shared array move helper for optimistic drag previews.
     const moveInArray = <T,>(arr: T[], from: number, to: number): T[] => {

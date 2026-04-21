@@ -11,12 +11,16 @@ from typing import Any
 
 from fastapi import APIRouter
 from augmentedquill.services.llm import llm_logging
+from augmentedquill.models.debug import DebugLogEntry, DebugLogsResponse
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
-router.add_api_route(
-    "/llm_logs", endpoint=lambda: llm_logging.llm_logs, methods=["GET"]
-)
+
+@router.get("/llm_logs", response_model=DebugLogsResponse)
+async def get_llm_logs() -> DebugLogsResponse:
+    """Return the in-memory LLM communication logs."""
+    entries = [DebugLogEntry(**entry) for entry in llm_logging.llm_logs]
+    return DebugLogsResponse(logs=entries)
 
 
 @router.delete("/llm_logs")

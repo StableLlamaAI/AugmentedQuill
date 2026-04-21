@@ -108,18 +108,18 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       ? p.stop.map((entry: string) => String(entry))
       : [];
     onUpdateProvider(providerId, {
-      temperature: p.temperature,
-      topP: p.top_p,
-      maxTokens: p.max_tokens,
-      presencePenalty: p.presence_penalty,
-      frequencyPenalty: p.frequency_penalty,
+      temperature: p.temperature ?? undefined,
+      topP: p.top_p ?? undefined,
+      maxTokens: p.max_tokens ?? undefined,
+      presencePenalty: p.presence_penalty ?? undefined,
+      frequencyPenalty: p.frequency_penalty ?? undefined,
       stop: nextStop,
-      seed: p.seed,
-      topK: p.top_k,
-      minP: p.min_p,
-      extraBody: p.extra_body || '',
+      seed: p.seed ?? undefined,
+      topK: p.top_k ?? undefined,
+      minP: p.min_p ?? undefined,
+      extraBody: p.extra_body ?? '',
       presetId: preset.id,
-      writingWarning: preset.warnings?.writing || null,
+      writingWarning: preset.warnings?.writing ?? null,
     });
     setSuggestedPresetByProvider((previous: Record<string, string | null>) => ({
       ...previous,

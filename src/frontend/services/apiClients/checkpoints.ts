@@ -8,7 +8,7 @@
 /**
  * Defines the checkpoints API unit so this responsibility stays isolated, testable, and easy to evolve.
  */
-import { fetchJson, postJson } from './shared';
+import { fetchJson, postJson, projectEndpoint } from './shared';
 
 export interface CheckpointInfo {
   timestamp: string;
@@ -18,10 +18,10 @@ export interface CheckpointListResponse {
   checkpoints: CheckpointInfo[];
 }
 
-export const checkpointsApi = {
+export const createCheckpointsApi = (projectName: string) => ({
   list: async (): Promise<CheckpointListResponse> => {
     return fetchJson<CheckpointListResponse>(
-      '/checkpoints',
+      projectEndpoint(projectName, '/checkpoints'),
       undefined,
       'Failed to fetch checkpoints'
     );
@@ -29,7 +29,7 @@ export const checkpointsApi = {
 
   create: async (): Promise<{ ok: boolean; timestamp: string }> => {
     return postJson<{ ok: boolean; timestamp: string }>(
-      '/checkpoints/create',
+      projectEndpoint(projectName, '/checkpoints/create'),
       {},
       'Failed to create checkpoint'
     );
@@ -37,7 +37,7 @@ export const checkpointsApi = {
 
   load: async (timestamp: string): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(
-      '/checkpoints/load',
+      projectEndpoint(projectName, '/checkpoints/load'),
       { timestamp },
       'Failed to load checkpoint'
     );
@@ -45,9 +45,11 @@ export const checkpointsApi = {
 
   delete: async (timestamp: string): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(
-      '/checkpoints/delete',
+      projectEndpoint(projectName, '/checkpoints/delete'),
       { timestamp },
       'Failed to delete checkpoint'
     );
   },
-};
+});
+
+export const checkpointsApi = createCheckpointsApi('');

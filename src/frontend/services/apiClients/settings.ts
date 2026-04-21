@@ -9,13 +9,13 @@
  * Defines the settings unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { fetchJson } from './shared';
+import { fetchJson, projectEndpoint } from './shared';
 
-export const settingsApi = {
+export const createSettingsApi = (projectName: string) => ({
   getPrompts: async (modelName?: string) => {
     const path = modelName
-      ? `/prompts?model_name=${encodeURIComponent(modelName)}`
-      : '/prompts';
+      ? `${projectEndpoint(projectName, '/prompts')}?model_name=${encodeURIComponent(modelName)}`
+      : projectEndpoint(projectName, '/prompts');
     return fetchJson<{
       ok: boolean;
       system_messages: Record<string, string>;
@@ -24,4 +24,6 @@ export const settingsApi = {
       project_language?: string;
     }>(path, undefined, 'Failed to fetch prompts');
   },
-};
+});
+
+export const settingsApi = createSettingsApi('');

@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { SourcebookEntry } from '../../types';
+import { normalizeProjectType } from '../story/storyMappers';
 
 interface UseSourcebookRelationDataParams {
   isOpen: boolean;
@@ -41,13 +42,13 @@ export const useSourcebookRelationData = ({
       .list()
       .then((res: import('../../services/apiTypes').ProjectsListResponse) => {
         const currentName = res.current;
-        const allProjects = res.projects || res.available || [];
+        const allProjects = res.available ?? [];
         const currentProj = allProjects.find(
           (p: import('../../services/apiTypes').ProjectListItem) =>
             p.name === currentName
         );
         if (currentProj && currentProj.type) {
-          setProjectType(currentProj.type);
+          setProjectType(normalizeProjectType(currentProj.type));
         }
       })
       .catch(console.error);

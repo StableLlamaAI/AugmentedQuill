@@ -29,6 +29,8 @@ from augmentedquill.core.config import (
 )
 from augmentedquill.services.exceptions import ServiceError
 from augmentedquill.services.chat.chat_tool_decorator import write_tools_json_tempfile
+from augmentedquill.services.projects.projects import get_active_project_dir
+from augmentedquill.models.machine import MachineConfigResponse
 
 # Import API routers
 from augmentedquill.api.v1.settings import router as settings_router  # noqa: E402
@@ -84,6 +86,62 @@ def create_app() -> FastAPI:
     # Mount static files if folder exists (created in repo)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    @app.middleware("http")
+    async def _legacy_project_route_rewrite(request: Request, call_next):
+        """Rewrite legacy unscoped project routes to project-scoped paths.
+
+        This keeps backward compatibility while clients/tests migrate to
+        `/api/v1/projects/{project_name}/...`.
+        """
+
+        path = request.scope.get("path", "")
+        if not path.startswith("/api/v1/") or path.startswith("/api/v1/projects/"):
+            return await call_next(request)
+
+        suffix = path[len("/api/v1/") :]
+
+        # Endpoints that remain globally scoped and must never be rewritten.
+        global_prefixes = (
+            "machine",
+            "projects",
+            "debug",
+            "health",
+        )
+        if (
+            suffix == "chat"
+            or suffix == "openai/models"
+            or suffix.startswith(global_prefixes)
+        ):
+            return await call_next(request)
+
+        books_project_scoped = suffix.startswith("books/") and not suffix.startswith(
+            ("books/create", "books/delete", "books/restore")
+        )
+
+        project_scoped_prefixes = (
+            "chapters",
+            "story",
+            "sourcebook",
+            "checkpoints",
+            "search",
+            "chat/",
+            "chats",
+        )
+        if not (books_project_scoped or suffix.startswith(project_scoped_prefixes)):
+            return await call_next(request)
+
+        active = get_active_project_dir()
+        if not active:
+            return JSONResponse(
+                status_code=400,
+                content={"ok": False, "detail": "No active project selected"},
+            )
+
+        rewritten = f"/api/v1/projects/{active.name}/{suffix}"
+        request.scope["path"] = rewritten
+        request.scope["raw_path"] = rewritten.encode("utf-8")
+        return await call_next(request)
+
     # Include API routers
     api_v1_router = APIRouter(prefix="/api/v1")
     api_v1_router.include_router(settings_router)
@@ -100,11 +158,12 @@ def create_app() -> FastAPI:
     api_v1_router.add_api_route(
         "/health", endpoint=lambda: {"status": "ok"}, methods=["GET"]
     )
-    api_v1_router.add_api_route(
-        "/machine",
-        endpoint=lambda: load_machine_config() or {},
-        methods=["GET"],
-    )
+
+    @api_v1_router.get("/machine", response_model=MachineConfigResponse)
+    async def _get_machine() -> MachineConfigResponse:
+        """Return the current machine configuration."""
+        cfg = load_machine_config() or {}
+        return MachineConfigResponse(**cfg)
 
     app.include_router(api_v1_router)
 

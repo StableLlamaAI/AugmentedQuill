@@ -20,9 +20,9 @@ from augmentedquill.services.chapters.chapter_helpers import (
 from augmentedquill.services.projects.projects import get_active_project_dir
 
 
-def get_active_story_or_raise() -> tuple[Path, Path, dict]:
+def get_active_story_or_raise(active: Path | None = None) -> tuple[Path, Path, dict]:
     """Get Active Story Or Raise."""
-    active = get_active_project_dir()
+    active = active or get_active_project_dir()
     if not active:
         raise BadRequestError("No active project")
     story_path = active / "story.json"

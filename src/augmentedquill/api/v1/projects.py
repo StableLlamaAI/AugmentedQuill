@@ -24,7 +24,6 @@ from augmentedquill.services.projects.projects_api_manage_ops import (
     restore_book_response,
 )
 from augmentedquill.services.projects.projects_api_asset_ops import (
-    list_images_response,
     update_image_description_response,
     create_image_placeholder_response,
     upload_image_response,
@@ -50,6 +49,14 @@ from augmentedquill.models.projects import (
     ImageRestoreRequest,
     ProjectListResponse,
 )
+from augmentedquill.models.story import (
+    BookMutationResponse,
+    ListImagesResponse,
+    ProjectImageInfo,
+    ProjectMutationResponse,
+    ProjectSelectResponse,
+)
+from augmentedquill.utils.image_helpers import get_project_images
 
 router = APIRouter(tags=["Projects"])
 
@@ -60,53 +67,54 @@ async def api_projects() -> ProjectListResponse:
     return projects_listing_payload()
 
 
-@router.post("/projects/delete")
-async def api_projects_delete(body: ProjectDeleteRequest) -> JSONResponse:
+@router.post("/projects/delete", response_model=ProjectMutationResponse)
+async def api_projects_delete(body: ProjectDeleteRequest) -> ProjectMutationResponse:
     """Handle the API request to projects delete."""
     return delete_project_response(body.name)
 
 
-@router.post("/projects/select")
-async def api_projects_select(body: ProjectSelectRequest) -> JSONResponse:
+@router.post("/projects/select", response_model=ProjectSelectResponse)
+async def api_projects_select(body: ProjectSelectRequest) -> ProjectSelectResponse:
     """Handle the API request to projects select."""
     return select_project_response(body.name)
 
 
-@router.post("/projects/create")
-async def api_projects_create(body: ProjectCreateRequest) -> JSONResponse:
+@router.post("/projects/create", response_model=ProjectMutationResponse)
+async def api_projects_create(body: ProjectCreateRequest) -> ProjectMutationResponse:
     """Handle the API request to projects create."""
     # language is optional, default occurs downstream
     return create_project_response(body.name, body.type, body.language or "en")
 
 
-@router.post("/projects/convert")
-async def api_projects_convert(body: ProjectConvertRequest) -> JSONResponse:
+@router.post("/projects/convert", response_model=ProjectMutationResponse)
+async def api_projects_convert(body: ProjectConvertRequest) -> ProjectMutationResponse:
     """Handle the API request to projects convert."""
     return convert_project_response(body.target_type)
 
 
-@router.post("/books/create")
-async def api_books_create(body: BookCreateRequest) -> JSONResponse:
+@router.post("/books/create", response_model=BookMutationResponse)
+async def api_books_create(body: BookCreateRequest) -> BookMutationResponse:
     """Handle the API request to books create."""
     return create_book_response(body.name)
 
 
-@router.post("/books/delete")
-async def api_books_delete(body: BookDeleteRequest) -> JSONResponse:
+@router.post("/books/delete", response_model=BookMutationResponse)
+async def api_books_delete(body: BookDeleteRequest) -> BookMutationResponse:
     """Handle the API request to books delete."""
     return delete_book_response(body.name)
 
 
-@router.post("/books/restore")
-async def api_books_restore(body: BookRestoreRequest) -> JSONResponse:
+@router.post("/books/restore", response_model=BookMutationResponse)
+async def api_books_restore(body: BookRestoreRequest) -> BookMutationResponse:
     """Handle the API request to books restore."""
     return restore_book_response(body.restore_id)
 
 
-@router.get("/projects/images/list")
-async def api_projects_images_list() -> JSONResponse:
+@router.get("/projects/images/list", response_model=ListImagesResponse)
+async def api_projects_images_list() -> ListImagesResponse:
     """Handle the API request to projects images list."""
-    return list_images_response()
+    images = get_project_images()
+    return ListImagesResponse(images=[ProjectImageInfo(**img) for img in images])
 
 
 @router.post("/projects/images/update_description")
@@ -163,7 +171,7 @@ async def api_projects_export_epub(name: str = None) -> Any:
     return export_project_epub_response(name=name)
 
 
-@router.post("/projects/import")
-async def api_projects_import(file: UploadFile = File(...)) -> Any:
+@router.post("/projects/import", response_model=ProjectMutationResponse)
+async def api_projects_import(file: UploadFile = File(...)) -> ProjectMutationResponse:
     """Handle the API request to projects import."""
     return await import_project_response(file)

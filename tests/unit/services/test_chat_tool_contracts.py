@@ -180,7 +180,9 @@ class ChatToolContractsTest(TestCase):
             ],
             "active_chapter_id": 1,
         }
-        response = self.client.post("/api/v1/chat/tools", json=body)
+        response = self.client.post(
+            "/api/v1/projects/tool_contracts/chat/tools", json=body
+        )
         self.assertEqual(response.status_code, 200, response.text)
         payload = _parse_tool_sse_result(response.text)
         appended = payload.get("appended_messages") or []
@@ -332,7 +334,9 @@ class ChatToolContractsTest(TestCase):
             ],
             "active_chapter_id": 1,
         }
-        response = self.client.post("/api/v1/chat/tools", json=body)
+        response = self.client.post(
+            "/api/v1/projects/tool_contracts/chat/tools", json=body
+        )
         self.assertEqual(response.status_code, 200, response.text)
         payload = _parse_tool_sse_result(response.text)
         return payload, json.loads(

@@ -11,9 +11,9 @@
 
 import { SourcebookEntry } from '../../types';
 import { SourcebookUpsertPayload } from '../apiTypes';
-import { fetchJson, postJson, putJson, deleteJson } from './shared';
+import { fetchJson, postJson, putJson, deleteJson, projectEndpoint } from './shared';
 
-export const sourcebookApi = {
+export const createSourcebookApi = (projectName: string) => ({
   list: async (
     query?: string,
     matchMode: 'direct' | 'extensive' = 'extensive',
@@ -26,18 +26,23 @@ export const sourcebookApi = {
     params.set('match_mode', matchMode);
     params.set('split_query_fallback', splitQueryFallback ? 'true' : 'false');
     const qs = params.toString();
-    const url = qs ? `/sourcebook?${qs}` : '/sourcebook';
+    const baseUrl = projectEndpoint(projectName, '/sourcebook');
+    const url = qs ? `${baseUrl}?${qs}` : baseUrl;
     return fetchJson<SourcebookEntry[]>(url, undefined, 'Failed to load sourcebook');
   },
 
   create: async (entry: SourcebookUpsertPayload) => {
-    return postJson<SourcebookEntry>('/sourcebook', entry, 'Failed to create entry');
+    return postJson<SourcebookEntry>(
+      projectEndpoint(projectName, '/sourcebook'),
+      entry,
+      'Failed to create entry'
+    );
   },
 
   update: async (id: string, updates: Partial<SourcebookUpsertPayload>) => {
     const escapedId = encodeURIComponent(id);
     return putJson<SourcebookEntry>(
-      `/sourcebook/${escapedId}`,
+      projectEndpoint(projectName, `/sourcebook/${escapedId}`),
       updates,
       'Failed to update entry'
     );
@@ -46,7 +51,7 @@ export const sourcebookApi = {
   delete: async (id: string) => {
     const escapedId = encodeURIComponent(id);
     return deleteJson<{ ok: boolean }>(
-      `/sourcebook/${escapedId}`,
+      projectEndpoint(projectName, `/sourcebook/${escapedId}`),
       'Failed to delete entry'
     );
   },
@@ -57,9 +62,11 @@ export const sourcebookApi = {
     synonyms?: string[];
   }) => {
     return postJson<{ keywords: string[] }>(
-      '/sourcebook/keywords',
+      projectEndpoint(projectName, '/sourcebook/keywords'),
       payload,
       'Failed to generate keywords'
     );
   },
-};
+});
+
+export const sourcebookApi = createSourcebookApi('');

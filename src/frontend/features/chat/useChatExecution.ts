@@ -9,10 +9,11 @@
  * Defines the use chat execution unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
+import { useChatStore } from '../../stores/chatStore';
 import { ChatToolFunctionCall } from '../../services/apiTypes';
 import {
   buildChapterContextMessage,
@@ -41,10 +42,6 @@ type UseChatExecutionParams = {
   currentChapterId: string | null;
   currentChatId: string | null;
   currentChapter?: { id: string; title: string } | null;
-  chatMessages: ChatMessage[];
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
-  isChatLoading: boolean;
-  setIsChatLoading: Dispatch<SetStateAction<boolean>>;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
@@ -66,10 +63,6 @@ export function useChatExecution({
   currentChapterId,
   currentChatId,
   currentChapter,
-  chatMessages,
-  setChatMessages,
-  isChatLoading,
-  setIsChatLoading,
   refreshProjects,
   refreshStory,
   onProseChunk,
@@ -77,11 +70,13 @@ export function useChatExecution({
   pushExternalHistoryEntry,
   requestToolCallLoopAccess,
 }: UseChatExecutionParams): {
-  isChatLoading: boolean;
   handleSendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;
   handleStopChat: () => void;
   handleRegenerate: () => Promise<void>;
 } {
+  // Setters are stable — read via getState() so this hook does not subscribe to
+  // every per-token chatMessages change.
+  const { setChatMessages, setIsChatLoading } = useChatStore.getState();
   const stopSignalRef = useRef(false);
   const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
   const updateFlushFrameRef = useRef<number | null>(null);
@@ -145,7 +140,7 @@ export function useChatExecution({
   ) => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
-    const historyBefore = [...chatMessages];
+    const historyBefore = [...useChatStore.getState().chatMessages];
 
     // Inject a get_current_chapter_id context message when the chapter has changed
     // (or when starting a fresh chat). This is stored in chatMessages so that
@@ -167,11 +162,12 @@ export function useChatExecution({
 
   const handleStopChatImpl = () => {
     stopSignalRef.current = true;
-    setIsChatLoading(false);
+    useChatStore.getState().setIsChatLoading(false);
   };
 
   const handleRegenerateImpl = async () => {
     if (!isChatAvailable) return;
+    const chatMessages = useChatStore.getState().chatMessages;
 
     let userMessageIndex = -1;
     for (let index = chatMessages.length - 1; index >= 0; index--) {
@@ -210,7 +206,6 @@ export function useChatExecution({
   const handleRegenerate = useCallback(() => handleRegenerateImplRef.current(), []);
 
   return {
-    isChatLoading,
     handleSendMessage,
     handleStopChat,
     handleRegenerate,

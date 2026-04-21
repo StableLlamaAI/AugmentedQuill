@@ -14,7 +14,6 @@ import json
 from typing import Any, Dict
 
 from augmentedquill.core.config import load_story_config
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.chat.chat_tool_decorator import MODEL_ROLES
 from augmentedquill.services.chat.chat_tools.chapter_tools import (
     compose_current_chapter_state,
@@ -135,6 +134,7 @@ def ensure_system_message_if_missing(
     model_type: str,
     machine: dict,
     selected_name: str | None,
+    active_project_dir: Path | None = None,
 ) -> None:
     """Ensure System Message If Missing."""
     has_system = any(msg.get("role") == "system" for msg in req_messages)
@@ -153,8 +153,7 @@ def ensure_system_message_if_missing(
     project_lang = "en"
     try:
         story = (
-            load_story_config((get_active_project_dir() or Path(".")) / "story.json")
-            or {}
+            load_story_config((active_project_dir or Path(".")) / "story.json") or {}
         )
         project_lang = str(story.get("language", "en") or "en")
     except Exception:

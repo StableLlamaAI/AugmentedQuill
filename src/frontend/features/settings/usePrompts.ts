@@ -13,7 +13,7 @@ import { useEffect, useState, startTransition } from 'react';
 import { api } from '../../services/api';
 import { setSmartQuoteChars } from '../../utils/textUtils';
 
-type PromptsState = {
+export type PromptsState = {
   system_messages: Record<string, string>;
   user_prompts: Record<string, string>;
   languages?: string[];

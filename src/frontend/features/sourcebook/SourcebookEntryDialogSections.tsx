@@ -409,7 +409,7 @@ export const SourcebookEntryImagesSection: React.FC<ImagesSectionProps> = ({
                     </div>
                   ) : (
                     <img
-                      src={img.url}
+                      src={img.url ?? undefined}
                       alt={img.filename}
                       className="w-full h-full object-cover"
                     />
@@ -838,7 +838,7 @@ export const SourcebookImagePickerModal: React.FC<ImagePickerProps> = ({
                       </div>
                     ) : (
                       <img
-                        src={img.url}
+                        src={img.url ?? undefined}
                         alt={img.filename}
                         className="w-full h-full object-cover"
                       />

@@ -11,15 +11,19 @@
 
 import { Conflict } from '../../types';
 import { ChapterDetailResponse, ChapterListResponse } from '../apiTypes';
-import { fetchJson, putJson, postJson, deleteJson } from './shared';
+import { fetchJson, putJson, postJson, deleteJson, projectEndpoint } from './shared';
 
-export const chaptersApi = {
+export const createChaptersApi = (projectName: string) => ({
   list: async () =>
-    fetchJson<ChapterListResponse>('/chapters', undefined, 'Failed to list chapters'),
+    fetchJson<ChapterListResponse>(
+      projectEndpoint(projectName, '/chapters'),
+      undefined,
+      'Failed to list chapters'
+    ),
 
   get: async (id: number) => {
     return fetchJson<ChapterDetailResponse>(
-      `/chapters/${id}`,
+      projectEndpoint(projectName, `/chapters/${id}`),
       undefined,
       'Failed to get chapter'
     );
@@ -27,7 +31,7 @@ export const chaptersApi = {
 
   create: async (title: string, content: string = '', book_id?: string) => {
     return postJson<{ ok: boolean; id: number; title: string; book_id?: string }>(
-      '/chapters',
+      projectEndpoint(projectName, '/chapters'),
       { title, content, book_id },
       'Failed to create chapter'
     );
@@ -35,7 +39,7 @@ export const chaptersApi = {
 
   updateContent: async (id: number, content: string) => {
     return putJson<{ ok: boolean }>(
-      `/chapters/${id}/content`,
+      projectEndpoint(projectName, `/chapters/${id}/content`),
       { content },
       'Failed to update chapter content'
     );
@@ -43,7 +47,7 @@ export const chaptersApi = {
 
   updateTitle: async (id: number, title: string) => {
     return putJson<{ ok: boolean }>(
-      `/chapters/${id}/title`,
+      projectEndpoint(projectName, `/chapters/${id}/title`),
       { title },
       'Failed to update chapter title'
     );
@@ -51,7 +55,7 @@ export const chaptersApi = {
 
   updateSummary: async (id: number, summary: string) => {
     return putJson<{ ok: boolean }>(
-      `/chapters/${id}/summary`,
+      projectEndpoint(projectName, `/chapters/${id}/summary`),
       { summary },
       'Failed to update chapter summary'
     );
@@ -67,19 +71,22 @@ export const chaptersApi = {
     }
   ) => {
     return putJson<{ ok: boolean; id?: number; message?: string }>(
-      `/chapters/${id}/metadata`,
+      projectEndpoint(projectName, `/chapters/${id}/metadata`),
       data,
       'Failed to update chapter metadata'
     );
   },
 
   delete: async (id: number) => {
-    return deleteJson<{ ok: boolean }>(`/chapters/${id}`, 'Failed to delete chapter');
+    return deleteJson<{ ok: boolean }>(
+      projectEndpoint(projectName, `/chapters/${id}`),
+      'Failed to delete chapter'
+    );
   },
 
   reorder: async (chapterIds: number[], bookId?: string) => {
     return fetchJson<{ ok: boolean }>(
-      '/chapters/reorder',
+      projectEndpoint(projectName, '/chapters/reorder'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,4 +99,6 @@ export const chaptersApi = {
       'Failed to reorder chapters'
     );
   },
-};
+});
+
+export const chaptersApi = createChaptersApi('');

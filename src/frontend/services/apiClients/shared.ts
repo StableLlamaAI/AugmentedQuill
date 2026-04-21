@@ -17,6 +17,14 @@ function endpoint(path: string): string {
   return `${API_BASE}/${path}`;
 }
 
+/** Build a project-scoped API path. */
+export function projectEndpoint(projectName: string, path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!projectName) return normalizedPath;
+  const encodedProject = encodeURIComponent(projectName);
+  return `/projects/${encodedProject}${normalizedPath}`;
+}
+
 /** Read error message. */
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {

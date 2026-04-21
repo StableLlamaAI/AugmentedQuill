@@ -23,6 +23,7 @@ import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
+import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { EditorSuggestionPanel } from './EditorSuggestionPanel';
 import { EditorMobileToolbar } from './EditorMobileToolbar';
@@ -155,7 +156,11 @@ export const Editor = React.memo(
         }
       }
 
-      const proseStreamingActive = aiControls.isProseStreaming ?? false;
+      const isChatStreaming = useChatStore(
+        (s: ChatStoreState) => s.isProseStreamingFromChat
+      );
+      const proseStreamingActive =
+        (aiControls.isProseStreaming ?? false) || isChatStreaming;
 
       // Keep local state in sync when the chapter changes externally (chapter
       // switch, AI update, undo/redo).  Use chapter.id as the primary trigger

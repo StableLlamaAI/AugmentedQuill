@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, List
 
 from augmentedquill.core.config import load_story_config, save_story_config
+from augmentedquill.services.projects.project_locks import run_locked
 from augmentedquill.services.chapters.chapter_helpers import (
     _chapter_by_id_or_404,
     _get_chapter_metadata_entry,
@@ -21,9 +22,11 @@ from augmentedquill.services.chapters.chapter_helpers import (
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
-def write_chapter_content_in_project(chap_id: int, content: str) -> None:
+def write_chapter_content_in_project(
+    chap_id: int, content: str, active: Path | None = None
+) -> None:
     """Write content to a chapter by its ID."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
 
     story_root = path
     for _ in range(5):
@@ -55,10 +58,12 @@ def update_chapter_metadata_in_project(
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapter metadata")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
-    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target_entry = _get_chapter_metadata_entry(
+        story, chap_id, path, files, active=active
+    )
 
     if target_entry is None:
         p_type = story.get("project_type", "novel")
@@ -107,12 +112,12 @@ def update_chapter_metadata_in_project(
 
 def _get_chapter_target_and_story(active: Path, chap_id: int) -> Any:
     """Return chapter target and story."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
     story_path = active / "story.json"
 
     story = load_story_config(story_path) or {}
-    target = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target = _get_chapter_metadata_entry(story, chap_id, path, files, active=active)
     if target is None:
         raise ValueError(f"Chapter {chap_id} metadata not found.")
     return story, story_path, target
@@ -201,14 +206,16 @@ def write_chapter_title_in_project(active: Path, chap_id: int, title: str) -> No
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapter titles")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
     new_title_str = str(title).strip()
     if new_title_str.lower() == "[object object]":
         new_title_str = ""
 
-    target_entry = _get_chapter_metadata_entry(story, chap_id, path, files)
+    target_entry = _get_chapter_metadata_entry(
+        story, chap_id, path, files, active=active
+    )
 
     if target_entry is not None:
         target_entry["title"] = new_title_str
@@ -224,8 +231,8 @@ def delete_chapter_in_project(active: Path, chap_id: int) -> None:
     if story.get("project_type") == "short-story":
         raise ValueError("Short Story projects do not have chapters")
 
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    files = _scan_chapter_files()
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=active)
+    files = _scan_chapter_files(active)
 
     path.unlink()
     p_type = story.get("project_type", "novel")
@@ -306,3 +313,70 @@ def delete_chapter_in_project(active: Path, chap_id: int) -> None:
             story["chapters"] = [c for c in chapters_data if id(c) != target_id]
 
     save_story_config(story_path, story)
+
+
+# ---------------------------------------------------------------------------
+# Async locked wrappers — preferred for use inside FastAPI route handlers
+# ---------------------------------------------------------------------------
+
+
+async def async_write_chapter_content_in_project(
+    chap_id: int, content: str, active: Path | None = None
+) -> None:
+    """Async, per-project-locked variant of write_chapter_content_in_project."""
+    if active is None:
+        # Determine the project root the same way the sync function would.
+        from augmentedquill.services.chapters.chapter_helpers import (
+            _chapter_by_id_or_404,
+        )
+
+        _, path, _ = _chapter_by_id_or_404(chap_id, active=None)
+        project_dir = path.parent
+        while project_dir != project_dir.parent:
+            if (project_dir / "story.json").exists():
+                break
+            project_dir = project_dir.parent
+    else:
+        project_dir = active
+    await run_locked(
+        project_dir,
+        lambda: write_chapter_content_in_project(chap_id, content, active=active),
+    )
+
+
+async def async_update_chapter_metadata_in_project(
+    active: Path,
+    chap_id: int,
+    title: str | None = None,
+    summary: str | None = None,
+    notes: str | None = None,
+    private_notes: str | None = None,
+    conflicts: list | None = None,
+) -> None:
+    """Async, per-project-locked variant of update_chapter_metadata_in_project."""
+    await run_locked(
+        active,
+        lambda: update_chapter_metadata_in_project(
+            active,
+            chap_id,
+            title=title,
+            summary=summary,
+            notes=notes,
+            private_notes=private_notes,
+            conflicts=conflicts,
+        ),
+    )
+
+
+async def async_write_chapter_title_in_project(
+    active: Path, chap_id: int, title: str
+) -> None:
+    """Async, per-project-locked variant of write_chapter_title_in_project."""
+    await run_locked(
+        active, lambda: write_chapter_title_in_project(active, chap_id, title)
+    )
+
+
+async def async_delete_chapter_in_project(active: Path, chap_id: int) -> None:
+    """Async, per-project-locked variant of delete_chapter_in_project."""
+    await run_locked(active, lambda: delete_chapter_in_project(active, chap_id))

@@ -12,17 +12,28 @@
 import { ChatSession } from '../../types';
 import {
   ChatApiMessage,
+  ChatListResponse,
   ChatToolBatchMutationResponse,
   ChatToolExecutionResponse,
 } from '../apiTypes';
-import { fetchJson, postJson, deleteJson } from './shared';
+import { fetchJson, postJson, deleteJson, projectEndpoint } from './shared';
 
-export const chatApi = {
-  list: async () =>
-    fetchJson<ChatSession[]>('/chats', undefined, 'Failed to list chats'),
+export const createChatApi = (projectName: string) => ({
+  list: async () => {
+    const response = await fetchJson<ChatListResponse>(
+      projectEndpoint(projectName, '/chats'),
+      undefined,
+      'Failed to list chats'
+    );
+    return response.chats ?? [];
+  },
 
   load: async (id: string) => {
-    return fetchJson<ChatSession>(`/chats/${id}`, undefined, 'Failed to load chat');
+    return fetchJson<ChatSession>(
+      projectEndpoint(projectName, `/chats/${id}`),
+      undefined,
+      'Failed to load chat'
+    );
   },
 
   save: async (
@@ -35,15 +46,25 @@ export const chatApi = {
       scratchpad?: string;
     }
   ) => {
-    return postJson<{ ok: boolean }>(`/chats/${id}`, data, 'Failed to save chat');
+    return postJson<{ ok: boolean }>(
+      projectEndpoint(projectName, `/chats/${id}`),
+      data,
+      'Failed to save chat'
+    );
   },
 
   delete: async (id: string) => {
-    return deleteJson<{ ok: boolean }>(`/chats/${id}`, 'Failed to delete chat');
+    return deleteJson<{ ok: boolean }>(
+      projectEndpoint(projectName, `/chats/${id}`),
+      'Failed to delete chat'
+    );
   },
 
   deleteAll: async () => {
-    return deleteJson<{ ok: boolean }>('/chats', 'Failed to delete all chats');
+    return deleteJson<{ ok: boolean }>(
+      projectEndpoint(projectName, '/chats'),
+      'Failed to delete all chats'
+    );
   },
 
   executeTools: async (
@@ -55,7 +76,7 @@ export const chatApi = {
     },
     onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
   ): Promise<ChatToolExecutionResponse> => {
-    const res = await fetch('/api/v1/chat/tools', {
+    const res = await fetch(`/api/v1${projectEndpoint(projectName, '/chat/tools')}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -179,7 +200,7 @@ export const chatApi = {
 
   undoToolBatch: async (batchId: string) => {
     return fetchJson<ChatToolBatchMutationResponse>(
-      `/chat/tools/undo/${encodeURIComponent(batchId)}`,
+      projectEndpoint(projectName, `/chat/tools/undo/${encodeURIComponent(batchId)}`),
       {
         method: 'POST',
       },
@@ -189,11 +210,13 @@ export const chatApi = {
 
   redoToolBatch: async (batchId: string) => {
     return fetchJson<ChatToolBatchMutationResponse>(
-      `/chat/tools/redo/${encodeURIComponent(batchId)}`,
+      projectEndpoint(projectName, `/chat/tools/redo/${encodeURIComponent(batchId)}`),
       {
         method: 'POST',
       },
       'Failed to redo AI tool batch'
     );
   },
-};
+});
+
+export const chatApi = createChatApi('');

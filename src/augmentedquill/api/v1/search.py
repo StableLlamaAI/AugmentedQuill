@@ -12,6 +12,7 @@ REST endpoints for project-wide search and replace.
 
 from fastapi import APIRouter, HTTPException
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.models.search import (
     ReplaceAllRequest,
     ReplaceResponse,
@@ -19,53 +20,46 @@ from augmentedquill.models.search import (
     SearchOptions,
     SearchResponse,
 )
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.search.search_service import run_search
 from augmentedquill.services.search.replace_service import replace_all, replace_single
 
-router = APIRouter(tags=["Search"])
+router = APIRouter(prefix="/projects/{project_name}", tags=["Search"])
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search_project(opts: SearchOptions) -> SearchResponse:
+async def search_project(
+    opts: SearchOptions, project_dir: ProjectDep
+) -> SearchResponse:
     """Search across the active project.
 
     Supported scopes: current_chapter, all_chapters, sourcebook, metadata, all.
     Supported modes: literal (default), regex (is_regex=true), phonetic (is_phonetic=true).
     """
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
     try:
-        return run_search(opts, active)
+        return run_search(opts, project_dir)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/search/replace-all", response_model=ReplaceResponse)
-async def replace_all_in_project(req: ReplaceAllRequest) -> ReplaceResponse:
+async def replace_all_in_project(
+    req: ReplaceAllRequest, project_dir: ProjectDep
+) -> ReplaceResponse:
     """Replace every occurrence of a query throughout the active project.
 
     All matching text in the specified scope is substituted with *replacement*.
     After completion the frontend should refresh story/chapter state.
     """
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
-    return replace_all(req, active)
+    return replace_all(req, project_dir)
 
 
 @router.post("/search/replace-single", response_model=ReplaceResponse)
-async def replace_single_in_project(req: ReplaceSingleRequest) -> ReplaceResponse:
+async def replace_single_in_project(
+    req: ReplaceSingleRequest, project_dir: ProjectDep
+) -> ReplaceResponse:
     """Replace a single specifically identified match.
 
     The match is identified by section_type, section_id, field, and match_index
     (zero-based ordinal of the match within that field).
     """
-    active = get_active_project_dir()
-    if not active:
-        raise HTTPException(status_code=400, detail="No active project")
-
-    return replace_single(req, active)
+    return replace_single(req, project_dir)

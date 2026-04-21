@@ -180,7 +180,9 @@ export const useSourcebookEntryDialogState = ({
         category,
         synonyms,
         images,
-        relations,
+        // Cast: domain SourcebookRelation is structurally compatible with the
+        // generated type; direction differs only in optional vs. nullable.
+        relations: relations as SourcebookUpsertPayload['relations'],
       });
       onClose();
     } finally {

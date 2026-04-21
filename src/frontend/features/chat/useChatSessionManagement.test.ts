@@ -15,6 +15,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { useChatSessionManagement } from './useChatSessionManagement';
+import { useChatStore } from '../../stores/chatStore';
 import { api } from '../../services/api';
 import type { ChatSession } from '../../types/chat';
 
@@ -39,19 +40,28 @@ describe('useChatSessionManagement', () => {
     vi.clearAllMocks();
     vi.mocked(api.chat.list).mockResolvedValue([]);
     vi.mocked(api.chat.load).mockResolvedValue(null);
+    // Reset chatStore to a clean state between tests
+    useChatStore.setState({
+      chatMessages: [],
+      isChatLoading: false,
+      sessionMutations: [],
+      chatHistoryList: [],
+      currentChatId: null,
+      incognitoSessions: [],
+      isIncognito: false,
+      allowWebSearch: false,
+      systemPrompt: '',
+      scratchpad: '',
+    });
   });
 
   it('creates an incognito session with expected defaults', async () => {
-    const setChatMessages = vi.fn();
     const getSystemPrompt = () => 'System Prompt';
 
     const { result } = renderHook(() =>
       useChatSessionManagement({
         storyId: '',
         getSystemPrompt,
-        chatMessages: [],
-        setChatMessages,
-        isChatLoading: false,
       })
     );
 
@@ -59,18 +69,17 @@ describe('useChatSessionManagement', () => {
       result.current.handleNewChat(true);
     });
 
-    expect(result.current.isIncognito).toBe(true);
-    expect(result.current.currentChatId).toBe('incognito-session-id');
-    expect(result.current.allowWebSearch).toBe(false);
-    expect(result.current.scratchpad).toBe('');
-    expect(result.current.incognitoSessions).toHaveLength(1);
-    expect(result.current.incognitoSessions[0].name).toBe('Incognito Chat');
-    expect(result.current.incognitoSessions[0].scratchpad).toBe('');
-    expect(setChatMessages).toHaveBeenCalled();
+    expect(useChatStore.getState().isIncognito).toBe(true);
+    expect(useChatStore.getState().currentChatId).toBe('incognito-session-id');
+    expect(useChatStore.getState().allowWebSearch).toBe(false);
+    expect(useChatStore.getState().scratchpad).toBe('');
+    expect(useChatStore.getState().incognitoSessions).toHaveLength(1);
+    expect(useChatStore.getState().incognitoSessions[0].name).toBe('Incognito Chat');
+    expect(useChatStore.getState().incognitoSessions[0].scratchpad).toBe('');
+    expect(useChatStore.getState().chatMessages).toHaveLength(0);
   });
 
   it('loads a persisted chat and applies prompt/search settings', async () => {
-    const setChatMessages = vi.fn();
     const getSystemPrompt = () => 'System Prompt';
     vi.mocked(api.chat.load).mockResolvedValue({
       id: 'chat-1',
@@ -85,9 +94,6 @@ describe('useChatSessionManagement', () => {
       useChatSessionManagement({
         storyId: '',
         getSystemPrompt,
-        chatMessages: [],
-        setChatMessages,
-        isChatLoading: false,
       })
     );
 
@@ -96,15 +102,15 @@ describe('useChatSessionManagement', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.currentChatId).toBe('chat-1');
+      expect(useChatStore.getState().currentChatId).toBe('chat-1');
     });
     await waitFor(() => {
-      expect(result.current.allowWebSearch).toBe(true);
+      expect(useChatStore.getState().allowWebSearch).toBe(true);
     });
-    expect(result.current.isIncognito).toBe(false);
-    expect(result.current.systemPrompt).toBe('Saved prompt');
-    expect(result.current.scratchpad).toBe('My Scratch');
-    expect(setChatMessages).toHaveBeenCalledWith([
+    expect(useChatStore.getState().isIncognito).toBe(false);
+    expect(useChatStore.getState().systemPrompt).toBe('Saved prompt');
+    expect(useChatStore.getState().scratchpad).toBe('My Scratch');
+    expect(useChatStore.getState().chatMessages).toEqual([
       { id: 'm1', role: 'user', text: 'hello' },
     ]);
   });

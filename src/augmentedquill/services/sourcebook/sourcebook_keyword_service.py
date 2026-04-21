@@ -10,6 +10,7 @@
 import json
 import os
 import re
+from typing import Any
 
 from augmentedquill.core.config import (
     BASE_DIR,
@@ -339,7 +340,7 @@ async def sourcebook_generate_keywords_with_editing_model(
 
 
 async def sourcebook_refresh_entry_keywords(
-    name_or_id: str, payload: dict | None = None
+    name_or_id: str, payload: dict | None = None, active: Any = None
 ) -> dict | None:
     """Regenerate and persist keywords for an existing entry with best-effort LLM extraction."""
     from augmentedquill.services.sourcebook.sourcebook_helpers import (
@@ -347,7 +348,7 @@ async def sourcebook_refresh_entry_keywords(
         sourcebook_update_entry,
     )
 
-    entry = sourcebook_get_entry(name_or_id)
+    entry = sourcebook_get_entry(name_or_id, active=active)
     if not entry:
         return None
 
@@ -362,13 +363,17 @@ async def sourcebook_refresh_entry_keywords(
     except Exception:
         keywords = []
 
-    updated = sourcebook_update_entry(name_or_id=entry["id"], keywords=keywords)
+    updated = sourcebook_update_entry(
+        name_or_id=entry["id"], keywords=keywords, active=active
+    )
     if "error" in updated:
         return None
     return updated
 
 
-async def sourcebook_generate_missing_keywords(payload: dict | None = None) -> None:
+async def sourcebook_generate_missing_keywords(
+    payload: dict | None = None, active: Any = None
+) -> None:
     """Generate keywords for entries that currently have no keywords.
 
     This function is intentionally best-effort; failures are ignored so search remains responsive.
@@ -377,12 +382,14 @@ async def sourcebook_generate_missing_keywords(payload: dict | None = None) -> N
         sourcebook_list_entries,
     )
 
-    for entry in sourcebook_list_entries():
+    for entry in sourcebook_list_entries(active=active):
         existing = entry.get("keywords")
         if isinstance(existing, list) and len(existing) > 0:
             continue
         try:
-            await sourcebook_refresh_entry_keywords(entry["id"], payload=payload)
+            await sourcebook_refresh_entry_keywords(
+                entry["id"], payload=payload, active=active
+            )
         except Exception:
             continue
 
@@ -392,6 +399,7 @@ async def sourcebook_search_entries_with_keyword_refresh(
     match_mode: str = "extensive",
     split_query_fallback: bool = False,
     payload: dict | None = None,
+    active: Any = None,
 ) -> list[dict]:
     """Shared search path for chat tool and UI filter.
 
@@ -401,9 +409,10 @@ async def sourcebook_search_entries_with_keyword_refresh(
         sourcebook_search_entries,
     )
 
-    await sourcebook_generate_missing_keywords(payload=payload)
+    await sourcebook_generate_missing_keywords(payload=payload, active=active)
     return sourcebook_search_entries(
         query,
         match_mode=match_mode,
         split_query_fallback=split_query_fallback,
+        active=active,
     )

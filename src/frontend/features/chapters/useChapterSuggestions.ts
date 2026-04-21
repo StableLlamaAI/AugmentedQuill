@@ -19,34 +19,35 @@ import {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, LLMConfig, StoryState, ViewMode, WritingUnit } from '../../types';
+import { ChatMessage, LLMConfig, ViewMode, WritingUnit } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
 import { computeContentWithSeparator } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { useChatStore } from '../../stores/chatStore';
 
 type UseChapterSuggestionsParams = {
   currentUnit?: WritingUnit;
-  story: StoryState;
-  systemPrompt: string;
+  storyTitle: string;
+  storySummary: string;
+  storyStyleTags: string[];
   activeWritingConfig: LLMConfig;
   isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   viewMode: ViewMode;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
 /** Custom React hook that manages chapter suggestions. */
 export function useChapterSuggestions({
   currentUnit,
-  story,
-  systemPrompt,
+  storyTitle,
+  storySummary,
+  storyStyleTags,
   activeWritingConfig,
   isWritingAvailable,
   updateChapter,
   viewMode,
-  setChatMessages,
   getErrorMessage,
 }: UseChapterSuggestionsParams): {
   continuations: string[];
@@ -229,11 +230,11 @@ export function useChapterSuggestions({
     cancelSignalRef.current = { cancelled: false };
 
     try {
-      const storyContext = `Title: ${story.title}\nSummary: ${story.summary}\nTags: ${story.styleTags.join(', ')}`;
+      const storyContext = `Title: ${storyTitle}\nSummary: ${storySummary}\nTags: ${storyStyleTags.join(', ')}`;
       const options = await generateContinuations(
         baseContent.slice(0, c),
         storyContext,
-        systemPrompt,
+        useChatStore.getState().systemPrompt,
         activeWritingConfig,
         currentUnit.id,
         Array.from(checkedEntries),
@@ -258,7 +259,9 @@ export function useChapterSuggestions({
         text: `Suggestion Error: ${getErrorMessage(error, 'Failed to generate suggestions')}`,
         isError: true,
       };
-      setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
+      useChatStore
+        .getState()
+        .setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
     } finally {
       if (isMountedRef.current) {
         setIsSuggesting(false);

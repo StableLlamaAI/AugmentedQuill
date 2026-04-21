@@ -23,6 +23,7 @@ import { SourcebookListView } from './SourcebookListView';
 import { useSourcebookListMutations } from './useSourcebookListMutations';
 import { useSourcebookEntryInteractions } from './hooks/useSourcebookEntryInteractions';
 import { useSourcebookDialogLifecycle } from './hooks/useSourcebookDialogLifecycle';
+import { useUIStore } from '../../stores/uiStore';
 
 interface SourcebookListProps {
   theme?: AppTheme;
@@ -50,8 +51,6 @@ interface SourcebookListProps {
   /** Trigger to open a specific entry via a mutation-tag click.  Uses an
    *  incrementing `id` so that clicking the same entry twice is always
    *  detected as a new click, even if the dialog was closed in between. */
-  sourcebookDialogTrigger?: { id: number; entryId: string } | null;
-  closeDialogTrigger?: number;
   language?: string;
   baselineEntries?: SourcebookEntry[];
 }
@@ -95,8 +94,6 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     onAppRedo,
     canAppUndo = false,
     canAppRedo = false,
-    sourcebookDialogTrigger,
-    closeDialogTrigger,
     mutatedEntryIds,
     language = 'en',
     baselineEntries,
@@ -175,13 +172,11 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     }, [externalEntries, search]);
 
     useSourcebookDialogLifecycle({
-      sourcebookDialogTrigger,
       entries,
       setEntries,
       setSelectedEntry,
       setDialogOpenedViaTrigger,
       setIsDialogOpen,
-      closeDialogTrigger,
       externalEntries,
       isDialogOpen,
       selectedEntry,
@@ -290,6 +285,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
         onDialogClose={() => {
           setIsDialogOpen(false);
           setDialogOpenedViaTrigger(false);
+          useUIStore.getState().closeSourcebookDialog();
         }}
         onEntryClick={handleEntryClick}
         onEntryHover={handleEntryHover}

@@ -82,7 +82,7 @@ export interface UseSearchReplaceResult {
 const buildFlatMatches = (results: SearchResultSection[]): FlatMatch[] => {
   const flat: FlatMatch[] = [];
   results.forEach((section: SearchResultSection, si: number) => {
-    section.matches.forEach(
+    (section.matches ?? []).forEach(
       (match: import('../../services/apiClients/search').SearchMatch, mi: number) => {
         flat.push({
           sectionIndex: si,
@@ -114,14 +114,14 @@ const buildHighlightMaps = (
       section.section_id,
       section.field
     );
-    ranges[key] = section.matches.map(
+    ranges[key] = (section.matches ?? []).map(
       (match: import('../../services/apiClients/search').SearchMatch) => ({
         start: match.start,
         end: match.end,
       })
     );
     const seen = new Set<string>();
-    texts[key] = section.matches.reduce<string[]>(
+    texts[key] = (section.matches ?? []).reduce<string[]>(
       (
         acc: string[],
         match: import('../../services/apiClients/search').SearchMatch

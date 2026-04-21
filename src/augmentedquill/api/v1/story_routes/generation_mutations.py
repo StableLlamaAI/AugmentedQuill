@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.api.v1.http_responses import ok_json
 from augmentedquill.api.v1.story_routes.common import (
     map_story_exception,
@@ -24,7 +25,7 @@ from augmentedquill.services.story.story_generation_ops import (
     write_chapter_from_summary,
 )
 
-router = APIRouter(tags=["Story"])
+router = APIRouter(prefix="/projects/{project_name}", tags=["Story"])
 
 
 async def _dispatch_generation(request: Request, handler: Any) -> Any:
@@ -38,19 +39,23 @@ async def _dispatch_generation(request: Request, handler: Any) -> Any:
 
 
 @router.post("/story/story-summary")
-async def api_story_story_summary(request: Request) -> JSONResponse:
+async def api_story_story_summary(
+    request: Request, project_dir: ProjectDep
+) -> JSONResponse:
     """Api Story Story Summary."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
         mode = (payload.get("mode") or "").lower()
-        return await generate_story_summary(mode=mode, payload=payload)
+        return await generate_story_summary(
+            mode=mode, payload=payload, active=project_dir
+        )
 
     return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/summary")
-async def api_story_summary(request: Request) -> JSONResponse:
+async def api_story_summary(request: Request, project_dir: ProjectDep) -> JSONResponse:
     """Api Story Summary."""
 
     async def _handler(payload: dict) -> Any:
@@ -58,31 +63,40 @@ async def api_story_summary(request: Request) -> JSONResponse:
         chap_id = payload.get("chap_id")
         mode = (payload.get("mode") or "").lower()
         return await generate_chapter_summary(
-            chap_id=chap_id, mode=mode, payload=payload
+            chap_id=chap_id,
+            mode=mode,
+            payload=payload,
+            active=project_dir,
         )
 
     return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/write")
-async def api_story_write(request: Request) -> JSONResponse:
+async def api_story_write(request: Request, project_dir: ProjectDep) -> JSONResponse:
     """Api Story Write."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
         chap_id = payload.get("chap_id")
-        return await write_chapter_from_summary(chap_id=chap_id, payload=payload)
+        return await write_chapter_from_summary(
+            chap_id=chap_id, payload=payload, active=project_dir
+        )
 
     return await _dispatch_generation(request, _handler)
 
 
 @router.post("/story/continue")
-async def api_story_continue(request: Request) -> JSONResponse:
+async def api_story_continue(request: Request, project_dir: ProjectDep) -> JSONResponse:
     """Api Story Continue."""
 
     async def _handler(payload: dict) -> Any:
         """Helper for the requested value.."""
         chap_id = payload.get("chap_id")
-        return await continue_chapter_from_summary(chap_id=chap_id, payload=payload)
+        return await continue_chapter_from_summary(
+            chap_id=chap_id,
+            payload=payload,
+            active=project_dir,
+        )
 
     return await _dispatch_generation(request, _handler)
