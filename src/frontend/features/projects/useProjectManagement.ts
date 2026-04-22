@@ -27,7 +27,7 @@ type UseProjectManagementParams = {
   storySummary: string;
   storyStyleTags: string[];
   storyConflicts: StoryState['conflicts'];
-  refreshStory: () => Promise<void>;
+  refreshStory: (historyLabel?: string, resetHistory?: boolean) => Promise<void>;
   loadStory: (story: StoryState) => void;
   updateStoryMetadata: (
     title: string,

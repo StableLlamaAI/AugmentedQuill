@@ -224,7 +224,7 @@ const buildToolPayload = (
       type: 'function';
       function: {
         name: string;
-        arguments: string | Record<string, unknown>;
+        arguments: string;
       };
     }>;
   }>;
