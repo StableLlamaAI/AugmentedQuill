@@ -47,6 +47,33 @@ def _resolve_story_draft_path(active: Any, story: dict) -> Any:
     return active / str(story.get("content_file") or "content.md")
 
 
+def _build_chapter_heading_prefix(chapter_title: str) -> str:
+    """Build the imposed heading prefix used for chapter rewrite continuations."""
+    title = (chapter_title or "").strip()
+    if not title:
+        return ""
+    return f"# {title}\n\n"
+
+
+def _build_prefill_for_chapter_action(
+    *, action: str, chapter_title: str, existing_content: str
+) -> str | None:
+    """Build assistant prefill text for chapter Rewrite/Extend actions."""
+    if action not in ("rewrite", "extend"):
+        return None
+
+    heading_prefix = _build_chapter_heading_prefix(chapter_title)
+    if action == "rewrite":
+        return heading_prefix
+
+    # Extend continues from the full current draft, prefixed with a temporary
+    # heading when absent so the model stays in the same markdown structure.
+    text = existing_content or ""
+    if heading_prefix and text.startswith(heading_prefix):
+        return text
+    return f"{heading_prefix}{text}" if heading_prefix else text
+
+
 def sanitize_prompt(prompt: str) -> str:
     """Remove empty labels and collapse blank lines in a prompt."""
     lines = prompt.splitlines()
@@ -593,12 +620,45 @@ def prepare_ai_action_generation(payload: dict, active: Path | None = None) -> d
         else:
             path, pos = None, None
 
+    chapters_data = get_all_normalized_chapters(story)
+
+    if scope == "story":
+        chapter_summary = story.get("story_summary", "")
+        chapter_title = story.get("project_title") or path.name
+    elif pos is not None:
+        ensure_chapter_slot(chapters_data, pos)
+        chapter_summary = chapters_data[pos].get("summary", "")
+        chapter_title = chapters_data[pos].get("title") or path.name
+    else:
+        chapter_summary = ""
+        chapter_title = ""
+
     # Read the current chapter text once (if we have a chapter path).
     actual_chapter_text = read_text_or_raise(path) if path else None
 
     existing_content = payload.get("current_text")
     if not isinstance(existing_content, str):
         existing_content = actual_chapter_text or ""
+
+    response_prefill = (
+        _build_prefill_for_chapter_action(
+            action=action,
+            chapter_title=chapter_title,
+            existing_content=existing_content,
+        )
+        if target == "chapter"
+        else None
+    )
+    extra_body = None
+    if response_prefill:
+        # Hint OpenAI-compatible template backends to continue the prefilled
+        # assistant turn instead of starting a fresh assistant response.
+        extra_body = {
+            "chat_template_kwargs": {
+                "continue_final_message": True,
+                "enable_thinking": False,
+            }
+        }
 
     # Decide whether the provided text should be treated as notes.
     source_hint = payload.get("source")
@@ -619,19 +679,6 @@ def prepare_ai_action_generation(payload: dict, active: Path | None = None) -> d
         and existing_content.strip() != actual_chapter_text.strip()
     ):
         is_notes_source = True
-
-    chapters_data = get_all_normalized_chapters(story)
-
-    if scope == "story":
-        chapter_summary = story.get("story_summary", "")
-        chapter_title = story.get("project_title") or path.name
-    elif pos is not None:
-        ensure_chapter_slot(chapters_data, pos)
-        chapter_summary = chapters_data[pos].get("summary", "")
-        chapter_title = chapters_data[pos].get("title") or path.name
-    else:
-        chapter_summary = ""
-        chapter_title = ""
 
     prepared = {
         "target": target,
@@ -729,6 +776,8 @@ def prepare_ai_action_generation(payload: dict, active: Path | None = None) -> d
         "model_name": model_name,
         "model_type": model_type,
         "timeout_s": timeout_s,
+        "response_prefill": response_prefill,
+        "extra_body": extra_body,
         "tools": (
             _get_read_only_tool_schemas(project_type=project_type)
             if model_type == EDITING_ROLE

@@ -74,6 +74,29 @@ class StoryApiPromptOpsTest(TestCase):
         self.assertIsNotNone(user_msg)
         self.assertIn("current draft", user_msg["content"].lower())
 
+    def test_chapter_rewrite_uses_prefill_prompt_shape(self):
+        messages = build_ai_action_messages(
+            target="chapter",
+            action="rewrite",
+            project_type_label="Novel",
+            story_title="My Story",
+            story_summary="Some story summary",
+            story_tags="tag1, tag2",
+            chapter_title="Chapter 1",
+            chapter_summary="Some summary",
+            chapter_conflicts="",
+            existing_content="# Chapter 1\n\n",
+            model_overrides={},
+            language="en",
+            project_type="novel",
+        )
+
+        user_msg = next((m for m in messages if m["role"] == "user"), None)
+        self.assertIsNotNone(user_msg)
+        self.assertIn("already prefilled assistant draft text", user_msg["content"])
+        self.assertNotIn("Existing draft text (do not change)", user_msg["content"])
+        self.assertNotIn("# Chapter 1", user_msg["content"])
+
     def test_read_only_tool_schema_filter_excludes_editing_functions(self):
         tools = _get_read_only_tool_schemas(project_type="series")
         names = {t["function"]["name"] for t in tools}

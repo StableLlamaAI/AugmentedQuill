@@ -361,6 +361,33 @@
         "Task: Continue the current draft from where it stops to advance the summary coherently."
       ]
     },
+    "chapter_ai_prefill_task": {
+      "_use": "WRITING",
+      "en": [
+        "Story title: {story_title}",
+        "",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "---",
+        "",
+        "Author's notes about the current draft:\n{chapter_notes}",
+        "",
+        "Active draft conflicts:\n{chapter_conflicts}",
+        "",
+        "Current draft title: {chapter_title}",
+        "",
+        "Current draft summary:",
+        "{chapter_summary}",
+        "",
+        "---",
+        "",
+        "Task: Write the full current draft as continuous prose. Maintain voice and pacing."
+      ]
+    },
     "story_summary_new": {
       "_use": "EDITING",
       "en": [

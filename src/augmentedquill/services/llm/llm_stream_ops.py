@@ -31,6 +31,27 @@ from augmentedquill.utils.llm_parsing import (
 )
 
 
+def _enforce_writing_no_thinking(
+    extra_body: Dict[str, Any], model_type: str | None
+) -> Dict[str, Any]:
+    """Ensure WRITING requests never enable provider thinking templates."""
+    if model_type != "WRITING":
+        return extra_body
+
+    merged = dict(extra_body or {})
+    chat_template_kwargs = merged.get("chat_template_kwargs")
+    if isinstance(chat_template_kwargs, dict):
+        next_kwargs = dict(chat_template_kwargs)
+        if next_kwargs.get("enable_thinking") is True:
+            next_kwargs["enable_thinking"] = False
+        merged["chat_template_kwargs"] = next_kwargs
+
+    if merged.get("enable_thinking") is True:
+        merged["enable_thinking"] = False
+
+    return merged
+
+
 def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
     """Validate base_url against configured models or environment overrides to prevent SSRF."""
     if not base_url or skip_validation:
@@ -128,13 +149,27 @@ async def unified_chat_stream(
         # since summaries usually don't reach 16k anyway, so it's a safe upper bound.
         max_tokens = 16384
 
-    merged_extra_body = apply_native_tool_calling_mode(
+    model_extra_body = _build_model_extra_body(model_cfg)
+    request_extra_body = apply_native_tool_calling_mode(
         extra_body,
         supports_function_calling=supports_function_calling,
         tools=tools,
         tool_choice=tool_choice,
     )
-    merged_extra_body.update(_build_model_extra_body(model_cfg))
+
+    # Model config acts as defaults; request-level extra_body must be able to
+    # override them (e.g. disable thinking for assistant-prefill continuation).
+    merged_extra_body = dict(model_extra_body)
+    for key, value in request_extra_body.items():
+        if (
+            key == "chat_template_kwargs"
+            and isinstance(merged_extra_body.get(key), dict)
+            and isinstance(value, dict)
+        ):
+            merged_extra_body[key] = {**merged_extra_body[key], **value}
+        else:
+            merged_extra_body[key] = value
+    merged_extra_body = _enforce_writing_no_thinking(merged_extra_body, model_type)
 
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers: Dict[str, str] = {"Content-Type": "application/json"}

@@ -104,6 +104,35 @@ class TestChannelFilter(unittest.TestCase):
         self.assertEqual(out[0]["channel"], "final")
         self.assertEqual(out[0]["content"], "<")
 
+    def test_malformed_channel_headers_are_consumed_without_switching_to_reasoning(
+        self,
+    ):
+        cf = ChannelFilter()
+
+        # Reasoning marker in malformed paired-header format should be consumed
+        # without yielding marker text and without switching away from final.
+        out1 = cf.feed("<|channel>thought\n<channel|>")
+        self.assertEqual(out1, [])
+        self.assertEqual(cf.current_channel, "final")
+
+        # Final marker in same malformed format remains harmless.
+        out2 = cf.feed("<|channel>final\n<channel|>")
+        self.assertEqual(out2, [])
+        self.assertEqual(cf.current_channel, "final")
+
+        out3 = cf.feed("Visible now")
+        self.assertEqual(out3, [{"channel": "final", "content": "Visible now"}])
+
+    def test_split_malformed_channel_header_does_not_block_final_streaming(self):
+        cf = ChannelFilter()
+
+        # Split malformed tag across chunks, then ensure final prose streams
+        # immediately (without waiting for flush/end).
+        self.assertEqual(cf.feed("<|channel>fin"), [])
+        self.assertEqual(cf.feed("al\n<channel|>"), [])
+        out = cf.feed("Hello")
+        self.assertEqual(out, [{"channel": "final", "content": "Hello"}])
+
 
 if __name__ == "__main__":
     unittest.main()

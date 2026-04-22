@@ -41,6 +41,95 @@ def _normalize_gemini_tokens(value: str) -> str:
     )
 
 
+def _sanitize_visible_prose(content: str) -> str:
+    """Return user-visible prose with model reasoning scaffolding removed.
+
+    This is the canonical sanitizer for streamed and non-streamed assistant text.
+    """
+    if not content:
+        return content
+
+    had_channel_marker = bool(re.search(r"<\|?channel", content, re.IGNORECASE))
+    had_leaked_thought_header = bool(
+        re.search(
+            r"<\|?channel\|?>\s*(thought|thinking|analysis|reasoning)\s*<\|?channel\|?>",
+            content,
+            re.IGNORECASE,
+        )
+    )
+
+    cleaned = content
+
+    # Remove complete reasoning blocks in common channel formats.
+    cleaned = re.sub(
+        r"<\|channel\|>\s*(analysis|thinking|thought|reasoning)\s*<\|message\|>.*?(?=(<\|channel\|>\s*final\s*<\|message\|>|$))",
+        "",
+        cleaned,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    # Remove malformed channel headers like <|channel>thought<channel|>.
+    cleaned = re.sub(
+        r"<\|?channel\|?>\s*(?:analysis|thought|thinking|reasoning|final)\s*<\|?channel\|?>",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove inline thought/thinking sections (closed and unclosed).
+    cleaned = re.sub(
+        r"<(thought|thinking)>.*?</\1>", "", cleaned, flags=re.IGNORECASE | re.DOTALL
+    )
+    cleaned = re.sub(r"<(thought|thinking)>.*$", "", cleaned, flags=re.IGNORECASE)
+
+    # Remove channel protocol tokens, keep actual prose.
+    cleaned = re.sub(r"<\|?channel\|?>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<\|?message\|?>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<\|?start\|?>assistant", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<\|?end\|?>", "", cleaned, flags=re.IGNORECASE)
+
+    if had_leaked_thought_header:
+        boundary = cleaned.find("\n\n")
+        if boundary >= 0:
+            cleaned = cleaned[boundary + 2 :]
+        elif "\n" in cleaned:
+            return ""
+
+    # If a marker label still leaks at the beginning, drop it and any following
+    # line noise until paragraph boundary when available.
+    prefix_match = re.match(
+        r"^\s*(thought|thinking|analysis|reasoning|final)\b", cleaned, re.IGNORECASE
+    )
+    if prefix_match and had_channel_marker:
+        boundary = cleaned.find("\n\n")
+        if boundary >= 0:
+            cleaned = cleaned[boundary + 2 :]
+        else:
+            cleaned = re.sub(
+                r"^\s*(thought|thinking|analysis|reasoning|final)\s*",
+                "",
+                cleaned,
+                flags=re.IGNORECASE,
+            )
+
+    # Drop standalone marker words left behind after token cleanup.
+    if cleaned.strip().lower() in {
+        "thought",
+        "thinking",
+        "analysis",
+        "reasoning",
+        "final",
+    }:
+        return ""
+    return cleaned
+
+
+def _is_reasoning_channel(channel: str) -> bool:
+    """Return True when channel name represents reasoning/thinking content."""
+    value = (channel or "").strip().lower()
+    return value in {"thinking", "thought", "analysis", "reasoning"}
+
+
 def _parse_xml_style_tool_call(content_inner: str) -> tuple[str, dict[str, Any]] | None:
     """Parse legacy XML-like tool call bodies with optional parameter tags."""
     xml_match = re.search(
@@ -319,8 +408,7 @@ def strip_thinking_tags(content: str) -> str:
         )
         return content.strip()
 
-    # Handle <thought>...</thought> or <thinking>...</thinking>
-    content = re.sub(r"<(thought|thinking)>.*?</\1>", "", content, flags=re.DOTALL)
+    content = _sanitize_visible_prose(content)
 
     return content.strip()
 
@@ -405,7 +493,7 @@ def parse_stream_channel_fragments(
         if not piece and channel != "tool_def":
             continue
 
-        if channel in {"thinking", "thought"}:
+        if _is_reasoning_channel(channel):
             if piece:
                 events.append({"thinking": piece})
             continue
@@ -477,6 +565,11 @@ def parse_stream_channel_fragments(
                     events.append({"tool_calls": new_calls})
                 continue
 
-        events.append({"content": piece})
+        cleaned_piece = _sanitize_visible_prose(piece)
+        if cleaned_piece is None or cleaned_piece == "":
+            continue
+        if cleaned_piece.strip().lower() in {"thought", "thinking", "analysis"}:
+            continue
+        events.append({"content": cleaned_piece})
 
     return events

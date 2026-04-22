@@ -55,8 +55,6 @@ describe('openaiService', () => {
 
     global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
 
-    const cfg: LLMConfig = { id: 'x', name: 'x', baseUrl: '', apiKey: '', timeout: 5 };
-
     // This call is intended to exercise streamAiAction; we only care about the request payload.
     await (
       await import('./openaiService')
@@ -82,5 +80,34 @@ describe('openaiService', () => {
     const raw = '{"chap_id":1,"notes":"line1\nline2"}';
     const result = parseToolArguments(raw);
     expect(result).toEqual({ chap_id: 1, notes: 'line1\nline2' });
+  });
+
+  it('preserves streamed paragraph content and newlines', async () => {
+    const events = [
+      { content: '\n\n' },
+      { content: 'Visible prose.' },
+      { content: ' Continued.' },
+    ]
+      .map((evt: { content: string }) => `data: ${JSON.stringify(evt)}\n\n`)
+      .join('')
+      .concat('data: [DONE]\n\n');
+
+    const encoder = new TextEncoder();
+    const fakeReader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: encoder.encode(events) })
+        .mockResolvedValueOnce({ done: true, value: new Uint8Array() }),
+    };
+    const fakeBody = {
+      getReader: () => fakeReader,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
+
+    const svc = await import('./openaiService');
+    const result = await svc.streamAiAction('chapter', 'rewrite', '1', 'draft');
+
+    expect(result).toBe('\n\nVisible prose. Continued.');
   });
 });

@@ -80,6 +80,7 @@ async def _create_gen_source_pure(prepared: dict) -> Any:
     """Create a generator source for streaming."""
     async for chunk_dict in stream_unified_chat_content(
         messages=prepared["messages"],
+        response_prefill=prepared.get("response_prefill"),
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
         model_id=prepared["model_id"],
@@ -87,6 +88,7 @@ async def _create_gen_source_pure(prepared: dict) -> Any:
         model_name=prepared.get("model_name"),
         model_type=prepared.get("model_type"),
         tools=prepared.get("tools"),
+        extra_body=prepared.get("extra_body"),
         max_rounds=prepared.get("max_rounds") or 4,
     ):
         yield chunk_dict

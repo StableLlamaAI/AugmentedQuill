@@ -115,6 +115,16 @@ class ModelRoutingTest(TestCase):
         )
         return pdir
 
+    def _set_writing_model_extra_body(self, extra_body_obj: dict) -> str:
+        """Temporarily override WRITING model extra_body in machine config."""
+        original = self.machine_config_path.read_text(encoding="utf-8")
+        cfg = json.loads(original)
+        for model in cfg.get("openai", {}).get("models", []):
+            if model.get("name") == "Write Mode":
+                model["extra_body"] = json.dumps(extra_body_obj)
+        self.machine_config_path.write_text(json.dumps(cfg), encoding="utf-8")
+        return original
+
     @patch("augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient")
     def test_routing_writing_streaming(self, MockClientClass):
         mock_instance = MagicMock()
@@ -149,6 +159,49 @@ class ModelRoutingTest(TestCase):
         )
 
     @patch("augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient")
+    def test_writing_streaming_never_sends_enable_thinking_true(self, MockClientClass):
+        original_cfg = self._set_writing_model_extra_body(
+            {
+                "mode": "write",
+                "chat_template_kwargs": {
+                    "enable_thinking": True,
+                    "foo": "bar",
+                },
+            }
+        )
+
+        try:
+            mock_instance = MagicMock()
+            MockClientClass.return_value = mock_instance
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "text/event-stream"}
+            mock_stream_ctx = MagicMock()
+            mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+            mock_stream_ctx.__aexit__ = AsyncMock()
+            mock_instance.stream.return_value = mock_stream_ctx
+
+            async def fake_aiter_lines():
+                yield "data: " + json.dumps(
+                    {"choices": [{"delta": {"content": "Test\n"}}]}
+                ) + "\n\n"
+
+            mock_resp.aiter_lines = fake_aiter_lines
+
+            r = self.client.post("/api/v1/story/write/stream", json={"chap_id": 1})
+            self.assertEqual(r.status_code, 200, r.text)
+
+            call_kwargs = mock_instance.stream.call_args[1]
+            payload = call_kwargs["json"]
+            template_kwargs = payload.get("chat_template_kwargs") or {}
+            self.assertNotEqual(template_kwargs.get("enable_thinking"), True)
+        finally:
+            self.machine_config_path.write_text(original_cfg, encoding="utf-8")
+
+    @patch("augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient")
     def test_routing_writing_rest(self, MockClientClass):
         mock_instance = MagicMock()
         MockClientClass.return_value = mock_instance
@@ -171,6 +224,40 @@ class ModelRoutingTest(TestCase):
             "write",
             "REST WRITING mode did not route to correct model provider configurations",
         )
+
+    @patch("augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient")
+    def test_writing_rest_never_sends_enable_thinking_true(self, MockClientClass):
+        original_cfg = self._set_writing_model_extra_body(
+            {
+                "mode": "write",
+                "chat_template_kwargs": {
+                    "enable_thinking": True,
+                    "foo": "bar",
+                },
+            }
+        )
+
+        try:
+            mock_instance = MagicMock()
+            MockClientClass.return_value = mock_instance
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json = lambda: {"choices": [{"message": {"content": "Test"}}]}
+            mock_resp.read = lambda: b"{}"
+            mock_instance.request = AsyncMock(return_value=mock_resp)
+
+            r = self.client.post("/api/v1/story/write", json={"chap_id": 1})
+            self.assertEqual(r.status_code, 200, r.text)
+
+            call_kwargs = mock_instance.request.call_args[1]
+            payload = call_kwargs["json"]
+            template_kwargs = payload.get("chat_template_kwargs") or {}
+            self.assertNotEqual(template_kwargs.get("enable_thinking"), True)
+        finally:
+            self.machine_config_path.write_text(original_cfg, encoding="utf-8")
 
     @patch("augmentedquill.services.llm.llm_http_ops.httpx.AsyncClient")
     def test_routing_editing_streaming(self, MockClientClass):

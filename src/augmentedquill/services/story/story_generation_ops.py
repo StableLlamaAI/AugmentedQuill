@@ -39,6 +39,7 @@ async def _complete_with_tool_calls(
     model_id: str,
     timeout_s: int,
     model_name: str | None = None,
+    model_type: str | None = None,
     tools: list[dict] | None = None,
     max_rounds: int = 4,
 ) -> dict:
@@ -47,6 +48,7 @@ async def _complete_with_tool_calls(
     for _ in range(max_rounds):
         response = await llm.unified_chat_complete(
             caller_id=caller_id,
+            model_type=model_type,
             messages=current_messages,
             base_url=base_url,
             api_key=api_key,
@@ -120,6 +122,7 @@ async def generate_story_summary(
             model_id=prepared["model_id"],
             timeout_s=prepared["timeout_s"],
             model_name=prepared.get("model_name"),
+            model_type=prepared.get("model_type"),
             tools=prepared.get("tools"),
         )
     except Exception:
@@ -161,6 +164,7 @@ async def generate_chapter_summary(
             model_id=prepared["model_id"],
             timeout_s=prepared["timeout_s"],
             model_name=prepared.get("model_name"),
+            model_type=prepared.get("model_type"),
             tools=prepared.get("tools"),
         )
     except Exception:
@@ -199,6 +203,7 @@ async def write_chapter_from_summary(
 
     data = await llm.unified_chat_complete(
         caller_id="story_generation.write_chapter_from_summary",
+        model_type=prepared.get("model_type"),
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],
@@ -221,6 +226,7 @@ async def continue_chapter_from_summary(
 
     data = await llm.unified_chat_complete(
         caller_id="story_generation.continue_chapter_from_summary",
+        model_type=prepared.get("model_type"),
         messages=prepared["messages"],
         base_url=prepared["base_url"],
         api_key=prepared["api_key"],

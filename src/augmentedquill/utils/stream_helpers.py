@@ -45,6 +45,38 @@ class ChannelFilter:
         results = []
 
         while True:
+            # Fast-path malformed paired channel headers like:
+            # <|channel>thought\n<channel|>
+            lower_buf = self.buffer.lower()
+            if lower_buf.startswith("<|channel>"):
+                opener = "<|channel>"
+                start_idx = len(opener)
+                close_idx = lower_buf.find("<channel|>", start_idx)
+                close_token = "<channel|>"
+                if close_idx == -1:
+                    close_idx = lower_buf.find("<|channel>", start_idx)
+                    close_token = "<|channel>"
+
+                if close_idx == -1:
+                    break
+
+                channel_name = self.buffer[start_idx:close_idx]
+                if "<|constrain|>" in channel_name:
+                    channel_name = channel_name.split("<|constrain|>", 1)[0]
+                normalized = channel_name.strip().lower()
+
+                # Treat malformed reasoning markers as noise; preserve final prose stream.
+                if normalized and normalized not in {
+                    "thought",
+                    "thinking",
+                    "analysis",
+                    "reasoning",
+                }:
+                    self.current_channel = channel_name.strip()
+
+                self.buffer = self.buffer[close_idx + len(close_token) :]
+                continue
+
             match = self.tag_pattern.search(self.buffer)
             if not match:
                 # No complete tag found.
@@ -115,8 +147,17 @@ class ChannelFilter:
                     re.IGNORECASE,
                 ):
                     self.current_channel = "final"
-                elif tag_text.startswith("<|channel|>"):
-                    channel_name = match.group(2)
+                elif re.match(r"<\|?channel\|?>", tag_text, re.IGNORECASE):
+                    channel_name = ""
+
+                    strict_match = re.match(
+                        r"<\|channel\|>(.*?)<\|message\|>",
+                        tag_text,
+                        re.IGNORECASE | re.DOTALL,
+                    )
+                    if strict_match:
+                        channel_name = strict_match.group(1)
+
                     if channel_name:
                         if "<|constrain|>" in channel_name:
                             channel_name = channel_name.split("<|constrain|>", 1)[0]

@@ -54,8 +54,6 @@ export type ExecuteChatRequestContext = {
   ) => void;
   setIsChatLoading: (v: boolean) => void;
   stopSignalRef: MutableRefObject<boolean>;
-  pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>;
-  updateFlushFrameRef: MutableRefObject<number | null>;
   createAssistantMessage: (
     id: string,
     result: {
@@ -87,7 +85,7 @@ export const upsertChatMessage = (
   ensureUniqueMessagesFn: (messages: ChatMessage[]) => ChatMessage[],
   msgId: string,
   messageUpdate: Partial<ChatMessage>
-) => {
+): void => {
   setChatMessages((prev: ChatMessage[]) => {
     const messageIndex = prev.findIndex((item: ChatMessage) => item.id === msgId);
     if (messageIndex !== -1) {
@@ -112,58 +110,6 @@ export const upsertChatMessage = (
         ...messageUpdate,
       } as ChatMessage,
     ]);
-  });
-};
-
-export const flushPendingMessageUpdates = (
-  pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>,
-  updateFlushFrameRef: MutableRefObject<number | null>,
-  setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
-) => {
-  if (updateFlushFrameRef.current !== null) {
-    cancelAnimationFrame(updateFlushFrameRef.current);
-    updateFlushFrameRef.current = null;
-  }
-
-  const updates = pendingMessageUpdatesRef.current;
-  const updateEntries = Object.entries(updates);
-  if (updateEntries.length === 0) return;
-
-  pendingMessageUpdatesRef.current = {};
-
-  setChatMessages((prev: ChatMessage[]) => {
-    const next = [...prev];
-    const messageIndexById = new Map<string, number>();
-
-    next.forEach((message: ChatMessage, index: number) => {
-      messageIndexById.set(message.id, index);
-    });
-
-    for (const [messageId, messageUpdate] of updateEntries) {
-      const existingIndex = messageIndexById.get(messageId);
-
-      if (existingIndex !== undefined) {
-        const existing = next[existingIndex];
-        next[existingIndex] = {
-          ...existing,
-          ...messageUpdate,
-          text: messageUpdate.text ?? existing.text,
-          thinking: messageUpdate.thinking ?? existing.thinking,
-          traceback: messageUpdate.traceback ?? existing.traceback,
-        } as ChatMessage;
-      } else {
-        next.push({
-          id: messageId,
-          role: 'model',
-          text: messageUpdate.text ?? '',
-          thinking: messageUpdate.thinking ?? '',
-          traceback: messageUpdate.traceback ?? '',
-          ...messageUpdate,
-        } as ChatMessage);
-      }
-    }
-
-    return next;
   });
 };
 
@@ -203,7 +149,11 @@ export const buildChapterContextMessage = (
 const parseToolCallResults = (
   messages: Array<{ content: string; tool_call_id: string; name: string }>,
   assistantMessage: ChatMessage
-) => {
+): Array<{
+  name: string;
+  args: Record<string, unknown>;
+  result: Record<string, unknown>;
+}> => {
   const callResults: Array<{
     name: string;
     args: Record<string, unknown>;
@@ -233,30 +183,17 @@ const parseToolCallResults = (
   return callResults;
 };
 
-const makeMessageUpdater =
+export const makeMessageUpdater =
   (
-    pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>,
-    updateFlushFrameRef: MutableRefObject<number | null>,
-    flushPendingMessageUpdatesFn: () => void
-  ) =>
+    setChatMessages: (
+      v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
+    ) => void
+  ): ((
+    msgId: string
+  ) => (update: { text?: string; thinking?: string; traceback?: string }) => void) =>
   (msgId: string) =>
   (update: { text?: string; thinking?: string; traceback?: string }) => {
-    if (pendingMessageUpdatesRef.current === null) return;
-
-    const existingUpdate = pendingMessageUpdatesRef.current[msgId] || {};
-    pendingMessageUpdatesRef.current[msgId] = {
-      ...existingUpdate,
-      ...update,
-      text: update.text ?? existingUpdate.text,
-      thinking: update.thinking ?? existingUpdate.thinking,
-      traceback: update.traceback ?? existingUpdate.traceback,
-    };
-
-    if (updateFlushFrameRef.current !== null) return;
-    updateFlushFrameRef.current = requestAnimationFrame(() => {
-      updateFlushFrameRef.current = null;
-      flushPendingMessageUpdatesFn();
-    });
+    upsertChatMessage(setChatMessages, ensureUniqueMessages, msgId, update);
   };
 
 const normalizeFunctionCalls = (
@@ -278,7 +215,22 @@ const buildToolPayload = (
   currentHistory: ChatMessage[],
   currentChapterId: string | null,
   currentChatId: string | null
-) => ({
+): {
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string | null;
+    tool_calls?: Array<{
+      id: string;
+      type: 'function';
+      function: {
+        name: string;
+        arguments: string | Record<string, unknown>;
+      };
+    }>;
+  }>;
+  active_chapter_id?: number;
+  chat_id?: string;
+} => ({
   messages: currentHistory.map((message: ChatMessage) => ({
     role: (message.role === 'model' ? 'assistant' : message.role) as
       | 'user'
@@ -315,7 +267,11 @@ const handleToolResponse = async (
     label: string;
     operation_count?: number;
   }>
-) => {
+): Promise<{
+  currentHistory: ChatMessage[];
+  currentMsgId: string;
+  result: UnifiedChatResult;
+} | null> => {
   const callResults = parseToolCallResults(
     toolResponse.appended_messages,
     assistantMessage
@@ -372,16 +328,7 @@ const handleToolResponse = async (
   const nextMsgId = uuidv4();
   const nextResult = await nextSession.sendMessage(
     { message: '' },
-    makeMessageUpdater(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      () =>
-        flushPendingMessageUpdates(
-          context.pendingMessageUpdatesRef,
-          context.updateFlushFrameRef,
-          context.setChatMessages
-        )
-    )(nextMsgId)
+    makeMessageUpdater(context.setChatMessages)(nextMsgId)
   );
 
   return {
@@ -412,7 +359,11 @@ const runToolCallLoop = async (
     label: string;
     operation_count?: number;
   }>
-) => {
+): Promise<{
+  currentHistory: ChatMessage[];
+  currentMsgId: string;
+  result: UnifiedChatResult;
+}> => {
   let sequentialToolCalls = 0;
   let toolCallLimit = 10;
 
@@ -435,11 +386,6 @@ const runToolCallLoop = async (
       thinking: result.thinking,
       functionCalls: normalizeFunctionCalls(result.functionCalls),
     });
-    flushPendingMessageUpdates(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      context.setChatMessages
-    );
     upsertChatMessage(
       context.setChatMessages,
       ensureUniqueMessages,
@@ -491,20 +437,11 @@ const executeChatRequestImpl = async (
   history: ChatMessage[],
   attachments?: ChatAttachment[],
   userMsgId?: string
-) => {
+): Promise<void> => {
   context.setIsChatLoading(true);
   context.stopSignalRef.current = false;
 
-  const updateMessage = makeMessageUpdater(
-    context.pendingMessageUpdatesRef,
-    context.updateFlushFrameRef,
-    () =>
-      flushPendingMessageUpdates(
-        context.pendingMessageUpdatesRef,
-        context.updateFlushFrameRef,
-        context.setChatMessages
-      )
-  );
+  const updateMessage = makeMessageUpdater(context.setChatMessages);
 
   try {
     let currentHistory = [...history];
@@ -592,11 +529,6 @@ const executeChatRequestImpl = async (
         thinking: result.thinking,
         functionCalls: normalizeFunctionCalls(result.functionCalls),
       });
-      flushPendingMessageUpdates(
-        context.pendingMessageUpdatesRef,
-        context.updateFlushFrameRef,
-        context.setChatMessages
-      );
       upsertChatMessage(
         context.setChatMessages,
         ensureUniqueMessages,
@@ -630,11 +562,6 @@ const executeChatRequestImpl = async (
     };
     context.setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
   } finally {
-    flushPendingMessageUpdates(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      context.setChatMessages
-    );
     context.setIsChatLoading(false);
     context.stopSignalRef.current = false;
   }

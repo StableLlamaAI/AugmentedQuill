@@ -78,8 +78,6 @@ export function useChatExecution({
   // every per-token chatMessages change.
   const { setChatMessages, setIsChatLoading } = useChatStore.getState();
   const stopSignalRef = useRef(false);
-  const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
-  const updateFlushFrameRef = useRef<number | null>(null);
 
   const executeChatRequest = useCallback(
     buildExecuteChatRequest({
@@ -98,8 +96,6 @@ export function useChatExecution({
       setChatMessages,
       setIsChatLoading,
       stopSignalRef,
-      pendingMessageUpdatesRef,
-      updateFlushFrameRef,
       createAssistantMessage,
     }),
     [
@@ -118,8 +114,6 @@ export function useChatExecution({
       setChatMessages,
       setIsChatLoading,
       stopSignalRef,
-      pendingMessageUpdatesRef,
-      updateFlushFrameRef,
       createAssistantMessage,
     ]
   );
@@ -137,7 +131,7 @@ export function useChatExecution({
   const handleSendMessageImpl = async (
     text: string,
     attachments?: ChatAttachment[]
-  ) => {
+  ): Promise<void> => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const historyBefore = [...useChatStore.getState().chatMessages];
@@ -160,12 +154,12 @@ export function useChatExecution({
     await executeChatRequest(text, historyWithContext, attachments, userMsgId);
   };
 
-  const handleStopChatImpl = () => {
+  const handleStopChatImpl = (): void => {
     stopSignalRef.current = true;
     useChatStore.getState().setIsChatLoading(false);
   };
 
-  const handleRegenerateImpl = async () => {
+  const handleRegenerateImpl = async (): Promise<void> => {
     if (!isChatAvailable) return;
     const chatMessages = useChatStore.getState().chatMessages;
 
@@ -198,12 +192,15 @@ export function useChatExecution({
   // Stable wrappers: identity never changes, so chatControls/useMemo deps that
   // capture these functions don't invalidate on every debounced keystroke.
   const handleSendMessage = useCallback(
-    (text: string, attachments?: ChatAttachment[]) =>
+    (text: string, attachments?: ChatAttachment[]): Promise<void> =>
       handleSendMessageImplRef.current(text, attachments),
     []
   );
-  const handleStopChat = useCallback(() => handleStopChatImplRef.current(), []);
-  const handleRegenerate = useCallback(() => handleRegenerateImplRef.current(), []);
+  const handleStopChat = useCallback((): void => handleStopChatImplRef.current(), []);
+  const handleRegenerate = useCallback(
+    (): Promise<void> => handleRegenerateImplRef.current(),
+    []
+  );
 
   return {
     handleSendMessage,
