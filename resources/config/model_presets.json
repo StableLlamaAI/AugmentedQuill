@@ -58,6 +58,42 @@
       }
     },
     {
+      "id": "creative-writing",
+      "name": "Creative Writing",
+      "description": "Recommended sampling settings for creative prose generation.",
+      "model_id_patterns": ["^"],
+      "parameters": {
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "max_tokens": null,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "stop": [],
+        "seed": null,
+        "top_k": null,
+        "min_p": 0.02,
+        "extra_body": "{\"repeat_penalty\": 1.0}"
+      }
+    },
+    {
+      "id": "gemma4-default",
+      "name": "Gemma 4 Default",
+      "description": "Recommended Gemma 4 sampling settings for general use.",
+      "model_id_patterns": ["^gemma4", "^gemma-4"],
+      "parameters": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "max_tokens": null,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "stop": [],
+        "seed": null,
+        "top_k": 64,
+        "min_p": null,
+        "extra_body": ""
+      }
+    },
+    {
       "id": "qwen35-thinking-default",
       "name": "Qwen 3.5 Thinking",
       "description": "Qwen3.5 recommended sampling for default thinking mode.",
