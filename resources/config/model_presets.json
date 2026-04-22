@@ -58,24 +58,6 @@
       }
     },
     {
-      "id": "creative-writing",
-      "name": "Creative Writing",
-      "description": "Recommended sampling settings for creative prose generation.",
-      "model_id_patterns": ["^"],
-      "parameters": {
-        "temperature": 1.0,
-        "top_p": 1.0,
-        "max_tokens": null,
-        "presence_penalty": 0,
-        "frequency_penalty": 0,
-        "stop": [],
-        "seed": null,
-        "top_k": null,
-        "min_p": 0.02,
-        "extra_body": "{\"repeat_penalty\": 1.0}"
-      }
-    },
-    {
       "id": "gemma4-default",
       "name": "Gemma 4 Default",
       "description": "Recommended Gemma 4 sampling settings for general use.",
@@ -130,6 +112,82 @@
         "top_k": 20,
         "min_p": 0.0,
         "extra_body": "{\"repetition_penalty\": 1.0, \"chat_template_kwargs\": {\"enable_thinking\": false}}"
+      }
+    },
+    {
+      "id": "delta-creative-writing",
+      "name": "Tweak: Creative Writing",
+      "description": "Recommended sampling settings for creative prose generation.",
+      "model_id_patterns": ["^"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "max_tokens": null,
+        "presence_penalty": null,
+        "frequency_penalty": null,
+        "stop": null,
+        "seed": null,
+        "top_k": 0,
+        "min_p": 0.02,
+        "extra_body": "{\"repeat_penalty\": 1.0}"
+      }
+    },
+    {
+      "id": "delta-creative-boost",
+      "name": "Tweak: Creative Boost",
+      "description": "Raises temperature and min_p for more varied, inventive prose. Apply on top of any model preset.",
+      "model_id_patterns": ["^"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": 1.15,
+        "top_p": null,
+        "max_tokens": null,
+        "presence_penalty": null,
+        "frequency_penalty": null,
+        "stop": null,
+        "seed": null,
+        "top_k": null,
+        "min_p": 0.03,
+        "extra_body": null
+      }
+    },
+    {
+      "id": "delta-factual-focus",
+      "name": "Tweak: Factual Focus",
+      "description": "Lowers temperature and top_p for more deterministic, conservative output. Apply on top of any model preset.",
+      "model_id_patterns": ["^"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": 0.3,
+        "top_p": 0.85,
+        "max_tokens": null,
+        "presence_penalty": null,
+        "frequency_penalty": null,
+        "stop": null,
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": null
+      }
+    },
+    {
+      "id": "delta-low-repetition",
+      "name": "Tweak: Low Repetition",
+      "description": "Increases presence and frequency penalties to reduce repeated phrases and loops.",
+      "model_id_patterns": ["^"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": null,
+        "max_tokens": null,
+        "presence_penalty": 0.6,
+        "frequency_penalty": 0.4,
+        "stop": null,
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": null
       }
     }
   ]

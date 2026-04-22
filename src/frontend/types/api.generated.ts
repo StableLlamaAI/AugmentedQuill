@@ -2094,6 +2094,16 @@ export interface components {
     /**
      * ModelPresetEntry
      * @description A single model-preset entry as loaded from *model_presets.json*.
+     *
+     *     ``preset_type`` distinguishes two flavours:
+     *
+     *     * ``"absolute"`` (default) – replaces **all** sampling parameters on the
+     *       provider and locks manual editing.  Suitable for a named full profile
+     *       tied to a specific model family.
+     *     * ``"delta"`` – applies **only the non-null fields** in ``parameters`` on
+     *       top of whatever is already configured.  Does not lock the provider or
+     *       change ``preset_id``.  Suitable for cross-model tweaks such as "more
+     *       creative" or "factual focus".
      */
     ModelPresetEntry: {
       /** Id */
@@ -2104,6 +2114,12 @@ export interface components {
       description: string;
       /** Model Id Patterns */
       model_id_patterns: string[];
+      /**
+       * Preset Type
+       * @default absolute
+       * @enum {string}
+       */
+      preset_type: 'absolute' | 'delta';
       parameters: components['schemas']['ModelPresetParameters'];
       warnings?: components['schemas']['ModelPresetWarning'] | null;
     };

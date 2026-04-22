@@ -78,6 +78,16 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   const [suggestedPresetByProvider, setSuggestedPresetByProvider] = useState<
     Record<string, string | null>
   >({});
+  const [lastDeltaByProvider, setLastDeltaByProvider] = useState<
+    Record<string, string | null>
+  >({});
+
+  const absolutePresets = modelPresets.filter(
+    (p: ModelPresetEntry) => (p.preset_type ?? 'absolute') === 'absolute'
+  );
+  const deltaPresets = modelPresets.filter(
+    (p: ModelPresetEntry) => p.preset_type === 'delta'
+  );
 
   const getPresetById = (id?: string | null) => {
     if (!id) return null;
@@ -87,7 +97,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   const suggestPresetForModelId = (modelId: string): ModelPresetEntry | null => {
     const modelIdTrimmed = (modelId || '').trim();
     if (!modelIdTrimmed) return null;
-    for (const preset of modelPresets) {
+    for (const preset of absolutePresets) {
       if (!Array.isArray(preset.model_id_patterns)) continue;
       const matches = preset.model_id_patterns.some((pattern: string) => {
         try {
@@ -99,6 +109,22 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       if (matches) return preset;
     }
     return null;
+  };
+
+  /** Returns absolute presets that match the given model ID, most specific first. */
+  const getMatchingAbsolutePresets = (modelId: string): ModelPresetEntry[] => {
+    const modelIdTrimmed = (modelId || '').trim();
+    if (!modelIdTrimmed) return [];
+    return absolutePresets.filter((preset: ModelPresetEntry) => {
+      if (!Array.isArray(preset.model_id_patterns)) return false;
+      return preset.model_id_patterns.some((pattern: string) => {
+        try {
+          return new RegExp(pattern, 'i').test(modelIdTrimmed);
+        } catch {
+          return false;
+        }
+      });
+    });
   };
 
   const applyPreset = (providerId: string, preset: ModelPresetEntry | null) => {
@@ -124,6 +150,34 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     setSuggestedPresetByProvider((previous: Record<string, string | null>) => ({
       ...previous,
       [providerId]: null,
+    }));
+  };
+
+  /** Applies only the non-null fields from a delta preset without locking the provider. */
+  const applyDelta = (providerId: string, preset: ModelPresetEntry | null) => {
+    if (!preset) {
+      setLastDeltaByProvider((prev: Record<string, string | null>) => ({
+        ...prev,
+        [providerId]: null,
+      }));
+      return;
+    }
+    const p = preset.parameters || {};
+    const updates: Partial<LLMConfig> = {};
+    if (p.temperature != null) updates.temperature = p.temperature;
+    if (p.top_p != null) updates.topP = p.top_p;
+    if (p.max_tokens != null) updates.maxTokens = p.max_tokens;
+    if (p.presence_penalty != null) updates.presencePenalty = p.presence_penalty;
+    if (p.frequency_penalty != null) updates.frequencyPenalty = p.frequency_penalty;
+    if (Array.isArray(p.stop)) updates.stop = p.stop.map((s: string) => String(s));
+    if (p.seed != null) updates.seed = p.seed;
+    if (p.top_k != null) updates.topK = p.top_k;
+    if (p.min_p != null) updates.minP = p.min_p;
+    if (p.extra_body != null) updates.extraBody = p.extra_body;
+    onUpdateProvider(providerId, updates);
+    setLastDeltaByProvider((prev: Record<string, string | null>) => ({
+      ...prev,
+      [providerId]: preset.id,
     }));
   };
 
@@ -179,10 +233,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     tooltip?: string
   ) => {
     if (!activeProvider) return null;
-    const disabled = !!activeProvider.presetId;
     const id = `provider-${field}`;
     return (
-      <div className={`space-y-2 ${disabled ? 'opacity-60' : ''}`}>
+      <div className="space-y-2">
         <div
           className={`flex justify-between text-xs ${
             isLight ? 'text-brand-gray-600' : 'text-brand-gray-400'
@@ -208,13 +261,12 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           max={max}
           step={step}
           value={activeProvider[field] ?? 0}
-          disabled={disabled}
           onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
             onUpdateProvider(activeProvider.id, {
               [field]: Number(e.target.value),
             })
           }
-          className={`w-full accent-brand-500 ${disabled ? 'cursor-not-allowed' : ''}`}
+          className="w-full accent-brand-500"
         />
       </div>
     );
@@ -233,9 +285,8 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     tooltip?: string
   ) => {
     if (!activeProvider) return null;
-    const disabled = !!activeProvider.presetId;
     return (
-      <div className={`space-y-1 ${disabled ? 'opacity-60' : ''}`}>
+      <div className="space-y-1">
         <label className="text-xs font-medium text-brand-gray-500 uppercase">
           <span
             title={tooltip}
@@ -261,7 +312,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           }
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
-          disabled={disabled}
           onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) => {
             const raw = e.target.value;
             onUpdateProvider(activeProvider.id, {
@@ -269,13 +319,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             });
           }}
           className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-            disabled
-              ? isLight
-                ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
-                : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
-              : isLight
-                ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+            isLight
+              ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+              : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
           }`}
         />
       </div>
@@ -562,6 +608,13 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                           ) => {
                             e.preventDefault();
                             onUpdateProvider(activeProvider.id, { modelId: m });
+                            const suggested = suggestPresetForModelId(m);
+                            setSuggestedPresetByProvider(
+                              (previous: Record<string, string | null>) => ({
+                                ...previous,
+                                [activeProvider.id]: suggested?.id || null,
+                              })
+                            );
                             setModelPickerOpenFor(null);
                           }}
                           className={`w-full text-left px-3 py-2 text-sm transition-colors truncate ${
@@ -702,53 +755,123 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           </div>
 
           {/* Preset — controls which named parameter configuration is active */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-brand-gray-500 uppercase">
-              Preset
-            </label>
-            <select
-              value={activeProvider.presetId || ''}
-              onChange={(
-                e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-              ) => {
-                const preset = getPresetById(e.target.value || null);
-                if (!preset) {
-                  onUpdateProvider(activeProvider.id, {
-                    presetId: null,
-                    writingWarning: null,
-                  });
-                  return;
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                Preset
+              </label>
+              <select
+                value={activeProvider.presetId || ''}
+                onChange={(
+                  e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                ) => {
+                  const preset = getPresetById(e.target.value || null);
+                  if (!preset) {
+                    onUpdateProvider(activeProvider.id, {
+                      presetId: null,
+                      writingWarning: null,
+                    });
+                    return;
+                  }
+                  applyPreset(activeProvider.id, preset);
+                }}
+                className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                  isLight
+                    ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                    : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                }`}
+                title={
+                  getPresetById(activeProvider.presetId)?.description ||
+                  'Choose a preset to apply a named parameter configuration'
                 }
-                applyPreset(activeProvider.id, preset);
-              }}
-              className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                isLight
-                  ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                  : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
-              }`}
-              title={
-                getPresetById(activeProvider.presetId)?.description ||
-                'Choose a preset to apply a named parameter configuration'
-              }
-            >
-              <option value="">No preset — edit parameters manually</option>
-              {modelPresets.map((preset: ModelPresetEntry) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name}
-                </option>
-              ))}
-            </select>
-            {getPresetById(activeProvider.presetId)?.description && (
-              <p className="text-[11px] text-brand-gray-500">
-                {getPresetById(activeProvider.presetId)?.description}
-              </p>
-            )}
-            {activeProvider.presetId && (
-              <p className="text-[11px] text-brand-gray-400 italic">
-                Parameters below are locked by this preset. Select "No preset" to edit
-                them manually.
-              </p>
-            )}
+              >
+                <option value="">No preset — edit parameters manually</option>
+                {(() => {
+                  const matching = getMatchingAbsolutePresets(activeProvider.modelId);
+                  const matchingIds = new Set(
+                    matching.map((p: ModelPresetEntry) => p.id)
+                  );
+                  const others = absolutePresets.filter(
+                    (p: ModelPresetEntry) => !matchingIds.has(p.id)
+                  );
+                  return (
+                    <>
+                      {matching.length > 0 && (
+                        <optgroup label="Suggested for this model">
+                          {matching.map((preset: ModelPresetEntry) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {others.length > 0 && (
+                        <optgroup label="All presets">
+                          {others.map((preset: ModelPresetEntry) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
+                  );
+                })()}
+              </select>
+              {getPresetById(activeProvider.presetId)?.description && (
+                <p className="text-[11px] text-brand-gray-500">
+                  {getPresetById(activeProvider.presetId)?.description}
+                </p>
+              )}
+              {activeProvider.presetId && (
+                <p className="text-[11px] text-brand-gray-400 italic">
+                  Preset values are applied below. You can freely edit any parameter to
+                  override it — your changes take effect immediately.
+                </p>
+              )}
+            </div>
+
+            {/* Delta tweak — applies partial parameter overrides on top of any preset */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                Parameter Tweak{' '}
+                <span className="normal-case font-normal text-brand-gray-400">
+                  (applied on top of preset)
+                </span>
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value=""
+                  onChange={(
+                    e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                  ) => {
+                    const preset = getPresetById(e.target.value || null);
+                    applyDelta(activeProvider.id, preset);
+                  }}
+                  className={`flex-1 border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                  title="Apply a partial tweak on top of the current parameters"
+                >
+                  <option value="">Apply a tweak…</option>
+                  {deltaPresets.map((preset: ModelPresetEntry) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {lastDeltaByProvider[activeProvider.id] && (
+                <p className="text-[11px] text-brand-gray-500 italic">
+                  Last tweak applied:{' '}
+                  {getPresetById(lastDeltaByProvider[activeProvider.id])?.name}
+                  {' — '}
+                  {getPresetById(lastDeltaByProvider[activeProvider.id])?.description}
+                </p>
+              )}
+            </div>
           </div>
 
           <div
@@ -820,9 +943,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               )}
             </div>
             <div className="mt-4 grid grid-cols-1 gap-4">
-              <div
-                className={`space-y-1 ${activeProvider.presetId ? 'opacity-60' : ''}`}
-              >
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-brand-gray-500 uppercase">
                   <span
                     title="Sequences that cause the model to stop generating immediately when encountered."
@@ -835,7 +956,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   data-no-smart-quotes="true"
                   rows={3}
                   value={(activeProvider.stop || []).join('\n')}
-                  disabled={!!activeProvider.presetId}
                   onChange={(
                     e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
                   ) =>
@@ -847,19 +967,13 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                     })
                   }
                   className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
-                    activeProvider.presetId
-                      ? isLight
-                        ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
-                        : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
-                      : isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                   }`}
                 />
               </div>
-              <div
-                className={`space-y-1 ${activeProvider.presetId ? 'opacity-60' : ''}`}
-              >
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-brand-gray-500 uppercase">
                   <span
                     title="Additional JSON fields merged into the API request body. Use for provider-specific options not exposed above."
@@ -872,7 +986,6 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   data-no-smart-quotes="true"
                   rows={4}
                   value={activeProvider.extraBody || ''}
-                  disabled={!!activeProvider.presetId}
                   onChange={(
                     e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
                   ) =>
@@ -882,13 +995,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   }
                   placeholder='{"reasoning": {"enabled": false}}'
                   className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none font-mono ${
-                    activeProvider.presetId
-                      ? isLight
-                        ? 'bg-brand-gray-100 border-brand-gray-200 text-brand-gray-500 cursor-not-allowed'
-                        : 'bg-brand-gray-900 border-brand-gray-700 text-brand-gray-500 cursor-not-allowed'
-                      : isLight
-                        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
-                        : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
                   }`}
                 />
                 {activeProvider.writingWarning && (

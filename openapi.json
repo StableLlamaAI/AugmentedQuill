@@ -4899,6 +4899,12 @@
             "type": "array",
             "title": "Model Id Patterns"
           },
+          "preset_type": {
+            "type": "string",
+            "enum": ["absolute", "delta"],
+            "title": "Preset Type",
+            "default": "absolute"
+          },
           "parameters": {
             "$ref": "#/components/schemas/ModelPresetParameters"
           },
@@ -4916,7 +4922,7 @@
         "type": "object",
         "required": ["id", "name", "description", "model_id_patterns", "parameters"],
         "title": "ModelPresetEntry",
-        "description": "A single model-preset entry as loaded from *model_presets.json*."
+        "description": "A single model-preset entry as loaded from *model_presets.json*.\n\n``preset_type`` distinguishes two flavours:\n\n* ``\"absolute\"`` (default) \u2013 replaces **all** sampling parameters on the\n  provider and locks manual editing.  Suitable for a named full profile\n  tied to a specific model family.\n* ``\"delta\"`` \u2013 applies **only the non-null fields** in ``parameters`` on\n  top of whatever is already configured.  Does not lock the provider or\n  change ``preset_id``.  Suitable for cross-model tweaks such as \"more\n  creative\" or \"factual focus\"."
       },
       "ModelPresetParameters": {
         "properties": {
