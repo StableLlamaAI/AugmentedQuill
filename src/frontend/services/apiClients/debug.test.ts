@@ -23,7 +23,7 @@ registerSharedApiMockCleanup();
 
 describe('debugApi', () => {
   it('calls GET /debug/llm_logs', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce([]);
+    vi.mocked(fetchJson).mockResolvedValueOnce({ logs: [] });
 
     await debugApi.getLogs();
 

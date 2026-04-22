@@ -174,7 +174,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
     setIsLoading(true);
     try {
       const data = await api.debug.getLogs();
-      setLogs(data);
+      setLogs(Array.isArray(data.logs) ? data.logs : []);
     } catch (error) {
       console.error('Failed to fetch debug logs:', error);
     } finally {
