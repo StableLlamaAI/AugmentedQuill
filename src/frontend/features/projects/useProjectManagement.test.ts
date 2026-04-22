@@ -140,7 +140,7 @@ describe('useProjectManagement', () => {
       await result.current.handleLoadProject('p1');
     });
 
-    expect(refreshStory).toHaveBeenCalled();
+    expect(refreshStory).toHaveBeenCalledWith(undefined, true);
     expect(handleNewChat).toHaveBeenCalled();
   });
 
