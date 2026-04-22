@@ -48,6 +48,8 @@ export function useSettingsDialogProviderValidation({
 
   const lastConnTestKeyRef = useRef<Record<string, string>>({});
   const prevModelIdRef = useRef<Record<string, string | undefined>>({});
+  const modelStatusRef = useRef<Record<string, ProviderStatus>>({});
+  modelStatusRef.current = modelStatus;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -151,8 +153,8 @@ export function useSettingsDialogProviderValidation({
 
       if (
         previousModelId === modelId &&
-        modelStatus[providerId] &&
-        modelStatus[providerId] !== 'idle'
+        modelStatusRef.current[providerId] &&
+        modelStatusRef.current[providerId] !== 'idle'
       ) {
         return;
       }
@@ -218,7 +220,7 @@ export function useSettingsDialogProviderValidation({
       cancelled = true;
       timeouts.forEach(clearTimeout);
     };
-  }, [isOpen, providers, connectionStatus, modelStatus]);
+  }, [isOpen, providers, connectionStatus]);
 
   return {
     connectionStatus,
