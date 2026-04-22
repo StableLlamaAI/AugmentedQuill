@@ -15,6 +15,7 @@ import { WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { useStoryStore } from '../../stores/storyStore';
 
 type PromptsState = {
   system_messages: Record<string, string>;
@@ -75,6 +76,8 @@ export function useAiActions({
     cancelSignalRef.current.cancelled = true;
     cancelSignalRef.current.reader?.cancel();
     cancelSignalRef.current.reader = undefined;
+    // Clear streaming slot so the editor reverts to committed chapter content.
+    useStoryStore.getState().setStreamingContent(null);
     if (isMountedRef.current) {
       setIsAiActionLoading(false);
     }
@@ -116,8 +119,12 @@ export function useAiActions({
         pendingPartial = null;
         const nextContent =
           action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
-        // Atomic local state update WITHOUT server sync during stream
-        void updateChapter(currentUnit.id, { content: nextContent }, false);
+        // Write into the dedicated streaming slot instead of story.chapters so
+        // only the editor re-renders; sourcebook, chat, and sidebar are unaffected.
+        useStoryStore.getState().setStreamingContent({
+          chapterId: currentUnit.id,
+          content: nextContent,
+        });
       };
 
       const pushProgress = (partial: string) => {
@@ -165,6 +172,11 @@ export function useAiActions({
         return;
       }
 
+      // Clear the streaming slot before committing the final result so the
+      // editor transitions directly from streaming text → final text without
+      // a flash back to the pre-AI baseline content.
+      useStoryStore.getState().setStreamingContent(null);
+
       if (target === 'summary') {
         await updateChapter(currentUnit.id, { summary: result });
       } else if (action === 'extend') {
@@ -178,6 +190,9 @@ export function useAiActions({
       console.error('AI Action Error:', error);
       notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
+      // Safety-net: clear the streaming slot in case the try block exited
+      // via an exception before reaching the explicit clearance above.
+      useStoryStore.getState().setStreamingContent(null);
       if (isMountedRef.current) {
         setIsAiActionLoading(false);
       }

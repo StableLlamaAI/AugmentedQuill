@@ -81,6 +81,15 @@ export interface StoryStoreState {
     currentIndex: number;
     baselineState: StoryState;
   }) => void;
+
+  /**
+   * Ephemeral streaming slot: holds the chapter content currently being
+   * streamed by an LLM so the preview reaches the editor WITHOUT touching
+   * story.chapters and triggering a full-app re-render cascade every chunk.
+   * Cleared to null when streaming ends (success, cancel, or error).
+   */
+  streamingContent: { chapterId: string; content: string } | null;
+  setStreamingContent: (data: { chapterId: string; content: string } | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +116,7 @@ function buildInitialState(): Omit<
   | 'patchSourcebookEntry'
   | 'pushHistoryState'
   | 'jumpHistory'
+  | 'setStreamingContent'
 > {
   return {
     story: INITIAL_STORY,
@@ -116,6 +126,7 @@ function buildInitialState(): Omit<
     baselineState: INITIAL_STORY,
     loadChapterSignal: 0,
     isChapterLoading: false,
+    streamingContent: null,
   };
 }
 
@@ -162,6 +173,10 @@ export const useStoryStore = create<StoryStoreState>()(
       })),
 
     setIsChapterLoading: (isChapterLoading: boolean) => set({ isChapterLoading }),
+
+    setStreamingContent: (
+      streamingContent: { chapterId: string; content: string } | null
+    ) => set({ streamingContent }),
 
     patchSourcebookEntry: (entry: SourcebookEntry | null, entryId?: string) => {
       const prev = get().story.sourcebook ?? [];

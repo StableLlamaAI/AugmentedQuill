@@ -58,7 +58,22 @@ const DIFF_DEBOUNCE_MS = 500;
 /** Documents smaller than this threshold are diffed immediately. */
 const DIFF_IMMEDIATE_THRESHOLD = 5000;
 
-export const buildDiffPlugin = (baseline: string): Extension =>
+/**
+ * Return the number of leading characters that are identical in both strings.
+ * Used for the streaming diff strategy which avoids LCS on partial content.
+ */
+function commonPrefixLength(a: string, b: string): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    if (a[i] !== b[i]) return i;
+  }
+  return len;
+}
+
+export const buildDiffPlugin = (
+  baseline: string,
+  streamingMode: boolean = false
+): Extension =>
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
@@ -115,6 +130,33 @@ export const buildDiffPlugin = (baseline: string): Extension =>
       build(view: EditorView): DecorationSet {
         const currentText = view.state.doc.toString();
         if (baseline === currentText) return Decoration.none;
+
+        if (streamingMode) {
+          // During streaming we use a common-prefix strategy instead of LCS:
+          //   – Find the longest shared prefix between baseline and the partial
+          //     streamed text (handles both rewrite and extend correctly).
+          //   – Show baseline[prefix:] as a deleted widget at the prefix position.
+          //   – Mark currentText[prefix:] as inserted (green).
+          // This avoids flickering caused by diff_match_patch finding accidental
+          // common subsequences inside a partially-written rewrite, which made
+          // earlier chunks look "equal" and only the latest chunk look new.
+          const prefixLen = commonPrefixLength(baseline, currentText);
+          const deletedSuffix = baseline.slice(prefixLen);
+          const insertedEnd = currentText.length;
+          const decs: Range<Decoration>[] = [];
+          if (deletedSuffix.length > 0) {
+            decs.push(
+              Decoration.widget({
+                widget: new DeletedWidget(deletedSuffix),
+                side: 0,
+              }).range(prefixLen)
+            );
+          }
+          if (insertedEnd > prefixLen) {
+            decs.push(diffMark.range(prefixLen, insertedEnd));
+          }
+          return decs.length > 0 ? Decoration.set(decs, true) : Decoration.none;
+        }
 
         const diffs = dmp.diff_main(baseline, currentText);
         dmp.diff_cleanupSemantic(diffs);
