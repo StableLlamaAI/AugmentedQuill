@@ -942,6 +942,135 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 'Reduces repetition by penalizing tokens in proportion to how often they have already been used. Range: −2.0 to 2.0.'
               )}
             </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                  <span
+                    title="Enable suggestion loop guard: detects repeated n-gram loops and retries generation once or more."
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                  >
+                    Suggestion Loop Guard
+                  </span>
+                </label>
+                <select
+                  value={
+                    activeProvider.suggestLoopGuardEnabled === false ? 'off' : 'on'
+                  }
+                  onChange={(
+                    e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                  ) => {
+                    onUpdateProvider(activeProvider.id, {
+                      suggestLoopGuardEnabled: e.target.value === 'on',
+                    });
+                  }}
+                  className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                >
+                  <option value="on">On</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                  <span
+                    title="N-gram size used for loop detection in suggestion mode."
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                  >
+                    Loop N-gram
+                  </span>
+                </label>
+                <select
+                  value={activeProvider.suggestLoopGuardNgram === 4 ? '4' : '3'}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+                  ) => {
+                    onUpdateProvider(activeProvider.id, {
+                      suggestLoopGuardNgram: e.target.value === '4' ? 4 : 3,
+                    });
+                  }}
+                  className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                >
+                  <option value="3">3-gram</option>
+                  <option value="4">4-gram</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                  <span
+                    title="How many repeats of the same n-gram trigger loop detection."
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                  >
+                    Min Repeats
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step={1}
+                  min={2}
+                  max={8}
+                  value={activeProvider.suggestLoopGuardMinRepeats ?? 3}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) =>
+                    onUpdateProvider(activeProvider.id, {
+                      suggestLoopGuardMinRepeats: Math.max(
+                        2,
+                        Math.min(8, Number(e.target.value) || 3)
+                      ),
+                    })
+                  }
+                  className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-gray-500 uppercase">
+                  <span
+                    title="Maximum number of regeneration retries when loop/low-quality output is detected."
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                  >
+                    Max Regenerations
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step={1}
+                  min={0}
+                  max={3}
+                  value={activeProvider.suggestLoopGuardMaxRegens ?? 1}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) =>
+                    onUpdateProvider(activeProvider.id, {
+                      suggestLoopGuardMaxRegens: Math.max(
+                        0,
+                        Math.min(3, Number(e.target.value) || 0)
+                      ),
+                    })
+                  }
+                  className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                    isLight
+                      ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
+                      : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
+                  }`}
+                />
+              </div>
+            </div>
+
             <div className="mt-4 grid grid-cols-1 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-brand-gray-500 uppercase">

@@ -4673,6 +4673,50 @@
             ],
             "title": "Supports Function Calling"
           },
+          "suggest_loop_guard_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Enabled"
+          },
+          "suggest_loop_guard_ngram": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Ngram"
+          },
+          "suggest_loop_guard_min_repeats": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Min Repeats"
+          },
+          "suggest_loop_guard_max_regens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Max Regens"
+          },
           "prompt_overrides": {
             "anyOf": [
               {

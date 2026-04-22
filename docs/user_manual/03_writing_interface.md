@@ -178,6 +178,15 @@ At the bottom of the editor sits the pulsing `Suggest next paragraph` pill with 
 
 While suggestions are still generating, the button shows a spinner and the word "Working…" The suggestion cards appear as they stream in, so you may see partial text before generation finishes.
 
+Suggestion quality is controlled by the active **WRITING provider** settings in **Machine Settings**:
+
+- **Suggestion Loop Guard** (On/Off)
+- **Loop N-gram** (3-gram or 4-gram)
+- **Min Repeats**
+- **Max Regenerations**
+
+If the end of a suggested paragraph looks weak or repetitive, keep Loop Guard enabled and increase **Max Regenerations** by one step.
+
 **Keyboard shortcuts for suggestions:**
 
 | Key                        | Action                                                         |

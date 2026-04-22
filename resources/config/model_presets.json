@@ -189,6 +189,82 @@
         "min_p": null,
         "extra_body": null
       }
+    },
+    {
+      "id": "delta-low-repetition-openai-hosted",
+      "name": "Tweak: Low Repetition (OpenAI Hosted)",
+      "description": "Low-loop matrix for hosted OpenAI GPT-family backends with standard penalties only.",
+      "model_id_patterns": ["^gpt-4", "^gpt-5", "^o[1-9]", "^o1", "^o3"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": null,
+        "max_tokens": null,
+        "presence_penalty": 0.35,
+        "frequency_penalty": 0.25,
+        "stop": null,
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": null
+      }
+    },
+    {
+      "id": "delta-low-repetition-qwen-vllm",
+      "name": "Tweak: Low Repetition (Qwen + vLLM)",
+      "description": "Low-loop matrix for Qwen family on vLLM/OpenAI-compatible servers.",
+      "model_id_patterns": ["^qwen", "Qwen"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": 0.9,
+        "max_tokens": null,
+        "presence_penalty": 0.45,
+        "frequency_penalty": 0.2,
+        "stop": null,
+        "seed": null,
+        "top_k": 40,
+        "min_p": 0.03,
+        "extra_body": "{\"repetition_penalty\": 1.1}"
+      }
+    },
+    {
+      "id": "delta-low-repetition-llama-ollama",
+      "name": "Tweak: Low Repetition (Llama/Mistral + Ollama/llama.cpp)",
+      "description": "Low-loop matrix for local llama.cpp-style servers (including Ollama-compatible stacks).",
+      "model_id_patterns": ["^llama", "^mistral", "^mixtral", "Llama", "Mistral"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": 0.9,
+        "max_tokens": null,
+        "presence_penalty": 0.35,
+        "frequency_penalty": 0.2,
+        "stop": null,
+        "seed": null,
+        "top_k": 40,
+        "min_p": 0.03,
+        "extra_body": "{\"repeat_penalty\": 1.12, \"repeat_last_n\": 256}"
+      }
+    },
+    {
+      "id": "delta-low-repetition-gemma-lmstudio",
+      "name": "Tweak: Low Repetition (Gemma + LM Studio)",
+      "description": "Low-loop matrix for Gemma-family models on LM Studio/OpenAI-compatible servers.",
+      "model_id_patterns": ["^gemma", "Gemma"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": 0.9,
+        "max_tokens": null,
+        "presence_penalty": 0.45,
+        "frequency_penalty": 0.25,
+        "stop": null,
+        "seed": null,
+        "top_k": 64,
+        "min_p": 0.02,
+        "extra_body": "{\"repeat_penalty\": 1.1}"
+      }
     }
   ]
 }

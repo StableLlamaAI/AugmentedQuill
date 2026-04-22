@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { ChatMessage, LLMConfig, ViewMode, WritingUnit } from '../../types';
 import { generateContinuations } from '../../services/openaiService';
-import { computeContentWithSeparator } from '../../utils/textUtils';
+import { joinSuggestionToContent } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 import { useChatStore } from '../../stores/chatStore';
@@ -240,6 +240,10 @@ export function useChapterSuggestions({
         Array.from(checkedEntries),
         {
           cancelSignal: cancelSignalRef.current,
+          loopGuardEnabled: activeWritingConfig.suggestLoopGuardEnabled ?? true,
+          loopGuardNgram: activeWritingConfig.suggestLoopGuardNgram ?? 3,
+          loopGuardMinRepeats: activeWritingConfig.suggestLoopGuardMinRepeats ?? 3,
+          loopGuardMaxRegens: activeWritingConfig.suggestLoopGuardMaxRegens ?? 1,
           onSuggestionUpdate: (index: number, text: string) => {
             if (!text) return;
             scheduleSuggestionUpdate(index, text);
@@ -288,15 +292,11 @@ export function useChapterSuggestions({
     // The model's predictions are next-paragraph continuation, not in-place
     // replacement of a mid-text cursor position.
     const c = currentContent.length;
-    const prefix = currentContent;
-    const suffix = '';
 
-    const { newContent, separator } = computeContentWithSeparator(
-      prefix,
-      text,
-      suffix,
-      viewMode
-    );
+    // joinSuggestionToContent respects the leading newlines in the suggestion
+    // text to determine the correct separator (none, hard line break, or
+    // paragraph break). See textUtils.ts for the full rule set.
+    const newContent = joinSuggestionToContent(currentContent, text);
 
     setSuggestUndoStack((prev: { content: string; cursor: number }[]) => [
       ...prev,
@@ -304,7 +304,7 @@ export function useChapterSuggestions({
     ]);
     await updateChapter(currentUnit.id, { content: newContent });
 
-    const newCursor = c + separator.length + text.length;
+    const newCursor = newContent.length;
     setSuggestCursor(newCursor);
     setIsSuggestionMode(true);
 

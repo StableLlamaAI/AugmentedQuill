@@ -188,19 +188,40 @@ Exactly one provider should be assigned to each role. You can assign all three r
 
 The parameters section controls the sampling behaviour of the model. You can set them manually, or use the **Preset** and **Parameter Tweak** selectors described below to start from a known-good configuration.
 
-| Parameter             | Range / Type          | Effect                                                                                                                                                      |
-| --------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Temperature**       | 0.0 – 2.0 (step 0.1)  | Controls randomness. Higher values produce more varied, creative output; lower values produce more focused, deterministic text.                             |
-| **Top P**             | 0.0 – 1.0 (step 0.05) | Nucleus sampling threshold. Only tokens within the top-P cumulative probability mass are sampled. 1.0 disables this filter.                                 |
-| **Min P**             | 0.0 – 1.0 (step 0.01) | Minimum token probability relative to the top token. Tokens below this threshold are excluded. Typical values: 0.01–0.1; 0 disables.                        |
-| **Top K**             | Integer or blank      | Restricts sampling to the K most likely tokens. Leave blank to disable.                                                                                     |
-| **Max Tokens**        | Integer or blank      | Maximum number of tokens the model will generate in a single response. Leave blank to use the model default.                                                |
-| **Context Window**    | Integer or blank      | Maximum combined prompt + response token count. Overrides the model default if set.                                                                         |
-| **Seed**              | Integer or blank      | Fixed random seed for reproducible output. Leave blank for random.                                                                                          |
-| **Presence Penalty**  | −2.0 – 2.0            | Penalizes tokens that have already appeared, encouraging topic variety.                                                                                     |
-| **Frequency Penalty** | −2.0 – 2.0            | Reduces repetition by penalizing tokens proportionally to how often they have been used.                                                                    |
-| **Stop Sequences**    | One sequence per line | Strings that cause the model to stop generating when encountered.                                                                                           |
-| **Extra Body (JSON)** | JSON object or blank  | Additional fields merged verbatim into the API request body. Use for provider-specific options not exposed above (e.g. `{"reasoning": {"enabled": true}}`). |
+| Parameter                 | Range / Type          | Effect                                                                                                                                                      |
+| ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Temperature**           | 0.0 – 2.0 (step 0.1)  | Controls randomness. Higher values produce more varied, creative output; lower values produce more focused, deterministic text.                             |
+| **Top P**                 | 0.0 – 1.0 (step 0.05) | Nucleus sampling threshold. Only tokens within the top-P cumulative probability mass are sampled. 1.0 disables this filter.                                 |
+| **Min P**                 | 0.0 – 1.0 (step 0.01) | Minimum token probability relative to the top token. Tokens below this threshold are excluded. Typical values: 0.01–0.1; 0 disables.                        |
+| **Top K**                 | Integer or blank      | Restricts sampling to the K most likely tokens. Leave blank to disable.                                                                                     |
+| **Max Tokens**            | Integer or blank      | Maximum number of tokens the model will generate in a single response. Leave blank to use the model default.                                                |
+| **Context Window**        | Integer or blank      | Maximum combined prompt + response token count. Overrides the model default if set.                                                                         |
+| **Seed**                  | Integer or blank      | Fixed random seed for reproducible output. Leave blank for random.                                                                                          |
+| **Presence Penalty**      | −2.0 – 2.0            | Penalizes tokens that have already appeared, encouraging topic variety.                                                                                     |
+| **Frequency Penalty**     | −2.0 – 2.0            | Reduces repetition by penalizing tokens proportionally to how often they have been used.                                                                    |
+| **Suggestion Loop Guard** | On / Off              | Enables automatic detection of repetitive or low-quality "Suggest next paragraph" output and triggers regeneration attempts before showing results.         |
+| **Loop N-gram**           | 3-gram / 4-gram       | Selects the phrase length used for loop detection during suggestions. 3-gram is stricter; 4-gram is more permissive.                                        |
+| **Min Repeats**           | Integer (2–8)         | Number of repeated n-grams required before a loop is considered detected. Lower values catch loops earlier; higher values reduce false positives.           |
+| **Max Regenerations**     | Integer (0–3)         | How many retries are allowed for suggestion generation when loops or low-quality endings are detected.                                                      |
+| **Stop Sequences**        | One sequence per line | Strings that cause the model to stop generating when encountered.                                                                                           |
+| **Extra Body (JSON)**     | JSON object or blank  | Additional fields merged verbatim into the API request body. Use for provider-specific options not exposed above (e.g. `{"reasoning": {"enabled": true}}`). |
+
+#### Suggestion Quality Tuning (Recommended)
+
+The four **Suggestion Loop Guard** options apply specifically to **Suggest Next Paragraph**. They are stored per provider, so you can keep stricter settings on one WRITING provider and looser settings on another.
+
+Recommended starting point:
+
+- **Suggestion Loop Guard**: On
+- **Loop N-gram**: 3-gram
+- **Min Repeats**: 3
+- **Max Regenerations**: 1
+
+If suggestions still degrade at the end of the paragraph:
+
+- Increase **Max Regenerations** to 2.
+- If creative phrasing gets rejected too often, switch **Loop N-gram** to 4-gram.
+- If loops still slip through, lower **Min Repeats** from 3 to 2.
 
 #### Presets and Parameter Tweaks
 

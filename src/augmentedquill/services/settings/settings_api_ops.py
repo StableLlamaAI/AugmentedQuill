@@ -197,6 +197,18 @@ def clean_machine_openai_cfg_for_put(
                 "writing_warning": (model.get("writing_warning") or None),
                 "is_multimodal": model.get("is_multimodal"),
                 "supports_function_calling": model.get("supports_function_calling"),
+                "suggest_loop_guard_enabled": bool(
+                    model.get("suggest_loop_guard_enabled", True)
+                ),
+                "suggest_loop_guard_ngram": _to_optional_int(
+                    model.get("suggest_loop_guard_ngram")
+                ),
+                "suggest_loop_guard_min_repeats": _to_optional_int(
+                    model.get("suggest_loop_guard_min_repeats")
+                ),
+                "suggest_loop_guard_max_regens": _to_optional_int(
+                    model.get("suggest_loop_guard_max_regens")
+                ),
                 "prompt_overrides": prompt_overrides,
             }
         )

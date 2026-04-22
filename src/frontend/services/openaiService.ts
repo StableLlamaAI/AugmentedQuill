@@ -425,6 +425,10 @@ export const generateContinuations = async (
   options?: {
     onSuggestionUpdate?: (index: number, text: string) => void;
     cancelSignal?: CancelSignal;
+    loopGuardEnabled?: boolean;
+    loopGuardNgram?: 3 | 4;
+    loopGuardMinRepeats?: number;
+    loopGuardMaxRegens?: number;
   }
 ): Promise<string[]> => {
   if (!chapterId) return [];
@@ -440,6 +444,24 @@ export const generateContinuations = async (
       };
       if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
         body.checked_sourcebook = checkedSourcebookIds;
+      }
+      if (typeof options?.loopGuardEnabled === 'boolean') {
+        body.loop_guard_enabled = options.loopGuardEnabled;
+      }
+      if (options?.loopGuardNgram === 3 || options?.loopGuardNgram === 4) {
+        body.loop_guard_ngram = options.loopGuardNgram;
+      }
+      if (
+        typeof options?.loopGuardMinRepeats === 'number' &&
+        Number.isFinite(options.loopGuardMinRepeats)
+      ) {
+        body.loop_guard_min_repeats = Math.floor(options.loopGuardMinRepeats);
+      }
+      if (
+        typeof options?.loopGuardMaxRegens === 'number' &&
+        Number.isFinite(options.loopGuardMaxRegens)
+      ) {
+        body.loop_guard_max_regens = Math.floor(options.loopGuardMaxRegens);
       }
       const res = await fetch('/api/v1/story/suggest', {
         method: 'POST',

@@ -2019,6 +2019,14 @@ export interface components {
       is_multimodal?: boolean | null;
       /** Supports Function Calling */
       supports_function_calling?: boolean | null;
+      /** Suggest Loop Guard Enabled */
+      suggest_loop_guard_enabled?: boolean | null;
+      /** Suggest Loop Guard Ngram */
+      suggest_loop_guard_ngram?: number | null;
+      /** Suggest Loop Guard Min Repeats */
+      suggest_loop_guard_min_repeats?: number | null;
+      /** Suggest Loop Guard Max Regens */
+      suggest_loop_guard_max_regens?: number | null;
       /** Prompt Overrides */
       prompt_overrides?: {
         [key: string]: string;

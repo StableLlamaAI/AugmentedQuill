@@ -86,7 +86,7 @@ export const EditorSuggestionPanel: React.FC = () => {
                       ? undefined
                       : () => onAcceptContinuation(option, localContentRef.current)
                   }
-                  className={`group relative p-5 rounded-lg border transition-all text-left ${
+                  className={`group relative flex flex-col justify-start h-full p-5 rounded-lg border transition-all text-left ${
                     isEmpty
                       ? 'cursor-default opacity-60'
                       : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
@@ -113,7 +113,7 @@ export const EditorSuggestionPanel: React.FC = () => {
                           : 'text-brand-gray-300 group-hover:text-brand-gray-200'
                     }`}
                   >
-                    {isEmpty ? 'Waiting for suggestion...' : option}
+                    {isEmpty ? 'Waiting for suggestion...' : option.replace(/^\n+/, '')}
                   </div>
                 </button>
               );

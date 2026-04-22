@@ -47,6 +47,10 @@ class MachineModelConfig(BaseModel):
     writing_warning: Optional[str] = None
     is_multimodal: Optional[bool] = None
     supports_function_calling: Optional[bool] = None
+    suggest_loop_guard_enabled: Optional[bool] = None
+    suggest_loop_guard_ngram: Optional[int] = None
+    suggest_loop_guard_min_repeats: Optional[int] = None
+    suggest_loop_guard_max_regens: Optional[int] = None
     prompt_overrides: Optional[dict[str, str]] = None
 
 
