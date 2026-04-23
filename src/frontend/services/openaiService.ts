@@ -9,7 +9,7 @@
  * Defines the openai service unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { ChatAttachment, LLMConfig } from '../types';
+import { ChatAttachment, LLMConfig, SuggestionGenerationMode } from '../types';
 import { applySmartQuotes } from '../utils/textUtils';
 import {
   ChatContextUsage,
@@ -429,6 +429,7 @@ export const generateContinuations = async (
     loopGuardNgram?: 3 | 4;
     loopGuardMinRepeats?: number;
     loopGuardMaxRegens?: number;
+    suggestionMode?: SuggestionGenerationMode;
   }
 ): Promise<string[]> => {
   if (!chapterId) return [];
@@ -441,6 +442,7 @@ export const generateContinuations = async (
         chap_id: scope === 'chapter' ? Number(chapterId) : undefined,
         model_name: config.name || config.id,
         current_text: currentContent,
+        mode: options?.suggestionMode || 'guided',
       };
       if (checkedSourcebookIds && checkedSourcebookIds.length > 0) {
         body.checked_sourcebook = checkedSourcebookIds;

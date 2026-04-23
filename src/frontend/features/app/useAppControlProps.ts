@@ -18,7 +18,12 @@ import { useCallback, useMemo, useRef } from 'react';
 
 import { AppHeader } from '../layout/AppHeader';
 import { AppMainLayout } from '../layout/AppMainLayout';
-import type { EditorSettings, SourcebookEntry, StoryState } from '../../types';
+import type {
+  EditorSettings,
+  SourcebookEntry,
+  StoryState,
+  SuggestionGenerationMode,
+} from '../../types';
 
 type AppHeaderProps = React.ComponentProps<typeof AppHeader>;
 type AppMainLayoutProps = React.ComponentProps<typeof AppMainLayout>;
@@ -120,6 +125,8 @@ type UseAppMainLayoutPropsParams = {
   setEditorSettings: AppHeaderProps['appearanceControls']['setEditorSettings'];
   viewMode: AppMainLayoutProps['editorControls']['viewMode'];
   continuations: string[];
+  suggestionMode: SuggestionGenerationMode;
+  setSuggestionMode: (mode: SuggestionGenerationMode) => void;
   isSuggesting: boolean;
   handleTriggerSuggestions: () => Promise<void>;
   cancelSuggestions: () => void;
@@ -377,6 +384,8 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     setEditorSettings,
     viewMode,
     continuations,
+    suggestionMode,
+    setSuggestionMode,
     isSuggesting,
     handleTriggerSuggestions,
     cancelSuggestions,
@@ -547,6 +556,8 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       updateChapter: editorUpdateChapter,
       suggestionControls: {
         continuations,
+        suggestionMode,
+        setSuggestionMode,
         isSuggesting,
         handleTriggerSuggestions,
         handleCancelSuggestions: cancelSuggestions,
@@ -578,6 +589,8 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       setEditorSettings,
       viewMode,
       continuations,
+      suggestionMode,
+      setSuggestionMode,
       isSuggesting,
       handleTriggerSuggestions,
       cancelSuggestions,

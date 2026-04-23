@@ -11,6 +11,8 @@
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
+export type SuggestionGenerationMode = 'guided' | 'instructed' | 'pure';
+
 export type AppTheme = 'light' | 'mixed' | 'dark';
 
 export interface SidebarSettings {

@@ -398,6 +398,107 @@ class StoryEndpointsTest(ApiTestCase):
         text = r.text or ""
         self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")
 
+    def test_suggest_mode_pure_uses_only_current_text(self):
+        """Pure suggest mode should pass only current chapter text to the model."""
+        self._make_project(name="novel_pure_mode")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        seen_prompt = {"value": ""}
+
+        async def fake_stream(prompt: str, **kwargs):
+            seen_prompt["value"] = prompt
+            yield "pure mode output"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Pure mode source text",
+                "mode": "pure",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(seen_prompt["value"], "Pure mode source text")
+
+    def test_suggest_mode_instructed_uses_context_rich_prompt(self):
+        """Instructed suggest mode should use role-based chat messages."""
+        self._make_project(name="novel_original_mode")
+
+        orig_stream = llm.openai_chat_complete_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        seen_messages = {"value": []}
+
+        async def fake_stream(messages: list[dict[str, str]], **kwargs):
+            seen_messages["value"] = messages
+            yield "instructed mode output"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_chat_complete_stream = fake_stream  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_chat_complete_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Instructed mode source text",
+                "mode": "instructed",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(seen_messages["value"][0]["role"], "system")
+        self.assertEqual(seen_messages["value"][1]["role"], "user")
+        self.assertIn(
+            "Task: Write the immediate next paragraph to continue the story.",
+            seen_messages["value"][1]["content"],
+        )
+        self.assertIn("Story title: P", seen_messages["value"][1]["content"])
+        self.assertIn("# T1", seen_messages["value"][1]["content"])
+        self.assertIn("Current draft summary: S1", seen_messages["value"][1]["content"])
+        self.assertIn(
+            "Instructed mode source text", seen_messages["value"][1]["content"]
+        )
+
     def test_suggest_loop_detection_truncates_repetitive_output(self):
         """Loop detection truncates repetitive text to the last clean prefix without retrying."""
         self._make_project(name="novel_loop_guard")

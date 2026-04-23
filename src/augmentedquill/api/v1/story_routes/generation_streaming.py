@@ -53,6 +53,26 @@ router = APIRouter(prefix="/projects/{project_name}", tags=["Story"])
 
 SUGGEST_STREAM_IDLE_TIMEOUT_S = 2.5
 SUGGEST_MAX_TOKENS = 500
+SUGGESTION_MODE_GUIDED = "guided"
+SUGGESTION_MODE_INSTRUCTED = "instructed"
+SUGGESTION_MODE_ORIGINAL_ALIAS = "original"
+SUGGESTION_MODE_PURE = "pure"
+
+
+def _coerce_suggestion_mode(value: Any) -> str:
+    """Return a supported suggestion mode with a safe guided fallback."""
+    if not isinstance(value, str):
+        return SUGGESTION_MODE_GUIDED
+    mode = value.strip().lower()
+    if mode in {
+        SUGGESTION_MODE_GUIDED,
+        SUGGESTION_MODE_INSTRUCTED,
+        SUGGESTION_MODE_PURE,
+    }:
+        return mode
+    if mode == SUGGESTION_MODE_ORIGINAL_ALIAS:
+        return SUGGESTION_MODE_INSTRUCTED
+    return SUGGESTION_MODE_GUIDED
 
 
 def _tokenize_for_loop_guard(text: str) -> list[str]:
@@ -763,36 +783,87 @@ async def api_story_suggest(
             base_dir=BASE_DIR,
         )
 
-        context = gather_writing_context(
-            story=story,
-            chapters_data=chapters_data,
-            pos=pos,
-            title=title or "",
-            summary=summary or "",
-            payload=payload,
-        )
+        suggestion_mode = _coerce_suggestion_mode((payload or {}).get("mode"))
+        instructed_messages: list[dict[str, str]] | None = None
 
-        prompt = get_user_prompt(
-            "suggest_continuation",
-            language=story.get("language", "en"),
-            project_type_label=context["project_type_label"],
-            story_title=context["story_title"],
-            story_summary=context["story_summary"],
-            story_tags=context["story_tags"],
-            background=context["background"],
-            chapter_notes=context["chapter_notes"],
-            chapter_title=title or "",
-            chapter_summary=summary or "",
-            chapter_conflicts=context["chapter_conflicts"],
-            current_text=_normalize_current_text_for_llm(current_text or ""),
-            user_prompt_overrides=model_overrides,
-        )
+        if suggestion_mode == SUGGESTION_MODE_PURE:
+            # Pure mode intentionally sends only chapter text without added
+            # instructions or metadata context.
+            prompt = current_text or ""
+        elif suggestion_mode == SUGGESTION_MODE_INSTRUCTED:
+            # Instructed mode uses a standard chat instruction shape
+            # (system + user) so providers return assistant-role content.
+            context = gather_writing_context(
+                story=story,
+                chapters_data=chapters_data,
+                pos=pos,
+                title=title or "",
+                summary=summary or "",
+                payload=payload,
+            )
 
-        # remove any sections that produced empty content to avoid blank
-        # labels and collapse multiple blank lines to a single one.  this
-        # keeps the model input lean and stops it from seeing meaningless
-        # placeholders.
-        prompt = sanitize_prompt(prompt)
+            prompt = get_user_prompt(
+                "suggest_continuation_instructed",
+                language=story.get("language", "en"),
+                project_type_label=context["project_type_label"],
+                story_title=context["story_title"],
+                story_summary=context["story_summary"],
+                story_tags=context["story_tags"],
+                background=context["background"],
+                chapter_notes=context["chapter_notes"],
+                chapter_title=title or "",
+                chapter_summary=summary or "",
+                chapter_conflicts=context["chapter_conflicts"],
+                current_text=current_text or "",
+                user_prompt_overrides=model_overrides,
+            )
+
+            prompt = sanitize_prompt(prompt)
+            instructed_messages = [
+                {
+                    "role": "system",
+                    "content": get_system_message(
+                        "story_continuer",
+                        model_overrides,
+                        language=story.get("language", "en"),
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ]
+        else:
+            context = gather_writing_context(
+                story=story,
+                chapters_data=chapters_data,
+                pos=pos,
+                title=title or "",
+                summary=summary or "",
+                payload=payload,
+            )
+
+            prompt = get_user_prompt(
+                "suggest_continuation",
+                language=story.get("language", "en"),
+                project_type_label=context["project_type_label"],
+                story_title=context["story_title"],
+                story_summary=context["story_summary"],
+                story_tags=context["story_tags"],
+                background=context["background"],
+                chapter_notes=context["chapter_notes"],
+                chapter_title=title or "",
+                chapter_summary=summary or "",
+                chapter_conflicts=context["chapter_conflicts"],
+                current_text=_normalize_current_text_for_llm(current_text or ""),
+                user_prompt_overrides=model_overrides,
+            )
+
+            # Remove any sections that produced empty content to avoid blank
+            # labels and collapse multiple blank lines to a single one. This
+            # keeps the model input lean and stops it from seeing meaningless
+            # placeholders.
+            prompt = sanitize_prompt(prompt)
 
         async def generate_suggestion() -> Any:
             """Generate Suggestion."""
@@ -809,6 +880,67 @@ async def api_story_suggest(
             except (OSError, TypeError, ValueError, RuntimeError, AssertionError):
                 # Mask internal errors
                 yield "\n[Error occurred during suggestion]"
+
+        async def generate_suggestion_instructed() -> Any:
+            """Generate suggestion for instructed mode via role-based chat."""
+            try:
+                start_found = False
+                async for chunk in llm.openai_chat_complete_stream(
+                    caller_id="api.story.suggest.instructed",
+                    messages=instructed_messages or [],
+                    base_url=base_url,
+                    api_key=api_key,
+                    model_id=model_id,
+                    timeout_s=timeout_s,
+                    model_name=model_name,
+                ):
+                    if not chunk:
+                        continue
+
+                    # Remove any leading spaces/tabs that are purely formatting noise,
+                    # but retain all newline characters to preserve paragraph boundaries.
+                    if not start_found:
+                        while chunk.startswith(" ") or chunk.startswith("\t"):
+                            chunk = chunk[1:]
+                        if chunk == "":
+                            continue
+
+                    # If this chunk starts with newlines and no non-newline content yet,
+                    # emit them in full and keep waiting for actual prose.
+                    while not start_found and chunk.startswith("\n"):
+                        newline_run = 0
+                        while newline_run < len(chunk) and chunk[newline_run] == "\n":
+                            newline_run += 1
+                        yield chunk[:newline_run]
+                        chunk = chunk[newline_run:]
+                        if chunk == "":
+                            break
+
+                    if chunk == "":
+                        continue
+
+                    start_found = True
+
+                    # Preserve model-provided paragraph breaks (including trailing newlines)
+                    first_newline = chunk.find("\n")
+                    if first_newline == -1:
+                        yield chunk
+                        continue
+
+                    # Keep all consecutive newline characters starting at first newline.
+                    end_idx = first_newline + 1
+                    while end_idx < len(chunk) and chunk[end_idx] == "\n":
+                        end_idx += 1
+                    yield chunk[:end_idx]
+                    break
+            except (OSError, TypeError, ValueError, RuntimeError, AssertionError):
+                # Mask internal errors
+                yield "\n[Error occurred during suggestion]"
+
+        if suggestion_mode == SUGGESTION_MODE_INSTRUCTED:
+            return StreamingResponse(
+                generate_suggestion_instructed(), media_type="text/plain"
+            )
 
         return StreamingResponse(generate_suggestion(), media_type="text/plain")
 

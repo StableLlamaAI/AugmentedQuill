@@ -45,6 +45,28 @@ describe('openaiService', () => {
     expect(body.checked_sourcebook).toEqual(['A', 'B']);
   });
 
+  it('includes suggestion mode in suggest request body', async () => {
+    const fakeReader = {
+      read: vi.fn().mockResolvedValue({ done: true, value: new Uint8Array() }),
+    };
+    const fakeBody = {
+      getReader: () => fakeReader,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
+
+    const cfg: LLMConfig = { id: 'x', name: 'x', baseUrl: '', apiKey: '', timeout: 5 };
+
+    await generateContinuations('text', 'ctx', 'sys', cfg, '1', undefined, {
+      suggestionMode: 'pure',
+    });
+
+    const callArgs = (global.fetch as vi.Mock).mock.calls[0];
+    const options = callArgs[1];
+    const body = JSON.parse(options.body);
+    expect(body.mode).toBe('pure');
+  });
+
   it('includes checkedSourcebookIds in streamAiAction request body when provided', async () => {
     const fakeReader = {
       read: vi.fn().mockResolvedValue({ done: true, value: new Uint8Array() }),

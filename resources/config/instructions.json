@@ -438,6 +438,34 @@
         "{current_text}"
       ]
     },
+    "suggest_continuation_instructed": {
+      "_use": "WRITING",
+      "en": [
+        "Story title: {story_title}",
+        "",
+        "Story description: {story_summary}",
+        "",
+        "Story tags: {story_tags}",
+        "",
+        "Background information:\n{background}",
+        "",
+        "Author's notes about the current draft:\n{chapter_notes}",
+        "",
+        "Current draft summary: {chapter_summary}",
+        "",
+        "Active draft conflicts:\n{chapter_conflicts}",
+        "",
+        "---",
+        "",
+        "# {chapter_title}",
+        "",
+        "{current_text}",
+        "",
+        "---",
+        "",
+        "Task: Write the immediate next paragraph to continue the story."
+      ]
+    },
     "chat_user_context": {
       "_use": "CHAT",
       "en": [

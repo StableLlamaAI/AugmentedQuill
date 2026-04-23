@@ -17,7 +17,12 @@ import React, {
   useState,
 } from 'react';
 import { EditorView } from '@codemirror/view';
-import { EditorSettings, ViewMode, WritingUnit } from '../../types';
+import {
+  EditorSettings,
+  SuggestionGenerationMode,
+  ViewMode,
+  WritingUnit,
+} from '../../types';
 import { Upload } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
@@ -56,6 +61,8 @@ interface EditorProps {
   spellCheck?: boolean;
   suggestionControls: {
     continuations: string[];
+    suggestionMode: SuggestionGenerationMode;
+    setSuggestionMode: (mode: SuggestionGenerationMode) => void;
     isSuggesting: boolean;
     onTriggerSuggestions: (cursor?: number, contentOverride?: string) => void;
     onCancelSuggestion?: () => void;
@@ -214,6 +221,8 @@ export const Editor = React.memo(
 
       const {
         continuations,
+        suggestionMode,
+        setSuggestionMode,
         isSuggesting,
         onTriggerSuggestions,
         onAcceptContinuation,
@@ -685,6 +694,8 @@ export const Editor = React.memo(
             onAiAction,
             shouldShowContinuationPanel,
             displayedContinuations,
+            suggestionMode,
+            onSuggestionModeChange: setSuggestionMode,
             isSuggesting,
             localContentRef,
             onSuggestionButtonClick: handleSuggestionButtonClick,

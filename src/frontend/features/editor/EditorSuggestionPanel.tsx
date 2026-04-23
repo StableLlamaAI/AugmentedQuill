@@ -23,6 +23,8 @@ export const EditorSuggestionPanel: React.FC = () => {
     textMuted,
     shouldShowContinuationPanel,
     displayedContinuations,
+    suggestionMode,
+    onSuggestionModeChange,
     isSuggesting,
     isAiLoading,
     isWritingAvailable,
@@ -32,6 +34,37 @@ export const EditorSuggestionPanel: React.FC = () => {
     onAcceptContinuation,
     onRegenerate,
   } = useEditorContext();
+
+  const modeSelector = (
+    <div className="flex items-center gap-2">
+      <label
+        htmlFor="suggestion-mode-select"
+        className={`text-xs ${
+          theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-400'
+        }`}
+      >
+        Mode
+      </label>
+      <select
+        id="suggestion-mode-select"
+        value={suggestionMode}
+        onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
+          onSuggestionModeChange(event.target.value as 'guided' | 'instructed' | 'pure')
+        }
+        className={`text-xs rounded-md border px-2 py-1 ${
+          theme === 'light'
+            ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-700'
+            : 'bg-brand-gray-800 border-brand-gray-600 text-brand-gray-200'
+        }`}
+        disabled={isSuggesting || isAiLoading}
+        aria-label="Suggestion generation mode"
+      >
+        <option value="guided">Guided</option>
+        <option value="instructed">Instructed</option>
+        <option value="pure">Pure</option>
+      </select>
+    </div>
+  );
 
   return (
     <div
@@ -62,12 +95,15 @@ export const EditorSuggestionPanel: React.FC = () => {
                 <RefreshCw size={14} />
               </button>
             </div>
-            <button
-              onClick={() => onAcceptContinuation('', localContentRef.current)}
-              className={`${textMuted} hover:text-brand-gray-800 text-xs`}
-            >
-              Dismiss
-            </button>
+            <div className="flex items-center gap-3">
+              {modeSelector}
+              <button
+                onClick={() => onAcceptContinuation('', localContentRef.current)}
+                className={`${textMuted} hover:text-brand-gray-800 text-xs`}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
 
           <div
@@ -121,7 +157,8 @@ export const EditorSuggestionPanel: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="p-3 flex justify-center items-center space-x-3">
+        <div className="p-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div />
           <button
             onClick={onSuggestionButtonClick}
             disabled={!isWritingAvailable}
@@ -154,6 +191,7 @@ export const EditorSuggestionPanel: React.FC = () => {
               </>
             )}
           </button>
+          <div className="justify-self-end">{modeSelector}</div>
         </div>
       )}
     </div>

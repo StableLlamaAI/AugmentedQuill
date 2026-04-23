@@ -77,6 +77,8 @@ const defaultProps = {
   },
   suggestionControls: {
     continuations: [],
+    suggestionMode: 'guided' as const,
+    setSuggestionMode: vi.fn(),
     isSuggesting: false,
     onTriggerSuggestions: vi.fn(),
     onAcceptContinuation: vi.fn(),
