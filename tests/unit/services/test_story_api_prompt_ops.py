@@ -93,7 +93,10 @@ class StoryApiPromptOpsTest(TestCase):
 
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         self.assertIsNotNone(user_msg)
-        self.assertIn("already prefilled assistant draft text", user_msg["content"])
+        self.assertIn(
+            "Task: Write the full current draft as continuous prose.",
+            user_msg["content"],
+        )
         self.assertNotIn("Existing draft text (do not change)", user_msg["content"])
         self.assertNotIn("# Chapter 1", user_msg["content"])
 
