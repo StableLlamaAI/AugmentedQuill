@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Maximize2,
   Minimize2,
@@ -149,6 +150,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
   onMoveConflict,
   onEditorUndoRedo,
 }: MetadataEditorDialogViewProps) => {
+  const { t } = useTranslation();
   const modalContent = (
     <div
       ref={dialogRef}
@@ -186,16 +188,16 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
               <div className="text-xs font-mono" role="status" aria-live="polite">
                 {saveStatus === 'saving' && (
                   <span className="flex items-center gap-1 text-brand-500">
-                    <Loader2 size={12} className="animate-spin" /> Saving...
+                    <Loader2 size={12} className="animate-spin" /> {t('Saving...')}
                   </span>
                 )}
                 {saveStatus === 'saved' && (
                   <span className="flex items-center gap-1 text-green-500">
-                    <Check size={12} /> Saved
+                    <Check size={12} /> {t('Saved')}
                   </span>
                 )}
                 {saveStatus === 'error' && (
-                  <span className="text-red-500">Error saving</span>
+                  <span className="text-red-500">{t('Error saving')}</span>
                 )}
               </div>
             </div>
@@ -204,8 +206,8 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 onClick={() => historyIndex > 0 && onRestoreHistory(historyIndex - 1)}
                 disabled={historyIndex === 0}
                 className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
-                title="Undo"
-                aria-label="Undo metadata editor changes"
+                title={t('Undo')}
+                aria-label={t('Undo metadata editor changes')}
               >
                 <Undo size={16} />
               </button>
@@ -215,16 +217,16 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 }
                 disabled={historyIndex >= historyLength - 1}
                 className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
-                title="Redo"
-                aria-label="Redo metadata editor changes"
+                title={t('Redo')}
+                aria-label={t('Redo metadata editor changes')}
               >
                 <Redo size={16} />
               </button>
               <button
                 onClick={onToggleShowDiff}
                 className={`${showDiff ? 'text-brand-500 hover:text-brand-600' : 'text-gray-400 hover:text-gray-600 dark:text-brand-gray-600 dark:hover:text-brand-gray-400'}`}
-                title={showDiff ? 'Hide diff highlights' : 'Show diff highlights'}
-                aria-label="Toggle diff view"
+                title={showDiff ? t('Hide diff highlights') : t('Show diff highlights')}
+                aria-label={t('Toggle diff view')}
                 aria-pressed={showDiff}
               >
                 <MessageSquareDiff size={16} />
@@ -233,10 +235,14 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 onClick={() => onSetIsFullscreen((value: boolean) => !value)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
-                  isFullscreen ? 'Switch to Sidebar View' : 'Switch to Full Screen'
+                  isFullscreen
+                    ? t('Switch to Sidebar View')
+                    : t('Switch to Full Screen')
                 }
                 aria-label={
-                  isFullscreen ? 'Switch to sidebar view' : 'Switch to full screen view'
+                  isFullscreen
+                    ? t('Switch to sidebar view')
+                    : t('Switch to full screen view')
                 }
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -244,8 +250,8 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
               <button
                 onClick={onClose}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
-                title="Close dialog"
-                aria-label="Close metadata editor dialog"
+                title={t('Close dialog')}
+                aria-label={t('Close metadata editor dialog')}
               >
                 ✕
               </button>
@@ -258,7 +264,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 htmlFor="metadata-dialog-title-input"
                 className="block text-sm font-medium dark:text-brand-gray-400"
               >
-                Title
+                {t('Title')}
               </label>
               <input
                 id="metadata-dialog-title-input"
@@ -276,7 +282,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   <div className="flex items-start gap-3 mt-3">
                     <div className="flex-1 min-w-0">
                       <label className="block text-sm font-medium dark:text-brand-gray-400">
-                        Style Tags
+                        {t('Style Tags')}
                       </label>
                       <input
                         value={data.tags ? data.tags.join(', ') : ''}
@@ -292,13 +298,13 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                           onSetData({ ...data, tags });
                         }}
                         className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
-                        placeholder="e.g. Noir, Sci-Fi, First-Person"
+                        placeholder={t('e.g. Noir, Sci-Fi, First-Person')}
                       />
                     </div>
                     {languages && (
                       <div className="flex-shrink-0 w-24">
                         <label className="block text-sm font-medium dark:text-brand-gray-400 text-right">
-                          Lang
+                          {t('Lang')}
                         </label>
                         <select
                           value={data.language || ''}
@@ -320,8 +326,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     )}
                   </div>
                   <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500 mt-2">
-                    Style tags guide the WRITING model’s voice and the EDITING model’s
-                    tone checks. Keep them short, specific, and stable.
+                    {t(
+                      'Style tags guide the WRITING model’s voice and the EDITING model’s tone checks. Keep them short, specific, and stable.'
+                    )}
                   </p>
                 </>
               )}
@@ -337,7 +344,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 }`}
               >
                 <FileText size={16} />
-                Summary
+                {t('Summary')}
               </button>
               <button
                 onClick={() => onSetActiveTab('notes')}
@@ -348,7 +355,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 }`}
               >
                 <StickyNote size={16} />
-                Notes
+                {t('Notes')}
               </button>
               <button
                 onClick={() => onSetActiveTab('private')}
@@ -359,7 +366,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 }`}
               >
                 <Lock size={16} />
-                Private Notes
+                {t('Private Notes')}
               </button>
               {(type === 'chapter' || allowConflicts) && (
                 <button
@@ -371,7 +378,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   }`}
                 >
                   <AlertTriangle size={16} />
-                  Conflicts
+                  {t('Conflicts')}
                 </button>
               )}
             </div>
@@ -380,8 +387,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
               {activeTab === 'summary' && (
                 <div className="h-full flex flex-col gap-2">
                   <div className="text-sm text-brand-gray-500 mb-1">
-                    This summary is part of the story logic that CHAT maintains and the
-                    other models read as context.
+                    {t(
+                      'This summary is part of the story logic that CHAT maintains and the other models read as context.'
+                    )}
                   </div>
                   {hasAiSummaryControls && (
                     <div className="flex flex-col gap-2 mb-2">
@@ -394,14 +402,16 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               }
                               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors bg-brand-500/10 text-brand-600 hover:bg-brand-500/20 dark:bg-brand-500/20 dark:text-brand-400 dark:hover:bg-brand-500/30"
                               title={
-                                isThinkingExpanded ? 'Hide thinking' : 'Show thinking'
+                                isThinkingExpanded
+                                  ? t('Hide thinking')
+                                  : t('Show thinking')
                               }
                             >
                               <Brain
                                 size={14}
                                 className={isAiGenerating ? 'animate-pulse' : ''}
                               />
-                              <span>Thinking</span>
+                              <span>{t('Thinking')}</span>
                               {isThinkingExpanded ? (
                                 <ChevronDown size={14} />
                               ) : (
@@ -412,7 +422,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                           {isAiGenerating && !aiThinking && (
                             <span className="text-xs text-brand-500 flex items-center gap-1 animate-in fade-in">
                               <Loader2 size={12} className="animate-spin" />{' '}
-                              Generating...
+                              {t('Generating...')}
                             </span>
                           )}
                         </div>
@@ -426,7 +436,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   : 'bg-brand-gray-800 border-brand-gray-700'
                               }`}
                               role="group"
-                              aria-label="AI summary generation"
+                              aria-label={t('AI summary generation')}
                             >
                               <span
                                 className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
@@ -459,10 +469,16 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 className="text-xs h-6"
                                 title={
                                   hasPrimarySource
-                                    ? `Generate summary ${primarySourceTitle}`
-                                    : `${primarySourceLabel} text not available`
+                                    ? t('Generate summary {{source}}', {
+                                        source: primarySourceTitle,
+                                      })
+                                    : t('{{label}} text not available', {
+                                        label: primarySourceLabel,
+                                      })
                                 }
-                                aria-label={`Generate summary ${primarySourceTitle}`}
+                                aria-label={t('Generate summary {{source}}', {
+                                  source: primarySourceTitle,
+                                })}
                               >
                                 {primarySourceTitle}
                               </Button>
@@ -483,12 +499,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 className="text-xs h-6"
                                 title={
                                   hasNotesSource
-                                    ? 'Generate summary from Notes'
-                                    : 'Add notes to enable this source'
+                                    ? t('Generate summary from Notes')
+                                    : t('Add notes to enable this source')
                                 }
-                                aria-label="Generate summary from Notes"
+                                aria-label={t('Generate summary from Notes')}
                               >
-                                from Notes
+                                {t('from Notes')}
                               </Button>
                             </div>
                           ) : (
@@ -500,7 +516,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
                                 role="group"
-                                aria-label={`${primarySourceLabel} summary actions`}
+                                aria-label={t('{{label}} summary actions', {
+                                  label: primarySourceLabel,
+                                })}
                               >
                                 <span
                                   className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
@@ -538,7 +556,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                       ? updatePrimaryTitle
                                       : `${primarySourceLabel} text not available`
                                   }
-                                  aria-label={`Update summary ${primarySourceTitle}`}
+                                  aria-label={t('Update summary {{source}}', {
+                                    source: primarySourceTitle,
+                                  })}
                                 >
                                   Update
                                 </Button>
@@ -562,7 +582,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                       ? rewritePrimaryTitle
                                       : `${primarySourceLabel} text not available`
                                   }
-                                  aria-label={`Rewrite summary ${primarySourceTitle}`}
+                                  aria-label={t('Rewrite summary {{source}}', {
+                                    source: primarySourceTitle,
+                                  })}
                                 >
                                   Rewrite
                                 </Button>
@@ -575,7 +597,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                     : 'bg-brand-gray-800 border-brand-gray-700'
                                 }`}
                                 role="group"
-                                aria-label="Notes summary actions"
+                                aria-label={t('Notes summary actions')}
                               >
                                 <span
                                   className={`inline-flex items-center justify-center rounded-md text-xs h-6 font-bold uppercase px-3 py-1.5 cursor-default pointer-events-none select-none ${
@@ -584,10 +606,10 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                       : 'text-brand-gray-500'
                                   }`}
                                   aria-hidden="true"
-                                  title="Regenerate summary from Notes"
+                                  title={t('Regenerate summary from Notes')}
                                 >
                                   <StickyNote size={12} className="mr-2" />
-                                  from Notes
+                                  {t('from Notes')}
                                 </span>
                                 <div
                                   className={`w-px h-4 ${theme === 'light' ? 'bg-brand-gray-300' : 'bg-brand-gray-700'}`}
@@ -610,12 +632,14 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   className="text-xs h-6"
                                   title={
                                     hasNotesSource
-                                      ? 'Update existing summary with facts from Notes'
-                                      : 'Add notes to enable this source'
+                                      ? t(
+                                          'Update existing summary with facts from Notes'
+                                        )
+                                      : t('Add notes to enable this source')
                                   }
-                                  aria-label="Update summary from Notes"
+                                  aria-label={t('Update summary from Notes')}
                                 >
-                                  Update
+                                  {t('Update')}
                                 </Button>
                                 <Button
                                   theme={theme}
@@ -634,12 +658,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   className="text-xs h-6"
                                   title={
                                     hasNotesSource
-                                      ? 'Rewrite existing summary using Notes style'
-                                      : 'Add notes to enable this source'
+                                      ? t('Rewrite existing summary using Notes style')
+                                      : t('Add notes to enable this source')
                                   }
-                                  aria-label="Rewrite summary from Notes"
+                                  aria-label={t('Rewrite summary from Notes')}
                                 >
-                                  Rewrite
+                                  {t('Rewrite')}
                                 </Button>
                               </div>
                             </>
@@ -652,7 +676,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     <div className="flex flex-col gap-1.5 p-3 rounded-lg border bg-brand-gray-50/50 dark:bg-brand-gray-800/20 border-brand-gray-200 dark:border-brand-gray-700 animate-in fade-in slide-in-from-top-1 duration-200">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-brand-gray-500 dark:text-brand-gray-400">
                         <Brain size={12} />
-                        LLM Thinking Process
+                        {t('LLM Thinking Process')}
                       </div>
                       <div className="text-xs font-serif leading-relaxed text-brand-gray-600 dark:text-brand-gray-400 whitespace-pre-wrap max-h-[150px] overflow-y-auto custom-scrollbar italic italic-shadow">
                         {aiThinking}
@@ -681,17 +705,20 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     searchHighlightRanges={summaryHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
-                    placeholder="Write a public summary..."
+                    placeholder={t('Write a public summary...')}
                     style={{ minHeight: '300px' }}
                   />
                 </div>
               )}
               {activeTab === 'notes' && (
                 <div className="h-full flex flex-col">
-                  <div className="text-sm text-brand-gray-500 mb-2">Visible to LLM</div>
+                  <div className="text-sm text-brand-gray-500 mb-2">
+                    {t('Visible to LLM')}
+                  </div>
                   <div className="text-xs text-brand-gray-500 mb-2">
-                    Use notes for facts, intentions, foreshadowing, and constraints that
-                    should inform CHAT, EDITING, and WRITING.
+                    {t(
+                      'Use notes for facts, intentions, foreshadowing, and constraints that should inform CHAT, EDITING, and WRITING.'
+                    )}
                   </div>
                   <CodeMirrorEditor
                     value={data.notes || ''}
@@ -709,7 +736,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     searchHighlightRanges={notesHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
-                    placeholder="Write notes (readable by LLM)..."
+                    placeholder={t('Write notes (readable by LLM)...')}
                     style={{ minHeight: '300px' }}
                   />
                 </div>
@@ -717,11 +744,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
               {activeTab === 'private' && (
                 <div className="h-full flex flex-col">
                   <div className="text-sm text-brand-gray-500 mb-2">
-                    Not visible to LLM
+                    {t('Not visible to LLM')}
                   </div>
                   <div className="text-xs text-brand-gray-500 mb-2">
-                    Keep private reminders, spoilers, and experiments here when they
-                    should stay outside model context.
+                    {t(
+                      'Keep private reminders, spoilers, and experiments here when they should stay outside model context.'
+                    )}
                   </div>
                   <CodeMirrorEditor
                     value={data.private_notes || ''}
@@ -742,7 +770,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                     searchHighlightRanges={privateNotesHighlightRanges}
                     mode="markdown"
                     className="flex-1 w-full p-4 border rounded-lg dark:bg-brand-gray-800/40 dark:border-brand-gray-700 text-brand-gray-900 dark:text-brand-gray-300 font-sans text-sm md:text-base leading-relaxed transition-all overflow-y-auto"
-                    placeholder="Write private notes (hidden from LLM)..."
+                    placeholder={t('Write private notes (hidden from LLM)...')}
                     style={{ minHeight: '300px' }}
                   />
                 </div>
@@ -751,11 +779,15 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 <div className="space-y-4">
                   <div className="text-sm text-brand-gray-500">
                     {allowConflicts
-                      ? 'Track unresolved tensions in the story draft. CHAT can use these conflicts to maintain continuity while planning and revising the text.'
-                      : 'Track unresolved tensions in story order. CHAT can use these to keep pacing and logic coherent while planning later chapters.'}
+                      ? t(
+                          'Track unresolved tensions in the story draft. CHAT can use these conflicts to maintain continuity while planning and revising the text.'
+                        )
+                      : t(
+                          'Track unresolved tensions in story order. CHAT can use these to keep pacing and logic coherent while planning later chapters.'
+                        )}
                   </div>
                   <Button onClick={onAddConflict} variant="secondary" theme={theme}>
-                    + Add Conflict
+                    + {t('Add Conflict')}
                   </Button>
                   <div className="space-y-4">
                     {conflicts.map((conflict: Conflict, idx: number) => {
@@ -775,10 +807,10 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                         >
                           <div className="flex justify-between mb-2">
                             <span className="font-semibold text-sm dark:text-brand-gray-300 flex items-center gap-2">
-                              Conflict #{idx + 1}
+                              {t('Conflict #{{index}}', { index: idx + 1 })}
                               {isNewConflict && (
                                 <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
-                                  New
+                                  {t('New')}
                                 </span>
                               )}
                             </span>
@@ -800,7 +832,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               <button
                                 onClick={() => onDeleteConflict(conflict.id)}
                                 className="text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
-                                title="Delete Conflict"
+                                title={t('Delete Conflict')}
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -811,7 +843,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                           >
                             <div>
                               <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
-                                Description
+                                {t('Description')}
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.description}
@@ -839,13 +871,13 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
-                                placeholder="Describe the conflict..."
+                                placeholder={t('Describe the conflict...')}
                                 style={{ minHeight: '60px' }}
                               />
                             </div>
                             <div>
                               <label className="block text-xs font-medium mb-1 dark:text-brand-gray-400 uppercase tracking-wide">
-                                Resolution Plan
+                                {t('Resolution Plan')}
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.resolution}
@@ -873,7 +905,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 )}
                                 mode="markdown"
                                 className="w-full p-3 border rounded-lg dark:bg-brand-gray-950 dark:border-brand-gray-800 dark:text-brand-gray-300 text-sm font-sans transition-all"
-                                placeholder="How will this conflict be resolved?"
+                                placeholder={t('How will this conflict be resolved?')}
                                 style={{ minHeight: '80px' }}
                               />
                             </div>

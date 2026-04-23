@@ -14,9 +14,11 @@
 
 import React from 'react';
 import { Sparkles, Loader2, SplitSquareHorizontal, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useEditorContext } from './EditorContext';
 
 export const EditorSuggestionPanel: React.FC = () => {
+  const { t } = useTranslation();
   const {
     theme,
     footerBg,
@@ -43,7 +45,7 @@ export const EditorSuggestionPanel: React.FC = () => {
           theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-400'
         }`}
       >
-        Mode
+        {t('Mode')}
       </label>
       <select
         id="suggestion-mode-select"
@@ -57,11 +59,11 @@ export const EditorSuggestionPanel: React.FC = () => {
             : 'bg-brand-gray-800 border-brand-gray-600 text-brand-gray-200'
         }`}
         disabled={isSuggesting || isAiLoading}
-        aria-label="Suggestion generation mode"
+        aria-label={t('Suggestion generation mode')}
       >
-        <option value="guided">Guided</option>
-        <option value="instructed">Instructed</option>
-        <option value="pure">Pure</option>
+        <option value="guided">{t('Guided')}</option>
+        <option value="instructed">{t('Instructed')}</option>
+        <option value="pure">{t('Pure')}</option>
       </select>
     </div>
   );
@@ -81,7 +83,7 @@ export const EditorSuggestionPanel: React.FC = () => {
             <div className="flex items-center space-x-2 text-brand-500">
               <SplitSquareHorizontal size={18} />
               <span className="text-xs font-bold uppercase tracking-wider">
-                Choose a continuation
+                {t('Choose a continuation')}
               </span>
               <button
                 onClick={() => {
@@ -89,8 +91,8 @@ export const EditorSuggestionPanel: React.FC = () => {
                   onRegenerate(cursor, localContentRef.current);
                 }}
                 className="inline-flex items-center justify-center p-1 rounded-md transition-colors text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-750"
-                title="Reload suggestions (same as arrow-down)"
-                aria-label="Reload continuation suggestions"
+                title={t('Reload suggestions (same as arrow-down)')}
+                aria-label={t('Reload continuation suggestions')}
               >
                 <RefreshCw size={14} />
               </button>
@@ -101,7 +103,7 @@ export const EditorSuggestionPanel: React.FC = () => {
                 onClick={() => onAcceptContinuation('', localContentRef.current)}
                 className={`${textMuted} hover:text-brand-gray-800 text-xs`}
               >
-                Dismiss
+                {t('Dismiss')}
               </button>
             </div>
           </div>
@@ -134,8 +136,10 @@ export const EditorSuggestionPanel: React.FC = () => {
                   role="listitem"
                   aria-label={
                     isEmpty
-                      ? 'Waiting for suggestion'
-                      : `Accept suggestion: ${option.substring(0, 50)}...`
+                      ? t('Waiting for suggestion')
+                      : t('Accept suggestion: {{preview}}...', {
+                          preview: option.substring(0, 50),
+                        })
                   }
                 >
                   <div
@@ -149,7 +153,9 @@ export const EditorSuggestionPanel: React.FC = () => {
                           : 'text-brand-gray-300 group-hover:text-brand-gray-200'
                     }`}
                   >
-                    {isEmpty ? 'Waiting for suggestion...' : option.replace(/^\n+/, '')}
+                    {isEmpty
+                      ? t('Waiting for suggestion...')
+                      : option.replace(/^\n+/, '')}
                   </div>
                 </button>
               );
@@ -171,15 +177,15 @@ export const EditorSuggestionPanel: React.FC = () => {
               !isWritingAvailable
                 ? writingUnavailableReason
                 : isSuggesting || isAiLoading
-                  ? 'Stop current AI generation'
-                  : 'Get AI Suggestions (WRITING model)'
+                  ? t('Stop current AI generation')
+                  : t('Get AI Suggestions (WRITING model)')
             }
           >
             {isSuggesting || isAiLoading ? (
               <>
                 <Loader2 className="animate-spin text-violet-500" size={18} />
                 <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
-                  Writing...
+                  {t('Writing...')}
                 </span>
               </>
             ) : (
@@ -187,7 +193,9 @@ export const EditorSuggestionPanel: React.FC = () => {
                 <div className="bg-violet-100 dark:bg-violet-900/30 p-1 rounded-md text-violet-600 dark:text-violet-400">
                   <Sparkles size={16} />
                 </div>
-                <span className="font-medium text-sm">Suggest next paragraph</span>
+                <span className="font-medium text-sm">
+                  {t('Suggest next paragraph')}
+                </span>
               </>
             )}
           </button>

@@ -12,6 +12,7 @@
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export type ToastVariant = 'error' | 'success' | 'info';
 
@@ -56,6 +57,7 @@ function ToastItem({
   toast: Toast;
   onDismiss: (id: string) => void;
 }): import('react/jsx-runtime').JSX.Element {
+  const { t } = useTranslation();
   return (
     <div
       role="alert"
@@ -66,7 +68,7 @@ function ToastItem({
       <button
         onClick={() => onDismiss(toast.id)}
         className="text-brand-gray-400 hover:text-brand-gray-100 transition-colors shrink-0 -mt-0.5"
-        aria-label="Dismiss notification"
+        aria-label={t('Dismiss notification')}
       >
         <X size={14} />
       </button>

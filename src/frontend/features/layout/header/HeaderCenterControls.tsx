@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bold,
   ChevronDown,
@@ -60,6 +61,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   modelControls,
   themeTokens,
 }: HeaderCenterControlsProps) => {
+  const { t } = useTranslation();
   const {
     viewMode,
     setViewMode,
@@ -79,8 +81,9 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   } = formatControls;
   const { handleAiAction, isAiActionLoading, isWritingAvailable, isChapterEmpty } =
     aiControls;
-  const writingUnavailableReason =
-    'This action is unavailable because no working WRITING model is configured.';
+  const writingUnavailableReason = t(
+    'This action is unavailable because no working WRITING model is configured.'
+  );
   const chapterExtendDisabled = isAiActionLoading || !isWritingAvailable;
   const chapterRewriteDisabled =
     isAiActionLoading || !isWritingAvailable || !!isChapterEmpty;
@@ -277,7 +280,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           />
           <button
             onClick={() => setShowWhitespace(!showWhitespace)}
-            title="Toggle whitespace characters"
+            title={t('Toggle whitespace characters')}
             className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
               showWhitespace ? buttonActive : `${iconColor} ${iconHover}`
             }`}
@@ -322,7 +325,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               <button
                 className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setIsViewMenuOpen(false)}
-                aria-label="Close menu"
+                aria-label={t('Close menu')}
               ></button>
               <div
                 role="menu"
@@ -418,7 +421,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                       ? 'text-brand-gray-500 hover:bg-brand-gray-100'
                       : 'text-brand-gray-400 hover:bg-brand-gray-800'
                 }`}
-                title="Formatting"
+                title={t('Formatting')}
               >
                 <Type size={16} />
                 <ChevronDown size={10} />
@@ -428,7 +431,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                   <button
                     className="fixed inset-0 z-10 cursor-default"
                     onClick={() => setIsFormatMenuOpen(false)}
-                    aria-label="Close formatting menu"
+                    aria-label={t('Close formatting menu')}
                   ></button>
                   <div
                     className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 rounded-lg shadow-xl border p-2 z-20 flex gap-1 flex-wrap max-w-48 ${
@@ -481,7 +484,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           }`}
         >
           <Type size={16} />
-          <span>Format</span>
+          <span>{t('Format')}</span>
         </button>
 
         {isMobileFormatMenuOpen && (
@@ -489,7 +492,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             <button
               className="fixed inset-0 z-10 cursor-default"
               onClick={() => setIsMobileFormatMenuOpen(false)}
-              aria-label="Close mobile format menu"
+              aria-label={t('Close mobile format menu')}
             ></button>
             <div
               className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-xl shadow-2xl border p-3 z-50 flex flex-wrap gap-1 ${
@@ -534,7 +537,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           }`}
         >
           <span className="hidden 2xl:inline text-[10px] text-brand-gray-500 font-bold uppercase px-2">
-            Chapter AI
+            {t('Chapter AI')}
           </span>
           <div
             className={`hidden 2xl:block w-px h-4 ${isLight ? 'bg-brand-gray-300' : 'bg-brand-gray-700'}`}
@@ -550,10 +553,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             title={
               !isWritingAvailable
                 ? writingUnavailableReason
-                : 'Extend Chapter (WRITING model)'
+                : t('Extend Chapter (WRITING model)')
             }
           >
-            <span className="hidden 2xl:inline">Extend</span>
+            <span className="hidden 2xl:inline">{t('Extend')}</span>
           </Button>
           <Button
             theme={currentTheme}
@@ -567,11 +570,11 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               !isWritingAvailable
                 ? writingUnavailableReason
                 : isChapterEmpty
-                  ? 'Chapter is empty; cannot rewrite existing text.'
-                  : 'Rewrite Chapter (WRITING model)'
+                  ? t('Chapter is empty; cannot rewrite existing text.')
+                  : t('Rewrite Chapter (WRITING model)')
             }
           >
-            <span className="hidden 2xl:inline">Rewrite</span>
+            <span className="hidden 2xl:inline">{t('Rewrite')}</span>
           </Button>
         </div>
       </div>
@@ -591,10 +594,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700 hover:bg-brand-gray-100'
                 : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-300 hover:bg-brand-gray-700'
             }`}
-            title="Model settings"
+            title={t('Model settings')}
           >
             <Cpu size={13} />
-            <span>Models</span>
+            <span>{t('Models')}</span>
             <ChevronDown size={10} className="opacity-60" />
           </button>
           {isModelMenuOpen && (
@@ -602,7 +605,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
               <button
                 className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setIsModelMenuOpen(false)}
-                aria-label="Close model menu"
+                aria-label={t('Close model menu')}
               ></button>
               <div
                 className={`absolute top-full right-0 mt-2 w-72 rounded-lg shadow-xl border p-3 z-20 flex flex-col gap-3 ${

@@ -13,6 +13,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Image as ImageIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { SourcebookEntry } from '../../types';
 import { ProjectImage } from '../../services/apiTypes';
 
@@ -35,6 +36,7 @@ export const SourcebookHoverCard: React.FC<SourcebookHoverCardProps> = ({
   subTextClass,
   availableImages,
 }: SourcebookHoverCardProps) => {
+  const { t } = useTranslation();
   const getEntryImage = () => {
     if (!entry.images || entry.images.length === 0) return null;
     const firstImgName = entry.images[0];
@@ -87,7 +89,9 @@ export const SourcebookHoverCard: React.FC<SourcebookHoverCardProps> = ({
           {entry.description}
         </p>
       ) : (
-        <p className={`text-xs italic ${subTextClass}`}>No description provided.</p>
+        <p className={`text-xs italic ${subTextClass}`}>
+          {t('No description provided.')}
+        </p>
       )}
     </div>,
     document.body

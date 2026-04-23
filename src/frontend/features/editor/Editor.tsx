@@ -24,6 +24,7 @@ import {
   WritingUnit,
 } from '../../types';
 import { Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
@@ -117,6 +118,7 @@ export const Editor = React.memo(
       }: EditorProps,
       ref: React.ForwardedRef<EditorHandle>
     ) => {
+      const { t } = useTranslation();
       // CodeMirror EditorView — persists across all view modes
       const editorViewRef = useRef<EditorView | null>(null);
       const paperDivRef = useRef<HTMLDivElement>(null);
@@ -726,7 +728,7 @@ export const Editor = React.memo(
                   <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-blue-500" />
                     <span className="font-bold text-blue-500">
-                      Drop image to upload
+                      {t('Drop image to upload')}
                     </span>
                   </div>
                 </div>
@@ -735,7 +737,7 @@ export const Editor = React.memo(
               <div
                 ref={paperDivRef}
                 role="group"
-                aria-label="Editor workspace"
+                aria-label={t('Editor workspace')}
                 className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
                 style={{
                   maxWidth: `${settings.maxWidth}ch`,

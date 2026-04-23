@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { Edit } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   MarkdownView,
   hasUnsupportedSummaryMarkdown,
@@ -81,6 +82,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   baselineConflicts = [],
   spellCheck = true,
 }: StoryMetadataProps) => {
+  const { t } = useTranslation();
   const metadataDialog = useMetadataDialog();
 
   const { isLight } = useThemeClasses();
@@ -95,10 +97,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     : 'bg-brand-gray-800 text-brand-gray-400 border-brand-gray-700';
   const usesStoryDraftSource = projectType === 'short-story';
   const primarySourceLabel = usesStoryDraftSource
-    ? 'Story Draft'
+    ? t('Story Draft')
     : projectType === 'series'
-      ? 'Books'
-      : 'Chapters';
+      ? t('Books')
+      : t('Chapters');
 
   const handleMetadataSave = async (data: MetadataParams) => {
     await onUpdate(
@@ -121,7 +123,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         <MetadataEditorDialog
           key={metadataDialog.version}
           type="story"
-          title="Edit Story Metadata"
+          title={t('Edit Story Metadata')}
           language={language}
           spellCheck={spellCheck}
           initialData={{
@@ -176,8 +178,8 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
         <button
           onClick={() => useUIStore.getState().openMetadataDialog()}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"
-          aria-label="Edit story metadata"
-          title="Edit story metadata"
+          aria-label={t('Edit story metadata')}
+          title={t('Edit story metadata')}
         >
           <Edit size={16} />
         </button>
@@ -195,7 +197,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
           </div>
         ) : (
-          <span className="italic">No description yet.</span>
+          <span className="italic">{t('No description yet.')}</span>
         )}
       </div>
       <div className="flex flex-wrap gap-2">

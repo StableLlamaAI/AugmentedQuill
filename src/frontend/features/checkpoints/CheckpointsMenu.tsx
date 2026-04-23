@@ -11,6 +11,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Save, ChevronDown, Download, Trash2, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { api } from '../../services/api';
@@ -28,6 +29,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
   hasUnsavedChanges = false,
   confirm,
 }: CheckpointsMenuProps) => {
+  const { t } = useTranslation();
   const { isLight, currentTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<CheckpointInfo[]>([]);
@@ -42,7 +44,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
       const res = await api.checkpoints.list();
       setCheckpoints(res.checkpoints || []);
     } catch (err) {
-      console.error('Failed to list checkpoints', err);
+      console.error(t('Failed to list checkpoints'), err);
     }
   };
 
@@ -89,10 +91,11 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
     const reallyHasUnsavedWork = hasUnsavedChanges && !isStateAlreadyBackedUpInSession;
     if (reallyHasUnsavedWork) {
       const sure = await confirm({
-        title: 'Load Checkpoint',
-        message:
-          "The current state isn't saved as a checkpoint. Are you sure you want to load? Unsaved information could be lost.",
-        confirmLabel: 'Load',
+        title: t('Load Checkpoint'),
+        message: t(
+          "The current state isn't saved as a checkpoint. Are you sure you want to load? Unsaved information could be lost."
+        ),
+        confirmLabel: t('Load'),
         variant: 'danger',
       });
       if (!sure) return;
@@ -103,16 +106,16 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
       window.location.reload();
     } catch (err) {
       console.error(err);
-      alert('Failed to load checkpoint');
+      alert(t('Failed to load checkpoint'));
     }
   };
 
   const handleDelete = async (e: React.MouseEvent, timestamp: string) => {
     e.stopPropagation();
     const sure = await confirm({
-      title: 'Delete Checkpoint',
-      message: 'Are you sure you want to delete this checkpoint?',
-      confirmLabel: 'Delete',
+      title: t('Delete Checkpoint'),
+      message: t('Are you sure you want to delete this checkpoint?'),
+      confirmLabel: t('Delete'),
       variant: 'danger',
     });
     if (!sure) return;
@@ -139,18 +142,18 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen((open: boolean) => !open)}
-        title="Checkpoints"
+        title={t('Checkpoints')}
         className="px-2 border-l"
       >
         <Save size={14} className="mr-1" />
         <ChevronDown size={12} />
-        <span className="sr-only">Checkpoints</span>
+        <span className="sr-only">{t('Checkpoints')}</span>
       </Button>
 
       {isOpen && (
         <div className={menuContainerClass}>
           <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70 border-b border-brand-gray-200 dark:border-brand-gray-700">
-            Checkpoints
+            {t('Checkpoints')}
           </div>
 
           <button
@@ -159,14 +162,14 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
             onClick={handleCreate}
             disabled={isCreating}
           >
-            <span>{isCreating ? 'Saving...' : 'Store Current State'}</span>
+            <span>{isCreating ? t('Saving...') : t('Store Current State')}</span>
             <Plus size={14} />
           </button>
 
           <div className="max-h-60 overflow-y-auto" role="list">
             {checkpoints.length === 0 ? (
               <div className="px-3 py-4 text-xs text-center opacity-50">
-                No checkpoints yet
+                {t('No checkpoints yet')}
               </div>
             ) : (
               checkpoints.map((cp: CheckpointInfo) => (
@@ -175,7 +178,9 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                     type="button"
                     className="flex flex-col truncate w-full pr-2 text-left"
                     onClick={() => handleLoad(cp.timestamp)}
-                    title={`Load checkpoint ${cp.timestamp}`}
+                    title={t('Load checkpoint {{timestamp}}', {
+                      timestamp: cp.timestamp,
+                    })}
                   >
                     <span className="truncate">{cp.timestamp}</span>
                   </button>
@@ -185,7 +190,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                     onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) =>
                       handleDelete(e, cp.timestamp)
                     }
-                    title="Delete"
+                    title={t('Delete')}
                   >
                     <Trash2 size={14} />
                   </button>

@@ -10,6 +10,7 @@
  */
 
 import React, { RefObject, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bug,
   LayoutTemplate,
@@ -56,6 +57,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
   sliderClass,
   setIsDebugLogsOpen,
 }: HeaderAppearanceControlsProps) => {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isAppearanceOpen, panelRef, () => setIsAppearanceOpen(false));
 
@@ -138,7 +140,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         size="sm"
         onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
         icon={<SlidersHorizontal size={16} />}
-        title="Page Appearance"
+        title={t('Page Appearance')}
         className="hidden sm:inline-flex"
       />
 
@@ -163,7 +165,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               id="page-appearance-title"
               className="text-xs font-semibold text-brand-gray-500 uppercase tracking-wider"
             >
-              Page Appearance
+              {t('Page Appearance')}
             </h3>
             <button
               onClick={() => setIsAppearanceOpen(false)}
@@ -277,7 +279,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
           variant="ghost"
           size="sm"
           onClick={() => setIsDebugLogsOpen(true)}
-          title="Debug Logs"
+          title={t('Debug Logs')}
           className="mr-1"
         >
           <Bug size={18} />

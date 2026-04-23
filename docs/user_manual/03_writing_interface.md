@@ -178,6 +178,16 @@ At the bottom of the editor sits the pulsing `Suggest next paragraph` pill with 
 
 While suggestions are still generating, the button shows a spinner and the word "Working…" The suggestion cards appear as they stream in, so you may see partial text before generation finishes.
 
+### Suggestion Mode Selector
+
+To the right of the **Suggest next paragraph** control, a mode selector lets you choose how much context the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model receives:
+
+- **Guided**: Uses full story and chapter context and applies stronger guidance for continuation quality.
+- **Instructed**: Uses full story and chapter context with an explicit "write the immediate next paragraph" instruction.
+- **Pure**: Uses only the current chapter text, with no extra story/chapter context.
+
+You can change the mode before requesting suggestions and also while the suggestion pane is open.
+
 Suggestion quality is controlled by the active **WRITING provider** settings in **Machine Settings**:
 
 - **Suggestion Loop Guard** (On/Off)

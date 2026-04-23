@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   X,
   Trash2,
@@ -148,6 +149,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
   onClose,
   theme,
 }: DebugLogsProps) => {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -176,19 +178,19 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
       const data = await api.debug.getLogs();
       setLogs(Array.isArray(data.logs) ? data.logs : []);
     } catch (error) {
-      console.error('Failed to fetch debug logs:', error);
+      console.error(t('Failed to fetch debug logs:'), error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const clearLogs = async () => {
-    if (!(await confirm('Are you sure you want to clear all logs?'))) return;
+    if (!(await confirm(t('Are you sure you want to clear all logs?')))) return;
     try {
       await api.debug.clearLogs();
       setLogs([]);
     } catch (error) {
-      console.error('Failed to clear debug logs:', error);
+      console.error(t('Failed to clear debug logs:'), error);
     }
   };
 
@@ -235,10 +237,10 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
             </div>
             <div>
               <h2 id="debug-logs-title" className={`text-lg font-bold ${textMain}`}>
-                LLM Communication Logs
+                {t('LLM Communication Logs')}
               </h2>
               <p className="text-xs text-brand-gray-500">
-                Debug view for all LLM requests and responses
+                {t('Debug view for all LLM requests and responses')}
               </p>
             </div>
           </div>
@@ -253,9 +255,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     ? 'bg-blue-500 text-white'
                     : `${bgSecondary} ${textMain} hover:bg-brand-gray-500/10`
                 }`}
-                title="Aggregated View"
+                title={t('Aggregated View')}
               >
-                <Layers size={14} /> Aggregated
+                <Layers size={14} /> {t('Aggregated')}
               </button>
               <button
                 onClick={() => setStreamMode('chunks')}
@@ -264,9 +266,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     ? 'bg-blue-500 text-white'
                     : `${bgSecondary} ${textMain} hover:bg-brand-gray-500/10`
                 }`}
-                title="Chunks View"
+                title={t('Chunks View')}
               >
-                <List size={14} /> Chunks
+                <List size={14} /> {t('Chunks')}
               </button>
             </div>
             <button
@@ -275,14 +277,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
               className={`p-2 rounded-lg hover:bg-brand-gray-500/10 transition-colors ${
                 isLoading ? 'animate-spin' : ''
               }`}
-              title="Refresh Logs"
+              title={t('Refresh Logs')}
             >
               <RefreshCw size={18} className="text-brand-gray-500" />
             </button>
             <button
               onClick={clearLogs}
               className="p-2 rounded-lg hover:bg-red-500/10 transition-colors group"
-              title="Clear Logs"
+              title={t('Clear Logs')}
             >
               <Trash2
                 size={18}
@@ -293,7 +295,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-brand-gray-500/10 transition-colors"
-              title="Close"
+              title={t('Close')}
             >
               <X size={20} className="text-brand-gray-500" />
             </button>
@@ -305,7 +307,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
           {logs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-brand-gray-500 space-y-4">
               <Bug size={48} className="opacity-20" />
-              <p>No LLM communications logged yet.</p>
+              <p>{t('No LLM communications logged yet.')}</p>
             </div>
           ) : (
             logs.map((log: DebugLogEntry, idx: number) => (
@@ -377,15 +379,17 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     <div className="w-full sm:w-[36%] text-right flex flex-wrap items-center justify-end gap-3 text-[10px] text-brand-gray-500 font-mono">
                       {log.caller_id && (
                         <span className="truncate">
-                          Caller: {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                          {t('Caller')}: {log.caller_id} (
+                          {t(getCallerOrigin(log.caller_id))})
                         </span>
                       )}
                       <span className="truncate">
-                        Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                        {t('Start')}:{' '}
+                        {new Date(log.timestamp_start).toLocaleTimeString()}
                       </span>
                       {log.timestamp_end && (
                         <span className="truncate">
-                          End: {new Date(log.timestamp_end).toLocaleTimeString()}
+                          {t('End')}: {new Date(log.timestamp_end).toLocaleTimeString()}
                         </span>
                       )}
                     </div>
@@ -399,7 +403,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     {log.caller_id && (
                       <div className="space-y-2">
                         <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                          Caller
+                          {t('Caller')}
                         </h4>
                         <div
                           className={`p-3 rounded-lg overflow-x-auto ${
@@ -407,14 +411,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                           }`}
                         >
                           <div className="text-blue-400">
-                            {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                            {log.caller_id} ({t(getCallerOrigin(log.caller_id))})
                           </div>
                         </div>
                       </div>
                     )}
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                        Request
+                        {t('Request')}
                       </h4>
                       <div
                         className={`p-3 rounded-lg overflow-x-auto ${
@@ -426,7 +430,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     </div>
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                        Response
+                        {t('Response')}
                       </h4>
                       <div
                         className={`p-3 rounded-lg overflow-x-auto ${
@@ -436,12 +440,12 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                         {log.response?.streaming && streamMode === 'aggregated' ? (
                           <div className="space-y-4">
                             <div className="space-y-1">
-                              <span className="text-blue-400">status_code:</span>{' '}
+                              <span className="text-blue-400">{t('status_code')}:</span>{' '}
                               {log.response.status_code}
                             </div>
                             {Boolean(log.response.error) && (
                               <div className="space-y-1">
-                                <span className="text-red-400">error:</span>
+                                <span className="text-red-400">{t('error')}:</span>
                                 <div
                                   className={
                                     'mt-1 p-2 rounded border border-red-500/30 bg-red-500/5 text-red-500 whitespace-pre-wrap font-sans text-sm'
@@ -455,7 +459,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                             )}
                             {log.response.thinking && (
                               <div className="space-y-1">
-                                <span className="text-blue-400">thinking:</span>
+                                <span className="text-blue-400">{t('thinking')}:</span>
                                 <div
                                   className={
                                     'mt-1 p-2 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 whitespace-pre-wrap font-sans text-sm italic'
@@ -466,7 +470,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                               </div>
                             )}
                             <div className="space-y-1">
-                              <span className="text-blue-400">full_content:</span>
+                              <span className="text-blue-400">
+                                {t('full_content')}:
+                              </span>
                               <div
                                 className={`mt-1 p-2 rounded border ${borderMain} whitespace-pre-wrap font-sans text-sm`}
                               >
@@ -475,7 +481,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                             </div>
                             {log.response.tool_calls && (
                               <div className="space-y-1">
-                                <span className="text-blue-400">tool_calls:</span>
+                                <span className="text-blue-400">
+                                  {t('tool_calls')}:
+                                </span>
                                 <div className="mt-1">
                                   <JsonView
                                     data={log.response.tool_calls}
@@ -485,7 +493,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                               </div>
                             )}
                             <div className="space-y-1">
-                              <span className="text-blue-400">metadata:</span>
+                              <span className="text-blue-400">{t('metadata')}:</span>
                               <JsonView
                                 data={{
                                   chunks_count: log.response.chunks?.length,

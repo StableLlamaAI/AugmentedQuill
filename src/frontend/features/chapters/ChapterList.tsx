@@ -610,7 +610,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
               <button
                 onClick={() => onCreate()}
                 className={`p-1 rounded-full transition-colors ${btnHover}`}
-                title="New Chapter"
+                title={t('New Chapter')}
               >
                 <Plus size={18} />
               </button>
@@ -734,7 +734,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                         {bookChapters.map(renderChapter)}
                         <button
                           type="button"
-                          aria-label="Add chapter"
+                          aria-label={t('Add Chapter')}
                           className={`w-full text-left text-xs p-2 rounded flex items-center space-x-2 opacity-60 hover:opacity-100 ${titleInactive}`}
                           onClick={() => {
                             onCreate(book.id);
