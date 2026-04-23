@@ -21,8 +21,13 @@ import {
   act,
   cleanup,
 } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import i18n from '../app/i18n';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+
+const renderWithI18n = (ui: React.ReactElement) =>
+  render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
 
 afterEach(cleanup);
 afterEach(() => vi.useRealTimers());
@@ -40,7 +45,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -61,14 +66,16 @@ describe('MetadataEditorDialog', () => {
     expect(titleInput.value).toBe('Chapter 1');
 
     rerender(
-      <MetadataEditorDialog
-        type="chapter"
-        title="Edit Chapter Metadata"
-        initialData={{ ...baseData, title: 'Updated Title from external call' }}
-        onSave={onSave}
-        onClose={onClose}
-        onAiGenerate={undefined}
-      />
+      <I18nextProvider i18n={i18n}>
+        <MetadataEditorDialog
+          type="chapter"
+          title="Edit Chapter Metadata"
+          initialData={{ ...baseData, title: 'Updated Title from external call' }}
+          onSave={onSave}
+          onClose={onClose}
+          onAiGenerate={undefined}
+        />
+      </I18nextProvider>
     );
 
     expect(titleInput.value).toBe('Updated Title from external call');
@@ -78,7 +85,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="story"
         title="Edit Story Metadata"
@@ -101,7 +108,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="story"
         title="Edit Story Metadata"
@@ -130,7 +137,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -175,7 +182,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -201,14 +208,16 @@ describe('MetadataEditorDialog', () => {
     });
 
     rerender(
-      <MetadataEditorDialog
-        type="chapter"
-        title="Edit Chapter Metadata"
-        initialData={{ ...baseData, title: 'Chapter 1 Revised' }}
-        onSave={onSave}
-        onClose={onClose}
-        onAiGenerate={undefined}
-      />
+      <I18nextProvider i18n={i18n}>
+        <MetadataEditorDialog
+          type="chapter"
+          title="Edit Chapter Metadata"
+          initialData={{ ...baseData, title: 'Chapter 1 Revised' }}
+          onSave={onSave}
+          onClose={onClose}
+          onAiGenerate={undefined}
+        />
+      </I18nextProvider>
     );
 
     fireEvent.click(
@@ -224,7 +233,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -276,7 +285,7 @@ describe('MetadataEditorDialog', () => {
     const onClose = vi.fn();
 
     // Start with data already diverged from baseline (simulates an AI write).
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -302,7 +311,7 @@ describe('MetadataEditorDialog', () => {
 
     // Simulate a save round-trip: baseline advances to match current data.
     // isSaveRoundTrip guard must keep the previous baseline so the diff stays visible.
-    rerender(
+    renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -330,7 +339,7 @@ describe('MetadataEditorDialog', () => {
     const onClose = vi.fn();
     const onAiGenerate = vi.fn(async () => 'Generated summary');
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -367,7 +376,7 @@ describe('MetadataEditorDialog', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
 
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="story"
         title="Edit Story Metadata"
@@ -412,7 +421,7 @@ describe('MetadataEditorDialog', () => {
     const conflictA = { id: 'c1', description: 'Conflict A', resolution: 'Resolve A' };
     const conflictB = { id: 'c2', description: 'Conflict B', resolution: 'Resolve B' };
 
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"
@@ -430,14 +439,16 @@ describe('MetadataEditorDialog', () => {
 
     // Simulate the LLM adding a second conflict while the dialog is open.
     rerender(
-      <MetadataEditorDialog
-        type="chapter"
-        title="Edit Chapter Metadata"
-        initialData={{ ...baseData, conflicts: [conflictA, conflictB] }}
-        onSave={onSave}
-        onClose={onClose}
-        onAiGenerate={undefined}
-      />
+      <I18nextProvider i18n={i18n}>
+        <MetadataEditorDialog
+          type="chapter"
+          title="Edit Chapter Metadata"
+          initialData={{ ...baseData, conflicts: [conflictA, conflictB] }}
+          onSave={onSave}
+          onClose={onClose}
+          onAiGenerate={undefined}
+        />
+      </I18nextProvider>
     );
 
     // Advance past the debounce so the LLM update is committed to history.
@@ -477,7 +488,7 @@ describe('MetadataEditorDialog', () => {
 
     // Open dialog with a baseline that only has conflictA; initialData already
     // includes conflictB (added by the LLM before the dialog opened).
-    render(
+    renderWithI18n(
       <MetadataEditorDialog
         type="story"
         title="Edit Story Metadata"
