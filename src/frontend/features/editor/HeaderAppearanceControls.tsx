@@ -107,7 +107,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
     step: string | undefined,
     value: number,
     onChange: (val: number) => void
-  ): JSX.Element => (
+  ): import('react/jsx-runtime').JSX.Element => (
     <div className="space-y-2">
       <div className={`flex justify-between items-center text-sm ${textMain}`}>
         <span className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
     label: string,
     enabled: boolean,
     onChange: (enabled: boolean) => void
-  ): JSX.Element => (
+  ): import('react/jsx-runtime').JSX.Element => (
     <div className="space-y-2">
       <div className={`flex justify-between items-center text-sm ${textMain}`}>
         <span>{label}</span>
