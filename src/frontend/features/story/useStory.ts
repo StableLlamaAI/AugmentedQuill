@@ -289,21 +289,23 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           dialogsRef.current.alert(`Invalid story config: ${res.error_message}`);
           return;
         } else if (res.ok && res.story) {
+          const projectApi = api.forProject(currentProject);
           const chapters: Chapter[] =
             res.story.project_type === 'short-story'
               ? []
-              : mapApiChapters((await api.chapters.list()).chapters);
+              : mapApiChapters((await projectApi.chapters.list()).chapters);
 
           let newStory: StoryState = mapSelectStoryToState(
             currentProject,
             res.story,
             chapters,
             currentChapterIdRef.current,
-            latestStoryRef.current.chapters
+            latestStoryRef.current.chapters,
+            latestStoryRef.current.id
           );
 
           if (res.story.project_type === 'short-story') {
-            const content = (await api.story.getContent()).content;
+            const content = (await projectApi.story.getContent()).content;
             newStory = {
               ...newStory,
               draft: buildStoryDraft(currentProject, res.story, content),
@@ -393,15 +395,16 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       if (projects.current) {
         const res = await api.projects.select(projects.current);
         if (res.ok && res.story) {
+          const projectApi = api.forProject(projects.current);
           const chapters =
             res.story.project_type === 'short-story'
               ? []
-              : mapApiChapters((await api.chapters.list()).chapters);
+              : mapApiChapters((await projectApi.chapters.list()).chapters);
 
           let newStory = buildInitialStoryState(projects.current, res.story, chapters);
 
           if (res.story.project_type === 'short-story') {
-            const content = (await api.story.getContent()).content;
+            const content = (await projectApi.story.getContent()).content;
             newStory = {
               ...newStory,
               draft: buildStoryDraft(projects.current, res.story, content),

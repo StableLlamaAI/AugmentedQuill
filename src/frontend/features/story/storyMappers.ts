@@ -90,7 +90,8 @@ export const mapSelectStoryToState = (
   story: StoryApiPayload,
   chapters: Chapter[],
   currentChapterId: string | null,
-  previousChapters: Chapter[]
+  previousChapters: Chapter[],
+  previousProjectId?: string
 ): StoryState => {
   const newSelection = reanchorChapterSelection(
     currentChapterId,
@@ -98,13 +99,16 @@ export const mapSelectStoryToState = (
     chapters
   );
 
-  const chaptersWithPreservedState = chapters.map((c: Chapter) => {
-    const prev = previousChapters.find((pc: Chapter) => pc.id === c.id);
-    if (prev) {
-      return { ...c, content: prev.content };
-    }
-    return c;
-  });
+  const shouldPreserveChapterContent = previousProjectId === projectId;
+  const chaptersWithPreservedState = shouldPreserveChapterContent
+    ? chapters.map((c: Chapter) => {
+        const prev = previousChapters.find((pc: Chapter) => pc.id === c.id);
+        if (prev) {
+          return { ...c, content: prev.content };
+        }
+        return c;
+      })
+    : chapters;
 
   return {
     id: projectId,
