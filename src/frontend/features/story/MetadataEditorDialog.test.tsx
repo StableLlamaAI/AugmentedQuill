@@ -22,12 +22,39 @@ import {
   cleanup,
 } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { SearchHighlightProvider } from '../search/SearchHighlightContext';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import i18n from '../app/i18n';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+import { useMetadataEditorDialogState } from './useMetadataEditorDialogState';
+import type { MetadataParams } from './metadataSync';
 
 const renderWithI18n = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
+
+const BaselineProbe = ({ initialData }: { initialData: MetadataParams }) => {
+  const state = useMetadataEditorDialogState({
+    initialData,
+    onSave: async () => undefined,
+    onClose: () => undefined,
+    language: 'en',
+    initialTab: 'notes',
+    theme: 'light',
+    primarySourceLabel: 'Story',
+    primarySourceAvailable: true,
+  });
+
+  return (
+    <>
+      <div data-testid="data-notes">{state.data.notes}</div>
+      <div data-testid="baseline-notes">{state.baselineData.notes}</div>
+      <div data-testid="data-conflicts">{JSON.stringify(state.data.conflicts)}</div>
+      <div data-testid="baseline-conflicts">
+        {JSON.stringify(state.baselineData.conflicts)}
+      </div>
+    </>
+  );
+};
 
 afterEach(cleanup);
 afterEach(() => vi.useRealTimers());
@@ -332,6 +359,67 @@ describe('MetadataEditorDialog', () => {
       within(dialog!).getByRole('button', { name: /Toggle diff view/i })
     ).toBeTruthy();
     expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('preserves the original baseline when story notes and conflicts update externally', async () => {
+    const initialConflict = {
+      id: 'c1',
+      description: 'Existing conflict',
+      resolution: 'Known',
+    };
+    const initialNotes = 'Initial visible notes';
+    const updatedConflict = {
+      id: 'c2',
+      description: 'LLM conflict',
+      resolution: 'TBD',
+    };
+    const { rerender } = render(
+      <SearchHighlightProvider
+        value={{ highlightActive: false, ranges: {}, texts: {} }}
+      >
+        <BaselineProbe
+          initialData={{
+            ...baseData,
+            notes: initialNotes,
+            conflicts: [initialConflict],
+          }}
+        />
+      </SearchHighlightProvider>
+    );
+
+    expect(screen.getByTestId('data-notes').textContent).toBe(initialNotes);
+    expect(screen.getByTestId('baseline-notes').textContent).toBe(initialNotes);
+    expect(screen.getByTestId('data-conflicts').textContent).toBe(
+      JSON.stringify([initialConflict])
+    );
+    expect(screen.getByTestId('baseline-conflicts').textContent).toBe(
+      JSON.stringify([initialConflict])
+    );
+
+    await act(async () => {
+      rerender(
+        <SearchHighlightProvider
+          value={{ highlightActive: false, ranges: {}, texts: {} }}
+        >
+          <BaselineProbe
+            initialData={{
+              ...baseData,
+              notes: 'LLM updated notes',
+              conflicts: [initialConflict, updatedConflict],
+            }}
+          />
+        </SearchHighlightProvider>
+      );
+    });
+
+    expect(screen.getByTestId('data-notes').textContent).toBe('LLM updated notes');
+    expect(screen.getByTestId('baseline-notes').textContent).toBe(initialNotes);
+    expect(screen.getByTestId('data-conflicts').textContent).toBe(
+      JSON.stringify([initialConflict, updatedConflict])
+    );
+    expect(screen.getByTestId('baseline-conflicts').textContent).toBe(
+      JSON.stringify([initialConflict])
+    );
   });
 
   it('shows actionable source buttons for empty summaries and selects notes when available', async () => {

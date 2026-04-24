@@ -256,11 +256,15 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         })
       );
       const bounded = trimmed.slice(-MAX_HISTORY);
+      const previousBaseline = history[currentIndex]?.state ?? updatedState;
+      // Preserve the pre-update baseline for external history entries. This
+      // keeps AI-generated prose and metadata changes highlighted until the
+      // next user action advances the baseline.
       useStoryStore.getState().pushHistoryState({
         story: updatedState,
         history: bounded,
         currentIndex: bounded.length - 1,
-        baselineState: updatedState,
+        baselineState: previousBaseline,
       });
       latestStoryRef.current = updatedState;
       useStoryStore

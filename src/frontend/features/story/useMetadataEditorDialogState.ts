@@ -165,29 +165,11 @@ function useMetadataDataState({
       return;
     }
 
-    setBaselineData((prev: MetadataParams) => {
-      const currentData = dataRef.current;
-      const next: MetadataParams = {
-        ...initialData,
-        conflicts: (initialData.conflicts || []).map((conflict: Conflict) =>
-          normalizeConflict(conflict)
-        ),
-      };
-
-      return {
-        ...next,
-        summary: prev.summary !== currentData.summary ? prev.summary : next.summary,
-        notes: prev.notes !== currentData.notes ? prev.notes : next.notes,
-        private_notes:
-          prev.private_notes !== currentData.private_notes
-            ? prev.private_notes
-            : next.private_notes,
-        conflicts:
-          JSON.stringify(prev.conflicts) !== JSON.stringify(currentData.conflicts)
-            ? prev.conflicts
-            : next.conflicts,
-      };
-    });
+    // If there is no explicit baseline provided, keep the existing
+    // baseline data unchanged for external updates. This preserves the prior
+    // state so that LLM-driven changes to notes or conflicts continue to
+    // appear as diff highlights instead of immediately advancing the baseline.
+    setBaselineData((prev: MetadataParams) => prev);
   }, [initialData, baseline]);
 
   const prevInitialRef = useRef<MetadataParams>(initialData);
