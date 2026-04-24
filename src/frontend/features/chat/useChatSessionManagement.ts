@@ -119,6 +119,7 @@ export function useChatSessionManagement({
         setChatMessages(incognito.messages || []);
         setCurrentChatId(id);
         setIsIncognito(true);
+        setScratchpad(incognito.scratchpad || '');
         if (incognito.systemPrompt) {
           setSystemPrompt(incognito.systemPrompt);
         }
@@ -148,9 +149,9 @@ export function useChatSessionManagement({
       setChatMessages,
       setCurrentChatId,
       setIsIncognito,
+      setScratchpad,
       setSystemPrompt,
       setAllowWebSearch,
-      setScratchpad,
     ]
   );
 
@@ -252,10 +253,15 @@ export function useChatSessionManagement({
 
     const unsubscribe = useChatStore.subscribe(
       (state: ChatStoreState, prevState: ChatStoreState) => {
-        // Only fire when messages or loading state actually changed.
+        // Only fire when persisted session fields actually changed.
         if (
           state.chatMessages === prevState.chatMessages &&
-          state.isChatLoading === prevState.isChatLoading
+          state.isChatLoading === prevState.isChatLoading &&
+          state.scratchpad === prevState.scratchpad &&
+          state.systemPrompt === prevState.systemPrompt &&
+          state.allowWebSearch === prevState.allowWebSearch &&
+          state.currentChatId === prevState.currentChatId &&
+          state.isIncognito === prevState.isIncognito
         ) {
           return;
         }
@@ -272,7 +278,7 @@ export function useChatSessionManagement({
           allowWebSearch,
         } = state;
 
-        if (!currentChatId || chatMessages.length === 0 || isChatLoading) {
+        if (!currentChatId || isChatLoading) {
           return;
         }
 
@@ -305,7 +311,7 @@ export function useChatSessionManagement({
                 allowWebSearch: aws,
                 scratchpad: sc,
               } = useChatStore.getState();
-              if (!cid || msgs.length === 0) return;
+              if (!cid) return;
               const firstUserMsg = msgs.find((m: ChatMessage) => m.role === 'user');
               const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
               await api.chat.save(cid, {

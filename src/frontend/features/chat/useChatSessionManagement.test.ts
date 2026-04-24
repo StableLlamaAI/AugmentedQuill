@@ -114,4 +114,76 @@ describe('useChatSessionManagement', () => {
       { id: 'm1', role: 'user', text: 'hello' },
     ]);
   });
+
+  it('restores incognito scratchpad when selecting an incognito chat', async () => {
+    const getSystemPrompt = () => 'System Prompt';
+
+    useChatStore.setState({
+      incognitoSessions: [
+        {
+          id: 'inc-1',
+          name: 'Incognito Chat',
+          messages: [{ id: 'm1', role: 'user', text: 'hello' }],
+          systemPrompt: 'Incognito prompt',
+          isIncognito: true,
+          allowWebSearch: true,
+          scratchpad: 'Incognito memory',
+        },
+      ],
+      scratchpad: '',
+    });
+
+    const { result } = renderHook(() =>
+      useChatSessionManagement({
+        storyId: '',
+        getSystemPrompt,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleSelectChat('inc-1');
+    });
+
+    expect(useChatStore.getState().isIncognito).toBe(true);
+    expect(useChatStore.getState().currentChatId).toBe('inc-1');
+    expect(useChatStore.getState().scratchpad).toBe('Incognito memory');
+  });
+
+  it('auto-saves non-incognito scratchpad updates even without messages', async () => {
+    vi.useFakeTimers();
+    try {
+      const getSystemPrompt = () => 'System Prompt';
+
+      const { result } = renderHook(() =>
+        useChatSessionManagement({
+          storyId: '',
+          getSystemPrompt,
+        })
+      );
+
+      act(() => {
+        useChatStore.setState({
+          currentChatId: 'chat-scratchpad',
+          isIncognito: false,
+          chatMessages: [],
+          scratchpad: '',
+        });
+        result.current.onUpdateScratchpad('Persistent memory text');
+      });
+
+      await vi.advanceTimersByTimeAsync(2200);
+
+      expect(api.chat.save).toHaveBeenCalledWith(
+        'chat-scratchpad',
+        expect.objectContaining({
+          name: 'Untitled Chat',
+          messages: [],
+          allowWebSearch: false,
+          scratchpad: 'Persistent memory text',
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
