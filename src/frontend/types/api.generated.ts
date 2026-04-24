@@ -1752,6 +1752,14 @@ export interface components {
       name?: string | null;
       /** Messages */
       messages?: unknown[] | null;
+      /** Systemprompt */
+      systemPrompt?: string | null;
+      /** Allowwebsearch */
+      allowWebSearch?: boolean | null;
+      /** Scratchpad */
+      scratchpad?: string | null;
+      /** Editing Scratchpad */
+      editing_scratchpad?: string | null;
       /** Created At */
       created_at?: string | null;
       /** Updated At */

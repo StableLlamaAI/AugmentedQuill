@@ -46,7 +46,6 @@ describe('useChatExecution', () => {
   });
 
   it('groups multiple incremental tool_batch calls into a single external history entry with combined undo/redo', async () => {
-    const setChatMessages = vi.fn();
     const refreshProjects = vi.fn().mockResolvedValue(undefined);
     const refreshStory = vi.fn().mockResolvedValue(undefined);
     const pushExternalHistoryEntry = vi.fn();
@@ -101,17 +100,13 @@ describe('useChatExecution', () => {
 
     const { result } = renderHook(() =>
       useChatExecution({
-        systemPrompt: 'system',
+        getSystemPrompt: () => 'system',
         activeChatConfig: { model: 'test', temperature: 0.5 },
         isChatAvailable: true,
-        allowWebSearch: false,
+        getAllowWebSearch: () => false,
         currentChapterId: '1',
-        currentChatId: 'chat-1',
+        getCurrentChatId: () => 'chat-1',
         currentChapter: { id: '1', title: 'Intro' },
-        chatMessages: [],
-        setChatMessages,
-        isChatLoading: false,
-        setIsChatLoading: vi.fn(),
         refreshProjects,
         refreshStory,
         pushExternalHistoryEntry,
@@ -146,7 +141,6 @@ describe('useChatExecution', () => {
   });
 
   it('passes attachments through to the chat session payload', async () => {
-    const setChatMessages = vi.fn();
     const refreshProjects = vi.fn().mockResolvedValue(undefined);
     const refreshStory = vi.fn().mockResolvedValue(undefined);
     const sendMessageMock = vi
@@ -159,20 +153,15 @@ describe('useChatExecution', () => {
 
     const { result } = renderHook(() =>
       useChatExecution({
-        systemPrompt: 'system',
+        getSystemPrompt: () => 'system',
         activeChatConfig: { model: 'test', temperature: 0.5 },
         isChatAvailable: true,
-        allowWebSearch: false,
+        getAllowWebSearch: () => false,
         currentChapterId: '1',
-        currentChatId: 'chat-1',
+        getCurrentChatId: () => 'chat-1',
         currentChapter: { id: '1', title: 'Intro' },
-        chatMessages: [],
-        setChatMessages,
-        isChatLoading: false,
-        setIsChatLoading: vi.fn(),
         refreshProjects,
         refreshStory,
-        pushExternalHistoryEntry: undefined,
         requestToolCallLoopAccess: vi.fn().mockResolvedValue('unlimited'),
       })
     );
