@@ -9,7 +9,7 @@
  * Defines the header appearance controls unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { RefObject, useRef } from 'react';
+import React, { RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bug,
@@ -43,6 +43,15 @@ type HeaderAppearanceControlsProps = {
   setIsDebugLogsOpen: (v: boolean) => void;
 };
 
+const DEFAULT_SIDEBAR_WIDTH_MAX = 600;
+const SIDEBAR_MIN_EDITOR_WIDTH = 320;
+
+const getDynamicSidebarWidthMax = (windowWidth: number): number => {
+  const availableWidth = Math.max(0, windowWidth - SIDEBAR_MIN_EDITOR_WIDTH);
+  const halfWidth = Math.floor(windowWidth * 0.5);
+  return Math.max(DEFAULT_SIDEBAR_WIDTH_MAX, Math.min(halfWidth, availableWidth));
+};
+
 export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> = ({
   appearanceRef,
   isAppearanceOpen,
@@ -61,6 +70,34 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isAppearanceOpen, panelRef, () => setIsAppearanceOpen(false));
 
+  const [windowWidth, setWindowWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 0
+  );
+
+  const sidebarWidthMax = useMemo(
+    () => getDynamicSidebarWidthMax(windowWidth),
+    [windowWidth]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = (): void => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (editorSettings.sidebarWidth > sidebarWidthMax) {
+      setEditorSettings((prev: EditorSettings) => ({
+        ...prev,
+        sidebarWidth: sidebarWidthMax,
+      }));
+    }
+  }, [editorSettings.sidebarWidth, sidebarWidthMax, setEditorSettings]);
+
   const renderSlider = (
     icon: React.ReactNode,
     label: string,
@@ -70,7 +107,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
     step: string | undefined,
     value: number,
     onChange: (val: number) => void
-  ) => (
+  ): JSX.Element => (
     <div className="space-y-2">
       <div className={`flex justify-between items-center text-sm ${textMain}`}>
         <span className="flex items-center gap-2">
@@ -96,7 +133,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
     label: string,
     enabled: boolean,
     onChange: (enabled: boolean) => void
-  ) => (
+  ): JSX.Element => (
     <div className="space-y-2">
       <div className={`flex justify-between items-center text-sm ${textMain}`}>
         <span>{label}</span>
@@ -261,7 +298,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               'Sidebar Width',
               `${editorSettings.sidebarWidth}px`,
               '200',
-              '600',
+              `${sidebarWidthMax}`,
               '10',
               editorSettings.sidebarWidth,
               (val: number) =>

@@ -63,4 +63,54 @@ describe('HeaderAppearanceControls', () => {
 
     expect(screen.queryByRole('dialog', { name: /Page Appearance/i })).toBeNull();
   });
+
+  it('uses a dynamic max for the sidebar width slider based on window width', () => {
+    const localRef = React.createRef<HTMLDivElement>();
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1600,
+    });
+
+    const Wrapper: React.FC = () => {
+      const [isAppearanceOpen, setIsAppearanceOpen] = useState(true);
+      const [settings, setSettings] = useState({
+        brightness: 1,
+        contrast: 1,
+        fontSize: 16,
+        maxWidth: 80,
+        sidebarWidth: 320,
+        theme: 'light',
+        showDiff: true,
+      });
+
+      return (
+        <HeaderAppearanceControls
+          appearanceRef={localRef}
+          isAppearanceOpen={isAppearanceOpen}
+          setIsAppearanceOpen={setIsAppearanceOpen}
+          isLight={true}
+          textMain="text-brand-gray-900"
+          buttonActive="bg-blue-500 text-white"
+          currentTheme="light"
+          setAppTheme={() => {}}
+          editorSettings={settings}
+          setEditorSettings={setSettings}
+          sliderClass=""
+          setIsDebugLogsOpen={() => {}}
+        />
+      );
+    };
+
+    render(<Wrapper />);
+
+    const sliders = screen.getAllByRole('slider');
+    const sidebarSlider = sliders[sliders.length - 1] as HTMLInputElement;
+    expect(sidebarSlider.getAttribute('max')).toBe('800');
+
+    window.innerWidth = 1200;
+    fireEvent(window, new Event('resize'));
+
+    expect(sidebarSlider.getAttribute('max')).toBe('600');
+  });
 });
