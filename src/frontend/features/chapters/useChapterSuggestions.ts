@@ -19,9 +19,15 @@ import {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, LLMConfig, ViewMode, WritingUnit } from '../../types';
+import {
+  ChatMessage,
+  LLMConfig,
+  SuggestionGenerationMode,
+  ViewMode,
+  WritingUnit,
+} from '../../types';
 import { generateContinuations } from '../../services/openaiService';
-import { computeContentWithSeparator } from '../../utils/textUtils';
+import { joinSuggestionToContent } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 import { useChatStore } from '../../stores/chatStore';
@@ -51,6 +57,8 @@ export function useChapterSuggestions({
   getErrorMessage,
 }: UseChapterSuggestionsParams): {
   continuations: string[];
+  suggestionMode: SuggestionGenerationMode;
+  setSuggestionMode: (mode: SuggestionGenerationMode) => void;
   isSuggesting: boolean;
   isSuggestionMode: boolean;
   suggestCursor: number | null;
@@ -72,6 +80,16 @@ export function useChapterSuggestions({
   setIsAutoSourcebookSelectionEnabled: Dispatch<SetStateAction<boolean>>;
   isSourcebookSelectionRunning: boolean;
 } {
+  const [suggestionMode, setSuggestionMode] = useState<SuggestionGenerationMode>(() => {
+    const saved = localStorage.getItem('aq_suggest_next_mode');
+    if (saved === 'original') {
+      return 'instructed';
+    }
+    if (saved === 'guided' || saved === 'instructed' || saved === 'pure') {
+      return saved;
+    }
+    return 'guided';
+  });
   const [continuations, setContinuations] = useState<string[]>([]);
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
@@ -101,6 +119,10 @@ export function useChapterSuggestions({
       isAutoSourcebookSelectionEnabled.toString()
     );
   }, [isAutoSourcebookSelectionEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('aq_suggest_next_mode', suggestionMode);
+  }, [suggestionMode]);
 
   const clampCursor = (cursor: number, content: string) => {
     if (!Number.isFinite(cursor)) return content.length;
@@ -240,6 +262,11 @@ export function useChapterSuggestions({
         Array.from(checkedEntries),
         {
           cancelSignal: cancelSignalRef.current,
+          loopGuardEnabled: activeWritingConfig.suggestLoopGuardEnabled ?? true,
+          loopGuardNgram: activeWritingConfig.suggestLoopGuardNgram ?? 3,
+          loopGuardMinRepeats: activeWritingConfig.suggestLoopGuardMinRepeats ?? 3,
+          loopGuardMaxRegens: activeWritingConfig.suggestLoopGuardMaxRegens ?? 1,
+          suggestionMode,
           onSuggestionUpdate: (index: number, text: string) => {
             if (!text) return;
             scheduleSuggestionUpdate(index, text);
@@ -288,15 +315,11 @@ export function useChapterSuggestions({
     // The model's predictions are next-paragraph continuation, not in-place
     // replacement of a mid-text cursor position.
     const c = currentContent.length;
-    const prefix = currentContent;
-    const suffix = '';
 
-    const { newContent, separator } = computeContentWithSeparator(
-      prefix,
-      text,
-      suffix,
-      viewMode
-    );
+    // joinSuggestionToContent respects the leading newlines in the suggestion
+    // text to determine the correct separator (none, hard line break, or
+    // paragraph break). See textUtils.ts for the full rule set.
+    const newContent = joinSuggestionToContent(currentContent, text);
 
     setSuggestUndoStack((prev: { content: string; cursor: number }[]) => [
       ...prev,
@@ -304,7 +327,7 @@ export function useChapterSuggestions({
     ]);
     await updateChapter(currentUnit.id, { content: newContent });
 
-    const newCursor = c + separator.length + text.length;
+    const newCursor = newContent.length;
     setSuggestCursor(newCursor);
     setIsSuggestionMode(true);
 
@@ -369,6 +392,8 @@ export function useChapterSuggestions({
 
   return {
     continuations,
+    suggestionMode,
+    setSuggestionMode,
     isSuggesting,
     isSuggestionMode,
     suggestCursor,

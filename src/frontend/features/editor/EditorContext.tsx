@@ -11,7 +11,7 @@
  */
 
 import React, { createContext, useContext } from 'react';
-import type { AppTheme } from '../../types';
+import type { AppTheme, SuggestionGenerationMode } from '../../types';
 
 export interface EditorContextValue {
   theme: AppTheme;
@@ -29,6 +29,8 @@ export interface EditorContextValue {
   ) => void;
   shouldShowContinuationPanel: boolean;
   displayedContinuations: string[];
+  suggestionMode: SuggestionGenerationMode;
+  onSuggestionModeChange: (mode: SuggestionGenerationMode) => void;
   isSuggesting: boolean;
   localContentRef: React.MutableRefObject<string>;
   onSuggestionButtonClick: () => void;

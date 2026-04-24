@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { ArrowRight, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { MarkdownView } from '../../editor/MarkdownView';
 
 type SearchResult = {
@@ -28,6 +29,7 @@ export const WebSearchResults: React.FC<{ content: string; name: string }> = ({
   content: string;
   name: string;
 }) => {
+  const { t } = useTranslation();
   try {
     const data = JSON.parse(content);
     const results = Array.isArray(data) ? data : data.results || [];
@@ -38,7 +40,7 @@ export const WebSearchResults: React.FC<{ content: string; name: string }> = ({
         <div className="flex items-center space-x-2 pb-2 border-b border-blue-500/20">
           <Globe className="text-blue-500" size={16} />
           <span className="font-bold text-xs text-blue-700 dark:text-blue-400">
-            {name === 'wikipedia_search' ? 'Wikipedia:' : 'Web Search:'}
+            {name === 'wikipedia_search' ? t('Wikipedia:') : t('Web Search:')}
           </span>
           <span className="italic text-brand-gray-600 dark:text-brand-gray-400 text-xs truncate">
             "{query}"
@@ -47,7 +49,9 @@ export const WebSearchResults: React.FC<{ content: string; name: string }> = ({
 
         {results.length === 0 ? (
           <div className="text-[11px] text-brand-gray-500 italic py-2">
-            {data.error ? `Error: ${data.error}` : 'No relevant results found.'}
+            {data.error
+              ? `${t('Error:')} ${String(data.error)}`
+              : t('No relevant results found.')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 py-2">
@@ -88,6 +92,7 @@ export const VisitPageResult: React.FC<{ content: string }> = ({
 }: {
   content: string;
 }) => {
+  const { t } = useTranslation();
   try {
     const data = JSON.parse(content);
     return (
@@ -95,7 +100,7 @@ export const VisitPageResult: React.FC<{ content: string }> = ({
         <div className="flex items-center space-x-2 pb-2 border-b border-amber-500/20">
           <ArrowRight className="text-amber-500" size={14} />
           <span className="font-bold text-xs text-amber-700 dark:text-amber-400">
-            Visited Page:
+            {t('Visited Page:')}
           </span>
         </div>
 
@@ -105,7 +110,7 @@ export const VisitPageResult: React.FC<{ content: string }> = ({
 
         {data.error ? (
           <div className="text-[11px] text-red-500 italic p-1">
-            Error loading page: {data.error}
+            {t('Error loading page:')} {String(data.error)}
           </div>
         ) : (
           <div className="bg-white/80 dark:bg-black/20 border border-black/5 dark:border-white/5 rounded-lg p-3">
@@ -114,7 +119,9 @@ export const VisitPageResult: React.FC<{ content: string }> = ({
             </div>
             <div className="mt-2 text-right">
               <span className="text-[9px] text-brand-gray-400 uppercase tracking-wider">
-                Extracted Text ({Math.round(data.content.length / 1024)} KB)
+                {t('Extracted Text ({{size}} KB)', {
+                  size: Math.round(data.content.length / 1024),
+                })}
               </span>
             </div>
           </div>

@@ -12,6 +12,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   computeContentWithSeparator,
+  joinSuggestionToContent,
   applySmartQuotes,
   resetSmartQuoteChars,
   setSmartQuoteChars,
@@ -115,6 +116,87 @@ describe('computeContentWithSeparator', () => {
       'markdown'
     );
     expect(separator).toBe('\n\n');
+  });
+
+  it('should normalize more than 2 boundary newlines to exactly 2 in markdown mode', () => {
+    // Model sends \n\n\n — 3 newlines is not valid markdown; must be normalised to 2.
+    const { newContent } = computeContentWithSeparator(
+      'prose.',
+      '\n\n\nShe walked.',
+      '',
+      'markdown'
+    );
+    expect(newContent).toBe('prose.\n\nShe walked.');
+  });
+});
+
+describe('joinSuggestionToContent', () => {
+  // --- Prompt normalization rules (tested here for completeness) ---
+  // The backend normalises current_text before sending to the LLM:
+  //   trailing single \n  → stripped (noise)
+  //   trailing \n\n+    → kept as \n\n
+  // These are backend tests; covered in test_story_endpoints.py.
+
+  // --- Accept-path joining rules ---
+
+  it('no leading newline in suggestion: inline concatenation, prefix unchanged', () => {
+    expect(joinSuggestionToContent('The door opened.', 'She entered.')).toBe(
+      'The door opened.She entered.'
+    );
+  });
+
+  it('no leading newline, prefix has single trailing newline: append directly', () => {
+    // The trailing \n is part of the prefix and is kept as-is.
+    expect(joinSuggestionToContent('The door opened.\n', 'She entered.')).toBe(
+      'The door opened.\nShe entered.'
+    );
+  });
+
+  it('single leading newline in suggestion: markdown hard line break (  \\n)', () => {
+    expect(joinSuggestionToContent('The door opened.', '\nShe entered.')).toBe(
+      'The door opened.  \nShe entered.'
+    );
+  });
+
+  it('single leading newline, prefix has single trailing newline: hard line break', () => {
+    // P=1, S=1: rule 2 applies (S==1 → hard line break), both newlines consumed.
+    expect(joinSuggestionToContent('The door opened.\n', '\nShe entered.')).toBe(
+      'The door opened.  \nShe entered.'
+    );
+  });
+
+  it('two or more leading newlines in suggestion: paragraph break (\\n\\n)', () => {
+    expect(joinSuggestionToContent('The door opened.', '\n\nShe entered.')).toBe(
+      'The door opened.\n\nShe entered.'
+    );
+    // 3 leading newlines also collapse to 2
+    expect(joinSuggestionToContent('The door opened.', '\n\n\nShe entered.')).toBe(
+      'The door opened.\n\nShe entered.'
+    );
+  });
+
+  it('prefix ends with two or more newlines: paragraph break regardless of suggestion', () => {
+    // Rule 3: P >= 2 triggers paragraph break even when S == 0.
+    expect(joinSuggestionToContent('The door opened.\n\n', 'She entered.')).toBe(
+      'The door opened.\n\nShe entered.'
+    );
+    // P >= 2 also wins when S == 1.
+    expect(joinSuggestionToContent('The door opened.\n\n', '\nShe entered.')).toBe(
+      'The door opened.\n\nShe entered.'
+    );
+    // Excess trailing newlines on prefix are consumed (not duplicated).
+    expect(joinSuggestionToContent('prose.\n\n\n', '\n\nShe walked.')).toBe(
+      'prose.\n\nShe walked.'
+    );
+  });
+
+  it('empty prefix: suggestion appended as-is without leading newlines consumed', () => {
+    expect(joinSuggestionToContent('', '\n\nShe walked.')).toBe('\n\nShe walked.');
+    expect(joinSuggestionToContent('', 'inline')).toBe('inline');
+  });
+
+  it('empty suggestion: prefix returned unchanged', () => {
+    expect(joinSuggestionToContent('The door opened.', '')).toBe('The door opened.');
   });
 });
 

@@ -7,8 +7,10 @@
 
 """Defines the test story endpoints unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+import asyncio
 from pathlib import Path
 
+from augmentedquill.api.v1.story_routes import generation_streaming
 import augmentedquill.services.llm.llm as llm
 from augmentedquill.services.projects.projects import select_project
 from tests.unit.api.v1.api_test_case import ApiTestCase
@@ -395,6 +397,313 @@ class StoryEndpointsTest(ApiTestCase):
         self.assertTrue(r.headers.get("content-type", "").startswith("text/plain"))
         text = r.text or ""
         self.assertGreater(len(text.strip()), 0, f"empty response body: {repr(text)}")
+
+    def test_suggest_mode_pure_uses_only_current_text(self):
+        """Pure suggest mode should pass only current chapter text to the model."""
+        self._make_project(name="novel_pure_mode")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        seen_prompt = {"value": ""}
+
+        async def fake_stream(prompt: str, **kwargs):
+            seen_prompt["value"] = prompt
+            yield "pure mode output"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Pure mode source text",
+                "mode": "pure",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(seen_prompt["value"], "Pure mode source text")
+
+    def test_suggest_mode_instructed_uses_context_rich_prompt(self):
+        """Instructed suggest mode should use role-based chat messages."""
+        self._make_project(name="novel_original_mode")
+
+        orig_stream = llm.openai_chat_complete_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        seen_messages = {"value": []}
+
+        async def fake_stream(messages: list[dict[str, str]], **kwargs):
+            seen_messages["value"] = messages
+            yield "instructed mode output"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_chat_complete_stream = fake_stream  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_chat_complete_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={
+                "chap_id": 1,
+                "current_text": "Instructed mode source text",
+                "mode": "instructed",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(seen_messages["value"][0]["role"], "system")
+        self.assertEqual(seen_messages["value"][1]["role"], "user")
+        self.assertIn(
+            "Task: Write the immediate next paragraph to continue the story.",
+            seen_messages["value"][1]["content"],
+        )
+        self.assertIn("Story title: P", seen_messages["value"][1]["content"])
+        self.assertIn("# T1", seen_messages["value"][1]["content"])
+        self.assertIn("Current draft summary: S1", seen_messages["value"][1]["content"])
+        self.assertIn(
+            "Instructed mode source text", seen_messages["value"][1]["content"]
+        )
+
+    def test_suggest_loop_detection_truncates_repetitive_output(self):
+        """Loop detection truncates repetitive text to the last clean prefix without retrying."""
+        self._make_project(name="novel_loop_guard")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        call_index = {"value": 0}
+
+        async def fake_stream_loop(prompt: str, **kwargs):
+            call_index["value"] += 1
+            if call_index["value"] == 1:
+                yield "the way the way the way the way\n"
+            else:
+                yield "He moved through the alley and kept his breath steady.\n"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream_loop  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={"chap_id": 1, "current_text": "Hi"},
+        )
+        self.assertEqual(r.status_code, 200)
+        # The repetitive tail is truncated; the second attempt is never made.
+        self.assertNotIn("the way the way the way the way", r.text)
+        self.assertEqual(call_index["value"], 1)
+
+    def test_suggest_loop_detection_always_truncates_loops(self):
+        """Loop detection is always-on; repetitive output is truncated to the last clean sentence."""
+        self._make_project(name="novel_loop_guard_disabled")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        call_index = {"value": 0}
+
+        async def fake_stream_loop(prompt: str, **kwargs):
+            call_index["value"] += 1
+            yield "the way the way the way the way\n"
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream_loop  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={"chap_id": 1, "current_text": "Hi"},
+        )
+        self.assertEqual(r.status_code, 200)
+        # Loop is detected and the output is truncated to the clean prefix.
+        self.assertNotIn("the way the way the way the way", r.text)
+        self.assertEqual(call_index["value"], 1)
+
+    def test_suggest_stream_leading_newlines_passed_through(self):
+        """Leading newlines from the model are forwarded to the client as semantic signals.
+
+        The frontend uses them to decide how to join the suggestion to the existing
+        prose (inline / hard line break / paragraph break).  The suggestion display
+        strips them for visual rendering, but they must be present in the raw stream.
+        """
+        self._make_project(name="novel_stream_newline_prefix")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+
+        async def fake_stream_chunks(prompt: str, **kwargs):
+            # Simulate a model that starts with paragraph separation then prose.
+            yield "\n\n"
+            yield "She"
+            yield " walked into the room and paused."
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream_chunks  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={"chap_id": 1, "current_text": "Hi"},
+        )
+        self.assertEqual(r.status_code, 200)
+        # The leading newlines must be forwarded (they are semantic, not noise).
+        self.assertTrue(r.text.startswith("\n\n"), repr(r.text))
+        # The full word "She" must not be clipped.
+        self.assertIn("She walked", r.text)
+
+    def test_suggest_prompt_normalizes_trailing_newlines_in_current_text(self):
+        """Trailing newlines in current_text must be normalised before reaching the LLM.
+
+        * Single trailing \\n  -> stripped (noise from editor auto-newline).
+        * Two or more trailing \\n -> kept as exactly \\n\\n (intentional paragraph break).
+        """
+        from augmentedquill.api.v1.story_routes.generation_streaming import (
+            _normalize_current_text_for_llm,
+        )
+
+        # No trailing newline: unchanged.
+        self.assertEqual(_normalize_current_text_for_llm("Hello"), "Hello")
+        # Single trailing newline: stripped.
+        self.assertEqual(_normalize_current_text_for_llm("Hello\n"), "Hello")
+        # Exactly two: kept as-is.
+        self.assertEqual(_normalize_current_text_for_llm("Hello\n\n"), "Hello\n\n")
+        # Three or more: normalised to two.
+        self.assertEqual(_normalize_current_text_for_llm("Hello\n\n\n"), "Hello\n\n")
+        self.assertEqual(_normalize_current_text_for_llm("Hello\n\n\n\n"), "Hello\n\n")
+        # Empty string: unchanged.
+        self.assertEqual(_normalize_current_text_for_llm(""), "")
+
+    def test_suggest_stream_idle_timeout_returns_partial_candidate(self):
+        """Stalled provider stream should not block suggestion forever."""
+        self._make_project(name="novel_stream_idle")
+
+        orig_stream = llm.openai_completions_stream
+        orig_edit = llm.unified_chat_complete
+        orig_resolve = llm.resolve_openai_credentials
+        orig_idle_timeout = generation_streaming.SUGGEST_STREAM_IDLE_TIMEOUT_S
+
+        async def fake_stream_idle(prompt: str, **kwargs):
+            yield "He stepped into the rain and pulled his coat tighter."
+            await asyncio.sleep(0.05)
+            yield " This trailing chunk should not be required."
+
+        async def fake_edit(**kwargs):
+            return {"content": ""}
+
+        llm.openai_completions_stream = fake_stream_idle  # type: ignore
+        llm.unified_chat_complete = fake_edit  # type: ignore
+        llm.resolve_openai_credentials = lambda payload, **kwargs: (
+            "https://fake.local/v1",
+            None,
+            "fake-model",
+            5,
+            "fake-model",
+        )  # type: ignore
+        generation_streaming.SUGGEST_STREAM_IDLE_TIMEOUT_S = 0.01
+
+        def _undo():
+            llm.openai_completions_stream = orig_stream  # type: ignore
+            llm.unified_chat_complete = orig_edit  # type: ignore
+            llm.resolve_openai_credentials = orig_resolve  # type: ignore
+            generation_streaming.SUGGEST_STREAM_IDLE_TIMEOUT_S = orig_idle_timeout
+
+        self.addCleanup(_undo)
+
+        r = self.client.post(
+            "/api/v1/story/suggest",
+            json={"chap_id": 1, "current_text": "Hi"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            r.text,
+            "He stepped into the rain and pulled his coat tighter.\n",
+        )
 
     def test_post_story_title_updates_and_persists(self):
         pdir = self._make_project()

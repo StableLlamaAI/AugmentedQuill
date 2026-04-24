@@ -10,6 +10,7 @@
  */
 
 import React from 'react';
+import i18n from '../app/i18n';
 
 type AppErrorBoundaryState = {
   hasError: boolean;
@@ -49,12 +50,13 @@ export class AppErrorBoundary extends React.Component<
           }`}
         >
           <div className="max-w-md text-center space-y-2">
-            <h1 className="text-lg font-semibold">Something went wrong</h1>
+            <h1 className="text-lg font-semibold">{i18n.t('Something went wrong')}</h1>
             <p
               className={`text-sm ${isDark ? 'text-brand-gray-400' : 'text-brand-gray-600'}`}
             >
-              Reload the page to continue working. If this keeps happening, check the
-              browser console for details.
+              {i18n.t(
+                'Reload the page to continue working. If this keeps happening, check the browser console for details.'
+              )}
             </p>
           </div>
         </div>

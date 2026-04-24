@@ -57,6 +57,13 @@ export function computeContentWithSeparator(
 
     if (totalBoundaryNewlines >= 2) {
       separator = '';
+      // Normalize excess newlines: more than two consecutive \n at the boundary
+      // is not valid markdown (extra blank lines). Trim the surplus from the
+      // leading edge of text so the joined result never exceeds one paragraph break.
+      if (totalBoundaryNewlines > 2) {
+        const excess = totalBoundaryNewlines - 2;
+        text = text.substring(excess);
+      }
     } else if (preNewlines > 0 || textNewlines > 0) {
       separator = '\n'.repeat(Math.max(0, 2 - totalBoundaryNewlines));
     } else {
@@ -68,6 +75,50 @@ export function computeContentWithSeparator(
     newContent: prefix + separator + text + suffix,
     separator,
   };
+}
+
+/**
+ * Join existing prose with an accepted AI suggestion using markdown-aware rules.
+ *
+ * The suggestion text from the backend carries leading newlines as a semantic
+ * signal about how the new text should attach to the existing prose:
+ *
+ *   - No leading `\n`  → inline continuation; append directly (no separator).
+ *   - Single `\n`      → hard line break: `  \n` (two trailing spaces, then newline).
+ *   - Two or more `\n` → paragraph break: exactly `\n\n`.
+ *
+ * The same paragraph-break rule fires when the existing prose already ends with
+ * two or more `\n`, regardless of what the suggestion starts with.
+ *
+ * Any excess trailing newlines on `prefix` are consumed into the separator so
+ * the joined result never has more than two consecutive `\n` at the boundary.
+ */
+export function joinSuggestionToContent(prefix: string, suggestion: string): string {
+  // Count trailing \n characters on the prefix.
+  let trailingNL = 0;
+  for (let i = prefix.length - 1; i >= 0 && prefix[i] === '\n'; i--) {
+    trailingNL++;
+  }
+
+  // Count leading \n characters on the suggestion.
+  let leadingNL = 0;
+  while (leadingNL < suggestion.length && suggestion[leadingNL] === '\n') {
+    leadingNL++;
+  }
+  const prose = suggestion.substring(leadingNL);
+
+  if (trailingNL >= 2 || leadingNL >= 2) {
+    // Paragraph break: strip all trailing newlines from prefix, join with \n\n.
+    const base = prefix.substring(0, prefix.length - trailingNL);
+    return base + '\n\n' + prose;
+  } else if (leadingNL === 1) {
+    // Markdown hard line break: two trailing spaces + newline.
+    const base = prefix.substring(0, prefix.length - trailingNL);
+    return base + '  \n' + prose;
+  } else {
+    // No leading newline in suggestion: inline continuation, prefix unchanged.
+    return prefix + prose;
+  }
 }
 
 /**

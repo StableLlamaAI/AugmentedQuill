@@ -91,6 +91,23 @@
               "supports_function_calling": {
                 "type": ["boolean", "null"]
               },
+              "suggest_loop_guard_enabled": {
+                "type": ["boolean", "null"]
+              },
+              "suggest_loop_guard_ngram": {
+                "type": ["integer", "null"],
+                "enum": [3, 4, null]
+              },
+              "suggest_loop_guard_min_repeats": {
+                "type": ["integer", "null"],
+                "minimum": 2,
+                "maximum": 8
+              },
+              "suggest_loop_guard_max_regens": {
+                "type": ["integer", "null"],
+                "minimum": 0,
+                "maximum": 3
+              },
               "prompt_overrides": {
                 "type": "object",
                 "additionalProperties": {

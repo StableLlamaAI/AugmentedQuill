@@ -28,6 +28,7 @@ import type {
 import type { PromptsState } from '../settings/usePrompts';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
+import { useStoryStore } from '../../stores/storyStore';
 
 type CurrentChapterContext = {
   id: string;
@@ -188,6 +189,8 @@ export function useAppChatRuntime({
       (state: ChatStoreState, prevState: ChatStoreState) => {
         if (prevState.isChatLoading && !state.isChatLoading) {
           prosePreviewStateRef.current = {};
+          // Clear the streaming slot so the editor shows the committed chapter content.
+          useStoryStore.getState().setStreamingContent(null);
           useChatStore.getState().setIsProseStreamingFromChat(false);
         }
       }
@@ -196,12 +199,12 @@ export function useAppChatRuntime({
   }, []);
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
-    systemPrompt: useChatStore.getState().systemPrompt,
+    getSystemPrompt: () => useChatStore.getState().systemPrompt,
     activeChatConfig,
     isChatAvailable,
-    allowWebSearch: useChatStore.getState().allowWebSearch,
+    getAllowWebSearch: () => useChatStore.getState().allowWebSearch,
     currentChapterId,
-    currentChatId: useChatStore.getState().currentChatId,
+    getCurrentChatId: () => useChatStore.getState().currentChatId,
     currentChapter: currentChapterContext,
     refreshProjects,
     refreshStory,
@@ -252,7 +255,10 @@ export function useAppChatRuntime({
           return;
         }
 
-        void updateChapter(unit.id, { content: newContent }, false, false);
+        void useStoryStore.getState().setStreamingContent({
+          chapterId: unit.id,
+          content: newContent,
+        });
         useChatStore.getState().setIsProseStreamingFromChat(true);
       },
       [storyRef, updateChapter]

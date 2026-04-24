@@ -15,7 +15,7 @@ auto-generated TypeScript types instead of maintaining hand-written copies.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -47,6 +47,10 @@ class MachineModelConfig(BaseModel):
     writing_warning: Optional[str] = None
     is_multimodal: Optional[bool] = None
     supports_function_calling: Optional[bool] = None
+    suggest_loop_guard_enabled: Optional[bool] = None
+    suggest_loop_guard_ngram: Optional[int] = None
+    suggest_loop_guard_min_repeats: Optional[int] = None
+    suggest_loop_guard_max_regens: Optional[int] = None
     prompt_overrides: Optional[dict[str, str]] = None
 
 
@@ -94,12 +98,24 @@ class ModelPresetParameters(BaseModel):
 
 
 class ModelPresetEntry(BaseModel):
-    """A single model-preset entry as loaded from *model_presets.json*."""
+    """A single model-preset entry as loaded from *model_presets.json*.
+
+    ``preset_type`` distinguishes two flavours:
+
+    * ``"absolute"`` (default) – replaces **all** sampling parameters on the
+      provider and locks manual editing.  Suitable for a named full profile
+      tied to a specific model family.
+    * ``"delta"`` – applies **only the non-null fields** in ``parameters`` on
+      top of whatever is already configured.  Does not lock the provider or
+      change ``preset_id``.  Suitable for cross-model tweaks such as "more
+      creative" or "factual focus".
+    """
 
     id: str
     name: str
     description: str
     model_id_patterns: list[str]
+    preset_type: Literal["absolute", "delta"] = "absolute"
     parameters: ModelPresetParameters
     warnings: Optional[ModelPresetWarning] = None
 

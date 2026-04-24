@@ -99,6 +99,27 @@ export const machineModelToProvider = (
       model.supports_function_calling === null
         ? undefined
         : model.supports_function_calling,
+    suggestLoopGuardEnabled:
+      model.suggest_loop_guard_enabled === null ||
+      model.suggest_loop_guard_enabled === undefined
+        ? true
+        : Boolean(model.suggest_loop_guard_enabled),
+    suggestLoopGuardNgram:
+      model.suggest_loop_guard_ngram === 4
+        ? 4
+        : model.suggest_loop_guard_ngram === 3
+          ? 3
+          : 3,
+    suggestLoopGuardMinRepeats:
+      model.suggest_loop_guard_min_repeats === null ||
+      model.suggest_loop_guard_min_repeats === undefined
+        ? 3
+        : Number(model.suggest_loop_guard_min_repeats),
+    suggestLoopGuardMaxRegens:
+      model.suggest_loop_guard_max_regens === null ||
+      model.suggest_loop_guard_max_regens === undefined
+        ? 1
+        : Number(model.suggest_loop_guard_max_regens),
     prompts: normalizeProviderPrompts(model.prompt_overrides, fallbackProvider.prompts),
   };
 };
@@ -124,5 +145,9 @@ export const providerToMachineModel = (provider: LLMConfig): MachineModelConfig 
   writing_warning: provider.writingWarning || undefined,
   is_multimodal: provider.isMultimodal ?? undefined,
   supports_function_calling: provider.supportsFunctionCalling ?? undefined,
+  suggest_loop_guard_enabled: provider.suggestLoopGuardEnabled ?? true,
+  suggest_loop_guard_ngram: provider.suggestLoopGuardNgram ?? 3,
+  suggest_loop_guard_min_repeats: provider.suggestLoopGuardMinRepeats ?? 3,
+  suggest_loop_guard_max_regens: provider.suggestLoopGuardMaxRegens ?? 1,
   prompt_overrides: toPromptOverrides(provider.prompts),
 });

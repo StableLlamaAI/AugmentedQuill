@@ -272,6 +272,8 @@ const App: React.FC = () => {
 
   const {
     continuations,
+    suggestionMode,
+    setSuggestionMode,
     isSuggesting,
     isSuggestionMode,
     suggestCursor,
@@ -448,6 +450,8 @@ const App: React.FC = () => {
     setEditorSettings,
     viewMode,
     continuations,
+    suggestionMode,
+    setSuggestionMode,
     isSuggesting,
     handleTriggerSuggestions,
     cancelSuggestions,

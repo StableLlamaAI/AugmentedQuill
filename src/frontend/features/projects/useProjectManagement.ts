@@ -27,7 +27,7 @@ type UseProjectManagementParams = {
   storySummary: string;
   storyStyleTags: string[];
   storyConflicts: StoryState['conflicts'];
-  refreshStory: () => Promise<void>;
+  refreshStory: (historyLabel?: string, resetHistory?: boolean) => Promise<void>;
   loadStory: (story: StoryState) => void;
   updateStoryMetadata: (
     title: string,
@@ -215,7 +215,7 @@ export function useProjectManagement({
         const response = await api.projects.select(id);
         if (!response.ok) return;
 
-        await refreshStory();
+        await refreshStory(undefined, true);
         const chats = await api.chat.list();
         useChatStore.getState().setChatHistoryList(chats);
         if (chats.length > 0) {

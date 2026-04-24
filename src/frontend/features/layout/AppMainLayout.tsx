@@ -225,6 +225,8 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 onChange={editorControls.updateChapter}
                 suggestionControls={{
                   continuations: suggestionControls.continuations,
+                  suggestionMode: suggestionControls.suggestionMode,
+                  setSuggestionMode: suggestionControls.setSuggestionMode,
                   isSuggesting: suggestionControls.isSuggesting,
                   onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
                   onCancelSuggestion: suggestionControls.handleCancelSuggestions,

@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../layout/ConfirmDialogContext';
 import {
   Image as ImageIcon,
@@ -83,6 +84,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   onInsert,
   onRecordHistory,
 }: ProjectImagesProps) => {
+  const { t } = useTranslation();
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [edits, setEdits] = useState<
@@ -124,7 +126,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
       setImages((res.images || []).map(mapApiImageToEntry));
       setEdits({});
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load images'));
+      setError(getErrorMessage(err, t('Failed to load images')));
     } finally {
       setLoading(false);
     }
@@ -232,7 +234,11 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         },
       });
     } catch (err: unknown) {
-      setError('Failed to save metadata: ' + getErrorMessage(err, 'Unknown error'));
+      setError(
+        t('Failed to save metadata: {{error}}', {
+          error: getErrorMessage(err, t('Unknown error')),
+        })
+      );
     }
   };
 
@@ -289,7 +295,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         className={`w-full max-w-[90vw] max-h-[90vh] flex flex-col rounded-lg shadow-xl ${bgClass} ${textClass} border ${borderClass} relative overflow-hidden`}
         role="button"
         tabIndex={0}
-        aria-label="Project images drop zone"
+        aria-label={t('Project images drop zone')}
         onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -304,9 +310,11 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
           <div className="absolute inset-0 z-50 bg-brand-blue-500/20 backdrop-blur-sm border-4 border-brand-blue-500 border-dashed m-4 rounded-lg flex items-center justify-center pointer-events-none">
             <div className="flex flex-col items-center p-8 bg-white/90 dark:bg-black/80 rounded-xl shadow-2xl animate-bounce">
               <Upload className="w-12 h-12 text-brand-blue-500 mb-2" />
-              <span className="text-xl font-bold text-brand-blue-600">Drop image</span>
+              <span className="text-xl font-bold text-brand-blue-600">
+                {t('Drop image')}
+              </span>
               <span className="text-sm text-brand-blue-400 mt-2">
-                Drop on background for new, on card to replace
+                {t('Drop on background for new, on card to replace')}
               </span>
             </div>
           </div>
@@ -320,13 +328,13 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             className="text-xl font-semibold flex items-center gap-2"
           >
             <ImageIcon className="w-5 h-5" />
-            Project Images
+            {t('Project Images')}
           </h2>
           <button
             onClick={onClose}
             className="p-1 hover:bg-black/10 rounded-full"
-            aria-label="Close image manager"
-            title="Close image manager"
+            aria-label={t('Close image manager')}
+            title={t('Close image manager')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -351,7 +359,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               onClick={() => setShowImageSettings(!showImageSettings)}
             >
               <span className="text-sm font-semibold opacity-80">
-                Project Image Settings
+                {t('Project Image Settings')}
               </span>
               {showImageSettings ? (
                 <ChevronDown className="w-4 h-4 opacity-50" />
@@ -364,12 +372,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               <div className="p-3 pt-0 flex flex-col gap-3">
                 <div>
                   <label className="block text-xs font-medium opacity-70 mb-1">
-                    Global Style (e.g. "watercolor", "charcoal sketch")
+                    {t('Global Style (e.g. "watercolor", "charcoal sketch")')}
                   </label>
                   <input
                     type="text"
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500`}
-                    placeholder="Generic style for all images..."
+                    placeholder={t('Generic style for all images...')}
                     value={imageStyle}
                     onChange={(
                       e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
@@ -378,13 +386,14 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-medium opacity-70 mb-1">
-                    Additional Information (e.g. LoRA triggers, specific negative
-                    prompts)
+                    {t(
+                      'Additional Information (e.g. LoRA triggers, specific negative prompts)'
+                    )}
                   </label>
                   <textarea
                     lang={projectLanguage}
                     className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent outline-none focus:ring-1 ring-brand-blue-500 min-h-[60px] resize-y`}
-                    placeholder="Extra details passed to the prompt generator..."
+                    placeholder={t('Extra details passed to the prompt generator...')}
                     value={imageAdditionalInfo}
                     onChange={(
                       e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
@@ -401,10 +410,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               onClick={handleGenerateAllPrompts}
               disabled={!imageActionsAvailable}
               icon={<Sparkles className="w-4 h-4" />}
-              title="Generate prompts for all placeholders"
+              title={t('Generate prompts for all placeholders')}
               className="whitespace-nowrap"
             >
-              Generate Placeholder Prompts
+              {t('Generate Placeholder Prompts')}
             </Button>
             <Button
               variant="secondary"
@@ -412,7 +421,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               icon={<Plus className="w-4 h-4" />}
               className="whitespace-nowrap"
             >
-              Create Placeholder
+              {t('Create Placeholder')}
             </Button>
             <Button
               variant="primary"
@@ -420,7 +429,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
               icon={<Upload className="w-4 h-4" />}
               className="whitespace-nowrap"
             >
-              Upload New Image
+              {t('Upload New Image')}
             </Button>
           </div>
 
@@ -430,7 +439,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             </div>
           ) : images.length === 0 ? (
             <div className="text-center py-10 opacity-50">
-              No images in this project.
+              {t('No images in this project.')}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -439,7 +448,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                   key={img.filename}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Image card ${img.filename}`}
+                  aria-label={t('Image card {{filename}}', {
+                    filename: img.filename,
+                  })}
                   onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -474,7 +485,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-brand-blue-500/10 backdrop-blur-[1px] rounded-lg pointer-events-none">
                       <div className="bg-white/90 dark:bg-black/90 px-4 py-2 rounded-lg shadow-lg text-brand-blue-600 font-bold flex items-center gap-2">
                         <RefreshCw className="w-5 h-5 animate-spin" />
-                        Replace Image
+                        {t('Replace Image')}
                       </div>
                     </div>
                   )}
@@ -483,7 +494,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       <div className="text-center p-4">
                         <FileImage className="w-12 h-12 mx-auto mb-2 opacity-30" />
                         <span className="text-xs opacity-50 uppercase tracking-widest">
-                          Placeholder
+                          {t('Placeholder')}
                         </span>
                         <div className="text-sm font-medium mt-1">{img.filename}</div>
                       </div>
@@ -492,7 +503,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         type="button"
                         className="w-full h-full cursor-zoom-in"
                         onClick={() => setSelectedImage(img)}
-                        aria-label={`View ${img.filename}`}
+                        aria-label={t('View {{filename}}', {
+                          filename: img.filename,
+                        })}
                       >
                         <img
                           src={img.url!}
@@ -509,7 +522,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           onClick={() => handleUploadClick(img.filename)}
                           icon={<RefreshCw className="w-3 h-3" />}
                         >
-                          Replace
+                          {t('Replace')}
                         </Button>
                       </div>
                     </div>
@@ -530,7 +543,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         <button
                           className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-brand-gray-400 hover:text-red-500 rounded transition-colors"
                           onClick={() => handleDelete(img.filename)}
-                          title="Delete image"
+                          title={t('Delete image')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -538,7 +551,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     </div>
                     <input
                       className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent focus:ring-1 ring-brand-blue-500 outline-none font-bold`}
-                      placeholder="Title"
+                      placeholder={t('Title')}
                       value={
                         edits[img.filename]?.title !== undefined
                           ? edits[img.filename].title
@@ -551,7 +564,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     <textarea
                       lang={projectLanguage}
                       className={`w-full text-sm p-2 rounded border ${borderClass} bg-transparent resize-y min-h-[80px] focus:ring-1 ring-brand-blue-500 outline-none`}
-                      placeholder="Image description..."
+                      placeholder={t('Image description...')}
                       value={
                         edits[img.filename]?.description !== undefined
                           ? edits[img.filename].description
@@ -576,9 +589,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           className="whitespace-nowrap flex-grow sm:flex-grow-0"
                           onClick={() => onInsert(img.filename, img.url, img.title)}
                           icon={<TextCursor className="w-3 h-3" />}
-                          title="Insert at cursor"
+                          title={t('Insert at cursor')}
                         >
-                          Insert
+                          {t('Insert')}
                         </Button>
                       )}
                       <Button
@@ -590,8 +603,8 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         icon={<Wand2 className="w-3 h-3" />}
                       >
                         {img.description
-                          ? 'Update description'
-                          : 'Generate description'}
+                          ? t('Update description')
+                          : t('Generate description')}
                       </Button>
                       <Button
                         size="sm"
@@ -600,9 +613,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         onClick={() => handleCreatePrompt(img)}
                         disabled={!img.description || !imageActionsAvailable}
                         icon={<Sparkles className="w-3 h-3" />}
-                        title="Create image generation prompt"
+                        title={t('Create image generation prompt')}
                       >
-                        Create prompt
+                        {t('Create prompt')}
                       </Button>
 
                       {edits[img.filename] &&
@@ -615,7 +628,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                             onClick={() => handleSaveMetadata(img.filename)}
                             icon={<Save className="w-3 h-3" />}
                           >
-                            Save
+                            {t('Save')}
                           </Button>
                         )}
                     </div>
@@ -644,7 +657,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
           <button
             className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-50 p-2"
             onClick={() => setSelectedImage(null)}
-            aria-label="Close image preview"
+            aria-label={t('Close image preview')}
           >
             <X size={32} />
           </button>
@@ -654,7 +667,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             className="relative max-w-full max-h-full flex flex-col items-center justify-center"
             role="dialog"
             aria-modal="true"
-            aria-label={`Preview of ${selectedImage.filename}`}
+            aria-label={t('Preview of {{filename}}', {
+              filename: selectedImage.filename,
+            })}
             onClick={(e: React.MouseEvent<HTMLDivElement, MouseEvent>) =>
               e.stopPropagation()
             }
@@ -702,7 +717,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                 className="font-semibold flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4 text-brand-purple-500" />
-                Generated Prompt
+                {t('Generated Prompt')}
               </h3>
               <button
                 onClick={() => setPromptPopup({ ...promptPopup, isOpen: false })}
@@ -719,12 +734,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                   readOnly
                   className={`w-full flex-1 p-3 text-sm rounded border ${borderClass} bg-black/5 dark:bg-white/5 resize-none focus:outline-none font-mono tracking-tight`}
                   value={promptPopup.content}
-                  placeholder="Generating..."
+                  placeholder={t('Generating...')}
                 />
                 {promptPopup.loading && (
                   <div className="absolute bottom-2 right-2 text-xs text-brand-purple-500 flex items-center gap-1 bg-white/90 dark:bg-black/80 px-2 py-1.5 rounded-full shadow-sm border border-brand-purple-200">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Generating...
+                    {t('Generating...')}
                   </div>
                 )}
               </div>
@@ -746,7 +761,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                   }}
                   disabled={!promptPopup.content}
                 >
-                  {copied ? 'Copied!' : 'Copy to Clipboard'}
+                  {copied ? t('Copied!') : t('Copy to Clipboard')}
                 </Button>
               </div>
             </div>

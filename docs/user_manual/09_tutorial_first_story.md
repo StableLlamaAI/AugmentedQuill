@@ -86,7 +86,9 @@ As you write, you might hit a wall. Let's say you need to describe the antagonis
 
 1. Click the **Rewrite** (<img src="assets/file-pen.svg" alt="File Edit icon" width="16" height="16" style="vertical-align:text-bottom;" />) button in the header to have the AI regenerate the entire chapter body with better prose. This is a great "reset" option early in the writing process.
 2. To extend the chapter with a new scene, click **Extend** (<img src="assets/wand.svg" alt="Wand icon" width="16" height="16" style="vertical-align:text-bottom;" />) and the AI will continue writing from where you left off.
-3. For smaller suggestions at the paragraph level, click **Suggest next paragraph** at the bottom of the editor.<br><br>The suggestion cards appear — click any card to insert that text, or press `Escape` to dismiss.
+3. For smaller suggestions at the paragraph level, click **Suggest next paragraph** at the bottom of the editor. Use the mode selector on the right: choose **Guided** for stronger context-guided continuation, **Instructed** for explicit next-paragraph continuation, or **Pure** for continuation from only the current chapter text.
+
+The suggestion cards appear — click any card to insert that text, or press `Escape` to dismiss.
 
 **Using Chat:**
 

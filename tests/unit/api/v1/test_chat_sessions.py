@@ -64,6 +64,9 @@ class TestChatSessionsApi(ApiTestCase):
         chat_payload = {
             "name": "API Test Chat",
             "messages": [{"role": "user", "content": "Hello API"}],
+            "systemPrompt": "Saved system prompt",
+            "allowWebSearch": True,
+            "scratchpad": "Persistent scratchpad",
         }
 
         # POST /api/v1/chats/{id}
@@ -83,6 +86,9 @@ class TestChatSessionsApi(ApiTestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["name"], "API Test Chat")
+        self.assertEqual(data["systemPrompt"], "Saved system prompt")
+        self.assertTrue(data["allowWebSearch"])
+        self.assertEqual(data["scratchpad"], "Persistent scratchpad")
 
         # DELETE /api/v1/chats/{id}
         resp = self.client.delete(f"/api/v1/chats/{chat_id}")

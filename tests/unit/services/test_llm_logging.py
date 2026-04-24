@@ -142,7 +142,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             "id": "fixed-id",
             "caller_id": "api.chat.stream",
             "timestamp_start": "2026-01-01T00:00:00",
-            "timestamp_end": None,
+            "timestamp_end": "2026-01-01T00:00:01",
             "request": {
                 "url": "https://example.com",
                 "method": "GET",
@@ -173,7 +173,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             "id": "stream-id",
             "caller_id": "chat_tools.call_writing_llm",
             "timestamp_start": "2026-01-01T00:00:00",
-            "timestamp_end": None,
+            "timestamp_end": "2026-01-01T00:00:01",
             "request": {
                 "url": "https://example.com",
                 "method": "POST",
@@ -222,7 +222,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             "id": "stream-id-3",
             "caller_id": "chat_tools.call_writing_llm",
             "timestamp_start": "2026-01-01T00:00:00",
-            "timestamp_end": None,
+            "timestamp_end": "2026-01-01T00:00:01",
             "request": {
                 "url": "https://example.com",
                 "method": "POST",
@@ -287,7 +287,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             "id": "stream-id-4",
             "caller_id": "api.chat.stream",
             "timestamp_start": "2026-01-01T00:00:00",
-            "timestamp_end": None,
+            "timestamp_end": "2026-01-01T00:00:01",
             "request": {
                 "url": "https://example.com",
                 "method": "POST",
@@ -334,7 +334,7 @@ class LlmLoggingTest(IsolatedAsyncioTestCase):
             "id": "stream-id-2",
             "caller_id": "chat_tools.call_writing_llm",
             "timestamp_start": "2026-01-01T00:00:00",
-            "timestamp_end": None,
+            "timestamp_end": "2026-01-01T00:00:01",
             "request": {
                 "url": "https://example.com",
                 "method": "POST",

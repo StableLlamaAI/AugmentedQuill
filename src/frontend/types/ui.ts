@@ -11,6 +11,8 @@
 
 export type ViewMode = 'raw' | 'markdown' | 'wysiwyg';
 
+export type SuggestionGenerationMode = 'guided' | 'instructed' | 'pure';
+
 export type AppTheme = 'light' | 'mixed' | 'dark';
 
 export interface SidebarSettings {
@@ -55,6 +57,10 @@ export interface LLMConfig {
   writingWarning?: string | null;
   isMultimodal?: boolean | null;
   supportsFunctionCalling?: boolean | null;
+  suggestLoopGuardEnabled?: boolean;
+  suggestLoopGuardNgram?: 3 | 4;
+  suggestLoopGuardMinRepeats?: number;
+  suggestLoopGuardMaxRegens?: number;
   prompts: {
     system: string;
     continuation: string;
@@ -81,6 +87,10 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   minP: undefined,
   extraBody: '',
   presetId: null,
+  suggestLoopGuardEnabled: true,
+  suggestLoopGuardNgram: 3,
+  suggestLoopGuardMinRepeats: 3,
+  suggestLoopGuardMaxRegens: 1,
   prompts: { system: '', continuation: '', summary: '' },
 };
 

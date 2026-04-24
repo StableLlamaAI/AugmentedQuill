@@ -35,12 +35,12 @@ const createAssistantMessage = (
 type ToolLoopChoice = 'stop' | 'continue' | 'unlimited';
 
 type UseChatExecutionParams = {
-  systemPrompt: string;
   activeChatConfig: LLMConfig;
   isChatAvailable: boolean;
-  allowWebSearch: boolean;
+  getSystemPrompt: () => string;
+  getAllowWebSearch: () => boolean;
+  getCurrentChatId: () => string | null;
   currentChapterId: string | null;
-  currentChatId: string | null;
   currentChapter?: { id: string; title: string } | null;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
@@ -56,12 +56,12 @@ type UseChatExecutionParams = {
 
 /** Custom React hook that manages chat execution. */
 export function useChatExecution({
-  systemPrompt,
   activeChatConfig,
   isChatAvailable,
-  allowWebSearch,
+  getSystemPrompt,
+  getAllowWebSearch,
+  getCurrentChatId,
   currentChapterId,
-  currentChatId,
   currentChapter,
   refreshProjects,
   refreshStory,
@@ -78,16 +78,14 @@ export function useChatExecution({
   // every per-token chatMessages change.
   const { setChatMessages, setIsChatLoading } = useChatStore.getState();
   const stopSignalRef = useRef(false);
-  const pendingMessageUpdatesRef = useRef<Record<string, Partial<ChatMessage>>>({});
-  const updateFlushFrameRef = useRef<number | null>(null);
 
   const executeChatRequest = useCallback(
     buildExecuteChatRequest({
-      systemPrompt,
+      getSystemPrompt,
       activeChatConfig,
-      allowWebSearch,
+      getAllowWebSearch,
       currentChapterId,
-      currentChatId,
+      getCurrentChatId,
       currentChapter,
       onProseChunk,
       refreshProjects,
@@ -98,16 +96,11 @@ export function useChatExecution({
       setChatMessages,
       setIsChatLoading,
       stopSignalRef,
-      pendingMessageUpdatesRef,
-      updateFlushFrameRef,
       createAssistantMessage,
     }),
     [
-      systemPrompt,
       activeChatConfig,
-      allowWebSearch,
       currentChapterId,
-      currentChatId,
       currentChapter,
       onProseChunk,
       refreshProjects,
@@ -118,9 +111,10 @@ export function useChatExecution({
       setChatMessages,
       setIsChatLoading,
       stopSignalRef,
-      pendingMessageUpdatesRef,
-      updateFlushFrameRef,
       createAssistantMessage,
+      getSystemPrompt,
+      getAllowWebSearch,
+      getCurrentChatId,
     ]
   );
 
@@ -137,7 +131,7 @@ export function useChatExecution({
   const handleSendMessageImpl = async (
     text: string,
     attachments?: ChatAttachment[]
-  ) => {
+  ): Promise<void> => {
     if (!isChatAvailable) return;
     const userMsgId = uuidv4();
     const historyBefore = [...useChatStore.getState().chatMessages];
@@ -160,12 +154,12 @@ export function useChatExecution({
     await executeChatRequest(text, historyWithContext, attachments, userMsgId);
   };
 
-  const handleStopChatImpl = () => {
+  const handleStopChatImpl = (): void => {
     stopSignalRef.current = true;
     useChatStore.getState().setIsChatLoading(false);
   };
 
-  const handleRegenerateImpl = async () => {
+  const handleRegenerateImpl = async (): Promise<void> => {
     if (!isChatAvailable) return;
     const chatMessages = useChatStore.getState().chatMessages;
 
@@ -198,12 +192,15 @@ export function useChatExecution({
   // Stable wrappers: identity never changes, so chatControls/useMemo deps that
   // capture these functions don't invalidate on every debounced keystroke.
   const handleSendMessage = useCallback(
-    (text: string, attachments?: ChatAttachment[]) =>
+    (text: string, attachments?: ChatAttachment[]): Promise<void> =>
       handleSendMessageImplRef.current(text, attachments),
     []
   );
-  const handleStopChat = useCallback(() => handleStopChatImplRef.current(), []);
-  const handleRegenerate = useCallback(() => handleRegenerateImplRef.current(), []);
+  const handleStopChat = useCallback((): void => handleStopChatImplRef.current(), []);
+  const handleRegenerate = useCallback(
+    (): Promise<void> => handleRegenerateImplRef.current(),
+    []
+  );
 
   return {
     handleSendMessage,

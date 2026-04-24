@@ -11,6 +11,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 // @ts-ignore
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -326,12 +327,17 @@ export const hasUnsupportedSummaryMarkdown = (text: string): boolean => {
   return false;
 };
 
-export const SummaryWarning: React.FC = () => (
-  <div
-    className="inline-flex items-center space-x-1 text-brand-500 bg-brand-950/30 px-2 py-1 rounded text-[10px] border border-brand-500/20 ml-2"
-    title="Summaries should mostly use Bold and Italic. Other formatting might distract."
-  >
-    <AlertTriangle size={10} />
-    <span>Complex formatting detected</span>
-  </div>
-);
+export const SummaryWarning: React.FC = () => {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="inline-flex items-center space-x-1 text-brand-500 bg-brand-950/30 px-2 py-1 rounded text-[10px] border border-brand-500/20 ml-2"
+      title={t(
+        'Summaries should mostly use Bold and Italic. Other formatting might distract.'
+      )}
+    >
+      <AlertTriangle size={10} />
+      <span>{t('Complex formatting detected')}</span>
+    </div>
+  );
+};

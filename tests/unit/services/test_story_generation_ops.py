@@ -214,3 +214,96 @@ async def test_generate_chapter_summary_discard_clears_existing_summary_before_l
     assert result["summary"] == "New chapter summary"
     final_story = load_story_config(story_path)
     assert final_story.get("chapters", [])[0].get("summary") == "New chapter summary"
+
+
+def test_prepare_ai_action_chapter_rewrite_uses_imposed_heading_prefix():
+    ok, msg = select_project("rewrite_heading_prefix")
+    assert ok, msg
+
+    project_dir = get_active_project_dir()
+    assert project_dir is not None
+
+    story_path = project_dir / "story.json"
+    story = load_story_config(story_path)
+    story["project_type"] = "novel"
+    story["chapters"] = [
+        {
+            "title": "My chapter title",
+            "summary": "Chapter summary",
+            "filename": "0001.txt",
+        }
+    ]
+    save_story_config(story_path, story)
+
+    chapters_dir = project_dir / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    (chapters_dir / "0001.txt").write_text(
+        "Existing chapter content.", encoding="utf-8"
+    )
+
+    prepared = prepare_ai_action_generation(
+        {
+            "target": "chapter",
+            "action": "rewrite",
+            "chap_id": 1,
+            "scope": "chapter",
+            "current_text": "This text should be ignored for rewrite.",
+        }
+    )
+
+    assert prepared["existing_content"] == "This text should be ignored for rewrite."
+    assert prepared["response_prefill"] == "# My chapter title\n\n"
+    assert prepared["extra_body"] == {
+        "chat_template_kwargs": {
+            "continue_final_message": True,
+            "enable_thinking": False,
+        }
+    }
+
+
+def test_prepare_ai_action_chapter_extend_prefills_full_draft_with_heading():
+    ok, msg = select_project("extend_full_prefill")
+    assert ok, msg
+
+    project_dir = get_active_project_dir()
+    assert project_dir is not None
+
+    story_path = project_dir / "story.json"
+    story = load_story_config(story_path)
+    story["project_type"] = "novel"
+    story["chapters"] = [
+        {
+            "title": "My chapter title",
+            "summary": "Chapter summary",
+            "filename": "0001.txt",
+        }
+    ]
+    save_story_config(story_path, story)
+
+    chapters_dir = project_dir / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    (chapters_dir / "0001.txt").write_text(
+        "Existing chapter content.", encoding="utf-8"
+    )
+
+    prepared = prepare_ai_action_generation(
+        {
+            "target": "chapter",
+            "action": "extend",
+            "chap_id": 1,
+            "scope": "chapter",
+            "current_text": "Existing chapter content.",
+        }
+    )
+
+    assert prepared["existing_content"] == "Existing chapter content."
+    assert (
+        prepared["response_prefill"]
+        == "# My chapter title\n\nExisting chapter content."
+    )
+    assert prepared["extra_body"] == {
+        "chat_template_kwargs": {
+            "continue_final_message": True,
+            "enable_thinking": False,
+        }
+    }

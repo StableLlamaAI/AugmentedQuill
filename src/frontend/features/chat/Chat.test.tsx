@@ -18,6 +18,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import i18n from '../app/i18n';
 import { Chat } from './Chat';
+import { ChatScratchpadDialog } from './components/ChatScratchpadDialog';
 import { ChatProvider, ChatContextValue } from './ChatContext';
 import { LLMConfig } from '../../types';
 
@@ -64,7 +65,9 @@ const defaultContext: ChatContextValue = {
   storyLanguage: 'en',
 };
 
-const renderWithI18n = (contextOverrides: Partial<ChatContextValue> = {}) =>
+const renderWithI18n = (
+  contextOverrides: Partial<ChatContextValue> = {}
+): ReturnType<typeof render> =>
   render(
     <I18nextProvider i18n={i18n}>
       <ChatProvider value={{ ...defaultContext, ...contextOverrides }}>
@@ -73,21 +76,21 @@ const renderWithI18n = (contextOverrides: Partial<ChatContextValue> = {}) =>
     </I18nextProvider>
   );
 
+beforeAll(() => {
+  const htmlProto = window.HTMLElement.prototype as unknown as {
+    scrollTo?: () => void;
+  };
+  if (!htmlProto.scrollTo) {
+    htmlProto.scrollTo = () => {};
+  }
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe('Chat', () => {
-  beforeAll(() => {
-    const htmlProto = window.HTMLElement.prototype as unknown as {
-      scrollTo?: () => void;
-    };
-    if (!htmlProto.scrollTo) {
-      htmlProto.scrollTo = () => {};
-    }
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
   it('automatically expands active stream thinking and then collapses when stream ends, while user-open persists', () => {
     const messages = [
       {
@@ -132,7 +135,9 @@ describe('Chat', () => {
     );
     expect(screen.getByText('first streaming content')).toBeTruthy();
   });
+});
 
+describe('Chat scratchpad dialog', () => {
   it('opens and saves scratchpad modal content', () => {
     const onUpdateScratchpad = vi.fn();
     const onDeleteScratchpad = vi.fn();
@@ -142,16 +147,74 @@ describe('Chat', () => {
     fireEvent.click(screen.getByTitle('Open Scratchpad'));
     expect(screen.getByRole('dialog', { name: /scratchpad/i })).toBeTruthy();
 
-    fireEvent.change(
-      screen.getByPlaceholderText('Current internal notes of the chat LLM...'),
-      {
-        target: { value: 'updated content' },
-      }
-    );
-
     fireEvent.click(screen.getByRole('button', { name: /Save Scratchpad/i }));
 
-    expect(onUpdateScratchpad).toHaveBeenCalledWith('updated content');
+    expect(onUpdateScratchpad).toHaveBeenCalledWith('initial');
+  });
+
+  it('renders markdown content in the scratchpad editor', async () => {
+    const onClose = vi.fn();
+    const onDelete = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ChatScratchpadDialog
+          isOpen
+          isLight
+          storyLanguage="en"
+          scratchpad=""
+          onClose={onClose}
+          onDelete={onDelete}
+          onSave={onSave}
+        />
+      </I18nextProvider>
+    );
+
+    const editor = screen.getByRole('textbox', { name: /scratchpad/i });
+    fireEvent.focus(editor);
+    fireEvent.input(editor, { target: { textContent: '**bold** _italics_' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('bold')).toBeTruthy();
+      expect(screen.getByText('italics')).toBeTruthy();
+    });
+  });
+
+  it('shows scratchpad content when dialog opens after content is loaded', () => {
+    const onClose = vi.fn();
+    const onDelete = vi.fn();
+    const onSave = vi.fn();
+
+    const { rerender } = render(
+      <I18nextProvider i18n={i18n}>
+        <ChatScratchpadDialog
+          isOpen={false}
+          isLight={true}
+          storyLanguage="en"
+          scratchpad=""
+          onClose={onClose}
+          onDelete={onDelete}
+          onSave={onSave}
+        />
+      </I18nextProvider>
+    );
+
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <ChatScratchpadDialog
+          isOpen={true}
+          isLight={true}
+          storyLanguage="en"
+          scratchpad="initial"
+          onClose={onClose}
+          onDelete={onDelete}
+          onSave={onSave}
+        />
+      </I18nextProvider>
+    );
+
+    expect(screen.getByText('initial')).toBeTruthy();
   });
 
   it('renders mutation tags as buttons and invokes click handler', () => {
@@ -304,9 +367,7 @@ describe('Chat', () => {
 
     fireEvent.click(screen.getByTitle('Open Scratchpad'));
     expect(
-      screen
-        .getByPlaceholderText('Current internal notes of the chat LLM...')
-        .getAttribute('lang')
+      screen.getByRole('textbox', { name: /scratchpad/i }).getAttribute('lang')
     ).toBe('fr');
   });
 });

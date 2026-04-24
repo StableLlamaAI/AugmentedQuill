@@ -69,6 +69,10 @@ class ChatDetailResponse(BaseModel):
     id: str
     name: Optional[str] = None
     messages: Optional[list[Any]] = None
+    systemPrompt: Optional[str] = None
+    allowWebSearch: Optional[bool] = None
+    scratchpad: Optional[str] = None
+    editing_scratchpad: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { LLMConfig, AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { useClickOutside } from '../../utils/hooks';
@@ -41,6 +42,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',
 }: ModelSelectorProps) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isLight } = useThemeClasses();
@@ -97,7 +99,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </label>
         {activeOption &&
           hasCapability(activeOption, 'isMultimodal', 'is_multimodal') && (
-            <Eye size={8} className={labelColorClass} aria-label="Multimodal" />
+            <Eye size={8} className={labelColorClass} aria-label={t('Multimodal')} />
           )}
         {activeOption &&
           hasCapability(
@@ -105,7 +107,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             'supportsFunctionCalling',
             'supports_function_calling'
           ) && (
-            <Wand2 size={8} className={labelColorClass} aria-label="Function Calling" />
+            <Wand2
+              size={8}
+              className={labelColorClass}
+              aria-label={t('Function Calling')}
+            />
           )}
         {label === 'Writing' && activeOption?.writingWarning && (
           <AlertTriangle
@@ -126,10 +132,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             ? 'text-brand-gray-600 hover:text-brand-gray-900'
             : 'text-brand-gray-300 hover:text-brand-gray-100'
         }`}
-        title={`Selected: ${activeOption?.name}`}
+        title={t('Selected: {{name}}', { name: activeOption?.name ?? '' })}
       >
         {getStatusIcon(value)}
-        <span className="truncate ml-1">{activeOption?.name || 'Select...'}</span>
+        <span className="truncate ml-1">{activeOption?.name || t('Select...')}</span>
       </button>
 
       {isOpen && (
@@ -166,7 +172,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <div className="flex items-center space-x-1 mt-0.5">
                   {hasCapability(opt, 'isMultimodal', 'is_multimodal') && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
-                      <Eye size={8} className="mr-0.5" /> Vision
+                      <Eye size={8} className="mr-0.5" /> {t('Vision')}
                     </span>
                   )}
                   {hasCapability(
@@ -175,7 +181,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     'supports_function_calling'
                   ) && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
-                      <Wand2 size={8} className="mr-0.5" /> Fn
+                      <Wand2 size={8} className="mr-0.5" /> {t('Fn')}
                     </span>
                   )}
                   {label === 'Writing' && opt.writingWarning && (
@@ -183,7 +189,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       className="flex items-center text-[9px] text-amber-500"
                       title={opt.writingWarning}
                     >
-                      <AlertTriangle size={8} className="mr-0.5" /> Warn
+                      <AlertTriangle size={8} className="mr-0.5" /> {t('Warn')}
                     </span>
                   )}
                 </div>

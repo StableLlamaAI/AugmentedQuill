@@ -9,12 +9,12 @@
  * Defines the debug unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { DebugLogEntry } from '../apiTypes';
+import { DebugLogsResponse } from '../apiTypes';
 import { fetchJson, deleteJson } from './shared';
 
 export const debugApi = {
   getLogs: async () => {
-    return fetchJson<DebugLogEntry[]>(
+    return fetchJson<DebugLogsResponse>(
       '/debug/llm_logs?_t=' + Date.now(),
       undefined,
       'Failed to fetch debug logs'

@@ -11,6 +11,7 @@
 
 import React, { useRef } from 'react';
 import { Ghost, Trash2, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ChatSession } from '../../../types';
 import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
@@ -39,12 +40,13 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
 }: ChatHistoryPanelProps) => {
   const { isLight } = useTheme();
   const confirm = useConfirm();
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(true, panelRef, onClose);
 
   const reason =
     disabledReason ||
-    'Chat is unavailable because no working CHAT model is configured.';
+    t('Chat is unavailable because no working CHAT model is configured.');
 
   return (
     <div
@@ -65,7 +67,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
             id="chat-history-title"
             className="text-xs font-bold uppercase tracking-wider text-brand-gray-500"
           >
-            Recent Chats
+            {t('Recent Chats')}
           </h3>
           {sessions.length > 0 && onDeleteAllSessions && (
             <button
@@ -74,16 +76,16 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 onDeleteAllSessions();
               }}
               className="text-[10px] text-red-500 hover:text-red-600 font-bold uppercase hover:underline ml-2"
-              title={isDisabled ? reason : 'Delete all chat sessions'}
+              title={isDisabled ? reason : t('Delete all chat sessions')}
               disabled={isDisabled}
             >
-              Clear All
+              {t('Clear All')}
             </button>
           )}
         </div>
         <button
           onClick={onClose}
-          aria-label="Close chat history panel"
+          aria-label={t('Close chat history panel')}
           className="text-brand-gray-500 hover:text-brand-gray-700"
         >
           <X size={14} />
@@ -92,7 +94,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
       <div className="space-y-1">
         {sessions.length === 0 && (
           <div className="text-xs text-brand-gray-500 py-2 italic">
-            No saved chats yet.
+            {t('No saved chats yet.')}
           </div>
         )}
         {sessions.map((session: ChatSession) => {
@@ -135,22 +137,22 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 </div>
                 <span className="text-[10px] text-brand-gray-500">
                   {isSIncognito
-                    ? 'Not saved to disk'
+                    ? t('Not saved to disk')
                     : session.updated_at
                       ? new Date(session.updated_at).toLocaleString()
-                      : 'Unknown date'}
+                      : t('Unknown date')}
                 </span>
               </button>
               <button
                 onClick={async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   e.stopPropagation();
                   if (isDisabled) return;
-                  if (await confirm('Delete this chat?')) {
+                  if (await confirm(t('Delete this chat?'))) {
                     onDeleteSession(session.id);
                   }
                 }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 hover:text-red-600 transition-all"
-                title={isDisabled ? reason : 'Delete this chat'}
+                title={isDisabled ? reason : t('Delete this chat')}
                 disabled={isDisabled}
               >
                 <Trash2 size={14} />

@@ -11,6 +11,7 @@
 
 import React, { useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../layout/useFocusTrap';
 
 import { AppTheme } from '../../types';
@@ -30,6 +31,7 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
   theme,
   onResolve,
 }: ToolCallLimitDialogProps) => {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(isOpen, dialogRef, () => onResolve('stop'));
 
@@ -56,35 +58,34 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
         <div className="flex items-center gap-3 mb-4 text-amber-500">
           <RefreshCw className="w-6 h-6 animate-spin-slow" />
           <h3 id="toolcall-dialog-title" className="text-xl font-bold">
-            Tool Call Limit
+            {t('Tool Call Limit')}
           </h3>
         </div>
         <p className="mb-6 opacity-90">
-          The AI has executed <strong>{count}</strong> tool calls in a row.
-          <br />
-          <br />
-          Frequent automated actions can consume tokens quickly. How would you like to
-          proceed?
+          {t(
+            'The AI has executed {{count}} tool calls in a row. Frequent automated actions can consume tokens quickly. How would you like to proceed?',
+            { count }
+          )}
         </p>
         <div className="flex flex-col gap-2">
           <button
             onClick={() => onResolve('continue')}
             className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors shadow-sm"
           >
-            Continue (+10 calls)
+            {t('Continue (+10 calls)')}
           </button>
           <button
             onClick={() => onResolve('unlimited')}
             className="w-full py-2.5 px-4 bg-brand-gray-200 dark:bg-brand-gray-800 hover:bg-brand-gray-300 dark:hover:bg-brand-gray-700 rounded-md font-medium transition-colors"
           >
-            Continue without limit
+            {t('Continue without limit')}
           </button>
           <div className="mt-2 pt-2 border-t border-brand-gray-100 dark:border-brand-gray-800">
             <button
               onClick={() => onResolve('stop')}
               className="w-full py-2.5 px-4 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md font-medium transition-colors"
             >
-              Stop and review
+              {t('Stop and review')}
             </button>
           </div>
         </div>

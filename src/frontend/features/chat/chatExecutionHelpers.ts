@@ -15,7 +15,8 @@ import type { MutableRefObject } from 'react';
 
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
-import type { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
+import { useChatStore } from '../../stores/chatStore';
+import type { ChatAttachment, ChatMessage, ChatSession, LLMConfig } from '../../types';
 import type {
   ChatToolExecutionResponse,
   ChatToolFunctionCall,
@@ -30,11 +31,11 @@ export type ChatToolMutationPayload = ChatToolExecutionResponse & {
 };
 
 export type ExecuteChatRequestContext = {
-  systemPrompt: string;
+  getSystemPrompt: () => string;
   activeChatConfig: LLMConfig;
-  allowWebSearch: boolean;
+  getAllowWebSearch: () => boolean;
   currentChapterId: string | null;
-  currentChatId: string | null;
+  getCurrentChatId: () => string | null;
   currentChapter?: { id: string; title: string } | null;
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
   refreshProjects: () => Promise<void>;
@@ -54,8 +55,6 @@ export type ExecuteChatRequestContext = {
   ) => void;
   setIsChatLoading: (v: boolean) => void;
   stopSignalRef: MutableRefObject<boolean>;
-  pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>;
-  updateFlushFrameRef: MutableRefObject<number | null>;
   createAssistantMessage: (
     id: string,
     result: {
@@ -87,7 +86,7 @@ export const upsertChatMessage = (
   ensureUniqueMessagesFn: (messages: ChatMessage[]) => ChatMessage[],
   msgId: string,
   messageUpdate: Partial<ChatMessage>
-) => {
+): void => {
   setChatMessages((prev: ChatMessage[]) => {
     const messageIndex = prev.findIndex((item: ChatMessage) => item.id === msgId);
     if (messageIndex !== -1) {
@@ -112,58 +111,6 @@ export const upsertChatMessage = (
         ...messageUpdate,
       } as ChatMessage,
     ]);
-  });
-};
-
-export const flushPendingMessageUpdates = (
-  pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>,
-  updateFlushFrameRef: MutableRefObject<number | null>,
-  setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
-) => {
-  if (updateFlushFrameRef.current !== null) {
-    cancelAnimationFrame(updateFlushFrameRef.current);
-    updateFlushFrameRef.current = null;
-  }
-
-  const updates = pendingMessageUpdatesRef.current;
-  const updateEntries = Object.entries(updates);
-  if (updateEntries.length === 0) return;
-
-  pendingMessageUpdatesRef.current = {};
-
-  setChatMessages((prev: ChatMessage[]) => {
-    const next = [...prev];
-    const messageIndexById = new Map<string, number>();
-
-    next.forEach((message: ChatMessage, index: number) => {
-      messageIndexById.set(message.id, index);
-    });
-
-    for (const [messageId, messageUpdate] of updateEntries) {
-      const existingIndex = messageIndexById.get(messageId);
-
-      if (existingIndex !== undefined) {
-        const existing = next[existingIndex];
-        next[existingIndex] = {
-          ...existing,
-          ...messageUpdate,
-          text: messageUpdate.text ?? existing.text,
-          thinking: messageUpdate.thinking ?? existing.thinking,
-          traceback: messageUpdate.traceback ?? existing.traceback,
-        } as ChatMessage;
-      } else {
-        next.push({
-          id: messageId,
-          role: 'model',
-          text: messageUpdate.text ?? '',
-          thinking: messageUpdate.thinking ?? '',
-          traceback: messageUpdate.traceback ?? '',
-          ...messageUpdate,
-        } as ChatMessage);
-      }
-    }
-
-    return next;
   });
 };
 
@@ -203,7 +150,11 @@ export const buildChapterContextMessage = (
 const parseToolCallResults = (
   messages: Array<{ content: string; tool_call_id: string; name: string }>,
   assistantMessage: ChatMessage
-) => {
+): Array<{
+  name: string;
+  args: Record<string, unknown>;
+  result: Record<string, unknown>;
+}> => {
   const callResults: Array<{
     name: string;
     args: Record<string, unknown>;
@@ -233,30 +184,17 @@ const parseToolCallResults = (
   return callResults;
 };
 
-const makeMessageUpdater =
+export const makeMessageUpdater =
   (
-    pendingMessageUpdatesRef: MutableRefObject<Record<string, Partial<ChatMessage>>>,
-    updateFlushFrameRef: MutableRefObject<number | null>,
-    flushPendingMessageUpdatesFn: () => void
-  ) =>
+    setChatMessages: (
+      v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
+    ) => void
+  ): ((
+    msgId: string
+  ) => (update: { text?: string; thinking?: string; traceback?: string }) => void) =>
   (msgId: string) =>
   (update: { text?: string; thinking?: string; traceback?: string }) => {
-    if (pendingMessageUpdatesRef.current === null) return;
-
-    const existingUpdate = pendingMessageUpdatesRef.current[msgId] || {};
-    pendingMessageUpdatesRef.current[msgId] = {
-      ...existingUpdate,
-      ...update,
-      text: update.text ?? existingUpdate.text,
-      thinking: update.thinking ?? existingUpdate.thinking,
-      traceback: update.traceback ?? existingUpdate.traceback,
-    };
-
-    if (updateFlushFrameRef.current !== null) return;
-    updateFlushFrameRef.current = requestAnimationFrame(() => {
-      updateFlushFrameRef.current = null;
-      flushPendingMessageUpdatesFn();
-    });
+    upsertChatMessage(setChatMessages, ensureUniqueMessages, msgId, update);
   };
 
 const normalizeFunctionCalls = (
@@ -278,7 +216,22 @@ const buildToolPayload = (
   currentHistory: ChatMessage[],
   currentChapterId: string | null,
   currentChatId: string | null
-) => ({
+): {
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string | null;
+    tool_calls?: Array<{
+      id: string;
+      type: 'function';
+      function: {
+        name: string;
+        arguments: string;
+      };
+    }>;
+  }>;
+  active_chapter_id?: number;
+  chat_id?: string;
+} => ({
   messages: currentHistory.map((message: ChatMessage) => ({
     role: (message.role === 'model' ? 'assistant' : message.role) as
       | 'user'
@@ -304,6 +257,64 @@ const buildToolPayload = (
   chat_id: currentChatId || undefined,
 });
 
+const extractScratchpadContent = (
+  args: Record<string, unknown> | string | undefined,
+  result?: Record<string, unknown>
+): string | undefined => {
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args);
+      if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+        const content = (parsed as Record<string, unknown>).content;
+        return typeof content === 'string' ? content : undefined;
+      }
+    } catch {
+      // Fall back to the raw string if it looks like actual content.
+      return args;
+    }
+    return args;
+  }
+
+  if (args) {
+    if (typeof args.content === 'string') return args.content;
+    if (typeof args.raw === 'string') {
+      try {
+        const parsed = JSON.parse(args.raw);
+        if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+          const content = (parsed as Record<string, unknown>).content;
+          return typeof content === 'string' ? content : undefined;
+        }
+      } catch {
+        return args.raw;
+      }
+      return args.raw;
+    }
+  }
+
+  if (result && typeof result.content === 'string') return result.content;
+  return undefined;
+};
+
+export const applyScratchpadToolResult = (
+  args: Record<string, unknown> | string | undefined,
+  result?: Record<string, unknown>
+): void => {
+  const content = extractScratchpadContent(args, result);
+  if (!content) return;
+
+  const { setScratchpad, isIncognito, currentChatId, setIncognitoSessions } =
+    useChatStore.getState();
+  setScratchpad(content);
+
+  if (isIncognito && currentChatId) {
+    setIncognitoSessions((prev: ChatSession[]) =>
+      prev.map((session: ChatSession) =>
+        session.id === currentChatId ? { ...session, scratchpad: content } : session
+      )
+    );
+  }
+};
+
 const handleToolResponse = async (
   context: ExecuteChatRequestContext,
   toolResponse: ChatToolExecutionResponse,
@@ -315,7 +326,11 @@ const handleToolResponse = async (
     label: string;
     operation_count?: number;
   }>
-) => {
+): Promise<{
+  currentHistory: ChatMessage[];
+  currentMsgId: string;
+  result: UnifiedChatResult;
+} | null> => {
   const callResults = parseToolCallResults(
     toolResponse.appended_messages,
     assistantMessage
@@ -332,6 +347,12 @@ const handleToolResponse = async (
   }
 
   context.setChatMessages(ensureUniqueMessages([...currentHistory]));
+
+  for (const callResult of callResults) {
+    if (callResult.name === 'write_scratchpad') {
+      applyScratchpadToolResult(callResult.args, callResult.result);
+    }
+  }
 
   if (toolResponse.mutations?.story_changed) {
     await context.refreshProjects();
@@ -359,12 +380,12 @@ const handleToolResponse = async (
   }
 
   const nextSession = createChatSession(
-    context.systemPrompt,
+    context.getSystemPrompt(),
     currentHistory,
     context.activeChatConfig,
     'CHAT',
     {
-      allowWebSearch: context.allowWebSearch,
+      allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
     }
   );
@@ -372,16 +393,7 @@ const handleToolResponse = async (
   const nextMsgId = uuidv4();
   const nextResult = await nextSession.sendMessage(
     { message: '' },
-    makeMessageUpdater(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      () =>
-        flushPendingMessageUpdates(
-          context.pendingMessageUpdatesRef,
-          context.updateFlushFrameRef,
-          context.setChatMessages
-        )
-    )(nextMsgId)
+    makeMessageUpdater(context.setChatMessages)(nextMsgId)
   );
 
   return {
@@ -412,7 +424,11 @@ const runToolCallLoop = async (
     label: string;
     operation_count?: number;
   }>
-) => {
+): Promise<{
+  currentHistory: ChatMessage[];
+  currentMsgId: string;
+  result: UnifiedChatResult;
+}> => {
   let sequentialToolCalls = 0;
   let toolCallLimit = 10;
 
@@ -435,11 +451,6 @@ const runToolCallLoop = async (
       thinking: result.thinking,
       functionCalls: normalizeFunctionCalls(result.functionCalls),
     });
-    flushPendingMessageUpdates(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      context.setChatMessages
-    );
     upsertChatMessage(
       context.setChatMessages,
       ensureUniqueMessages,
@@ -448,8 +459,9 @@ const runToolCallLoop = async (
     );
     currentHistory.push(assistantMessage);
 
+    const currentChatId = context.getCurrentChatId();
     const toolResponse = await api.chat.executeTools(
-      buildToolPayload(currentHistory, context.currentChapterId, context.currentChatId),
+      buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
       context.onProseChunk
     );
 
@@ -491,30 +503,21 @@ const executeChatRequestImpl = async (
   history: ChatMessage[],
   attachments?: ChatAttachment[],
   userMsgId?: string
-) => {
+): Promise<void> => {
   context.setIsChatLoading(true);
   context.stopSignalRef.current = false;
 
-  const updateMessage = makeMessageUpdater(
-    context.pendingMessageUpdatesRef,
-    context.updateFlushFrameRef,
-    () =>
-      flushPendingMessageUpdates(
-        context.pendingMessageUpdatesRef,
-        context.updateFlushFrameRef,
-        context.setChatMessages
-      )
-  );
+  const updateMessage = makeMessageUpdater(context.setChatMessages);
 
   try {
     let currentHistory = [...history];
     const session = createChatSession(
-      context.systemPrompt,
+      context.getSystemPrompt(),
       currentHistory,
       context.activeChatConfig,
       'CHAT',
       {
-        allowWebSearch: context.allowWebSearch,
+        allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
       }
     );
@@ -592,11 +595,6 @@ const executeChatRequestImpl = async (
         thinking: result.thinking,
         functionCalls: normalizeFunctionCalls(result.functionCalls),
       });
-      flushPendingMessageUpdates(
-        context.pendingMessageUpdatesRef,
-        context.updateFlushFrameRef,
-        context.setChatMessages
-      );
       upsertChatMessage(
         context.setChatMessages,
         ensureUniqueMessages,
@@ -630,11 +628,6 @@ const executeChatRequestImpl = async (
     };
     context.setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
   } finally {
-    flushPendingMessageUpdates(
-      context.pendingMessageUpdatesRef,
-      context.updateFlushFrameRef,
-      context.setChatMessages
-    );
     context.setIsChatLoading(false);
     context.stopSignalRef.current = false;
   }

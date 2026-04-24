@@ -73,6 +73,12 @@ def _extract_chunk_text(chunk: Any) -> str:
                             parts.append(delta["content"])
                         elif "text" in delta and isinstance(delta["text"], str):
                             parts.append(delta["text"])
+                    else:
+                        # completions endpoint: text is directly on the choice
+                        if "content" in choice and isinstance(choice["content"], str):
+                            parts.append(choice["content"])
+                        elif "text" in choice and isinstance(choice["text"], str):
+                            parts.append(choice["text"])
             if parts:
                 return "".join(parts)
 
@@ -140,6 +146,11 @@ def _prepare_dump_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
                 if not chunks and response.get("full_content"):
                     preview = response["full_content"].splitlines(keepends=True)
 
+                # Second fallback: chunks present but no text extracted (e.g. unknown format),
+                # use full_content if available so the log always shows what was generated.
+                if not preview and response.get("full_content"):
+                    preview = response["full_content"].splitlines(keepends=True)
+
                 response["chunk_text_preview"] = preview
                 response.pop("chunks", None)
                 response.pop("full_content", None)
@@ -182,8 +193,10 @@ def add_llm_log(log_entry: Dict[str, Any]) -> Any:
     if len(llm_logs) > 100:
         llm_logs.pop(0)
 
-    # Raw logging to file if enabled
-    if os.getenv("AUGQ_LLM_DUMP") == "1":
+    # Raw logging to file if enabled — only write complete (finalized) entries.
+    # Pending start entries are kept in-memory only; writing them would create
+    # confusing duplicate pairs in the log file.
+    if os.getenv("AUGQ_LLM_DUMP") == "1" and entry_copy.get("timestamp_end"):
         default_path = os.path.join("data", "logs", "llm_raw.log")
         log_path = os.getenv("AUGQ_LLM_DUMP_PATH") or default_path
         os.makedirs(os.path.dirname(log_path), exist_ok=True)

@@ -42,7 +42,7 @@ describe('DebugLogs component', () => {
       },
     ] as DebugLogEntry[];
 
-    vi.spyOn(api.debug, 'getLogs').mockResolvedValue(logs);
+    vi.spyOn(api.debug, 'getLogs').mockResolvedValue({ logs });
 
     // render the component to a string (SSR) to exercise its logic; this
     // will still run the function body and hooks but not effects, which is

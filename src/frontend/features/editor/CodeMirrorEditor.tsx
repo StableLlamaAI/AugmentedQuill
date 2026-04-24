@@ -196,6 +196,12 @@ export interface CodeMirrorEditorProps {
   baselineValue?: string;
   /** Enable inline diff highlighting in the editor */
   showDiff?: boolean;
+  /**
+   * When true the diff plugin uses a common-prefix strategy instead of LCS so
+   * that partial streamed text does not flicker between equal/inserted as new
+   * chunks arrive.  Set this while an LLM is actively writing to the editor.
+   */
+  streamingMode?: boolean;
   /** Active search highlights in document text offset coordinates */
   searchHighlightRanges?: Array<{ start: number; end: number }>;
   /** BCP 47 language tag for spellcheck and hyphenation */
@@ -226,6 +232,7 @@ export const CodeMirrorEditor = React.forwardRef<
       onSelectionChange,
       baselineValue,
       showDiff = true,
+      streamingMode = false,
       searchHighlightRanges,
       language = 'en',
       spellCheck = false,
@@ -359,8 +366,11 @@ export const CodeMirrorEditor = React.forwardRef<
     ): Extension =>
       ranges && ranges.length > 0 ? buildSearchHighlightPlugin(ranges) : [];
 
-    const buildDiffExtension = (bv: string | undefined, enabled: boolean): Extension =>
-      enabled && bv != null ? buildDiffPlugin(bv) : [];
+    const buildDiffExtension = (
+      bv: string | undefined,
+      enabled: boolean,
+      sm: boolean
+    ): Extension => (enabled && bv != null ? buildDiffPlugin(bv, sm) : []);
 
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
@@ -406,7 +416,9 @@ export const CodeMirrorEditor = React.forwardRef<
         // Tab keymap for Raw/Markdown modes
         Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
-        diffCompartment.current.of(buildDiffExtension(baselineValue, showDiff)),
+        diffCompartment.current.of(
+          buildDiffExtension(baselineValue, showDiff, streamingMode)
+        ),
         searchHighlightCompartment.current.of(
           buildSearchHighlightExtension(searchHighlightRanges)
         ),
@@ -515,10 +527,10 @@ export const CodeMirrorEditor = React.forwardRef<
     useLayoutEffect(() => {
       viewRef.current?.dispatch({
         effects: diffCompartment.current.reconfigure(
-          buildDiffExtension(baselineValue, showDiff)
+          buildDiffExtension(baselineValue, showDiff, streamingMode)
         ),
       });
-    }, [baselineValue, showDiff]);
+    }, [baselineValue, showDiff, streamingMode]);
 
     useEffect(() => {
       viewRef.current?.dispatch({

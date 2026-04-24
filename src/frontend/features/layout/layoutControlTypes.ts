@@ -19,6 +19,7 @@ import type {
   EditorSettings,
   LLMConfig,
   SourcebookEntry,
+  SuggestionGenerationMode,
   ViewMode,
   WritingUnit,
 } from '../../types';
@@ -181,6 +182,8 @@ export type MainSidebarControls = {
 
 export type MainEditorSuggestionControls = {
   continuations: string[];
+  suggestionMode: SuggestionGenerationMode;
+  setSuggestionMode: (mode: SuggestionGenerationMode) => void;
   isSuggesting: boolean;
   handleTriggerSuggestions: (
     cursor?: number,

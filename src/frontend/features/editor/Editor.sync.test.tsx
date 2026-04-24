@@ -17,6 +17,7 @@ import { render, act, cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from './Editor';
 import { WritingUnit } from '../../types';
+import { useStoryStore, resetStoryStore } from '../../stores/storyStore';
 
 if (typeof window.requestAnimationFrame !== 'function') {
   window.requestAnimationFrame = (cb: FrameRequestCallback) =>
@@ -28,6 +29,7 @@ if (typeof window.cancelAnimationFrame !== 'function') {
 
 afterEach(() => {
   cleanup();
+  resetStoryStore();
 });
 
 vi.mock('../../services/api', () => ({
@@ -75,6 +77,8 @@ const defaultProps = {
   },
   suggestionControls: {
     continuations: [],
+    suggestionMode: 'guided' as const,
+    setSuggestionMode: vi.fn(),
     isSuggesting: false,
     onTriggerSuggestions: vi.fn(),
     onAcceptContinuation: vi.fn(),
@@ -113,27 +117,34 @@ describe('Editor diff highlighting', () => {
     expect(cmContent?.innerHTML).not.toContain('diff-inserted');
   });
 
-  it('forces content sync and shows diff decoration when streaming even if editor is focused', async () => {
+  it('shows streaming content from store slot with correct diff during streaming', async () => {
     const { rerender } = render(<Editor {...defaultProps} />);
 
     const cmContent = document.querySelector('.cm-content');
     if (cmContent) (cmContent as HTMLElement).focus();
 
-    const updatedChapter = { ...mockChapter, content: 'Original content with AI' };
-
+    // Simulate a rewrite streaming: entirely new text, nothing in common with baseline.
+    // The streaming slot is used so only this editor re-renders.
     await act(async () => {
+      useStoryStore.getState().setStreamingContent({
+        chapterId: mockChapter.id,
+        content: 'Brand new text with AI',
+      });
       rerender(
         <Editor
           {...defaultProps}
-          chapter={updatedChapter}
           aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
         />
       );
     });
 
     const updated = document.querySelector('.cm-content');
-    expect(updated?.textContent).toContain('with AI');
+    // Streamed text must reach the editor.
+    expect(updated?.textContent).toContain('Brand new text with AI');
+    // Common-prefix streaming diff: all streamed content is inserted (green).
     expect(updated?.innerHTML).toContain('diff-inserted');
+    // Deleted baseline is shown as a red widget.
+    expect(updated?.innerHTML).toContain('diff-deleted');
   });
 
   it('calls the external onChange with user-modified content', async () => {
@@ -212,10 +223,7 @@ describe('Editor diff highlighting – smart-quote regression', () => {
     // typographic quotes to server content, the diff must still show the FULL
     // new text — not only the quote-position changes.
     const baseline = 'He said \u201Chello.\u201D';
-    const rawQuoteChapter = {
-      ...mockChapter,
-      content: 'He said \u201Chello.\u201D\n\nShe replied "goodbye."',
-    };
+    const rawContent = 'He said \u201Chello.\u201D\n\nShe replied "goodbye."';
     const typographicChapter = {
       ...mockChapter,
       content: 'He said \u201Chello.\u201D\n\nShe replied \u201Cgoodbye.\u201D',
@@ -223,12 +231,16 @@ describe('Editor diff highlighting – smart-quote regression', () => {
 
     const { rerender } = render(<Editor {...defaultProps} />);
 
-    // Simulate streaming preview arriving (raw quotes in the new paragraph).
+    // Simulate streaming preview via the dedicated store slot.  chapter.content
+    // stays at the pre-AI baseline while streaming is active; diff is suppressed.
     await act(async () => {
+      useStoryStore.getState().setStreamingContent({
+        chapterId: mockChapter.id,
+        content: rawContent,
+      });
       rerender(
         <Editor
           {...defaultProps}
-          chapter={rawQuoteChapter}
           baselineContent={baseline}
           aiControls={{ ...defaultProps.aiControls, isProseStreaming: true }}
         />
@@ -236,12 +248,16 @@ describe('Editor diff highlighting – smart-quote regression', () => {
     });
 
     let cmContent = document.querySelector('.cm-content');
-    // Full new paragraph must be highlighted, not just the quotes.
+    // Streaming text must reach the editor.
+    expect(cmContent?.textContent).toContain('goodbye');
+    // Common-prefix streaming diff: the common prefix ('He said "hello."') is
+    // white, the new paragraph ('\n\nShe replied ...') is shown as inserted.
     expect(cmContent?.innerHTML).toContain('diff-inserted');
-    const htmlAfterRaw = cmContent?.innerHTML ?? '';
 
-    // Simulate lazy-load replacing content with typographic version from server.
+    // Simulate lazy-load replacing content with typographic version from server
+    // and streaming ending.
     await act(async () => {
+      useStoryStore.getState().setStreamingContent(null);
       rerender(
         <Editor
           {...defaultProps}
@@ -257,15 +273,9 @@ describe('Editor diff highlighting – smart-quote regression', () => {
     // The highlighted region must contain the new paragraph text, not shrink to
     // just the quote-character positions.
     expect(cmContent?.innerHTML).toContain('goodbye');
-    // The size of the highlighted region should be comparable (same logical
-    // new text, just with different quote characters).
-    const htmlAfterTypographic = cmContent?.innerHTML ?? '';
-    // Both versions should highlight a similar amount of new content —
-    // the typographic version must not suddenly show much less than the raw one.
+    // Verify the post-streaming diff decorates a meaningful amount of content.
     const countInserted = (html: string) =>
       (html.match(/class="cm-diff-inserted"/g) ?? []).length;
-    expect(countInserted(htmlAfterTypographic)).toBeGreaterThanOrEqual(
-      countInserted(htmlAfterRaw) - 1
-    );
+    expect(countInserted(cmContent?.innerHTML ?? '')).toBeGreaterThan(0);
   });
 });

@@ -364,3 +364,176 @@ class TestChatStreamNativeToolCalls(ChatStreamTestBase):
         self.assertIn("chat_template_kwargs", upstream_body)
         self.assertTrue(upstream_body["chat_template_kwargs"]["enable_thinking"])
         self.assertEqual(upstream_body["chat_template_kwargs"]["foo"], "bar")
+
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
+    def test_stream_filters_leaked_channel_marker_but_keeps_paragraph_breaks(
+        self, MockClientClass
+    ):
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            for piece in [
+                "<|channel>thought\n<channel|>",
+                "\n\n",
+                "Paragraph one.",
+                "\n\n",
+                "Paragraph two.",
+            ]:
+                yield "data: " + json.dumps(
+                    {"choices": [{"delta": {"content": piece}}]}
+                ) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Continue draft"}],
+            "model_type": "WRITING",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        events = self._parse_sse_events(response.text)
+        content_text = ""
+        for evt in events:
+            if "content" in evt:
+                content_text += evt["content"]
+
+        self.assertNotIn("<|channel>", content_text)
+        self.assertNotIn("<channel|>", content_text)
+        self.assertIn("Paragraph one.", content_text)
+        self.assertIn("Paragraph two.", content_text)
+        self.assertIn("\n\n", content_text)
+
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
+    def test_stream_filters_split_leaked_channel_marker(self, MockClientClass):
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            for piece in [
+                "<|channel>tho",
+                "ught\n<chan",
+                "nel|>",
+                "\n\n",
+                "Paragraph one.",
+                "\n\n",
+                "Paragraph two.",
+            ]:
+                yield "data: " + json.dumps(
+                    {"choices": [{"delta": {"content": piece}}]}
+                ) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Continue draft"}],
+            "model_type": "WRITING",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        events = self._parse_sse_events(response.text)
+        content_text = ""
+        for evt in events:
+            if "content" in evt:
+                content_text += evt["content"]
+
+        self.assertNotIn("<|channel>", content_text)
+        self.assertNotIn("<channel|>", content_text)
+        self.assertIn("Paragraph one.", content_text)
+        self.assertIn("Paragraph two.", content_text)
+
+    @patch("augmentedquill.services.llm.llm.httpx.AsyncClient")
+    def test_stream_final_content_is_incremental_after_thinking_channel(
+        self, MockClientClass
+    ):
+        mock_client_instance = MagicMock()
+        MockClientClass.return_value = mock_client_instance
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/event-stream"}
+
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock()
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        async def fake_aiter_lines():
+            # Explicit thinking stream should remain separate.
+            yield "data: " + json.dumps(
+                {"choices": [{"delta": {"reasoning_content": "silent thinking"}}]}
+            ) + "\n\n"
+
+            # Model switches channels using malformed markers.
+            yield "data: " + json.dumps(
+                {"choices": [{"delta": {"content": "<|channel>thought\n<channel|>"}}]}
+            ) + "\n\n"
+            yield "data: " + json.dumps(
+                {"choices": [{"delta": {"content": "<|channel>final\n<channel|>"}}]}
+            ) + "\n\n"
+
+            # Final prose must stream chunk-by-chunk, not only at [DONE].
+            yield "data: " + json.dumps(
+                {"choices": [{"delta": {"content": "Hello "}}]}
+            ) + "\n\n"
+            yield "data: " + json.dumps(
+                {"choices": [{"delta": {"content": "world"}}]}
+            ) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        mock_response.aiter_lines.side_effect = fake_aiter_lines
+
+        payload = {
+            "messages": [{"role": "user", "content": "Say hello"}],
+            "model_type": "CHAT",
+        }
+
+        response = self.client.post("/api/v1/chat/stream", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+
+        events = self._parse_sse_events(response.text)
+
+        thinking_events = [evt for evt in events if "thinking" in evt]
+        content_events = [evt for evt in events if "content" in evt]
+
+        self.assertGreaterEqual(len(thinking_events), 1)
+        self.assertGreaterEqual(len(content_events), 2)
+
+        content_text = "".join(evt["content"] for evt in content_events)
+        self.assertNotIn("<|channel>", content_text)
+        self.assertNotIn("<channel|>", content_text)
+        self.assertIn("Hello world", content_text)
+
+        # Ensure final prose arrives in multiple content chunks, not one buffered flush.
+        self.assertEqual(content_events[-2]["content"], "Hello ")
+        self.assertEqual(content_events[-1]["content"], "world")

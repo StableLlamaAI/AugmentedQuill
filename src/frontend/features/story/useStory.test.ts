@@ -357,6 +357,26 @@ describe('buildInitialStoryState', () => {
     expect(result.current.historySize).toBe(2); // no-op duplicate suppressed
   });
 
+  it('preserves the pre-update baseline when pushing external history entries', async () => {
+    const ch = buildChapter('1', 'Original content');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    const updatedStory = {
+      ...result.current.story,
+      chapters: [{ ...ch, content: 'Original content + AI' }],
+    };
+
+    act(() => {
+      result.current.pushExternalHistoryEntry({
+        label: 'AI prose update',
+        state: updatedStory,
+      });
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Original content + AI');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original content');
+  });
+
   it('merges undo/redo handlers into current history entry if state is unchanged', async () => {
     const { result } = renderHook(() =>
       useStory({

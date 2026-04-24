@@ -24,6 +24,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
 async def stream_unified_chat_content(
     *,
     messages: list,
+    response_prefill: str | None = None,
     base_url: str,
     api_key: str | None,
     model_id: str,
@@ -31,6 +32,7 @@ async def stream_unified_chat_content(
     model_name: str | None = None,
     model_type: str | None = None,
     tools: list[dict] | None = None,
+    extra_body: dict | None = None,
     max_rounds: int = 4,
 ) -> AsyncIterator[dict]:
     """Stream Unified Chat Content as event dictionaries (content, thinking, tool_calls).
@@ -39,6 +41,9 @@ async def stream_unified_chat_content(
     in the stream and restarting the LLM generation with the tool results.
     """
     current_messages = [dict(m) for m in messages]
+    if response_prefill:
+        # Seed the assistant turn so generation continues from this exact prefix.
+        current_messages.append({"role": "assistant", "content": response_prefill})
 
     for round_idx in range(max_rounds):
         round_content = ""
@@ -57,6 +62,7 @@ async def stream_unified_chat_content(
             model_name=model_name,
             model_type=model_type,
             tools=tools,
+            extra_body=extra_body,
         ):
             # Yield everything from the stream to the frontend
             yield chunk_dict

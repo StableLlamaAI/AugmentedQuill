@@ -255,7 +255,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
                 <button
                   key={cat}
                   onClick={() => onCategoryChange(cat)}
-                  title={details.description}
+                  title={t(details.description)}
                   className={`flex flex-col items-center justify-center p-2 rounded-md border transition-all ${
                     isSelected
                       ? 'bg-brand-500 text-white border-brand-600 ring-2 ring-brand-500/20'
@@ -274,7 +274,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
         <p
           className={`text-xs mt-1 min-h-[1.5em] ${isLight ? 'text-brand-700' : 'text-brand-300'}`}
         >
-          {CATEGORY_DETAILS[category]?.description}
+          {t(CATEGORY_DETAILS[category]?.description || '')}
         </p>
       </div>
     </div>
@@ -504,7 +504,7 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
                       <>
                         {relationNameMap[rel.target_id] || rel.target_id}{' '}
                         <span className="opacity-70 font-normal">[{rel.relation}]</span>{' '}
-                        this
+                        {t('this')}
                       </>
                     ) : (
                       <>
@@ -519,13 +519,13 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
                   rel.start_book ||
                   rel.end_book) && (
                   <div className="text-xs opacity-60 mt-1 truncate">
-                    {rel.start_chapter ? `Start: ${rel.start_chapter}` : ''}
+                    {rel.start_chapter ? `${t('Start')}: ${rel.start_chapter}` : ''}
                     {rel.start_book ? ` (${rel.start_book})` : ''}
                     {(rel.start_chapter || rel.start_book) &&
                     (rel.end_chapter || rel.end_book)
                       ? ' | '
                       : ''}
-                    {rel.end_chapter ? `End: ${rel.end_chapter}` : ''}
+                    {rel.end_chapter ? `${t('End')}: ${rel.end_chapter}` : ''}
                     {rel.end_book ? ` (${rel.end_book})` : ''}
                   </div>
                 )}
@@ -534,14 +534,14 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
                 <button
                   onClick={() => onEditRelation(idx)}
                   className="p-1 rounded-md hover:bg-brand-500/10 text-brand-500 transition-colors"
-                  title="Edit relation"
+                  title={t('Edit Relation')}
                 >
                   <Edit2 size={14} />
                 </button>
                 <button
                   onClick={() => onDeleteRelation(idx)}
                   className="p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
-                  title="Remove relation"
+                  title={t('Delete Relation')}
                 >
                   <Trash2 size={14} />
                 </button>
