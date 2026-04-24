@@ -35,12 +35,12 @@ const createAssistantMessage = (
 type ToolLoopChoice = 'stop' | 'continue' | 'unlimited';
 
 type UseChatExecutionParams = {
-  systemPrompt: string;
   activeChatConfig: LLMConfig;
   isChatAvailable: boolean;
-  allowWebSearch: boolean;
+  getSystemPrompt: () => string;
+  getAllowWebSearch: () => boolean;
+  getCurrentChatId: () => string | null;
   currentChapterId: string | null;
-  currentChatId: string | null;
   currentChapter?: { id: string; title: string } | null;
   refreshProjects: () => Promise<void>;
   refreshStory: () => Promise<void>;
@@ -56,12 +56,12 @@ type UseChatExecutionParams = {
 
 /** Custom React hook that manages chat execution. */
 export function useChatExecution({
-  systemPrompt,
   activeChatConfig,
   isChatAvailable,
-  allowWebSearch,
+  getSystemPrompt,
+  getAllowWebSearch,
+  getCurrentChatId,
   currentChapterId,
-  currentChatId,
   currentChapter,
   refreshProjects,
   refreshStory,
@@ -81,11 +81,11 @@ export function useChatExecution({
 
   const executeChatRequest = useCallback(
     buildExecuteChatRequest({
-      systemPrompt,
+      getSystemPrompt,
       activeChatConfig,
-      allowWebSearch,
+      getAllowWebSearch,
       currentChapterId,
-      currentChatId,
+      getCurrentChatId,
       currentChapter,
       onProseChunk,
       refreshProjects,
@@ -99,11 +99,8 @@ export function useChatExecution({
       createAssistantMessage,
     }),
     [
-      systemPrompt,
       activeChatConfig,
-      allowWebSearch,
       currentChapterId,
-      currentChatId,
       currentChapter,
       onProseChunk,
       refreshProjects,
@@ -115,6 +112,9 @@ export function useChatExecution({
       setIsChatLoading,
       stopSignalRef,
       createAssistantMessage,
+      getSystemPrompt,
+      getAllowWebSearch,
+      getCurrentChatId,
     ]
   );
 

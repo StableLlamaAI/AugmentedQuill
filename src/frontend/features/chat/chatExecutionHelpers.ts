@@ -15,7 +15,8 @@ import type { MutableRefObject } from 'react';
 
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
-import type { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
+import { useChatStore } from '../../stores/chatStore';
+import type { ChatAttachment, ChatMessage, ChatSession, LLMConfig } from '../../types';
 import type {
   ChatToolExecutionResponse,
   ChatToolFunctionCall,
@@ -30,11 +31,11 @@ export type ChatToolMutationPayload = ChatToolExecutionResponse & {
 };
 
 export type ExecuteChatRequestContext = {
-  systemPrompt: string;
+  getSystemPrompt: () => string;
   activeChatConfig: LLMConfig;
-  allowWebSearch: boolean;
+  getAllowWebSearch: () => boolean;
   currentChapterId: string | null;
-  currentChatId: string | null;
+  getCurrentChatId: () => string | null;
   currentChapter?: { id: string; title: string } | null;
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void;
   refreshProjects: () => Promise<void>;
@@ -256,6 +257,64 @@ const buildToolPayload = (
   chat_id: currentChatId || undefined,
 });
 
+const extractScratchpadContent = (
+  args: Record<string, unknown> | string | undefined,
+  result?: Record<string, unknown>
+): string | undefined => {
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args);
+      if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+        const content = (parsed as Record<string, unknown>).content;
+        return typeof content === 'string' ? content : undefined;
+      }
+    } catch {
+      // Fall back to the raw string if it looks like actual content.
+      return args;
+    }
+    return args;
+  }
+
+  if (args) {
+    if (typeof args.content === 'string') return args.content;
+    if (typeof args.raw === 'string') {
+      try {
+        const parsed = JSON.parse(args.raw);
+        if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+          const content = (parsed as Record<string, unknown>).content;
+          return typeof content === 'string' ? content : undefined;
+        }
+      } catch {
+        return args.raw;
+      }
+      return args.raw;
+    }
+  }
+
+  if (result && typeof result.content === 'string') return result.content;
+  return undefined;
+};
+
+export const applyScratchpadToolResult = (
+  args: Record<string, unknown> | string | undefined,
+  result?: Record<string, unknown>
+): void => {
+  const content = extractScratchpadContent(args, result);
+  if (!content) return;
+
+  const { setScratchpad, isIncognito, currentChatId, setIncognitoSessions } =
+    useChatStore.getState();
+  setScratchpad(content);
+
+  if (isIncognito && currentChatId) {
+    setIncognitoSessions((prev: ChatSession[]) =>
+      prev.map((session: ChatSession) =>
+        session.id === currentChatId ? { ...session, scratchpad: content } : session
+      )
+    );
+  }
+};
+
 const handleToolResponse = async (
   context: ExecuteChatRequestContext,
   toolResponse: ChatToolExecutionResponse,
@@ -289,6 +348,12 @@ const handleToolResponse = async (
 
   context.setChatMessages(ensureUniqueMessages([...currentHistory]));
 
+  for (const callResult of callResults) {
+    if (callResult.name === 'write_scratchpad') {
+      applyScratchpadToolResult(callResult.args, callResult.result);
+    }
+  }
+
   if (toolResponse.mutations?.story_changed) {
     await context.refreshProjects();
     await context.refreshStory();
@@ -315,12 +380,12 @@ const handleToolResponse = async (
   }
 
   const nextSession = createChatSession(
-    context.systemPrompt,
+    context.getSystemPrompt(),
     currentHistory,
     context.activeChatConfig,
     'CHAT',
     {
-      allowWebSearch: context.allowWebSearch,
+      allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
     }
   );
@@ -394,8 +459,9 @@ const runToolCallLoop = async (
     );
     currentHistory.push(assistantMessage);
 
+    const currentChatId = context.getCurrentChatId();
     const toolResponse = await api.chat.executeTools(
-      buildToolPayload(currentHistory, context.currentChapterId, context.currentChatId),
+      buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
       context.onProseChunk
     );
 
@@ -446,12 +512,12 @@ const executeChatRequestImpl = async (
   try {
     let currentHistory = [...history];
     const session = createChatSession(
-      context.systemPrompt,
+      context.getSystemPrompt(),
       currentHistory,
       context.activeChatConfig,
       'CHAT',
       {
-        allowWebSearch: context.allowWebSearch,
+        allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
       }
     );

@@ -199,12 +199,12 @@ export function useAppChatRuntime({
   }, []);
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
-    systemPrompt: useChatStore.getState().systemPrompt,
+    getSystemPrompt: () => useChatStore.getState().systemPrompt,
     activeChatConfig,
     isChatAvailable,
-    allowWebSearch: useChatStore.getState().allowWebSearch,
+    getAllowWebSearch: () => useChatStore.getState().allowWebSearch,
     currentChapterId,
-    currentChatId: useChatStore.getState().currentChatId,
+    getCurrentChatId: () => useChatStore.getState().currentChatId,
     currentChapter: currentChapterContext,
     refreshProjects,
     refreshStory,
