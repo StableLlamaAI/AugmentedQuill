@@ -125,15 +125,15 @@ const baseTheme = EditorView.theme({
     boxSizing: 'border-box',
   },
   ".cm-ws-marker[data-ws-diff='1']": {
-    opacity: '0.9',
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    opacity: '0.35',
+    backgroundColor: 'rgba(34, 197, 94, 0.45)',
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
     borderRadius: '2px',
   },
   ".cm-ws-marker[data-ws-diff='1'][data-ws-tab='1']": {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: 'rgba(34, 197, 94, 0.45)',
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
@@ -142,7 +142,7 @@ const baseTheme = EditorView.theme({
     margin: '0',
   },
   ".cm-ws-marker[data-ws-deleted='1']": {
-    opacity: '1',
+    opacity: '0.35',
     backgroundColor: 'transparent',
     borderBottomStyle: 'none',
     borderBottomWidth: '0',
