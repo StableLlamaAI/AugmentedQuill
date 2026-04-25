@@ -90,9 +90,10 @@ body.light ::-webkit-scrollbar-thumb:hover {
 }
 
 .cm-ws-marker[data-ws-tab='1'] {
-  display: inline-block;
-  min-width: 1ch;
-  width: 1ch;
+  display: inline;
+  min-width: 0;
+  width: auto;
+  padding-right: 0.55ch;
   text-align: center;
   vertical-align: baseline;
   background-image: none;

@@ -35,20 +35,66 @@ const diffMark = Decoration.mark({
   class: 'cm-diff-inserted',
 });
 
-const deletedMark = Decoration.mark({
-  class: 'cm-diff-deleted',
-});
+function appendDeletedTextWithWhitespaceMarkers(
+  container: HTMLSpanElement,
+  text: string
+): void {
+  const fragment = document.createDocumentFragment();
+  for (const ch of text) {
+    if (ch === ' ') {
+      const marker = document.createElement('span');
+      marker.setAttribute('aria-hidden', 'true');
+      marker.className = 'cm-ws-marker';
+      marker.dataset.wsMarker = '1';
+      marker.dataset.wsDeleted = '1';
+      marker.textContent = ' ';
+      fragment.appendChild(marker);
+      continue;
+    }
+    if (ch === '\t') {
+      const marker = document.createElement('span');
+      marker.setAttribute('aria-hidden', 'true');
+      marker.className = 'cm-ws-marker';
+      marker.dataset.wsTab = '1';
+      marker.dataset.wsDeleted = '1';
+      marker.textContent = '→';
+      fragment.appendChild(marker);
+      continue;
+    }
+    if (ch === '\n') {
+      const marker = document.createElement('span');
+      marker.setAttribute('aria-hidden', 'true');
+      marker.className = 'cm-ws-marker';
+      marker.dataset.wsNl = '1';
+      marker.dataset.wsDeleted = '1';
+      marker.textContent = '¶';
+      fragment.appendChild(marker);
+      // Keep a real newline so line and paragraph breaks match deleted content.
+      fragment.appendChild(document.createTextNode('\n'));
+      continue;
+    }
+    fragment.appendChild(document.createTextNode(ch));
+  }
+  container.appendChild(fragment);
+}
 
 /** Represents widget. */
 class DeletedWidget extends WidgetType {
-  constructor(readonly text: string) {
+  constructor(
+    readonly text: string,
+    readonly showWhitespace: boolean
+  ) {
     super();
   }
   /** Convert dom. */
   toDOM(): HTMLSpanElement {
     const wrap = document.createElement('span');
     wrap.className = 'cm-diff-deleted';
-    wrap.textContent = this.text;
+    if (this.showWhitespace) {
+      appendDeletedTextWithWhitespaceMarkers(wrap, this.text);
+    } else {
+      wrap.textContent = this.text;
+    }
     return wrap;
   }
 }
@@ -72,7 +118,8 @@ function commonPrefixLength(a: string, b: string): number {
 
 export const buildDiffPlugin = (
   baseline: string,
-  streamingMode: boolean = false
+  streamingMode: boolean = false,
+  showWhitespace: boolean = false
 ): Extension =>
   ViewPlugin.fromClass(
     class {
@@ -147,7 +194,7 @@ export const buildDiffPlugin = (
           if (deletedSuffix.length > 0) {
             decs.push(
               Decoration.widget({
-                widget: new DeletedWidget(deletedSuffix),
+                widget: new DeletedWidget(deletedSuffix, showWhitespace),
                 side: 0,
               }).range(prefixLen)
             );
@@ -176,7 +223,7 @@ export const buildDiffPlugin = (
             // DELETED — exists in baseline only, inject as a widget in the current doc.
             decs.push(
               Decoration.widget({
-                widget: new DeletedWidget(text),
+                widget: new DeletedWidget(text, showWhitespace),
                 side: 0,
               }).range(pos)
             );

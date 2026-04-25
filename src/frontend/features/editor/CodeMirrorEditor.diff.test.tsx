@@ -111,4 +111,45 @@ describe('CodeMirrorEditor Diff Highlighting', () => {
 
     expect(ref.current!.contentDOM.innerHTML).not.toContain('diff-inserted');
   });
+
+  it('tags inserted whitespace markers for diff highlighting when WS is enabled', async () => {
+    const ref = React.createRef<EditorView | null>();
+    const { container } = render(
+      <CodeMirrorEditor
+        ref={ref}
+        value="a b"
+        baselineValue="ab"
+        showWhitespace={true}
+        showDiff={true}
+        onChange={vi.fn()}
+      />
+    );
+
+    await act(async () => {});
+
+    expect(ref.current!.state.doc.toString()).toBe('a b');
+    const insertedSpace = container.querySelector(
+      '.cm-ws-marker[data-ws-marker="1"][data-ws-diff="1"]'
+    );
+    expect(insertedSpace).toBeTruthy();
+  });
+
+  it('shows deleted newline marker when WS is enabled', async () => {
+    const { container } = render(
+      <CodeMirrorEditor
+        value="line one"
+        baselineValue={'line one\n'}
+        showWhitespace={true}
+        showDiff={true}
+        onChange={vi.fn()}
+      />
+    );
+
+    await act(async () => {});
+
+    const deletedNewline = container.querySelector(
+      '.cm-diff-deleted .cm-ws-marker[data-ws-nl="1"][data-ws-deleted="1"]'
+    );
+    expect(deletedNewline).toBeTruthy();
+  });
 });

@@ -118,6 +118,41 @@ const baseTheme = EditorView.theme({
     userSelect: 'none',
     fontStyle: 'normal',
     fontWeight: 'normal',
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    lineHeight: 'inherit',
+    verticalAlign: 'baseline',
+    boxSizing: 'border-box',
+  },
+  ".cm-ws-marker[data-ws-diff='1']": {
+    opacity: '0.9',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+    borderRadius: '2px',
+  },
+  ".cm-ws-marker[data-ws-diff='1'][data-ws-tab='1']": {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+    borderRadius: '0',
+    padding: '0',
+    margin: '0',
+  },
+  ".cm-ws-marker[data-ws-deleted='1']": {
+    opacity: '1',
+    backgroundColor: 'transparent',
+    borderBottomStyle: 'none',
+    borderBottomWidth: '0',
+    borderBottomColor: 'transparent',
+    borderRadius: '0',
+    textDecoration: 'inherit',
+    paddingRight: '0',
+  },
+  ".cm-ws-marker[data-ws-deleted='1'][data-ws-tab='1']": {
+    paddingRight: '0',
   },
   '.diff-inserted': {
     backgroundColor: 'rgba(34, 197, 94, 0.25) !important', // brand-green-500 @ 0.25
@@ -303,8 +338,12 @@ export const CodeMirrorEditor = React.forwardRef<
         ? [markdown({ addKeymap: false }), syntaxHighlighting(mdHighlightStyle)]
         : [];
 
-    const buildWsExtension = (ws: boolean): Extension =>
-      ws ? buildWhitespacePlugin() : [];
+    const buildWsExtension = (
+      ws: boolean,
+      bv: string | undefined,
+      showDiffEnabled: boolean,
+      streamMode: boolean
+    ): Extension => (ws ? buildWhitespacePlugin(bv, showDiffEnabled, streamMode) : []);
 
     const buildSearchHighlightPlugin = (
       ranges: Array<{ start: number; end: number }>
@@ -369,8 +408,9 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildDiffExtension = (
       bv: string | undefined,
       enabled: boolean,
-      sm: boolean
-    ): Extension => (enabled && bv != null ? buildDiffPlugin(bv, sm) : []);
+      sm: boolean,
+      ws: boolean
+    ): Extension => (enabled && bv != null ? buildDiffPlugin(bv, sm, ws) : []);
 
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
@@ -417,14 +457,16 @@ export const CodeMirrorEditor = React.forwardRef<
         Prec.high(buildTabExtension()),
         // Diff highlights for AI changes
         diffCompartment.current.of(
-          buildDiffExtension(baselineValue, showDiff, streamingMode)
+          buildDiffExtension(baselineValue, showDiff, streamingMode, showWhitespace)
         ),
         searchHighlightCompartment.current.of(
           buildSearchHighlightExtension(searchHighlightRanges)
         ),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
-        wsCompartment.current.of(buildWsExtension(showWhitespace)),
+        wsCompartment.current.of(
+          buildWsExtension(showWhitespace, baselineValue, showDiff, streamingMode)
+        ),
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         EditorView.updateListener.of((update: ViewUpdate) => {
@@ -490,9 +532,11 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       viewRef.current?.dispatch({
-        effects: wsCompartment.current.reconfigure(buildWsExtension(showWhitespace)),
+        effects: wsCompartment.current.reconfigure(
+          buildWsExtension(showWhitespace, baselineValue, showDiff, streamingMode)
+        ),
       });
-    }, [showWhitespace]);
+    }, [showWhitespace, baselineValue, showDiff, streamingMode]);
 
     useEffect(() => {
       viewRef.current?.dispatch({
@@ -527,10 +571,10 @@ export const CodeMirrorEditor = React.forwardRef<
     useLayoutEffect(() => {
       viewRef.current?.dispatch({
         effects: diffCompartment.current.reconfigure(
-          buildDiffExtension(baselineValue, showDiff, streamingMode)
+          buildDiffExtension(baselineValue, showDiff, streamingMode, showWhitespace)
         ),
       });
-    }, [baselineValue, showDiff, streamingMode]);
+    }, [baselineValue, showDiff, streamingMode, showWhitespace]);
 
     useEffect(() => {
       viewRef.current?.dispatch({
