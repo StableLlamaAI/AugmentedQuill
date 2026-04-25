@@ -83,6 +83,11 @@ body.light ::-webkit-scrollbar-thumb:hover {
   display: inline;
   position: relative;
   color: inherit;
+}
+
+.cm-ws-marker[data-ws-marker='1'] .cm-ws-glyph {
+  display: inline;
+  white-space: pre;
   background-image: radial-gradient(circle, currentColor 35%, transparent 36%);
   background-position: center;
   background-repeat: no-repeat;

@@ -125,15 +125,18 @@ const baseTheme = EditorView.theme({
     boxSizing: 'border-box',
   },
   ".cm-ws-marker[data-ws-diff='1']": {
-    opacity: '0.35',
-    backgroundColor: 'rgba(34, 197, 94, 0.45)',
+    opacity: '1',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
-    borderRadius: '2px',
+    borderRadius: '0',
+  },
+  ".cm-ws-marker[data-ws-diff='1'] .cm-ws-glyph": {
+    opacity: '0.35',
   },
   ".cm-ws-marker[data-ws-diff='1'][data-ws-tab='1']": {
-    backgroundColor: 'rgba(34, 197, 94, 0.45)',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(34, 197, 94, 0.4)',
@@ -141,18 +144,28 @@ const baseTheme = EditorView.theme({
     padding: '0',
     margin: '0',
   },
-  ".cm-ws-marker[data-ws-deleted='1']": {
-    opacity: '0.35',
-    backgroundColor: 'transparent',
-    borderBottomStyle: 'none',
-    borderBottomWidth: '0',
-    borderBottomColor: 'transparent',
-    borderRadius: '0',
-    textDecoration: 'inherit',
-    paddingRight: '0',
+  ".cm-diff-deleted .cm-ws-marker[data-ws-diff='1']": {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
   },
-  ".cm-ws-marker[data-ws-deleted='1'][data-ws-tab='1']": {
-    paddingRight: '0',
+  ".cm-ws-marker.cm-diff-deleted[data-ws-diff='1']": {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
+  },
+  ".cm-ws-marker.cm-diff-deleted[data-ws-diff='1'] .cm-ws-glyph": {
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
   },
   '.diff-inserted': {
     backgroundColor: 'rgba(34, 197, 94, 0.25) !important', // brand-green-500 @ 0.25
@@ -184,7 +197,13 @@ const baseTheme = EditorView.theme({
     borderBottomStyle: 'solid',
     borderBottomWidth: '1px',
     borderBottomColor: 'rgba(239, 68, 68, 0.4)',
-    opacity: '0.8',
+  },
+  '.cm-diff-deleted.cm-widget': {
+    display: 'inline',
+    whiteSpace: 'inherit',
+    overflowWrap: 'inherit',
+    wordBreak: 'inherit',
+    verticalAlign: 'baseline',
   },
 });
 
@@ -423,8 +442,6 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       if (!containerRef.current) return undefined;
-
-      const editorAriaLabel = placeholder ?? 'Story content';
 
       const extensions: Extension[] = [
         baseTheme,

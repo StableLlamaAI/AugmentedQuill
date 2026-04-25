@@ -23,11 +23,42 @@ import type { Extension } from '@codemirror/state';
 import { diff_match_patch } from 'diff-match-patch';
 
 type WsDiffFlag = '1' | undefined;
+type WsMarkerKind = 'space' | 'tab' | 'newline';
 
 const dmp = new diff_match_patch();
 
 function isVisibleWhitespace(char: string): boolean {
   return char === ' ' || char === '\t' || char === '\n';
+}
+
+export function createWhitespaceMarkerElement(
+  kind: WsMarkerKind,
+  diffFlag?: WsDiffFlag
+): HTMLSpanElement {
+  const el = document.createElement('span');
+  el.setAttribute('aria-hidden', 'true');
+  el.className = 'cm-ws-marker';
+
+  const glyph = document.createElement('span');
+  glyph.className = 'cm-ws-glyph';
+
+  if (kind === 'space') {
+    el.dataset.wsMarker = '1';
+    glyph.textContent = ' ';
+  } else if (kind === 'tab') {
+    el.dataset.wsTab = '1';
+    glyph.textContent = '→';
+  } else {
+    el.dataset.wsNl = '1';
+    glyph.textContent = '¶';
+  }
+
+  if (diffFlag) {
+    el.dataset.wsDiff = diffFlag;
+  }
+
+  el.appendChild(glyph);
+  return el;
 }
 
 function commonPrefixLength(a: string, b: string): number {
@@ -88,15 +119,7 @@ class WsSpaceWidget extends WidgetType {
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsMarker = '1';
-    if (this.diffFlag) {
-      el.dataset.wsDiff = this.diffFlag;
-    }
-    el.textContent = ' ';
-    return el;
+    return createWhitespaceMarkerElement('space', this.diffFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {
@@ -112,15 +135,7 @@ class WsTabWidget extends WidgetType {
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsTab = '1';
-    if (this.diffFlag) {
-      el.dataset.wsDiff = this.diffFlag;
-    }
-    el.textContent = '→';
-    return el;
+    return createWhitespaceMarkerElement('tab', this.diffFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {
@@ -136,15 +151,7 @@ class WsNlWidget extends WidgetType {
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.dataset.wsNl = '1';
-    if (this.diffFlag) {
-      el.dataset.wsDiff = this.diffFlag;
-    }
-    el.textContent = '¶';
-    return el;
+    return createWhitespaceMarkerElement('newline', this.diffFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {

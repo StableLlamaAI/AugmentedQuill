@@ -24,6 +24,7 @@ import { Annotation } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
 import { diff_match_patch } from 'diff-match-patch';
+import { createWhitespaceMarkerElement } from './codeMirrorWhitespacePlugin';
 
 // Marks transactions that mirror external prop updates so the updateListener
 // can skip emitting onChange for programmatic document replacements.
@@ -35,68 +36,155 @@ const diffMark = Decoration.mark({
   class: 'cm-diff-inserted',
 });
 
-function appendDeletedTextWithWhitespaceMarkers(
-  container: HTMLSpanElement,
-  text: string
-): void {
-  const fragment = document.createDocumentFragment();
-  for (const ch of text) {
-    if (ch === ' ') {
-      const marker = document.createElement('span');
-      marker.setAttribute('aria-hidden', 'true');
-      marker.className = 'cm-ws-marker';
-      marker.dataset.wsMarker = '1';
-      marker.dataset.wsDeleted = '1';
-      marker.textContent = ' ';
-      fragment.appendChild(marker);
-      continue;
-    }
-    if (ch === '\t') {
-      const marker = document.createElement('span');
-      marker.setAttribute('aria-hidden', 'true');
-      marker.className = 'cm-ws-marker';
-      marker.dataset.wsTab = '1';
-      marker.dataset.wsDeleted = '1';
-      marker.textContent = '→';
-      fragment.appendChild(marker);
-      continue;
-    }
-    if (ch === '\n') {
-      const marker = document.createElement('span');
-      marker.setAttribute('aria-hidden', 'true');
-      marker.className = 'cm-ws-marker';
-      marker.dataset.wsNl = '1';
-      marker.dataset.wsDeleted = '1';
-      marker.textContent = '¶';
-      fragment.appendChild(marker);
-      // Keep a real newline so line and paragraph breaks match deleted content.
-      fragment.appendChild(document.createTextNode('\n'));
-      continue;
-    }
-    fragment.appendChild(document.createTextNode(ch));
-  }
-  container.appendChild(fragment);
-}
+type DeletedWsKind = 'space' | 'tab' | 'newline';
 
-/** Represents widget. */
-class DeletedWidget extends WidgetType {
-  constructor(
-    readonly text: string,
-    readonly showWhitespace: boolean
-  ) {
+/** Represents plain deleted text widget. */
+class DeletedTextWidget extends WidgetType {
+  constructor(readonly text: string) {
     super();
   }
   /** Convert dom. */
   toDOM(): HTMLSpanElement {
     const wrap = document.createElement('span');
     wrap.className = 'cm-diff-deleted';
-    if (this.showWhitespace) {
-      appendDeletedTextWithWhitespaceMarkers(wrap, this.text);
-    } else {
-      wrap.textContent = this.text;
-    }
+    wrap.textContent = this.text;
     return wrap;
   }
+}
+
+/** Represents explicit widget buffer to mirror green diff DOM shape. */
+class DeletedBufferWidget extends WidgetType {
+  /** Convert dom. */
+  toDOM(): HTMLImageElement {
+    const img = document.createElement('img');
+    img.className = 'cm-widgetBuffer';
+    img.setAttribute('aria-hidden', 'true');
+    return img;
+  }
+}
+
+/** Represents deleted whitespace marker widget. */
+class DeletedWhitespaceWidget extends WidgetType {
+  constructor(readonly kind: DeletedWsKind) {
+    super();
+  }
+  /** Convert dom. */
+  toDOM(): HTMLSpanElement {
+    const marker = createWhitespaceMarkerElement(this.kind, '1');
+    marker.classList.add('cm-diff-deleted');
+    return marker;
+  }
+}
+
+/** Represents line break effect for deleted newlines. */
+class DeletedLineBreakWidget extends WidgetType {
+  /** Convert dom. */
+  toDOM(): HTMLBRElement {
+    const br = document.createElement('br');
+    br.className = 'cm-diff-deleted-break';
+    return br;
+  }
+}
+
+function addDeletedDecorations(
+  decs: Range<Decoration>[],
+  atPos: number,
+  text: string,
+  showWhitespace: boolean
+): void {
+  if (!showWhitespace) {
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedTextWidget(text),
+        side: 0,
+      }).range(atPos)
+    );
+    return;
+  }
+
+  let textBuffer = '';
+  let side = 0;
+
+  const startsWithVisibleWhitespace =
+    text.startsWith(' ') || text.startsWith('\t') || text.startsWith('\n');
+  if (startsWithVisibleWhitespace) {
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedBufferWidget(),
+        side,
+      }).range(atPos)
+    );
+    side += 1;
+  }
+
+  const pushTextBuffer = (): void => {
+    if (textBuffer.length === 0) {
+      return;
+    }
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedBufferWidget(),
+        side,
+      }).range(atPos)
+    );
+    side += 1;
+
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedTextWidget(textBuffer),
+        side,
+      }).range(atPos)
+    );
+    side += 1;
+
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedBufferWidget(),
+        side,
+      }).range(atPos)
+    );
+    side += 1;
+
+    textBuffer = '';
+  };
+
+  const pushWs = (kind: DeletedWsKind): void => {
+    decs.push(
+      Decoration.widget({
+        widget: new DeletedWhitespaceWidget(kind),
+        side,
+      }).range(atPos)
+    );
+    side += 1;
+  };
+
+  for (const ch of text) {
+    if (ch === ' ') {
+      pushTextBuffer();
+      pushWs('space');
+      continue;
+    }
+    if (ch === '\t') {
+      pushTextBuffer();
+      pushWs('tab');
+      continue;
+    }
+    if (ch === '\n') {
+      pushTextBuffer();
+      pushWs('newline');
+      decs.push(
+        Decoration.widget({
+          widget: new DeletedLineBreakWidget(),
+          side,
+        }).range(atPos)
+      );
+      side += 1;
+      continue;
+    }
+    textBuffer += ch;
+  }
+
+  pushTextBuffer();
 }
 
 /** Debounce delay before recomputing full diff decorations (ms). */
@@ -192,12 +280,7 @@ export const buildDiffPlugin = (
           const insertedEnd = currentText.length;
           const decs: Range<Decoration>[] = [];
           if (deletedSuffix.length > 0) {
-            decs.push(
-              Decoration.widget({
-                widget: new DeletedWidget(deletedSuffix, showWhitespace),
-                side: 0,
-              }).range(prefixLen)
-            );
+            addDeletedDecorations(decs, prefixLen, deletedSuffix, showWhitespace);
           }
           if (insertedEnd > prefixLen) {
             decs.push(diffMark.range(prefixLen, insertedEnd));
@@ -221,12 +304,7 @@ export const buildDiffPlugin = (
             pos += text.length;
           } else if (op === -1) {
             // DELETED — exists in baseline only, inject as a widget in the current doc.
-            decs.push(
-              Decoration.widget({
-                widget: new DeletedWidget(text, showWhitespace),
-                side: 0,
-              }).range(pos)
-            );
+            addDeletedDecorations(decs, pos, text, showWhitespace);
           }
         }
 
