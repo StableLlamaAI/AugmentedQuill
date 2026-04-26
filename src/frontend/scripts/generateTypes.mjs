@@ -53,7 +53,7 @@ const GPL_HEADER = `// Copyright (C) 2026 StableLlama
 
 // Step 1: run openapi-typescript to generate raw output
 console.log(`Generating types from ${schemaPath} …`);
-execSync(`npx openapi-typescript "${schemaPath}" -o "${outputPath}"`, {
+execSync(`npx --yes openapi-typescript@7.13.0 "${schemaPath}" -o "${outputPath}"`, {
   stdio: 'inherit',
   cwd: frontendRoot,
 });
