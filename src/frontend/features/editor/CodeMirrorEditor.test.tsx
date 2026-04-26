@@ -237,6 +237,24 @@ describe('CodeMirrorEditor', () => {
     expect(marker).toBeDefined();
   });
 
+  it('renders normal space markers without widget buffers', async () => {
+    const { container } = render(
+      <CodeMirrorEditor value="a b" onChange={vi.fn()} showWhitespace={true} />
+    );
+    await act(async () => {});
+
+    const line = container.querySelector('.cm-line');
+    expect(line).not.toBeNull();
+    if (!line) return;
+
+    const marker = line.querySelector(
+      '.cm-ws-marker.cm-ws-space[data-ws-marker="1"]'
+    ) as HTMLElement | null;
+    expect(marker).toBeTruthy();
+    expect(marker?.getAttribute('aria-hidden')).toBeNull();
+    expect(marker?.querySelector('.cm-ws-glyph')).toBeNull();
+  });
+
   it('renders a visible tab marker when showWhitespace is active', async () => {
     const ref = React.createRef<EditorView | null>();
     const { container } = render(

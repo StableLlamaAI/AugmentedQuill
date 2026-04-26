@@ -89,6 +89,17 @@ body.light ::-webkit-scrollbar-thumb:hover {
   border-bottom-color: transparent !important;
 }
 
+.cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  border-bottom-color: rgba(34, 197, 94, 0.4) !important;
+}
+
+.cm-diff-deleted .cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'],
+.cm-ws-marker.cm-diff-deleted[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.4) !important;
+}
+
 .cm-ws-marker[data-ws-selected='1'] .cm-ws-glyph {
   /* Selection bg is semi-transparent — no text inversion, keep normal dim colour */
   color: color-mix(in srgb, currentColor 35%, transparent);
@@ -107,16 +118,17 @@ body.light ::-webkit-scrollbar-thumb:hover {
 .cm-ws-marker[data-ws-marker='1'] {
   display: inline;
   position: relative;
-  color: inherit;
-}
-
-.cm-ws-marker[data-ws-marker='1'] .cm-ws-glyph {
-  display: inline;
-  white-space: pre;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+  white-space: break-spaces;
   background-image: radial-gradient(circle, currentColor 35%, transparent 36%);
   background-position: center;
   background-repeat: no-repeat;
   background-size: 0.35em 0.35em;
+}
+
+.cm-ws-marker[data-ws-marker='1'] .cm-ws-glyph {
+  display: inline;
+  white-space: inherit;
 }
 
 .cm-ws-marker[data-ws-tab='1'] {

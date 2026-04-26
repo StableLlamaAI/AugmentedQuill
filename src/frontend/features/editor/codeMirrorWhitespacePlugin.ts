@@ -6,8 +6,8 @@
 // (at your option) any later version.
 
 /**
- * CodeMirror whitespace display plugin: replaces spaces, tabs, and newlines
- * with visible glyph widgets while leaving the document content unchanged.
+ * CodeMirror whitespace display plugin: renders spaces as styled marks and
+ * tabs/newlines as widgets while leaving the document content unchanged.
  */
 
 import {
@@ -198,6 +198,10 @@ function createNewlineWidget(isDiff: boolean, isSelected: boolean): WidgetType {
       : wsNlWidget;
 }
 
+function createSpaceDecoration(isSelected: boolean): Decoration {
+  return isSelected ? wsSpaceSelectedMark : wsSpaceMark;
+}
+
 function createWhitespaceWidget(
   ch: string,
   isInserted: boolean,
@@ -224,6 +228,25 @@ function createWhitespaceWidget(
   return null;
 }
 
+function createSpaceMark(
+  diffFlag?: WsDiffFlag,
+  selectedFlag?: WsSelectedFlag
+): Decoration {
+  const attributes: Record<string, string> = {
+    class: 'cm-ws-marker cm-ws-space',
+    'data-ws-marker': '1',
+  };
+  if (diffFlag) {
+    attributes['data-ws-diff'] = diffFlag;
+  }
+  if (selectedFlag) {
+    attributes['data-ws-selected'] = selectedFlag;
+  }
+  return Decoration.mark({ attributes });
+}
+
+const wsSpaceMark = createSpaceMark();
+const wsSpaceSelectedMark = createSpaceMark(undefined, '1');
 export const buildWhitespacePlugin = (
   baseline: string | undefined,
   showDiff: boolean,
@@ -313,6 +336,17 @@ export const buildWhitespacePlugin = (
           const pos = vpFrom + i;
           const isInsertedWs = insertedWhitespace?.has(pos) ?? false;
           const isSelectedWs = intersectsSelection(pos, pos + 1);
+          if (ch === ' ') {
+            if (isInsertedWs) {
+              const widget = createWhitespaceWidget(ch, isInsertedWs, isSelectedWs);
+              if (widget) {
+                decs.push(Decoration.replace({ widget }).range(pos, pos + 1));
+              }
+            } else {
+              decs.push(createSpaceDecoration(isSelectedWs).range(pos, pos + 1));
+            }
+            continue;
+          }
           const widget = createWhitespaceWidget(ch, isInsertedWs, isSelectedWs);
           if (widget) {
             decs.push(Decoration.replace({ widget }).range(pos, pos + 1));

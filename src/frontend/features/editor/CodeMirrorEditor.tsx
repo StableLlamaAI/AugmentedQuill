@@ -129,6 +129,14 @@ const baseTheme = EditorView.theme({
     verticalAlign: 'baseline',
     boxSizing: 'border-box',
   },
+  '.cm-ws-marker.cm-ws-space': {
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
+    whiteSpace: 'break-spaces',
+    backgroundImage: 'radial-gradient(circle, currentColor 35%, transparent 36%)',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '0.35em 0.35em',
+  },
   '.cm-ws-marker .cm-ws-glyph': {
     opacity: '1',
     color: 'color-mix(in srgb, currentColor 35%, transparent)',
@@ -144,6 +152,15 @@ const baseTheme = EditorView.theme({
     backgroundColor: 'transparent !important',
     borderBottomColor: 'transparent !important',
   },
+  ".cm-ws-marker[data-ws-diff='1'][data-ws-selected='1']": {
+    backgroundColor: 'rgba(34, 197, 94, 0.15) !important',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4) !important',
+  },
+  ".cm-diff-deleted .cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'], .cm-ws-marker.cm-diff-deleted[data-ws-diff='1'][data-ws-selected='1']":
+    {
+      backgroundColor: 'rgba(239, 68, 68, 0.15) !important',
+      borderBottomColor: 'rgba(239, 68, 68, 0.4) !important',
+    },
   ".cm-ws-marker[data-ws-diff='1']": {
     opacity: '1',
     backgroundColor: 'rgba(34, 197, 94, 0.15)',
