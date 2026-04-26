@@ -9,31 +9,31 @@
 
 from fastapi import APIRouter, HTTPException, Path as FastAPIPath
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
 from augmentedquill.services.chapters.chapters_api_ops import (
     chapter_detail_payload,
     list_chapters_payload,
 )
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.models.chapters import ChaptersListResponse, ChapterDetailResponse
 
-router = APIRouter(tags=["Chapters"])
+router = APIRouter(prefix="/projects/{project_name}", tags=["Chapters"])
 
 
 @router.get("/chapters", response_model=ChaptersListResponse)
-async def api_chapters() -> ChaptersListResponse:
-    active = get_active_project_dir()
-    return {"chapters": list_chapters_payload(active)}
+async def api_chapters(project_dir: ProjectDep) -> ChaptersListResponse:
+    """Handle the API request to chapters."""
+    return {"chapters": list_chapters_payload(project_dir)}
 
 
 @router.get("/chapters/{chap_id}", response_model=ChapterDetailResponse)
 async def api_chapter_content(
-    chap_id: int = FastAPIPath(..., ge=0)
+    project_dir: ProjectDep,
+    chap_id: int = FastAPIPath(..., ge=0),
 ) -> ChapterDetailResponse:
     """Api Chapter Content."""
-    _, path, _ = _chapter_by_id_or_404(chap_id)
-    active = get_active_project_dir()
-    chapter = chapter_detail_payload(active, chap_id, path)
+    _, path, _ = _chapter_by_id_or_404(chap_id, active=project_dir)
+    chapter = chapter_detail_payload(project_dir, chap_id, path)
 
     try:
         content = path.read_text(encoding="utf-8")

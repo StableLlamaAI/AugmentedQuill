@@ -40,12 +40,15 @@ from augmentedquill.services.projects.projects import (
     load_registry,
     select_project,
 )
+from augmentedquill.utils.path_utils import safe_child_path
 from augmentedquill.services.projects.projects_api_manage_ops import normalize_registry
+from augmentedquill.models.story import ProjectMutationResponse
 
 _RESTORE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    """Return a safe child path.."""
     base_resolved = base_dir.resolve()
     candidate = base_resolved.joinpath(*parts).resolve()
     if not candidate.is_relative_to(base_resolved):
@@ -54,12 +57,14 @@ def _safe_child_path(base_dir: Path, *parts: str) -> Path:
 
 
 def _validate_restore_id(restore_id: str) -> str:
+    """Validate restore id."""
     if not _RESTORE_ID_PATTERN.fullmatch(restore_id or ""):
         raise BadRequestError("Invalid restore_id")
     return restore_id
 
 
 def list_images_response() -> JSONResponse:
+    """List images response."""
     images = get_project_images()
     return JSONResponse(status_code=200, content={"images": images})
 
@@ -96,10 +101,12 @@ def create_image_placeholder_response(payload: dict) -> JSONResponse:
 
 
 def _sanitize_target_name(raw: str) -> str:
+    """Helper for target name.."""
     return "".join(c for c in raw if c.isalnum() or c in "._-").strip()
 
 
 def _get_deleted_images_dir(active: Path) -> Path:
+    """Return deleted images dir."""
     deleted_dir = active / ".aq_history" / "deleted_images"
     deleted_dir.mkdir(parents=True, exist_ok=True)
     return deleted_dir
@@ -295,7 +302,7 @@ def export_project_response(name: str | None = None) -> Response:
     )
 
 
-async def import_project_response(file: UploadFile) -> JSONResponse:
+async def import_project_response(file: UploadFile) -> ProjectMutationResponse:
     """Import Project Response."""
     if not file.filename.endswith(".zip"):
         raise BadRequestError("File must be a ZIP archive")
@@ -312,7 +319,19 @@ async def import_project_response(file: UploadFile) -> JSONResponse:
                 member_path = Path(member.filename)
                 if member_path.is_absolute() or ".." in member_path.parts:
                     continue
-                zf.extract(member, temp_dir)
+
+                try:
+                    target_path = safe_child_path(temp_dir, *member_path.parts)
+                except ValueError:
+                    continue
+
+                if member.is_dir():
+                    target_path.mkdir(parents=True, exist_ok=True)
+                    continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as source, target_path.open("wb") as dest:
+                    shutil.copyfileobj(source, dest)
 
         if not (temp_dir / "story.json").exists():
             shutil.rmtree(temp_dir)
@@ -340,14 +359,10 @@ async def import_project_response(file: UploadFile) -> JSONResponse:
         normalized_reg = normalize_registry(reg)
         available = list_projects()
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "message": f"Imported as {final_name}",
-                "registry": normalized_reg,
-                "available": available,
-            },
+        return ProjectMutationResponse(
+            ok=True,
+            message=f"Imported as {final_name}",
+            registry={"current": normalized_reg["current"], "recent": normalized_reg["recent"], "available": available},  # type: ignore[arg-type]
         )
     except Exception as e:
         if temp_dir.exists():

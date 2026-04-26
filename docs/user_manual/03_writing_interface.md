@@ -2,7 +2,7 @@
 
 The main column of AugmentedQuill is your prose studio. It shows the active chapter (title plus editable body), hosts the AI buttons that extend or rewrite the draft, and keeps suggestions, uploads, and formatting controls just within reach. The chapter and book management UI lives in the sidebar, which is described in [Chapters and Books](04_chapters_and_books.md).
 
-`[SCREENSHOT: Main editor view with the Chapter AI badge visible at the top and the suggestion footer offering cards]`
+![Main editor view with the Chapter AI badge visible at the top and the suggestion footer offering cards](screenshots/main.png)
 
 ## Editor Workspace
 
@@ -36,7 +36,7 @@ Drag an image file (PNG, JPEG, GIF, WEBP) and drop it onto the editor paper area
 
 The condensed bar above the editor holds view toggles, formatting helpers, AI buttons, and the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING / <img src="assets/pen.svg" alt="Pen icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/fuchsia.svg" alt="Fuchsia swatch" width="16" height="16" style="vertical-align:text-bottom;" /> EDITING / <img src="assets/message-square.svg" alt="Message Square icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/blue.svg" alt="Blue swatch" width="16" height="16" style="vertical-align:text-bottom;" /> CHAT model selectors. On desktop the buttons are exposed; smaller screens wrap the view and formatting controls inside expandable menus so the same commands stay within reach.
 
-`[SCREENSHOT: Top header bar focused on the center section: view toggles, format toolbar, Chapter AI, and model selectors]`
+![Top header bar focused on the center section: view toggles, format toolbar, Chapter AI, and model selectors](screenshots/main.png)
 
 ### View and Whitespace
 
@@ -160,7 +160,7 @@ Each dropdown button shows a colored status dot (green = connected, red = failed
 
 All three writing-focused actions — Extend, Rewrite, and Suggest — use the **WRITING** model (<img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> Book Open, <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Violet) explained in the machine settings guide. The action buttons live in the floating toolbar and the persistent footer, so they are always available even as you scroll.
 
-`[SCREENSHOT: Chapter AI badge showing Extend and Rewrite on a light background plus the Suggest button in the footer]`
+![Chapter AI badge showing Extend and Rewrite on a light background plus the Suggest button in the footer](screenshots/03_chapter_ai.png)
 
 ### Extend Chapter
 
@@ -172,11 +172,30 @@ Next to Extend is `Rewrite`, decorated with the <img src="assets/file-pen.svg" a
 
 ### Suggest Next Paragraph
 
-`[SCREENSHOT: The suggestion footer open with two or three continuation cards and the Dismiss button]`
+![The suggestion footer open with two or three continuation cards and the Dismiss button](screenshots/03_continuation.png)
 
 At the bottom of the editor sits the pulsing `Suggest next paragraph` pill with the <img src="assets/sparkles.svg" alt="Sparkles icon" width="16" height="16" style="vertical-align:text-bottom;" /> Sparkles icon. Click it to open the **continuation pane**. The <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model generates two or more short continuation options, each shown as a card. Click any card to insert that text at the cursor and close the pane, or press **Dismiss** to discard all suggestions without changing your draft.
 
 While suggestions are still generating, the button shows a spinner and the word "Working…" The suggestion cards appear as they stream in, so you may see partial text before generation finishes.
+
+### Suggestion Mode Selector
+
+To the right of the **Suggest next paragraph** control, a mode selector lets you choose how much context the <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model receives:
+
+- **Guided**: Uses full story and chapter context and applies stronger guidance for continuation quality.
+- **Instructed**: Uses full story and chapter context with an explicit "write the immediate next paragraph" instruction.
+- **Pure**: Uses only the current chapter text, with no extra story/chapter context.
+
+You can change the mode before requesting suggestions and also while the suggestion pane is open.
+
+Suggestion quality is controlled by the active **WRITING provider** settings in **Machine Settings**:
+
+- **Suggestion Loop Guard** (On/Off)
+- **Loop N-gram** (3-gram or 4-gram)
+- **Min Repeats**
+- **Max Regenerations**
+
+If the end of a suggested paragraph looks weak or repetitive, keep Loop Guard enabled and increase **Max Regenerations** by one step.
 
 **Keyboard shortcuts for suggestions:**
 
@@ -196,7 +215,7 @@ The summary tab inside the Metadata Editor dialog (covered in [Chapters and Book
 
 These controls update the planning layer around a chapter rather than the prose itself. The summaries they produce help CHAT steer the project and help WRITING stay aligned when it generates new text.
 
-`[SCREENSHOT: Metadata summary tab with AI Write/Update/Rewrite buttons highlighted]`
+![Metadata summary tab with AI Write/Update/Rewrite buttons highlighted](screenshots/03_metadata_summary.png)
 
 ---
 
@@ -206,6 +225,7 @@ These controls update the planning layer around a chapter rather than the prose 
 - The suggestion pane always shows the last set of continuations, so you can keep requesting more or hit `Dismiss` once you are satisfied.
 - Even when AI actions are running, you can keep typing because the UI disables only the relevant button and leaves the rest of the editor responsive.
 - Switch between Raw, MD, and Visual modes freely — the underlying file is the same markdown source regardless of which view you use.
+- Press **Ctrl+F** (or **Cmd+F** on macOS) at any time — or click the **<img src="assets/search.svg" alt="Search icon" width="16" height="16" style="vertical-align:text-bottom;" /> Search** icon in the top-right header — to open the project-wide **Search and Replace** dialog. See [Search and Replace](12_search_and_replace.md) for the full guide.
 
 ---
 

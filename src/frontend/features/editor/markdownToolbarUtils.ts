@@ -153,7 +153,13 @@ const resolveInlineTarget = (
   return { start, end };
 };
 
-const countChar = (s: string, c: string) => s.split(c).length - 1;
+const countChar = (s: string, c: string) => {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === c) n++;
+  }
+  return n;
+};
 
 const getLeftFormat = (str: string, start: number) => {
   let L = start;
@@ -433,7 +439,7 @@ export const insertFootnote = (
 ): { nextRawText: string; nextCaret: number } => {
   // Find the next available footnote number.
   const existing = rawText.match(/\[\^(\d+)\]/g) ?? [];
-  const maxNum = existing.reduce((max, m) => {
+  const maxNum = existing.reduce((max: number, m: string) => {
     const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
     return n > max ? n : max;
   }, 0);

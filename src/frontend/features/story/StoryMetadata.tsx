@@ -9,16 +9,20 @@
  * Defines the story metadata unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Edit } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   MarkdownView,
   hasUnsupportedSummaryMarkdown,
   SummaryWarning,
 } from '../editor/MarkdownView';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { AppTheme, Conflict } from '../../types';
+import { useMetadataDialog, useUIStore } from '../../stores/uiStore';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from './MetadataEditorDialog';
+import { MetadataParams } from './metadataSync';
 
 interface StoryMetadataProps {
   title: string;
@@ -44,10 +48,17 @@ interface StoryMetadataProps {
     action: 'write' | 'update' | 'rewrite',
     onProgress?: (text: string) => void,
     currentText?: string,
-    onThinking?: (thinking: string) => void
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
   ) => Promise<string | undefined>;
   summaryAiDisabledReason?: string;
+  primarySourceAvailable?: boolean;
   theme?: AppTheme;
+  baselineSummary?: string;
+  baselineNotes?: string;
+  baselinePrivateNotes?: string;
+  baselineConflicts?: Conflict[];
+  spellCheck?: boolean;
 }
 
 export const StoryMetadata: React.FC<StoryMetadataProps> = ({
@@ -63,11 +74,21 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
   onUpdate,
   onAiGenerateSummary,
   summaryAiDisabledReason,
+  primarySourceAvailable,
   theme = 'mixed',
-}) => {
-  const [metadataModalOpen, setMetadataModalOpen] = useState(false);
+  baselineSummary = '',
+  baselineNotes = '',
+  baselinePrivateNotes = '',
+  baselineConflicts = [],
+  spellCheck = true,
+}: StoryMetadataProps) => {
+  const { t } = useTranslation();
+  const metadataDialog = useMetadataDialog();
 
   const { isLight } = useThemeClasses();
+  const { getRanges } = useSearchHighlight();
+  const summaryHighlightRanges = getRanges('story_metadata', 'story', 'story_summary');
+
   const containerClass = isLight
     ? 'bg-brand-gray-50 text-brand-gray-800 border-brand-gray-200'
     : 'bg-brand-gray-900 text-brand-gray-300 border-brand-gray-800';
@@ -76,23 +97,15 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
     : 'bg-brand-gray-800 text-brand-gray-400 border-brand-gray-700';
   const usesStoryDraftSource = projectType === 'short-story';
   const primarySourceLabel = usesStoryDraftSource
-    ? 'Story Draft'
+    ? t('Story Draft')
     : projectType === 'series'
-      ? 'Books'
-      : 'Chapters';
+      ? t('Books')
+      : t('Chapters');
 
-  const handleMetadataSave = async (data: {
-    title: string;
-    summary: string;
-    tags: string[];
-    notes?: string;
-    private_notes?: string;
-    conflicts?: Conflict[];
-    language?: string;
-  }) => {
+  const handleMetadataSave = async (data: MetadataParams) => {
     await onUpdate(
-      data.title,
-      data.summary,
+      data.title || '',
+      data.summary || '',
       data.tags || [],
       data.notes,
       data.private_notes,
@@ -106,10 +119,13 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       id="story-metadata"
       className={`p-6 flex-1 overflow-y-auto custom-scrollbar ${containerClass}`}
     >
-      {metadataModalOpen && (
+      {metadataDialog.isOpen && (
         <MetadataEditorDialog
+          key={metadataDialog.version}
           type="story"
-          title="Edit Story Metadata"
+          title={t('Edit Story Metadata')}
+          language={language}
+          spellCheck={spellCheck}
           initialData={{
             title,
             summary,
@@ -119,13 +135,23 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
             conflicts,
             language,
           }}
+          baseline={{
+            title,
+            summary: baselineSummary,
+            notes: baselineNotes,
+            private_notes: baselinePrivateNotes,
+            conflicts: baselineConflicts,
+            language,
+          }}
           languages={languages}
           onSave={handleMetadataSave}
-          onClose={() => setMetadataModalOpen(false)}
+          onClose={() => useUIStore.getState().closeMetadataDialog()}
           allowConflicts={usesStoryDraftSource}
           primarySourceLabel={primarySourceLabel}
+          initialTab={metadataDialog.initialTab}
           onAiGenerate={onAiGenerateSummary}
           aiDisabledReason={summaryAiDisabledReason}
+          primarySourceAvailable={primarySourceAvailable}
           theme={theme}
         />
       )}
@@ -141,7 +167,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           </h1>
           {!!conflicts?.length && (
             <span
-              className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold"
+              className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold"
               aria-label={`${conflicts.length} active conflicts`}
               title={`${conflicts.length} active conflicts`}
             >
@@ -150,8 +176,10 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
           )}
         </div>
         <button
-          onClick={() => setMetadataModalOpen(true)}
+          onClick={() => useUIStore.getState().openMetadataDialog()}
           className="text-brand-gray-500 hover:text-brand-gray-400 transition-colors"
+          aria-label={t('Edit story metadata')}
+          title={t('Edit story metadata')}
         >
           <Edit size={16} />
         </button>
@@ -159,25 +187,21 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       <div className="text-sm text-brand-gray-500 mb-4 leading-relaxed">
         {summary ? (
           <div className="flex flex-col gap-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-            <MarkdownView content={summary} simple />
+            <MarkdownView
+              content={summary}
+              simple
+              baseline={baselineSummary}
+              language={language}
+              searchHighlightRanges={summaryHighlightRanges}
+            />
             {hasUnsupportedSummaryMarkdown(summary) && <SummaryWarning />}
           </div>
         ) : (
-          <span className="italic">No description yet.</span>
+          <span className="italic">{t('No description yet.')}</span>
         )}
       </div>
-      {notes && (
-        <div className="text-sm text-brand-gray-500 mb-4 leading-relaxed border-t pt-2 dark:border-gray-700">
-          <span className="text-xs uppercase font-bold text-brand-gray-600 block mb-1">
-            Notes (LLM Visible)
-          </span>
-          <div className="max-h-24 overflow-y-auto custom-scrollbar">
-            <MarkdownView content={notes} simple />
-          </div>
-        </div>
-      )}
       <div className="flex flex-wrap gap-2">
-        {tags.map((tag, i) => (
+        {tags.map((tag: string, i: number) => (
           <span key={i} className={`px-2 py-1 text-xs rounded-full border ${tagClass}`}>
             {tag}
           </span>

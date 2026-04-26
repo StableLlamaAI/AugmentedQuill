@@ -11,6 +11,7 @@
 
 import { ViewMode } from '../types';
 
+/** Helper for content with separator. */
 export function computeContentWithSeparator(
   prefix: string,
   text: string,
@@ -56,6 +57,13 @@ export function computeContentWithSeparator(
 
     if (totalBoundaryNewlines >= 2) {
       separator = '';
+      // Normalize excess newlines: more than two consecutive \n at the boundary
+      // is not valid markdown (extra blank lines). Trim the surplus from the
+      // leading edge of text so the joined result never exceeds one paragraph break.
+      if (totalBoundaryNewlines > 2) {
+        const excess = totalBoundaryNewlines - 2;
+        text = text.substring(excess);
+      }
     } else if (preNewlines > 0 || textNewlines > 0) {
       separator = '\n'.repeat(Math.max(0, 2 - totalBoundaryNewlines));
     } else {
@@ -67,6 +75,50 @@ export function computeContentWithSeparator(
     newContent: prefix + separator + text + suffix,
     separator,
   };
+}
+
+/**
+ * Join existing prose with an accepted AI suggestion using markdown-aware rules.
+ *
+ * The suggestion text from the backend carries leading newlines as a semantic
+ * signal about how the new text should attach to the existing prose:
+ *
+ *   - No leading `\n`  → inline continuation; append directly (no separator).
+ *   - Single `\n`      → hard line break: `  \n` (two trailing spaces, then newline).
+ *   - Two or more `\n` → paragraph break: exactly `\n\n`.
+ *
+ * The same paragraph-break rule fires when the existing prose already ends with
+ * two or more `\n`, regardless of what the suggestion starts with.
+ *
+ * Any excess trailing newlines on `prefix` are consumed into the separator so
+ * the joined result never has more than two consecutive `\n` at the boundary.
+ */
+export function joinSuggestionToContent(prefix: string, suggestion: string): string {
+  // Count trailing \n characters on the prefix.
+  let trailingNL = 0;
+  for (let i = prefix.length - 1; i >= 0 && prefix[i] === '\n'; i--) {
+    trailingNL++;
+  }
+
+  // Count leading \n characters on the suggestion.
+  let leadingNL = 0;
+  while (leadingNL < suggestion.length && suggestion[leadingNL] === '\n') {
+    leadingNL++;
+  }
+  const prose = suggestion.substring(leadingNL);
+
+  if (trailingNL >= 2 || leadingNL >= 2) {
+    // Paragraph break: strip all trailing newlines from prefix, join with \n\n.
+    const base = prefix.substring(0, prefix.length - trailingNL);
+    return base + '\n\n' + prose;
+  } else if (leadingNL === 1) {
+    // Markdown hard line break: two trailing spaces + newline.
+    const base = prefix.substring(0, prefix.length - trailingNL);
+    return base + '  \n' + prose;
+  } else {
+    // No leading newline in suggestion: inline continuation, prefix unchanged.
+    return prefix + prose;
+  }
 }
 
 /**
@@ -88,7 +140,8 @@ let smartQuoteChars: SmartQuoteChars = {
   singleClose: '’',
 };
 
-export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>) {
+/** Set smart quote chars. */
+export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>): void {
   smartQuoteChars = {
     doubleOpen: chars.doubleOpen ?? smartQuoteChars.doubleOpen,
     doubleClose: chars.doubleClose ?? smartQuoteChars.doubleClose,
@@ -97,7 +150,8 @@ export function setSmartQuoteChars(chars: Partial<SmartQuoteChars>) {
   };
 }
 
-export function resetSmartQuoteChars() {
+/** Helper for smart quote chars. */
+export function resetSmartQuoteChars(): void {
   smartQuoteChars = {
     doubleOpen: '“',
     doubleClose: '”',
@@ -106,6 +160,7 @@ export function resetSmartQuoteChars() {
   };
 }
 
+/** Apply smart quotes. */
 export function applySmartQuotes(
   text: string,
   overrideChars?: Partial<SmartQuoteChars>
@@ -128,13 +183,15 @@ export function applySmartQuotes(
   return result;
 }
 
-export function convertContentEditableQuotes(root: HTMLElement) {
+/** Helper for content editable quotes. */
+export function convertContentEditableQuotes(root: HTMLElement): void {
   const selection = window.getSelection();
   const savedRange =
     selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
+    /** Helper for node. */
+    acceptNode(node: Node): 2 | 1 {
       const value = node.nodeValue || '';
       return /["']/.test(value) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
@@ -172,6 +229,7 @@ function findContentEditableRoot(node: Node | null): HTMLElement | null {
   return null;
 }
 
+/** Return text offset. */
 function getTextOffset(root: Node, target: Node, offset: number): number | null {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let current = walker.nextNode() as Text | null;
@@ -188,10 +246,12 @@ function getTextOffset(root: Node, target: Node, offset: number): number | null 
   return null;
 }
 
+/** Return whether opening double quote context. */
 function isOpeningDoubleQuoteContext(prevChar: string | undefined): boolean {
   return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
 }
 
+/** Return whether opening single quote context. */
 function isOpeningSingleQuoteContext(
   prevChar: string | undefined,
   nextChar: string | undefined
@@ -205,6 +265,7 @@ function isOpeningSingleQuoteContext(
   return !prevChar || /[\s(\[{<—\-\*_]/.test(prevChar);
 }
 
+/** Return smart quote for insertion. */
 function getSmartQuoteForInsertion(
   quote: '"' | "'",
   leftText: string,
@@ -224,6 +285,7 @@ function getSmartQuoteForInsertion(
     : smartQuoteChars.singleClose;
 }
 
+/** Helper for replace inserted quote in content editable. */
 export function maybeReplaceInsertedQuoteInContentEditable(
   e: InputEvent,
   root: HTMLElement
@@ -279,11 +341,12 @@ export function maybeReplaceInsertedQuoteInContentEditable(
   return true;
 }
 
-export function setupSmartQuotesProxy() {
+/** Helper for smart quotes proxy. */
+export function setupSmartQuotesProxy(): void {
   if (typeof window === 'undefined') return;
   document.addEventListener(
     'input',
-    (e) => {
+    (e: InputEvent) => {
       const targetNode = e.target as Node | null;
       if (!targetNode) return;
 

@@ -16,7 +16,7 @@ import httpx
 
 def get_story_llm_preferences(
     *,
-    config_dir,
+    config_dir: Any,
     get_active_project_dir: Callable[[], Any],
     load_story_config: Callable[[Any], Dict[str, Any] | None],
 ) -> tuple[float, int | None]:
@@ -35,6 +35,7 @@ def get_story_llm_preferences(
 
 
 def build_headers(api_key: str | None) -> Dict[str, str]:
+    """Build headers."""
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -42,6 +43,7 @@ def build_headers(api_key: str | None) -> Dict[str, str]:
 
 
 def build_timeout(timeout_s: int) -> httpx.Timeout:
+    """Build timeout."""
     try:
         return httpx.Timeout(float(timeout_s or 60))
     except Exception:

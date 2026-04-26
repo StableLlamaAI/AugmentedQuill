@@ -8,9 +8,8 @@
  * Purpose: Global CSS entrypoint (Tailwind + app global styles).
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@config "./tailwind.config.js";
 
 body {
   font-family: 'Inter', sans-serif;
@@ -61,8 +60,149 @@ body.light ::-webkit-scrollbar-thumb:hover {
   line-height: 1.75;
 }
 
-.prose-editor:focus {
-  outline: none;
+/* AI diff highlight — shows text added/changed since the last undo/redo point.
+   Used in WYSIWYG mode and Markdown view renderings outside the CM editor. */
+.diff-inserted {
+  background-color: rgba(34, 197, 94, 0.12);
+  border-bottom: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 2px;
+}
+
+.cm-ws-marker {
+  opacity: 1;
+  pointer-events: auto;
+  user-select: text;
+  font-style: normal;
+  font-weight: normal;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.cm-ws-marker .cm-ws-glyph {
+  opacity: 1;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker[data-ws-selected='1'] {
+  background-color: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
+.cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  border-bottom-color: rgba(34, 197, 94, 0.4) !important;
+}
+
+.cm-diff-deleted .cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'],
+.cm-ws-marker.cm-diff-deleted[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.cm-ws-marker[data-ws-selected='1'] .cm-ws-glyph {
+  /* Selection bg is semi-transparent — no text inversion, keep normal dim colour */
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker::selection,
+.cm-ws-marker .cm-ws-glyph::selection {
+  background-color: transparent;
+}
+
+.cm-ws-marker::-moz-selection,
+.cm-ws-marker .cm-ws-glyph::-moz-selection {
+  background-color: transparent;
+}
+
+.cm-ws-marker[data-ws-marker='1'] {
+  display: inline;
+  position: relative;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+  white-space: break-spaces;
+  background-image: radial-gradient(circle, currentColor 35%, transparent 36%);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 0.35em 0.35em;
+}
+
+.cm-ws-marker[data-ws-marker='1'] .cm-ws-glyph {
+  display: inline;
+  white-space: inherit;
+}
+
+.cm-ws-marker[data-ws-tab='1'] {
+  display: inline;
+  min-width: 0;
+  width: auto;
+  padding-right: 0.55ch;
+  text-align: center;
+  vertical-align: baseline;
+  background-image: none;
+  color: currentColor;
+}
+
+.cm-ws-marker[data-ws-nl='1']:not([data-ws-gap='1']) {
+  display: inline;
+  background-image: none;
+  color: currentColor;
+}
+
+.search-highlight,
+mark.search-highlight {
+  background-color: rgba(245, 158, 11, 0.25);
+  border-radius: 2px;
+  color: inherit;
+}
+
+.diff-deleted {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.4);
+  text-decoration: line-through;
+  opacity: 0.8;
+  border-radius: 2px;
+}
+
+.prose-editor:focus,
+.prose-editor:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.prose-editor h1,
+.prose-editor h2,
+.prose-editor h3,
+.prose-editor h4,
+.prose-editor h5,
+.prose-editor h6 {
+  margin-top: 1.6em;
+  margin-bottom: 0.7em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.prose-editor h1 {
+  font-size: 2rem;
+}
+
+.prose-editor h2 {
+  font-size: 1.75rem;
+}
+
+.prose-editor h3 {
+  font-size: 1.5rem;
+}
+
+.prose-editor h4 {
+  font-size: 1.25rem;
+}
+
+.prose-editor h5 {
+  font-size: 1.1rem;
+}
+
+.prose-editor h6 {
+  font-size: 1rem;
 }
 
 .prose-editor p:first-child {
@@ -75,4 +215,42 @@ body.light ::-webkit-scrollbar-thumb:hover {
 
 .prose-editor p {
   margin: 1em 0;
+}
+
+/* Accessibility: visible keyboard focus indication */
+:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+button,
+a,
+[role='button'],
+[role='link'],
+input[type='button'],
+input[type='submit'],
+input[type='reset'] {
+  cursor: pointer;
+}
+
+button:disabled,
+button[disabled],
+input[type='button'][disabled],
+input[type='submit'][disabled],
+input[type='reset'][disabled],
+[role='button'][aria-disabled='true'],
+[role='link'][aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+[role='link']:focus-visible,
+[tabindex='0']:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
 }

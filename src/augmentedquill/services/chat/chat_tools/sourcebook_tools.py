@@ -7,7 +7,7 @@
 
 """Defines the sourcebook tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
-from typing import List, Union
+from typing import Any, List, Union
 
 from pydantic import BaseModel, Field
 
@@ -25,7 +25,6 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_list_entries,
     sourcebook_refresh_entry_keywords,
     sourcebook_remove_relation,
-    sourcebook_search_entries_with_keyword_refresh,
     sourcebook_update_entry,
     _get_story_data,
 )
@@ -97,20 +96,6 @@ def _strip_internal_sourcebook_fields_list(entries: list[dict]) -> list[dict]:
 # Pydantic models for tool parameters
 
 
-class SearchSourcebookParams(BaseModel):
-    """Parameters for searching the sourcebook."""
-
-    query: str = Field(..., description="The search query string")
-    match_mode: str = Field(
-        default="direct",
-        description="Search mode: 'direct' returns only exact name/synonym match. 'extensive' matches name, synonym, and generated keywords.",
-    )
-    split_query_fallback: bool = Field(
-        default=True,
-        description="If true and no extensive match is found, split query into tokens and match each token individually.",
-    )
-
-
 class SourcebookRelation(BaseModel):
     """Represents a relation between sourcebook entries.
 
@@ -129,19 +114,19 @@ class SourcebookRelation(BaseModel):
     )
     start_chapter: str | None = Field(
         None,
-        description="Optional start chapter for the relation (novel/series projects).",
+        description="Optional start chapter for the relation.",
     )
     end_chapter: str | None = Field(
         None,
-        description="Optional end chapter for the relation (novel/series projects).",
+        description="Optional end chapter for the relation.",
     )
     start_book: str | None = Field(
         None,
-        description="Optional start book for the relation (series projects).",
+        description="Optional start book for the relation.",
     )
     end_book: str | None = Field(
         None,
-        description="Optional end book for the relation (series projects).",
+        description="Optional end book for the relation.",
     )
 
 
@@ -201,45 +186,13 @@ class DeleteSourcebookEntryParams(BaseModel):
 
 
 @chat_tool(
-    description=(
-        "Search the sourcebook for entries matching a query string. "
-        "Each returned entry includes its relations, where each relation is a 3-element list: "
-        "[source_id, relation_type, target_id]."
-    ),
-    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
-    capability="sourcebook-read",
-)
-async def search_sourcebook(
-    params: SearchSourcebookParams, payload: dict, mutations: dict
-):
-    """Search the sourcebook for entries matching a query string."""
-    mode = (params.match_mode or "direct").strip().lower()
-    if mode not in ("direct", "extensive"):
-        return {
-            "error": "Invalid match_mode. Allowed values are 'direct' or 'extensive'."
-        }
-
-    entries = await sourcebook_search_entries_with_keyword_refresh(
-        params.query,
-        match_mode=mode,
-        split_query_fallback=params.split_query_fallback,
-        payload=payload,
-    )
-    if mode == "direct":
-        if not entries:
-            return []
-        return {"entry": _strip_internal_sourcebook_fields(entries[0])}
-    return _strip_internal_sourcebook_fields_list(entries)
-
-
-@chat_tool(
     description="Get a specific sourcebook entry by name or ID.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="sourcebook-read",
 )
 async def get_sourcebook_entry(
     params: GetSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Sourcebook Entry.
 
     Accepts either a single string (name/ID) or a list of strings.
@@ -267,7 +220,7 @@ async def get_sourcebook_entry(
 )
 async def create_sourcebook_entry(
     params: CreateSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Create Sourcebook Entry."""
     new_entry = sourcebook_create_entry(
         name=params.name,
@@ -285,14 +238,30 @@ async def create_sourcebook_entry(
 
 
 @chat_tool(
-    description="Update an existing sourcebook entry. Provide only the fields you want to change. If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable.",
+    description=(
+        "Update an existing sourcebook entry. Provide only the fields you want to change; this is a partial replacement. "
+        "At least one of name, description, category, synonyms, or images must be provided. "
+        "If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. "
+        "For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="sourcebook-write",
 )
 async def update_sourcebook_entry(
     params: UpdateSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Update Sourcebook Entry."""
+    if (
+        params.name is None
+        and params.description is None
+        and params.category is None
+        and params.synonyms is None
+        and params.images is None
+    ):
+        return {
+            "error": "No update fields provided. Provide at least one of name, description, category, synonyms, or images with replacement values to update the entry."
+        }
+
     result = sourcebook_update_entry(
         name_or_id=params.name_or_id,
         name=params.name,
@@ -316,7 +285,7 @@ async def update_sourcebook_entry(
 )
 async def delete_sourcebook_entry(
     params: DeleteSourcebookEntryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Delete Sourcebook Entry."""
     deleted = sourcebook_delete_entry(params.name_or_id)
     if deleted:
@@ -352,7 +321,7 @@ class ListSourcebookEntriesParams(BaseModel):
 )
 async def list_sourcebook_entries(
     params: ListSourcebookEntriesParams, payload: dict, mutations: dict
-):
+) -> Any:
     """List all sourcebook entries with optional category filter."""
     entries = sourcebook_list_entries()
     if params.category:
@@ -382,10 +351,10 @@ class AddSourcebookRelationParams(BaseModel):
         None, description="Optional chapter where the relation ends."
     )
     start_book: str | None = Field(
-        None, description="Optional book where the relation begins (series only)."
+        None, description="Optional book where the relation begins."
     )
     end_book: str | None = Field(
-        None, description="Optional book where the relation ends (series only)."
+        None, description="Optional book where the relation ends."
     )
 
 
@@ -410,7 +379,7 @@ class RemoveSourcebookRelationParams(BaseModel):
 )
 async def add_sourcebook_relation(
     params: AddSourcebookRelationParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Add Sourcebook Relation."""
     result = sourcebook_add_relation(
         source_id=params.source_id,
@@ -436,7 +405,7 @@ async def add_sourcebook_relation(
 )
 async def remove_sourcebook_relation(
     params: RemoveSourcebookRelationParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Remove Sourcebook Relation."""
     result = sourcebook_remove_relation(
         source_id=params.source_id,

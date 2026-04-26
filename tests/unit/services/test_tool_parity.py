@@ -19,6 +19,19 @@ from fastapi.testclient import TestClient
 import augmentedquill.main as main
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ToolParityTest(TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
@@ -110,7 +123,7 @@ class ToolParityTest(TestCase):
         }
         r = self.client.post("/api/v1/chat/tools", json=body)
         self.assertEqual(r.status_code, 200, r.text)
-        data = r.json()
+        data = _parse_tool_sse_result(r.text)
         self.assertTrue(data.get("ok"))
         return json.loads(data["appended_messages"][0]["content"])
 
@@ -346,6 +359,68 @@ class ToolParityTest(TestCase):
             res = self._call_tool("sync_summary", {"chap_id": 1})
             self.assertTrue("summary" in res, f"response lacked summary: {res}")
             self.assertEqual(res["summary"], "Synced summary")
+
+    def test_sync_summary_with_tool_call(self):
+        from unittest.mock import patch, AsyncMock
+
+        _dummy_runtime = (
+            "http://localhost:11434/v1",
+            None,
+            "dummy-model",
+            60,
+            "dummy-model",
+            {},
+        )
+        first_response = {
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_get_story_metadata",
+                    "type": "function",
+                    "function": {
+                        "name": "get_story_metadata",
+                        "arguments": "{}",
+                    },
+                }
+            ],
+            "thinking": "",
+        }
+        second_response = {
+            "content": "Synced summary after tool",
+            "tool_calls": [],
+            "thinking": "",
+        }
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_complete",
+                new_callable=AsyncMock,
+            ) as mock_llm,
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=_dummy_runtime[:5],
+            ),
+            patch(
+                "augmentedquill.services.story.story_generation_ops.resolve_model_runtime",
+                return_value=_dummy_runtime,
+            ),
+            patch(
+                "augmentedquill.services.story.story_generation_ops.execute_registered_tool",
+                new_callable=AsyncMock,
+            ) as mock_tool,
+        ):
+            mock_llm.side_effect = [first_response, second_response]
+            mock_tool.return_value = {
+                "role": "tool",
+                "tool_call_id": "call_get_story_metadata",
+                "name": "get_story_metadata",
+                "content": '{"title": "Test Series"}',
+            }
+
+            res = self._call_tool("sync_summary", {"chap_id": 1})
+            self.assertTrue("summary" in res, f"response lacked summary: {res}")
+            self.assertEqual(res["summary"], "Synced summary after tool")
+            mock_tool.assert_called_once()
 
     def test_sync_story_summary(self):
         from unittest.mock import patch, AsyncMock
@@ -660,6 +735,49 @@ class ToolParityTest(TestCase):
             model_type="EDITING",
         )
         self.assertIn("error", res)
+
+    def test_insert_image_in_chapter_short_story(self):
+        # Create a short-story project with content.md
+        project_name = "test_short_story_image"
+        r = self.client.post(
+            "/api/v1/projects/create",
+            json={"name": project_name, "type": "short-story"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        r = self.client.post(
+            "/api/v1/projects/select",
+            json={"name": project_name},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+
+        from augmentedquill.services.projects.projects import get_active_project_dir
+
+        active = get_active_project_dir()
+        (active / "content.md").write_text(
+            "Paragraph one.\n\nParagraph two.", encoding="utf-8"
+        )
+
+        # Should insert in short-story content as if chap_id=1
+        res = self._call_tool(
+            "insert_image_in_chapter",
+            {"chap_id": 1, "filename": "hero.png", "position": "end"},
+            model_type="EDITING",
+        )
+        self.assertTrue(res.get("ok"), res)
+
+        updated = (active / "content.md").read_text(encoding="utf-8")
+        self.assertIn("![hero.png](hero.png)", updated)
+
+        # Should also support write_chapter_content in short-story context as a pseudo chapter.
+        res = self._call_tool(
+            "write_chapter_content",
+            {"chap_id": 1, "content": "New short story content."},
+            model_type="EDITING",
+        )
+        self.assertIn("successfully", res.get("message", ""))
+
+        updated2 = (active / "content.md").read_text(encoding="utf-8")
+        self.assertEqual(updated2, "New short story content.")
 
     def test_editing_scratchpad(self):
         # Read before any write → empty content

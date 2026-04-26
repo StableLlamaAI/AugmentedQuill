@@ -11,7 +11,7 @@
 
 export default {
   darkMode: 'class',
-  content: ['./index.html', './**/*.{ts,tsx}', '!./node_modules/**/*'],
+  content: ['./index.html', './**/*.{ts,tsx}'],
   theme: {
     extend: {
       fontFamily: {
@@ -53,5 +53,4 @@ export default {
       },
     },
   },
-  plugins: [],
 };

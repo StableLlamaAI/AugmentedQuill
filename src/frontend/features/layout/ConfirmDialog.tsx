@@ -9,7 +9,9 @@
  * Defines the confirm dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React from 'react';
+import React, { useId, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from './useFocusTrap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -20,6 +22,8 @@ export interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'primary' | 'danger';
+  /** When true only the confirm/OK button is shown — acts as an alert dialog. */
+  alertOnly?: boolean;
 }
 
 /**
@@ -34,20 +38,35 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   message,
   onConfirm,
   onCancel,
-  confirmLabel = 'OK',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   variant = 'primary',
-}) => {
+  alertOnly = false,
+}: ConfirmDialogProps) => {
   const { isLight } = useTheme();
+  const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const idBase = useId();
+  useFocusTrap(isOpen, dialogRef, onCancel);
+
+  const resolvedConfirmLabel = confirmLabel ?? t('OK');
+  const resolvedCancelLabel = cancelLabel ?? t('Cancel');
+
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
+  const titleId = title ? `${idBase}-confirm-dialog-title` : undefined;
+  const messageId = `${idBase}-confirm-dialog-description`;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      ref={dialogRef}
+      className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
+      aria-describedby={messageId}
+      tabIndex={-1}
     >
       <div
         className={`${
@@ -58,6 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       >
         {title && (
           <h2
+            id={titleId}
             className={`text-lg font-bold mb-2 ${
               isDanger
                 ? 'text-red-600 dark:text-red-500'
@@ -70,6 +90,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </h2>
         )}
         <p
+          id={messageId}
           className={`${
             isLight ? 'text-brand-gray-700' : 'text-brand-gray-200'
           } text-sm whitespace-pre-wrap mb-6`}
@@ -77,16 +98,18 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           {message}
         </p>
         <div className="flex justify-end gap-3">
-          <button
-            className={`${
-              isLight
-                ? 'bg-brand-gray-100 text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-200'
-                : 'bg-brand-gray-800 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-700'
-            } px-4 py-2 text-sm rounded-md border transition-colors`}
-            onClick={onCancel}
-          >
-            {cancelLabel}
-          </button>
+          {!alertOnly && (
+            <button
+              className={`${
+                isLight
+                  ? 'bg-brand-gray-100 text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-200'
+                  : 'bg-brand-gray-800 text-brand-gray-300 border-brand-gray-700 hover:bg-brand-gray-700'
+              } px-4 py-2 text-sm rounded-md border transition-colors`}
+              onClick={onCancel}
+            >
+              {resolvedCancelLabel}
+            </button>
+          )}
           <button
             className={`${
               isDanger
@@ -94,9 +117,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 : 'bg-brand-700 hover:bg-brand-600'
             } px-4 py-2 text-sm rounded-md text-white border-transparent transition-colors`}
             onClick={onConfirm}
-            autoFocus
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
         </div>
       </div>

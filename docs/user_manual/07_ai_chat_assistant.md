@@ -22,11 +22,12 @@ The header bar at the top of the chat panel shows the current session name and a
 | Button             | Icon                                                                                                                | Description                                                                                                                                                                                                                                            |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Session title**  | Sparkles + text                                                                                                     | Displays the name of the active session ("Incognito Chat" for ephemeral sessions, or the conversation name for saved sessions).                                                                                                                        |
-| **Delete session** | <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />        | Permanently deletes the active chat session after confirmation.                                                                                                                                                                                        |
 | **New Chat**       | <img src="assets/plus.svg" alt="Plus icon" width="16" height="16" style="vertical-align:text-bottom;" />            | Creates a new persistent chat session. Previous sessions are preserved in history.                                                                                                                                                                     |
+| **Delete session** | <img src="assets/trash-2.svg" alt="Trash icon" width="16" height="16" style="vertical-align:text-bottom;" />        | Permanently deletes the active chat session after confirmation.                                                                                                                                                                                        |
 | **Incognito Chat** | <img src="assets/ghost.svg" alt="Ghost icon" width="16" height="16" style="vertical-align:text-bottom;" />          | Creates or shows an ephemeral chat session that is not saved to disk and does not appear in the history list. Use this for sensitive brainstorming you don't want logged. The icon turns purple when an incognito session is currently active.         |
-| **Chat History**   | <img src="assets/history.svg" alt="History icon" width="16" height="16" style="vertical-align:text-bottom;" />      | Shows or hides the **Chat History Panel** (see below). The icon is highlighted when the panel is open.                                                                                                                                                 |
 | **Web Search**     | <img src="assets/globe.svg" alt="Globe icon" width="16" height="16" style="vertical-align:text-bottom;" />          | Enables or disables the live web search tool for the current session. When active (blue), the AI can perform web searches before responding — useful for fact-checking, research, or getting up-to-date information. The icon turns blue when enabled. |
+| **Scratchpad**     | <img src="assets/clipboard.svg" alt="Clipboard icon" width="16" height="16" style="vertical-align:text-bottom;" />  | Opens the per-chat scratchpad modal where you can view, edit, or clear the temporary notes the chat LLM noted itself for the current session.                                                                                                          |
+| **Chat History**   | <img src="assets/history.svg" alt="History icon" width="16" height="16" style="vertical-align:text-bottom;" />      | Shows or hides the **Chat History Panel** (see below). The icon is highlighted when the panel is open.                                                                                                                                                 |
 | **Chat Settings**  | <img src="assets/settings-2.svg" alt="Settings2 icon" width="16" height="16" style="vertical-align:text-bottom;" /> | Shows or hides the **System Prompt Panel** (see below). The icon is highlighted when the panel is open.                                                                                                                                                |
 
 ---
@@ -106,6 +107,17 @@ When **Web Search** is enabled and the AI performs a search, the response includ
 - A list of result cards, each with a clickable **title link**, the source URL, and a text snippet.
 
 If the AI visits a specific page, a **Visit Page result** card appears with the URL, the extracted page text (scrollable), and the size of the fetched content.
+
+### Tracking AI-made changes
+
+When the chat assistant performs a tool-enabled action, a row of change tags appears below the message composer. These tags summarize what the AI changed during the current session, such as story prose updates, chapter edits, metadata changes, or Sourcebook entries.
+
+- **Story prose / Chapter prose** appears when the AI writes or updates text in your story or chapter.
+- **Metadata** appears when the AI updates summaries, notes, private notes, or conflict information.
+- **Sourcebook** appears when the AI creates or edits a Sourcebook entry.
+- **Book** appears when the AI changes book-level metadata or structure.
+
+Click a tag to jump directly to the changed item: it opens the metadata dialog for story or chapter updates, or opens the relevant Sourcebook entry for review. The tags stay visible for the current chat session and clear when you start a new chat.
 
 ### AI Actions and Project Changes
 

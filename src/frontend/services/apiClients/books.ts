@@ -9,9 +9,9 @@
  * Defines the books unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { fetchJson, postJson } from './shared';
+import { postJson, projectEndpoint } from './shared';
 
-export const booksApi = {
+export const createBooksApi = (projectName: string) => ({
   create: async (title: string) => {
     return postJson<{ ok: boolean; book_id?: string; story?: unknown }>(
       '/books/create',
@@ -38,7 +38,7 @@ export const booksApi = {
 
   reorder: async (bookIds: string[]) => {
     return postJson<{ ok: boolean }>(
-      '/books/reorder',
+      projectEndpoint(projectName, '/books/reorder'),
       { book_ids: bookIds },
       'Failed to reorder books'
     );
@@ -54,9 +54,11 @@ export const booksApi = {
     }
   ) => {
     return postJson<{ ok: boolean; detail?: string }>(
-      `/books/${bookId}/metadata`,
+      projectEndpoint(projectName, `/books/${bookId}/metadata`),
       data,
       'Failed to update book metadata'
     );
   },
-};
+});
+
+export const booksApi = createBooksApi('');

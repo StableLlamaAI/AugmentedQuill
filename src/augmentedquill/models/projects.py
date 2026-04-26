@@ -15,52 +15,74 @@ from typing import Optional
 
 
 class ProjectDeleteRequest(BaseModel):
+    """Represents the ProjectDeleteRequest type."""
+
     name: str
 
 
 class ProjectSelectRequest(BaseModel):
+    """Represents the ProjectSelectRequest type."""
+
     name: str
 
 
 class ProjectCreateRequest(BaseModel):
+    """Represents the ProjectCreateRequest type."""
+
     name: str
     type: str  # 'short-story', 'novel', 'series'
     language: Optional[str] = "en"
 
 
 class ProjectConvertRequest(BaseModel):
+    """Represents the ProjectConvertRequest type."""
+
     target_type: str
 
 
 class BookCreateRequest(BaseModel):
+    """Represents the BookCreateRequest type."""
+
     name: str
 
 
 class BookDeleteRequest(BaseModel):
+    """Represents the BookDeleteRequest type."""
+
     name: str
 
 
 class BookRestoreRequest(BaseModel):
+    """Represents the BookRestoreRequest type."""
+
     restore_id: str
 
 
 class ImageDescriptionUpdateRequest(BaseModel):
+    """Represents the ImageDescriptionUpdateRequest type."""
+
     filename: str
     description: Optional[str] = ""
     title: Optional[str] = ""
 
 
 class ImagePlaceholderRequest(BaseModel):
+    """Represents the ImagePlaceholderRequest type."""
+
     name: Optional[str] = ""
     title: Optional[str] = ""
     description: Optional[str] = ""
 
 
 class ImageDeleteRequest(BaseModel):
+    """Represents the ImageDeleteRequest type."""
+
     filename: str
 
 
 class ImageRestoreRequest(BaseModel):
+    """Represents the ImageRestoreRequest type."""
+
     restore_id: str
 
 
@@ -78,6 +100,7 @@ class ProjectInfo(BaseModel):
     is_valid: bool
     title: str
     type: str = "novel"
+    language: Optional[str] = None
 
 
 class ProjectListResponse(BaseModel):

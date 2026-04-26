@@ -19,35 +19,77 @@ import {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, LLMConfig, StoryState, ViewMode, WritingUnit } from '../../types';
+import {
+  ChatMessage,
+  LLMConfig,
+  SuggestionGenerationMode,
+  ViewMode,
+  WritingUnit,
+} from '../../types';
 import { generateContinuations } from '../../services/openaiService';
-import { computeContentWithSeparator } from '../../utils/textUtils';
+import { joinSuggestionToContent } from '../../utils/textUtils';
 import { api } from '../../services/api';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { useChatStore } from '../../stores/chatStore';
 
 type UseChapterSuggestionsParams = {
   currentUnit?: WritingUnit;
-  story: StoryState;
-  systemPrompt: string;
+  storyTitle: string;
+  storySummary: string;
+  storyStyleTags: string[];
   activeWritingConfig: LLMConfig;
   isWritingAvailable: boolean;
   updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
   viewMode: ViewMode;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+/** Custom React hook that manages chapter suggestions. */
 export function useChapterSuggestions({
   currentUnit,
-  story,
-  systemPrompt,
+  storyTitle,
+  storySummary,
+  storyStyleTags,
   activeWritingConfig,
   isWritingAvailable,
   updateChapter,
   viewMode,
-  setChatMessages,
   getErrorMessage,
-}: UseChapterSuggestionsParams) {
+}: UseChapterSuggestionsParams): {
+  continuations: string[];
+  suggestionMode: SuggestionGenerationMode;
+  setSuggestionMode: (mode: SuggestionGenerationMode) => void;
+  isSuggesting: boolean;
+  isSuggestionMode: boolean;
+  suggestCursor: number | null;
+  handleTriggerSuggestions: (
+    cursor?: number,
+    contentOverride?: string,
+    enableSuggestionMode?: boolean
+  ) => Promise<void>;
+  handleKeyboardSuggestionAction: (
+    action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
+    cursor?: number,
+    contentOverride?: string
+  ) => Promise<void>;
+  handleAcceptContinuation: (text: string, contentOverride?: string) => Promise<void>;
+  cancelSuggestions: () => void;
+  checkedEntries: Set<string>;
+  handleToggleEntry: (id: string, checked: boolean) => void;
+  isAutoSourcebookSelectionEnabled: boolean;
+  setIsAutoSourcebookSelectionEnabled: Dispatch<SetStateAction<boolean>>;
+  isSourcebookSelectionRunning: boolean;
+} {
+  const [suggestionMode, setSuggestionMode] = useState<SuggestionGenerationMode>(() => {
+    const saved = localStorage.getItem('aq_suggest_next_mode');
+    if (saved === 'original') {
+      return 'instructed';
+    }
+    if (saved === 'guided' || saved === 'instructed' || saved === 'pure') {
+      return saved;
+    }
+    return 'guided';
+  });
   const [continuations, setContinuations] = useState<string[]>([]);
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
@@ -77,6 +119,10 @@ export function useChapterSuggestions({
       isAutoSourcebookSelectionEnabled.toString()
     );
   }, [isAutoSourcebookSelectionEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('aq_suggest_next_mode', suggestionMode);
+  }, [suggestionMode]);
 
   const clampCursor = (cursor: number, content: string) => {
     if (!Number.isFinite(cursor)) return content.length;
@@ -108,7 +154,7 @@ export function useChapterSuggestions({
   // on the next model recompute triggered by text changes or suggestion
   // acceptance.
   const handleToggleEntry = (id: string, checked: boolean) => {
-    setCheckedEntries((prev) => {
+    setCheckedEntries((prev: Set<string>) => {
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
@@ -126,7 +172,10 @@ export function useChapterSuggestions({
     return () => clearTimeout(timer);
   }, [currentUnit?.content, isAutoSourcebookSelectionEnabled]);
 
-  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const cancelSignalRef = useRef<{
+    cancelled: boolean;
+    reader?: ReadableStreamDefaultReader<Uint8Array>;
+  }>({ cancelled: false });
   const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
   const suggestionUpdateTimerRef = useRef<number | null>(null);
 
@@ -142,7 +191,7 @@ export function useChapterSuggestions({
     suggestionUpdateTimerRef.current = null;
 
     startTransition(() => {
-      setContinuations((previous) => {
+      setContinuations((previous: string[]) => {
         const next = [...previous];
         for (const [idxStr, text] of Object.entries(updates)) {
           const index = Number(idxStr);
@@ -203,17 +252,22 @@ export function useChapterSuggestions({
     cancelSignalRef.current = { cancelled: false };
 
     try {
-      const storyContext = `Title: ${story.title}\nSummary: ${story.summary}\nTags: ${story.styleTags.join(', ')}`;
+      const storyContext = `Title: ${storyTitle}\nSummary: ${storySummary}\nTags: ${storyStyleTags.join(', ')}`;
       const options = await generateContinuations(
         baseContent.slice(0, c),
         storyContext,
-        systemPrompt,
+        useChatStore.getState().systemPrompt,
         activeWritingConfig,
         currentUnit.id,
         Array.from(checkedEntries),
         {
           cancelSignal: cancelSignalRef.current,
-          onSuggestionUpdate: (index, text) => {
+          loopGuardEnabled: activeWritingConfig.suggestLoopGuardEnabled ?? true,
+          loopGuardNgram: activeWritingConfig.suggestLoopGuardNgram ?? 3,
+          loopGuardMinRepeats: activeWritingConfig.suggestLoopGuardMinRepeats ?? 3,
+          loopGuardMaxRegens: activeWritingConfig.suggestLoopGuardMaxRegens ?? 1,
+          suggestionMode,
+          onSuggestionUpdate: (index: number, text: string) => {
             if (!text) return;
             scheduleSuggestionUpdate(index, text);
           },
@@ -232,7 +286,9 @@ export function useChapterSuggestions({
         text: `Suggestion Error: ${getErrorMessage(error, 'Failed to generate suggestions')}`,
         isError: true,
       };
-      setChatMessages((prev) => [...prev, errorMessage]);
+      useChatStore
+        .getState()
+        .setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
     } finally {
       if (isMountedRef.current) {
         setIsSuggesting(false);
@@ -259,20 +315,19 @@ export function useChapterSuggestions({
     // The model's predictions are next-paragraph continuation, not in-place
     // replacement of a mid-text cursor position.
     const c = currentContent.length;
-    const prefix = currentContent;
-    const suffix = '';
 
-    const { newContent, separator } = computeContentWithSeparator(
-      prefix,
-      text,
-      suffix,
-      viewMode
-    );
+    // joinSuggestionToContent respects the leading newlines in the suggestion
+    // text to determine the correct separator (none, hard line break, or
+    // paragraph break). See textUtils.ts for the full rule set.
+    const newContent = joinSuggestionToContent(currentContent, text);
 
-    setSuggestUndoStack((prev) => [...prev, { content: currentContent, cursor: c }]);
+    setSuggestUndoStack((prev: { content: string; cursor: number }[]) => [
+      ...prev,
+      { content: currentContent, cursor: c },
+    ]);
     await updateChapter(currentUnit.id, { content: newContent });
 
-    const newCursor = c + separator.length + text.length;
+    const newCursor = newContent.length;
     setSuggestCursor(newCursor);
     setIsSuggestionMode(true);
 
@@ -337,6 +392,8 @@ export function useChapterSuggestions({
 
   return {
     continuations,
+    suggestionMode,
+    setSuggestionMode,
     isSuggesting,
     isSuggestionMode,
     suggestCursor,

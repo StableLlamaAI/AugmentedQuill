@@ -15,7 +15,9 @@ from augmentedquill.services.exceptions import NotFoundError
 from augmentedquill.core.config import load_story_config
 
 
-def _scan_chapter_files() -> List[Tuple[str, Path]]:
+def _scan_chapter_files(
+    active: Path | None = None,
+) -> List[Tuple[str, Path]]:
     """Return list of (global_id, path) for chapter files.
 
     For Medium projects: global_id is likely the string of int '1', '2'.
@@ -29,9 +31,10 @@ def _scan_chapter_files() -> List[Tuple[str, Path]]:
 
     Returns: List of (virtual_id, path).
     """
-    from augmentedquill.services.projects.projects import get_active_project_dir
+    if active is None:
+        from augmentedquill.services.projects.projects import get_active_project_dir
 
-    active = get_active_project_dir()
+        active = get_active_project_dir()
     if not active:
         return []
 
@@ -99,13 +102,14 @@ def _scan_chapter_files() -> List[Tuple[str, Path]]:
     return [(i + 1, p) for i, (_, p) in enumerate(items)]
 
 
-def _load_chapter_titles(count: int) -> List[str]:
+def _load_chapter_titles(count: int, active: Path | None = None) -> List[str]:
     """Load chapter titles from story.json chapters array if present.
     Do not pad; callers decide fallbacks (e.g., filename).
     """
-    from augmentedquill.services.projects.projects import get_active_project_dir
+    if active is None:
+        from augmentedquill.services.projects.projects import get_active_project_dir
 
-    active = get_active_project_dir()
+        active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
     titles = story.get("chapters") or []
     # Preserve caller-controlled fallback behavior by not mutating empty titles here.
@@ -119,6 +123,7 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, Any]:
     """
 
     def _sanitize_text(val: Any) -> str:
+        """Helper for text.."""
         s = str(val if val is not None else "").strip()
         if s.lower() == "[object object]":
             return ""
@@ -135,9 +140,30 @@ def _normalize_chapter_entry(entry: Any) -> Dict[str, Any]:
     return {"title": "", "summary": "", "filename": ""}
 
 
-def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
+def _chapter_by_id_or_404(
+    chap_id: int,
+    active: Path | None = None,
+) -> tuple[Path, int, int]:
     """Chapter By Id Or 404."""
-    files = _scan_chapter_files()
+    if active is None:
+        from augmentedquill.services.projects.projects import get_active_project_dir
+
+        active = get_active_project_dir()
+    if active:
+        story = load_story_config(active / "story.json") or {}
+        p_type = story.get("project_type", "novel")
+        if p_type == "short-story":
+            # Short-story projects do not have chapter files.
+            # Treat the single story content file as a pseudo chapter #1.
+            if chap_id != 1:
+                raise NotFoundError(
+                    f"Chapter with ID {chap_id} not found. Short-story projects only support chap_id=1."
+                )
+            filename = story.get("content_file", "content.md")
+            path = active / filename
+            return (1, path, 0)
+
+    files = _scan_chapter_files(active)
     match = next(
         ((idx, p, i) for i, (idx, p) in enumerate(files) if idx == chap_id), None
     )
@@ -151,14 +177,18 @@ def _chapter_by_id_or_404(chap_id: int) -> tuple[Path, int, int]:
 
 
 def _get_chapter_metadata_entry(
-    story: dict, chap_id: int, path: Path, files: list = None
+    story: dict,
+    chap_id: int,
+    path: Path,
+    files: list = None,
+    active: Path | None = None,
 ) -> dict | None:
     """Find the specific metadata entry in story.json for a given chapter global ID.
     Handles 'novel', 'short-story', and 'series' project types consistently.
     Returns the dict entry by reference if found.
     """
     if files is None:
-        files = _scan_chapter_files()
+        files = _scan_chapter_files(active)
 
     p_type = story.get("project_type", "novel")
     if p_type == "series":

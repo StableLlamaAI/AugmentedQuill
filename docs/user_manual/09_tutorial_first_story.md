@@ -47,7 +47,7 @@ Before writing, it helps to know who is in the story and where it takes place.
 2. Type: _"Create a character profile for the antagonist, a ruthless treasure hunter named Silas."_
 3. Type: _"Create a location entry for The Grand Library, an ancient building filled with dusty tomes and hidden secrets."_
 
-`[SCREENSHOT: The Sourcebook showing the newly created entries for Elara and the Library]`
+![The Sourcebook showing the newly created entries for Elara and the Library](screenshots/09_sourcebook.png)
 
 ## Step 3: Outlining with the AI
 
@@ -86,7 +86,9 @@ As you write, you might hit a wall. Let's say you need to describe the antagonis
 
 1. Click the **Rewrite** (<img src="assets/file-pen.svg" alt="File Edit icon" width="16" height="16" style="vertical-align:text-bottom;" />) button in the header to have the AI regenerate the entire chapter body with better prose. This is a great "reset" option early in the writing process.
 2. To extend the chapter with a new scene, click **Extend** (<img src="assets/wand.svg" alt="Wand icon" width="16" height="16" style="vertical-align:text-bottom;" />) and the AI will continue writing from where you left off.
-3. For smaller suggestions at the paragraph level, click **Suggest next paragraph** at the bottom of the editor.<br><br>The suggestion cards appear — click any card to insert that text, or press `Escape` to dismiss.
+3. For smaller suggestions at the paragraph level, click **Suggest next paragraph** at the bottom of the editor. Use the mode selector on the right: choose **Guided** for stronger context-guided continuation, **Instructed** for explicit next-paragraph continuation, or **Pure** for continuation from only the current chapter text.
+
+The suggestion cards appear — click any card to insert that text, or press `Escape` to dismiss.
 
 **Using Chat:**
 

@@ -10,11 +10,13 @@
  */
 
 import React from 'react';
+import i18n from '../app/i18n';
 
 type AppErrorBoundaryState = {
   hasError: boolean;
 };
 
+/** Represents error boundary. */
 export class AppErrorBoundary extends React.Component<
   React.PropsWithChildren,
   AppErrorBoundaryState
@@ -23,23 +25,38 @@ export class AppErrorBoundary extends React.Component<
     hasError: false,
   };
 
+  /** Return derived state from error. */
   static getDerivedStateFromError(): AppErrorBoundaryState {
     return { hasError: true };
   }
 
+  /** Helper for did catch. */
   componentDidCatch(error: Error): void {
     console.error('Unhandled UI error', error);
   }
 
-  render() {
+  /** Render the requested value. */
+  render(): React.ReactNode {
     if (this.state.hasError) {
+      const isDark =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-color-scheme: dark)').matches;
       return (
-        <div className="h-screen w-screen flex items-center justify-center bg-brand-gray-50 text-brand-gray-800 p-6">
+        <div
+          className={`h-screen w-screen flex items-center justify-center p-6 ${
+            isDark
+              ? 'bg-brand-gray-900 text-brand-gray-100'
+              : 'bg-brand-gray-50 text-brand-gray-800'
+          }`}
+        >
           <div className="max-w-md text-center space-y-2">
-            <h1 className="text-lg font-semibold">Something went wrong</h1>
-            <p className="text-sm text-brand-gray-600">
-              Reload the page to continue working. If this keeps happening, check the
-              browser console for details.
+            <h1 className="text-lg font-semibold">{i18n.t('Something went wrong')}</h1>
+            <p
+              className={`text-sm ${isDark ? 'text-brand-gray-400' : 'text-brand-gray-600'}`}
+            >
+              {i18n.t(
+                'Reload the page to continue working. If this keeps happening, check the browser console for details.'
+              )}
             </p>
           </div>
         </div>

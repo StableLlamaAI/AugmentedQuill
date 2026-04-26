@@ -6,40 +6,13 @@
 // (at your option) any later version.
 
 /**
- * Purpose: Test URL sanitization helpers used by WYSIWYG link/image commands.
+ * Purpose: Test URL sanitization helpers used by image insertion.
  */
 
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { escapeHtmlAttribute, isSafeImageUrl, isSafeLinkUrl } from './Editor';
-
-describe('isSafeLinkUrl', () => {
-  it('allows safe HTTP, HTTPS, FTP, mailto and relative paths', () => {
-    expect(isSafeLinkUrl('http://example.com')).toBe(true);
-    expect(isSafeLinkUrl('https://example.com')).toBe(true);
-    expect(isSafeLinkUrl('ftp://example.com')).toBe(true);
-    expect(isSafeLinkUrl('mailto:user@example.com')).toBe(true);
-    expect(isSafeLinkUrl('/local/path')).toBe(true);
-    expect(isSafeLinkUrl('./relative/path')).toBe(true);
-    expect(isSafeLinkUrl('../parent/path')).toBe(true);
-  });
-
-  it('rejects dangerous protocols and malformed URLs', () => {
-    expect(isSafeLinkUrl('javascript:alert(1)')).toBe(false);
-    expect(isSafeLinkUrl('data:text/html,<script>')).toBe(false);
-    expect(isSafeLinkUrl('vbscript:msgbox(1)')).toBe(false);
-    expect(isSafeLinkUrl('   javascript:foo')).toBe(false);
-    expect(isSafeLinkUrl('http://')).toBe(false);
-  });
-
-  it('rejects URL-like values not on allowlist', () => {
-    expect(isSafeLinkUrl('file://C:/path')).toBe(false);
-    expect(isSafeLinkUrl('//example.com')).toBe(false);
-    expect(isSafeLinkUrl('example.com')).toBe(false);
-    expect(isSafeLinkUrl('')).toBe(false);
-  });
-});
+import { isSafeImageUrl } from './Editor';
 
 describe('isSafeImageUrl', () => {
   it('allows safe HTTP/HTTPS and relative paths', () => {
@@ -61,11 +34,5 @@ describe('isSafeImageUrl', () => {
     expect(isSafeImageUrl('ftp://example.com/foo.png')).toBe(false);
     expect(isSafeImageUrl('//example.com/foo.png')).toBe(false);
     expect(isSafeImageUrl('')).toBe(false);
-  });
-});
-
-describe('escapeHtmlAttribute', () => {
-  it('escapes HTML entities in attribute values', () => {
-    expect(escapeHtmlAttribute('a&b"c\'<d>')).toBe('a&amp;b&quot;c&#39;&lt;d&gt;');
   });
 });

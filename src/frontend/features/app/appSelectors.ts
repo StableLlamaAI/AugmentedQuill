@@ -9,18 +9,19 @@
  * Defines app selectors so App component orchestration stays focused and testable.
  */
 
-import { AppSettings, LLMConfig } from '../../types';
+import {
+  AppSettings,
+  ConnectionStatus,
+  LLMConfig,
+  ProviderCapabilities,
+} from '../../types';
 
-type ConnectionStatus = 'idle' | 'success' | 'error' | 'loading';
-type ProviderCapabilities = {
-  is_multimodal: boolean;
-  supports_function_calling: boolean;
-};
-
+/** Return error message. */
 export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+/** Resolve active provider configs. */
 export function resolveActiveProviderConfigs(appSettings: AppSettings): {
   activeChatConfig: LLMConfig;
   activeWritingConfig: LLMConfig;
@@ -29,17 +30,21 @@ export function resolveActiveProviderConfigs(appSettings: AppSettings): {
   const fallback = appSettings.providers[0];
   return {
     activeChatConfig:
-      appSettings.providers.find((p) => p.id === appSettings.activeChatProviderId) ||
-      fallback,
+      appSettings.providers.find(
+        (p: LLMConfig) => p.id === appSettings.activeChatProviderId
+      ) || fallback,
     activeWritingConfig:
-      appSettings.providers.find((p) => p.id === appSettings.activeWritingProviderId) ||
-      fallback,
+      appSettings.providers.find(
+        (p: LLMConfig) => p.id === appSettings.activeWritingProviderId
+      ) || fallback,
     activeEditingConfig:
-      appSettings.providers.find((p) => p.id === appSettings.activeEditingProviderId) ||
-      fallback,
+      appSettings.providers.find(
+        (p: LLMConfig) => p.id === appSettings.activeEditingProviderId
+      ) || fallback,
   };
 }
 
+/** Resolve role availability. */
 export function resolveRoleAvailability(
   appSettings: AppSettings,
   modelConnectionStatus: Record<string, ConnectionStatus>
@@ -49,7 +54,7 @@ export function resolveRoleAvailability(
   chat: boolean;
 } {
   const byId = new Map(
-    appSettings.providers.map((provider) => [provider.id, provider])
+    appSettings.providers.map((provider: LLMConfig) => [provider.id, provider])
   );
   const isAvailable = (providerId: string) => {
     const provider = byId.get(providerId);
@@ -65,13 +70,14 @@ export function resolveRoleAvailability(
   };
 }
 
+/** Return whether image actions is supported. */
 export function supportsImageActions(
   appSettings: AppSettings,
   detectedCapabilities: Record<string, ProviderCapabilities>,
   modelConnectionStatus: Record<string, ConnectionStatus>
 ): boolean {
   const activeChatProvider = appSettings.providers.find(
-    (provider) => provider.id === appSettings.activeChatProviderId
+    (provider: LLMConfig) => provider.id === appSettings.activeChatProviderId
   );
   if (!activeChatProvider) return false;
   if (modelConnectionStatus[activeChatProvider.id] !== 'success') return false;

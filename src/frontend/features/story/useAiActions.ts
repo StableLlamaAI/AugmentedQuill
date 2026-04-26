@@ -9,12 +9,13 @@
  * Defines the use ai actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ChatMessage, StoryState, WritingUnit } from '../../types';
+import { WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { useStoryStore } from '../../stores/storyStore';
 
 type PromptsState = {
   system_messages: Record<string, string>;
@@ -23,7 +24,6 @@ type PromptsState = {
 
 type UseAiActionsParams = {
   currentUnit?: WritingUnit;
-  story: StoryState;
   prompts: PromptsState;
   isEditingAvailable: boolean;
   isWritingAvailable: boolean;
@@ -33,10 +33,65 @@ type UseAiActionsParams = {
     partial: Partial<WritingUnit>,
     sync?: boolean
   ) => Promise<void>;
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+const createPrefillStripper =
+  (imposedActionPrefill: string, imposedHeadingPrefix: string) =>
+  (text: string): string => {
+    if (!text) return text;
+    let cleaned = text;
+
+    if (imposedActionPrefill && cleaned.startsWith(imposedActionPrefill)) {
+      cleaned = cleaned.slice(imposedActionPrefill.length);
+    }
+    if (imposedHeadingPrefix && cleaned.startsWith(imposedHeadingPrefix)) {
+      cleaned = cleaned.slice(imposedHeadingPrefix.length);
+    }
+
+    return cleaned;
+  };
+
+const normalizeAiActionText = (text: string): string =>
+  text.replace(/^(\*\*?|##\s*)?(Updated )?Summary:?\*\*?\s*/i, '');
+
+const getImposedHeadingPrefix = (
+  target: 'summary' | 'chapter',
+  action: 'update' | 'rewrite' | 'extend',
+  title: string
+): string =>
+  target === 'chapter' && action === 'rewrite' && title.trim().length > 0
+    ? `# ${title.trim()}\n\n`
+    : '';
+
+const getImposedActionPrefill = (
+  target: 'summary' | 'chapter',
+  action: 'update' | 'rewrite' | 'extend',
+  title: string,
+  baseContent: string,
+  imposedHeadingPrefix: string
+): string =>
+  target === 'chapter' && action === 'extend' && title.trim().length > 0
+    ? `${imposedHeadingPrefix}${baseContent}`
+    : action === 'rewrite'
+      ? imposedHeadingPrefix
+      : '';
+
+const getAiActionTarget = (
+  target: 'summary' | 'chapter',
+  scope: string | undefined
+): 'summary' | 'story_summary' | 'chapter' =>
+  target === 'chapter' ? 'chapter' : scope === 'chapter' ? 'summary' : 'story_summary';
+
+const getSeparator = (
+  action: 'update' | 'rewrite' | 'extend',
+  baseContent: string
+): string =>
+  action === 'extend' && baseContent.length > 0 && !baseContent.endsWith('\n')
+    ? '\n\n'
+    : '';
+
+/** Custom React hook that manages ai actions. */
 export function useAiActions({
   currentUnit,
   isEditingAvailable,
@@ -44,19 +99,40 @@ export function useAiActions({
   checkedSourcebookIds,
   updateChapter,
   getErrorMessage,
-}: UseAiActionsParams) {
+}: UseAiActionsParams): {
+  isAiActionLoading: boolean;
+  handleAiAction: (
+    target: 'summary' | 'chapter',
+    action: 'update' | 'rewrite' | 'extend'
+  ) => Promise<void>;
+  handleSidebarAiAction: (
+    type: 'chapter' | 'book' | 'story',
+    id: string,
+    action: 'write' | 'update' | 'rewrite',
+    onProgress?: (text: string) => void,
+    currentText?: string,
+    onThinking?: (thinking: string) => void,
+    source?: 'chapter' | 'notes'
+  ) => Promise<string | undefined>;
+  cancelAiAction: () => void;
+} {
   const [isAiActionLoading, setIsAiActionLoading] = useState(false);
-  const cancelSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const cancelSignalRef = useRef<{
+    cancelled: boolean;
+    reader?: ReadableStreamDefaultReader<Uint8Array>;
+  }>({ cancelled: false });
   const isMountedRef = useRef(true);
 
   // Avoid updating state after the component has unmounted.
   // This can happen if the user cancels a streaming action while the component is still tearing down.
   useEffect(() => setupMountedRefLifecycle(isMountedRef), []);
 
-  const cancelAiAction = () => {
+  const cancelAiAction = (): void => {
     cancelSignalRef.current.cancelled = true;
     cancelSignalRef.current.reader?.cancel();
     cancelSignalRef.current.reader = undefined;
+    // Clear streaming slot so the editor reverts to committed chapter content.
+    useStoryStore.getState().setStreamingContent(null);
     if (isMountedRef.current) {
       setIsAiActionLoading(false);
     }
@@ -65,7 +141,7 @@ export function useAiActions({
   const handleAiAction = async (
     target: 'summary' | 'chapter',
     action: 'update' | 'rewrite' | 'extend'
-  ) => {
+  ): Promise<void> => {
     if (!currentUnit) return;
     if (target === 'summary' && !isEditingAvailable) return;
     if (target === 'chapter' && !isWritingAvailable) return;
@@ -78,31 +154,65 @@ export function useAiActions({
       const isChapterStreamingAction =
         target === 'chapter' && (action === 'extend' || action === 'rewrite');
       const baseContent = currentUnit.content;
-      const separator =
-        action === 'extend' && baseContent.length > 0 && !baseContent.endsWith('\n')
-          ? '\n\n'
-          : '';
+      const imposedHeadingPrefix = getImposedHeadingPrefix(
+        target,
+        action,
+        currentUnit.title
+      );
+      const imposedActionPrefill = getImposedActionPrefill(
+        target,
+        action,
+        currentUnit.title,
+        baseContent,
+        imposedHeadingPrefix
+      );
+      const stripPrefillEcho = createPrefillStripper(
+        imposedActionPrefill,
+        imposedHeadingPrefix
+      );
+      const separator = getSeparator(action, baseContent);
 
-      let lastPushed = '';
-      let lastPushAt = 0;
+      let pendingPartial: string | null = null;
+      let throttleHandle: ReturnType<typeof setTimeout> | null = null;
+      // Throttle interval for streaming preview updates. Fires via setTimeout
+      // (macrotask) so it is always outside React's render cycle, avoiding the
+      // "Maximum update depth exceeded" error that requestAnimationFrame can
+      // trigger when React 19 concurrent rendering is mid-flight.
+      const PREVIEW_INTERVAL_MS = 150;
 
-      const pushProgress = (partial: string) => {
-        if (!isChapterStreamingAction) return;
-        if (partial === lastPushed) return;
-        const now = Date.now();
-        if (now - lastPushAt < 50) return; // Faster for local UI
-        lastPushAt = now;
-        lastPushed = partial;
-
+      const flushPending = (): void => {
+        throttleHandle = null;
+        if (pendingPartial === null) return;
+        const partial = pendingPartial;
+        pendingPartial = null;
+        const normalizedPartial = stripPrefillEcho(partial);
         const nextContent =
-          action === 'extend' ? `${baseContent}${separator}${partial}` : partial;
-
-        // Atomic local state update WITHOUT server sync during stream
-        void updateChapter(currentUnit.id, { content: nextContent }, false);
+          action === 'extend'
+            ? `${baseContent}${separator}${normalizedPartial}`
+            : normalizedPartial;
+        // Write into the dedicated streaming slot instead of story.chapters so
+        // only the editor re-renders; sourcebook, chat, and sidebar are unaffected.
+        useStoryStore.getState().setStreamingContent({
+          chapterId: currentUnit.id,
+          content: nextContent,
+        });
       };
 
+      const pushProgress = (partial: string): void => {
+        if (!isChapterStreamingAction) return;
+        // Coalesce all SSE chunks arriving within PREVIEW_INTERVAL_MS into a
+        // single state update. Storing the latest value means we never render
+        // a stale intermediate — only the most-recent accumulated text is shown.
+        pendingPartial = partial;
+        if (throttleHandle === null) {
+          throttleHandle = setTimeout(flushPending, PREVIEW_INTERVAL_MS);
+        }
+      };
+
+      const selectedTarget = getAiActionTarget(target, currentUnit.scope);
+
       const result = await streamAiAction(
-        target as any,
+        selectedTarget,
         action,
         currentUnit.id,
         currentUnit.content,
@@ -113,6 +223,14 @@ export function useAiActions({
         cancelSignalRef.current
       );
 
+      // Cancel any pending throttle flush before applying the final result to
+      // avoid a stale intermediate state overwriting the completed content.
+      if (throttleHandle !== null) {
+        clearTimeout(throttleHandle);
+        throttleHandle = null;
+        pendingPartial = null;
+      }
+
       // If the user cancelled the action while it was streaming, avoid
       // applying any final updates and exit quickly so the UI can return to
       // an idle state.
@@ -120,19 +238,29 @@ export function useAiActions({
         return;
       }
 
+      // Clear the streaming slot before committing the final result so the
+      // editor transitions directly from streaming text → final text without
+      // a flash back to the pre-AI baseline content.
+      useStoryStore.getState().setStreamingContent(null);
+
       if (target === 'summary') {
         await updateChapter(currentUnit.id, { summary: result });
       } else if (action === 'extend') {
         await updateChapter(currentUnit.id, {
-          content: baseContent + separator + result,
+          content: baseContent + separator + stripPrefillEcho(result),
         });
       } else {
-        await updateChapter(currentUnit.id, { content: result });
+        await updateChapter(currentUnit.id, {
+          content: stripPrefillEcho(result),
+        });
       }
     } catch (error: unknown) {
       console.error('AI Action Error:', error);
       notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
+      // Safety-net: clear the streaming slot in case the try block exited
+      // via an exception before reaching the explicit clearance above.
+      useStoryStore.getState().setStreamingContent(null);
       if (isMountedRef.current) {
         setIsAiActionLoading(false);
       }
@@ -155,11 +283,9 @@ export function useAiActions({
     cancelSignalRef.current = { cancelled: false };
 
     try {
-      const cleanText = (text: string) => {
-        return text.replace(/^(\*\*?|##\s*)?(Updated )?Summary:?\**\s*/i, '');
-      };
+      const cleanText = (text: string): string => normalizeAiActionText(text);
 
-      const target: any =
+      const target: 'summary' | 'book_summary' | 'story_summary' =
         type === 'chapter'
           ? 'summary'
           : type === 'book'
@@ -169,9 +295,9 @@ export function useAiActions({
       const result = await streamAiAction(
         target,
         action,
-        id,
+        type === 'story' ? 'story' : id,
         currentText ?? '',
-        onProgress ? (partial) => onProgress(cleanText(partial)) : undefined,
+        onProgress ? (partial: string) => onProgress(cleanText(partial)) : undefined,
         onThinking,
         source,
         undefined,

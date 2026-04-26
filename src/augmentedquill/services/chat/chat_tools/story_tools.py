@@ -7,6 +7,8 @@
 
 """Defines the story tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 import json as _json
 import os
 
@@ -190,7 +192,7 @@ class WriteEditingScratchpadParams(BaseModel):
 )
 async def get_story_metadata(
     params: GetStoryMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Story Metadata."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -205,13 +207,13 @@ async def get_story_metadata(
 
 
 @chat_tool(
-    description="Update story-level metadata such as title, summary, notes, tags, or story-level conflicts. Provide only the fields you want to change.",
-    allowed_roles=(CHAT_ROLE,),
+    description="Update story-level metadata such as title, summary, notes, or tags. Provide only the fields you want to change.",
+    allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
 async def update_story_metadata(
     params: UpdateStoryMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Update Story Metadata."""
     _update_story_metadata(
         title=params.title,
@@ -221,7 +223,7 @@ async def update_story_metadata(
         conflicts=params.conflicts,
     )
     mutations["story_changed"] = True
-    return {"ok": True}
+    return {"ok": True, "message": "Story metadata updated successfully"}
 
 
 @chat_tool(
@@ -231,7 +233,8 @@ async def update_story_metadata(
 )
 async def read_story_content(
     params: ReadStoryContentParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Read story content."""
     content = _read_story_content() or ""
     start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
@@ -246,16 +249,16 @@ async def read_story_content(
 
 @chat_tool(
     description=(
-        "Overwrite the ENTIRE story-level content file. "
-        "WARNING: replaces all existing text — only use for short stories or complete rewrites. "
-        "In chapter-based projects, prefer targeted chapter editing tools instead of whole-document replacement."
+        "Overwrite the ENTIRE story-level content file. WARNING: replaces all existing text. "
+        "Use this only when the current task explicitly targets the story-level content file."
     ),
     allowed_roles=(EDITING_ROLE,),
     capability="prose-write",
 )
 async def write_story_content(
     params: WriteStoryContentParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Write story content."""
     _write_story_content(params.content)
     mutations["story_changed"] = True
     return {"ok": True}
@@ -269,7 +272,7 @@ async def write_story_content(
 )
 async def get_book_metadata(
     params: GetBookMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Get Book Metadata."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -296,7 +299,7 @@ async def get_book_metadata(
 )
 async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Update Book Metadata."""
     _update_book_metadata(
         params.book_id, title=params.title, summary=params.summary, notes=params.notes
@@ -313,7 +316,8 @@ async def update_book_metadata(
 )
 async def read_book_content(
     params: ReadBookContentParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Read book content."""
     content = _read_book_content(params.book_id) or ""
     start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
@@ -338,13 +342,15 @@ async def read_book_content(
 )
 async def write_book_content(
     params: WriteBookContentParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Write book content."""
     _write_book_content(params.book_id, params.content)
     mutations["story_changed"] = True
     return {"ok": True}
 
 
 def _normalize_chat_id(chat_id: str | None) -> str | None:
+    """Normalize chat id."""
     if not chat_id or not isinstance(chat_id, str):
         return None
     normalized = os.path.basename(chat_id.strip())
@@ -352,6 +358,7 @@ def _normalize_chat_id(chat_id: str | None) -> str | None:
 
 
 def _read_scratchpad_from_chat(chat_id: str | None) -> str:
+    """Read scratchpad from chat."""
     safe_id = _normalize_chat_id(chat_id)
     if not safe_id:
         return ""
@@ -364,6 +371,7 @@ def _read_scratchpad_from_chat(chat_id: str | None) -> str:
 
 
 def _write_scratchpad_to_chat(chat_id: str | None, content: str) -> None:
+    """Write scratchpad to chat."""
     safe_id = _normalize_chat_id(chat_id)
     if not safe_id:
         raise ValueError("Invalid chat_id")
@@ -392,7 +400,9 @@ def _write_scratchpad_to_chat(chat_id: str | None, content: str) -> None:
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-read",
 )
-async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations: dict):
+async def read_scratchpad(
+    params: ReadScratchpadParams, payload: dict, mutations: dict
+) -> Any:
     """Read Scratchpad."""
     chat_id = params.chat_id or (payload or {}).get("chat_id")
     if chat_id:
@@ -411,7 +421,7 @@ async def read_scratchpad(params: ReadScratchpadParams, payload: dict, mutations
 )
 async def write_scratchpad(
     params: WriteScratchpadParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Write Scratchpad."""
     chat_id = params.chat_id or (payload or {}).get("chat_id")
     if chat_id:
@@ -423,7 +433,7 @@ async def write_scratchpad(
 
 async def get_story_summary_tool(
     params: GetStorySummaryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Deprecated: use get_story_metadata instead."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -431,7 +441,9 @@ async def get_story_summary_tool(
     return {"story_summary": summary}
 
 
-async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: dict):
+async def get_story_tags(
+    params: GetStoryTagsParams, payload: dict, mutations: dict
+) -> Any:
     """Deprecated: use get_story_metadata instead."""
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
@@ -439,7 +451,9 @@ async def get_story_tags(params: GetStoryTagsParams, payload: dict, mutations: d
     return {"tags": tags}
 
 
-async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: dict):
+async def set_story_tags(
+    params: SetStoryTagsParams, payload: dict, mutations: dict
+) -> Any:
     """Deprecated: use update_story_metadata instead."""
     active = get_active_project_dir()
     if not active:
@@ -466,7 +480,7 @@ async def set_story_tags(params: SetStoryTagsParams, payload: dict, mutations: d
 )
 async def sync_story_summary(
     params: SyncStorySummaryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Sync Story Summary."""
     from augmentedquill.services.story.story_generation_ops import (
         generate_story_summary,
@@ -479,7 +493,7 @@ async def sync_story_summary(
 
 async def write_story_summary(
     params: WriteStorySummaryParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Deprecated: use update_story_metadata with summary= instead."""
     active = get_active_project_dir()
     if not active:
@@ -511,7 +525,7 @@ async def write_story_summary(
 )
 async def read_editing_scratchpad(
     params: ReadEditingScratchpadParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Read Editing Scratchpad."""
     chat_id = (payload or {}).get("chat_id")
     if chat_id:
@@ -536,7 +550,7 @@ async def read_editing_scratchpad(
 )
 async def write_editing_scratchpad(
     params: WriteEditingScratchpadParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Write Editing Scratchpad."""
     chat_id = (payload or {}).get("chat_id")
     if chat_id:

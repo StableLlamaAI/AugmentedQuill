@@ -34,6 +34,27 @@ from augmentedquill.services.llm.llm_request_helpers import (
 )
 
 
+def _enforce_writing_no_thinking(
+    extra_body: Dict[str, Any], model_type: str | None
+) -> Dict[str, Any]:
+    """Ensure WRITING requests never enable provider thinking templates."""
+    if model_type != "WRITING":
+        return extra_body
+
+    merged = dict(extra_body or {})
+    chat_template_kwargs = merged.get("chat_template_kwargs")
+    if isinstance(chat_template_kwargs, dict):
+        next_kwargs = dict(chat_template_kwargs)
+        if next_kwargs.get("enable_thinking") is True:
+            next_kwargs["enable_thinking"] = False
+        merged["chat_template_kwargs"] = next_kwargs
+
+    if merged.get("enable_thinking") is True:
+        merged["enable_thinking"] = False
+
+    return merged
+
+
 def _llm_debug_enabled() -> bool:
     """Return whether verbose LLM request/response logging is enabled."""
     return os.getenv("AUGQ_LLM_DEBUG", "0") in ("1", "true", "TRUE", "yes", "on")
@@ -103,8 +124,15 @@ def _validate_base_url(base_url: str, skip_validation: bool = False) -> None:
 
 
 def _prepare_llm_request(
-    base_url, api_key, model_id, messages, temperature, max_tokens, extra_body=None
-):
+    base_url: Any,
+    api_key: Any,
+    model_id: Any,
+    messages: Any,
+    temperature: Any,
+    max_tokens: Any,
+    extra_body: Any = None,
+) -> Any:
+    """Prepare llm request."""
     url = str(base_url).rstrip("/") + "/chat/completions"
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -296,8 +324,14 @@ async def unified_chat_complete(
 
 
 async def _execute_llm_request(
-    caller_id, url, headers, body, timeout_s, model_type=None
-):
+    caller_id: Any,
+    url: Any,
+    headers: Any,
+    body: Any,
+    timeout_s: Any,
+    model_type: Any = None,
+) -> Any:
+    """Send a request to the configured LLM backend and return the decoded response."""
     timeout_obj = build_timeout(timeout_s)
     response = await logged_request(
         caller_id=caller_id,
@@ -344,11 +378,23 @@ async def openai_chat_complete(
     }
     if isinstance(max_tokens, int):
         body["max_tokens"] = max_tokens
+
     model_extra = _build_model_extra_body(model_cfg)
-    if model_extra:
-        body.update(model_extra)
-    if extra_body:
-        body.update(extra_body)
+    merged_extra: Dict[str, Any] = dict(model_extra)
+    request_extra = dict(extra_body or {})
+    for key, value in request_extra.items():
+        if (
+            key == "chat_template_kwargs"
+            and isinstance(merged_extra.get(key), dict)
+            and isinstance(value, dict)
+        ):
+            merged_extra[key] = {**merged_extra[key], **value}
+        else:
+            merged_extra[key] = value
+
+    merged_extra = _enforce_writing_no_thinking(merged_extra, model_type)
+    if merged_extra:
+        body.update(merged_extra)
 
     return await _execute_llm_request(
         caller_id, url, headers, body, timeout_s, model_type=model_type

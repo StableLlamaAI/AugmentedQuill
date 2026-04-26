@@ -9,8 +9,10 @@
  * Defines the create project dialog unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { Button } from '../../components/ui/Button';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -30,13 +32,16 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   onCreate,
   theme,
   languages,
-}) => {
+}: CreateProjectDialogProps) => {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [type, setType] = useState('novel');
   const [language, setLanguage] = useState(() =>
     languages && languages.length ? languages[0] : 'en'
   );
   const { isLight } = useThemeClasses();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   if (!isOpen) return null;
 
@@ -48,36 +53,58 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
     : 'bg-brand-gray-800 border-brand-gray-700';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-project-title"
+      tabIndex={-1}
+    >
       <div className={`w-full max-w-md p-6 rounded-lg shadow-xl ${bgClass}`}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Create New Project</h2>
-          <Button variant="ghost" size="sm" onClick={onClose} theme={theme}>
+          <h2 id="create-project-title" className="text-xl font-bold">
+            {t('Create New Project')}
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            theme={theme}
+            aria-label={t('Close create project dialog')}
+          >
             <X size={20} />
           </Button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Project Name</label>
+            <label className="block text-sm font-medium mb-1">
+              {t('Project Name')}
+            </label>
             <input
               data-no-smart-quotes="true"
               type="text"
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Story"
-              autoFocus
+              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                setName(e.target.value)
+              }
+              placeholder={t('My Story')}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Project Language</label>
+            <label className="block text-sm font-medium mb-1">
+              {t('Project Language')}
+            </label>
             <select
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
+                setLanguage(e.target.value)
+              }
             >
-              {languages.map((lng) => (
+              {languages.map((lng: string) => (
                 <option key={lng} value={lng}>
                   {lng.toUpperCase()}
                 </option>
@@ -86,7 +113,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Project Type</label>
+            <label className="block text-sm font-medium mb-2">
+              {t('Project Type')}
+            </label>
             <div
               className={`space-y-3 p-3 rounded border ${isLight ? 'border-gray-200 bg-gray-50' : 'border-brand-gray-800 bg-brand-gray-950/50'}`}
             >
@@ -96,18 +125,22 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="short-story"
                   checked={type === 'short-story'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
                   <span
                     className="block font-bold text-sm"
-                    title="Short Story: One chapter"
+                    title={t('Short Story: One chapter')}
                   >
-                    Short Story
+                    {t('Short Story')}
                   </span>
                   <span className="text-xs opacity-70 block">
-                    Single-chapter structure for short fiction, poems, or compact prose.
+                    {t(
+                      'Single-chapter structure for short fiction, poems, or compact prose.'
+                    )}
                   </span>
                 </div>
               </label>
@@ -120,18 +153,20 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="novel"
                   checked={type === 'novel'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
                   <span
                     className="block font-bold text-sm"
-                    title="Novel: Multiple chapters"
+                    title={t('Novel: Multiple chapters')}
                   >
-                    Novel
+                    {t('Novel')}
                   </span>
                   <span className="text-xs opacity-70 block">
-                    Standard novel structure with multiple chapters.
+                    {t('Standard novel structure with multiple chapters.')}
                   </span>
                 </div>
               </label>
@@ -144,18 +179,20 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   name="ptype"
                   value="series"
                   checked={type === 'series'}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(
+                    e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                  ) => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
                   <span
                     className="block font-bold text-sm"
-                    title="Series: Multiple books"
+                    title={t('Series: Multiple books')}
                   >
-                    Series
+                    {t('Series')}
                   </span>
                   <span className="text-xs opacity-70 block">
-                    Epic sagas grouped into multiple books.
+                    {t('Epic sagas grouped into multiple books.')}
                   </span>
                 </div>
               </label>
@@ -164,7 +201,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
 
           <div className="flex justify-end space-x-2 mt-6">
             <Button variant="ghost" onClick={onClose} theme={theme}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               variant="primary"
@@ -174,7 +211,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               disabled={!name.trim()}
               theme={theme}
             >
-              Create Project
+              {t('Create Project')}
             </Button>
           </div>
         </div>

@@ -45,7 +45,7 @@ describe('openaiService', () => {
     expect(body.checked_sourcebook).toEqual(['A', 'B']);
   });
 
-  it('includes checkedSourcebookIds in streamAiAction request body when provided', async () => {
+  it('includes suggestion mode in suggest request body', async () => {
     const fakeReader = {
       read: vi.fn().mockResolvedValue({ done: true, value: new Uint8Array() }),
     };
@@ -56,6 +56,26 @@ describe('openaiService', () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
 
     const cfg: LLMConfig = { id: 'x', name: 'x', baseUrl: '', apiKey: '', timeout: 5 };
+
+    await generateContinuations('text', 'ctx', 'sys', cfg, '1', undefined, {
+      suggestionMode: 'pure',
+    });
+
+    const callArgs = (global.fetch as vi.Mock).mock.calls[0];
+    const options = callArgs[1];
+    const body = JSON.parse(options.body);
+    expect(body.mode).toBe('pure');
+  });
+
+  it('includes checkedSourcebookIds in streamAiAction request body when provided', async () => {
+    const fakeReader = {
+      read: vi.fn().mockResolvedValue({ done: true, value: new Uint8Array() }),
+    };
+    const fakeBody = {
+      getReader: () => fakeReader,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
 
     // This call is intended to exercise streamAiAction; we only care about the request payload.
     await (
@@ -82,5 +102,34 @@ describe('openaiService', () => {
     const raw = '{"chap_id":1,"notes":"line1\nline2"}';
     const result = parseToolArguments(raw);
     expect(result).toEqual({ chap_id: 1, notes: 'line1\nline2' });
+  });
+
+  it('preserves streamed paragraph content and newlines', async () => {
+    const events = [
+      { content: '\n\n' },
+      { content: 'Visible prose.' },
+      { content: ' Continued.' },
+    ]
+      .map((evt: { content: string }) => `data: ${JSON.stringify(evt)}\n\n`)
+      .join('')
+      .concat('data: [DONE]\n\n');
+
+    const encoder = new TextEncoder();
+    const fakeReader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: encoder.encode(events) })
+        .mockResolvedValueOnce({ done: true, value: new Uint8Array() }),
+    };
+    const fakeBody = {
+      getReader: () => fakeReader,
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: fakeBody });
+
+    const svc = await import('./openaiService');
+    const result = await svc.streamAiAction('chapter', 'rewrite', '1', 'draft');
+
+    expect(result).toBe('\n\nVisible prose. Continued.');
   });
 });

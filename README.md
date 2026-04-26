@@ -10,7 +10,7 @@
 - You are the author in the driver seat: your story is your story, and the AI is a creative partner (from brainstorm buddy to ghostwriter-style assistant) that supports your voice and choices.
 - Join the community: [r/AugmentedQuill](https://www.reddit.com/r/AugmentedQuill/)
 
-> **Screenshot placeholder:** Insert your app screenshot here (e.g., `docs/assets/screenshot.png`).
+![Main screen of AugmentedQuill](docs/user_manual/screenshots/main.png)
 
 ---
 
@@ -106,6 +106,7 @@ The complete user guide is in `docs/user_manual/`:
   - `black --check .`
   - `python -m pytest`
 - Frontend: `cd src/frontend && npm run lint && npm run test && npm run build`
+- Accessibility validation: `cd src/frontend && npm run test:accessibility` (new)
 - Quick run: `augmentedquill --reload --host 127.0.0.1 --port 28000`
 
 ### Configuration paths
@@ -143,5 +144,8 @@ Model endpoint variables:
 ## 🧩 Known limitations
 
 - No multi-user access controls.
-- Limited accessibility support.
 - No real-time external editor sync.
+
+## Multiple Languages
+
+AugmentedQuill natively supports multiple languages for both the application interface (GUI) and your story formatting. Use `Settings > General > GUI Language` to configure the application locale, and the language will automatically be respected.

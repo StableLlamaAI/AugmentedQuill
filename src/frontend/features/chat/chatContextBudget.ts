@@ -9,7 +9,7 @@
  * Defines chat context budgeting helpers so oversized histories are compacted before they hit upstream LLM limits.
  */
 
-import { ChatMessage, ChatToolCall, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, ChatToolCall, LLMConfig } from '../../types';
 
 export type ChatHistoryMessage = {
   role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
@@ -22,6 +22,7 @@ export type ChatHistoryMessage = {
     name: string;
     args: string | Record<string, unknown>;
   }>;
+  attachments?: ChatAttachment[];
 };
 
 export type ChatApiPreparedMessage = {
@@ -63,36 +64,51 @@ const MAX_TEXT_EXCERPT = 280;
 const CONTEXT_FULL_WARNING_THRESHOLD = 0.85;
 const TOOL_RESULT_PREFIX_PATTERN = /^\[Earlier tool result(?:: [^\]]+)?\]\s*/;
 
+/** Helper for the requested value. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/** Normalize whitespace. */
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+/** Estimate string tokens. */
 function estimateStringTokens(value: string): number {
   if (!value) return 0;
   return Math.ceil(value.length / 4);
 }
 
+/** Estimate tool calls tokens. */
 function estimateToolCallsTokens(
   toolCalls?: MutablePreparedMessage['tool_calls']
 ): number {
   if (!toolCalls || toolCalls.length === 0) return 0;
-  return toolCalls.reduce((total, toolCall) => {
-    const args = toolCall.function.arguments || '';
-    return (
-      total +
-      12 +
-      estimateStringTokens(toolCall.function.name) +
-      estimateStringTokens(args)
-    );
-  }, 0);
+  return toolCalls.reduce(
+    (
+      total: number,
+      toolCall: {
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      }
+    ) => {
+      const args = toolCall.function.arguments || '';
+      return (
+        total +
+        12 +
+        estimateStringTokens(toolCall.function.name) +
+        estimateStringTokens(args)
+      );
+    },
+    0
+  );
 }
 
+/** Estimate prompt tokens. */
 function estimatePromptTokens(messages: MutablePreparedMessage[]): number {
-  return messages.reduce((total, message) => {
+  return messages.reduce((total: number, message: ChatApiPreparedMessage) => {
     const content = message.content || '';
     return (
       total +
@@ -106,6 +122,7 @@ function estimatePromptTokens(messages: MutablePreparedMessage[]): number {
   }, 0);
 }
 
+/** Resolve context window tokens. */
 function resolveContextWindowTokens(config: LLMConfig): number | null {
   const explicit = Number(config.contextWindowTokens);
   if (Number.isFinite(explicit) && explicit >= 2048) {
@@ -114,6 +131,7 @@ function resolveContextWindowTokens(config: LLMConfig): number | null {
   return null;
 }
 
+/** Build prompt budget. */
 function buildPromptBudget(config: LLMConfig, contextWindowTokens: number): number {
   const requestedMaxTokens = Number(config.maxTokens);
   const responseReserve = Number.isFinite(requestedMaxTokens)
@@ -130,6 +148,7 @@ function buildPromptBudget(config: LLMConfig, contextWindowTokens: number): numb
   );
 }
 
+/** Summarize text. */
 function summarizeText(value: string, maxLength: number): string {
   const compact = normalizeWhitespace(value);
   if (!compact) return '';
@@ -142,6 +161,7 @@ function summarizeText(value: string, maxLength: number): string {
   return `${head} ... ${tail}`;
 }
 
+/** Summarize structured value. */
 function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   if (value === null || value === undefined) return value;
 
@@ -157,7 +177,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     const limit = depth === 0 ? 6 : 4;
     const trimmed = value
       .slice(0, limit)
-      .map((entry) => summarizeStructuredValue(entry, depth + 1));
+      .map((entry: unknown) => summarizeStructuredValue(entry, depth + 1));
     if (value.length > limit) {
       trimmed.push({ omitted_items: value.length - limit });
     }
@@ -186,9 +206,9 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   ];
 
   const keys = Object.keys(record);
-  const selectedKeys = preferredKeys.filter((key) => key in record);
+  const selectedKeys = preferredKeys.filter((key: string) => key in record);
   const fallbackKeys = keys
-    .filter((key) => !selectedKeys.includes(key))
+    .filter((key: string) => !selectedKeys.includes(key))
     .slice(0, Math.max(0, 8 - selectedKeys.length));
   const finalKeys = [...selectedKeys, ...fallbackKeys];
   const summarized: Record<string, unknown> = {};
@@ -196,7 +216,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   for (const key of finalKeys) {
     const current = record[key];
     if (key === 'chapters' && Array.isArray(current)) {
-      summarized[key] = current.slice(0, 8).map((chapter) => {
+      summarized[key] = current.slice(0, 8).map((chapter: unknown) => {
         if (!chapter || typeof chapter !== 'object') {
           return summarizeStructuredValue(chapter, depth + 1);
         }
@@ -218,7 +238,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     }
 
     if (key === 'books' && Array.isArray(current)) {
-      summarized[key] = current.slice(0, 5).map((book) => {
+      summarized[key] = current.slice(0, 5).map((book: unknown) => {
         if (!book || typeof book !== 'object') {
           return summarizeStructuredValue(book, depth + 1);
         }
@@ -240,7 +260,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     summarized[key] = summarizeStructuredValue(current, depth + 1);
   }
 
-  const omittedKeys = keys.filter((key) => !finalKeys.includes(key));
+  const omittedKeys = keys.filter((key: string) => !finalKeys.includes(key));
   if (omittedKeys.length > 0) {
     summarized.omitted_keys = omittedKeys.length;
   }
@@ -248,6 +268,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   return summarized;
 }
 
+/** Summarize tool content. */
 function summarizeToolContent(
   toolName: string | undefined,
   content: string | null
@@ -283,9 +304,10 @@ function summarizeToolContent(
   return `${label} ${summarizeText(unwrapped, MAX_TOOL_TEXT_PREVIEW)}`;
 }
 
+/** Summarize tool call. */
 function summarizeToolCall(
   toolCall: NonNullable<MutablePreparedMessage['tool_calls']>[number]
-) {
+): { function: { arguments: string; name: string }; id: string; type: 'function' } {
   const args = toolCall.function.arguments || '';
   let compactArgs = summarizeText(args, 180);
 
@@ -311,6 +333,7 @@ function summarizeToolCall(
   };
 }
 
+/** Summarize conversation message. */
 function summarizeConversationMessage(message: MutablePreparedMessage): string | null {
   const roleLabel = message.role === 'assistant' ? 'assistant' : 'user';
   const content = summarizeText(message.content || '', MAX_TEXT_EXCERPT);
@@ -319,6 +342,28 @@ function summarizeConversationMessage(message: MutablePreparedMessage): string |
   return `[Earlier ${roleLabel} message] ${content}`;
 }
 
+/** Render attachment as text. */
+function renderAttachmentAsText(attachment: ChatAttachment): string {
+  const name = attachment.name || 'unknown file';
+  const type = attachment.type || 'application/octet-stream';
+  const size = Number.isFinite(attachment.size) ? attachment.size : 0;
+  const encoding = attachment.encoding || 'utf-8';
+  const headerLines = [
+    `[Attached file: ${name}]`,
+    `Content-Type: ${type}`,
+    `Size: ${size} bytes`,
+    `Encoding: ${encoding}`,
+  ];
+
+  if (encoding === 'base64') {
+    headerLines.push('Content is base64 encoded');
+  }
+
+  const body = attachment.content ?? '[Attachment content not available]';
+  return `${headerLines.join('\n')}\n\n${body}`;
+}
+
+/** Build prepared messages. */
 function buildPreparedMessages(
   systemInstruction: string,
   history: ChatHistoryMessage[],
@@ -326,7 +371,7 @@ function buildPreparedMessages(
 ): MutablePreparedMessage[] {
   const messages: MutablePreparedMessage[] = [
     { role: 'system', content: systemInstruction },
-    ...history.map((historyMessage) => {
+    ...history.map((historyMessage: ChatHistoryMessage) => {
       const prepared: MutablePreparedMessage = {
         role: historyMessage.role === 'model' ? 'assistant' : historyMessage.role,
         content:
@@ -339,17 +384,33 @@ function buildPreparedMessages(
       if (historyMessage.tool_call_id)
         prepared.tool_call_id = historyMessage.tool_call_id;
       if (historyMessage.tool_calls) {
-        prepared.tool_calls = historyMessage.tool_calls.map((toolCall) => ({
-          id: toolCall.id,
-          type: 'function',
-          function: {
-            name: toolCall.name,
-            arguments:
-              typeof toolCall.args === 'string'
-                ? toolCall.args
-                : JSON.stringify(toolCall.args),
-          },
-        }));
+        prepared.tool_calls = historyMessage.tool_calls.map(
+          (toolCall: {
+            id: string;
+            name: string;
+            args: string | Record<string, unknown>;
+          }) => ({
+            id: toolCall.id,
+            type: 'function',
+            function: {
+              name: toolCall.name,
+              arguments:
+                typeof toolCall.args === 'string'
+                  ? toolCall.args
+                  : JSON.stringify(toolCall.args),
+            },
+          })
+        );
+      }
+
+      if (historyMessage.attachments && historyMessage.attachments.length > 0) {
+        const attachmentContent = historyMessage.attachments
+          .map(renderAttachmentAsText)
+          .join('\n\n');
+        prepared.content =
+          prepared.content || ''
+            ? `${prepared.content}\n\n${attachmentContent}`
+            : attachmentContent;
       }
 
       return prepared;
@@ -363,6 +424,7 @@ function buildPreparedMessages(
   return messages;
 }
 
+/** Return recent indexes. */
 function getRecentIndexes(messages: MutablePreparedMessage[]): {
   recentNonSystem: Set<number>;
   recentUsers: Set<number>;
@@ -394,6 +456,7 @@ function getRecentIndexes(messages: MutablePreparedMessage[]): {
   return { recentNonSystem, recentUsers };
 }
 
+/** Return whether critical tool message. */
 function isCriticalToolMessage(message: MutablePreparedMessage): boolean {
   return (
     message.role === 'tool' &&
@@ -402,16 +465,23 @@ function isCriticalToolMessage(message: MutablePreparedMessage): boolean {
   );
 }
 
+/** Helper for prepared messages. */
 function compactPreparedMessages(
   originalMessages: MutablePreparedMessage[],
   promptBudgetTokens: number
 ): { messages: MutablePreparedMessage[]; compactedMessages: number } {
-  const messages = originalMessages.map((message) => ({
+  const messages = originalMessages.map((message: ChatApiPreparedMessage) => ({
     ...message,
-    tool_calls: message.tool_calls?.map((toolCall) => ({
-      ...toolCall,
-      function: { ...toolCall.function },
-    })),
+    tool_calls: message.tool_calls?.map(
+      (toolCall: {
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      }) => ({
+        ...toolCall,
+        function: { ...toolCall.function },
+      })
+    ),
   }));
 
   let compactedMessages = 0;
@@ -477,7 +547,7 @@ function compactPreparedMessages(
     if (callsChanged) {
       message.tool_calls = summarizedCalls;
       if (!message.content) {
-        message.content = `[Earlier tool planning] ${summarizedCalls.map((call) => call.function.name).join(', ')}`;
+        message.content = `[Earlier tool planning] ${summarizedCalls.map((call: { function: { arguments: string; name: string }; id: string; type: 'function' }) => call.function.name).join(', ')}`;
       }
       compactedMessages += 1;
       estimatedTokens = estimatePromptTokens(messages);
@@ -500,7 +570,7 @@ function compactPreparedMessages(
     if (callsChanged) {
       message.tool_calls = summarizedCalls;
       if (!message.content) {
-        message.content = `[Earlier tool planning] ${summarizedCalls.map((call) => call.function.name).join(', ')}`;
+        message.content = `[Earlier tool planning] ${summarizedCalls.map((call: { function: { arguments: string; name: string }; id: string; type: 'function' }) => call.function.name).join(', ')}`;
       }
       compactedMessages += 1;
       estimatedTokens = estimatePromptTokens(messages);
@@ -555,6 +625,7 @@ function compactPreparedMessages(
   return { messages, compactedMessages };
 }
 
+/** Prepare chat context. */
 export function prepareChatContext(params: {
   systemInstruction: string;
   history: ChatHistoryMessage[];
@@ -616,6 +687,7 @@ export function prepareChatContext(params: {
 
 const FAST_CONTEXT_ESTIMATE_MESSAGE_LIMIT = 128;
 
+/** Estimate chat context usage. */
 export function estimateChatContextUsage(params: {
   systemInstruction: string;
   messages: ChatMessage[];

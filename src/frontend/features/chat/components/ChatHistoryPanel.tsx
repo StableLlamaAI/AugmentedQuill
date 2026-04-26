@@ -9,10 +9,13 @@
  * Defines the chat history panel so session management UI is isolated from message rendering.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Ghost, Trash2, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ChatSession } from '../../../types';
+import { useConfirm } from '../../layout/ConfirmDialogContext';
 import { useTheme } from '../../layout/ThemeContext';
+import { useFocusTrap } from '../../layout/useFocusTrap';
 
 type ChatHistoryPanelProps = {
   sessions: ChatSession[];
@@ -34,14 +37,24 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
   onDeleteSession,
   onDeleteAllSessions,
   onClose,
-}) => {
+}: ChatHistoryPanelProps) => {
   const { isLight } = useTheme();
+  const confirm = useConfirm();
+  const { t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, panelRef, onClose);
+
   const reason =
     disabledReason ||
-    'Chat is unavailable because no working CHAT model is configured.';
+    t('Chat is unavailable because no working CHAT model is configured.');
 
   return (
     <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="chat-history-title"
+      tabIndex={-1}
       className={`p-4 border-b max-h-60 overflow-y-auto ${
         isLight
           ? 'bg-brand-gray-100 border-brand-gray-200'
@@ -50,8 +63,11 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-brand-gray-500">
-            Recent Chats
+          <h3
+            id="chat-history-title"
+            className="text-xs font-bold uppercase tracking-wider text-brand-gray-500"
+          >
+            {t('Recent Chats')}
           </h3>
           {sessions.length > 0 && onDeleteAllSessions && (
             <button
@@ -60,15 +76,16 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 onDeleteAllSessions();
               }}
               className="text-[10px] text-red-500 hover:text-red-600 font-bold uppercase hover:underline ml-2"
-              title={isDisabled ? reason : 'Delete all chat sessions'}
+              title={isDisabled ? reason : t('Delete all chat sessions')}
               disabled={isDisabled}
             >
-              Clear All
+              {t('Clear All')}
             </button>
           )}
         </div>
         <button
           onClick={onClose}
+          aria-label={t('Close chat history panel')}
           className="text-brand-gray-500 hover:text-brand-gray-700"
         >
           <X size={14} />
@@ -77,55 +94,65 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
       <div className="space-y-1">
         {sessions.length === 0 && (
           <div className="text-xs text-brand-gray-500 py-2 italic">
-            No saved chats yet.
+            {t('No saved chats yet.')}
           </div>
         )}
-        {sessions.map((session) => {
+        {sessions.map((session: ChatSession) => {
           const isSIncognito = session.isIncognito;
           return (
             <div
               key={session.id}
-              className={`group flex items-center justify-between p-2 rounded text-sm cursor-pointer transition-colors ${
+              className={`group flex items-center justify-between p-2 rounded text-sm transition-colors ${
                 currentSessionId === session.id
                   ? isLight
-                    ? 'bg-brand-gray-200 text-brand-600 font-medium'
-                    : 'bg-brand-gray-800 text-brand-300 font-medium'
+                    ? 'bg-brand-gray-200'
+                    : 'bg-brand-gray-800'
                   : isLight
                     ? 'hover:bg-brand-gray-200/50'
                     : 'hover:bg-brand-gray-800/50'
-              } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-              onClick={() => {
-                if (isDisabled) return;
-                onSelectSession(session.id);
-                onClose();
-              }}
-              title={isDisabled ? reason : session.name}
+              } ${isDisabled ? 'opacity-60 overflow-hidden' : 'overflow-hidden'}`}
+              title={isDisabled ? reason : (session.name ?? '')}
             >
-              <div className="flex flex-col overflow-hidden">
-                <div className="flex items-center space-x-1">
+              <button
+                className={`flex-1 flex flex-col items-start overflow-hidden text-left ${
+                  currentSessionId === session.id
+                    ? isLight
+                      ? 'text-brand-600 font-medium'
+                      : 'text-brand-300 font-medium'
+                    : ''
+                } ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => {
+                  if (isDisabled) return;
+                  onSelectSession(session.id);
+                  onClose();
+                }}
+                disabled={isDisabled}
+                aria-current={currentSessionId === session.id ? 'true' : undefined}
+              >
+                <div className="flex items-center space-x-1 w-full">
                   {isSIncognito && (
                     <Ghost size={12} className="text-purple-500 shrink-0" />
                   )}
-                  <span className="truncate">{session.name}</span>
+                  <span className="truncate w-full">{session.name}</span>
                 </div>
                 <span className="text-[10px] text-brand-gray-500">
                   {isSIncognito
-                    ? 'Not saved to disk'
+                    ? t('Not saved to disk')
                     : session.updated_at
                       ? new Date(session.updated_at).toLocaleString()
-                      : 'Unknown date'}
+                      : t('Unknown date')}
                 </span>
-              </div>
+              </button>
               <button
-                onClick={(e) => {
+                onClick={async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   e.stopPropagation();
                   if (isDisabled) return;
-                  if (confirm('Delete this chat?')) {
+                  if (await confirm(t('Delete this chat?'))) {
                     onDeleteSession(session.id);
                   }
                 }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 hover:text-red-600 transition-all"
-                title={isDisabled ? reason : 'Delete this chat'}
+                title={isDisabled ? reason : t('Delete this chat')}
                 disabled={isDisabled}
               >
                 <Trash2 size={14} />

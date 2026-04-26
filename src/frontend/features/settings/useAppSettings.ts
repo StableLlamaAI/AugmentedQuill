@@ -9,12 +9,18 @@
  * Defines the use app settings unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
+import i18n, { detectBrowserLanguage } from '../app/i18n';
 import { AppSettings, LLMConfig } from '../../types';
 import { api } from '../../services/api';
 import { MachineModelConfig } from '../../services/apiTypes';
+import { machineModelToProvider } from './providerAdapter';
 
-export function useAppSettings(defaultSettings: AppSettings) {
+/** Custom React hook that manages app settings. */
+export function useAppSettings(defaultSettings: AppSettings): {
+  appSettings: AppSettings;
+  setAppSettings: import('react').Dispatch<import('react').SetStateAction<AppSettings>>;
+} {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_settings');
     const base = defaultSettings;
@@ -50,113 +56,58 @@ export function useAppSettings(defaultSettings: AppSettings) {
         if (models.length > 0) {
           const fallbackProvider = defaultSettings.providers[0] as LLMConfig;
           const providers: LLMConfig[] = (models as MachineModelConfig[]).map(
-            (model) => {
-              const name = String(model.name || '').trim();
-              const timeoutS = Number(model.timeout_s ?? 60);
-              return {
-                ...fallbackProvider,
-                id: name,
-                name,
-                baseUrl: String(model.base_url || '').trim(),
-                apiKey: String(model.api_key || ''),
-                timeout: Number.isFinite(timeoutS)
-                  ? Math.max(1, timeoutS) * 1000
-                  : 60000,
-                modelId: String(model.model || '').trim(),
-                contextWindowTokens:
-                  model.context_window_tokens === null ||
-                  model.context_window_tokens === undefined
-                    ? undefined
-                    : Number(model.context_window_tokens),
-                temperature:
-                  model.temperature === null || model.temperature === undefined
-                    ? fallbackProvider.temperature
-                    : Number(model.temperature),
-                topP:
-                  model.top_p === null || model.top_p === undefined
-                    ? fallbackProvider.topP
-                    : Number(model.top_p),
-                maxTokens:
-                  model.max_tokens === null || model.max_tokens === undefined
-                    ? fallbackProvider.maxTokens
-                    : Number(model.max_tokens),
-                presencePenalty:
-                  model.presence_penalty === null ||
-                  model.presence_penalty === undefined
-                    ? fallbackProvider.presencePenalty
-                    : Number(model.presence_penalty),
-                frequencyPenalty:
-                  model.frequency_penalty === null ||
-                  model.frequency_penalty === undefined
-                    ? fallbackProvider.frequencyPenalty
-                    : Number(model.frequency_penalty),
-                stop: Array.isArray(model.stop)
-                  ? model.stop.map((entry) => String(entry))
-                  : [],
-                seed:
-                  model.seed === null || model.seed === undefined
-                    ? undefined
-                    : Number(model.seed),
-                topK:
-                  model.top_k === null || model.top_k === undefined
-                    ? undefined
-                    : Number(model.top_k),
-                minP:
-                  model.min_p === null || model.min_p === undefined
-                    ? undefined
-                    : Number(model.min_p),
-                extraBody: String(model.extra_body || ''),
-                presetId: model.preset_id || null,
-                writingWarning: model.writing_warning || null,
-                isMultimodal: model.is_multimodal,
-                supportsFunctionCalling: model.supports_function_calling,
-                prompts: {
-                  ...fallbackProvider.prompts,
-                  ...(model.prompt_overrides || {}),
-                },
-              };
-            }
+            (model: MachineModelConfig) =>
+              machineModelToProvider(model, fallbackProvider)
           );
 
-          setAppSettings((prev) => {
-            const next = { ...prev, providers };
-            const selectedName = (openai?.selected || '') as string;
-            const selectedChat = (openai?.selected_chat || selectedName) as string;
-            const selectedWriting = (openai?.selected_writing ||
-              selectedName) as string;
-            const selectedEditing = (openai?.selected_editing ||
-              selectedName) as string;
+          startTransition(() =>
+            setAppSettings((prev: AppSettings) => {
+              const next = { ...prev, providers };
+              const selectedName = (openai?.selected || '') as string;
+              const selectedChat = (openai?.selected_chat || selectedName) as string;
+              const selectedWriting = (openai?.selected_writing ||
+                selectedName) as string;
+              const selectedEditing = (openai?.selected_editing ||
+                selectedName) as string;
 
-            if (!next.activeChatProviderId || next.activeChatProviderId === 'default') {
-              if (selectedChat) next.activeChatProviderId = selectedChat;
-            }
-            if (
-              !next.activeWritingProviderId ||
-              next.activeWritingProviderId === 'default'
-            ) {
-              if (selectedWriting) next.activeWritingProviderId = selectedWriting;
-            }
-            if (
-              !next.activeEditingProviderId ||
-              next.activeEditingProviderId === 'default'
-            ) {
-              if (selectedEditing) next.activeEditingProviderId = selectedEditing;
-            }
+              if (
+                !next.activeChatProviderId ||
+                next.activeChatProviderId === 'default'
+              ) {
+                if (selectedChat) next.activeChatProviderId = selectedChat;
+              }
+              if (
+                !next.activeWritingProviderId ||
+                next.activeWritingProviderId === 'default'
+              ) {
+                if (selectedWriting) next.activeWritingProviderId = selectedWriting;
+              }
+              if (
+                !next.activeEditingProviderId ||
+                next.activeEditingProviderId === 'default'
+              ) {
+                if (selectedEditing) next.activeEditingProviderId = selectedEditing;
+              }
 
-            const exists = (id: string) =>
-              providers.some((provider) => provider.id === id);
-            if (!exists(next.activeChatProviderId)) {
-              next.activeChatProviderId = providers[0].id;
-            }
-            if (!exists(next.activeWritingProviderId)) {
-              next.activeWritingProviderId = providers[0].id;
-            }
-            if (!exists(next.activeEditingProviderId)) {
-              next.activeEditingProviderId = providers[0].id;
-            }
+              if (machine?.gui_language) {
+                next.guiLanguage = machine.gui_language;
+              }
 
-            return next;
-          });
+              const exists = (id: string) =>
+                providers.some((provider: LLMConfig) => provider.id === id);
+              if (!exists(next.activeChatProviderId)) {
+                next.activeChatProviderId = providers[0].id;
+              }
+              if (!exists(next.activeWritingProviderId)) {
+                next.activeWritingProviderId = providers[0].id;
+              }
+              if (!exists(next.activeEditingProviderId)) {
+                next.activeEditingProviderId = providers[0].id;
+              }
+
+              return next;
+            })
+          );
         }
       } catch (error) {
         console.error('Failed to sync settings with backend', error);
@@ -168,6 +119,10 @@ export function useAppSettings(defaultSettings: AppSettings) {
 
   useEffect(() => {
     localStorage.setItem('augmentedquill_settings', JSON.stringify(appSettings));
+    const targetLanguage = appSettings.guiLanguage || detectBrowserLanguage();
+    if (i18n.language !== targetLanguage) {
+      i18n.changeLanguage(targetLanguage);
+    }
   }, [appSettings]);
 
   return { appSettings, setAppSettings };

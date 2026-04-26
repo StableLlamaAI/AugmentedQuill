@@ -11,12 +11,14 @@
 
 import { useState, useCallback, useRef } from 'react';
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'primary' | 'danger';
+  /** When true the dialog acts as an alert with only an OK button. */
+  alertOnly?: boolean;
 }
 
 interface PendingConfirm {
@@ -37,12 +39,19 @@ export const useConfirmDialog = () => {
     const normalizedOptions: ConfirmOptions =
       typeof input === 'string' ? { message: input } : input;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve: (value: boolean | PromiseLike<boolean>) => void) => {
       pendingRef.current = { options: normalizedOptions, resolve };
       setOptions(normalizedOptions);
       setIsOpen(true);
     });
   }, []);
+
+  /** Non-blocking themed replacement for window.alert(). */
+  const alert = useCallback(
+    (message: string, title?: string): Promise<void> =>
+      confirm({ message, title, alertOnly: true }).then(() => undefined),
+    [confirm]
+  );
 
   const handleConfirm = useCallback(() => {
     setIsOpen(false);
@@ -58,6 +67,7 @@ export const useConfirmDialog = () => {
 
   return {
     confirm,
+    alert,
     confirmDialogState: {
       isOpen,
       message: options.message,
@@ -65,6 +75,7 @@ export const useConfirmDialog = () => {
       confirmLabel: options.confirmLabel,
       cancelLabel: options.cancelLabel,
       variant: options.variant,
+      alertOnly: options.alertOnly,
     },
     handleConfirm,
     handleCancel,

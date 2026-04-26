@@ -17,104 +17,37 @@ import React, {
   useState,
 } from 'react';
 import { EditorView } from '@codemirror/view';
-import { EditorSettings, ViewMode, WritingUnit } from '../../types';
 import {
-  Sparkles,
-  Loader2,
-  SplitSquareHorizontal,
-  RefreshCw,
-  PenLine,
-  Wand2,
-  FileEdit,
-  BookOpen,
-  Image as ImageIcon,
-  Trash2,
-  X,
-  Upload,
-} from 'lucide-react';
+  EditorSettings,
+  SuggestionGenerationMode,
+  ViewMode,
+  WritingUnit,
+} from '../../types';
+import { Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
-import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
-// @ts-ignore
-import { marked } from 'marked';
+import { useSearchHighlight } from '../search/SearchHighlightContext';
+import { useChatStore, ChatStoreState } from '../../stores/chatStore';
+import { useStoryStore } from '../../stores/storyStore';
+import type { StoryStoreState } from '../../stores/storyStore';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
-import { createEditorTurndownService } from './turndown';
-import { configureMarked } from './configureMarked';
+import { EditorSuggestionPanel } from './EditorSuggestionPanel';
+import { EditorMobileToolbar } from './EditorMobileToolbar';
+import { EditorProvider } from './EditorContext';
 import {
-  applyInlineFormatAtSelection,
-  getBlockType,
-  getLineAtOffset,
   insertFencedCodeBlock,
   insertFootnote,
-  isInlineFormatActiveAtSelection,
-  resolveInlineSelection,
-  toggleBlockAtOffset,
   toggleInlineFormatAtSelection,
   InlineFormatType,
   MarkdownBlockType,
-  TextSelectionRange,
 } from './markdownToolbarUtils';
+import { useEditorScroll } from './hooks/useEditorScroll';
+import { useEditorFormatting } from './hooks/useEditorFormatting';
 
-// URL sanitizer helpers for createLink/insertImage to avoid passing
-// unsafe protocols directly into document.execCommand.
-export const isSafeLinkUrl = (url: string): boolean => {
-  const value = url?.trim();
-  if (!value) return false;
-
-  // Block known dangerous protocols early.
-  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
-
-  // Allow http(s), ftp, mailto, and path-based links.
-  if (/^(?:https?:\/\/|ftp:\/\/|mailto:)/i.test(value)) {
-    if (/^(?:https?:\/\/|ftp:\/\/)/i.test(value)) {
-      try {
-        new URL(value);
-      } catch {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  return (
-    (value.startsWith('/') && !value.startsWith('//')) ||
-    value.startsWith('./') ||
-    value.startsWith('../')
-  );
-};
-
-export const isSafeImageUrl = (src: string): boolean => {
-  const value = src?.trim();
-  if (!value) return false;
-
-  if (/^(?:javascript|data|vbscript):/i.test(value)) return false;
-
-  if (/^https?:\/\//i.test(value)) {
-    try {
-      new URL(value);
-    } catch {
-      return false;
-    }
-    return true;
-  }
-
-  return (
-    (value.startsWith('/') && !value.startsWith('//')) ||
-    value.startsWith('./') ||
-    value.startsWith('../')
-  );
-};
-
-export const escapeHtmlAttribute = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-// Configure marked extensions once (subscript, superscript, footnotes).
-configureMarked();
+// URL sanitizer — re-exported for backward compat with Editor.url.test.ts
+export { isSafeImageUrl } from './editorUtils';
+import { isSafeImageUrl } from './editorUtils';
 
 interface EditorProps {
   chapter: WritingUnit;
@@ -123,8 +56,13 @@ interface EditorProps {
   showWhitespace?: boolean;
   onToggleShowWhitespace?: () => void;
   onChange: (id: string, updates: Partial<WritingUnit>) => void;
+  baselineContent?: string;
+  language?: string;
+  spellCheck?: boolean;
   suggestionControls: {
     continuations: string[];
+    suggestionMode: SuggestionGenerationMode;
+    setSuggestionMode: (mode: SuggestionGenerationMode) => void;
     isSuggesting: boolean;
     onTriggerSuggestions: (cursor?: number, contentOverride?: string) => void;
     onCancelSuggestion?: () => void;
@@ -144,12 +82,11 @@ interface EditorProps {
     isAiLoading: boolean;
     isWritingAvailable?: boolean;
     onCancelAiAction?: () => void;
+    /** True whenever any LLM is writing prose into the editor. */
+    isProseStreaming?: boolean;
   };
   onContextChange?: (formats: string[]) => void;
-}
-
-interface TurndownServiceLike {
-  turndown: (html: string) => string;
+  onOpenSearch?: () => void;
 }
 
 export interface EditorHandle {
@@ -157,227 +94,205 @@ export interface EditorHandle {
   focus: () => void;
   format: (type: string) => void;
   openImageManager?: () => void;
+  jumpToPosition: (start: number, end: number) => void;
 }
 
-// Inject visible whitespace markers into the WYSIWYG contentEditable DOM.
-// Replaces space characters in text nodes (skipping code/pre blocks and
-// existing marker spans) with a visible middle-dot span.  The injected
-// element carries data-ws-marker so turndown can strip it back to a space.
-const injectWsMarkersWysiwyg = (root: HTMLElement): void => {
-  const textNodes: Text[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node: Node): number {
-      const parent = (node as Text).parentElement;
-      // Skip nodes inside existing WS marker spans
-      if (parent?.dataset.wsMarker) return NodeFilter.FILTER_SKIP;
-      // Skip text inside <code> or <pre>
-      let el: Element | null = parent;
-      while (el && el !== root) {
-        if (el.tagName === 'CODE' || el.tagName === 'PRE')
-          return NodeFilter.FILTER_SKIP;
-        el = el.parentElement;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  let n: Node | null;
-  while ((n = walker.nextNode())) textNodes.push(n as Text);
-
-  for (const textNode of textNodes) {
-    const text = textNode.textContent ?? '';
-    if (!text.includes(' ')) continue;
-    const frag = document.createDocumentFragment();
-    let i = 0;
-    for (let j = 0; j <= text.length; j++) {
-      if (j === text.length || text[j] === ' ') {
-        if (j > i) frag.appendChild(document.createTextNode(text.slice(i, j)));
-        if (j < text.length) {
-          const span = document.createElement('span');
-          span.dataset.wsMarker = '1';
-          span.setAttribute('aria-hidden', 'true');
-          span.className = 'cm-ws-marker';
-          span.textContent = '\u00b7'; // MIDDLE DOT
-          span.style.display = 'inline-block';
-          // Use 1ch so the visible marker takes up a single monospace char width
-          // and matches the expected Raw mode layout.
-          span.style.minWidth = '1ch';
-          span.style.width = '1ch';
-          span.style.textAlign = 'center';
-          span.style.verticalAlign = 'baseline';
-          span.style.opacity = '0.5';
-          span.style.pointerEvents = 'none';
-          span.style.userSelect = 'none';
-          frag.appendChild(span);
-        }
-        i = j + 1;
-      }
-    }
-    textNode.parentNode?.replaceChild(frag, textNode);
-  }
-};
-
-export const Editor = React.forwardRef<EditorHandle, EditorProps>(
-  (
-    {
-      chapter,
-      settings,
-      viewMode,
-      showWhitespace,
-      onToggleShowWhitespace,
-      onChange,
-      suggestionControls,
-      aiControls,
-      onContextChange,
-    },
-    ref
-  ) => {
-    // CodeMirror EditorView for Raw / Markdown modes
-    const editorViewRef = useRef<EditorView | null>(null);
-    const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
-    const lastWysiwygSelectionRef = useRef<Range | null>(null);
-    const wysiwygRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const showInlineTitle = true;
-    const conflictCount = chapter.conflicts?.length ?? 0;
-    const isAtBottomRef = useRef<boolean>(true);
-    // Debounce timers for API-level persistence so every keystroke does not
-    // trigger a network request.  Display updates remain synchronous.
-    const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const DEBOUNCE_MS = 300;
-
-    // Local content/title state so the editor div always gets the latest
-    // typed value immediately, while the parent onChange (API call) is debounced.
-    const [localContent, setLocalContent] = useState(chapter.content);
-    const [localTitle, setLocalTitle] = useState(chapter.title);
-
-    // Keep local state in sync when the chapter changes externally (chapter
-    // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
-    // for chapter switches; also watch chapter.content so AI insertions and
-    // undo/redo (which can change content without changing id) are reflected.
-    const lastChapterIdRef = useRef(chapter.id);
-    useEffect(() => {
-      const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
-      lastChapterIdRef.current = chapter.id;
-      // On chapter switch always reset.  For in-place content changes (AI,
-      // undo/redo) only sync when the editor is not focused — when it IS
-      // focused CodeMirror already has the correct document state.
-      const editorFocused = editorViewRef.current?.hasFocus ?? false;
-      if (isChapterSwitch || !editorFocused) {
-        setLocalContent(chapter.content);
-      }
-    }, [chapter.id, chapter.content]);
-
-    useEffect(() => {
-      setLocalTitle(chapter.title);
-    }, [chapter.id, chapter.title]);
-
-    const {
-      continuations,
-      isSuggesting,
-      onTriggerSuggestions,
-      onAcceptContinuation,
-      isSuggestionMode,
-      onKeyboardSuggestionAction,
-    } = suggestionControls;
-    const {
-      onAiAction,
-      isAiLoading,
-      isWritingAvailable = true,
-      onCancelAiAction,
-    } = aiControls;
-
-    // Detect if we are at the bottom of the scroll container
-    const handleScroll = useCallback(() => {
-      if (!scrollContainerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Use a small buffer (5px) for "at bottom" detection
-      const atBottom = scrollHeight - scrollTop - clientHeight < 5;
-      isAtBottomRef.current = atBottom;
-    }, []);
-
-    // Effect to scroll to bottom under scenarios where bottom content should remain visible
-    // while the continuation area / AI streaming can change layout.
-    useEffect(() => {
-      const hasContinuationOptionsLocal = continuations.some(
-        (option) => option && option.trim().length > 0
+/* eslint-disable complexity */
+export const Editor = React.memo(
+  React.forwardRef<EditorHandle, EditorProps>(
+    // eslint-disable-next-line max-lines-per-function
+    (
+      {
+        chapter,
+        settings,
+        viewMode,
+        showWhitespace,
+        onChange,
+        baselineContent = undefined,
+        suggestionControls,
+        aiControls,
+        language,
+        spellCheck,
+        onContextChange,
+        onOpenSearch,
+      }: EditorProps,
+      ref: React.ForwardedRef<EditorHandle>
+    ) => {
+      const { t } = useTranslation();
+      // CodeMirror EditorView — persists across all view modes
+      const editorViewRef = useRef<EditorView | null>(null);
+      const paperDivRef = useRef<HTMLDivElement>(null);
+      const showInlineTitle = true;
+      const { getRanges } = useSearchHighlight();
+      const chapterSearchHighlightRanges = getRanges(
+        'chapter_content',
+        String(chapter.id),
+        'content'
       );
+      // Debounce timers for API-level persistence so every keystroke does not
+      // trigger a network request.  Display updates remain synchronous.
+      const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const DEBOUNCE_MS = 300;
 
-      const shouldScroll =
-        isAiLoading ||
-        isSuggesting ||
-        (isAtBottomRef.current && hasContinuationOptionsLocal);
+      // Local content/title state so the editor div always gets the latest
+      // typed value immediately, while the parent onChange (API call) is debounced.
+      const [localContent, setLocalContent] = useState(chapter.content);
+      // Ref that always holds the current content without triggering re-renders.
+      // Used in callbacks that need the latest value at call time (e.g. suggestion
+      // hotkeys) so those callbacks don't need localContent in their deps arrays.
+      const localContentRef = useRef(chapter.content);
+      const [localTitle, setLocalTitle] = useState(chapter.title);
 
-      if (!shouldScroll || !scrollContainerRef.current) {
-        return undefined;
+      // Track the diff baseline locally so we can clear it immediately when the
+      // user types — preventing newly typed text from appearing as diff insertions.
+      // Re-adopt the prop whenever a new non-undefined baseline arrives (AI write).
+      const [localBaseline, setLocalBaseline] = useState<string | undefined>(
+        baselineContent
+      );
+      const prevBaselineRef = useRef<string | undefined>(baselineContent);
+      // Keep the last non-undefined baseline so undo can restore the diff view.
+      const savedBaselineRef = useRef<string | undefined>(baselineContent);
+      if (baselineContent !== prevBaselineRef.current) {
+        prevBaselineRef.current = baselineContent;
+        setLocalBaseline(baselineContent);
+        // Only preserve as the real AI baseline when baselineContent differs from
+        // chapter.content. When isUserEdit=true, pushState sets baselineContent
+        // equal to chapter.content (no diff), so we must not overwrite the saved
+        // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+        // that wrong baseline instead of the original AI-written baseline.
+        if (baselineContent !== undefined && baselineContent !== chapter.content) {
+          savedBaselineRef.current = baselineContent;
+        }
       }
 
-      const raf = window.requestAnimationFrame(() => {
-        scrollContainerRef.current!.scrollTop =
-          scrollContainerRef.current!.scrollHeight;
+      const isChatStreaming = useChatStore(
+        (s: ChatStoreState) => s.isProseStreamingFromChat
+      );
+      // Subscribe to the ephemeral streaming slot — only this editor instance
+      // re-renders on each chunk, not the entire component tree.
+      const streamingContent = useStoryStore((s: StoryStoreState) =>
+        s.streamingContent?.chapterId === chapter.id ? s.streamingContent.content : null
+      );
+      const proseStreamingActive =
+        (aiControls.isProseStreaming ?? false) || isChatStreaming;
+
+      // Keep local state in sync when the chapter changes externally (chapter
+      // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
+      // for chapter switches; also watch chapter.content so AI insertions and
+      // undo/redo (which can change content without changing id) are reflected.
+      const lastChapterIdRef = useRef(chapter.id);
+      useEffect(() => {
+        const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
+        lastChapterIdRef.current = chapter.id;
+
+        // During active streaming the streaming-slot effect below owns
+        // localContent; skip the chapter.content sync to avoid flashing the
+        // pre-AI baseline content on every chunk.
+        if (proseStreamingActive && !isChapterSwitch) return;
+
+        // On chapter switch always reset.  For in-place content changes (AI,
+        // undo/redo) only sync when the editor is not focused — when it IS
+        // focused CodeMirror already has the correct document state.
+        const editorFocused = editorViewRef.current?.hasFocus ?? false;
+        const shouldDeferStreamingSync =
+          proseStreamingActive &&
+          isDetachedFromBottomRef.current &&
+          distanceFromBottomRef.current > 120 &&
+          !isChapterSwitch;
+
+        if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
+          localContentRef.current = chapter.content;
+          setLocalContent(chapter.content);
+        }
+      }, [chapter.id, chapter.content, proseStreamingActive]);
+
+      // Push each streamed chunk directly into the editor's local state so
+      // only this component re-renders — story.chapters stays untouched.
+      useEffect(() => {
+        if (streamingContent !== null) {
+          localContentRef.current = streamingContent;
+          setLocalContent(streamingContent);
+        }
+      }, [streamingContent]);
+
+      useEffect(() => {
+        setLocalTitle(chapter.title);
+      }, [chapter.id, chapter.title]);
+
+      const {
+        continuations,
+        suggestionMode,
+        setSuggestionMode,
+        isSuggesting,
+        onTriggerSuggestions,
+        onAcceptContinuation,
+        isSuggestionMode,
+        onKeyboardSuggestionAction,
+      } = suggestionControls;
+      const {
+        onAiAction,
+        isAiLoading,
+        isWritingAvailable = true,
+        onCancelAiAction,
+        isProseStreaming = false,
+      } = aiControls;
+
+      const {
+        scrollContainerRef,
+        handleScroll,
+        scrollMainContentToBottom,
+        isDetachedFromBottomRef,
+        distanceFromBottomRef,
+      } = useEditorScroll({
+        localContent,
+        isProseStreaming,
+        chapterId: chapter.id,
       });
 
-      return () => {
-        window.cancelAnimationFrame(raf);
-      };
-    }, [chapter.content, continuations, isAiLoading, isSuggesting]);
+      const { checkContext, scheduleCheckContext, toggleBlockAtCaret } =
+        useEditorFormatting({
+          editorViewRef,
+          onContextChange,
+          contextDebounceMs: 150,
+        });
 
-    const writingUnavailableReason =
-      'This action is unavailable because no working WRITING model is configured.';
+      const writingUnavailableReason =
+        'This action is unavailable because no working WRITING model is configured.';
 
-    const handleSuggestionButtonClick = () => {
-      if (isSuggesting || isAiLoading) {
-        if (isSuggesting) {
-          suggestionControls.onCancelSuggestion?.();
-        } else if (isAiLoading) {
-          onCancelAiAction?.();
-        }
-        return;
-      }
-      const cursor = getEditorCaretOffset() ?? localContent.length;
-      onTriggerSuggestions(cursor, localContent);
-    };
-
-    const [isDragging, setIsDragging] = useState(false);
-
-    const handleImageUpload = async (file: File) => {
-      try {
-        const res = await api.projects.uploadImage(file);
-        if (res.ok) {
-          insertImageMarkdown(res.filename, res.url);
-        }
-      } catch (e) {
-        notifyError('Failed to upload image', e);
-      }
-    };
-
-    const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
-      const alt = altText || filename;
-      if (viewMode === 'wysiwyg') {
-        if (!isSafeImageUrl(url)) {
-          // Avoid inserting malicious URI contents into execCommand.
+      const handleSuggestionButtonClick = (): void => {
+        if (isSuggesting || isAiLoading) {
+          if (isSuggesting) {
+            suggestionControls.onCancelSuggestion?.();
+          } else if (isAiLoading) {
+            onCancelAiAction?.();
+          }
           return;
         }
+        const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
+        onTriggerSuggestions(cursor, localContentRef.current);
+      };
 
-        const safeUrl = escapeHtmlAttribute(url);
-        const safeAlt = escapeHtmlAttribute(alt);
-        const html = `<img src="${safeUrl}" alt="${safeAlt}" />`;
+      const [isDragging, setIsDragging] = useState(false);
 
-        if (wysiwygRef.current && wysiwygRef.current.contains(document.activeElement)) {
-          document.execCommand('insertHTML', false, html);
-          wysiwygRef.current.dispatchEvent(new Event('input', { bubbles: true }));
-        } else if (lastWysiwygSelectionRef.current) {
-          const selection = window.getSelection();
-          selection?.removeAllRanges();
-          selection?.addRange(lastWysiwygSelectionRef.current);
-          document.execCommand('insertHTML', false, html);
-          wysiwygRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
-        } else {
-          const markdown = `\n![${alt}](${url})`;
-          onChange(chapter.id, { content: chapter.content + markdown });
+      const handleImageUpload = async (file: File): Promise<void> => {
+        try {
+          const res = await api.projects.uploadImage(file);
+          if (res.ok) {
+            insertImageMarkdown(res.filename, res.url);
+          }
+        } catch (e) {
+          notifyError('Failed to upload image', e);
         }
-      } else {
+      };
+
+      const insertImageMarkdown = (
+        filename: string,
+        url: string,
+        altText?: string
+      ): void => {
+        const alt = altText || filename;
+        if (!isSafeImageUrl(url)) return;
         const md = `![${alt}](${url})`;
         const view = editorViewRef.current;
         if (view) {
@@ -390,620 +305,136 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
         } else {
           onChange(chapter.id, { content: chapter.content + '\n' + md });
         }
-      }
-    };
+      };
 
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(true);
-    };
+      const handleDragOver = (e: React.DragEvent): void => {
+        e.preventDefault();
+        setIsDragging(true);
+      };
 
-    const handleDragLeave = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-    };
+      const handleDragLeave = (e: React.DragEvent): void => {
+        e.preventDefault();
+        setIsDragging(false);
+      };
 
-    const handleDrop = async (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        if (file.type.startsWith('image/')) {
-          await handleImageUpload(file);
-        }
-      }
-    };
-
-    const turndownService = useRef<TurndownServiceLike | null>(null);
-    if (!turndownService.current) {
-      turndownService.current = createEditorTurndownService();
-    }
-
-    // Keep WYSIWYG DOM synchronized when content changes externally.
-    // Use `breaks: true` so single newlines in the markdown source are
-    // rendered as <br> rather than being collapsed — this makes the
-    // marked → turndown round-trip lossless for soft line-breaks.
-    useEffect(() => {
-      if (viewMode === 'wysiwyg' && wysiwygRef.current) {
-        if (document.activeElement !== wysiwygRef.current) {
-          wysiwygRef.current.innerHTML = marked.parse(chapter.content, {
-            breaks: true,
-          }) as string;
-          if (showWhitespace) {
-            injectWsMarkersWysiwyg(wysiwygRef.current);
+      const handleDrop = async (e: React.DragEvent): Promise<void> => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          if (file.type.startsWith('image/')) {
+            await handleImageUpload(file);
           }
         }
-      }
-    }, [chapter.content, viewMode, chapter.id, showWhitespace]);
+      };
 
-    const handleWysiwygInput = (e?: React.FormEvent<HTMLDivElement>) => {
-      if (e && !e.nativeEvent.isTrusted) return;
-      if (wysiwygRef.current) {
-        const html = wysiwygRef.current.innerHTML;
-        const md = turndownService.current.turndown(html);
-        if (md !== chapter.content) {
-          onChange(chapter.id, { content: md });
-        }
-        checkContext();
-      }
-    };
-
-    // Re-inject WS markers after the user finishes editing.
-    // While the element is focused, markers are absent so typing isn't
-    // disrupted; on blur we re-render and re-inject for a clean view.
-    const handleWysiwygBlur = () => {
-      if (!wysiwygRef.current) return;
-
-      const currentMd =
-        turndownService.current?.turndown(wysiwygRef.current.innerHTML) ?? '';
-
-      if (currentMd !== chapter.content) {
-        onChange(chapter.id, { content: currentMd });
-      }
-
-      if (!showWhitespace) return;
-
-      wysiwygRef.current.innerHTML = marked.parse(currentMd, {
-        breaks: true,
-      }) as string;
-      injectWsMarkersWysiwyg(wysiwygRef.current);
-    };
-
-    // Update active formatting state for toolbar affordances.
-    const checkContext = () => {
-      if (!onContextChange) return;
-
-      const formats: string[] = [];
-      const isWysiwyg = viewMode === 'wysiwyg';
-
-      if (isWysiwyg) {
-        // Walk the DOM from the selection anchor to detect formatting applied
-        // either via execCommand or via markdown→HTML rendering.  queryCommandState
-        // is unreliable for elements that were not inserted by execCommand itself
-        // (e.g. <sub>/<sup>/<del> coming from marked).
-        const selAnchor = window.getSelection()?.anchorNode ?? null;
-        const isInsideTag = (tags: string[]): boolean => {
-          let node: Node | null = selAnchor;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              tags.includes((node as Element).tagName)
-            )
-              return true;
-            node = node.parentNode;
-          }
-          return false;
-        };
-
-        if (document.queryCommandState('bold')) formats.push('bold');
-        if (document.queryCommandState('italic')) formats.push('italic');
-        // strikeThrough: prefer DOM walk so <del> from markdown is detected.
-        if (isInsideTag(['DEL', 'S', 'STRIKE'])) formats.push('strikethrough');
-        // subscript/superscript: queryCommandState is unreliable for <sub>/<sup>
-        // rendered from markdown; always use DOM walk.
-        if (isInsideTag(['SUB'])) formats.push('subscript');
-        // Superscript: exclude footnote-ref <sup> (class="footnote-ref")
-        const insideNonFootnoteSup = (() => {
-          let node: Node | null = selAnchor;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              (node as Element).tagName === 'SUP'
-            ) {
-              return !(node as Element).classList.contains('footnote-ref');
-            }
-            node = node.parentNode;
-          }
-          return false;
-        })();
-        if (insideNonFootnoteSup) formats.push('superscript');
-        if (document.queryCommandState('insertUnorderedList')) formats.push('ul');
-        if (document.queryCommandState('insertOrderedList')) formats.push('ol');
-        const formatBlock = document.queryCommandValue('formatBlock');
-        if (formatBlock === 'h1') formats.push('h1');
-        if (formatBlock === 'h2') formats.push('h2');
-        if (formatBlock === 'h3') formats.push('h3');
-        if (formatBlock === 'blockquote') formats.push('quote');
-      } else {
-        const view = editorViewRef.current;
-        if (view) {
-          const rawText = view.state.doc.toString();
-          const { anchor, head } = view.state.selection.main;
-          const rawCaret = head;
-          const rawStart = Math.min(anchor, head);
-          const rawEnd = Math.max(anchor, head);
-
-          const line = getLineAtOffset(rawText, rawCaret);
-          const blockType = getBlockType(line);
-          if (blockType) formats.push(blockType);
-
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'bold'))
-            formats.push('bold');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'italic'))
-            formats.push('italic');
-          if (
-            isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'strikethrough')
-          )
-            formats.push('strikethrough');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'subscript'))
-            formats.push('subscript');
-          if (isInlineFormatActiveAtSelection(rawText, rawStart, rawEnd, 'superscript'))
-            formats.push('superscript');
-
-          lastRawSelectionRef.current = { start: rawStart, end: rawEnd };
-        }
-      }
-      onContextChange(formats);
-    };
-
-    const toggleBlockAtCaret = (type: MarkdownBlockType) => {
-      const view = editorViewRef.current;
-      if (!view) return;
-      const rawText = view.state.doc.toString();
-      const rawCaret = view.state.selection.main.head;
-      const { nextRawText, nextRawCaret } = toggleBlockAtOffset(
-        rawText,
-        rawCaret,
-        type
-      );
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: nextRawText },
-        selection: { anchor: nextRawCaret },
-      });
-      view.focus();
-    };
-
-    const getEditorCaretOffset = useCallback((): number | null => {
-      if (viewMode === 'raw' || viewMode === 'markdown') {
+      const getEditorCaretOffset = useCallback((): number | null => {
         return editorViewRef.current?.state.selection.main.head ?? null;
-      }
-      if (viewMode === 'wysiwyg') {
-        // DOM-to-markdown offset mapping is ambiguous in WYSIWYG mode;
-        // use content-end fallback while still requiring in-editor selection.
-        const inside =
-          !!wysiwygRef.current &&
-          !!window.getSelection()?.anchorNode &&
-          wysiwygRef.current.contains(window.getSelection()!.anchorNode);
-        return inside ? chapter.content.length : null;
-      }
-      return null;
-    }, [viewMode, chapter.content.length]);
+      }, []);
 
-    const isEditorFocused = useCallback(() => {
-      if (viewMode === 'raw' || viewMode === 'markdown') {
+      const isEditorFocused = useCallback((): boolean => {
         return editorViewRef.current?.hasFocus ?? false;
-      }
-      if (viewMode === 'wysiwyg') {
-        return (
-          !!wysiwygRef.current &&
-          document.activeElement &&
-          wysiwygRef.current.contains(document.activeElement)
-        );
-      }
-      return false;
-    }, [viewMode]);
+      }, []);
 
-    const maybeHandleSuggestionHotkey = useCallback(
-      (e: KeyboardEvent | React.KeyboardEvent) => {
-        const key = 'key' in e ? e.key : '';
-        const ctrlKey = 'ctrlKey' in e ? e.ctrlKey : false;
-        const metaKey = 'metaKey' in e ? e.metaKey : false;
+      const stopPropagationIfAvailable = (
+        e: KeyboardEvent | React.KeyboardEvent
+      ): void => {
+        e.stopPropagation?.();
+      };
 
-        const suggestionActive =
-          isSuggestionMode || continuations.length > 0 || isSuggesting;
+      const maybeHandleSuggestionHotkey = useCallback(
+        (e: KeyboardEvent | React.KeyboardEvent): boolean => {
+          const key = 'key' in e ? e.key : '';
+          const ctrlKey = 'ctrlKey' in e ? e.ctrlKey : false;
+          const metaKey = 'metaKey' in e ? e.metaKey : false;
 
-        const editingFocus = isEditorFocused();
-        const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
-          key
-        );
+          const suggestionActive =
+            isSuggestionMode || continuations.length > 0 || isSuggesting;
 
-        if (isArrow && editingFocus) {
-          return false;
-        }
+          const editingFocus = isEditorFocused();
+          const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
+            key
+          );
 
-        // Trigger: Ctrl+Enter / Cmd+Enter
-        if (key === 'Enter' && (ctrlKey || metaKey)) {
-          const cursor = getEditorCaretOffset() ?? chapter.content.length;
-          e.preventDefault();
-          // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('trigger', cursor, localContent);
-          return true;
-        }
+          if (isArrow && editingFocus) {
+            return false;
+          }
 
-        if (!suggestionActive) return false;
-
-        if (key === 'ArrowLeft') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowRight') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowDown') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          const cursor = getEditorCaretOffset() ?? localContent.length;
-          onKeyboardSuggestionAction('regenerate', cursor, localContent);
-          return true;
-        }
-        if (key === 'ArrowUp') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('undo');
-          return true;
-        }
-        if (key === 'Escape') {
-          if (suggestionActive) {
+          // Trigger: Ctrl+Enter / Cmd+Enter
+          if (key === 'Enter' && (ctrlKey || metaKey)) {
+            const cursor = getEditorCaretOffset() ?? chapter.content.length;
             e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction('exit', undefined, localContent);
+            stopPropagationIfAvailable(e);
+            onKeyboardSuggestionAction('trigger', cursor, localContentRef.current);
             return true;
           }
+
+          if (!suggestionActive) return false;
+
+          const performSuggestionAction = (
+            action: 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
+            cursor?: number
+          ): boolean => {
+            e.preventDefault();
+            stopPropagationIfAvailable(e);
+            if (action === 'regenerate') {
+              onKeyboardSuggestionAction(
+                'regenerate',
+                cursor ?? localContentRef.current.length,
+                localContentRef.current
+              );
+            } else if (action === 'undo') {
+              onKeyboardSuggestionAction('undo');
+            } else if (action === 'exit') {
+              onKeyboardSuggestionAction('exit', undefined, localContentRef.current);
+            } else {
+              onKeyboardSuggestionAction(action, undefined, localContentRef.current);
+            }
+            return true;
+          };
+
+          if (key === 'ArrowLeft') {
+            return performSuggestionAction('chooseLeft');
+          }
+          if (key === 'ArrowRight') {
+            return performSuggestionAction('chooseRight');
+          }
+          if (key === 'ArrowDown') {
+            const cursor = getEditorCaretOffset();
+            return performSuggestionAction('regenerate', cursor ?? undefined);
+          }
+          if (key === 'ArrowUp') {
+            return performSuggestionAction('undo');
+          }
+          if (key === 'Escape') {
+            return suggestionActive ? performSuggestionAction('exit') : false;
+          }
+
           return false;
-        }
+        },
+        [
+          isSuggestionMode,
+          continuations.length,
+          isSuggesting,
+          onKeyboardSuggestionAction,
+          getEditorCaretOffset,
+          isEditorFocused,
+          // localContentRef is a stable ref; reading .current inside the callback
+          // always gives the latest value without requiring it in deps.
+        ]
+      );
 
-        if (!suggestionActive) return false;
-
-        if (key === 'ArrowLeft') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseLeft', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowRight') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('chooseRight', undefined, localContent);
-          return true;
-        }
-        if (key === 'ArrowDown') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          const cursor = getEditorCaretOffset() ?? localContent.length;
-          onKeyboardSuggestionAction('regenerate', cursor, localContent);
-          return true;
-        }
-        if (key === 'ArrowUp') {
-          e.preventDefault();
-          // @ts-ignore
-          e.stopPropagation?.();
-          onKeyboardSuggestionAction('undo');
-          return true;
-        }
-        return false;
-      },
-      [
-        isSuggestionMode,
-        continuations.length,
-        isSuggesting,
-        onKeyboardSuggestionAction,
-        getEditorCaretOffset,
-        isEditorFocused,
-        localContent,
-      ]
-    );
-
-    useEffect(() => {
-      // Capture shortcuts globally so suggestion controls remain reachable
-      // while focus moves across editor-adjacent UI.
-      const onKeyDown = (e: KeyboardEvent) => {
-        maybeHandleSuggestionHotkey(e);
-      };
-      window.addEventListener('keydown', onKeyDown, true);
-      return () => window.removeEventListener('keydown', onKeyDown, true);
-    }, [maybeHandleSuggestionHotkey]);
-
-    useEffect(() => {
-      if (viewMode !== 'wysiwyg') return () => {};
-      const onSelectionChange = () => {
-        if (wysiwygRef.current) {
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            if (wysiwygRef.current.contains(range.commonAncestorContainer)) {
-              lastWysiwygSelectionRef.current = range.cloneRange();
-            }
-          }
-        }
-      };
-      document.addEventListener('selectionchange', onSelectionChange);
-      return () => document.removeEventListener('selectionchange', onSelectionChange);
-    }, [viewMode]);
-
-    useEffect(() => {
-      if (viewMode !== 'wysiwyg' || !wysiwygRef.current) return () => {};
-      // Always preserve the latest WYSIWYG state when leaving visual mode.
-      return () => {
-        const currentMd =
-          turndownService.current?.turndown(wysiwygRef.current!.innerHTML) ?? '';
-        if (currentMd !== chapter.content) {
-          onChange(chapter.id, { content: currentMd });
-        }
-      };
-    }, [viewMode, chapter.content, chapter.id, onChange]);
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (maybeHandleSuggestionHotkey(e)) return;
-
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        setTimeout(checkContext, 0);
-      }
-
-      // Visual mode: intercept Enter to implement the soft-break / paragraph
-      // semantics that match MD mode:
-      //  • Plain Enter  → soft line-break (inserts <br>, stored as '\n')
-      //  • Shift+Enter  → new paragraph   (stored as '\n\n')
-      // We leave the browser default Enter-in-paragraph behaviour alone;
-      // instead we always insert a <br> and let turndown (with its softBreak
-      // rule) convert it back to a single '\n'.  A second Enter therefore
-      // inserts another <br> which becomes a second '\n' — markdown '\n\n' —
-      // which is a paragraph in readback.
-      if (viewMode === 'wysiwyg' && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        document.execCommand('insertLineBreak');
-        handleWysiwygInput();
-      }
-    };
-
-    const withRestoredWysiwygSelection = (action: () => void) => {
-      const root = wysiwygRef.current;
-      if (!root) return;
-
-      const selection = window.getSelection();
-      const savedRange =
-        selection && selection.rangeCount > 0
-          ? selection.getRangeAt(0).cloneRange()
-          : null;
-      const hasEditorSelection =
-        !!savedRange && root.contains(savedRange.startContainer);
-
-      root.focus();
-
-      if (hasEditorSelection && savedRange) {
-        selection?.removeAllRanges();
-        selection?.addRange(savedRange);
-      }
-
-      action();
-    };
-
-    const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch);
-
-    const selectWordAtCollapsedCaret = (): boolean => {
-      const root = wysiwygRef.current;
-      const selection = window.getSelection();
-      if (!root || !selection || selection.rangeCount === 0) return false;
-
-      const range = selection.getRangeAt(0);
-      if (!range.collapsed || !root.contains(range.startContainer)) return false;
-      if (range.startContainer.nodeType !== Node.TEXT_NODE) return false;
-
-      const textNode = range.startContainer as Text;
-      const text = textNode.textContent || '';
-      const offset = range.startOffset;
-      if (!isWordChar(text[offset])) return false;
-
-      let start = offset;
-      let end = offset;
-
-      while (start > 0 && isWordChar(text[start - 1])) start -= 1;
-      while (end < text.length && isWordChar(text[end])) end += 1;
-      if (start === end) return false;
-
-      const wordRange = document.createRange();
-      wordRange.setStart(textNode, start);
-      wordRange.setEnd(textNode, end);
-      selection.removeAllRanges();
-      selection.addRange(wordRange);
-      return true;
-    };
-
-    const applyInlineWysiwygFormat = (command: 'bold' | 'italic') => {
-      withRestoredWysiwygSelection(() => {
-        const selection = window.getSelection();
-        const hasSelection = !!selection && selection.rangeCount > 0;
-        const isCollapsed = hasSelection ? selection!.getRangeAt(0).collapsed : true;
-
-        if (isCollapsed) {
-          // Match expected MD-like ergonomics in visual mode:
-          // if caret is inside a word, format that word; otherwise insert empty style toggle.
-          selectWordAtCollapsedCaret();
-        }
-
-        document.execCommand(command);
-      });
-    };
-
-    const format = (type: string) => {
-      if (viewMode === 'wysiwyg') {
-        // DOM helpers for sub/sup toggle and mutual-exclusion unwrapping.
-        const findWysiwygAncestor = (tags: string[]): Element | null => {
-          let node: Node | null = window.getSelection()?.anchorNode ?? null;
-          while (node && node !== wysiwygRef.current) {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              tags.includes((node as Element).tagName)
-            )
-              return node as Element;
-            node = node.parentNode;
-          }
-          return null;
+      useEffect(() => {
+        // Capture shortcuts globally so suggestion controls remain reachable
+        // while focus moves across editor-adjacent UI.
+        const onKeyDown = (e: KeyboardEvent): void => {
+          maybeHandleSuggestionHotkey(e);
         };
-        const unwrapWysiwygEl = (el: Element): void => {
-          const p = el.parentNode!;
-          while (el.firstChild) p.insertBefore(el.firstChild, el);
-          p.removeChild(el);
-        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => window.removeEventListener('keydown', onKeyDown, true);
+      }, [maybeHandleSuggestionHotkey]);
 
-        switch (type) {
-          case 'bold':
-            applyInlineWysiwygFormat('bold');
-            break;
-          case 'italic':
-            applyInlineWysiwygFormat('italic');
-            break;
-          case 'strikethrough':
-            withRestoredWysiwygSelection(() => document.execCommand('strikeThrough'));
-            break;
-          case 'subscript': {
-            withRestoredWysiwygSelection(() => {
-              const subEl = findWysiwygAncestor(['SUB']);
-              if (subEl) {
-                // Already subscript — toggle off by unwrapping.
-                unwrapWysiwygEl(subEl);
-              } else {
-                // Remove any enclosing superscript first (mutual exclusion).
-                const supEl = findWysiwygAncestor(['SUP']);
-                if (supEl && !supEl.classList.contains('footnote-ref'))
-                  unwrapWysiwygEl(supEl);
-                document.execCommand('subscript');
-              }
-            });
-            break;
-          }
-          case 'superscript': {
-            withRestoredWysiwygSelection(() => {
-              const supEl = findWysiwygAncestor(['SUP']);
-              if (supEl && !supEl.classList.contains('footnote-ref')) {
-                // Already superscript — toggle off by unwrapping.
-                unwrapWysiwygEl(supEl);
-              } else {
-                // Remove any enclosing subscript first (mutual exclusion).
-                const subEl = findWysiwygAncestor(['SUB']);
-                if (subEl) unwrapWysiwygEl(subEl);
-                document.execCommand('superscript');
-              }
-            });
-            break;
-          }
-          case 'codeblock': {
-            withRestoredWysiwygSelection(() => {
-              const sel = window.getSelection();
-              if (sel && sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                const selectedText = range.toString();
-                const pre = document.createElement('pre');
-                const code = document.createElement('code');
-                code.textContent = selectedText || '';
-                pre.appendChild(code);
-                range.deleteContents();
-                range.insertNode(pre);
-              }
-            });
-            break;
-          }
-          case 'footnote': {
-            // Determine next footnote number from current content.
-            const currentMd =
-              turndownService.current?.turndown(wysiwygRef.current?.innerHTML ?? '') ??
-              '';
-            const existing = currentMd.match(/\[\^(\d+)\]/g) ?? [];
-            const maxNum = existing.reduce((max, m) => {
-              const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
-              return n > max ? n : max;
-            }, 0);
-            const fn = maxNum + 1;
-            withRestoredWysiwygSelection(() => {
-              const refHtml = `<sup class="footnote-ref" id="fnref-${fn}"><a href="#fn-${fn}">[${fn}]</a></sup>`;
-              document.execCommand('insertHTML', false, refHtml);
-            });
-            if (wysiwygRef.current) {
-              const defHtml = `<p class="footnote-def" id="fn-${fn}"><sup>[${fn}]</sup>\u00a0(footnote text) <a href="#fnref-${fn}" class="footnote-backref">\u21a9</a></p>`;
-              wysiwygRef.current.insertAdjacentHTML('beforeend', defHtml);
-            }
-            break;
-          }
-          case 'h1':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H1')
-            );
-            break;
-          case 'h2':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H2')
-            );
-            break;
-          case 'h3':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'H3')
-            );
-            break;
-          case 'quote':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('formatBlock', false, 'BLOCKQUOTE')
-            );
-            break;
-          case 'ul':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('insertUnorderedList')
-            );
-            break;
-          case 'ol':
-            withRestoredWysiwygSelection(() =>
-              document.execCommand('insertOrderedList')
-            );
-            break;
-          case 'link': {
-            const url = prompt('Enter URL:');
-            if (url !== null) {
-              const safe = isSafeLinkUrl(url);
-              if (safe)
-                withRestoredWysiwygSelection(() =>
-                  document.execCommand('createLink', false, url)
-                );
-            }
-            break;
-          }
-          case 'image': {
-            const src = prompt('Enter Image URL:');
-            if (src !== null) {
-              const safe = isSafeImageUrl(src);
-              if (safe)
-                withRestoredWysiwygSelection(() =>
-                  document.execCommand('insertImage', false, src)
-                );
-            }
-            break;
-          }
-        }
-        handleWysiwygInput();
-        checkContext();
-      } else {
-        // Raw / Markdown mode formatting via CodeMirror dispatch
+      const format = (type: string): void => {
         const view = editorViewRef.current;
         if (!view) return;
 
@@ -1083,406 +514,303 @@ export const Editor = React.forwardRef<EditorHandle, EditorProps>(
           view.focus();
           return;
         }
-      }
-    };
-
-    useImperativeHandle(ref, () => ({
-      insertImage: (filename: string, url: string, altText?: string) =>
-        insertImageMarkdown(filename, url, altText),
-      focus: () => {
-        if (viewMode === 'wysiwyg') wysiwygRef.current?.focus();
-        else editorViewRef.current?.focus();
-      },
-      format: (type: string) => format(type),
-    }));
-
-    // Styles & Theme Logic
-    let pageBackgroundColor: string;
-    let textColor: string;
-    let editorContainerBg: string;
-
-    if (settings.theme === 'dark') {
-      const b = settings.brightness * 20; // range 10-20% lightness
-      pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
-      textColor = `rgba(231, 229, 228, ${settings.contrast})`;
-      editorContainerBg = 'bg-brand-gray-950';
-    } else {
-      pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
-      textColor = `rgba(20, 15, 10, ${settings.contrast})`;
-      editorContainerBg =
-        settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
-    }
-
-    const isMonospace = viewMode === 'raw';
-    const fontFamily = isMonospace
-      ? '"JetBrains Mono", "Fira Code", monospace'
-      : 'Merriweather, serif';
-    const titleFontFamily = 'Merriweather, serif'; // Always serif for title
-
-    const commonTextStyle: React.CSSProperties = {
-      fontFamily: 'inherit',
-      fontSize: 'inherit',
-      lineHeight: '1.75',
-      padding: '0px',
-      margin: '0',
-      border: 'none',
-      width: '100%',
-      boxSizing: 'border-box',
-      whiteSpace: 'pre-wrap',
-      overflowWrap: 'break-word',
-      wordBreak: 'break-word',
-    };
-
-    const toolbarBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
-        : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
-    const summaryBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-b border-brand-gray-200'
-        : 'bg-brand-gray-900 border-b border-brand-gray-800';
-    const inputBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
-        : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
-    const textMuted =
-      settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
-    const footerBg =
-      settings.theme === 'light'
-        ? 'bg-brand-gray-50 border-t border-brand-gray-200'
-        : 'bg-brand-gray-900 border-t border-brand-gray-800';
-    const hasContinuationOptions = continuations.some(
-      (option) => option && option.trim().length > 0
-    );
-
-    const scrollMainContentToBottom = useCallback(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      container.scrollTop = container.scrollHeight;
-    }, []);
-
-    // We need to scroll in a few scenarios:
-    //   * the LLM is in the middle of loading or suggesting content, since
-    //     new text streaming at the bottom should always be visible.  By
-    //     including `continuations` in the dependency list we rerun the effect
-    //     each time the options array is updated; while `isSuggesting` is true
-    //     this ensures the viewport keeps up with an expanding suggestion.
-    //   * the continuation panel first becomes visible
-    //     (`hasContinuationOptions` transitions from false to true), because
-    //     its appearance can push the editor content upward and may hide the
-    //     current viewport.
-    //
-    // We deliberately *do not* auto-scroll when the user is editing while the
-    // panel is already present; the guard below prevents scrolling unless an
-    // LLM action is active or the panel just opened.
-    const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
-    useEffect(() => {
-      const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
-      prevHasContinuationRef.current = hasContinuationOptions;
-
-      if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
-
-      const raf = window.requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
-          scrollMainContentToBottom();
-        }
-      });
-      return () => {
-        window.cancelAnimationFrame(raf);
       };
-    }, [
-      chapter.content,
-      continuations,
-      isAiLoading,
-      isSuggesting,
-      hasContinuationOptions,
-      scrollMainContentToBottom,
-    ]);
 
-    return (
-      <div
-        className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
-      >
-        <div className={`flex-none z-20 xl:hidden ${toolbarBg}`}>
-          <div className="h-14 flex items-center justify-between px-4">
-            <div className="flex items-center space-x-3">
-              {/* Mobile Toolbar Left Items */}
-            </div>
-            <div className="flex items-center space-x-2">
-              <div
-                className={`flex items-center rounded-md p-1 space-x-1 ${
-                  settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-800'
-                }`}
-              >
-                <span className={`text-[10px] font-bold uppercase px-2 ${textMuted}`}>
-                  {chapter.scope === 'story' ? 'Story AI' : 'Chapter AI'}
-                </span>
-                <div
-                  className={`w-px h-4 ${
-                    settings.theme === 'light'
-                      ? 'bg-brand-gray-300'
-                      : 'bg-brand-gray-700'
-                  }`}
-                ></div>
-                <Button
-                  theme={settings.theme}
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs h-7"
-                  onClick={() => onAiAction('chapter', 'extend')}
-                  disabled={isAiLoading || !isWritingAvailable}
-                  icon={<Wand2 size={12} />}
-                  title={
-                    !isWritingAvailable
-                      ? writingUnavailableReason
-                      : chapter.scope === 'story'
-                        ? 'Extend Story Draft (WRITING model)'
-                        : 'Extend Chapter (WRITING model)'
-                  }
-                >
-                  Extend
-                </Button>
-                <Button
-                  theme={settings.theme}
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs h-7"
-                  onClick={() => onAiAction('chapter', 'rewrite')}
-                  disabled={isAiLoading || !isWritingAvailable}
-                  icon={<FileEdit size={12} />}
-                  title={
-                    !isWritingAvailable
-                      ? writingUnavailableReason
-                      : chapter.scope === 'story'
-                        ? 'Rewrite Story Draft (WRITING model)'
-                        : 'Rewrite Chapter (WRITING model)'
-                  }
-                >
-                  Rewrite
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+      useImperativeHandle(ref, () => ({
+        insertImage: (filename: string, url: string, altText?: string) =>
+          insertImageMarkdown(filename, url, altText),
+        focus: () => {
+          editorViewRef.current?.focus();
+        },
+        format: (type: string) => format(type),
+        jumpToPosition: (start: number, end: number) => {
+          const view = editorViewRef.current;
+          if (!view) return;
+          view.dispatch({
+            selection: { anchor: start, head: end },
+            scrollIntoView: true,
+          });
+          view.focus();
+        },
+      }));
 
-        {/* Main Scrollable Content Area */}
-        <div
-          ref={scrollContainerRef}
-          data-testid="editor-scroll-container"
-          className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onScroll={handleScroll}
+      // Styles & Theme Logic
+      let pageBackgroundColor: string;
+      let textColor: string;
+      let editorContainerBg: string;
+      let selectionBg: string;
+
+      if (settings.theme === 'dark') {
+        const b = settings.brightness * 20; // range 10-20% lightness
+        pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
+        textColor = `rgba(231, 229, 228, ${settings.contrast})`;
+        editorContainerBg = 'bg-brand-gray-950';
+        // Dark background: stronger selection to remain visible
+        selectionBg = 'rgba(99,102,241,0.40)';
+      } else {
+        pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
+        textColor = `rgba(20, 15, 10, ${settings.contrast})`;
+        editorContainerBg =
+          settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
+        // Light/Mixed mode: warm editor background — use a soft semi-transparent
+        // highlight so selected text stays readable without being too vivid
+        selectionBg = 'rgba(99,102,241,0.22)';
+      }
+
+      const isMonospace = viewMode === 'raw';
+      const fontFamily = isMonospace
+        ? '"JetBrains Mono", "Fira Code", monospace'
+        : 'Merriweather, serif';
+      const titleFontFamily = 'Merriweather, serif'; // Always serif for title
+
+      const commonTextStyle: React.CSSProperties = {
+        fontFamily: 'inherit',
+        fontSize: 'inherit',
+        lineHeight: '1.75',
+        padding: '0px',
+        margin: '0',
+        border: 'none',
+        width: '100%',
+        boxSizing: 'border-box',
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'break-word',
+        wordBreak: 'break-word',
+      };
+
+      const toolbarBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
+          : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
+      const textMuted =
+        settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
+      const footerBg =
+        settings.theme === 'light'
+          ? 'bg-brand-gray-50 border-t border-brand-gray-200'
+          : 'bg-brand-gray-900 border-t border-brand-gray-800';
+      const hasContinuationOptions = continuations.some(
+        (option: string) => option && option.trim().length > 0
+      );
+      const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
+      const displayedContinuations =
+        continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
+      const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
+
+      // We need to scroll in a few scenarios:
+      //   * suggestion generation is active and options are changing,
+      //   * the continuation panel just became visible.
+      //
+      // IMPORTANT: prose streaming has its own dedicated bottom-follow logic in
+      // the layout effect above. Running this effect at the same time causes two
+      // competing scroll writers and can produce up/down flicker at bottom.
+      //   * the continuation panel first becomes visible
+      //     (`hasContinuationOptions` transitions from false to true), because
+      //     its appearance can push the editor content upward and may hide the
+      //     current viewport.
+      //
+      // We deliberately *do not* auto-scroll when the user is editing while the
+      // panel is already present; the guard below prevents scrolling unless an
+      // LLM action is active or the panel just opened.
+      const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
+      useEffect(() => {
+        const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
+        prevHasContinuationRef.current = hasContinuationOptions;
+
+        if (isProseStreaming) return undefined;
+        if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
+
+        const raf = window.requestAnimationFrame(() => {
+          if (!isDetachedFromBottomRef.current) {
+            scrollMainContentToBottom();
+          }
+        });
+        return () => {
+          window.cancelAnimationFrame(raf);
+        };
+      }, [
+        continuations,
+        isAiLoading,
+        isSuggesting,
+        isProseStreaming,
+        hasContinuationOptions,
+        scrollMainContentToBottom,
+      ]);
+
+      return (
+        <EditorProvider
+          value={{
+            theme: settings.theme,
+            toolbarBg,
+            footerBg,
+            textMuted,
+            chapterScope: chapter.scope,
+            isAiLoading,
+            isWritingAvailable,
+            writingUnavailableReason,
+            isChapterEmpty,
+            onAiAction,
+            shouldShowContinuationPanel,
+            displayedContinuations,
+            suggestionMode,
+            onSuggestionModeChange: setSuggestionMode,
+            isSuggesting,
+            localContentRef,
+            onSuggestionButtonClick: handleSuggestionButtonClick,
+            onAcceptContinuation,
+            onRegenerate: (cursor: number, content: string) =>
+              suggestionControls.onKeyboardSuggestionAction?.(
+                'regenerate',
+                cursor,
+                content
+              ),
+          }}
         >
-          {isDragging && (
-            <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
-                <Upload className="w-8 h-8 mb-2 text-blue-500" />
-                <span className="font-bold text-blue-500">Drop image to upload</span>
-              </div>
-            </div>
-          )}
-          {/* The Paper - Grows infinitely */}
           <div
-            className="relative w-full shadow-2xl transition duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none"
-            style={{
-              maxWidth: `${settings.maxWidth}ch`,
-              backgroundColor: pageBackgroundColor,
-              color: textColor,
-              fontSize: `${settings.fontSize}px`,
-              fontFamily: fontFamily,
-              // At least fill the available scroll area height, but always grow with content.
-              minHeight: '100%',
-            }}
+            className={`flex flex-col h-full w-full overflow-hidden relative ${editorContainerBg}`}
           >
-            {/* Toolbar - Removed Image Icon here */}
-            {showInlineTitle && (
-              <div className="flex items-start gap-3 mb-8">
-                <textarea
-                  value={localTitle}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\n/g, '');
-                    setLocalTitle(val);
-                    if (titleDebounceRef.current)
-                      clearTimeout(titleDebounceRef.current);
-                    titleDebounceRef.current = setTimeout(() => {
-                      onChange(chapter.id, { title: val });
-                    }, DEBOUNCE_MS);
-                  }}
-                  rows={1}
-                  className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
-                  placeholder={
-                    chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
-                  }
-                  spellCheck={false}
-                  style={{
-                    ...commonTextStyle,
-                    fontSize: '1.8em',
-                    lineHeight: '1.3',
-                    fontFamily: titleFontFamily,
-                  }}
-                />
-                {conflictCount > 0 && (
-                  <span
-                    className="mt-1 flex items-center gap-0.5 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold"
-                    aria-label={`${conflictCount} active conflicts`}
-                    title={`${conflictCount} active conflicts`}
-                  >
-                    {conflictCount}
-                  </span>
-                )}
-              </div>
-            )}
+            <EditorMobileToolbar />
 
-            {/* Editor Area */}
-            <div id="editor-area" className="flex flex-col relative w-full">
-              {/* WYSIWYG View */}
-              <div
-                id="wysiwyg-editor"
-                ref={wysiwygRef}
-                contentEditable
-                onInput={handleWysiwygInput}
-                onBlur={handleWysiwygBlur}
-                onMouseUp={checkContext}
-                onKeyDown={handleKeyDown}
-                onKeyUp={(e) => {
-                  checkContext();
-                }}
-                className={`prose-editor outline-none w-full ${
-                  viewMode === 'wysiwyg' ? 'block' : 'hidden'
-                }${showWhitespace ? ' prose-editor-ws' : ''}`}
-                style={{ ...commonTextStyle, whiteSpace: 'normal' }}
-              />
-
-              {/* Raw / Markdown View */}
-              {(viewMode === 'raw' || viewMode === 'markdown') && (
-                <div id="raw-markdown-editor" className="relative w-full flex flex-col">
-                  <CodeMirrorEditor
-                    ref={editorViewRef}
-                    value={localContent}
-                    onChange={(val: string) => {
-                      setLocalContent(val);
-                      checkContext();
-                      if (contentDebounceRef.current)
-                        clearTimeout(contentDebounceRef.current);
-                      contentDebounceRef.current = setTimeout(() => {
-                        onChange(chapter.id, { content: val });
-                      }, DEBOUNCE_MS);
-                    }}
-                    onSelectionChange={checkContext}
-                    mode={viewMode === 'markdown' ? 'markdown' : 'plain'}
-                    showWhitespace={showWhitespace}
-                    enterBehavior={viewMode === 'markdown' ? 'softbreak' : 'newline'}
-                    placeholder={
-                      chapter.scope === 'story'
-                        ? 'Start writing your story here...'
-                        : 'Start writing your chapter here...'
-                    }
-                    className="w-full"
-                    style={{
-                      ...commonTextStyle,
-                      caretColor: textColor,
-                    }}
-                  />
+            {/* Main Scrollable Content Area */}
+            <div
+              ref={scrollContainerRef}
+              data-testid="editor-scroll-container"
+              className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
+              style={{ overflowAnchor: 'none' }}
+              onScroll={handleScroll}
+            >
+              {isDragging && (
+                <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg flex flex-col items-center">
+                    <Upload className="w-8 h-8 mb-2 text-blue-500" />
+                    <span className="font-bold text-blue-500">
+                      {t('Drop image to upload')}
+                    </span>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 h-16 w-full"></div>
-        </div>
-
-        {/* Persistent Footer */}
-        <div
-          className={`flex-shrink-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] ${footerBg}`}
-        >
-          {hasContinuationOptions ? (
-            <div className="p-4 animate-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center space-x-2 text-brand-500">
-                  <SplitSquareHorizontal size={18} />
-                  <span className="text-xs font-bold uppercase tracking-wider">
-                    Choose a continuation
-                  </span>
-                </div>
-                <button
-                  onClick={() => onAcceptContinuation('', localContent)}
-                  className={`${textMuted} hover:text-brand-gray-800 text-xs`}
-                >
-                  Dismiss
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[40vh] overflow-y-auto pr-1 custom-scrollbar">
-                {continuations.map((option, idx) => {
-                  if (!option || option.trim().length === 0) {
-                    return null;
-                  }
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => onAcceptContinuation(option, localContent)}
-                      className={`group relative p-5 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${
-                        settings.theme === 'light'
-                          ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 hover:border-brand-300'
-                          : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-750 hover:border-brand-500/50'
-                      }`}
-                    >
-                      <div
-                        className={`font-serif text-sm leading-relaxed ${
-                          settings.theme === 'light'
-                            ? 'text-brand-gray-800'
-                            : 'text-brand-gray-300 group-hover:text-brand-gray-200'
-                        }`}
-                      >
-                        {option}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 flex justify-center items-center space-x-3">
-              <button
-                onClick={handleSuggestionButtonClick}
-                disabled={!isWritingAvailable}
-                className={`group flex items-center space-x-3 px-6 py-3 rounded-full border transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                  settings.theme === 'light'
-                    ? 'bg-brand-gray-50 border-brand-gray-200 hover:bg-brand-gray-50 text-brand-gray-600'
-                    : 'bg-brand-gray-800 border-brand-gray-700 hover:bg-brand-gray-700 hover:border-brand-500/30 text-brand-gray-300'
-                }`}
-                title={
-                  !isWritingAvailable
-                    ? writingUnavailableReason
-                    : isSuggesting || isAiLoading
-                      ? 'Stop current AI generation'
-                      : 'Get AI Suggestions (WRITING model)'
-                }
+              {/* The Paper - Grows infinitely */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+              <div
+                ref={paperDivRef}
+                role="group"
+                aria-label={t('Editor workspace')}
+                className="relative w-full shadow-2xl transition-colors duration-300 ease-in-out px-4 py-8 md:px-12 md:py-16 mx-auto flex flex-col flex-none min-h-full"
+                style={{
+                  maxWidth: `${settings.maxWidth}ch`,
+                  backgroundColor: pageBackgroundColor,
+                  color: textColor,
+                  fontSize: `${settings.fontSize}px`,
+                  fontFamily: fontFamily,
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
-                {isSuggesting || isAiLoading ? (
-                  <>
-                    <Loader2 className="animate-spin text-violet-500" size={18} />
-                    <span className="font-medium text-sm text-violet-600 dark:text-violet-400">
-                      Writing...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-violet-100 dark:bg-violet-900/30 p-1 rounded-md text-violet-600 dark:text-violet-400">
-                      <Sparkles size={16} />
-                    </div>
-                    <span className="font-medium text-sm">Suggest next paragraph</span>
-                  </>
+                {/* Toolbar - Removed Image Icon here */}
+                {showInlineTitle && (
+                  <div className="flex items-start gap-3 mb-8">
+                    <textarea
+                      value={localTitle}
+                      onChange={(
+                        e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+                      ) => {
+                        const val = e.target.value.replace(/\n/g, '');
+                        setLocalTitle(val);
+                        if (titleDebounceRef.current)
+                          clearTimeout(titleDebounceRef.current);
+                        titleDebounceRef.current = setTimeout(() => {
+                          onChange(chapter.id, { title: val });
+                        }, DEBOUNCE_MS);
+                      }}
+                      rows={1}
+                      className="flex-1 bg-transparent font-serif font-bold border-b-2 border-transparent focus:border-brand-gray-400/50 transition-colors outline-none resize-none overflow-hidden"
+                      placeholder={
+                        chapter.scope === 'story' ? 'Story Title' : 'Chapter Title'
+                      }
+                      lang={language || 'en'}
+                      spellCheck={spellCheck}
+                      style={{
+                        ...commonTextStyle,
+                        fontSize: '1.8em',
+                        lineHeight: '1.3',
+                        fontFamily: titleFontFamily,
+                      }}
+                    />
+                  </div>
                 )}
-              </button>
+
+                {/* Editor Area */}
+                <div id="editor-area" className="flex flex-col relative w-full">
+                  <div id="codemirror-editor" className="relative w-full flex flex-col">
+                    <CodeMirrorEditor
+                      ref={editorViewRef}
+                      value={localContent}
+                      language={language}
+                      spellCheck={spellCheck}
+                      onOpenSearch={onOpenSearch}
+                      onChange={(val: string, isUndoRedo?: boolean) => {
+                        setLocalContent(val);
+                        localContentRef.current = val;
+                        // Clear diff immediately on user input so typed text is
+                        // never highlighted as a diff insertion. Keep the baseline
+                        // active when undo/redo is used so the diff view works.
+                        if (isUndoRedo) {
+                          // Undo/redo: always restore the real AI baseline so the
+                          // diff view activates, even if localBaseline was already
+                          // set to a user-edit baseline by the debounce firing.
+                          if (savedBaselineRef.current !== undefined) {
+                            setLocalBaseline(savedBaselineRef.current);
+                          }
+                        } else if (localBaseline !== undefined) {
+                          setLocalBaseline(undefined);
+                        }
+                        scheduleCheckContext();
+                        if (contentDebounceRef.current)
+                          clearTimeout(contentDebounceRef.current);
+                        contentDebounceRef.current = setTimeout(() => {
+                          onChange(chapter.id, { content: val });
+                        }, DEBOUNCE_MS);
+                      }}
+                      onSelectionChange={scheduleCheckContext}
+                      viewMode={
+                        viewMode === 'wysiwyg'
+                          ? 'visual'
+                          : viewMode === 'markdown'
+                            ? 'markdown'
+                            : 'plain'
+                      }
+                      showWhitespace={showWhitespace}
+                      showDiff={settings.showDiff}
+                      streamingMode={proseStreamingActive}
+                      baselineValue={localBaseline}
+                      searchHighlightRanges={chapterSearchHighlightRanges}
+                      enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                      selectionBg={selectionBg}
+                      placeholder={
+                        chapter.scope === 'story'
+                          ? 'Start writing your story here...'
+                          : 'Start writing your chapter here...'
+                      }
+                      className="w-full"
+                      style={{
+                        ...commonTextStyle,
+                        caretColor: textColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 h-16 w-full"></div>
             </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+
+            {/* Persistent Footer */}
+            <EditorSuggestionPanel />
+          </div>
+        </EditorProvider>
+      );
+    }
+  )
 );
+/* eslint-enable complexity */
 
 Editor.displayName = 'Editor';

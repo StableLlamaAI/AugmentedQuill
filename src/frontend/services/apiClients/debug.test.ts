@@ -12,17 +12,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { debugApi } from './debug';
-import { fetchJson } from './shared';
+import { fetchJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
   fetchJson: vi.fn(),
+  deleteJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
 describe('debugApi', () => {
   it('calls GET /debug/llm_logs', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce([]);
+    vi.mocked(fetchJson).mockResolvedValueOnce({ logs: [] });
 
     await debugApi.getLogs();
 
@@ -34,13 +35,12 @@ describe('debugApi', () => {
   });
 
   it('calls DELETE /debug/llm_logs', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ status: 'ok' });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ status: 'ok' });
 
     await debugApi.clearLogs();
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(deleteJson).toHaveBeenCalledWith(
       expect.stringMatching(/^\/debug\/llm_logs(\?_t=\d+)?$/),
-      { method: 'DELETE' },
       'Failed to clear debug logs'
     );
   });

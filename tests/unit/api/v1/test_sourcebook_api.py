@@ -166,6 +166,7 @@ class SourcebookApiTest(ApiTestCase):
                 match_mode="extensive",
                 split_query_fallback=True,
                 payload={},
+                active=self.projects_root / "sourcebook_api_proj",
             )
 
     def test_sourcebook_api_create_calls_keyword_refresh(self):
@@ -194,8 +195,14 @@ class SourcebookApiTest(ApiTestCase):
             )
             self.assertEqual(create.status_code, 200, create.text)
             body = create.json()
-            self.assertEqual(body.get("keywords"), ["traveling archivist"])
-            mocked_refresh.assert_awaited_once_with("Aelith", payload={})
+            # Keywords are refreshed in a background task; the immediate response
+            # returns the entry without keywords.
+            self.assertEqual(body.get("keywords"), [])
+            mocked_refresh.assert_awaited_once_with(
+                "Aelith",
+                payload={},
+                active=self.projects_root / "sourcebook_api_proj",
+            )
 
     def test_sourcebook_api_update_calls_keyword_refresh(self):
         self.client.post(
@@ -229,8 +236,14 @@ class SourcebookApiTest(ApiTestCase):
             )
             self.assertEqual(update.status_code, 200, update.text)
             body = update.json()
-            self.assertEqual(body.get("keywords"), ["renowned archivist"])
-            mocked_refresh.assert_awaited_once_with("Aelith", payload={})
+            # Keywords are refreshed in a background task; the immediate response
+            # returns the entry without keywords.
+            self.assertEqual(body.get("keywords"), [])
+            mocked_refresh.assert_awaited_once_with(
+                "Aelith",
+                payload={},
+                active=self.projects_root / "sourcebook_api_proj",
+            )
 
     def test_sourcebook_keywords_endpoint(self):
         with patch(

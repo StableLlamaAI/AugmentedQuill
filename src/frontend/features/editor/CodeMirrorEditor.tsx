@@ -12,150 +12,32 @@
  * interact with the document exclusively through EditorView's state API.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import {
   EditorView,
   keymap,
   placeholder as cmPlaceholder,
   Decoration,
-  WidgetType,
   ViewPlugin,
   ViewUpdate,
   DecorationSet,
+  drawSelection,
 } from '@codemirror/view';
-import { EditorState, Compartment, Prec } from '@codemirror/state';
-import type { Extension, Range } from '@codemirror/state';
+import { EditorState, Compartment, Prec, Range, Transaction } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-
-// ─── Whitespace display ──────────────────────────────────────────────────────
-// These widgets replace spaces, tabs and newline-positions with a visible glyph
-// while keeping the document content unchanged.  contenteditable="false" on the
-// widget containers prevents the caret from landing inside them.
-
-class WsSpaceWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.textContent = '·';
-    // Use inline-block with a width equal to a typical space, so visible whitespace
-    // mode does not significantly change layout.  Keep consistent with WYSIWYG.
-    el.style.display = 'inline-block';
-    // Use 1ch so the visible marker takes up exactly one monospace character cell
-    // and does not alter layout in Raw mode.
-    el.style.minWidth = '1ch';
-    el.style.width = '1ch';
-    el.style.textAlign = 'center';
-    el.style.verticalAlign = 'baseline';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-class WsTabWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.textContent = '→';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-class WsNlWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const el = document.createElement('span');
-    el.setAttribute('aria-hidden', 'true');
-    el.className = 'cm-ws-marker';
-    el.textContent = '¶';
-    el.style.opacity = '0.5';
-    el.style.pointerEvents = 'none';
-    el.style.userSelect = 'none';
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
-const wsSpaceWidget = new WsSpaceWidget();
-const wsTabWidget = new WsTabWidget();
-const wsNlWidget = new WsNlWidget();
-
-const buildWhitespacePlugin = () =>
-  ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-      constructor(view: EditorView) {
-        this.decorations = this.build(view);
-      }
-      update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged || u.geometryChanged) {
-          this.decorations = this.build(u.view);
-        }
-      }
-      build(view: EditorView): DecorationSet {
-        const decs: Range<Decoration>[] = [];
-        // Fall back to full document if the viewport hasn't been computed yet
-        // (can happen synchronously in the plugin constructor before first layout).
-        const vpFrom = view.viewport.from;
-        const vpTo =
-          view.viewport.to > view.viewport.from
-            ? view.viewport.to
-            : view.state.doc.length;
-        const doc = view.state.doc;
-
-        // ¶ widget at the end of every visible line (before the implicit newline)
-        const firstLine = doc.lineAt(vpFrom).number;
-        const lastLine = doc.lineAt(Math.min(vpTo, doc.length)).number;
-        for (let n = firstLine; n <= lastLine; n++) {
-          const line = doc.line(n);
-          // side: 1 places the widget after the position (at the line end,
-          // after the logical caret slot), so the cursor appears before the mark.
-          decs.push(Decoration.widget({ widget: wsNlWidget, side: 1 }).range(line.to));
-        }
-
-        // Space / tab replacements within the visible range
-        const text = doc.sliceString(vpFrom, vpTo);
-        for (let i = 0; i < text.length; i++) {
-          const ch = text[i];
-          if (ch === ' ') {
-            decs.push(
-              Decoration.replace({ widget: wsSpaceWidget }).range(
-                vpFrom + i,
-                vpFrom + i + 1
-              )
-            );
-          } else if (ch === '\t') {
-            decs.push(
-              Decoration.replace({ widget: wsTabWidget }).range(
-                vpFrom + i,
-                vpFrom + i + 1
-              )
-            );
-          }
-        }
-
-        // Decoration.set(decs, true) sorts by position automatically
-        return Decoration.set(decs, true);
-      }
-    },
-    { decorations: (v) => v.decorations }
-  );
+import {
+  buildMarkdownDecorationPlugin,
+  markdownDecorationTheme,
+  type DecorationViewMode,
+} from './markdownDecorations';
+import { buildClipboardExtension } from './clipboardExtension';
+import { buildDiffPlugin, externalValueSyncAnnotation } from './codeMirrorDiffPlugin';
+import { buildWhitespacePlugin } from './codeMirrorWhitespacePlugin';
+import { buildEnterExtension, buildTabExtension } from './codeMirrorKeymap';
 
 // ─── Markdown syntax highlight style ────────────────────────────────────────
 // Maps Lezer markdown tokens to CSS properties so prose writers see inline
@@ -196,6 +78,10 @@ const baseTheme = EditorView.theme({
     fontFamily: 'inherit',
     lineHeight: 'inherit',
     height: 'auto',
+    // Fallback selection colours used when the selectionBg prop is not set.
+    // The selectionBgCompartment overrides these at runtime.
+    '--aq-selection-bg': 'rgba(99,102,241,0.25)',
+    '--aq-selection-bg-focused': 'rgba(99,102,241,0.35)',
   },
   '.cm-scroller': {
     fontFamily: 'inherit',
@@ -226,17 +112,110 @@ const baseTheme = EditorView.theme({
     backgroundColor: 'transparent !important',
   },
   '.cm-selectionBackground': {
-    backgroundColor: 'rgba(99,102,241,0.2) !important',
+    backgroundColor: 'var(--aq-selection-bg) !important',
   },
   '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(99,102,241,0.3) !important',
+    backgroundColor: 'var(--aq-selection-bg-focused) !important',
   },
   '.cm-ws-marker': {
-    opacity: '0.35',
-    pointerEvents: 'none',
-    userSelect: 'none',
+    opacity: '1',
+    pointerEvents: 'auto',
+    userSelect: 'text',
     fontStyle: 'normal',
     fontWeight: 'normal',
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    lineHeight: 'inherit',
+    verticalAlign: 'baseline',
+    boxSizing: 'border-box',
+  },
+  '.cm-ws-marker.cm-ws-space': {
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
+    whiteSpace: 'break-spaces',
+    backgroundImage: 'radial-gradient(circle, currentColor 35%, transparent 36%)',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '0.35em 0.35em',
+  },
+  '.cm-ws-marker .cm-ws-glyph': {
+    opacity: '1',
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
+  },
+  // Selected WS markers: let the drawSelection semi-transparent background
+  // show through (transparent) while keeping the glyph at its normal dim
+  // colour — no text inversion because the selection bg is never opaque.
+  ".cm-ws-marker[data-ws-selected='1']": {
+    backgroundColor: 'transparent !important',
+    borderBottomColor: 'transparent !important',
+  },
+  "&.cm-focused .cm-ws-marker[data-ws-selected='1']": {
+    backgroundColor: 'transparent !important',
+    borderBottomColor: 'transparent !important',
+  },
+  ".cm-ws-marker[data-ws-diff='1'][data-ws-selected='1']": {
+    backgroundColor: 'rgba(34, 197, 94, 0.15) !important',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4) !important',
+  },
+  ".cm-diff-deleted .cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'], .cm-ws-marker.cm-diff-deleted[data-ws-diff='1'][data-ws-selected='1']":
+    {
+      backgroundColor: 'rgba(239, 68, 68, 0.15) !important',
+      borderBottomColor: 'rgba(239, 68, 68, 0.4) !important',
+    },
+  ".cm-ws-marker[data-ws-diff='1']": {
+    opacity: '1',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+    borderRadius: '0',
+  },
+  ".cm-ws-marker[data-ws-diff='1'] .cm-ws-glyph": {
+    opacity: '1',
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
+  },
+  ".cm-ws-marker[data-ws-diff='1'][data-ws-tab='1']": {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+    borderRadius: '0',
+    padding: '0',
+    margin: '0',
+  },
+  ".cm-diff-deleted .cm-ws-marker[data-ws-diff='1']": {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
+  },
+  ".cm-ws-marker.cm-diff-deleted[data-ws-diff='1']": {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
+  },
+  ".cm-ws-marker.cm-diff-deleted[data-ws-diff='1'] .cm-ws-glyph": {
+    textDecorationLine: 'line-through',
+    textDecorationColor: 'currentColor',
+    textDecorationSkipInk: 'none',
+  },
+  '.diff-inserted': {
+    backgroundColor: 'rgba(34, 197, 94, 0.25) !important', // brand-green-500 @ 0.25
+    borderBottomStyle: 'dashed',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.5)',
+    borderRadius: '2px',
+    transition: 'background-color 0.2s ease',
+  },
+  '.cm-search-highlight': {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: '2px',
   },
   // Placeholder styling
   '.cm-placeholder': {
@@ -244,22 +223,53 @@ const baseTheme = EditorView.theme({
     opacity: '0.4',
     fontStyle: 'normal',
   },
+  '.cm-diff-inserted': {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)', // Light green
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(34, 197, 94, 0.4)',
+  },
+  '.cm-diff-deleted': {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)', // Light red
+    textDecoration: 'line-through',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: '1px',
+    borderBottomColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  '.cm-diff-deleted.cm-widget': {
+    display: 'inline',
+    whiteSpace: 'inherit',
+    overflowWrap: 'inherit',
+    wordBreak: 'inherit',
+    verticalAlign: 'baseline',
+  },
 });
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface CodeMirrorEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, isUndoRedo?: boolean) => void;
   /**
-   * 'plain'    — no syntax highlighting (default)
-   * 'markdown' — Lezer-based markdown highlighting and softbreak Enter
+   * Editor display mode:
+   * 'raw'      — plain text, no syntax highlighting, monospace
+   * 'markdown' — Lezer-based markdown highlighting, inline widgets, softbreak Enter
+   * 'visual'   — markdown syntax hidden, WYSIWYG-like rendering, softbreak Enter
+   *
+   * Legacy alias: 'plain' maps to 'raw'.
+   */
+  viewMode?: 'raw' | 'markdown' | 'visual' | 'plain';
+  /**
+   * @deprecated Use viewMode instead. Kept for backward compatibility.
    */
   mode?: 'plain' | 'markdown';
   /** Show spaces / tabs / newlines as visible glyphs */
   showWhitespace?: boolean;
   /**
-   * 'newline'   — Enter inserts a plain newline (default)
+   * Override for Enter key behavior.  When not set, derived from viewMode:
+   *   raw → 'newline', markdown/visual → 'softbreak'
+   *
+   * 'newline'   — Enter inserts a plain newline
    * 'softbreak' — Enter inserts the markdown soft-break '  \n'; a second
    *               Enter on a line already ending with '  ' removes those
    *               spaces and inserts '\n\n' (paragraph break)
@@ -274,6 +284,34 @@ export interface CodeMirrorEditorProps {
   style?: React.CSSProperties;
   /** Called on every selection / cursor change */
   onSelectionChange?: (anchor: number, head: number) => void;
+  /** Text state to compare against for change highlighting (AI additions) */
+  baselineValue?: string;
+  /** Enable inline diff highlighting in the editor */
+  showDiff?: boolean;
+  /**
+   * When true the diff plugin uses a common-prefix strategy instead of LCS so
+   * that partial streamed text does not flicker between equal/inserted as new
+   * chunks arrive.  Set this while an LLM is actively writing to the editor.
+   */
+  streamingMode?: boolean;
+  /** Active search highlights in document text offset coordinates */
+  searchHighlightRanges?: Array<{ start: number; end: number }>;
+  /** BCP 47 language tag for spellcheck and hyphenation */
+  language?: string;
+  /** Whether to enable browser-native spellcheck */
+  spellCheck?: boolean;
+  /** Called when the user presses Ctrl+F / Cmd+F inside the editor */
+  onOpenSearch?: () => void;
+  /**
+   * CSS colour value used as the selection background (both focused and
+   * unfocused, via --aq-selection-bg / --aq-selection-bg-focused).
+   * Should be a semi-transparent colour so text remains readable without
+   * inversion.  Defaults to indigo-500 @ 25 / 35 %.
+   *
+   * Pass a theme-appropriate value from the parent so Light, Mixed, and Dark
+   * modes each get the right contrast level.
+   */
+  selectionBg?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -282,20 +320,42 @@ export const CodeMirrorEditor = React.forwardRef<
   EditorView | null,
   CodeMirrorEditorProps
 >(
+  // eslint-disable-next-line max-lines-per-function
   (
     {
       value,
       onChange,
-      mode = 'plain',
+      viewMode: viewModeProp,
+      mode: legacyMode,
       showWhitespace = false,
-      enterBehavior = 'newline',
+      enterBehavior: enterBehaviorProp,
       placeholder,
       className,
       style,
       onSelectionChange,
-    },
-    ref
+      baselineValue,
+      showDiff = true,
+      streamingMode = false,
+      searchHighlightRanges,
+      language = 'en',
+      spellCheck = false,
+      onOpenSearch,
+      selectionBg,
+    }: CodeMirrorEditorProps,
+    ref: React.ForwardedRef<EditorView | null>
   ) => {
+    // Resolve viewMode: new prop takes precedence, then legacy mode, then default
+    const viewMode: DecorationViewMode =
+      viewModeProp === 'plain'
+        ? 'raw'
+        : (viewModeProp ?? (legacyMode === 'markdown' ? 'markdown' : 'raw'));
+
+    // Derive enter behavior from viewMode unless explicitly overridden
+    const enterBehavior =
+      enterBehaviorProp ?? (viewMode === 'raw' ? 'newline' : 'softbreak');
+
+    // Derive CodeMirror language mode from viewMode
+    const mode: 'plain' | 'markdown' = viewMode === 'raw' ? 'plain' : 'markdown';
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -303,8 +363,10 @@ export const CodeMirrorEditor = React.forwardRef<
     // calls the latest version without needing the view to be recreated.
     const onChangeRef = useRef(onChange);
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onOpenSearchRef = useRef(onOpenSearch);
     onChangeRef.current = onChange;
     onSelectionChangeRef.current = onSelectionChange;
+    onOpenSearchRef.current = onOpenSearch;
 
     // Track the last value emitted by our own onChange so we can distinguish
     // externally-driven value changes from the echo of our own edits.
@@ -313,62 +375,135 @@ export const CodeMirrorEditor = React.forwardRef<
     // Compartments allow dynamic extension switching without recreating the view
     const languageCompartment = useRef(new Compartment());
     const wsCompartment = useRef(new Compartment());
+    const diffCompartment = useRef(new Compartment());
+    const searchHighlightCompartment = useRef(new Compartment());
     const enterCompartment = useRef(new Compartment());
     const placeholderCompartment = useRef(new Compartment());
+    const attributesCompartment = useRef(new Compartment());
+    const mdDecorationCompartment = useRef(new Compartment());
+    const selectionBgCompartment = useRef(new Compartment());
 
     // ── Extension builders ──────────────────────────────────────────────────
+
+    const buildAttributesExtension = (
+      la: string | undefined,
+      sc: boolean,
+      ph: string | undefined
+    ): Extension => {
+      const editorAriaLabel = ph ?? 'Story content';
+      return EditorView.contentAttributes.of({
+        lang: la || 'en',
+        spellcheck: sc ? 'true' : 'false',
+        autocomplete: 'off',
+        autocorrect: sc ? 'on' : 'off',
+        autocapitalize: sc ? 'sentences' : 'off',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': editorAriaLabel,
+      });
+    };
 
     const buildLanguageExtension = (m: typeof mode): Extension =>
       m === 'markdown'
         ? [markdown({ addKeymap: false }), syntaxHighlighting(mdHighlightStyle)]
         : [];
 
-    const buildWsExtension = (ws: boolean): Extension =>
-      ws ? buildWhitespacePlugin() : [];
+    const buildWsExtension = (
+      ws: boolean,
+      bv: string | undefined,
+      showDiffEnabled: boolean,
+      streamMode: boolean
+    ): Extension => (ws ? buildWhitespacePlugin(bv, showDiffEnabled, streamMode) : []);
 
-    const buildEnterExtension = (eb: typeof enterBehavior): Extension => {
-      if (eb === 'ignore') {
-        return keymap.of([
-          { key: 'Enter', run: () => true }, // swallow silently
-          { key: 'Shift-Enter', run: () => true },
-        ]);
-      }
-      if (eb === 'softbreak') {
-        return keymap.of([
-          {
-            key: 'Enter',
-            run: (view) => {
-              const { from, to } = view.state.selection.main;
-              const line = view.state.doc.lineAt(from);
-              const lineBeforeCaret = view.state.doc.sliceString(line.from, from);
-
-              let deleteFrom = from;
-              let insert: string;
-              if (lineBeforeCaret.endsWith('  ')) {
-                // Second Enter: remove trailing soft-break spaces, open paragraph
-                deleteFrom = from - 2;
-                insert = '\n\n';
-              } else {
-                // First Enter: trailing-space soft break
-                insert = '  \n';
+    const buildSearchHighlightPlugin = (
+      ranges: Array<{ start: number; end: number }>
+    ): Extension =>
+      ViewPlugin.fromClass(
+        class {
+          decorations: DecorationSet;
+          constructor(view: EditorView) {
+            this.decorations = this.build(view);
+          }
+          /** Update the requested value. */
+          update(u: ViewUpdate): void {
+            if (u.viewportChanged || u.geometryChanged) {
+              this.decorations = this.build(u.view);
+            } else if (u.docChanged) {
+              let safeInsert = true;
+              u.changes.iterChanges(
+                (
+                  fromA: number,
+                  toA: number,
+                  _fB: number,
+                  _tB: number,
+                  ins: import('@codemirror/state').Text
+                ) => {
+                  if (toA !== fromA || ins.length !== 1) {
+                    safeInsert = false;
+                    return;
+                  }
+                  const c = ins.sliceString(0, 1);
+                  if (c === ' ' || c === '\t' || c === '\n') safeInsert = false;
+                }
+              );
+              this.decorations = safeInsert
+                ? this.decorations.map(u.changes)
+                : this.build(u.view);
+            }
+          }
+          /** Build the requested value. */
+          build(view: EditorView): DecorationSet {
+            const decs: Range<Decoration>[] = [];
+            const length = view.state.doc.length;
+            for (const range of ranges) {
+              const from = Math.max(0, Math.min(range.start, length));
+              const to = Math.max(0, Math.min(range.end, length));
+              if (from < to) {
+                decs.push(
+                  Decoration.mark({ class: 'cm-search-highlight' }).range(from, to)
+                );
               }
+            }
+            return Decoration.set(decs, true);
+          }
+        },
+        { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+      );
 
-              view.dispatch({
-                changes: { from: deleteFrom, to, insert },
-                selection: { anchor: deleteFrom + insert.length },
-              });
-              return true;
-            },
-          },
-        ]);
-      }
-      // 'newline' — let defaultKeymap handle Enter (inserts a single '\n')
-      return [];
-    };
+    const buildSearchHighlightExtension = (
+      ranges: Array<{ start: number; end: number }> | undefined
+    ): Extension =>
+      ranges && ranges.length > 0 ? buildSearchHighlightPlugin(ranges) : [];
+
+    const buildDiffExtension = (
+      bv: string | undefined,
+      enabled: boolean,
+      sm: boolean,
+      ws: boolean
+    ): Extension => (enabled && bv != null ? buildDiffPlugin(bv, sm, ws) : []);
 
     const buildPlaceholderExtension = (ph: string | undefined): Extension =>
       ph ? cmPlaceholder(ph) : [];
 
+    const buildMdDecorationExtension = (vm: DecorationViewMode): Extension =>
+      buildMarkdownDecorationPlugin(vm);
+
+    // Builds a per-instance EditorView.theme() that overrides the selection
+    // background directly on .cm-selectionBackground.  Registered after
+    // baseTheme, so its stylesheet wins the CSS cascade.
+    const buildSelectionBgExtension = (bg: string | undefined): Extension => {
+      if (!bg) return [];
+      return EditorView.theme({
+        '.cm-selectionBackground': {
+          backgroundColor: `${bg} !important`,
+        },
+        '&.cm-focused .cm-selectionBackground': {
+          backgroundColor: `${bg} !important`,
+        },
+      });
+    };
+
+    // ── Mount / unmount ─────────────────────────────────────────────────────
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -376,28 +511,66 @@ export const CodeMirrorEditor = React.forwardRef<
 
       const extensions: Extension[] = [
         baseTheme,
+        markdownDecorationTheme,
+        // drawSelection takes control of selection rendering via
+        // .cm-selectionBackground divs so that WS marker widgets and plain
+        // text receive identical selection colours (Highlight / HighlightText).
+        drawSelection(),
         EditorView.lineWrapping,
-        // Disable spellcheck / autocorrect on the editable surface
-        EditorView.contentAttributes.of({
-          spellcheck: 'false',
-          autocomplete: 'off',
-          autocorrect: 'off',
-          autocapitalize: 'off',
-        }),
+        buildClipboardExtension(),
+        // Spellcheck / autocorrect / platform-native behavior in its own compartment
+        attributesCompartment.current.of(
+          buildAttributesExtension(language, spellCheck, placeholder)
+        ),
         history(),
+        // Ctrl+F / Cmd+F opens the app search dialog instead of CodeMirror's built-in search
+        Prec.highest(
+          keymap.of([
+            {
+              key: 'Ctrl-f',
+              mac: 'Cmd-f',
+              run: () => {
+                onOpenSearchRef.current?.();
+                return true;
+              },
+            },
+          ])
+        ),
         // Enter/history keymaps take precedence over defaultKeymap
         Prec.high(keymap.of(historyKeymap)),
         // Enter-behavior keymap in its own compartment
         enterCompartment.current.of(buildEnterExtension(enterBehavior)),
+        // Tab keymap for Raw/Markdown modes
+        Prec.high(buildTabExtension()),
+        // Diff highlights for AI changes
+        diffCompartment.current.of(
+          buildDiffExtension(baselineValue, showDiff, streamingMode, showWhitespace)
+        ),
+        searchHighlightCompartment.current.of(
+          buildSearchHighlightExtension(searchHighlightRanges)
+        ),
         keymap.of(defaultKeymap),
         languageCompartment.current.of(buildLanguageExtension(mode)),
-        wsCompartment.current.of(buildWsExtension(showWhitespace)),
+        wsCompartment.current.of(
+          buildWsExtension(showWhitespace, baselineValue, showDiff, streamingMode)
+        ),
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
+        mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
+        selectionBgCompartment.current.of(buildSelectionBgExtension(selectionBg)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
+            const isExternalSync = update.transactions.some((tx: Transaction) =>
+              tx.annotation(externalValueSyncAnnotation)
+            );
+            if (isExternalSync) {
+              return;
+            }
             const val = update.state.doc.toString();
             lastEmittedRef.current = val;
-            onChangeRef.current(val);
+            const isUndoRedo = update.transactions.some(
+              (tx: Transaction) => tx.isUserEvent('undo') || tx.isUserEvent('redo')
+            );
+            onChangeRef.current(val, isUndoRedo);
           }
           if (update.selectionSet) {
             const { anchor, head } = update.state.selection.main;
@@ -439,9 +612,19 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       viewRef.current?.dispatch({
-        effects: wsCompartment.current.reconfigure(buildWsExtension(showWhitespace)),
+        effects: mdDecorationCompartment.current.reconfigure(
+          buildMdDecorationExtension(viewMode)
+        ),
       });
-    }, [showWhitespace]);
+    }, [viewMode]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: wsCompartment.current.reconfigure(
+          buildWsExtension(showWhitespace, baselineValue, showDiff, streamingMode)
+        ),
+      });
+    }, [showWhitespace, baselineValue, showDiff, streamingMode]);
 
     useEffect(() => {
       viewRef.current?.dispatch({
@@ -453,17 +636,59 @@ export const CodeMirrorEditor = React.forwardRef<
 
     useEffect(() => {
       viewRef.current?.dispatch({
+        effects: selectionBgCompartment.current.reconfigure(
+          buildSelectionBgExtension(selectionBg)
+        ),
+      });
+    }, [selectionBg]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
         effects: placeholderCompartment.current.reconfigure(
           buildPlaceholderExtension(placeholder)
         ),
       });
     }, [placeholder]);
 
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: attributesCompartment.current.reconfigure(
+          buildAttributesExtension(language, spellCheck, placeholder)
+        ),
+      });
+    }, [language, spellCheck, placeholder]);
+
+    // useLayoutEffect (not useEffect) keeps this in the same frame as the
+    // external value sync below.  Both are declared in order (baseline first,
+    // value second) so that when a new baseline and new content land in the
+    // same render the plugin is reconfigured with the correct baseline BEFORE
+    // the content dispatch fires — ensuring the first painted frame already
+    // shows the correct diff decorations rather than missing them.
+    useLayoutEffect(() => {
+      viewRef.current?.dispatch({
+        effects: diffCompartment.current.reconfigure(
+          buildDiffExtension(baselineValue, showDiff, streamingMode, showWhitespace)
+        ),
+      });
+    }, [baselineValue, showDiff, streamingMode, showWhitespace]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: searchHighlightCompartment.current.reconfigure(
+          buildSearchHighlightExtension(searchHighlightRanges)
+        ),
+      });
+    }, [searchHighlightRanges]);
+
     // ── External value sync ─────────────────────────────────────────────────
     // Update the CodeMirror document when the value prop changes due to an
     // external cause (chapter switch, AI insertion) — not when the change
     // originated from our own onChange callback.
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) ensures CodeMirror's DOM is updated
+    // synchronously in the same commit phase as the React render, so that any
+    // sibling layout effects that measure scrollHeight see the new content
+    // height immediately — eliminating one-frame flicker during LLM streaming.
+    useLayoutEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       const docStr = view.state.doc.toString();
@@ -476,6 +701,14 @@ export const CodeMirrorEditor = React.forwardRef<
 
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
+        annotations: [
+          externalValueSyncAnnotation.of(true),
+          // External prop changes (LLM updates, dialog restores) must not enter
+          // CodeMirror's own undo history.  Without this, Ctrl+Z inside the
+          // field would undo the LLM text instead of triggering the dialog-level
+          // undo, corrupting the undo/redo button state.
+          Transaction.addToHistory.of(false),
+        ],
         selection: {
           anchor: Math.min(anchor, maxPos),
           head: Math.min(head, maxPos),

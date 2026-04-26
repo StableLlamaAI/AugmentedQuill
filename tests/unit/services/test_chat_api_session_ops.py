@@ -22,46 +22,23 @@ from augmentedquill.services.exceptions import NotFoundError
 
 
 class ChatApiSessionOpsTest(TestCase):
-    def test_list_active_chats_returns_empty_without_active_project(self):
-        with patch(
-            "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-            return_value=None,
-        ):
-            self.assertEqual(list_active_chats(), [])
-
-    def test_load_active_chat_raises_without_project(self):
-        with patch(
-            "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-            return_value=None,
-        ):
-            with self.assertRaises(NotFoundError):
-                load_active_chat("chat-1")
+    def test_list_active_chats_returns_empty_with_no_chats(self):
+        project_dir = Path("/tmp/nonexistent_project")
+        self.assertEqual(list_active_chats(project_dir), [])
 
     def test_load_active_chat_raises_when_missing(self):
-        with (
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-                return_value=Path("/tmp/project"),
-            ),
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.load_chat",
-                return_value=None,
-            ),
+        with patch(
+            "augmentedquill.services.chat.chat_api_session_ops.load_chat",
+            return_value=None,
         ):
             with self.assertRaises(NotFoundError):
-                load_active_chat("chat-1")
+                load_active_chat(Path("/tmp/project"), "chat-1")
 
     def test_save_active_chat_injects_chat_id(self):
-        with (
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-                return_value=Path("/tmp/project"),
-            ),
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.save_chat",
-            ) as mocked_save,
-        ):
-            save_active_chat("chat-1", {"name": "Test"})
+        with patch(
+            "augmentedquill.services.chat.chat_api_session_ops.save_chat",
+        ) as mocked_save:
+            save_active_chat(Path("/tmp/project"), "chat-1", {"name": "Test"})
 
         mocked_save.assert_called_once()
         _, _, payload = mocked_save.call_args.args
@@ -69,23 +46,16 @@ class ChatApiSessionOpsTest(TestCase):
         self.assertEqual(payload["name"], "Test")
 
     def test_delete_active_chat_raises_when_not_found(self):
-        with (
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-                return_value=Path("/tmp/project"),
-            ),
-            patch(
-                "augmentedquill.services.chat.chat_api_session_ops.delete_chat",
-                return_value=False,
-            ),
-        ):
-            with self.assertRaises(NotFoundError):
-                delete_active_chat("chat-1")
-
-    def test_delete_all_active_chats_raises_without_project(self):
         with patch(
-            "augmentedquill.services.chat.chat_api_session_ops.get_active_project_dir",
-            return_value=None,
+            "augmentedquill.services.chat.chat_api_session_ops.delete_chat",
+            return_value=False,
         ):
             with self.assertRaises(NotFoundError):
-                delete_all_active_chats()
+                delete_active_chat(Path("/tmp/project"), "chat-1")
+
+    def test_delete_all_active_chats(self):
+        with patch(
+            "augmentedquill.services.chat.chat_api_session_ops.delete_all_chats",
+        ) as mocked_delete:
+            delete_all_active_chats(Path("/tmp/project"))
+            mocked_delete.assert_called_once()

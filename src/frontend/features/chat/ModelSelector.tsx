@@ -11,8 +11,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Wand2, AlertTriangle, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { LLMConfig, AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
+import { useClickOutside } from '../../utils/hooks';
 
 interface ModelSelectorProps {
   value: string;
@@ -39,12 +41,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   connectionStatus = {},
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',
-}) => {
+}: ModelSelectorProps) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isLight } = useThemeClasses();
 
-  const selectedOption = options.find((o) => o.id === value);
+  const selectedOption = options.find((o: LLMConfig) => o.id === value);
 
   // If the provided value (ID) is not in our current options (e.g., after duplication or name change),
   // but we find an option with the same name, we should probably switch to that ID.
@@ -52,7 +55,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   useEffect(() => {
     if (value && options.length > 0 && !selectedOption) {
       // Try finding by name if ID mismatch (common if names are used as human-readable IDs in some places)
-      const byName = options.find((o) => o.name === value);
+      const byName = options.find((o: LLMConfig) => o.name === value);
       if (byName && byName.id !== value) {
         onChange(byName.id);
       }
@@ -61,22 +64,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const activeOption = selectedOption || options[0];
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
+  useClickOutside(containerRef, () => setIsOpen(false), isOpen);
 
   const getStatusIcon = (id: string) => {
     const status = connectionStatus[id] || 'idle';
@@ -111,19 +99,25 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </label>
         {activeOption &&
           hasCapability(activeOption, 'isMultimodal', 'is_multimodal') && (
-            <Eye size={8} className={labelColorClass} title="Multimodal" />
+            <Eye size={8} className={labelColorClass} aria-label={t('Multimodal')} />
           )}
         {activeOption &&
           hasCapability(
             activeOption,
             'supportsFunctionCalling',
             'supports_function_calling'
-          ) && <Wand2 size={8} className={labelColorClass} title="Function Calling" />}
+          ) && (
+            <Wand2
+              size={8}
+              className={labelColorClass}
+              aria-label={t('Function Calling')}
+            />
+          )}
         {label === 'Writing' && activeOption?.writingWarning && (
           <AlertTriangle
             size={8}
             className="text-amber-500"
-            title={activeOption.writingWarning}
+            aria-label={activeOption.writingWarning}
           />
         )}
       </div>
@@ -138,10 +132,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             ? 'text-brand-gray-600 hover:text-brand-gray-900'
             : 'text-brand-gray-300 hover:text-brand-gray-100'
         }`}
-        title={`Selected: ${activeOption?.name}`}
+        title={t('Selected: {{name}}', { name: activeOption?.name ?? '' })}
       >
         {getStatusIcon(value)}
-        <span className="truncate ml-1">{activeOption?.name || 'Select...'}</span>
+        <span className="truncate ml-1">{activeOption?.name || t('Select...')}</span>
       </button>
 
       {isOpen && (
@@ -152,7 +146,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               : 'bg-brand-gray-900 border-brand-gray-700'
           }`}
         >
-          {options.map((opt) => (
+          {options.map((opt: LLMConfig) => (
             <button
               key={opt.id}
               onClick={() => {
@@ -178,7 +172,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <div className="flex items-center space-x-1 mt-0.5">
                   {hasCapability(opt, 'isMultimodal', 'is_multimodal') && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
-                      <Eye size={8} className="mr-0.5" /> Vision
+                      <Eye size={8} className="mr-0.5" /> {t('Vision')}
                     </span>
                   )}
                   {hasCapability(
@@ -187,7 +181,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     'supports_function_calling'
                   ) && (
                     <span className="flex items-center text-[9px] text-brand-gray-400">
-                      <Wand2 size={8} className="mr-0.5" /> Fn
+                      <Wand2 size={8} className="mr-0.5" /> {t('Fn')}
                     </span>
                   )}
                   {label === 'Writing' && opt.writingWarning && (
@@ -195,7 +189,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       className="flex items-center text-[9px] text-amber-500"
                       title={opt.writingWarning}
                     >
-                      <AlertTriangle size={8} className="mr-0.5" /> Warn
+                      <AlertTriangle size={8} className="mr-0.5" /> {t('Warn')}
                     </span>
                   )}
                 </div>

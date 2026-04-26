@@ -74,7 +74,7 @@ class RestContractsTest(ApiTestCase):
 
         r_logs = self.client.get("/api/v1/debug/llm_logs")
         self.assertEqual(r_logs.status_code, 200)
-        self.assertIsInstance(r_logs.json(), list)
+        self.assertIsInstance(r_logs.json()["logs"], list)
 
         r_clear = self.client.delete("/api/v1/debug/llm_logs")
         self.assertEqual(r_clear.status_code, 200)
@@ -87,10 +87,21 @@ class RestContractsTest(ApiTestCase):
         )
         self.assertEqual(r_bad.status_code, 400)
 
-        # Successful no-op tools call
+        # Successful no-op tools call – response is now SSE; parse the result event.
         r_ok = self.client.post("/api/v1/chat/tools", json={"messages": []})
         self.assertEqual(r_ok.status_code, 200)
-        self.assertTrue(r_ok.json().get("ok"))
+        result_event = None
+        for line in r_ok.text.splitlines():
+            if line.startswith("data: ") and line != "data: [DONE]":
+                try:
+                    data = json.loads(line[6:])
+                    if data.get("type") == "result":
+                        result_event = data
+                        break
+                except json.JSONDecodeError:
+                    pass
+        self.assertIsNotNone(result_event, "No result event found in SSE response")
+        self.assertTrue(result_event.get("ok"))
 
     def test_settings_endpoints_success_and_invalid(self):
         valid_settings_payload = {

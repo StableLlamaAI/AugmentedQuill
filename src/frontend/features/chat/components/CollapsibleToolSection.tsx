@@ -9,8 +9,9 @@
  * Defines a reusable collapsible section for chat tool/debug payload rendering.
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useCollapsible } from '../../../components/ui/Collapsible';
 
 export const CollapsibleToolSection: React.FC<{
   title: string;
@@ -24,34 +25,31 @@ export const CollapsibleToolSection: React.FC<{
   defaultExpanded = false,
   isExpanded: isExpandedProp,
   onExpandedChange,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+  isExpanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) => {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const isControlled = isExpandedProp !== undefined;
-  const expanded = isControlled ? isExpandedProp : isExpanded;
-
-  // Explicit user toggles should persist (for uncontrolled mode) and not be overwritten by re-renders.
-  // Controlled mode state is managed externally by onExpandedChange + isExpanded prop.
-
-  const toggleExpanded = () => {
-    const next = !expanded;
-    if (onExpandedChange) onExpandedChange(next);
-    if (!isControlled) {
-      setIsExpanded(next);
-    }
-  };
+  const { isExpanded, toggle } = useCollapsible(
+    defaultExpanded,
+    isExpandedProp,
+    onExpandedChange
+  );
 
   return (
     <div className="mt-2 border border-black/10 dark:border-white/10 rounded overflow-hidden">
       <button
-        onClick={toggleExpanded}
+        onClick={toggle}
         className="w-full flex items-center justify-between px-2 py-1 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:hover:bg-black/30 transition-colors text-[10px] font-mono text-brand-gray-500"
       >
         <span className="flex items-center gap-1">
-          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           {title}
         </span>
       </button>
-      {expanded && <div className="p-2 bg-transparent">{children}</div>}
+      {isExpanded && <div className="p-2 bg-transparent">{children}</div>}
     </div>
   );
 };

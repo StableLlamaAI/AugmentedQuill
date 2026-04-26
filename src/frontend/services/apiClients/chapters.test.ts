@@ -12,12 +12,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { chaptersApi } from './chapters';
-import { fetchJson } from './shared';
+import { fetchJson, postJson, putJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
+  projectEndpoint: vi.fn((projectName: string, path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (!projectName) return normalizedPath;
+    return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
+  }),
   fetchJson: vi.fn(),
   postJson: vi.fn(),
+  putJson: vi.fn(),
+  deleteJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
@@ -47,96 +54,72 @@ describe('chaptersApi', () => {
   });
 
   it('calls POST /chapters', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, id: 1, title: 'C1' });
+    vi.mocked(postJson).mockResolvedValueOnce({ ok: true, id: 1, title: 'C1' });
 
     await chaptersApi.create('C1', 'Body', 'book-1');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(postJson).toHaveBeenCalledWith(
       '/chapters',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'C1', content: 'Body', book_id: 'book-1' }),
-      },
+      { title: 'C1', content: 'Body', book_id: 'book-1' },
       'Failed to create chapter'
     );
   });
 
   it('calls PUT /chapters/{id}/content', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     await chaptersApi.updateContent(2, 'New content');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/chapters/2/content',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: 'New content' }),
-      },
+      { content: 'New content' },
       'Failed to update chapter content'
     );
   });
 
   it('calls PUT /chapters/{id}/title', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     await chaptersApi.updateTitle(2, 'New title');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/chapters/2/title',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'New title' }),
-      },
+      { title: 'New title' },
       'Failed to update chapter title'
     );
   });
 
   it('calls PUT /chapters/{id}/summary', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     await chaptersApi.updateSummary(2, 'New summary');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/chapters/2/summary',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary: 'New summary' }),
-      },
+      { summary: 'New summary' },
       'Failed to update chapter summary'
     );
   });
 
   it('calls PUT /chapters/{id}/metadata', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     const payload = { summary: 'S', notes: 'N', private_notes: 'P' };
     await chaptersApi.updateMetadata(3, payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/chapters/3/metadata',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
+      payload,
       'Failed to update chapter metadata'
     );
   });
 
   it('calls DELETE /chapters/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ ok: true });
 
     await chaptersApi.delete(9);
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chapters/9',
-      { method: 'DELETE' },
-      'Failed to delete chapter'
-    );
+    expect(deleteJson).toHaveBeenCalledWith('/chapters/9', 'Failed to delete chapter');
   });
 
   it('calls POST /chapters/reorder with optional book id', async () => {

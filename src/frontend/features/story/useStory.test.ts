@@ -1,6 +1,4 @@
 // Copyright (C) 2026 StableLlama
-
-// @vitest-environment jsdom
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -11,11 +9,12 @@
  * Defines the useStory.test unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
 import { StoryState } from '../../types';
 import { api } from '../../services/api';
+import { resetStoryStore } from '../../stores/storyStore';
 import {
   buildInitialStoryState,
   resolveExternalHistorySourceState,
@@ -54,6 +53,71 @@ const buildStory = (summary: string): StoryState => ({
   conflicts: [],
   currentChapterId: null,
   lastUpdated: 1,
+  draft: null,
+});
+
+const buildChapter = (id: string, content: string) => ({
+  id,
+  title: `Chapter ${id}`,
+  summary: '',
+  content,
+  filename: `ch${id}.md`,
+  book_id: undefined as string | undefined,
+  notes: '',
+  private_notes: '',
+  conflicts: [] as { id: string; description: string; resolution: string }[],
+});
+
+const baseHook = () => useStory({ confirm: async () => true, alert: () => {} });
+
+/** Render the hook and perform the initial loadStory so history starts clean. */
+const hookWithStory = async (
+  summary: string = 'initial',
+  chapters: ReturnType<typeof buildChapter>[] = []
+) => {
+  // The lazy-load useEffect inside useStory calls api.chapters.get whenever
+  // currentChapterId changes.  A previous test in this file may have left a
+  // mock that returns {content: ''}, which would silently overwrite the
+  // content we just loaded.  Wire the mock to return the real content so the
+  // overwrite is a no-op and baseline tests stay deterministic.
+  const hook = renderHook(() => baseHook());
+  vi.mocked(api.chapters.get).mockImplementation(async (id: number) => {
+    const ch = chapters.find(
+      (c: {
+        id: string;
+        title: string;
+        summary: string;
+        content: string;
+        filename: string;
+        book_id: string | undefined;
+        notes: string;
+        private_notes: string;
+        conflicts: { id: string; description: string; resolution: string }[];
+      }) => c.id === String(id)
+    );
+    return {
+      content: ch?.content ?? '',
+      notes: ch?.notes ?? '',
+      private_notes: ch?.private_notes ?? '',
+      conflicts: ch?.conflicts ?? [],
+      title: ch?.title ?? '',
+      summary: ch?.summary ?? '',
+    } as unknown as Awaited<ReturnType<typeof api.chapters.get>>;
+  });
+  await act(async () => {
+    hook.result.current.loadStory({
+      ...buildStory(summary),
+      id: '',
+      chapters,
+      currentChapterId: chapters[0]?.id ?? null,
+    });
+  });
+  return hook;
+};
+
+// Reset Zustand store between tests to prevent state leaking across test cases.
+beforeEach(() => {
+  resetStoryStore();
 });
 
 describe('resolveExternalHistorySourceState', () => {
@@ -120,9 +184,13 @@ describe('buildInitialStoryState', () => {
     vi.mocked(api.projects.list).mockResolvedValue({
       available: [],
       current: null,
-    } as any);
-    vi.mocked(api.projects.select).mockResolvedValue({ ok: false } as any);
-    vi.mocked(api.chapters.list).mockResolvedValue([] as any);
+    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
+    vi.mocked(api.projects.select).mockResolvedValue({
+      ok: false,
+    } as unknown as Awaited<ReturnType<typeof api.projects.select>>);
+    vi.mocked(api.chapters.list).mockResolvedValue(
+      [] as unknown as Awaited<ReturnType<typeof api.chapters.list>>
+    );
     vi.mocked(api.chapters.get).mockResolvedValue({
       content: '',
       notes: '',
@@ -130,7 +198,7 @@ describe('buildInitialStoryState', () => {
       conflicts: [],
       title: 'Intro',
       summary: 'initial',
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof api.chapters.get>>);
 
     const { result } = renderHook(() =>
       useStory({
@@ -289,6 +357,26 @@ describe('buildInitialStoryState', () => {
     expect(result.current.historySize).toBe(2); // no-op duplicate suppressed
   });
 
+  it('preserves the pre-update baseline when pushing external history entries', async () => {
+    const ch = buildChapter('1', 'Original content');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    const updatedStory = {
+      ...result.current.story,
+      chapters: [{ ...ch, content: 'Original content + AI' }],
+    };
+
+    act(() => {
+      result.current.pushExternalHistoryEntry({
+        label: 'AI prose update',
+        state: updatedStory,
+      });
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Original content + AI');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original content');
+  });
+
   it('merges undo/redo handlers into current history entry if state is unchanged', async () => {
     const { result } = renderHook(() =>
       useStory({
@@ -342,7 +430,9 @@ describe('buildInitialStoryState', () => {
   });
 
   it('persists short-story conflicts through story metadata updates', async () => {
-    vi.mocked(api.story.updateMetadata).mockResolvedValue({ ok: true } as any);
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof api.story.updateMetadata>>);
 
     const { result } = renderHook(() =>
       useStory({
@@ -395,5 +485,406 @@ describe('buildInitialStoryState', () => {
     expect(api.story.updateMetadata).toHaveBeenCalledWith(
       expect.objectContaining({ conflicts })
     );
+  });
+
+  it('advances diff baseline on manual metadata updates so no diff is shown', async () => {
+    vi.mocked(api.story.updateMetadata).mockResolvedValue({
+      ok: true,
+    } as unknown as Awaited<ReturnType<typeof api.story.updateMetadata>>);
+
+    const { result } = await hookWithStory('Original summary');
+
+    await act(async () => {
+      await result.current.updateStoryMetadata(
+        'Demo',
+        'Edited summary',
+        [],
+        'Notes',
+        'Private notes',
+        [],
+        'en'
+      );
+    });
+
+    expect(result.current.story.summary).toBe('Edited summary');
+    expect(result.current.baselineState.summary).toBe('Edited summary');
+  });
+});
+
+// ─── baselineState diff highlighting ─────────────────────────────────────────
+//
+// Rules:
+//  - AI/external push  → baseline = state BEFORE the push (shows new text)
+//  - User-edit push    → baseline = state AFTER  the push (no highlight)
+//  - undo              → baseline = state we left (shows restored text)
+//  - redo              → baseline = state we left (shows re-inserted text)
+//  - loadStory         → baseline = the loaded state (no highlight)
+
+describe('baselineState diff highlighting', () => {
+  it('starts with baseline equal to current state (no highlight on load)', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Hello world');
+    expect(result.current.story.chapters[0]?.content).toBe('Hello world');
+  });
+
+  it('sets baseline to pre-push state when AI pushes new chapter content', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Hello world with AI paragraph' },
+        false, // no server sync in tests
+        true, // push history
+        false // NOT a user edit → AI
+      );
+    });
+
+    // Baseline should still hold the pre-AI content
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Hello world');
+    // Current story has the new content
+    expect(result.current.story.chapters[0]?.content).toBe(
+      'Hello world with AI paragraph'
+    );
+  });
+
+  it('sets baseline to new state when user types (no highlight)', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Hello world edited by user' },
+        false,
+        true,
+        true // IS a user edit
+      );
+    });
+
+    // Baseline == current state: nothing would be highlighted
+    expect(result.current.baselineState.chapters[0]?.content).toBe(
+      'Hello world edited by user'
+    );
+    expect(result.current.story.chapters[0]?.content).toBe(
+      'Hello world edited by user'
+    );
+  });
+
+  it('highlights only the second AI addition after two sequential AI pushes', async () => {
+    const ch = buildChapter('1', 'Para 1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // First AI push
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Para 1\nPara 2' },
+        false,
+        true,
+        false
+      );
+    });
+    // Second AI push
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Para 1\nPara 2\nPara 3' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Baseline should be the state after the FIRST push
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Para 1\nPara 2');
+    expect(result.current.story.chapters[0]?.content).toBe('Para 1\nPara 2\nPara 3');
+  });
+
+  it('sets baseline to the left-behind state when undoing an AI change', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Undo — baseline should become the AI state we just left
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Original');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original + AI');
+  });
+
+  it('sets baseline to the left-behind state when undoing a user edit', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'User typed this' },
+        false,
+        true,
+        true
+      );
+    });
+
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    // After undo, current = Original; baseline = what we left = user-typed text
+    expect(result.current.story.chapters[0]?.content).toBe('Original');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('User typed this');
+  });
+
+  it('sets baseline to the left-behind state when redoing an AI change', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    // Now redo
+    await act(async () => {
+      await result.current.redo();
+    });
+
+    // After redo, current = 'Original + AI'; baseline = what we left = 'Original'
+    expect(result.current.story.chapters[0]?.content).toBe('Original + AI');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+  });
+
+  it('sets baseline to the left-behind state when redoing a user edit', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'User edit' },
+        false,
+        true,
+        true
+      );
+    });
+    await act(async () => {
+      await result.current.undo();
+    });
+    await act(async () => {
+      await result.current.redo();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('User edit');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+  });
+
+  it('resets baseline to loaded state (no highlight) when loadStory is called', async () => {
+    const ch = buildChapter('1', 'Before load');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI change' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Load a completely fresh story
+    const freshCh = buildChapter('1', 'Fresh content');
+    act(() => {
+      result.current.loadStory({
+        ...buildStory('fresh'),
+        chapters: [freshCh],
+        currentChapterId: '1',
+      });
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Fresh content');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Fresh content');
+  });
+
+  it('after undo then new AI push, shows baseline relative to the undo target', async () => {
+    const ch = buildChapter('1', 'v1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // AI writes v2
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v2' }, false, true, false);
+    });
+    // User undoes back to v1
+    await act(async () => {
+      await result.current.undo();
+    });
+    // AI writes v3 from v1
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v3' }, false, true, false);
+    });
+
+    // Baseline should be v1 (state before the new AI push)
+    expect(result.current.story.chapters[0]?.content).toBe('v3');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('v1');
+  });
+
+  it('multi-step undo highlights each intermediate state correctly', async () => {
+    const ch = buildChapter('1', 'v1');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v2' }, false, true, false);
+    });
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'v3' }, false, true, false);
+    });
+
+    // Jump back 2 steps at once
+    await act(async () => {
+      await result.current.undoSteps(2);
+    });
+
+    // We left 'v3' (the most recent state before jumping), so baseline = v3
+    expect(result.current.story.chapters[0]?.content).toBe('v1');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('v3');
+  });
+
+  it('user edit after AI change clears the highlight (baseline advances)', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // AI adds content
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI' },
+        false,
+        true,
+        false
+      );
+    });
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Original');
+
+    // User edits: highlight should disappear (baseline = new state)
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'Original + AI + user' },
+        false,
+        true,
+        true
+      );
+    });
+
+    expect(result.current.baselineState.chapters[0]?.content).toBe(
+      'Original + AI + user'
+    );
+  });
+});
+
+// ─── advanceBaselineToCurrentStory ───────────────────────────────────────────
+
+describe('advanceBaselineToCurrentStory', () => {
+  it('advances the baseline to the current story state so the next AI turn diffs correctly', async () => {
+    const ch = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // Simulate an AI operation: add new sourcebook entry (via setStory directly,
+    // mimicking what refreshStory does when called without a historyLabel).
+    const storyWithSb = {
+      ...result.current.story,
+      sourcebook: [
+        {
+          id: 'hero',
+          name: 'Hero',
+          description: 'A brave hero',
+          synonyms: [],
+          images: [],
+          keywords: [],
+        },
+      ],
+    };
+    act(() => {
+      result.current.loadStory(storyWithSb);
+    });
+    // loadStory also advances baseline, so manually simulate just the
+    // setStory path by calling pushExternalHistoryEntry.
+    act(() => {
+      result.current.pushExternalHistoryEntry({ label: 'AI: Create Hero' });
+    });
+
+    // At this point baseline should reflect the state at load, which included
+    // the sourcebook entry.  Now advance baseline to simulate starting a new
+    // chat turn.
+    act(() => {
+      result.current.advanceBaselineToCurrentStory();
+    });
+
+    // After advancing, baseline matches current story — no diff should show.
+    expect(result.current.baselineState.sourcebook).toEqual(
+      result.current.story.sourcebook
+    );
+  });
+
+  it('after advancing baseline, a subsequent AI change shows the correct diff', async () => {
+    const ch = buildChapter('1', 'Original');
+    const { result } = await hookWithStory('initial', [ch]);
+
+    // First AI turn: updates chapter content.
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI turn 1' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Simulate what onChatNewMessageBegin does: advance baseline before next turn.
+    act(() => {
+      result.current.advanceBaselineToCurrentStory();
+    });
+
+    // Now baseline = 'AI turn 1'.
+    expect(result.current.baselineState.chapters[0]?.content).toBe('AI turn 1');
+
+    // Second AI turn: further changes.
+    await act(async () => {
+      await result.current.updateChapter(
+        '1',
+        { content: 'AI turn 2' },
+        false,
+        true,
+        false
+      );
+    });
+
+    // Diff should be between 'AI turn 1' (baseline) and 'AI turn 2' (current).
+    expect(result.current.story.chapters[0]?.content).toBe('AI turn 2');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('AI turn 1');
   });
 });

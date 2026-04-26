@@ -36,4 +36,21 @@ describe('StoryMetadata', () => {
 
     expect(screen.getByLabelText('2 active conflicts')).toBeTruthy();
   });
+
+  it('does not render story notes in the sidebar metadata preview', () => {
+    render(
+      <StoryMetadata
+        title="Short Story"
+        summary="Summary"
+        tags={[]}
+        notes="New story notes"
+        private_notes="Private notes"
+        projectType="novel"
+        onUpdate={vi.fn(async () => undefined)}
+      />
+    );
+
+    expect(screen.queryByText(/Notes \(LLM Visible\)/i)).toBeNull();
+    expect(screen.queryByText('New story notes')).toBeNull();
+  });
 });

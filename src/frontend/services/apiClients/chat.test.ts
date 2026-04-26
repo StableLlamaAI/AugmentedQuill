@@ -12,11 +12,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { chatApi } from './chat';
-import { fetchJson } from './shared';
+import { fetchJson, postJson, deleteJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
+  projectEndpoint: vi.fn((projectName: string, path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (!projectName) return normalizedPath;
+    return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
+  }),
   fetchJson: vi.fn(),
+  postJson: vi.fn(),
+  deleteJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
@@ -42,7 +49,7 @@ describe('chatApi', () => {
   });
 
   it('calls POST /chats/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(postJson).mockResolvedValueOnce({ ok: true });
 
     const payload = {
       name: 'Session',
@@ -53,44 +60,26 @@ describe('chatApi', () => {
 
     await chatApi.save('c1', payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chats/c1',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      'Failed to save chat'
-    );
+    expect(postJson).toHaveBeenCalledWith('/chats/c1', payload, 'Failed to save chat');
   });
 
   it('calls DELETE /chats/{id}', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ ok: true });
 
     await chatApi.delete('c1');
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chats/c1',
-      { method: 'DELETE' },
-      'Failed to delete chat'
-    );
+    expect(deleteJson).toHaveBeenCalledWith('/chats/c1', 'Failed to delete chat');
   });
 
   it('calls DELETE /chats', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(deleteJson).mockResolvedValueOnce({ ok: true });
 
     await chatApi.deleteAll();
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chats',
-      { method: 'DELETE' },
-      'Failed to delete all chats'
-    );
+    expect(deleteJson).toHaveBeenCalledWith('/chats', 'Failed to delete all chats');
   });
 
   it('calls POST /chat/tools', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true, appended_messages: [] });
-
     const payload = {
       messages: [
         {
@@ -103,16 +92,29 @@ describe('chatApi', () => {
       model_name: 'demo-model',
     };
 
+    const encoder = new TextEncoder();
+    const resultChunk = encoder.encode(
+      'data: {"type":"result","ok":true,"appended_messages":[]}\n\n'
+    );
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: resultChunk })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({ read }),
+      },
+    } as unknown as Response);
+
     await chatApi.executeTools(payload);
 
-    expect(fetchJson).toHaveBeenCalledWith(
-      '/chat/tools',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      'Failed to execute chat tools'
-    );
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/chat/tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    fetchSpy.mockRestore();
   });
 });

@@ -9,7 +9,7 @@
  * Defines the use chat message actions unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useCallback } from 'react';
 
 import { ChatMessage } from '../../types';
 
@@ -17,20 +17,32 @@ type UseChatMessageActionsParams = {
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
 };
 
+/** Custom React hook that manages chat message actions. */
 export function useChatMessageActions({
   setChatMessages,
-}: UseChatMessageActionsParams) {
-  const handleEditMessage = (id: string, newText: string) => {
-    setChatMessages((previous) =>
-      previous.map((message) =>
-        message.id === id ? { ...message, text: newText } : message
-      )
-    );
-  };
+}: UseChatMessageActionsParams): {
+  handleEditMessage: (id: string, newText: string) => void;
+  handleDeleteMessage: (id: string) => void;
+} {
+  const handleEditMessage = useCallback(
+    (id: string, newText: string) => {
+      setChatMessages((previous: ChatMessage[]) =>
+        previous.map((message: ChatMessage) =>
+          message.id === id ? { ...message, text: newText } : message
+        )
+      );
+    },
+    [setChatMessages]
+  );
 
-  const handleDeleteMessage = (id: string) => {
-    setChatMessages((previous) => previous.filter((message) => message.id !== id));
-  };
+  const handleDeleteMessage = useCallback(
+    (id: string) => {
+      setChatMessages((previous: ChatMessage[]) =>
+        previous.filter((message: ChatMessage) => message.id !== id)
+      );
+    },
+    [setChatMessages]
+  );
 
   return {
     handleEditMessage,

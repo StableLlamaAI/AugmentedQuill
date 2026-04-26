@@ -125,12 +125,12 @@ class SourcebookKeywordGenerationFlowTest(TestCase):
 
         async def _run():
             with patch(
-                "augmentedquill.services.sourcebook.sourcebook_helpers.sourcebook_refresh_entry_keywords",
+                "augmentedquill.services.sourcebook.sourcebook_keyword_service.sourcebook_refresh_entry_keywords",
                 new=AsyncMock(return_value={}),
             ) as mocked_refresh:
                 await sourcebook_generate_missing_keywords(payload={"k": "v"})
                 mocked_refresh.assert_awaited_once_with(
-                    "Needs Keywords", payload={"k": "v"}
+                    "Needs Keywords", payload={"k": "v"}, active=None
                 )
 
         self._run_async(_run())

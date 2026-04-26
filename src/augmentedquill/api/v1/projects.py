@@ -10,6 +10,7 @@
 API endpoints for project-related operations including creation, deletion, and management.
 """
 
+from typing import Any
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from augmentedquill.services.projects.projects_api_manage_ops import (
@@ -23,7 +24,6 @@ from augmentedquill.services.projects.projects_api_manage_ops import (
     restore_book_response,
 )
 from augmentedquill.services.projects.projects_api_asset_ops import (
-    list_images_response,
     update_image_description_response,
     create_image_placeholder_response,
     upload_image_response,
@@ -49,60 +49,79 @@ from augmentedquill.models.projects import (
     ImageRestoreRequest,
     ProjectListResponse,
 )
+from augmentedquill.models.story import (
+    BookMutationResponse,
+    ListImagesResponse,
+    ProjectImageInfo,
+    ProjectMutationResponse,
+    ProjectSelectResponse,
+)
+from augmentedquill.utils.image_helpers import get_project_images
 
 router = APIRouter(tags=["Projects"])
 
 
 @router.get("/projects", response_model=ProjectListResponse)
 async def api_projects() -> ProjectListResponse:
+    """Handle the API request to projects."""
     return projects_listing_payload()
 
 
-@router.post("/projects/delete")
-async def api_projects_delete(body: ProjectDeleteRequest) -> JSONResponse:
+@router.post("/projects/delete", response_model=ProjectMutationResponse)
+async def api_projects_delete(body: ProjectDeleteRequest) -> ProjectMutationResponse:
+    """Handle the API request to projects delete."""
     return delete_project_response(body.name)
 
 
-@router.post("/projects/select")
-async def api_projects_select(body: ProjectSelectRequest) -> JSONResponse:
+@router.post("/projects/select", response_model=ProjectSelectResponse)
+async def api_projects_select(body: ProjectSelectRequest) -> ProjectSelectResponse:
+    """Handle the API request to projects select."""
     return select_project_response(body.name)
 
 
-@router.post("/projects/create")
-async def api_projects_create(body: ProjectCreateRequest) -> JSONResponse:
+@router.post("/projects/create", response_model=ProjectMutationResponse)
+async def api_projects_create(body: ProjectCreateRequest) -> ProjectMutationResponse:
+    """Handle the API request to projects create."""
     # language is optional, default occurs downstream
     return create_project_response(body.name, body.type, body.language or "en")
 
 
-@router.post("/projects/convert")
-async def api_projects_convert(body: ProjectConvertRequest) -> JSONResponse:
+@router.post("/projects/convert", response_model=ProjectMutationResponse)
+async def api_projects_convert(body: ProjectConvertRequest) -> ProjectMutationResponse:
+    """Handle the API request to projects convert."""
     return convert_project_response(body.target_type)
 
 
-@router.post("/books/create")
-async def api_books_create(body: BookCreateRequest) -> JSONResponse:
+@router.post("/books/create", response_model=BookMutationResponse)
+async def api_books_create(body: BookCreateRequest) -> BookMutationResponse:
+    """Handle the API request to books create."""
     return create_book_response(body.name)
 
 
-@router.post("/books/delete")
-async def api_books_delete(body: BookDeleteRequest) -> JSONResponse:
+@router.post("/books/delete", response_model=BookMutationResponse)
+async def api_books_delete(body: BookDeleteRequest) -> BookMutationResponse:
+    """Handle the API request to books delete."""
     return delete_book_response(body.name)
 
 
-@router.post("/books/restore")
-async def api_books_restore(body: BookRestoreRequest) -> JSONResponse:
+@router.post("/books/restore", response_model=BookMutationResponse)
+async def api_books_restore(body: BookRestoreRequest) -> BookMutationResponse:
+    """Handle the API request to books restore."""
     return restore_book_response(body.restore_id)
 
 
-@router.get("/projects/images/list")
-async def api_projects_images_list() -> JSONResponse:
-    return list_images_response()
+@router.get("/projects/images/list", response_model=ListImagesResponse)
+async def api_projects_images_list() -> ListImagesResponse:
+    """Handle the API request to projects images list."""
+    images = get_project_images()
+    return ListImagesResponse(images=[ProjectImageInfo(**img) for img in images])
 
 
 @router.post("/projects/images/update_description")
 async def api_projects_images_update_description(
     body: ImageDescriptionUpdateRequest,
 ) -> JSONResponse:
+    """Handle the API request to projects images update description."""
     return update_image_description_response(body.model_dump())
 
 
@@ -110,6 +129,7 @@ async def api_projects_images_update_description(
 async def api_projects_images_create_placeholder(
     body: ImagePlaceholderRequest,
 ) -> JSONResponse:
+    """Handle the API request to projects images create placeholder."""
     return create_image_placeholder_response(body.model_dump())
 
 
@@ -117,34 +137,41 @@ async def api_projects_images_create_placeholder(
 async def api_projects_images_upload(
     file: UploadFile = File(...), target_name: str | None = None
 ) -> JSONResponse:
+    """Handle the API request to projects images upload."""
     return await upload_image_response(file=file, target_name=target_name)
 
 
 @router.post("/projects/images/delete")
 async def api_projects_images_delete(body: ImageDeleteRequest) -> JSONResponse:
+    """Handle the API request to projects images delete."""
     return delete_image_response(body.model_dump())
 
 
 @router.post("/projects/images/restore")
 async def api_projects_images_restore(body: ImageRestoreRequest) -> JSONResponse:
+    """Handle the API request to projects images restore."""
     return restore_image_response(body.model_dump())
 
 
 @router.get("/projects/images/{filename}")
-async def api_projects_images_get(filename: str):
+async def api_projects_images_get(filename: str) -> Any:
+    """Handle the API request to projects images get."""
     return get_image_file_response(filename)
 
 
 @router.get("/projects/export")
-async def api_projects_export(name: str = None):
+async def api_projects_export(name: str = None) -> Any:
+    """Handle the API request to projects export."""
     return export_project_response(name=name)
 
 
 @router.get("/projects/export/epub")
-async def api_projects_export_epub(name: str = None):
+async def api_projects_export_epub(name: str = None) -> Any:
+    """Handle the API request to projects export epub."""
     return export_project_epub_response(name=name)
 
 
-@router.post("/projects/import")
-async def api_projects_import(file: UploadFile = File(...)):
+@router.post("/projects/import", response_model=ProjectMutationResponse)
+async def api_projects_import(file: UploadFile = File(...)) -> ProjectMutationResponse:
+    """Handle the API request to projects import."""
     return await import_project_response(file)

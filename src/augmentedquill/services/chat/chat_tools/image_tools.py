@@ -7,6 +7,8 @@
 
 """Defines the image tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 import base64
 import uuid
 from pathlib import Path
@@ -141,7 +143,7 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="image-admin",
 )
-async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
+async def list_images(params: ListImagesParams, payload: dict, mutations: dict) -> Any:
     """List Images."""
     from augmentedquill.utils.image_helpers import get_project_images
 
@@ -165,7 +167,8 @@ async def list_images(params: ListImagesParams, payload: dict, mutations: dict):
 )
 async def generate_image_description(
     params: GenerateImageDescriptionParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Generate a textual description for an image using the image tool and update project state if successful."""
     desc = await _tool_generate_image_description(params.filename, payload)
     if not str(desc).startswith("Error:"):
         mutations["story_changed"] = True
@@ -179,7 +182,7 @@ async def generate_image_description(
 )
 async def create_image_placeholder(
     params: CreateImagePlaceholderParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Create Image Placeholder."""
     from augmentedquill.utils.image_helpers import update_image_metadata
 
@@ -201,7 +204,7 @@ async def create_image_placeholder(
 )
 async def set_image_metadata(
     params: SetImageMetadataParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Set Image Metadata."""
     from augmentedquill.utils.image_helpers import update_image_metadata
 
@@ -248,7 +251,7 @@ class InsertImageInChapterParams(BaseModel):
 )
 async def insert_image_in_chapter(
     params: InsertImageInChapterParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Insert Image In Chapter."""
     from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
     from augmentedquill.services.projects.projects import write_chapter_content

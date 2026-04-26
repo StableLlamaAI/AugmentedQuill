@@ -16,6 +16,7 @@ from tests.unit.api.v1.api_test_case import ApiTestCase
 
 class StoryActionsTest(ApiTestCase):
     captured_messages = None
+    captured_extra_body = None
 
     def setUp(self):
         super().setUp()
@@ -53,9 +54,11 @@ class StoryActionsTest(ApiTestCase):
 
     def _patch_llm(self):
         StoryActionsTest.captured_messages = None
+        StoryActionsTest.captured_extra_body = None
 
         async def fake_chat_stream(**kwargs):
             StoryActionsTest.captured_messages = kwargs.get("messages")
+            StoryActionsTest.captured_extra_body = kwargs.get("extra_body")
             # We yield a recognizable piece of content
             yield {"content": "Generated content chunk."}
 
@@ -70,6 +73,7 @@ class StoryActionsTest(ApiTestCase):
 
     def _make_project(self, name="action_test"):
         StoryActionsTest.captured_messages = None
+        StoryActionsTest.captured_extra_body = None
         select_project(name)
         pdir = self.projects_root / name
         chdir = pdir / "chapters"
@@ -132,6 +136,22 @@ class StoryActionsTest(ApiTestCase):
         self.assertEqual(r.status_code, 200)
         for line in r.iter_lines():
             pass
+
+        self.assertIsNotNone(StoryActionsTest.captured_messages)
+        self.assertGreaterEqual(len(StoryActionsTest.captured_messages), 1)
+        self.assertEqual(StoryActionsTest.captured_messages[-1]["role"], "assistant")
+        self.assertEqual(
+            StoryActionsTest.captured_messages[-1]["content"], "# Ch 1\n\n"
+        )
+        self.assertEqual(
+            StoryActionsTest.captured_extra_body,
+            {
+                "chat_template_kwargs": {
+                    "continue_final_message": True,
+                    "enable_thinking": False,
+                }
+            },
+        )
 
         # Verify NO persistence
         new_content = chap_f.read_text(encoding="utf-8")

@@ -18,6 +18,19 @@ import augmentedquill.main as main
 from augmentedquill.services.projects.projects import select_project
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class TestChatToolsSymmetry(TestCase):
     def setUp(self):
         self.td = tempfile.TemporaryDirectory()
@@ -113,7 +126,7 @@ class TestChatToolsSymmetry(TestCase):
             ]
         }
         r = self.client.post("/api/v1/chat/tools", json=get_body)
-        data = r.json()
+        data = _parse_tool_sse_result(r.text)
         content = json.loads(data["appended_messages"][0]["content"])
 
         self.assertEqual(content["title"], "New Title")
@@ -175,7 +188,7 @@ class TestChatToolsSymmetry(TestCase):
             ]
         }
         r = self.client.post("/api/v1/chat/tools", json=get_body)
-        data = r.json()
+        data = _parse_tool_sse_result(r.text)
         content = json.loads(data["appended_messages"][0]["content"])
 
         self.assertEqual(content["chapter"]["title"], "New Chapter Title")

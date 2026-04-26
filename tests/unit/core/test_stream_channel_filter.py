@@ -45,6 +45,27 @@ class TestChannelFilter(unittest.TestCase):
         self.assertEqual(len(res5), 1)
         self.assertEqual(res5[0]["channel"], "final")
 
+    def test_tool_call_gemini_wrapper_tags(self):
+        """Test Gemini-style <|tool_call> wrappers change the channel correctly."""
+        cf = ChannelFilter()
+
+        res1 = cf.feed("Something before.\n")
+        self.assertEqual(res1[0]["channel"], "final")
+
+        cf.feed("<|tool_call>")
+        self.assertEqual(cf.current_channel, "tool_def")
+
+        res3 = cf.feed('call:search_sourcebook{"query":"Clara"}')
+        self.assertEqual(len(res3), 1)
+        self.assertEqual(res3[0]["channel"], "tool_def")
+        self.assertEqual(res3[0]["content"], 'call:search_sourcebook{"query":"Clara"}')
+
+        cf.feed("<|tool_call|>")
+        self.assertEqual(cf.current_channel, "final")
+
+        res4 = cf.feed("\nFinished.")
+        self.assertEqual(res4[0]["channel"], "final")
+
     def test_tool_call_xml_tags_partial_feed(self):
         """Test split chunks handling for xml tags."""
         cf = ChannelFilter()
@@ -82,6 +103,35 @@ class TestChannelFilter(unittest.TestCase):
         self.assertGreaterEqual(len(out), 1)
         self.assertEqual(out[0]["channel"], "final")
         self.assertEqual(out[0]["content"], "<")
+
+    def test_malformed_channel_headers_are_consumed_without_switching_to_reasoning(
+        self,
+    ):
+        cf = ChannelFilter()
+
+        # Reasoning marker in malformed paired-header format should be consumed
+        # without yielding marker text and without switching away from final.
+        out1 = cf.feed("<|channel>thought\n<channel|>")
+        self.assertEqual(out1, [])
+        self.assertEqual(cf.current_channel, "final")
+
+        # Final marker in same malformed format remains harmless.
+        out2 = cf.feed("<|channel>final\n<channel|>")
+        self.assertEqual(out2, [])
+        self.assertEqual(cf.current_channel, "final")
+
+        out3 = cf.feed("Visible now")
+        self.assertEqual(out3, [{"channel": "final", "content": "Visible now"}])
+
+    def test_split_malformed_channel_header_does_not_block_final_streaming(self):
+        cf = ChannelFilter()
+
+        # Split malformed tag across chunks, then ensure final prose streams
+        # immediately (without waiting for flush/end).
+        self.assertEqual(cf.feed("<|channel>fin"), [])
+        self.assertEqual(cf.feed("al\n<channel|>"), [])
+        out = cf.feed("Hello")
+        self.assertEqual(out, [{"channel": "final", "content": "Hello"}])
 
 
 if __name__ == "__main__":

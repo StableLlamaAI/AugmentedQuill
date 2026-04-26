@@ -6,40 +6,59 @@
 // (at your option) any later version.
 
 /**
- * Defines the use chat session management unit so this responsibility stays isolated, testable, and easy to evolve.
+ * Purpose: Manage chat sessions (list, select, create, delete, auto-save).
+ *
+ * All mutable state is now held in chatStore (Zustand) rather than local
+ * useState so that session updates never propagate a re-render up to App.tsx.
+ * The auto-save logic uses chatStore.subscribe() instead of a useEffect
+ * dependency on chatMessages, which would otherwise create a chatStore
+ * selector subscription in App-level code.
  */
 
-import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, startTransition } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ChatMessage, ChatSession } from '../../types';
+import { ChatSession, ChatMessage } from '../../types';
 import { api } from '../../services/api';
+import { useChatStore, ChatStoreState } from '../../stores/chatStore';
 
 type UseChatSessionManagementParams = {
   storyId: string;
   getSystemPrompt: () => string;
-  chatMessages: ChatMessage[];
-  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
-  isChatLoading: boolean;
 };
 
+/** Custom React hook that manages chat session management. */
 export function useChatSessionManagement({
   storyId,
   getSystemPrompt,
-  chatMessages,
-  setChatMessages,
-  isChatLoading,
-}: UseChatSessionManagementParams) {
-  const [chatHistoryList, setChatHistoryList] = useState<ChatSession[]>([]);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [isIncognito, setIsIncognito] = useState(false);
-  const [allowWebSearch, setAllowWebSearch] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt());
-  const [incognitoSessions, setIncognitoSessions] = useState<ChatSession[]>([]);
+}: UseChatSessionManagementParams): {
+  refreshChatList: () => Promise<void>;
+  handleNewChat: (incognito?: boolean) => void;
+  handleSelectChat: (id: string) => Promise<void>;
+  handleDeleteChat: (id: string) => Promise<void>;
+  handleDeleteAllChats: () => Promise<void>;
+  onUpdateScratchpad: (content: string) => void;
+  onDeleteScratchpad: () => void;
+} {
+  // ---------------------------------------------------------------------------
+  // Stable store-action aliases (Zustand actions never change identity)
+  // ---------------------------------------------------------------------------
+  const {
+    setChatMessages,
+    setChatHistoryList,
+    setCurrentChatId,
+    setIsIncognito,
+    setAllowWebSearch,
+    setSystemPrompt,
+    setScratchpad,
+    setIncognitoSessions,
+    // Setters are stable — read via getState() to avoid subscribing to every token.
+  } = useChatStore.getState();
 
+  // Update systemPrompt when the project changes.
   useEffect(() => {
     setSystemPrompt(getSystemPrompt());
-  }, [storyId, getSystemPrompt]);
+  }, [storyId, getSystemPrompt, setSystemPrompt]);
 
   const refreshChatList = useCallback(async () => {
     try {
@@ -62,30 +81,45 @@ export function useChatSessionManagement({
           systemPrompt: getSystemPrompt(),
           isIncognito: true,
           allowWebSearch: false,
+          scratchpad: '',
         };
-        setIncognitoSessions((prev) => [newSession, ...prev]);
+        setIncognitoSessions((prev: ChatSession[]) => [newSession, ...prev]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
+        setScratchpad('');
       } else {
         setChatMessages([]);
         setIsIncognito(false);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
+        setScratchpad('');
       }
       setSystemPrompt(getSystemPrompt());
     },
-    [getSystemPrompt, setChatMessages]
+    [
+      getSystemPrompt,
+      setChatMessages,
+      setIncognitoSessions,
+      setIsIncognito,
+      setCurrentChatId,
+      setAllowWebSearch,
+      setScratchpad,
+      setSystemPrompt,
+    ]
   );
 
   const handleSelectChat = useCallback(
     async (id: string) => {
-      const incognito = incognitoSessions.find((session) => session.id === id);
+      const incognito = useChatStore
+        .getState()
+        .incognitoSessions.find((session: ChatSession) => session.id === id);
       if (incognito) {
         setChatMessages(incognito.messages || []);
         setCurrentChatId(id);
         setIsIncognito(true);
+        setScratchpad(incognito.scratchpad || '');
         if (incognito.systemPrompt) {
           setSystemPrompt(incognito.systemPrompt);
         }
@@ -96,25 +130,57 @@ export function useChatSessionManagement({
       try {
         const chat = await api.chat.load(id);
         if (chat) {
-          setChatMessages(chat.messages || []);
-          setCurrentChatId(id);
-          setIsIncognito(false);
-          if (chat.systemPrompt) {
-            setSystemPrompt(chat.systemPrompt);
-          }
-          setAllowWebSearch(chat.allowWebSearch || false);
+          startTransition(() => {
+            setChatMessages(chat.messages || []);
+            setCurrentChatId(id);
+            setIsIncognito(false);
+            setScratchpad(chat.scratchpad || '');
+            if (chat.systemPrompt) {
+              setSystemPrompt(chat.systemPrompt);
+            }
+            setAllowWebSearch(chat.allowWebSearch || false);
+          });
         }
       } catch (error) {
         console.error('Failed to load chat', error);
       }
     },
-    [incognitoSessions, setChatMessages]
+    [
+      setChatMessages,
+      setCurrentChatId,
+      setIsIncognito,
+      setScratchpad,
+      setSystemPrompt,
+      setAllowWebSearch,
+    ]
   );
+
+  const handleUpdateScratchpad = useCallback(
+    (content: string) => {
+      setScratchpad(content);
+      const { currentChatId, isIncognito } = useChatStore.getState();
+      if (isIncognito && currentChatId) {
+        setIncognitoSessions((prev: ChatSession[]) =>
+          prev.map((session: ChatSession) =>
+            session.id === currentChatId ? { ...session, scratchpad: content } : session
+          )
+        );
+      }
+    },
+    [setScratchpad, setIncognitoSessions]
+  );
+
+  const handleDeleteScratchpad = useCallback(() => {
+    handleUpdateScratchpad('');
+  }, [handleUpdateScratchpad]);
 
   const handleDeleteChat = useCallback(
     async (id: string) => {
-      if (incognitoSessions.some((session) => session.id === id)) {
-        setIncognitoSessions((prev) => prev.filter((session) => session.id !== id));
+      const { incognitoSessions, currentChatId } = useChatStore.getState();
+      if (incognitoSessions.some((session: ChatSession) => session.id === id)) {
+        setIncognitoSessions((prev: ChatSession[]) =>
+          prev.filter((session: ChatSession) => session.id !== id)
+        );
         if (currentChatId === id) {
           handleNewChat();
         }
@@ -131,7 +197,7 @@ export function useChatSessionManagement({
         console.error('Failed to delete chat', error);
       }
     },
-    [incognitoSessions, currentChatId, handleNewChat, refreshChatList]
+    [handleNewChat, refreshChatList, setIncognitoSessions]
   );
 
   const handleDeleteAllChats = useCallback(async () => {
@@ -151,14 +217,18 @@ export function useChatSessionManagement({
     } catch (error) {
       console.error('Failed to delete all chats', error);
     }
-  }, [refreshChatList, handleNewChat]);
+  }, [refreshChatList, handleNewChat, setIncognitoSessions]);
 
+  // ---------------------------------------------------------------------------
+  // Initial chat load
+  // ---------------------------------------------------------------------------
   useEffect(() => {
+    const { currentChatId, isIncognito } = useChatStore.getState();
     if (storyId && !currentChatId && !isIncognito) {
       const loadInitialChats = async () => {
         try {
           const chats = await api.chat.list();
-          setChatHistoryList(chats);
+          startTransition(() => setChatHistoryList(chats));
           if (chats.length > 0) {
             await handleSelectChat(chats[0].id);
           } else {
@@ -170,77 +240,109 @@ export function useChatSessionManagement({
       };
       loadInitialChats();
     }
-  }, [storyId, currentChatId, isIncognito, handleSelectChat, handleNewChat]);
+  }, [storyId, handleSelectChat, handleNewChat, setChatHistoryList]);
 
+  // ---------------------------------------------------------------------------
+  // Auto-save: react to chatMessages / isChatLoading changes without
+  // subscribing to the store as a React selector (which would propagate
+  // re-renders up to App.tsx).  chatStore.subscribe() fires imperatively
+  // without triggering any React render cycle.
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
-    if (currentChatId && chatMessages.length > 0 && !isChatLoading) {
-      if (isIncognito) {
-        const firstUserMsg = chatMessages.find((message) => message.role === 'user');
-        const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
-        setIncognitoSessions((prev) =>
-          prev.map((session) =>
-            session.id === currentChatId
-              ? {
-                  ...session,
-                  name,
-                  messages: chatMessages,
-                  systemPrompt,
-                  allowWebSearch,
-                }
-              : session
-          )
-        );
-      } else {
-        timeout = setTimeout(async () => {
-          try {
-            const firstUserMsg = chatMessages.find(
-              (message) => message.role === 'user'
-            );
-            const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
-            await api.chat.save(currentChatId, {
-              name,
-              messages: chatMessages,
-              systemPrompt,
-              allowWebSearch,
-            });
-            refreshChatList();
-          } catch (error) {
-            console.error('Failed to auto-save chat', error);
-          }
-        }, 2000);
-      }
-    }
+    const unsubscribe = useChatStore.subscribe(
+      (state: ChatStoreState, prevState: ChatStoreState) => {
+        // Only fire when persisted session fields actually changed.
+        if (
+          state.chatMessages === prevState.chatMessages &&
+          state.isChatLoading === prevState.isChatLoading &&
+          state.scratchpad === prevState.scratchpad &&
+          state.systemPrompt === prevState.systemPrompt &&
+          state.allowWebSearch === prevState.allowWebSearch &&
+          state.currentChatId === prevState.currentChatId &&
+          state.isIncognito === prevState.isIncognito
+        ) {
+          return;
+        }
 
-    return () => clearTimeout(timeout);
-  }, [
-    chatMessages,
-    currentChatId,
-    isIncognito,
-    systemPrompt,
-    isChatLoading,
-    allowWebSearch,
-    refreshChatList,
-  ]);
+        clearTimeout(timeout);
+
+        const {
+          chatMessages,
+          currentChatId,
+          isChatLoading,
+          isIncognito,
+          systemPrompt,
+          scratchpad,
+          allowWebSearch,
+        } = state;
+
+        if (!currentChatId || isChatLoading) {
+          return;
+        }
+
+        if (isIncognito) {
+          const firstUserMsg = chatMessages.find(
+            (message: ChatMessage) => message.role === 'user'
+          );
+          const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
+          useChatStore.getState().setIncognitoSessions((prev: ChatSession[]) =>
+            prev.map((session: ChatSession) =>
+              session.id === currentChatId
+                ? {
+                    ...session,
+                    name,
+                    messages: chatMessages,
+                    systemPrompt,
+                    allowWebSearch,
+                    scratchpad,
+                  }
+                : session
+            )
+          );
+        } else {
+          timeout = setTimeout(async () => {
+            try {
+              const {
+                chatMessages: msgs,
+                currentChatId: cid,
+                systemPrompt: sp,
+                allowWebSearch: aws,
+                scratchpad: sc,
+              } = useChatStore.getState();
+              if (!cid) return;
+              const firstUserMsg = msgs.find((m: ChatMessage) => m.role === 'user');
+              const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
+              await api.chat.save(cid, {
+                name,
+                messages: msgs,
+                systemPrompt: sp,
+                allowWebSearch: aws,
+                scratchpad: sc,
+              });
+              refreshChatList();
+            } catch (error) {
+              console.error('Failed to auto-save chat', error);
+            }
+          }, 2000);
+        }
+      }
+    );
+
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, [refreshChatList]);
 
   return {
-    chatHistoryList,
-    setChatHistoryList,
-    currentChatId,
-    setCurrentChatId,
-    isIncognito,
-    setIsIncognito,
-    allowWebSearch,
-    setAllowWebSearch,
-    systemPrompt,
-    setSystemPrompt,
-    incognitoSessions,
-    setIncognitoSessions,
     refreshChatList,
     handleNewChat,
     handleSelectChat,
     handleDeleteChat,
     handleDeleteAllChats,
+    onUpdateScratchpad: handleUpdateScratchpad,
+    onDeleteScratchpad: handleDeleteScratchpad,
   };
 }

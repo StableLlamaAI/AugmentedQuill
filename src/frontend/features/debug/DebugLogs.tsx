@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   X,
   Trash2,
@@ -20,6 +21,8 @@ import {
   Layers,
   List,
 } from 'lucide-react';
+import { useConfirm } from '../layout/ConfirmDialogContext';
+import { useFocusTrap } from '../layout/useFocusTrap';
 import { AppTheme } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { api } from '../../services/api';
@@ -38,7 +41,17 @@ const JsonView: React.FC<{
   theme: AppTheme;
   depth?: number;
   label?: string;
-}> = ({ data, theme, depth = 0, label }) => {
+}> = ({
+  data,
+  theme,
+  depth = 0,
+  label,
+}: {
+  data: unknown;
+  theme: AppTheme;
+  depth?: number;
+  label?: string;
+}) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (label === 'tools') return true;
     return false;
@@ -84,19 +97,21 @@ const JsonView: React.FC<{
 
   return (
     <div className="pl-4 border-l border-brand-gray-500/20 my-0.5">
-      <div
-        className="flex items-center gap-1 cursor-pointer hover:bg-brand-gray-500/5 -ml-4 px-1 rounded"
+      <button
+        type="button"
+        className="flex items-center gap-1 cursor-pointer hover:bg-brand-gray-500/5 -ml-4 px-1 rounded w-full text-left"
         onClick={() => setIsCollapsed(!isCollapsed)}
+        aria-expanded={!isCollapsed}
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         {label && <span className="text-blue-400 mr-1">{label}:</span>}
         <span className={textMuted}>
           {isArray ? `Array(${keys.length})` : 'Object'}
         </span>
-      </div>
+      </button>
       {!isCollapsed && (
         <div className="space-y-0.5 mt-0.5">
-          {keys.map((key) => (
+          {keys.map((key: string) => (
             <div key={key} className="flex flex-col">
               <JsonView
                 data={(data as Record<string, unknown>)[key]}
@@ -129,14 +144,23 @@ const getCallerOrigin = (caller_id?: string) => {
   return 'Internal';
 };
 
-export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) => {
+export const DebugLogs: React.FC<DebugLogsProps> = ({
+  isOpen,
+  onClose,
+  theme,
+}: DebugLogsProps) => {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [streamMode, setStreamMode] = useState<'chunks' | 'aggregated'>('aggregated');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, dialogRef, onClose);
 
   const { isLight } = useThemeClasses();
+  const confirm = useConfirm();
   const bgMain = isLight ? 'bg-white' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
@@ -152,21 +176,21 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
     setIsLoading(true);
     try {
       const data = await api.debug.getLogs();
-      setLogs(data);
+      setLogs(Array.isArray(data.logs) ? data.logs : []);
     } catch (error) {
-      console.error('Failed to fetch debug logs:', error);
+      console.error(t('Failed to fetch debug logs:'), error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const clearLogs = async () => {
-    if (!confirm('Are you sure you want to clear all logs?')) return;
+    if (!(await confirm(t('Are you sure you want to clear all logs?')))) return;
     try {
       await api.debug.clearLogs();
       setLogs([]);
     } catch (error) {
-      console.error('Failed to clear debug logs:', error);
+      console.error(t('Failed to clear debug logs:'), error);
     }
   };
 
@@ -182,17 +206,25 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
       const timeoutId = setTimeout(scrollToBottom, 50);
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [isOpen, logs.length]);
 
   const toggleExpand = (id: string) => {
-    setExpandedLogs((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedLogs((prev: Record<string, boolean>) => ({ ...prev, [id]: !prev[id] }));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black/50 backdrop-blur-sm p-4 md:p-8">
+    <div
+      className="fixed inset-0 z-[100] flex flex-col bg-black/50 backdrop-blur-sm p-4 md:p-8"
+      role="presentation"
+    >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="debug-logs-title"
         className={`flex-1 flex flex-col rounded-xl shadow-2xl overflow-hidden border ${borderMain} ${bgMain}`}
       >
         {/* Header */}
@@ -204,11 +236,11 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               <Bug className="text-blue-500" size={20} />
             </div>
             <div>
-              <h2 className={`text-lg font-bold ${textMain}`}>
-                LLM Communication Logs
+              <h2 id="debug-logs-title" className={`text-lg font-bold ${textMain}`}>
+                {t('LLM Communication Logs')}
               </h2>
               <p className="text-xs text-brand-gray-500">
-                Debug view for all LLM requests and responses
+                {t('Debug view for all LLM requests and responses')}
               </p>
             </div>
           </div>
@@ -223,9 +255,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                     ? 'bg-blue-500 text-white'
                     : `${bgSecondary} ${textMain} hover:bg-brand-gray-500/10`
                 }`}
-                title="Aggregated View"
+                title={t('Aggregated View')}
               >
-                <Layers size={14} /> Aggregated
+                <Layers size={14} /> {t('Aggregated')}
               </button>
               <button
                 onClick={() => setStreamMode('chunks')}
@@ -234,9 +266,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                     ? 'bg-blue-500 text-white'
                     : `${bgSecondary} ${textMain} hover:bg-brand-gray-500/10`
                 }`}
-                title="Chunks View"
+                title={t('Chunks View')}
               >
-                <List size={14} /> Chunks
+                <List size={14} /> {t('Chunks')}
               </button>
             </div>
             <button
@@ -245,14 +277,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
               className={`p-2 rounded-lg hover:bg-brand-gray-500/10 transition-colors ${
                 isLoading ? 'animate-spin' : ''
               }`}
-              title="Refresh Logs"
+              title={t('Refresh Logs')}
             >
               <RefreshCw size={18} className="text-brand-gray-500" />
             </button>
             <button
               onClick={clearLogs}
               className="p-2 rounded-lg hover:bg-red-500/10 transition-colors group"
-              title="Clear Logs"
+              title={t('Clear Logs')}
             >
               <Trash2
                 size={18}
@@ -263,7 +295,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-brand-gray-500/10 transition-colors"
-              title="Close"
+              title={t('Close')}
             >
               <X size={20} className="text-brand-gray-500" />
             </button>
@@ -275,10 +307,10 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
           {logs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-brand-gray-500 space-y-4">
               <Bug size={48} className="opacity-20" />
-              <p>No LLM communications logged yet.</p>
+              <p>{t('No LLM communications logged yet.')}</p>
             </div>
           ) : (
-            logs.map((log, idx) => (
+            logs.map((log: DebugLogEntry, idx: number) => (
               <div
                 key={`${log.id ?? 'log'}-${idx}`}
                 className={`border rounded-lg overflow-hidden ${borderMain} ${
@@ -286,19 +318,23 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                 }`}
               >
                 <div
-                  className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-brand-gray-500/5 transition-colors ${
+                  className={`flex items-center justify-between px-4 py-3 hover:bg-brand-gray-500/5 transition-colors ${
                     expandedLogs[log.id] ? bgSecondary : ''
                   }`}
-                  onClick={() => toggleExpand(log.id)}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
-                    <div className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[62%]">
+                    <button
+                      type="button"
+                      className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[75%] text-left"
+                      onClick={() => toggleExpand(log.id)}
+                      aria-expanded={expandedLogs[log.id]}
+                    >
                       {expandedLogs[log.id] ? (
                         <ChevronDown size={16} />
                       ) : (
                         <ChevronRight size={16} />
                       )}
-                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden flex-1">
                         {log.request && (
                           <span
                             className={`text-xs font-mono px-1.5 py-0.5 rounded ${
@@ -339,19 +375,21 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           </span>
                         )}
                       </div>
-                    </div>
+                    </button>
                     <div className="w-full sm:w-[36%] text-right flex flex-wrap items-center justify-end gap-3 text-[10px] text-brand-gray-500 font-mono">
                       {log.caller_id && (
                         <span className="truncate">
-                          Caller: {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                          {t('Caller')}: {log.caller_id} (
+                          {t(getCallerOrigin(log.caller_id))})
                         </span>
                       )}
                       <span className="truncate">
-                        Start: {new Date(log.timestamp_start).toLocaleTimeString()}
+                        {t('Start')}:{' '}
+                        {new Date(log.timestamp_start).toLocaleTimeString()}
                       </span>
                       {log.timestamp_end && (
                         <span className="truncate">
-                          End: {new Date(log.timestamp_end).toLocaleTimeString()}
+                          {t('End')}: {new Date(log.timestamp_end).toLocaleTimeString()}
                         </span>
                       )}
                     </div>
@@ -365,7 +403,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                     {log.caller_id && (
                       <div className="space-y-2">
                         <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                          Caller
+                          {t('Caller')}
                         </h4>
                         <div
                           className={`p-3 rounded-lg overflow-x-auto ${
@@ -373,14 +411,14 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                           }`}
                         >
                           <div className="text-blue-400">
-                            {log.caller_id} ({getCallerOrigin(log.caller_id)})
+                            {log.caller_id} ({t(getCallerOrigin(log.caller_id))})
                           </div>
                         </div>
                       </div>
                     )}
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                        Request
+                        {t('Request')}
                       </h4>
                       <div
                         className={`p-3 rounded-lg overflow-x-auto ${
@@ -392,7 +430,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                     </div>
                     <div className="space-y-2">
                       <h4 className="text-brand-gray-500 uppercase tracking-wider text-[10px] font-bold">
-                        Response
+                        {t('Response')}
                       </h4>
                       <div
                         className={`p-3 rounded-lg overflow-x-auto ${
@@ -402,12 +440,12 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                         {log.response?.streaming && streamMode === 'aggregated' ? (
                           <div className="space-y-4">
                             <div className="space-y-1">
-                              <span className="text-blue-400">status_code:</span>{' '}
+                              <span className="text-blue-400">{t('status_code')}:</span>{' '}
                               {log.response.status_code}
                             </div>
-                            {log.response.error && (
+                            {Boolean(log.response.error) && (
                               <div className="space-y-1">
-                                <span className="text-red-400">error:</span>
+                                <span className="text-red-400">{t('error')}:</span>
                                 <div
                                   className={
                                     'mt-1 p-2 rounded border border-red-500/30 bg-red-500/5 text-red-500 whitespace-pre-wrap font-sans text-sm'
@@ -421,7 +459,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                             )}
                             {log.response.thinking && (
                               <div className="space-y-1">
-                                <span className="text-blue-400">thinking:</span>
+                                <span className="text-blue-400">{t('thinking')}:</span>
                                 <div
                                   className={
                                     'mt-1 p-2 rounded border border-blue-500/20 bg-blue-500/5 text-blue-400 whitespace-pre-wrap font-sans text-sm italic'
@@ -432,7 +470,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                               </div>
                             )}
                             <div className="space-y-1">
-                              <span className="text-blue-400">full_content:</span>
+                              <span className="text-blue-400">
+                                {t('full_content')}:
+                              </span>
                               <div
                                 className={`mt-1 p-2 rounded border ${borderMain} whitespace-pre-wrap font-sans text-sm`}
                               >
@@ -441,7 +481,9 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                             </div>
                             {log.response.tool_calls && (
                               <div className="space-y-1">
-                                <span className="text-blue-400">tool_calls:</span>
+                                <span className="text-blue-400">
+                                  {t('tool_calls')}:
+                                </span>
                                 <div className="mt-1">
                                   <JsonView
                                     data={log.response.tool_calls}
@@ -451,7 +493,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({ isOpen, onClose, theme }) 
                               </div>
                             )}
                             <div className="space-y-1">
-                              <span className="text-blue-400">metadata:</span>
+                              <span className="text-blue-400">{t('metadata')}:</span>
                               <JsonView
                                 data={{
                                   chunks_count: log.response.chunks?.length,

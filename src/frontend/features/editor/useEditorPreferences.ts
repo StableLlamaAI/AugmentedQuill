@@ -19,9 +19,18 @@ const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   contrast: 0.9,
   theme: 'mixed',
   sidebarWidth: 320,
+  showDiff: true,
 };
 
-export function useEditorPreferences() {
+/** Custom React hook that manages editor preferences. */
+export function useEditorPreferences(): {
+  editorSettings: EditorSettings;
+  setEditorSettings: import('react').Dispatch<
+    import('react').SetStateAction<EditorSettings>
+  >;
+  currentTheme: AppTheme;
+  isLight: boolean;
+} {
   const [editorSettings, setEditorSettings] = useState<EditorSettings>(() => {
     const saved = localStorage.getItem('augmentedquill_editor_settings');
     if (!saved) return DEFAULT_EDITOR_SETTINGS;
@@ -43,8 +52,12 @@ export function useEditorPreferences() {
   const isLight = currentTheme === 'light';
 
   useEffect(() => {
-    document.body.className = currentTheme;
-  }, [currentTheme]);
+    // Tailwind `dark:` utilities are activated by the `dark` class.
+    // Mixed mode should behave like dark mode in the UI, so we map
+    // both `dark` and `mixed` to the same body class while preserving
+    // the raw theme value in the hook return value.
+    document.body.className = isLight ? 'light' : 'dark';
+  }, [isLight]);
 
   return { editorSettings, setEditorSettings, currentTheme, isLight };
 }

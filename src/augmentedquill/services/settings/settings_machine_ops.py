@@ -18,6 +18,7 @@ from augmentedquill.services.llm.llm_completion_ops import _validate_base_url
 
 
 def auth_headers(api_key: str | None) -> dict[str, str]:
+    """Helper for headers.."""
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"

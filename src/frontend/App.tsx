@@ -9,48 +9,53 @@
  * Defines the app unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo } from 'react';
 import { useStory } from './features/story/useStory';
-import { StoryMetadata } from './features/story/StoryMetadata';
-import { ChapterList } from './features/chapters/ChapterList';
 import { useChapterSuggestions } from './features/chapters/useChapterSuggestions';
-import { Editor, EditorHandle } from './features/editor/Editor';
+import { EditorHandle } from './features/editor/Editor';
 import { useAppUiActions } from './features/editor/useAppUiActions';
 import { useEditorPreferences } from './features/editor/useEditorPreferences';
 import { useAiActions } from './features/story/useAiActions';
-import { Chat } from './features/chat/Chat';
-import { useChatExecution } from './features/chat/useChatExecution';
-import { useChatMessageActions } from './features/chat/useChatMessageActions';
-import { ToolCallLimitDialog } from './features/chat/ToolCallLimitDialog';
-import { useChatSessionManagement } from './features/chat/useChatSessionManagement';
-import { AppDialogs } from './features/layout/AppDialogs';
-import { AppHeader } from './features/layout/AppHeader';
-import { AppMainLayout } from './features/layout/AppMainLayout';
-import { ConfirmDialog } from './features/layout/ConfirmDialog';
+import { AppLayout } from './features/layout/AppLayout';
 import { useConfirmDialog } from './features/layout/useConfirmDialog';
-import { ThemeProvider } from './features/layout/ThemeContext';
 import { useProjectManagement } from './features/projects/useProjectManagement';
-import { DebugLogs } from './features/debug/DebugLogs';
 import { useAppSettings } from './features/settings/useAppSettings';
 import { useProviderHealth } from './features/settings/useProviderHealth';
 import { usePrompts } from './features/settings/usePrompts';
-import { ChatMessage } from './types';
 import { DEFAULT_APP_SETTINGS } from './features/app/appDefaults';
+import { useAppChatRuntime } from './features/app/useAppChatRuntime';
+import {
+  useAppHeaderProps,
+  useAppMainLayoutProps,
+} from './features/app/useAppControlProps';
+import { useAppSearchNavigation } from './features/app/useAppSearchNavigation';
 import { useBrowserHistory } from './features/app/useBrowserHistory';
 import { useEditorUIState } from './features/app/useEditorUIState';
 import { useSettingsPersistence } from './features/app/useSettingsPersistence';
 import { useToolCallGate } from './features/app/useToolCallGate';
 import { useUIPanels } from './features/app/useUIPanels';
+import { useSidebarIntents } from './features/layout/sidebarIntents';
+import { useCurrentWritingUnit } from './features/story/useCurrentWritingUnit';
 import {
   getErrorMessage,
   resolveActiveProviderConfigs,
   resolveRoleAvailability,
   supportsImageActions,
 } from './features/app/appSelectors';
+import { useToast } from './components/ui/Toast';
+import { setErrorDispatcher } from './services/errorNotifier';
+import { useChatStore, ChatStoreState } from './stores/chatStore';
+import type { SessionMutation } from './features/chat';
 
+// eslint-disable-next-line max-lines-per-function
 const App: React.FC = () => {
-  const { confirm, confirmDialogState, handleConfirm, handleCancel } =
+  const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
     useConfirmDialog();
+
+  const addToast = useToast();
+  useEffect(() => {
+    setErrorDispatcher((msg: string) => addToast(msg, 'error'));
+  }, [addToast]);
 
   const {
     story,
@@ -76,7 +81,18 @@ const App: React.FC = () => {
     historyIndex,
     canUndo,
     canRedo,
-  } = useStory({ confirm, alert: window.alert });
+    baselineState,
+    advanceBaselineToCurrentStory,
+    patchSourcebook,
+    isChapterLoading,
+  } = useStory({ confirm, alert: (msg: string) => void alert(msg) });
+
+  // Stable ref to avoid recreating callbacks that read story state during
+  // streaming (e.g. onProseChunk).
+  const storyRef = useRef(story);
+  storyRef.current = story;
+  const editorRef = useRef<EditorHandle | null>(null);
+  const refreshProjectsRef = useRef<null | (() => Promise<void>)>(null);
 
   useBrowserHistory({
     historyIndex,
@@ -88,21 +104,16 @@ const App: React.FC = () => {
     redo,
   });
 
-  const activeChapter = story.chapters.find((c) => c.id === currentChapterId);
-  const currentChapter =
-    story.projectType === 'short-story'
-      ? story.draft
-      : activeChapter
-        ? { ...activeChapter, scope: 'chapter' as const }
-        : null;
-  const currentChapterContext = activeChapter
-    ? {
-        id: activeChapter.id,
-        title: activeChapter.title,
-        is_empty: !activeChapter.content || activeChapter.content.trim() === '',
-      }
-    : null;
-  const editorRef = useRef<EditorHandle | null>(null);
+  const {
+    currentChapter,
+    currentChapterContext,
+    isCurrentChapterEmpty,
+    editorBaselineContent,
+  } = useCurrentWritingUnit({
+    story,
+    currentChapterId,
+    baselineState,
+  });
 
   const { appSettings, setAppSettings } = useAppSettings(DEFAULT_APP_SETTINGS);
 
@@ -122,17 +133,17 @@ const App: React.FC = () => {
     refreshHealth,
   });
 
-  const roleAvailability = resolveRoleAvailability(appSettings, modelConnectionStatus);
-  const imageActionsAvailable = supportsImageActions(
-    appSettings,
-    detectedCapabilities,
-    modelConnectionStatus
+  const roleAvailability = useMemo(
+    () => resolveRoleAvailability(appSettings, modelConnectionStatus),
+    [appSettings, modelConnectionStatus]
+  );
+  const imageActionsAvailable = useMemo(
+    () =>
+      supportsImageActions(appSettings, detectedCapabilities, modelConnectionStatus),
+    [appSettings, detectedCapabilities, modelConnectionStatus]
   );
 
   const { toolCallLoopDialog, requestToolCallLoopAccess } = useToolCallGate();
-
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
 
   const {
     isChatOpen,
@@ -149,6 +160,8 @@ const App: React.FC = () => {
     setIsDebugLogsOpen,
     appearanceRef,
   } = useUIPanels();
+
+  const openImagesDialog = useCallback(() => setIsImagesOpen(true), [setIsImagesOpen]);
 
   const {
     viewMode,
@@ -168,106 +181,17 @@ const App: React.FC = () => {
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
-  const getSystemPrompt = useCallback(() => {
-    return prompts.system_messages.chat_llm || '';
-  }, [prompts]);
-
-  const {
-    chatHistoryList,
-    setChatHistoryList,
-    currentChatId,
-    isIncognito,
-    setIsIncognito,
-    allowWebSearch,
-    setAllowWebSearch,
-    systemPrompt,
-    setSystemPrompt,
-    incognitoSessions,
-    refreshChatList,
-    handleNewChat,
-    handleSelectChat,
-    handleDeleteChat,
-    handleDeleteAllChats,
-  } = useChatSessionManagement({
-    storyId: story.id,
-    getSystemPrompt,
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
-  });
-
-  const {
-    projects,
-    refreshProjects,
-    isCreateProjectOpen,
-    setIsCreateProjectOpen,
-    instructionLanguages,
-    handleLoadProject,
-    handleImportProject,
-    handleCreateProject,
-    handleCreateProjectConfirm,
-    handleDeleteProject,
-    handleRenameProject,
-  } = useProjectManagement({
-    story,
-    refreshStory,
-    loadStory,
-    updateStoryMetadata,
-    handleSelectChat,
-    handleNewChat,
-    setChatHistoryList,
-    getErrorMessage,
-    isSettingsOpen,
-    setIsSettingsOpen,
-    recordHistoryEntry: pushExternalHistoryEntry,
-  });
-
-  // Get Active LLM Configs
-  const { activeChatConfig, activeWritingConfig, activeEditingConfig } =
-    resolveActiveProviderConfigs(appSettings);
-
-  const { handleEditMessage, handleDeleteMessage } = useChatMessageActions({
-    setChatMessages,
-  });
-
-  const {
-    continuations,
-    isSuggesting,
-    isSuggestionMode,
-    suggestCursor,
-    handleTriggerSuggestions,
-    handleKeyboardSuggestionAction,
-    handleAcceptContinuation,
-    cancelSuggestions,
-    checkedEntries,
-    handleToggleEntry,
-    isAutoSourcebookSelectionEnabled,
-    setIsAutoSourcebookSelectionEnabled,
-    isSourcebookSelectionRunning,
-  } = useChapterSuggestions({
-    currentUnit: currentChapter || undefined,
-    story,
-    systemPrompt,
-    activeWritingConfig,
-    isWritingAvailable: roleAvailability.writing,
-    updateChapter,
-    viewMode,
-    setChatMessages,
-    getErrorMessage,
-  });
-
-  const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
-    useAiActions({
-      currentUnit: currentChapter || undefined,
-      story,
-      prompts,
-      isEditingAvailable: roleAvailability.editing,
-      isWritingAvailable: roleAvailability.writing,
-      checkedSourcebookIds: Array.from(checkedEntries),
-      updateChapter,
-      setChatMessages,
-      getErrorMessage,
+  const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
+    useSidebarIntents({
+      setEditorSettings,
     });
+
+  // Get Active LLM Configs — memoized so hooks that receive these as params
+  // don't re-run unnecessarily when unrelated appSettings fields change.
+  const { activeChatConfig, activeWritingConfig } = useMemo(
+    () => resolveActiveProviderConfigs(appSettings),
+    [appSettings]
+  );
 
   const {
     handleFormat,
@@ -295,222 +219,353 @@ const App: React.FC = () => {
     recordHistoryEntry: pushExternalHistoryEntry,
   });
 
-  const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
-    systemPrompt,
+  const {
+    onMutationClick,
+    handleSendMessageWithReset,
+    handleStopChat,
+    handleRegenerateWithReset,
+    handleEditMessage,
+    handleDeleteMessage,
+    handleNewChat,
+    handleSelectChat,
+    handleDeleteChat,
+    handleDeleteAllChats,
+    onUpdateScratchpad,
+    onDeleteScratchpad,
+    refreshChatList,
+  } = useAppChatRuntime({
+    storyId: story.id,
+
+    storyRef,
+    prompts,
     activeChatConfig,
     isChatAvailable: roleAvailability.chat,
-    allowWebSearch,
     currentChapterId,
-    currentChatId,
-    currentChapter: currentChapterContext,
-    chatMessages,
-    setChatMessages,
-    isChatLoading,
-    setIsChatLoading,
-    refreshProjects,
+    currentChapterContext,
+    advanceBaselineToCurrentStory,
+    refreshProjects: async () => {
+      await refreshProjectsRef.current?.();
+    },
     refreshStory,
+    updateChapter,
     pushExternalHistoryEntry,
     requestToolCallLoopAccess,
+    handleChapterSelect,
+    openAndExpandStory,
+    openSourcebookEntryDialog,
+    openStoryMetadataDialog,
   });
+
+  // sessionMutations changes only when LLM tool calls complete (a few times per
+  // conversation turn, not per streaming token) – subscribing here is intentional
+  // and per the explicit-mutation exception in the architecture decision.
+  const sessionMutations = useChatStore((s: ChatStoreState) => s.sessionMutations);
+  const sourcebookMutationEntryIds = useMemo(
+    () =>
+      new Set(
+        sessionMutations
+          .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)
+          .map((m: SessionMutation) => m.targetId as string)
+      ),
+    [sessionMutations]
+  );
+
+  const {
+    continuations,
+    suggestionMode,
+    setSuggestionMode,
+    isSuggesting,
+    isSuggestionMode,
+    suggestCursor,
+    handleTriggerSuggestions,
+    handleKeyboardSuggestionAction,
+    handleAcceptContinuation,
+    cancelSuggestions,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
+  } = useChapterSuggestions({
+    currentUnit: currentChapter || undefined,
+    storyTitle: story.title,
+    storySummary: story.summary,
+    storyStyleTags: story.styleTags,
+    activeWritingConfig,
+    isWritingAvailable: roleAvailability.writing,
+    updateChapter,
+    viewMode,
+    getErrorMessage,
+  });
+
+  // Stabilize checkedSourcebookIds so useAiActions does not receive a new
+  // array reference on every render when checkedEntries hasn't changed.
+  const checkedSourcebookIdsMemo = useMemo(
+    () => Array.from(checkedEntries),
+    [checkedEntries]
+  );
+
+  const { isAiActionLoading, handleAiAction, handleSidebarAiAction, cancelAiAction } =
+    useAiActions({
+      currentUnit: currentChapter || undefined,
+      prompts,
+      isEditingAvailable: roleAvailability.editing,
+      isWritingAvailable: roleAvailability.writing,
+      checkedSourcebookIds: checkedSourcebookIdsMemo,
+      updateChapter,
+      getErrorMessage,
+    });
+
+  const {
+    projects,
+    refreshProjects,
+    isCreateProjectOpen,
+    setIsCreateProjectOpen,
+    instructionLanguages,
+    handleLoadProject,
+    handleImportProject,
+    handleCreateProject,
+    handleCreateProjectConfirm,
+    handleDeleteProject,
+    handleRenameProject,
+  } = useProjectManagement({
+    storyId: story.id,
+    storyTitle: story.title,
+    storyProjectType: story.projectType,
+    storyLanguage: story.language ?? 'en',
+    storySummary: story.summary,
+    storyStyleTags: story.styleTags,
+    storyConflicts: story.conflicts,
+    refreshStory,
+    loadStory,
+    updateStoryMetadata,
+    handleSelectChat,
+    handleNewChat,
+    getErrorMessage,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    recordHistoryEntry: pushExternalHistoryEntry,
+  });
+  refreshProjectsRef.current = refreshProjects;
+
+  const { searchState, openSearch, searchHighlightValue, searchReplaceDialogProps } =
+    useAppSearchNavigation({
+      editorRef,
+      currentChapterId,
+      currentChapterContent: currentChapter?.content,
+      storyLanguage: story.language,
+      refreshStory: async () => {
+        await refreshStory();
+      },
+      handleChapterSelect,
+      openSourcebookEntryDialog,
+      openStoryMetadataDialog,
+    });
 
   // Minimal theme values needed by the outer wrapper div.
   const bgMain = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950';
   const textMain = isLight ? 'text-brand-gray-800' : 'text-brand-gray-300';
 
+  // Memoize so AppChatPanel's React.memo actually fires; without this the
+  // chat panel re-renders on every App update even when nothing chat-related
+  // changed.
+  const chatControls = useMemo(
+    () => ({
+      isChatOpen,
+      isChatAvailable: roleAvailability.chat,
+      activeChatConfig,
+      handleSendMessage: handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerate: handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      handleLoadProject,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      onMutationClick,
+    }),
+    [
+      isChatOpen,
+      roleAvailability.chat,
+      activeChatConfig,
+      handleSendMessageWithReset,
+      handleStopChat,
+      handleRegenerateWithReset,
+      handleEditMessage,
+      handleDeleteMessage,
+      handleLoadProject,
+      handleSelectChat,
+      handleNewChat,
+      handleDeleteChat,
+      handleDeleteAllChats,
+      onUpdateScratchpad,
+      onDeleteScratchpad,
+      onMutationClick,
+    ]
+  );
+
+  const { sidebarControls, appMainLayoutProps } = useAppMainLayoutProps({
+    isSidebarOpen,
+    setIsSidebarOpen,
+    currentChapterId,
+    handleChapterSelect,
+    deleteChapter,
+    updateChapter: (id: string, partial: Record<string, unknown>) =>
+      updateChapter(id, partial, true, true, true),
+    updateBook,
+    addChapter,
+    handleBookCreate,
+    handleBookDelete,
+    handleReorderChapters,
+    handleReorderBooks,
+    handleSidebarAiAction,
+    isEditingAvailable: roleAvailability.editing,
+    handleOpenImages,
+    updateStoryMetadata,
+    checkedEntries,
+    handleToggleEntry,
+    isAutoSourcebookSelectionEnabled,
+    setIsAutoSourcebookSelectionEnabled,
+    isSourcebookSelectionRunning,
+    sourcebookMutationEntryIds,
+    baselineState,
+    advanceBaselineToCurrentStory,
+    patchSourcebook,
+    pushExternalHistoryEntry,
+    refreshStory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    searchState,
+    currentChapter,
+    isChapterLoading,
+    editorRef,
+    editorSettings,
+    storyLanguage: story.language,
+    setEditorSettings,
+    viewMode,
+    continuations,
+    suggestionMode,
+    setSuggestionMode,
+    isSuggesting,
+    handleTriggerSuggestions,
+    cancelSuggestions,
+    handleAcceptContinuation,
+    isSuggestionMode,
+    handleKeyboardSuggestionAction,
+    handleAiAction,
+    cancelAiAction,
+    isAiActionLoading,
+    isWritingAvailable: roleAvailability.writing,
+    setActiveFormats,
+    showWhitespace,
+    setShowWhitespace,
+    editorBaselineContent,
+    openSearch,
+    chatControls,
+    instructionLanguages,
+  });
+
+  const appHeaderProps = useAppHeaderProps({
+    storyTitle: story.title,
+    sidebarControls,
+    undo,
+    redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    canUndo,
+    canRedo,
+    viewMode,
+    setViewMode,
+    showWhitespace,
+    setShowWhitespace,
+    isViewMenuOpen,
+    setIsViewMenuOpen,
+    isFormatMenuOpen,
+    setIsFormatMenuOpen,
+    isMobileFormatMenuOpen,
+    setIsMobileFormatMenuOpen,
+    handleFormat,
+    getFormatButtonClass,
+    openImagesDialog,
+    setIsSettingsOpen,
+    setIsImagesOpen,
+    setIsDebugLogsOpen,
+    appearanceRef,
+    isAppearanceOpen,
+    setIsAppearanceOpen,
+    setAppTheme,
+    editorSettings,
+    setEditorSettings,
+    appSettings,
+    setAppSettings,
+    handleSaveSettings,
+    modelConnectionStatus,
+    detectedCapabilities,
+    recheckUnavailableProviderIfStale,
+    handleAiAction,
+    isAiActionLoading,
+    isWritingAvailable: roleAvailability.writing,
+    isCurrentChapterEmpty,
+    isChatOpen,
+    setIsChatOpen,
+    openSearch,
+  });
+
   return (
-    <ThemeProvider currentTheme={currentTheme}>
-      <div
-        id="aq-app-root"
-        className={`flex flex-col h-screen font-sans overflow-hidden ${bgMain} ${textMain}`}
-        style={
-          {
-            '--sidebar-width': `${editorSettings.sidebarWidth}px`,
-          } as React.CSSProperties
-        }
-      >
-        <AppDialogs
-          isSettingsOpen={isSettingsOpen}
-          setIsSettingsOpen={setIsSettingsOpen}
-          appSettings={appSettings}
-          setAppSettings={handleSaveSettings}
-          projects={projects}
-          story={story}
-          handleLoadProject={handleLoadProject}
-          handleCreateProject={handleCreateProject}
-          handleImportProject={handleImportProject}
-          handleDeleteProject={handleDeleteProject}
-          handleRenameProject={handleRenameProject}
-          handleConvertProject={handleConvertProject}
-          refreshProjects={refreshProjects}
-          currentTheme={currentTheme}
-          prompts={prompts}
-          instructionLanguages={instructionLanguages}
-          isImagesOpen={isImagesOpen}
-          setIsImagesOpen={setIsImagesOpen}
-          updateStoryImageSettings={updateStoryImageSettings}
-          imageActionsAvailable={imageActionsAvailable}
-          recordHistoryEntry={pushExternalHistoryEntry}
-          editorRef={editorRef}
-          isCreateProjectOpen={isCreateProjectOpen}
-          setIsCreateProjectOpen={setIsCreateProjectOpen}
-          handleCreateProjectConfirm={handleCreateProjectConfirm}
-        />
-
-        <AppHeader
-          storyTitle={story.title}
-          sidebarControls={{ isSidebarOpen, setIsSidebarOpen }}
-          settingsControls={{
-            setIsSettingsOpen,
-            setIsImagesOpen,
-            setIsDebugLogsOpen,
-          }}
-          historyControls={{
-            undo,
-            redo,
-            undoSteps,
-            redoSteps,
-            undoOptions,
-            redoOptions,
-            nextUndoLabel,
-            nextRedoLabel,
-            canUndo,
-            canRedo,
-          }}
-          viewControls={{
-            viewMode,
-            setViewMode,
-            showWhitespace,
-            setShowWhitespace,
-            isViewMenuOpen,
-            setIsViewMenuOpen,
-          }}
-          formatControls={{
-            handleFormat,
-            getFormatButtonClass,
-            isFormatMenuOpen,
-            setIsFormatMenuOpen,
-            isMobileFormatMenuOpen,
-            setIsMobileFormatMenuOpen,
-            onOpenImages: () => setIsImagesOpen(true),
-          }}
-          aiControls={{
-            handleAiAction,
-            isAiActionLoading,
-            isWritingAvailable: roleAvailability.writing,
-          }}
-          modelControls={{
-            appSettings,
-            setAppSettings,
-            modelConnectionStatus,
-            detectedCapabilities,
-            recheckUnavailableProviderIfStale,
-          }}
-          appearanceControls={{
-            appearanceRef,
-            isAppearanceOpen,
-            setIsAppearanceOpen,
-            setAppTheme,
-            editorSettings,
-            setEditorSettings,
-          }}
-          chatPanelControls={{ isChatOpen, setIsChatOpen }}
-        />
-
-        <AppMainLayout
-          sidebarControls={{
-            isSidebarOpen,
-            setIsSidebarOpen,
-            story,
-            currentChapterId,
-            handleChapterSelect,
-            deleteChapter,
-            updateChapter,
-            updateBook,
-            addChapter,
-            handleBookCreate,
-            handleBookDelete,
-            handleReorderChapters,
-            handleReorderBooks,
-            handleSidebarAiAction,
-            isEditingAvailable: roleAvailability.editing,
-            handleOpenImages,
-            updateStoryMetadata,
-            checkedSourcebookIds: Array.from(checkedEntries),
-            onToggleSourcebook: handleToggleEntry,
-            isAutoSourcebookSelectionEnabled,
-            onToggleAutoSourcebookSelection: setIsAutoSourcebookSelectionEnabled,
-            isSourcebookSelectionRunning,
-            onSourcebookMutated: pushExternalHistoryEntry,
-          }}
-          editorControls={{
-            currentChapter,
-            editorRef,
-            editorSettings,
-            setEditorSettings,
-            viewMode,
-            updateChapter,
-            suggestionControls: {
-              continuations,
-              isSuggesting,
-              handleTriggerSuggestions,
-              cancelSuggestions,
-              handleAcceptContinuation,
-              isSuggestionMode,
-              handleKeyboardSuggestionAction,
-            },
-            aiControls: {
-              handleAiAction,
-              cancelAiAction,
-              isAiActionLoading,
-              isWritingAvailable: roleAvailability.writing,
-            },
-            setActiveFormats,
-            showWhitespace,
-            setShowWhitespace,
-          }}
-          chatControls={{
-            isChatOpen,
-            chatMessages,
-            isChatLoading,
-            isChatAvailable: roleAvailability.chat,
-            activeChatConfig,
-            systemPrompt,
-            handleSendMessage,
-            handleStopChat,
-            handleRegenerate,
-            handleEditMessage,
-            handleDeleteMessage,
-            setSystemPrompt,
-            handleLoadProject,
-            incognitoSessions,
-            chatHistoryList,
-            currentChatId,
-            isIncognito,
-            handleSelectChat,
-            handleNewChat,
-            handleDeleteChat,
-            handleDeleteAllChats,
-            setIsIncognito,
-            allowWebSearch,
-            setAllowWebSearch,
-          }}
-          instructionLanguages={instructionLanguages}
-        />
-
-        <DebugLogs
-          isOpen={isDebugLogsOpen}
-          onClose={() => setIsDebugLogsOpen(false)}
-          theme={currentTheme}
-        />
-
-        <ToolCallLimitDialog
-          isOpen={!!toolCallLoopDialog}
-          count={toolCallLoopDialog?.count ?? 0}
-          theme={currentTheme}
-          onResolve={(choice) => toolCallLoopDialog?.resolver(choice)}
-        />
-      </div>
-    </ThemeProvider>
+    <AppLayout
+      confirm={confirm}
+      searchHighlightValue={searchHighlightValue}
+      currentTheme={currentTheme}
+      confirmDialogState={confirmDialogState}
+      handleConfirm={handleConfirm}
+      handleCancel={handleCancel}
+      bgMain={bgMain}
+      textMain={textMain}
+      sidebarWidth={editorSettings.sidebarWidth}
+      appDialogsProps={{
+        isSettingsOpen,
+        setIsSettingsOpen,
+        appSettings,
+        setAppSettings: handleSaveSettings,
+        projects,
+        story,
+        handleLoadProject,
+        handleCreateProject,
+        handleImportProject,
+        handleDeleteProject,
+        handleRenameProject,
+        handleConvertProject,
+        refreshProjects,
+        currentTheme,
+        prompts,
+        instructionLanguages,
+        isImagesOpen,
+        setIsImagesOpen,
+        updateStoryImageSettings,
+        imageActionsAvailable,
+        recordHistoryEntry: pushExternalHistoryEntry,
+        editorRef,
+        isCreateProjectOpen,
+        setIsCreateProjectOpen,
+        handleCreateProjectConfirm,
+      }}
+      appHeaderProps={appHeaderProps}
+      appMainLayoutProps={appMainLayoutProps}
+      isDebugLogsOpen={isDebugLogsOpen}
+      setIsDebugLogsOpen={setIsDebugLogsOpen}
+      toolCallLoopDialog={toolCallLoopDialog}
+      searchReplaceDialogProps={searchReplaceDialogProps}
+    />
   );
 };
 

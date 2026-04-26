@@ -10,6 +10,7 @@
 Common LLM-related utility functions, including capability verification and URL normalization.
 """
 
+from typing import Any
 import asyncio
 import time
 
@@ -45,7 +46,7 @@ async def _probe_model_capabilities(
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     headers["Content-Type"] = "application/json"
 
-    async def check_vision():
+    async def check_vision() -> Any:
         """Check Vision."""
         try:
             payload = {
@@ -79,7 +80,7 @@ async def _probe_model_capabilities(
         except Exception:
             return False
 
-    async def check_function_calling():
+    async def check_function_calling() -> Any:
         """Check Function Calling."""
         try:
             payload = {

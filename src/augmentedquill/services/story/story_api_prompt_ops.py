@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from pathlib import Path
 
 from augmentedquill.services.llm import llm
@@ -24,7 +25,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
 )
 
 
-def _ensure_tools_loaded():
+def _ensure_tools_loaded() -> Any:
     """Force load tool modules to ensure they are registered without causing circular imports at module level."""
     # We import here to avoid circular dependencies with story_generation_ops which imports us
     import augmentedquill.services.chat.chat_tools.chapter_tools  # noqa: F401
@@ -33,7 +34,25 @@ def _ensure_tools_loaded():
     import augmentedquill.services.chat.chat_tools.sourcebook_tools  # noqa: F401
 
 
-def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path):
+def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
+    """Return a filtered tool schema list with only read-only story/chapter context tools."""
+    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type) or []
+    relevant_names = {
+        "get_project_overview",
+        "get_story_metadata",
+        "get_story_summary",
+        "get_story_tags",
+        "get_chapter_metadata",
+        "get_chapter_content",
+        "get_chapter_summary",
+        "get_chapter_summaries",
+        "search_in_project",
+        "get_sourcebook_entry",
+    }
+    return [t for t in tools if t.get("function", {}).get("name") in relevant_names]
+
+
+def resolve_model_runtime(payload: dict, model_type: str, base_dir: Path) -> Any:
     """Resolve runtime model credentials and prompt overrides for a request."""
     base_url, api_key, model_id, timeout_s, model_name = llm.resolve_openai_credentials(
         payload, model_type=model_type
@@ -58,7 +77,7 @@ def _build_messages(
     user_prompt_key: str,
     model_overrides: dict,
     language: str | None = None,
-    **prompt_kwargs,
+    **prompt_kwargs: Any,
 ) -> list[dict[str, str]]:
     """Build a two-message system/user prompt pair for story generation flows.
 
@@ -91,7 +110,7 @@ def build_chapter_summary_messages(
     story_tags: str = "",
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for creating or updating a chapter summary."""
     _ensure_tools_loaded()
     sys_parts = [
@@ -109,26 +128,12 @@ def build_chapter_summary_messages(
             )
         )
 
-    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+    tools = _get_read_only_tool_schemas(project_type=project_type)
     if tools:
-        # Only expose read-only tools that provide facts and story context.
-        relevant_names = {
-            "get_project_overview",
-            "get_story_metadata",
-            "get_story_summary",
-            "get_story_tags",
-            "get_chapter_metadata",
-            "get_chapter_content",
-            "get_chapter_summary",
-            "get_chapter_summaries",
-            "search_sourcebook",
-            "get_sourcebook_entry",
-        }
-
         tool_lines: list[str] = []
         for t in tools:
             fn = t.get("function", {}).get("name")
-            if not fn or fn not in relevant_names:
+            if not fn:
                 continue
             desc = t.get("function", {}).get("description", "")
             if desc:
@@ -179,31 +184,18 @@ def build_story_summary_messages(
     model_overrides: dict,
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for creating or updating a story-level summary."""
     sys_parts = [
         get_system_message("story_summarizer", model_overrides, language=language)
     ]
 
-    tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+    tools = _get_read_only_tool_schemas(project_type=project_type)
     if tools:
-        # Only expose read-only tools relevant for understanding the story state.
-        relevant_names = {
-            "get_project_overview",
-            "get_story_metadata",
-            "get_story_summary",
-            "get_story_tags",
-            "get_chapter_metadata",
-            "get_chapter_content",
-            "get_chapter_summary",
-            "get_chapter_summaries",
-            "search_sourcebook",
-            "get_sourcebook_entry",
-        }
         tool_lines: list[str] = []
         for t in tools:
             fn = t.get("function", {}).get("name")
-            if not fn or fn not in relevant_names:
+            if not fn:
                 continue
             desc = t.get("function", {}).get("description", "")
             if desc:
@@ -258,7 +250,7 @@ def build_write_chapter_messages(
     chapter_notes: str,
     model_overrides: dict,
     language: str | None = None,
-):
+) -> Any:
     """Build messages for first-pass chapter drafting."""
     return _build_messages(
         system_message_key="story_writer",
@@ -291,7 +283,7 @@ def build_continue_chapter_messages(
     existing_text: str,
     model_overrides: dict,
     language: str | None = None,
-):
+) -> Any:
     """Build messages for continuing an existing chapter draft."""
     return _build_messages(
         system_message_key="story_continuer",
@@ -331,7 +323,7 @@ def build_ai_action_messages(
     model_overrides: dict,
     language: str | None = None,
     project_type: str | None = None,
-):
+) -> Any:
     """Build messages for generic AI Actions (Extend/Rewrite/Summary)."""
     _ensure_tools_loaded()
     # Map target/action to prompt keys
@@ -347,23 +339,42 @@ def build_ai_action_messages(
     elif target == "book_summary":
         sys_key = "ai_action_summary_rewrite"
         user_key = (
-            "story_summary_new" if action == "rewrite" else "story_summary_update"
+            "story_summary_new"
+            if action in ("write", "rewrite")
+            else "story_summary_update"
         )
     elif target == "story_summary":
         sys_key = "ai_action_summary_rewrite"
-        user_key = (
-            "story_summary_new" if action == "rewrite" else "story_summary_update"
-        )
+        if project_type == "short-story":
+            # Short-story has no chapters; use the story draft text as the source
+            # (same template family as chapter summaries, with chapter_text = story draft).
+            user_key = (
+                "chapter_summary_new"
+                if action in ("write", "rewrite")
+                else "chapter_summary_update"
+            )
+        else:
+            # Novel/series: source material is chapter or book summaries.
+            user_key = (
+                "story_summary_new"
+                if action in ("write", "rewrite")
+                else "story_summary_update"
+            )
     else:
-        sys_key = f"ai_action_chapter_{action}"
-        user_key = f"ai_action_chapter_{action}_user"
+        # Keep chapter Extend/Rewrite on a shared continuation-style prompt path.
+        if action in ("extend", "rewrite"):
+            sys_key = "ai_action_chapter_extend"
+            user_key = "chapter_ai_prefill_task"
+        else:
+            sys_key = f"ai_action_chapter_{action}"
+            user_key = f"ai_action_chapter_{action}_user"
 
-    # User templates for AI actions are currently same as standard ones
+    # User templates for chapter AI actions are currently the standard chapter templates.
     if user_key.startswith("ai_action_chapter_"):
         if action == "extend":
             user_key = "continue_chapter"
         elif action == "rewrite":
-            user_key = "write_chapter"
+            user_key = "continue_chapter"
 
     # Additional placeholders for EDITING tasks
     story_context = ""
@@ -378,26 +389,12 @@ def build_ai_action_messages(
                 story_tags=story_tags,
             )
 
-        tools = get_tool_schemas(EDITING_ROLE, project_type=project_type)
+        tools = _get_read_only_tool_schemas(project_type=project_type)
         if tools:
-            # Only expose read-only tools that provide facts and story context.
-            relevant_names = {
-                "get_project_overview",
-                "get_story_metadata",
-                "get_story_summary",
-                "get_story_tags",
-                "get_chapter_metadata",
-                "get_chapter_content",
-                "get_chapter_summary",
-                "get_chapter_summaries",
-                "search_sourcebook",
-                "get_sourcebook_entry",
-            }
-
             tool_lines: list[str] = []
             for t in tools:
                 fn = t.get("function", {}).get("name")
-                if not fn or fn not in relevant_names:
+                if not fn:
                     continue
                 desc = t.get("function", {}).get("description", "")
                 if desc:
@@ -422,6 +419,23 @@ def build_ai_action_messages(
             language=language,
         )
 
+    # Heading and canonical source alias used by story/book-level summary templates.
+    if target == "book_summary":
+        summary_heading = get_system_message(
+            "chapter_summaries_label", model_overrides, language=language
+        )
+    elif target == "story_summary":
+        label_key = (
+            "book_summaries_label"
+            if project_type == "series"
+            else "chapter_summaries_label"
+        )
+        summary_heading = get_system_message(
+            label_key, model_overrides, language=language
+        )
+    else:
+        summary_heading = ""
+
     return _build_messages(
         system_message_key=sys_key,
         user_prompt_key=user_key,
@@ -440,6 +454,8 @@ def build_ai_action_messages(
         existing_text=existing_content,
         existing_summary=chapter_summary,
         chapter_summaries=chapter_summaries,
+        source_summaries=chapter_summaries,
+        summary_heading=summary_heading,
         style_tags=style_tags,
         content_label=content_label,
         background=background,

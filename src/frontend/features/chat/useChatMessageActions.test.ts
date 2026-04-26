@@ -58,6 +58,32 @@ describe('useChatMessageActions', () => {
     });
 
     expect(result.current.messages).toHaveLength(2);
-    expect(result.current.messages.map((message) => message.id)).toEqual(['m1', 'm3']);
+    expect(result.current.messages.map((message: ChatMessage) => message.id)).toEqual([
+      'm1',
+      'm3',
+    ]);
+  });
+
+  it('keeps action identities stable across message updates', () => {
+    const initialMessages: ChatMessage[] = [
+      { id: 'm1', role: 'user', text: 'Hello' },
+      { id: 'm2', role: 'model', text: 'World' },
+    ];
+
+    const { result } = renderHook(() => {
+      const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+      const actions = useChatMessageActions({ setChatMessages: setMessages });
+      return { messages, ...actions };
+    });
+
+    const firstEditHandler = result.current.handleEditMessage;
+    const firstDeleteHandler = result.current.handleDeleteMessage;
+
+    act(() => {
+      result.current.handleEditMessage('m1', 'Updated');
+    });
+
+    expect(result.current.handleEditMessage).toBe(firstEditHandler);
+    expect(result.current.handleDeleteMessage).toBe(firstDeleteHandler);
   });
 });

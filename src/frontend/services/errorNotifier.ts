@@ -9,20 +9,40 @@
  * Defines the error notifier unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-export function formatError(error: unknown, fallback = 'Unknown error'): string {
+export function formatError(
+  error: unknown,
+  fallback: string = 'Unknown error'
+): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error.trim()) return error;
   return fallback;
 }
 
+/**
+ * Module-level toast dispatcher.
+ * Wired up by calling `setErrorDispatcher` once the toast provider is mounted.
+ */
+let _dispatch: ((message: string) => void) | null = null;
+
+/** Set error dispatcher. */
+export function setErrorDispatcher(fn: (message: string) => void): void {
+  _dispatch = fn;
+}
+
+/** Helper for error. */
 export function notifyError(message: string, error?: unknown): void {
   if (error !== undefined) {
     console.error(message, error);
   } else {
     console.error(message);
   }
-  const alertFn = (globalThis as { alert?: (text: string) => void }).alert;
-  if (typeof alertFn === 'function') {
-    alertFn(message);
+
+  if (_dispatch) {
+    _dispatch(message);
+    return;
+  }
+
+  if (typeof globalThis.alert === 'function') {
+    globalThis.alert(message);
   }
 }

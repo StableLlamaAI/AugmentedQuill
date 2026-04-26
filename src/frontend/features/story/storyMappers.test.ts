@@ -98,4 +98,37 @@ describe('storyMappers mapSelectStoryToState', () => {
     expect(mapped.notes).toBe('');
     expect(mapped.private_notes).toBe('');
   });
+
+  it('does not preserve chapter prose when project changes', () => {
+    const previousChapters: Chapter[] = [
+      {
+        id: '1',
+        title: 'Old chapter',
+        summary: '',
+        content: 'Old project prose',
+      },
+    ];
+    const incomingChapters: Chapter[] = [
+      {
+        id: '1',
+        title: 'New chapter',
+        summary: '',
+        content: '',
+      },
+    ];
+
+    const mapped = mapSelectStoryToState(
+      'new-project',
+      {
+        project_title: 'Demo',
+        story_summary: 'Summary',
+      },
+      incomingChapters,
+      '1',
+      previousChapters,
+      'old-project'
+    );
+
+    expect(mapped.chapters[0].content).toBe('');
+  });
 });

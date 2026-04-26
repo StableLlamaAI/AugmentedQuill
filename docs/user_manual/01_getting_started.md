@@ -25,7 +25,7 @@ Before diving in, it's helpful to understand how AugmentedQuill organizes your w
 
 When you open AugmentedQuill, you'll be greeted by the main writing environment. The interface is divided into three main panels plus a persistent header bar across the top:
 
-`[SCREENSHOT: The main dashboard showing the three-panel layout: Left Sidebar, Editor, and Right Sidebar]`
+![The main dashboard showing the three-panel layout: Left Sidebar, Editor, and Right Sidebar](screenshots/main.png)
 
 1. **Left Sidebar** — Your project's control center. Scroll through it to find:
    - **Story Metadata**: The story title, summary, style tags, and LLM-visible notes at a glance. Click the <img src="assets/edit-2.svg" alt="Edit icon" width="16" height="16" style="vertical-align:text-bottom;" /> pencil icon to open the full Metadata Editor.
@@ -41,8 +41,6 @@ On mobile and small tablets the left sidebar slides in from the left edge and th
 ## The Top Header Bar
 
 A persistent bar runs across the top of the screen. From left to right it contains:
-
-`[SCREENSHOT: The top header bar with all controls labeled: logo, undo/redo, view modes, format toolbar, Chapter AI buttons, model selectors, and right-side icons]`
 
 ### Left Section
 

@@ -12,7 +12,7 @@ Pydantic models for chat-related API responses.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -27,3 +27,57 @@ class ChatInitialStateResponse(BaseModel):
     models: list[str]
     current_model: str
     messages: list[Any]
+
+
+# ---------------------------------------------------------------------------
+# Chat undo / redo batch mutations
+# ---------------------------------------------------------------------------
+
+
+class ChatToolBatchMutationResponse(BaseModel):
+    """Response body for ``POST /api/v1/chat/tools/undo/{batch_id}``
+    and ``POST /api/v1/chat/tools/redo/{batch_id}``."""
+
+    ok: bool
+    batch_id: Optional[str] = None
+    detail: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Chat session list / load
+# ---------------------------------------------------------------------------
+
+
+class ChatListItem(BaseModel):
+    """Summary of a saved chat session returned in the chat list."""
+
+    id: str
+    name: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ChatListResponse(BaseModel):
+    """Response body for ``GET /api/v1/chats`` (list of saved chats)."""
+
+    chats: list[ChatListItem]
+
+
+class ChatDetailResponse(BaseModel):
+    """Response body for ``GET /api/v1/chats/{chat_id}``."""
+
+    id: str
+    name: Optional[str] = None
+    messages: Optional[list[Any]] = None
+    systemPrompt: Optional[str] = None
+    allowWebSearch: Optional[bool] = None
+    scratchpad: Optional[str] = None
+    editing_scratchpad: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OkResponse(BaseModel):
+    """Generic ``{ok: true}`` response used by save/delete chat endpoints."""
+
+    ok: bool

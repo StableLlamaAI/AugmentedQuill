@@ -8,60 +8,48 @@
 /**
  * Purpose: Centralises all top-level UI panel open/close state so App.tsx stays
  * focused on orchestration rather than boolean bookkeeping.
+ * State now lives in uiStore (Zustand) so panel toggling never re-renders
+ * unrelated subtrees.
  */
 
-import {
-  Dispatch,
-  RefObject,
-  SetStateAction,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { RefObject, useRef } from 'react';
+import { useClickOutside } from '../../utils/hooks';
+import { useUIStore, UIStoreState } from '../../stores/uiStore';
 
 export type UIPanels = {
   isChatOpen: boolean;
-  setIsChatOpen: Dispatch<SetStateAction<boolean>>;
+  setIsChatOpen: (v: boolean) => void;
   isSidebarOpen: boolean;
-  setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  setIsSidebarOpen: (v: boolean) => void;
   isAppearanceOpen: boolean;
-  setIsAppearanceOpen: Dispatch<SetStateAction<boolean>>;
+  setIsAppearanceOpen: (v: boolean) => void;
   isSettingsOpen: boolean;
-  setIsSettingsOpen: Dispatch<SetStateAction<boolean>>;
+  setIsSettingsOpen: (v: boolean) => void;
   isImagesOpen: boolean;
-  setIsImagesOpen: Dispatch<SetStateAction<boolean>>;
+  setIsImagesOpen: (v: boolean) => void;
   isDebugLogsOpen: boolean;
-  setIsDebugLogsOpen: Dispatch<SetStateAction<boolean>>;
+  setIsDebugLogsOpen: (v: boolean) => void;
   /** Ref passed to the appearance dropdown so clicks inside don't close it. */
   appearanceRef: RefObject<HTMLDivElement | null>;
 };
 
+/** Custom React hook that manages uipanels. */
 export function useUIPanels(): UIPanels {
-  const [isChatOpen, setIsChatOpen] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isImagesOpen, setIsImagesOpen] = useState(false);
-  const [isDebugLogsOpen, setIsDebugLogsOpen] = useState(false);
+  const isChatOpen = useUIStore((s: UIStoreState) => s.isChatOpen);
+  const setIsChatOpen = useUIStore((s: UIStoreState) => s.setIsChatOpen);
+  const isSidebarOpen = useUIStore((s: UIStoreState) => s.isSidebarOpen);
+  const setIsSidebarOpen = useUIStore((s: UIStoreState) => s.setIsSidebarOpen);
+  const isAppearanceOpen = useUIStore((s: UIStoreState) => s.isAppearanceOpen);
+  const setIsAppearanceOpen = useUIStore((s: UIStoreState) => s.setIsAppearanceOpen);
+  const isSettingsOpen = useUIStore((s: UIStoreState) => s.isSettingsOpen);
+  const setIsSettingsOpen = useUIStore((s: UIStoreState) => s.setIsSettingsOpen);
+  const isImagesOpen = useUIStore((s: UIStoreState) => s.isImagesOpen);
+  const setIsImagesOpen = useUIStore((s: UIStoreState) => s.setIsImagesOpen);
+  const isDebugLogsOpen = useUIStore((s: UIStoreState) => s.isDebugLogsOpen);
+  const setIsDebugLogsOpen = useUIStore((s: UIStoreState) => s.setIsDebugLogsOpen);
+
   const appearanceRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        appearanceRef.current &&
-        !appearanceRef.current.contains(event.target as Node)
-      ) {
-        setIsAppearanceOpen(false);
-      }
-    }
-
-    if (isAppearanceOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isAppearanceOpen]);
+  useClickOutside(appearanceRef, () => setIsAppearanceOpen(false), isAppearanceOpen);
 
   return {
     isChatOpen,

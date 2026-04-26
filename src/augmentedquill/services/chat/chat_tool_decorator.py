@@ -54,7 +54,7 @@ def resolve_tool_role(payload: dict | None = None, tool_role: str | None = None)
     return CHAT_ROLE
 
 
-def _tool_message(name: str, call_id: str, content) -> dict:
+def _tool_message(name: str, call_id: str, content: Any) -> dict:
     """Format a tool response message."""
     return {
         "role": "tool",
@@ -298,12 +298,45 @@ def get_tool_schemas(
         if project_type == "short-story" and str(info.get("module", "")).endswith(
             ".chapter_tools"
         ):
-            continue
+            allowed_project_types = info.get("project_types")
+            if not allowed_project_types or "short-story" not in allowed_project_types:
+                continue
         allowed_project_types = info.get("project_types")
         if project_type and allowed_project_types is not None:
             if project_type not in allowed_project_types:
                 continue
-        schemas.append(deepcopy(info["schema"]))
+        schema = deepcopy(info["schema"])
+        func_name = schema.get("function", {}).get("name")
+        params = schema.get("function", {}).get("parameters", {})
+        properties = params.get("properties") if isinstance(params, dict) else None
+
+        if func_name == "update_story_metadata" and project_type in ("novel", "series"):
+            if properties is not None:
+                properties.pop("conflicts", None)
+
+        if func_name == "call_writing_llm" and properties is not None:
+            chap_prop = properties.get("chap_id")
+            if isinstance(chap_prop, dict):
+                if project_type == "short-story":
+                    chap_prop["description"] = (
+                        "Chapter ID to write to. Use 1 or omit it and it will be auto-detected."
+                    )
+                else:
+                    chap_prop["description"] = (
+                        "Chapter ID to write to. Required when write_mode is set."
+                    )
+
+        if func_name == "add_sourcebook_relation" and properties is not None:
+            if project_type == "short-story":
+                properties.pop("start_chapter", None)
+                properties.pop("end_chapter", None)
+                properties.pop("start_book", None)
+                properties.pop("end_book", None)
+            elif project_type == "novel":
+                properties.pop("start_book", None)
+                properties.pop("end_book", None)
+
+        schemas.append(schema)
     return schemas
 
 

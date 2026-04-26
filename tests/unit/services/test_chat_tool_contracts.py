@@ -26,6 +26,19 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
 )
 
 
+def _parse_tool_sse_result(text: str) -> dict:
+    """Extract the 'result' event payload from a chat/tools SSE response."""
+    for line in text.splitlines():
+        if line.startswith("data: ") and line != "data: [DONE]":
+            try:
+                data = json.loads(line[6:])
+                if data.get("type") == "result":
+                    return data
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
 class ChatToolContractsTest(TestCase):
     _SPECIAL_CASE_MUTATION_TOOLS = {
         # Covered with nested-tool-call behavior assertions in test_chat_tools.py
@@ -49,7 +62,7 @@ class ChatToolContractsTest(TestCase):
         "read_editing_scratchpad",
         "read_story_content",
         "recommend_metadata_updates",
-        "search_sourcebook",
+        "search_in_project",
     }
 
     _EDITING_ONLY_TOOLS = {
@@ -167,9 +180,11 @@ class ChatToolContractsTest(TestCase):
             ],
             "active_chapter_id": 1,
         }
-        response = self.client.post("/api/v1/chat/tools", json=body)
+        response = self.client.post(
+            "/api/v1/projects/tool_contracts/chat/tools", json=body
+        )
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         appended = payload.get("appended_messages") or []
         self.assertEqual(len(appended), 1, payload)
         msg = appended[0]
@@ -178,6 +193,123 @@ class ChatToolContractsTest(TestCase):
         content = json.loads(msg.get("content") or "{}")
         self.assertIsInstance(content, (dict, list, str, int, float, bool, type(None)))
         return content
+
+    def test_short_story_chat_tools_include_writing_delegation_tools(self):
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type="short-story"
+        )
+        names = [t["function"]["name"] for t in tools]
+        self.assertIn("call_writing_llm", names)
+        self.assertIn("call_editing_assistant", names)
+
+    def test_update_story_metadata_hides_conflicts_for_chapter_based_projects(self):
+        for project_type in ("novel", "series"):
+            tools = get_registered_tool_schemas(
+                model_type="CHAT", project_type=project_type
+            )
+            metadata_tool = next(
+                (t for t in tools if t["function"]["name"] == "update_story_metadata"),
+                None,
+            )
+            self.assertIsNotNone(
+                metadata_tool, "update_story_metadata schema should exist"
+            )
+            properties = (
+                metadata_tool.get("function", {})
+                .get("parameters", {})
+                .get("properties", {})
+            )
+            self.assertIsInstance(properties, dict)
+            self.assertNotIn(
+                "conflicts",
+                properties,
+                "chapter-based projects should not expose story-level conflicts in update_story_metadata schema",
+            )
+
+    def test_add_sourcebook_relation_schema_filters_chapter_and_book_fields_by_project_type(
+        self,
+    ):
+        expected = {
+            "short-story": {"source_id", "relation_type", "target_id"},
+            "novel": {
+                "source_id",
+                "relation_type",
+                "target_id",
+                "start_chapter",
+                "end_chapter",
+            },
+            "series": {
+                "source_id",
+                "relation_type",
+                "target_id",
+                "start_chapter",
+                "end_chapter",
+                "start_book",
+                "end_book",
+            },
+        }
+        for project_type, expected_props in expected.items():
+            tools = get_registered_tool_schemas(
+                model_type="CHAT", project_type=project_type
+            )
+            tool = next(
+                (
+                    t
+                    for t in tools
+                    if t["function"]["name"] == "add_sourcebook_relation"
+                ),
+                None,
+            )
+            self.assertIsNotNone(tool, "add_sourcebook_relation schema should exist")
+            properties = (
+                tool.get("function", {}).get("parameters", {}).get("properties", {})
+            )
+            self.assertEqual(
+                set(properties.keys()),
+                expected_props,
+                f"Unexpected schema properties for add_sourcebook_relation in {project_type}",
+            )
+
+    def test_call_writing_llm_chap_id_description_matches_active_project_type(self):
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type="short-story"
+        )
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "call_writing_llm"),
+            None,
+        )
+        self.assertIsNotNone(tool, "call_writing_llm schema should exist")
+        chap_id_desc = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("chap_id", {})
+            .get("description", "")
+        )
+        self.assertIn(
+            "Use 1 or omit",
+            chap_id_desc,
+            "Short-story schema should indicate chap_id can be omitted",
+        )
+
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="novel")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "call_writing_llm"),
+            None,
+        )
+        self.assertIsNotNone(tool, "call_writing_llm schema should exist")
+        chap_id_desc = (
+            tool.get("function", {})
+            .get("parameters", {})
+            .get("properties", {})
+            .get("chap_id", {})
+            .get("description", "")
+        )
+        self.assertIn(
+            "Required when write_mode is set",
+            chap_id_desc,
+            "Novel schema should indicate chap_id is required when write_mode is set",
+        )
 
     def _call_tool_with_payload(self, name: str, args, model_type: str = "CHAT"):
         if isinstance(args, str):
@@ -202,14 +334,18 @@ class ChatToolContractsTest(TestCase):
             ],
             "active_chapter_id": 1,
         }
-        response = self.client.post("/api/v1/chat/tools", json=body)
+        response = self.client.post(
+            "/api/v1/projects/tool_contracts/chat/tools", json=body
+        )
         self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
+        payload = _parse_tool_sse_result(response.text)
         return payload, json.loads(
             (payload.get("appended_messages") or [{}])[0].get("content") or "{}"
         )
 
     def _tool_role_for_execution(self, tool_name: str) -> str:
+        if tool_name in {"write_chapter", "continue_chapter"}:
+            return "WRITING"
         return "EDITING" if tool_name in self._EDITING_ONLY_TOOLS else "CHAT"
 
     def _base_valid_args(self, tool_name: str):
@@ -412,13 +548,15 @@ class ChatToolContractsTest(TestCase):
             for tool in get_registered_tool_schemas(model_type="CHAT")
         }
 
-        self.assertEqual(writing_tools, set())
+        self.assertEqual(writing_tools, {"write_chapter", "continue_chapter"})
         self.assertIn("call_editing_assistant", chat_tools)
         self.assertIn("update_story_metadata", chat_tools)
+        self.assertNotIn("write_chapter", chat_tools)
+        self.assertNotIn("continue_chapter", chat_tools)
         self.assertNotIn("replace_text_in_chapter", chat_tools)
         self.assertIn("replace_text_in_chapter", editing_tools)
         self.assertIn("recommend_metadata_updates", editing_tools)
-        self.assertNotIn("update_story_metadata", editing_tools)
+        self.assertIn("update_story_metadata", editing_tools)
         self.assertNotIn("create_sourcebook_entry", editing_tools)
 
     def test_project_tool_descriptions_cover_all_project_types(self):
@@ -439,8 +577,12 @@ class ChatToolContractsTest(TestCase):
 
     def test_tools_reject_wrong_model_role(self):
         content = self._call_tool(
-            "update_story_metadata",
-            {"title": "Should fail"},
+            "create_sourcebook_entry",
+            {
+                "name": "Test Entry",
+                "description": "A test entry",
+                "category": "Other",
+            },
             model_type="EDITING",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")
@@ -448,6 +590,20 @@ class ChatToolContractsTest(TestCase):
         content = self._call_tool(
             "recommend_metadata_updates",
             {"story_summary": "Suggested only"},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "write_chapter",
+            {"chap_id": 1},
+            model_type="CHAT",
+        )
+        self.assertEqual(content.get("error"), "Tool unavailable for model role")
+
+        content = self._call_tool(
+            "continue_chapter",
+            {"chap_id": 1},
             model_type="CHAT",
         )
         self.assertEqual(content.get("error"), "Tool unavailable for model role")
@@ -502,6 +658,22 @@ class ChatToolContractsTest(TestCase):
                 self.assertTrue(ok, msg)
 
                 name = tool_schema["function"]["name"]
+
+                if name in ("call_writing_llm", "call_editing_assistant"):
+                    self._call_tool(
+                        "update_story_metadata",
+                        {
+                            "conflicts": [
+                                {
+                                    "id": "c1",
+                                    "description": "Auto conflict guard for test",
+                                    "resolution": "Auto resolution",
+                                }
+                            ]
+                        },
+                        model_type="CHAT",
+                    )
+
                 args = self._build_args_for_schema(tool_schema, invalid=False)
                 content = self._call_tool(
                     name,
@@ -548,6 +720,7 @@ class ChatToolContractsTest(TestCase):
             "read_scratchpad",
             "write_scratchpad",
             "write_editing_scratchpad",
+            "replace_in_project",
         }
 
         tool_names = set(self._tool_names())

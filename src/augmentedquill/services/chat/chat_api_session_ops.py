@@ -9,8 +9,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
 from augmentedquill.services.exceptions import NotFoundError
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.chat.chat_session_helpers import (
     list_chats,
     load_chat,
@@ -20,46 +21,33 @@ from augmentedquill.services.chat.chat_session_helpers import (
 )
 
 
-def list_active_chats():
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        return []
+def list_active_chats(project_dir: Path) -> Any:
+    """List active chats."""
     return list_chats(project_dir)
 
 
-def load_active_chat(chat_id: str):
+def load_active_chat(project_dir: Path, chat_id: str) -> Any:
     """Load Active Chat."""
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        raise NotFoundError("No active project")
     data = load_chat(project_dir, chat_id)
     if not data:
         raise NotFoundError("Chat not found")
     return data
 
 
-def save_active_chat(chat_id: str, data: dict):
+def save_active_chat(project_dir: Path, chat_id: str, data: dict) -> Any:
     """Save Active Chat."""
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        raise NotFoundError("No active project")
     payload = dict(data)
     payload["id"] = chat_id
     save_chat(project_dir, chat_id, payload)
 
 
-def delete_active_chat(chat_id: str):
+def delete_active_chat(project_dir: Path, chat_id: str) -> Any:
     """Delete Active Chat."""
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        raise NotFoundError("No active project")
     if delete_chat(project_dir, chat_id):
         return
     raise NotFoundError("Chat not found")
 
 
-def delete_all_active_chats():
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        raise NotFoundError("No active project")
+def delete_all_active_chats(project_dir: Path) -> Any:
+    """Delete all active chats."""
     delete_all_chats(project_dir)

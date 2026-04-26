@@ -1,0 +1,6872 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AugmentedQuill",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/settings": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Api Settings Post Legacy",
+        "description": "Legacy settings endpoint that persists to default story config when no project path is provided.",
+        "operationId": "api_settings_post_legacy_api_v1_settings_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__machine__OkResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/settings": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Api Settings Post",
+        "description": "Project-scoped settings endpoint.",
+        "operationId": "api_settings_post_api_v1_projects__project_name__settings_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__machine__OkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompts": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Api Prompts Get Legacy",
+        "description": "Legacy prompts endpoint resolved without explicit project path.",
+        "operationId": "api_prompts_get_legacy_api_v1_prompts_get",
+        "parameters": [
+          {
+            "name": "model_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/prompts": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Api Prompts Get",
+        "description": "Project-scoped prompts endpoint.",
+        "operationId": "api_prompts_get_api_v1_projects__project_name__prompts_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          },
+          {
+            "name": "model_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machine/test": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Api Machine Test",
+        "description": "Test base_url + api_key and return available remote model ids.\n\nBody: { base_url: str, api_key?: str, timeout_s?: int }\nReturns: { ok: bool, models: str[], detail?: str }",
+        "operationId": "api_machine_test_api_v1_machine_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineTestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machine/presets": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Api Machine Presets Get",
+        "description": "Return model preset database used by Machine Settings UI.",
+        "operationId": "api_machine_presets_get_api_v1_machine_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachinePresetsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machine/test_model": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Api Machine Test Model",
+        "description": "Test whether a model is available for base_url + api_key.\n\nBody: { base_url: str, api_key?: str, timeout_s?: int, model_id: str }\nReturns: { ok: bool, model_ok: bool, models: str[], detail?: str }",
+        "operationId": "api_machine_test_model_api_v1_machine_test_model_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineTestModelResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machine": {
+      "get": {
+        "summary": " Get Machine",
+        "description": "Return the current machine configuration.",
+        "operationId": "_get_machine_api_v1_machine_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Api Machine Put",
+        "description": "Persist machine config to runtime user config path.\n\nBody: { openai: { models: [{name, base_url, api_key?, timeout_s?, model}], selected? } }\nReturns: { ok: bool, detail?: str }",
+        "operationId": "api_machine_put_api_v1_machine_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkSelectedResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/summary": {
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Api Story Summary Put",
+        "description": "Update story summary in story.json.",
+        "operationId": "api_story_summary_put_api_v1_projects__project_name__story_summary_put",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorySummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Summary",
+        "description": "Api Story Summary.",
+        "operationId": "api_story_summary_api_v1_projects__project_name__story_summary_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/tags": {
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Api Story Tags Put",
+        "description": "Update story tags in story.json.",
+        "operationId": "api_story_tags_put_api_v1_projects__project_name__story_tags_put",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryTagsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Api Projects",
+        "description": "Handle the API request to projects.",
+        "operationId": "api_projects_api_v1_projects_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/delete": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Delete",
+        "description": "Handle the API request to projects delete.",
+        "operationId": "api_projects_delete_api_v1_projects_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/select": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Select",
+        "description": "Handle the API request to projects select.",
+        "operationId": "api_projects_select_api_v1_projects_select_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSelectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/create": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Create",
+        "description": "Handle the API request to projects create.",
+        "operationId": "api_projects_create_api_v1_projects_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/convert": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Convert",
+        "description": "Handle the API request to projects convert.",
+        "operationId": "api_projects_convert_api_v1_projects_convert_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectConvertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/create": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Books Create",
+        "description": "Handle the API request to books create.",
+        "operationId": "api_books_create_api_v1_books_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/delete": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Books Delete",
+        "description": "Handle the API request to books delete.",
+        "operationId": "api_books_delete_api_v1_books_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/restore": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Books Restore",
+        "description": "Handle the API request to books restore.",
+        "operationId": "api_books_restore_api_v1_books_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/list": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images List",
+        "description": "Handle the API request to projects images list.",
+        "operationId": "api_projects_images_list_api_v1_projects_images_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListImagesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/update_description": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Update Description",
+        "description": "Handle the API request to projects images update description.",
+        "operationId": "api_projects_images_update_description_api_v1_projects_images_update_description_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageDescriptionUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/create_placeholder": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Create Placeholder",
+        "description": "Handle the API request to projects images create placeholder.",
+        "operationId": "api_projects_images_create_placeholder_api_v1_projects_images_create_placeholder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImagePlaceholderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/upload": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Upload",
+        "description": "Handle the API request to projects images upload.",
+        "operationId": "api_projects_images_upload_api_v1_projects_images_upload_post",
+        "parameters": [
+          {
+            "name": "target_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_api_projects_images_upload_api_v1_projects_images_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/delete": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Delete",
+        "description": "Handle the API request to projects images delete.",
+        "operationId": "api_projects_images_delete_api_v1_projects_images_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/restore": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Restore",
+        "description": "Handle the API request to projects images restore.",
+        "operationId": "api_projects_images_restore_api_v1_projects_images_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/images/{filename}": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Images Get",
+        "description": "Handle the API request to projects images get.",
+        "operationId": "api_projects_images_get_api_v1_projects_images__filename__get",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Projects Images Get Api V1 Projects Images  Filename  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/export": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Export",
+        "description": "Handle the API request to projects export.",
+        "operationId": "api_projects_export_api_v1_projects_export_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Projects Export Api V1 Projects Export Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/export/epub": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Export Epub",
+        "description": "Handle the API request to projects export epub.",
+        "operationId": "api_projects_export_epub_api_v1_projects_export_epub_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Projects Export Epub Api V1 Projects Export Epub Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/import": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Api Projects Import",
+        "description": "Handle the API request to projects import.",
+        "operationId": "api_projects_import_api_v1_projects_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_api_projects_import_api_v1_projects_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters": {
+      "get": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Chapters",
+        "description": "Handle the API request to chapters.",
+        "operationId": "api_chapters_api_v1_projects__project_name__chapters_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChaptersListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Create Chapter",
+        "description": "Api Create Chapter.",
+        "operationId": "api_create_chapter_api_v1_projects__project_name__chapters_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Create Chapter Api V1 Projects  Project Name  Chapters Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/{chap_id}": {
+      "get": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Chapter Content",
+        "description": "Api Chapter Content.",
+        "operationId": "api_chapter_content_api_v1_projects__project_name__chapters__chap_id__get",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChapterDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Delete Chapter",
+        "description": "Api Delete Chapter.",
+        "operationId": "api_delete_chapter_api_v1_projects__project_name__chapters__chap_id__delete",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Delete Chapter Api V1 Projects  Project Name  Chapters  Chap Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/metadata": {
+      "put": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Update Chapter Metadata",
+        "description": "Api Update Chapter Metadata.",
+        "operationId": "api_update_chapter_metadata_api_v1_projects__project_name__chapters__chap_id__metadata_put",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterMetadataUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Chapter Metadata Api V1 Projects  Project Name  Chapters  Chap Id  Metadata Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/title": {
+      "put": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Update Chapter Title",
+        "description": "Api Update Chapter Title.",
+        "operationId": "api_update_chapter_title_api_v1_projects__project_name__chapters__chap_id__title_put",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterTitleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Chapter Title Api V1 Projects  Project Name  Chapters  Chap Id  Title Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/content": {
+      "put": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Update Chapter Content",
+        "description": "Api Update Chapter Content.",
+        "operationId": "api_update_chapter_content_api_v1_projects__project_name__chapters__chap_id__content_put",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterContentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Chapter Content Api V1 Projects  Project Name  Chapters  Chap Id  Content Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/{chap_id}/summary": {
+      "put": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Update Chapter Summary",
+        "description": "Api Update Chapter Summary.",
+        "operationId": "api_update_chapter_summary_api_v1_projects__project_name__chapters__chap_id__summary_put",
+        "parameters": [
+          {
+            "name": "chap_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Chap Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterSummaryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Chapter Summary Api V1 Projects  Project Name  Chapters  Chap Id  Summary Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chapters/reorder": {
+      "post": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Reorder Chapters",
+        "description": "Api Reorder Chapters.",
+        "operationId": "api_reorder_chapters_api_v1_projects__project_name__chapters_reorder_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChaptersReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Reorder Chapters Api V1 Projects  Project Name  Chapters Reorder Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/books/reorder": {
+      "post": {
+        "tags": ["Chapters", "Chapters"],
+        "summary": "Api Reorder Books",
+        "description": "Api Reorder Books.",
+        "operationId": "api_reorder_books_api_v1_projects__project_name__books_reorder_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BooksReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Reorder Books Api V1 Projects  Project Name  Books Reorder Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/story-summary": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Story Summary",
+        "description": "Api Story Story Summary.",
+        "operationId": "api_story_story_summary_api_v1_projects__project_name__story_story_summary_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/write": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Write",
+        "description": "Api Story Write.",
+        "operationId": "api_story_write_api_v1_projects__project_name__story_write_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/continue": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Continue",
+        "description": "Api Story Continue.",
+        "operationId": "api_story_continue_api_v1_projects__project_name__story_continue_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/sourcebook/relevance": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Sourcebook Relevance",
+        "description": "Ask the WRITING model which sourcebook entries are relevant.\n\nThis is a lightweight helper used by the frontend to keep checkboxes\nin sync.  It is deliberately separate from the prose suggestion call so\nthat we can run it in the background on every text change.",
+        "operationId": "api_story_sourcebook_relevance_api_v1_projects__project_name__story_sourcebook_relevance_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Sourcebook Relevance Api V1 Projects  Project Name  Story Sourcebook Relevance Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/suggest": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Suggest",
+        "description": "Api Story Suggest.",
+        "operationId": "api_story_suggest_api_v1_projects__project_name__story_suggest_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/summary/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Summary Stream",
+        "description": "Api Story Summary Stream.",
+        "operationId": "api_story_summary_stream_api_v1_projects__project_name__story_summary_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Summary Stream Api V1 Projects  Project Name  Story Summary Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/write/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Write Stream",
+        "description": "Api Story Write Stream.",
+        "operationId": "api_story_write_stream_api_v1_projects__project_name__story_write_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Write Stream Api V1 Projects  Project Name  Story Write Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/continue/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Continue Stream",
+        "description": "Api Story Continue Stream.",
+        "operationId": "api_story_continue_stream_api_v1_projects__project_name__story_continue_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Continue Stream Api V1 Projects  Project Name  Story Continue Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/story-summary/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Story Summary Stream",
+        "description": "Api Story Story Summary Stream.",
+        "operationId": "api_story_story_summary_stream_api_v1_projects__project_name__story_story_summary_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Story Summary Stream Api V1 Projects  Project Name  Story Story Summary Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/action/stream": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Action Stream",
+        "description": "Stream generic AI Actions (Extend/Rewrite/Summary update).",
+        "operationId": "api_story_action_stream_api_v1_projects__project_name__story_action_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Story Action Stream Api V1 Projects  Project Name  Story Action Stream Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/title": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Title",
+        "description": "Api Story Title.",
+        "operationId": "api_story_title_api_v1_projects__project_name__story_title_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/settings": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Settings",
+        "description": "Api Story Settings.",
+        "operationId": "api_story_settings_api_v1_projects__project_name__story_settings_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/metadata": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Metadata",
+        "description": "Api Story Metadata.",
+        "operationId": "api_story_metadata_api_v1_projects__project_name__story_metadata_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/story/content": {
+      "get": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Content",
+        "description": "Api Story Content.",
+        "operationId": "api_story_content_api_v1_projects__project_name__story_content_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Story Content Update",
+        "description": "Api Story Content Update.",
+        "operationId": "api_story_content_update_api_v1_projects__project_name__story_content_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/books/{book_id}/metadata": {
+      "post": {
+        "tags": ["Story", "Story"],
+        "summary": "Api Book Metadata",
+        "description": "Api Book Metadata.",
+        "operationId": "api_book_metadata_api_v1_projects__project_name__books__book_id__metadata_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/checkpoints": {
+      "get": {
+        "tags": ["Checkpoints"],
+        "summary": "Api Get Checkpoints",
+        "description": "Handle the API request to get checkpoints.",
+        "operationId": "api_get_checkpoints_api_v1_projects__project_name__checkpoints_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/checkpoints/create": {
+      "post": {
+        "tags": ["Checkpoints"],
+        "summary": "Api Create Checkpoint",
+        "description": "Handle the API request to create checkpoint.",
+        "operationId": "api_create_checkpoint_api_v1_projects__project_name__checkpoints_create_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/checkpoints/load": {
+      "post": {
+        "tags": ["Checkpoints"],
+        "summary": "Api Load Checkpoint",
+        "description": "Handle the API request to load checkpoint.",
+        "operationId": "api_load_checkpoint_api_v1_projects__project_name__checkpoints_load_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointLoadDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/checkpoints/delete": {
+      "post": {
+        "tags": ["Checkpoints"],
+        "summary": "Api Delete Checkpoint",
+        "description": "Handle the API request to delete checkpoint.",
+        "operationId": "api_delete_checkpoint_api_v1_projects__project_name__checkpoints_delete_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointLoadDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "get": {
+        "tags": ["Chat"],
+        "summary": "Api Get Chat",
+        "description": "Return initial state for chat view: models and current selection.",
+        "operationId": "api_get_chat_api_v1_chat_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatInitialStateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chat/tools": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Api Chat Tools",
+        "description": "Execute OpenAI-style tool calls and stream tool messages as SSE.\n\nThe endpoint does not call the upstream LLM; it only executes provided\ntool_calls from the last assistant message and returns corresponding\n{role:\"tool\"} messages.  When call_writing_llm is among the tools, prose\nchunks are streamed as ``prose_chunk`` events before the final ``result``.\n\nBody JSON:\n  {\n    \"model_name\": str | null,\n    \"messages\": [\n      {\"role\":\"user|assistant|system|tool\", \"content\": str,\n       \"tool_calls\"?: [{\"id\":str, \"type\":\"function\",\n                        \"function\": {\"name\": str, \"arguments\": str}}],\n       \"tool_call_id\"?: str, \"name\"?: str}\n    ],\n    \"active_chapter_id\"?: int\n  }\n\nSSE events emitted:\n  {\"type\": \"prose_start\", \"chap_id\": N, \"write_mode\": str}  (optional)\n  {\"type\": \"prose_chunk\", \"accumulated\": str, \"chap_id\": N, \"write_mode\": str}\n  {\"type\": \"result\", \"ok\": true, \"appended_messages\": [...], \"mutations\": {...}}",
+        "operationId": "api_chat_tools_api_v1_projects__project_name__chat_tools_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chat/tools/undo/{batch_id}": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Api Chat Tools Undo",
+        "description": "Undo a previously executed chat-tool batch by restoring snapshot content.",
+        "operationId": "api_chat_tools_undo_api_v1_projects__project_name__chat_tools_undo__batch_id__post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatToolBatchMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chat/tools/redo/{batch_id}": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Api Chat Tools Redo",
+        "description": "Redo a previously undone chat-tool batch by restoring post-batch snapshot.",
+        "operationId": "api_chat_tools_redo_api_v1_projects__project_name__chat_tools_redo__batch_id__post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatToolBatchMutationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chat/stream": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Api Chat Stream",
+        "description": "Stream chat with the configured OpenAI-compatible model.\n\nBody JSON:\n  {\n    \"model_name\": \"name-of-configured-entry\" | null,\n    \"model_type\": \"CHAT\" | \"WRITING\" | \"EDITING\" | null,\n    \"messages\": [{\"role\": \"system|user|assistant\", \"content\": str}, ...],\n    // optional overrides (otherwise pulled from runtime user machine config)\n    \"base_url\": str,\n    \"api_key\": str,\n    \"model\": str,\n    \"timeout_s\": int\n  }\n\nReturns: Streaming text response with the assistant's message.",
+        "operationId": "api_chat_stream_api_v1_projects__project_name__chat_stream_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chats": {
+      "get": {
+        "tags": ["Chat"],
+        "summary": "Api List Chats",
+        "description": "Handle the API request to list chats.",
+        "operationId": "api_list_chats_api_v1_projects__project_name__chats_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Chat"],
+        "summary": "Api Delete All Chats",
+        "description": "Handle the API request to delete all chats.",
+        "operationId": "api_delete_all_chats_api_v1_projects__project_name__chats_delete",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/chats/{chat_id}": {
+      "get": {
+        "tags": ["Chat"],
+        "summary": "Api Load Chat",
+        "description": "Handle the API request to load chat.",
+        "operationId": "api_load_chat_api_v1_projects__project_name__chats__chat_id__get",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chat Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Api Save Chat",
+        "description": "Api Save Chat.",
+        "operationId": "api_save_chat_api_v1_projects__project_name__chats__chat_id__post",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chat Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Chat"],
+        "summary": "Api Delete Chat",
+        "description": "Handle the API request to delete chat.",
+        "operationId": "api_delete_chat_api_v1_projects__project_name__chats__chat_id__delete",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chat Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/augmentedquill__models__chat__OkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openai/models": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Proxy List Models",
+        "description": "Fetch `${base_url}/models` using provided credentials.\n\nBody JSON:\n  {\"base_url\": str, \"api_key\": str | None, \"timeout_s\": int | None}\n\nReturns the JSON payload from the upstream (expected to include a `data` array).",
+        "operationId": "proxy_list_models_api_v1_openai_models_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/debug/llm_logs": {
+      "get": {
+        "tags": ["debug"],
+        "summary": "Get Llm Logs",
+        "description": "Return the in-memory LLM communication logs.",
+        "operationId": "get_llm_logs_api_v1_debug_llm_logs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugLogsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["debug"],
+        "summary": "Clear Llm Logs",
+        "description": "Clear the LLM communication logs.",
+        "operationId": "clear_llm_logs_api_v1_debug_llm_logs_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Clear Llm Logs Api V1 Debug Llm Logs Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/sourcebook/keywords": {
+      "post": {
+        "tags": ["Sourcebook"],
+        "summary": "Generate Sourcebook Keywords",
+        "description": "Generate keywords from an entry description without persisting the entry.",
+        "operationId": "generate_sourcebook_keywords_api_v1_projects__project_name__sourcebook_keywords_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourcebookKeywordsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcebookKeywordsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/sourcebook": {
+      "get": {
+        "tags": ["Sourcebook"],
+        "summary": "Get Sourcebook",
+        "description": "Return sourcebook.",
+        "operationId": "get_sourcebook_api_v1_projects__project_name__sourcebook_get",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "name": "match_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["direct", "extensive"],
+              "type": "string",
+              "default": "extensive",
+              "title": "Match Mode"
+            }
+          },
+          {
+            "name": "split_query_fallback",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Split Query Fallback"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourcebookEntry"
+                  },
+                  "title": "Response Get Sourcebook Api V1 Projects  Project Name  Sourcebook Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Sourcebook"],
+        "summary": "Create Sourcebook Entry",
+        "description": "Create Sourcebook Entry.",
+        "operationId": "create_sourcebook_entry_api_v1_projects__project_name__sourcebook_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourcebookEntryCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcebookEntry"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/sourcebook/{entry_name}": {
+      "put": {
+        "tags": ["Sourcebook"],
+        "summary": "Update Sourcebook Entry",
+        "description": "Update Sourcebook Entry.",
+        "operationId": "update_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__put",
+        "parameters": [
+          {
+            "name": "entry_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Name"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourcebookEntryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcebookEntry"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Sourcebook"],
+        "summary": "Delete Sourcebook Entry",
+        "description": "Delete Sourcebook Entry.",
+        "operationId": "delete_sourcebook_entry_api_v1_projects__project_name__sourcebook__entry_name__delete",
+        "parameters": [
+          {
+            "name": "entry_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Name"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Sourcebook Entry Api V1 Projects  Project Name  Sourcebook  Entry Name  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/search": {
+      "post": {
+        "tags": ["Search"],
+        "summary": "Search Project",
+        "description": "Search across the active project.\n\nSupported scopes: current_chapter, all_chapters, sourcebook, metadata, all.\nSupported modes: literal (default), regex (is_regex=true), phonetic (is_phonetic=true).",
+        "operationId": "search_project_api_v1_projects__project_name__search_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchOptions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/search/replace-all": {
+      "post": {
+        "tags": ["Search"],
+        "summary": "Replace All In Project",
+        "description": "Replace every occurrence of a query throughout the active project.\n\nAll matching text in the specified scope is substituted with *replacement*.\nAfter completion the frontend should refresh story/chapter state.",
+        "operationId": "replace_all_in_project_api_v1_projects__project_name__search_replace_all_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceAllRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_name}/search/replace-single": {
+      "post": {
+        "tags": ["Search"],
+        "summary": "Replace Single In Project",
+        "description": "Replace a single specifically identified match.\n\nThe match is identified by section_type, section_id, field, and match_index\n(zero-based ordinal of the match within that field).",
+        "operationId": "replace_single_in_project_api_v1_projects__project_name__search_replace_single_post",
+        "parameters": [
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceSingleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "<Lambda>",
+        "operationId": "_lambda__api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": " Root Redirect",
+        "description": "Helper for redirect..",
+        "operationId": "_root_redirect__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_api_projects_images_upload_api_v1_projects_images_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": ["file"],
+        "title": "Body_api_projects_images_upload_api_v1_projects_images_upload_post"
+      },
+      "Body_api_projects_import_api_v1_projects_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": ["file"],
+        "title": "Body_api_projects_import_api_v1_projects_import_post"
+      },
+      "BookCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "BookCreateRequest",
+        "description": "Represents the BookCreateRequest type."
+      },
+      "BookDeleteRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "BookDeleteRequest",
+        "description": "Represents the BookDeleteRequest type."
+      },
+      "BookMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "restore_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Id"
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "BookMutationResponse",
+        "description": "Response body for book create/delete/restore endpoints."
+      },
+      "BookRestoreRequest": {
+        "properties": {
+          "restore_id": {
+            "type": "string",
+            "title": "Restore Id"
+          }
+        },
+        "type": "object",
+        "required": ["restore_id"],
+        "title": "BookRestoreRequest",
+        "description": "Represents the BookRestoreRequest type."
+      },
+      "BooksReorderRequest": {
+        "properties": {
+          "book_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Book Ids"
+          }
+        },
+        "type": "object",
+        "required": ["book_ids"],
+        "title": "BooksReorderRequest",
+        "description": "Request body for reordering books."
+      },
+      "ChapterContentUpdate": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": ["content"],
+        "title": "ChapterContentUpdate",
+        "description": "Request body for updating chapter content."
+      },
+      "ChapterCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content",
+            "default": ""
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          }
+        },
+        "type": "object",
+        "required": ["title"],
+        "title": "ChapterCreate",
+        "description": "Request body for creating a new chapter."
+      },
+      "ChapterDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "private_notes": {
+            "type": "string",
+            "title": "Private Notes"
+          },
+          "conflicts": {
+            "items": {},
+            "type": "array",
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "filename",
+          "content",
+          "summary",
+          "notes",
+          "private_notes",
+          "conflicts"
+        ],
+        "title": "ChapterDetailResponse",
+        "description": "Response body for ``GET /api/v1/chapters/{chap_id}``."
+      },
+      "ChapterMetadataUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "private_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Notes"
+          },
+          "conflicts": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "title": "ChapterMetadataUpdate",
+        "description": "Request body for updating chapter metadata."
+      },
+      "ChapterSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "private_notes": {
+            "type": "string",
+            "title": "Private Notes"
+          },
+          "conflicts": {
+            "items": {},
+            "type": "array",
+            "title": "Conflicts"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "filename",
+          "summary",
+          "notes",
+          "private_notes",
+          "conflicts"
+        ],
+        "title": "ChapterSummary",
+        "description": "Lightweight chapter descriptor used in list responses."
+      },
+      "ChapterSummaryUpdate": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": ["summary"],
+        "title": "ChapterSummaryUpdate",
+        "description": "Request body for updating chapter summary."
+      },
+      "ChapterTitleUpdate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": ["title"],
+        "title": "ChapterTitleUpdate",
+        "description": "Request body for updating chapter title."
+      },
+      "ChaptersListResponse": {
+        "properties": {
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/ChapterSummary"
+            },
+            "type": "array",
+            "title": "Chapters"
+          }
+        },
+        "type": "object",
+        "required": ["chapters"],
+        "title": "ChaptersListResponse",
+        "description": "Response body for ``GET /api/v1/chapters``."
+      },
+      "ChaptersReorderRequest": {
+        "properties": {
+          "chapter_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Chapter Ids"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          }
+        },
+        "type": "object",
+        "required": ["chapter_ids"],
+        "title": "ChaptersReorderRequest",
+        "description": "Request body for reordering chapters."
+      },
+      "ChatDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "messages": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages"
+          },
+          "systemPrompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemprompt"
+          },
+          "allowWebSearch": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowwebsearch"
+          },
+          "scratchpad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scratchpad"
+          },
+          "editing_scratchpad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editing Scratchpad"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatDetailResponse",
+        "description": "Response body for ``GET /api/v1/chats/{chat_id}``."
+      },
+      "ChatInitialStateResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "current_model": {
+            "type": "string",
+            "title": "Current Model"
+          },
+          "messages": {
+            "items": {},
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": ["models", "current_model", "messages"],
+        "title": "ChatInitialStateResponse",
+        "description": "Response body for ``GET /api/v1/chat``.\n\nReturns the available LLM models and initial (empty) message history so\nthe frontend can initialise the chat panel without a separate request."
+      },
+      "ChatListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatListItem",
+        "description": "Summary of a saved chat session returned in the chat list."
+      },
+      "ChatListResponse": {
+        "properties": {
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ChatListItem"
+            },
+            "type": "array",
+            "title": "Chats"
+          }
+        },
+        "type": "object",
+        "required": ["chats"],
+        "title": "ChatListResponse",
+        "description": "Response body for ``GET /api/v1/chats`` (list of saved chats)."
+      },
+      "ChatToolBatchMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ChatToolBatchMutationResponse",
+        "description": "Response body for ``POST /api/v1/chat/tools/undo/{batch_id}``\nand ``POST /api/v1/chat/tools/redo/{batch_id}``."
+      },
+      "CheckpointInfo": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": ["timestamp"],
+        "title": "CheckpointInfo",
+        "description": "Represents the CheckpointInfo type."
+      },
+      "CheckpointListResponse": {
+        "properties": {
+          "checkpoints": {
+            "items": {
+              "$ref": "#/components/schemas/CheckpointInfo"
+            },
+            "type": "array",
+            "title": "Checkpoints"
+          }
+        },
+        "type": "object",
+        "required": ["checkpoints"],
+        "title": "CheckpointListResponse",
+        "description": "Represents the CheckpointListResponse type."
+      },
+      "CheckpointLoadDeleteRequest": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": ["timestamp"],
+        "title": "CheckpointLoadDeleteRequest",
+        "description": "Represents the CheckpointLoadDeleteRequest type."
+      },
+      "DebugLogEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "caller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Id"
+          },
+          "model_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Type"
+          },
+          "timestamp_start": {
+            "type": "string",
+            "title": "Timestamp Start"
+          },
+          "timestamp_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp End"
+          },
+          "request": {
+            "$ref": "#/components/schemas/LLMLogRequest"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMLogResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["id", "timestamp_start", "request"],
+        "title": "DebugLogEntry",
+        "description": "A single LLM communication log entry."
+      },
+      "DebugLogsResponse": {
+        "properties": {
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/DebugLogEntry"
+            },
+            "type": "array",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": ["logs"],
+        "title": "DebugLogsResponse",
+        "description": "Response body for ``GET /api/v1/debug/llm_logs``."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ImageDeleteRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          }
+        },
+        "type": "object",
+        "required": ["filename"],
+        "title": "ImageDeleteRequest",
+        "description": "Represents the ImageDeleteRequest type."
+      },
+      "ImageDescriptionUpdateRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "default": ""
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": ["filename"],
+        "title": "ImageDescriptionUpdateRequest",
+        "description": "Represents the ImageDescriptionUpdateRequest type."
+      },
+      "ImagePlaceholderRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "default": ""
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "default": ""
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ImagePlaceholderRequest",
+        "description": "Represents the ImagePlaceholderRequest type."
+      },
+      "ImageRestoreRequest": {
+        "properties": {
+          "restore_id": {
+            "type": "string",
+            "title": "Restore Id"
+          }
+        },
+        "type": "object",
+        "required": ["restore_id"],
+        "title": "ImageRestoreRequest",
+        "description": "Represents the ImageRestoreRequest type."
+      },
+      "LLMLogRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers"
+          },
+          "body": {
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": ["url", "method", "headers", "body"],
+        "title": "LLMLogRequest",
+        "description": "Shape of the request portion of an LLM log entry."
+      },
+      "LLMLogResponse": {
+        "properties": {
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          },
+          "body": {
+            "title": "Body"
+          },
+          "streaming": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Streaming"
+          },
+          "chunks": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunks"
+          },
+          "full_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Content"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking"
+          },
+          "error": {
+            "title": "Error"
+          },
+          "error_detail": {
+            "title": "Error Detail"
+          },
+          "tool_calls": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Calls"
+          }
+        },
+        "type": "object",
+        "title": "LLMLogResponse",
+        "description": "Shape of the response portion of an LLM log entry."
+      },
+      "ListImagesResponse": {
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectImageInfo"
+            },
+            "type": "array",
+            "title": "Images"
+          }
+        },
+        "type": "object",
+        "required": ["images"],
+        "title": "ListImagesResponse",
+        "description": "Response body for ``GET /api/v1/projects/images/list``."
+      },
+      "MachineConfigResponse": {
+        "properties": {
+          "gui_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gui Language"
+          },
+          "openai": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineOpenAIConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "MachineConfigResponse",
+        "description": "Response body for ``GET /api/v1/machine``."
+      },
+      "MachineModelConfig": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "context_window_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window Tokens"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty"
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min P"
+          },
+          "extra_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Body"
+          },
+          "preset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Id"
+          },
+          "writing_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writing Warning"
+          },
+          "is_multimodal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Multimodal"
+          },
+          "supports_function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Function Calling"
+          },
+          "suggest_loop_guard_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Enabled"
+          },
+          "suggest_loop_guard_ngram": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Ngram"
+          },
+          "suggest_loop_guard_min_repeats": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Min Repeats"
+          },
+          "suggest_loop_guard_max_regens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Loop Guard Max Regens"
+          },
+          "prompt_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Overrides"
+          }
+        },
+        "type": "object",
+        "required": ["name", "base_url", "model"],
+        "title": "MachineModelConfig",
+        "description": "Configuration for a single LLM provider / model entry."
+      },
+      "MachineOpenAIConfig": {
+        "properties": {
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MachineModelConfig"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          },
+          "selected_chat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Chat"
+          },
+          "selected_writing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Writing"
+          },
+          "selected_editing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Editing"
+          }
+        },
+        "type": "object",
+        "title": "MachineOpenAIConfig",
+        "description": "The ``openai`` section of the machine config."
+      },
+      "MachinePresetsResponse": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/ModelPresetEntry"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": ["presets"],
+        "title": "MachinePresetsResponse",
+        "description": "Response body for ``GET /api/v1/machine/presets``."
+      },
+      "MachineTestModelResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "model_ok": {
+            "type": "boolean",
+            "title": "Model Ok"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["ok", "model_ok"],
+        "title": "MachineTestModelResponse",
+        "description": "Response body for ``POST /api/v1/machine/test_model``."
+      },
+      "MachineTestResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "MachineTestResponse",
+        "description": "Response body for ``POST /api/v1/machine/test``."
+      },
+      "ModelCapabilities": {
+        "properties": {
+          "multimodal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multimodal"
+          },
+          "function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Function Calling"
+          }
+        },
+        "type": "object",
+        "title": "ModelCapabilities",
+        "description": "Subset of capabilities detected for a model (optional fields)."
+      },
+      "ModelPresetEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "model_id_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Id Patterns"
+          },
+          "preset_type": {
+            "type": "string",
+            "enum": ["absolute", "delta"],
+            "title": "Preset Type",
+            "default": "absolute"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ModelPresetParameters"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelPresetWarning"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "description", "model_id_patterns", "parameters"],
+        "title": "ModelPresetEntry",
+        "description": "A single model-preset entry as loaded from *model_presets.json*.\n\n``preset_type`` distinguishes two flavours:\n\n* ``\"absolute\"`` (default) \u2013 replaces **all** sampling parameters on the\n  provider and locks manual editing.  Suitable for a named full profile\n  tied to a specific model family.\n* ``\"delta\"`` \u2013 applies **only the non-null fields** in ``parameters`` on\n  top of whatever is already configured.  Does not lock the provider or\n  change ``preset_id``.  Suitable for cross-model tweaks such as \"more\n  creative\" or \"factual focus\"."
+      },
+      "ModelPresetParameters": {
+        "properties": {
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty"
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min P"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "extra_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Body"
+          }
+        },
+        "type": "object",
+        "title": "ModelPresetParameters",
+        "description": "Typed parameters for a model preset."
+      },
+      "ModelPresetWarning": {
+        "properties": {
+          "writing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writing"
+          }
+        },
+        "type": "object",
+        "title": "ModelPresetWarning",
+        "description": "Warnings that should be surfaced to the user for a preset."
+      },
+      "OkSelectedResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkSelectedResponse",
+        "description": "Response for ``PUT /api/v1/machine`` \u2013 returns the new selected model name."
+      },
+      "ProjectConvertRequest": {
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          }
+        },
+        "type": "object",
+        "required": ["target_type"],
+        "title": "ProjectConvertRequest",
+        "description": "Represents the ProjectConvertRequest type."
+      },
+      "ProjectCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": ["name", "type"],
+        "title": "ProjectCreateRequest",
+        "description": "Represents the ProjectCreateRequest type."
+      },
+      "ProjectDeleteRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "ProjectDeleteRequest",
+        "description": "Represents the ProjectDeleteRequest type."
+      },
+      "ProjectImageInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "is_placeholder": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Placeholder"
+          }
+        },
+        "type": "object",
+        "required": ["filename"],
+        "title": "ProjectImageInfo",
+        "description": "Describes a single project image or image placeholder."
+      },
+      "ProjectInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "is_valid": {
+            "type": "boolean",
+            "title": "Is Valid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "novel"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "path", "is_valid", "title"],
+        "title": "ProjectInfo",
+        "description": "Describes a single project entry returned by the listing endpoint."
+      },
+      "ProjectListResponse": {
+        "properties": {
+          "current": {
+            "type": "string",
+            "title": "Current"
+          },
+          "recent": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recent"
+          },
+          "available": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectInfo"
+            },
+            "type": "array",
+            "title": "Available"
+          }
+        },
+        "type": "object",
+        "required": ["current", "recent", "available"],
+        "title": "ProjectListResponse",
+        "description": "Response body for ``GET /api/v1/projects``."
+      },
+      "ProjectMutationResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "registry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRegistry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ProjectMutationResponse",
+        "description": "Generic response for project create/delete/convert operations."
+      },
+      "ProjectRegistry": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "recent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProjectRegistryEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          }
+        },
+        "type": "object",
+        "title": "ProjectRegistry",
+        "description": "Registry summary returned alongside project mutations."
+      },
+      "ProjectRegistryEntry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "is_valid": {
+            "type": "boolean",
+            "title": "Is Valid",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "ProjectRegistryEntry",
+        "description": "A single project registry entry embedded in mutation responses."
+      },
+      "ProjectSelectRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "ProjectSelectRequest",
+        "description": "Represents the ProjectSelectRequest type."
+      },
+      "ProjectSelectResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "registry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRegistry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "ProjectSelectResponse",
+        "description": "Response body for ``POST /api/v1/projects/select``."
+      },
+      "PromptsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "system_messages": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Messages"
+          },
+          "user_prompts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Prompts"
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Languages"
+          },
+          "project_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Language"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "PromptsResponse",
+        "description": "Response for ``GET /api/v1/prompts``."
+      },
+      "ReplaceAllRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Text or pattern to search for"
+          },
+          "replacement": {
+            "type": "string",
+            "title": "Replacement",
+            "description": "Text to substitute in place of each match"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SearchScope",
+            "default": "all"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "title": "Case Sensitive",
+            "default": false
+          },
+          "is_regex": {
+            "type": "boolean",
+            "title": "Is Regex",
+            "default": false
+          },
+          "is_phonetic": {
+            "type": "boolean",
+            "title": "Is Phonetic",
+            "default": false
+          },
+          "active_chapter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Chapter Id"
+          }
+        },
+        "type": "object",
+        "required": ["query", "replacement"],
+        "title": "ReplaceAllRequest",
+        "description": "Request to replace all occurrences of a search query."
+      },
+      "ReplaceResponse": {
+        "properties": {
+          "replacements_made": {
+            "type": "integer",
+            "title": "Replacements Made",
+            "description": "Total number of occurrences replaced",
+            "default": 0
+          },
+          "changed_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changed Sections",
+            "description": "Human-readable labels for each changed section"
+          }
+        },
+        "type": "object",
+        "title": "ReplaceResponse",
+        "description": "Result of a replace operation."
+      },
+      "ReplaceSingleRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Text or pattern to search for"
+          },
+          "replacement": {
+            "type": "string",
+            "title": "Replacement",
+            "description": "Text to substitute in place of the match"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SearchScope",
+            "default": "all"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "title": "Case Sensitive",
+            "default": false
+          },
+          "is_regex": {
+            "type": "boolean",
+            "title": "Is Regex",
+            "default": false
+          },
+          "is_phonetic": {
+            "type": "boolean",
+            "title": "Is Phonetic",
+            "default": false
+          },
+          "active_chapter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Chapter Id"
+          },
+          "section_type": {
+            "type": "string",
+            "title": "Section Type",
+            "description": "The section_type value from SearchResultSection"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id",
+            "description": "The section_id value from SearchResultSection"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "The field value from SearchResultSection"
+          },
+          "match_index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Match Index",
+            "description": "Zero-based index of the match within this section+field"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "replacement",
+          "section_type",
+          "section_id",
+          "field",
+          "match_index"
+        ],
+        "title": "ReplaceSingleRequest",
+        "description": "Request to replace one specific match (identified by its ordinal index)."
+      },
+      "SearchMatch": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "title": "Start",
+            "description": "Character offset of the start of the match"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End",
+            "description": "Character offset of the end of the match"
+          },
+          "match_text": {
+            "type": "string",
+            "title": "Match Text",
+            "description": "The matched text"
+          },
+          "context_before": {
+            "type": "string",
+            "title": "Context Before",
+            "description": "Up to 80 characters before the match"
+          },
+          "context_after": {
+            "type": "string",
+            "title": "Context After",
+            "description": "Up to 80 characters after the match"
+          }
+        },
+        "type": "object",
+        "required": ["start", "end", "match_text", "context_before", "context_after"],
+        "title": "SearchMatch",
+        "description": "A single occurrence of the query in a body of text."
+      },
+      "SearchOptions": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Text or pattern to search for"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SearchScope",
+            "description": "Which parts of the project to search",
+            "default": "all"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "title": "Case Sensitive",
+            "description": "Whether the search is case-sensitive",
+            "default": false
+          },
+          "is_regex": {
+            "type": "boolean",
+            "title": "Is Regex",
+            "description": "Treat query as a regular expression",
+            "default": false
+          },
+          "is_phonetic": {
+            "type": "boolean",
+            "title": "Is Phonetic",
+            "description": "Use phonetic (soundex) matching instead of literal",
+            "default": false
+          },
+          "active_chapter_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Chapter Id",
+            "description": "Chapter ID to use when scope is current_chapter"
+          }
+        },
+        "type": "object",
+        "required": ["query"],
+        "title": "SearchOptions",
+        "description": "Parameters controlling what and how to search."
+      },
+      "SearchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResultSection"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "total_matches": {
+            "type": "integer",
+            "title": "Total Matches",
+            "description": "Total number of individual matches",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SearchResponse",
+        "description": "Top-level response for a search request."
+      },
+      "SearchResultSection": {
+        "properties": {
+          "section_type": {
+            "type": "string",
+            "title": "Section Type",
+            "description": "One of: chapter_content, chapter_metadata, story_metadata, sourcebook"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id",
+            "description": "Unique identifier for the section (chapter ID, entry name, \u2026)"
+          },
+          "section_title": {
+            "type": "string",
+            "title": "Section Title",
+            "description": "Human-readable title for the section"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "Which data field contains the match, e.g. 'content', 'summary', 'notes', 'conflicts[0].description'"
+          },
+          "field_display": {
+            "type": "string",
+            "title": "Field Display",
+            "description": "Human-readable field label, e.g. 'Content', 'Summary'"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/SearchMatch"
+            },
+            "type": "array",
+            "title": "Matches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_type",
+          "section_id",
+          "section_title",
+          "field",
+          "field_display"
+        ],
+        "title": "SearchResultSection",
+        "description": "All matches found within one logical section of the project."
+      },
+      "SearchScope": {
+        "type": "string",
+        "enum": ["current_chapter", "all_chapters", "sourcebook", "metadata", "all"],
+        "title": "SearchScope",
+        "description": "The scope of content to search within a project."
+      },
+      "SourcebookEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "synonyms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Synonyms",
+            "default": []
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Images",
+            "default": []
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords",
+            "default": []
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/SourcebookRelation"
+            },
+            "type": "array",
+            "title": "Relations",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "description"],
+        "title": "SourcebookEntry",
+        "description": "Represents the SourcebookEntry type."
+      },
+      "SourcebookEntryCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "synonyms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Synonyms",
+            "default": []
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Images",
+            "default": []
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/SourcebookRelation"
+            },
+            "type": "array",
+            "title": "Relations",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["name", "description"],
+        "title": "SourcebookEntryCreate",
+        "description": "Represents the SourcebookEntryCreate type."
+      },
+      "SourcebookEntryUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "synonyms": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synonyms"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "relations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourcebookRelation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relations"
+          }
+        },
+        "type": "object",
+        "title": "SourcebookEntryUpdate",
+        "description": "Represents the SourcebookEntryUpdate type."
+      },
+      "SourcebookKeywordsRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "synonyms": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synonyms"
+          }
+        },
+        "type": "object",
+        "title": "SourcebookKeywordsRequest",
+        "description": "Request payload for generating keywords from an entry description."
+      },
+      "SourcebookKeywordsResponse": {
+        "properties": {
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          }
+        },
+        "type": "object",
+        "required": ["keywords"],
+        "title": "SourcebookKeywordsResponse",
+        "description": "Represents the SourcebookKeywordsResponse type."
+      },
+      "SourcebookRelation": {
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "relation": {
+            "type": "string",
+            "title": "Relation"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction",
+            "default": "forward"
+          },
+          "start_chapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Chapter"
+          },
+          "start_book": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Book"
+          },
+          "end_chapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Chapter"
+          },
+          "end_book": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Book"
+          }
+        },
+        "type": "object",
+        "required": ["target_id", "relation"],
+        "title": "SourcebookRelation",
+        "description": "Represents the SourcebookRelation type."
+      },
+      "StoryBook": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "chapters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryChapterSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters"
+          }
+        },
+        "type": "object",
+        "title": "StoryBook",
+        "description": "Book descriptor embedded in the story payload."
+      },
+      "StoryChapterSummary": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "private_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Notes"
+          },
+          "conflicts": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts"
+          }
+        },
+        "type": "object",
+        "title": "StoryChapterSummary",
+        "description": "Lightweight chapter descriptor embedded in the story payload."
+      },
+      "StoryContentResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": ["ok", "content"],
+        "title": "StoryContentResponse",
+        "description": "Response body for ``GET /api/v1/story/content``."
+      },
+      "StoryLLMPrefs": {
+        "properties": {
+          "prompt_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Overrides"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          }
+        },
+        "type": "object",
+        "title": "StoryLLMPrefs",
+        "description": "Per-project LLM preference overrides embedded in story data."
+      },
+      "StoryPayload": {
+        "properties": {
+          "project_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Title"
+          },
+          "story_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Summary"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "private_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Notes"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "image_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Style"
+          },
+          "image_additional_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Additional Info"
+          },
+          "project_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Type"
+          },
+          "books": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryBook"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Books"
+          },
+          "sourcebook": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StorySourcebookEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcebook"
+          },
+          "conflicts": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts"
+          },
+          "llm_prefs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryLLMPrefs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chapters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoryChapterSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters"
+          }
+        },
+        "type": "object",
+        "title": "StoryPayload",
+        "description": "Story data as returned by project selection and mutation endpoints.\n\nThis matches the shape produced by\n``services.projects.project_helpers.normalize_story_for_frontend``.\nAll fields are optional because the payload depends on what the author\nhas filled in for a given project."
+      },
+      "StorySourcebookEntry": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "synonyms": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synonyms"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keywords"
+          },
+          "relations": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relations"
+          }
+        },
+        "type": "object",
+        "title": "StorySourcebookEntry",
+        "description": "Minimal sourcebook entry embedded in the story payload."
+      },
+      "StorySummaryResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "story_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Summary"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "StorySummaryResponse",
+        "description": "Response for ``PUT /api/v1/story/summary``."
+      },
+      "StoryTagsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "StoryTagsResponse",
+        "description": "Response for ``PUT /api/v1/story/tags``."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "augmentedquill__models__chat__OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkResponse",
+        "description": "Generic ``{ok: true}`` response used by save/delete chat endpoints."
+      },
+      "augmentedquill__models__machine__OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "OkResponse",
+        "description": "Generic success response used by endpoints that return ``{ok: true}``."
+      }
+    }
+  }
+}

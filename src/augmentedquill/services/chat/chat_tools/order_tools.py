@@ -7,6 +7,8 @@
 
 """Defines the order tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from augmentedquill.services.chat.chat_tool_decorator import CHAT_ROLE  # noqa: F401
@@ -39,7 +41,7 @@ class ReorderBooksParams(BaseModel):
 
 async def reorder_chapters(
     params: ReorderChaptersParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Reorder Chapters — internal helper, not an LLM tool."""
     from augmentedquill.api.v1.chapters_routes.mutate import api_reorder_chapters
     from augmentedquill.models.chapters import ChaptersReorderRequest
@@ -58,7 +60,9 @@ async def reorder_chapters(
     }
 
 
-async def reorder_books(params: ReorderBooksParams, payload: dict, mutations: dict):
+async def reorder_books(
+    params: ReorderBooksParams, payload: dict, mutations: dict
+) -> Any:
     """Reorder Books — internal helper, not an LLM tool."""
     from augmentedquill.api.v1.chapters_routes.mutate import api_reorder_books
     from augmentedquill.models.chapters import BooksReorderRequest

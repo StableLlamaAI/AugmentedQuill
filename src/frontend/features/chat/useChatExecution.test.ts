@@ -16,7 +16,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { useChatExecution } from './useChatExecution';
 import { api } from '../../services/api';
-import { createChatSession } from '../../services/openaiService';
+import { createChatSession, UnifiedChat } from '../../services/openaiService';
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -46,7 +46,6 @@ describe('useChatExecution', () => {
   });
 
   it('groups multiple incremental tool_batch calls into a single external history entry with combined undo/redo', async () => {
-    const setChatMessages = vi.fn();
     const refreshProjects = vi.fn().mockResolvedValue(undefined);
     const refreshStory = vi.fn().mockResolvedValue(undefined);
     const pushExternalHistoryEntry = vi.fn();
@@ -56,7 +55,7 @@ describe('useChatExecution', () => {
     // createChatSession returns object with sendMessage that resolves sequentially.
     vi.mocked(createChatSession).mockReturnValue({
       sendMessage: sendMessageMock,
-    } as any);
+    } as UnifiedChat);
 
     sendMessageMock
       .mockResolvedValueOnce({
@@ -101,17 +100,13 @@ describe('useChatExecution', () => {
 
     const { result } = renderHook(() =>
       useChatExecution({
-        systemPrompt: 'system',
+        getSystemPrompt: () => 'system',
         activeChatConfig: { model: 'test', temperature: 0.5 },
         isChatAvailable: true,
-        allowWebSearch: false,
+        getAllowWebSearch: () => false,
         currentChapterId: '1',
-        currentChatId: 'chat-1',
+        getCurrentChatId: () => 'chat-1',
         currentChapter: { id: '1', title: 'Intro' },
-        chatMessages: [],
-        setChatMessages,
-        isChatLoading: false,
-        setIsChatLoading: vi.fn(),
         refreshProjects,
         refreshStory,
         pushExternalHistoryEntry,
@@ -143,5 +138,53 @@ describe('useChatExecution', () => {
     expect(api.chat.redoToolBatch).toHaveBeenCalledTimes(2);
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(1, 'batch1');
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(2, 'batch2');
+  });
+
+  it('passes attachments through to the chat session payload', async () => {
+    const refreshProjects = vi.fn().mockResolvedValue(undefined);
+    const refreshStory = vi.fn().mockResolvedValue(undefined);
+    const sendMessageMock = vi
+      .fn()
+      .mockResolvedValue({ text: 'OK', functionCalls: [] });
+
+    vi.mocked(createChatSession).mockReturnValue({
+      sendMessage: sendMessageMock,
+    } as UnifiedChat);
+
+    const { result } = renderHook(() =>
+      useChatExecution({
+        getSystemPrompt: () => 'system',
+        activeChatConfig: { model: 'test', temperature: 0.5 },
+        isChatAvailable: true,
+        getAllowWebSearch: () => false,
+        currentChapterId: '1',
+        getCurrentChatId: () => 'chat-1',
+        currentChapter: { id: '1', title: 'Intro' },
+        refreshProjects,
+        refreshStory,
+        requestToolCallLoopAccess: vi.fn().mockResolvedValue('unlimited'),
+      })
+    );
+
+    const attachments = [
+      {
+        id: 'a1',
+        name: 'monika_01.txt',
+        size: 11,
+        type: 'text/plain',
+        content: 'Hello world',
+        encoding: 'utf-8',
+      },
+    ];
+
+    await act(async () => {
+      await result.current.handleSendMessage('Read this file', attachments);
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageMock.mock.calls[0][0]).toEqual({
+      message: 'Read this file',
+      attachments,
+    });
   });
 });

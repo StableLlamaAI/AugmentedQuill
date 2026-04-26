@@ -10,6 +10,7 @@
 API endpoints for chat sessions and conversational interactions with the LLM writing partner.
 """
 
+import asyncio
 import datetime
 import re
 import augmentedquill.services.llm.llm as llm
@@ -18,19 +19,22 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pathlib import Path
 from uuid import uuid4
 
+from augmentedquill.api.v1.dependencies import ProjectDep
 from augmentedquill.core.config import (
     load_machine_config,
     load_story_config,
     DEFAULT_STORY_CONFIG_PATH,
 )
-from augmentedquill.api.v1.http_responses import error_json, ok_json
-from augmentedquill.services.projects.projects import get_active_project_dir
 from augmentedquill.services.llm.llm import add_llm_log, create_log_entry
 from augmentedquill.services.chat.chat_tool_decorator import (
     execute_registered_tool,
     get_registered_tool_schemas,
+    tool_message,
+    CHAT_ROLE,
+    WRITING_ROLE,
 )
 from augmentedquill.services.chat.chat_api_helpers import (
+    inject_chat_attachments,
     inject_project_images,
     normalize_chat_messages,
 )
@@ -54,7 +58,14 @@ from augmentedquill.services.chat.chat_api_session_ops import (
 import augmentedquill.services.chat.chat_api_proxy_ops as _chat_api_proxy_ops
 import json as _json
 from typing import Any, Dict
-from augmentedquill.models.chat import ChatInitialStateResponse
+from augmentedquill.models.chat import (
+    ChatInitialStateResponse,
+    ChatToolBatchMutationResponse,
+    ChatListItem,
+    ChatListResponse,
+    ChatDetailResponse,
+    OkResponse,
+)
 from augmentedquill.utils.json_repair import try_parse_json_robust
 from augmentedquill.api.v1.request_body import parse_json_object_body
 from augmentedquill.utils.path_utils import safe_child_path
@@ -74,10 +85,15 @@ async def _run_tool_calls(
     payload: dict,
     model_type: str,
     active_dir: Path | None,
+    initial_mutations: dict | None = None,
 ) -> tuple[list[dict], dict, list[str]]:
     """Execute raw tool_calls and return (appended_messages, mutations, tool_names)."""
     appended: list[dict] = []
-    mutations: dict = {"story_changed": False}
+    mutations: dict = (
+        initial_mutations if initial_mutations is not None else {"story_changed": False}
+    )
+    if "story_changed" not in mutations:
+        mutations["story_changed"] = False
     tool_names: list[str] = []
 
     # Determine project language for typographic quote handling in tool arguments.
@@ -112,12 +128,15 @@ async def _run_tool_calls(
             mutations,
             tool_role=model_type,
         )
+        if isinstance(msg, dict) and "role" not in msg:
+            msg = tool_message(name, call_id, msg)
         appended.append(msg)
 
     return appended, mutations, tool_names
 
 
 def _safe_child_path(base_dir: Path, *parts: str) -> Path:
+    """Return a safe child path.."""
     try:
         return safe_child_path(base_dir, *parts)
     except ValueError:
@@ -125,12 +144,14 @@ def _safe_child_path(base_dir: Path, *parts: str) -> Path:
 
 
 def _validated_batch_id(batch_id: str) -> str:
+    """Return a validated batch id.."""
     if not _BATCH_ID_PATTERN.fullmatch(batch_id or ""):
         raise HTTPException(status_code=400, detail="Invalid batch id")
     return batch_id
 
 
 def _snapshot_storage_dir(project_dir: Path, batch_id: str) -> Path:
+    """Create a snapshot storage dir.."""
     safe_batch_id = _validated_batch_id(batch_id)
     return _safe_child_path(project_dir, _CHAT_TOOL_BATCH_DIR, safe_batch_id)
 
@@ -141,7 +162,7 @@ def _store_chat_tool_batch_snapshot(
     before_snapshot: Dict[str, str],
     after_snapshot: Dict[str, str],
     tool_names: list[str],
-):
+) -> Any:
     """Persist before/after snapshots for reversible tool-call batches."""
     target_dir = _snapshot_storage_dir(project_dir, batch_id)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -156,6 +177,7 @@ def _store_chat_tool_batch_snapshot(
 
 
 def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str, Any]:
+    """Load chat tool batch snapshot."""
     batch_file = _snapshot_storage_dir(project_dir, batch_id) / "batch.json"
     if not batch_file.exists():
         raise HTTPException(
@@ -165,6 +187,7 @@ def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str
 
 
 def _build_chat_tool_batch_label(tool_names: list[str]) -> str:
+    """Build chat tool batch label."""
     if not tool_names:
         return "AI tool batch"
     if len(tool_names) == 1:
@@ -202,28 +225,40 @@ async def api_get_chat() -> ChatInitialStateResponse:
     }
 
 
-@router.post("/chat/tools")
-async def api_chat_tools(request: Request) -> JSONResponse:
-    """Execute OpenAI-style tool calls and return tool messages.
+@router.post("/projects/{project_name}/chat/tools")
+async def api_chat_tools(
+    request: Request, project_dir: ProjectDep
+) -> StreamingResponse:
+    """Execute OpenAI-style tool calls and stream tool messages as SSE.
 
-    The endpoint does not call the upstream LLM; it only executes provided tool_calls
-    from the last assistant message and returns corresponding {role:"tool"} messages.
+    The endpoint does not call the upstream LLM; it only executes provided
+    tool_calls from the last assistant message and returns corresponding
+    {role:"tool"} messages.  When call_writing_llm is among the tools, prose
+    chunks are streamed as ``prose_chunk`` events before the final ``result``.
 
     Body JSON:
       {
         "model_name": str | null,
         "messages": [
-          {"role":"user|assistant|system|tool", "content": str, "tool_calls"?: [{"id":str, "type":"function", "function": {"name": str, "arguments": str}}], "tool_call_id"?: str, "name"?: str}
+          {"role":"user|assistant|system|tool", "content": str,
+           "tool_calls"?: [{"id":str, "type":"function",
+                            "function": {"name": str, "arguments": str}}],
+           "tool_call_id"?: str, "name"?: str}
         ],
         "active_chapter_id"?: int
       }
+
+    SSE events emitted:
+      {"type": "prose_start", "chap_id": N, "write_mode": str}  (optional)
+      {"type": "prose_chunk", "accumulated": str, "chap_id": N, "write_mode": str}
+      {"type": "result", "ok": true, "appended_messages": [...], "mutations": {...}}
     """
     payload = await parse_json_object_body(request)
 
     messages = payload.get("messages") or []
     model_type = str((payload or {}).get("model_type") or "CHAT").upper()
     if not isinstance(messages, list):
-        return error_json("messages must be an array", status_code=400)
+        raise HTTPException(status_code=400, detail="messages must be an array")
 
     last = messages[-1] if messages else None
     tool_calls: list = []
@@ -232,7 +267,7 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         if isinstance(t, list):
             tool_calls = t
 
-    active_project_dir = get_active_project_dir()
+    active_project_dir = project_dir
     before_snapshot: Dict[str, str] | None = None
     batch_id: str | None = None
 
@@ -240,78 +275,139 @@ async def api_chat_tools(request: Request) -> JSONResponse:
         before_snapshot = capture_project_snapshot(active_project_dir)
         batch_id = f"batch-{uuid4().hex}"
 
-    appended, mutations, tool_names = await _run_tool_calls(
-        tool_calls, payload, model_type, active_project_dir
-    )
-
-    if (
-        active_project_dir
-        and batch_id
-        and before_snapshot is not None
-        and mutations.get("story_changed")
-    ):
-        after_snapshot = capture_project_snapshot(active_project_dir)
-        _store_chat_tool_batch_snapshot(
-            active_project_dir,
-            batch_id,
-            before_snapshot,
-            after_snapshot,
-            tool_names,
-        )
-        mutations["tool_batch"] = {
-            "batch_id": batch_id,
-            "tool_names": tool_names,
-            "operation_count": len(tool_names),
-            "label": _build_chat_tool_batch_label(tool_names),
+    async def _gen() -> Any:
+        """Helper for the requested value.."""
+        stream_queue: asyncio.Queue = asyncio.Queue()
+        initial_mutations: dict = {
+            "story_changed": False,
+            "_stream_queue": stream_queue,
         }
 
-    # Log tool execution if there were any
-    if appended:
-        log_entry = create_log_entry(
-            "/api/v1/chat/tools", "POST", {}, {"tool_calls": tool_calls}
-        )
-        log_entry["response"]["status_code"] = 200
-        log_entry["response"]["body"] = {"appended_messages": appended}
-        log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
-        add_llm_log(log_entry)
+        result_holder: list = []
 
-    return ok_json(appended_messages=appended, mutations=mutations)
+        async def _run_and_signal() -> Any:
+            """Helper for and signal.."""
+            try:
+                appended_inner, mutations_inner, names_inner = await _run_tool_calls(
+                    tool_calls,
+                    payload,
+                    model_type,
+                    active_project_dir,
+                    initial_mutations=initial_mutations,
+                )
+                result_holder.append(
+                    (appended_inner, mutations_inner, names_inner, None)
+                )
+            except Exception as exc:  # noqa: BLE001
+                result_holder.append(([], initial_mutations, [], exc))
+            finally:
+                await stream_queue.put(None)  # sentinel – signals end of stream
+
+        task = asyncio.create_task(_run_and_signal())
+
+        # Relay prose-streaming events emitted by call_writing_llm.
+        while True:
+            item = await stream_queue.get()
+            if item is None:
+                break
+            kind, data = item
+            if kind == "prose_start":
+                yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
+            elif kind == "prose_chunk":
+                yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+
+        await task  # ensure the background task has fully finished
+
+        if not result_holder:
+            yield f"data: {_json.dumps({'type': 'error', 'error': 'Tool execution produced no result'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        appended, mutations, tool_names, exc = result_holder[0]
+
+        if exc is not None:
+            yield f"data: {_json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # Remove internal _stream_queue key before sending mutations to client.
+        mutations.pop("_stream_queue", None)
+
+        if (
+            active_project_dir
+            and batch_id
+            and before_snapshot is not None
+            and mutations.get("story_changed")
+        ):
+            after_snapshot = capture_project_snapshot(active_project_dir)
+            _store_chat_tool_batch_snapshot(
+                active_project_dir,
+                batch_id,
+                before_snapshot,
+                after_snapshot,
+                tool_names,
+            )
+            mutations["tool_batch"] = {
+                "batch_id": batch_id,
+                "tool_names": tool_names,
+                "operation_count": len(tool_names),
+                "label": _build_chat_tool_batch_label(tool_names),
+            }
+
+        # Log tool execution if there were any
+        if appended:
+            log_entry = create_log_entry(
+                "/api/v1/chat/tools", "POST", {}, {"tool_calls": tool_calls}
+            )
+            log_entry["response"]["status_code"] = 200
+            log_entry["response"]["body"] = {"appended_messages": appended}
+            log_entry["timestamp_end"] = datetime.datetime.now().isoformat()
+            add_llm_log(log_entry)
+
+        yield f"data: {_json.dumps({'type': 'result', 'ok': True, 'appended_messages': appended, 'mutations': mutations})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
-@router.post("/chat/tools/undo/{batch_id}")
-async def api_chat_tools_undo(batch_id: str) -> JSONResponse:
+@router.post(
+    "/projects/{project_name}/chat/tools/undo/{batch_id}",
+    response_model=ChatToolBatchMutationResponse,
+)
+async def api_chat_tools_undo(
+    batch_id: str, project_dir: ProjectDep
+) -> ChatToolBatchMutationResponse:
     """Undo a previously executed chat-tool batch by restoring snapshot content."""
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        return error_json("No active project selected", status_code=400)
-
     batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
     before_snapshot = batch.get("before")
     if not isinstance(before_snapshot, dict):
-        return error_json("Invalid chat tool batch snapshot", status_code=500)
+        raise HTTPException(status_code=500, detail="Invalid chat tool batch snapshot")
 
     restore_project_snapshot(project_dir, before_snapshot)
-    return ok_json(ok=True, batch_id=batch_id)
+    return ChatToolBatchMutationResponse(ok=True, batch_id=batch_id)
 
 
-@router.post("/chat/tools/redo/{batch_id}")
-async def api_chat_tools_redo(batch_id: str) -> JSONResponse:
+@router.post(
+    "/projects/{project_name}/chat/tools/redo/{batch_id}",
+    response_model=ChatToolBatchMutationResponse,
+)
+async def api_chat_tools_redo(
+    batch_id: str, project_dir: ProjectDep
+) -> ChatToolBatchMutationResponse:
     """Redo a previously undone chat-tool batch by restoring post-batch snapshot."""
-    project_dir = get_active_project_dir()
-    if not project_dir:
-        return error_json("No active project selected", status_code=400)
-
     batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
     after_snapshot = batch.get("after")
     if not isinstance(after_snapshot, dict):
-        return error_json("Invalid chat tool batch snapshot", status_code=500)
+        raise HTTPException(status_code=500, detail="Invalid chat tool batch snapshot")
 
     restore_project_snapshot(project_dir, after_snapshot)
-    return ok_json(ok=True, batch_id=batch_id)
+    return ChatToolBatchMutationResponse(ok=True, batch_id=batch_id)
 
 
-@router.post("/chat/stream")
-async def api_chat_stream(request: Request) -> StreamingResponse:
+@router.post("/projects/{project_name}/chat/stream")
+async def api_chat_stream(
+    request: Request, project_dir: ProjectDep
+) -> StreamingResponse:
     """Stream chat with the configured OpenAI-compatible model.
 
     Body JSON:
@@ -333,6 +429,11 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     req_messages = normalize_chat_messages((payload or {}).get("messages"))
     if not req_messages:
         raise HTTPException(status_code=400, detail="messages array is required")
+
+    try:
+        inject_chat_attachments(req_messages, (payload or {}).get("attachments"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Load config to determine model capabilities and overrides
     machine = load_machine_config() or {}
@@ -357,6 +458,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         model_type=model_type,
         machine=machine,
         selected_name=selected_name,
+        active_project_dir=project_dir,
     )
 
     # If web search is enabled, append the RESEARCH PROTOCOL to the system message
@@ -384,14 +486,9 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
                 break
 
     # If it's a chat, inject current chapter context into the latest user message
-    if model_type == "CHAT":
+    if model_type == CHAT_ROLE:
         try:
-            story = (
-                load_story_config(
-                    (get_active_project_dir() or Path(".")) / "story.json"
-                )
-                or {}
-            )
+            story = load_story_config((project_dir or Path(".")) / "story.json") or {}
             project_lang = str(story.get("language", "en") or "en")
         except (OSError, ValueError, TypeError):
             project_lang = "en"
@@ -404,10 +501,11 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
 
     temperature, max_tokens = resolve_story_llm_prefs(
         config_dir=DEFAULT_STORY_CONFIG_PATH.parent,
-        active_project_dir=get_active_project_dir(),
+        active_project_dir=project_dir,
     )
 
-    def _to_float(value):
+    def _to_float(value: Any) -> None:
+        """Convert float."""
         try:
             if value is None or value == "":
                 return None
@@ -415,7 +513,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         except (TypeError, ValueError):
             return None
 
-    def _to_int(value):
+    def _to_int(value: Any) -> None:
+        """Convert int."""
         try:
             if value is None or value == "":
                 return None
@@ -461,10 +560,8 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     # Resolve active project type for tool schema filtering
     _active_project_type: str | None = None
     try:
-        _active_dir = get_active_project_dir()
-        if _active_dir:
-            _active_story = load_story_config(_active_dir / "story.json") or {}
-            _active_project_type = _active_story.get("project_type") or None
+        _active_story = load_story_config(project_dir / "story.json") or {}
+        _active_project_type = _active_story.get("project_type") or None
     except Exception:
         pass
 
@@ -473,7 +570,7 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     story_tools = get_registered_tool_schemas(
         model_type=model_type, project_type=_active_project_type
     )
-    if _allow_web_search and model_type == "CHAT":
+    if _allow_web_search and model_type == CHAT_ROLE:
         from augmentedquill.services.chat.chat_tool_decorator import (
             get_opt_in_tool_schemas,
         )
@@ -485,12 +582,12 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
         # This prevents some models from hallucinating tool usage even when told not to.
         if tool_choice == "none":
             pass
-    if model_type == "WRITING":
+    if model_type == WRITING_ROLE:
         story_tools = None
         tool_choice = None
         supports_function_calling = False
 
-    async def _gen():
+    async def _gen() -> Any:
         """Gen."""
         try:
             async for chunk in llm.unified_chat_stream(
@@ -529,34 +626,44 @@ async def api_chat_stream(request: Request) -> StreamingResponse:
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
-@router.get("/chats")
-async def api_list_chats():
-    return list_active_chats()
+@router.get("/projects/{project_name}/chats", response_model=ChatListResponse)
+async def api_list_chats(project_dir: ProjectDep) -> ChatListResponse:
+    """Handle the API request to list chats."""
+    items = list_active_chats(project_dir)
+    return ChatListResponse(chats=[ChatListItem(**item) for item in items])
 
 
-@router.get("/chats/{chat_id}")
-async def api_load_chat(chat_id: str):
-    return load_active_chat(chat_id)
+@router.get(
+    "/projects/{project_name}/chats/{chat_id}", response_model=ChatDetailResponse
+)
+async def api_load_chat(project_dir: ProjectDep, chat_id: str) -> ChatDetailResponse:
+    """Handle the API request to load chat."""
+    data = load_active_chat(project_dir, chat_id)
+    return ChatDetailResponse(**data)
 
 
-@router.post("/chats/{chat_id}")
-async def api_save_chat(chat_id: str, request: Request):
+@router.post("/projects/{project_name}/chats/{chat_id}", response_model=OkResponse)
+async def api_save_chat(
+    project_dir: ProjectDep, chat_id: str, request: Request
+) -> OkResponse:
     """Api Save Chat."""
     data = await parse_json_object_body(request)
-    save_active_chat(chat_id, data)
-    return {"ok": True}
+    save_active_chat(project_dir, chat_id, data)
+    return OkResponse(ok=True)
 
 
-@router.delete("/chats/{chat_id}")
-async def api_delete_chat(chat_id: str):
-    delete_active_chat(chat_id)
-    return {"ok": True}
+@router.delete("/projects/{project_name}/chats/{chat_id}", response_model=OkResponse)
+async def api_delete_chat(project_dir: ProjectDep, chat_id: str) -> OkResponse:
+    """Handle the API request to delete chat."""
+    delete_active_chat(project_dir, chat_id)
+    return OkResponse(ok=True)
 
 
-@router.delete("/chats")
-async def api_delete_all_chats():
-    delete_all_active_chats()
-    return {"ok": True}
+@router.delete("/projects/{project_name}/chats", response_model=OkResponse)
+async def api_delete_all_chats(project_dir: ProjectDep) -> OkResponse:
+    """Handle the API request to delete all chats."""
+    delete_all_active_chats(project_dir)
+    return OkResponse(ok=True)
 
 
 @router.post("/openai/models")

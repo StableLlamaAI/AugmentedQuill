@@ -64,6 +64,9 @@ class TestChatSessionsApi(ApiTestCase):
         chat_payload = {
             "name": "API Test Chat",
             "messages": [{"role": "user", "content": "Hello API"}],
+            "systemPrompt": "Saved system prompt",
+            "allowWebSearch": True,
+            "scratchpad": "Persistent scratchpad",
         }
 
         # POST /api/v1/chats/{id}
@@ -74,7 +77,7 @@ class TestChatSessionsApi(ApiTestCase):
         # GET /api/v1/chats (list)
         resp = self.client.get("/api/v1/chats")
         self.assertEqual(resp.status_code, 200)
-        chats = resp.json()
+        chats = resp.json()["chats"]
         self.assertEqual(len(chats), 1)
         self.assertEqual(chats[0]["id"], chat_id)
 
@@ -83,6 +86,9 @@ class TestChatSessionsApi(ApiTestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["name"], "API Test Chat")
+        self.assertEqual(data["systemPrompt"], "Saved system prompt")
+        self.assertTrue(data["allowWebSearch"])
+        self.assertEqual(data["scratchpad"], "Persistent scratchpad")
 
         # DELETE /api/v1/chats/{id}
         resp = self.client.delete(f"/api/v1/chats/{chat_id}")
@@ -91,7 +97,7 @@ class TestChatSessionsApi(ApiTestCase):
 
         # Confirm deleted
         resp = self.client.get("/api/v1/chats")
-        self.assertEqual(len(resp.json()), 0)
+        self.assertEqual(len(resp.json()["chats"]), 0)
 
     def test_chat_save_updates_timestamp(self):
         chat_id = "timestamp_test"

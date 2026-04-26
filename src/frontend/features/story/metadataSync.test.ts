@@ -26,8 +26,9 @@ const base: Params = {
   private_notes: 'P',
 };
 
-function copy(obj: any) {
-  return JSON.parse(JSON.stringify(obj));
+/** Helper for the requested value. */
+function copy<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj)) as T;
 }
 
 describe('computeSyncUpdates', () => {

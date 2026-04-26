@@ -16,6 +16,8 @@
  * initial value are returned.
  */
 
+import type { Conflict } from '../../types';
+
 export interface MetadataParams {
   title?: string;
   summary?: string;
@@ -23,7 +25,7 @@ export interface MetadataParams {
   notes?: string;
   private_notes?: string;
   language?: string;
-  conflicts?: Array<{ description?: string; resolution?: string }>;
+  conflicts?: Conflict[];
 }
 
 /**

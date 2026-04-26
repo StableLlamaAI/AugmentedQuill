@@ -7,6 +7,8 @@
 
 """Defines the project tools unit so this responsibility stays isolated, testable, and easy to evolve."""
 
+from typing import Any
+
 import json as _json
 
 from pydantic import BaseModel, Field
@@ -96,7 +98,8 @@ class ChangeProjectTypeParams(BaseModel):
 )
 async def get_project_overview(
     params: GetProjectOverviewParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Return project overview."""
     data = _project_overview(include_notes=params.include_notes)
     # Return data directly - decorator handles wrapping in tool message format
     return data
@@ -110,7 +113,8 @@ async def get_project_overview(
 )
 async def create_project_tool(
     params: CreateProjectParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """Create project tool."""
     ok, msg = create_project(params.name, params.project_type)
     if ok:
         mutations["story_changed"] = True
@@ -125,7 +129,8 @@ async def create_project_tool(
 )
 async def list_projects_tool(
     params: ListProjectsParams, payload: dict, mutations: dict
-):
+) -> Any:
+    """List projects tool."""
     projs = list_projects()
     simple = [{"name": p["name"], "title": p["title"]} for p in projs]
     return {"projects": simple}
@@ -139,7 +144,7 @@ async def list_projects_tool(
 )
 async def delete_project_tool(
     params: DeleteProjectParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Delete Project Tool."""
     if not params.confirm:
         return {
@@ -158,7 +163,7 @@ async def delete_project_tool(
     capability="metadata-write",
     project_types=("series",),
 )
-async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
+async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict) -> Any:
     """Delete Book."""
     if not params.confirm:
         return {
@@ -192,7 +197,9 @@ async def delete_book(params: DeleteBookParams, payload: dict, mutations: dict):
     capability="metadata-write",
     project_types=("series",),
 )
-async def create_new_book(params: CreateNewBookParams, payload: dict, mutations: dict):
+async def create_new_book(
+    params: CreateNewBookParams, payload: dict, mutations: dict
+) -> Any:
     """Create New Book."""
     from augmentedquill.services.projects.projects import (
         create_new_book as _create_book,
@@ -210,7 +217,7 @@ async def create_new_book(params: CreateNewBookParams, payload: dict, mutations:
 )
 async def change_project_type(
     params: ChangeProjectTypeParams, payload: dict, mutations: dict
-):
+) -> Any:
     """Change Project Type."""
     from augmentedquill.services.projects.projects import (
         change_project_type as _change_type,

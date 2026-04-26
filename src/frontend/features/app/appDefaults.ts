@@ -12,6 +12,7 @@
 import { AppSettings, DEFAULT_LLM_CONFIG } from '../../types';
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  guiLanguage: '', // Uses system default when empty
   providers: [DEFAULT_LLM_CONFIG],
   activeChatProviderId: DEFAULT_LLM_CONFIG.id,
   activeWritingProviderId: DEFAULT_LLM_CONFIG.id,
@@ -23,6 +24,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     contrast: 0.9,
     theme: 'mixed',
     sidebarWidth: 320,
+    showDiff: true,
   },
   sidebarOpen: false,
   activeTab: 'chat',

@@ -48,7 +48,7 @@ def _get_typographic_quotes(language: str = "en") -> tuple[str, str, str, str]:
     return double_open, double_close, single_open, single_close
 
 
-def _apply_typographic_quotes(text: str, language: str = "en") -> str:
+def apply_typographic_quotes(text: str, language: str = "en") -> str:
     """Convert straight quotes in `text` into typographic quotes for the language."""
 
     double_open, double_close, single_open, single_close = _get_typographic_quotes(
@@ -58,6 +58,7 @@ def _apply_typographic_quotes(text: str, language: str = "en") -> str:
     def _smart_replace(
         text_value: str, quote_char: str, open_q: str, close_q: str
     ) -> str:
+        """Perform a context-aware replacement of straight quotes with typographic quotes."""
         # Preserve escaped quote sequences (e.g. \" or \\') by splitting on
         # unescaped quote characters.
         pattern = r"(?<!\\)" + re.escape(quote_char)
@@ -74,6 +75,10 @@ def _apply_typographic_quotes(text: str, language: str = "en") -> str:
     text = _smart_replace(text, "'", single_open, single_close)
 
     return text
+
+
+# Keep backward compatibility for private-style usage
+_apply_typographic_quotes = apply_typographic_quotes
 
 
 def repair_json_quotes(json_str: str, language: str = "en") -> str:
@@ -95,12 +100,13 @@ def repair_json_quotes(json_str: str, language: str = "en") -> str:
         pass
 
     def convert_to_typographic(match: re.Match) -> str:
+        """Helper for to typographic.."""
         prefix = match.group(1)  # e.g., '"text": "'
         content = match.group(2)  # e.g., 'He said "Hello" to me'
         suffix = match.group(3)  # e.g., '"' or '",'
 
         # Convert quotes inside the value using the language-specific quote styles.
-        converted = _apply_typographic_quotes(content, language=language)
+        converted = apply_typographic_quotes(content, language=language)
 
         # Escape newlines for valid JSON
         converted = converted.replace("\n", "\\n").replace("\r", "\\r")

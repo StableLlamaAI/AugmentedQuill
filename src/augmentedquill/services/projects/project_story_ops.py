@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import List
 
 from augmentedquill.core.config import load_story_config, save_story_config
+from augmentedquill.services.projects.project_locks import run_locked
+from augmentedquill.utils.json_repair import apply_typographic_quotes
 
 
 def update_book_metadata_in_project(
@@ -54,6 +56,7 @@ def update_book_metadata_in_project(
 
 
 def read_book_content_in_project(active: Path, book_id: str) -> str:
+    """Read book content in project."""
     # Security: Prevent path traversal by ensuring book_id is a simple name
     if not book_id:
         return ""
@@ -70,6 +73,7 @@ def read_book_content_in_project(active: Path, book_id: str) -> str:
 
 
 def write_book_content_in_project(active: Path, book_id: str, content: str) -> None:
+    """Write book content in project."""
     # Security: Prevent path traversal by ensuring book_id is a simple name
     if not book_id:
         raise ValueError("book_id is required")
@@ -137,6 +141,7 @@ def write_story_content_in_project(active: Path, content: str) -> None:
     """Write Story Content In Project."""
     story = load_story_config(active / "story.json") or {}
     project_type = story.get("project_type", "novel")
+    project_lang = str(story.get("language", "en") or "en")
 
     if project_type == "short-story":
         filename = story.get("content_file", "content.md")
@@ -144,7 +149,9 @@ def write_story_content_in_project(active: Path, content: str) -> None:
     else:
         content_path = active / "story_content.md"
 
-    content_path.write_text(content, encoding="utf-8")
+    content_path.write_text(
+        apply_typographic_quotes(content, language=project_lang), encoding="utf-8"
+    )
 
 
 def read_scratchpad_in_project(active: Path) -> str:
@@ -173,3 +180,82 @@ def write_editing_scratchpad_in_project(active: Path, content: str) -> None:
     """Write the EDITING-model scratchpad (separate from the CHAT scratchpad)."""
     scratchpad_path = active / "editing_scratchpad.txt"
     scratchpad_path.write_text(content, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Async locked wrappers — preferred for use inside FastAPI route handlers
+# ---------------------------------------------------------------------------
+
+
+async def async_update_book_metadata_in_project(
+    active: Path,
+    book_id: str,
+    title: str | None = None,
+    summary: str | None = None,
+    notes: str | None = None,
+    private_notes: str | None = None,
+) -> None:
+    """Async, per-project-locked variant of update_book_metadata_in_project."""
+    await run_locked(
+        active,
+        lambda: update_book_metadata_in_project(
+            active,
+            book_id,
+            title=title,
+            summary=summary,
+            notes=notes,
+            private_notes=private_notes,
+        ),
+    )
+
+
+async def async_write_book_content_in_project(
+    active: Path, book_id: str, content: str
+) -> None:
+    """Async, per-project-locked variant of write_book_content_in_project."""
+    await run_locked(
+        active, lambda: write_book_content_in_project(active, book_id, content)
+    )
+
+
+async def async_update_story_metadata_in_project(
+    active: Path,
+    title: str | None = None,
+    summary: str | None = None,
+    tags: list[str] | None = None,
+    notes: str | None = None,
+    private_notes: str | None = None,
+    conflicts: list | None = None,
+    language: str | None = None,
+) -> None:
+    """Async, per-project-locked variant of update_story_metadata_in_project."""
+    await run_locked(
+        active,
+        lambda: update_story_metadata_in_project(
+            active,
+            title=title,
+            summary=summary,
+            tags=tags,
+            notes=notes,
+            private_notes=private_notes,
+            conflicts=conflicts,
+            language=language,
+        ),
+    )
+
+
+async def async_write_story_content_in_project(active: Path, content: str) -> None:
+    """Async, per-project-locked variant of write_story_content_in_project."""
+    await run_locked(active, lambda: write_story_content_in_project(active, content))
+
+
+async def async_write_scratchpad_in_project(active: Path, content: str) -> None:
+    """Async, per-project-locked variant of write_scratchpad_in_project."""
+    await run_locked(active, lambda: write_scratchpad_in_project(active, content))
+
+
+async def async_write_editing_scratchpad_in_project(active: Path, content: str) -> None:
+    """Async, per-project-locked variant of write_editing_scratchpad_in_project."""
+    await run_locked(
+        active, lambda: write_editing_scratchpad_in_project(active, content)
+    )

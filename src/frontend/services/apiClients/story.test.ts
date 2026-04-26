@@ -12,11 +12,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { storyApi } from './story';
-import { fetchJson } from './shared';
+import { fetchJson, putJson } from './shared';
 import { registerSharedApiMockCleanup } from './testSharedMocks';
 
 vi.mock('./shared', () => ({
+  projectEndpoint: vi.fn((projectName: string, path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (!projectName) return normalizedPath;
+    return `/projects/${encodeURIComponent(projectName)}${normalizedPath}`;
+  }),
   fetchJson: vi.fn(),
+  putJson: vi.fn(),
 }));
 registerSharedApiMockCleanup();
 
@@ -38,33 +44,25 @@ describe('storyApi', () => {
   });
 
   it('calls PUT /story/summary', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     await storyApi.updateSummary('Summary');
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/story/summary',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary: 'Summary' }),
-      },
+      { summary: 'Summary' },
       'Failed to update story summary'
     );
   });
 
   it('calls PUT /story/tags', async () => {
-    vi.mocked(fetchJson).mockResolvedValueOnce({ ok: true });
+    vi.mocked(putJson).mockResolvedValueOnce({ ok: true });
 
     await storyApi.updateTags(['a', 'b']);
 
-    expect(fetchJson).toHaveBeenCalledWith(
+    expect(putJson).toHaveBeenCalledWith(
       '/story/tags',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: ['a', 'b'] }),
-      },
+      { tags: ['a', 'b'] },
       'Failed to update story tags'
     );
   });

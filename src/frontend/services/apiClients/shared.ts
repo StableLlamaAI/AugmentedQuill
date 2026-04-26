@@ -11,24 +11,38 @@
 
 const API_BASE = '/api/v1';
 
+/** Helper for the requested value. */
 function endpoint(path: string): string {
   if (path.startsWith('/')) return `${API_BASE}${path}`;
   return `${API_BASE}/${path}`;
 }
 
+/** Build a project-scoped API path. */
+export function projectEndpoint(projectName: string, path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!projectName) return normalizedPath;
+  const encodedProject = encodeURIComponent(projectName);
+  return `/projects/${encodedProject}${normalizedPath}`;
+}
+
+/** Read error message. */
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const data = (await response.json()) as {
-      detail?: string;
-      message?: string;
-      error?: string;
+      detail?: unknown;
+      message?: unknown;
+      error?: unknown;
     };
-    return data.detail || data.message || data.error || fallback;
+    const detail = data.detail ?? data.message ?? data.error;
+    if (typeof detail === 'string') return detail;
+    if (detail !== undefined) return JSON.stringify(detail);
+    return fallback;
   } catch {
     return fallback;
   }
 }
 
+/** Fetch json. */
 export async function fetchJson<T>(
   path: string,
   init: RequestInit | undefined,
@@ -41,6 +55,7 @@ export async function fetchJson<T>(
   return response.json() as Promise<T>;
 }
 
+/** Fetch blob. */
 export async function fetchBlob(
   path: string,
   init: RequestInit | undefined,
@@ -53,6 +68,7 @@ export async function fetchBlob(
   return response.blob();
 }
 
+/** Send json. */
 export async function postJson<T>(
   path: string,
   body: unknown,
@@ -67,4 +83,26 @@ export async function postJson<T>(
     },
     fallbackError
   );
+}
+
+/** Send json. */
+export async function putJson<T>(
+  path: string,
+  body: unknown,
+  fallbackError: string
+): Promise<T> {
+  return fetchJson<T>(
+    path,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    fallbackError
+  );
+}
+
+/** Delete json. */
+export async function deleteJson<T>(path: string, fallbackError: string): Promise<T> {
+  return fetchJson<T>(path, { method: 'DELETE' }, fallbackError);
 }

@@ -12,14 +12,23 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import i18n from '../app/i18n';
 import { ToolCallLimitDialog } from './ToolCallLimitDialog';
+
+const renderWithI18n = (ui: React.ReactElement) =>
+  render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('ToolCallLimitDialog', () => {
   it('does not render when closed', () => {
-    render(
+    renderWithI18n(
       <ToolCallLimitDialog
         isOpen={false}
         count={10}
@@ -33,7 +42,7 @@ describe('ToolCallLimitDialog', () => {
 
   it('renders count and resolves all actions', () => {
     const onResolve = vi.fn();
-    render(
+    renderWithI18n(
       <ToolCallLimitDialog
         isOpen={true}
         count={12}
@@ -43,7 +52,7 @@ describe('ToolCallLimitDialog', () => {
     );
 
     expect(screen.getByText('Tool Call Limit')).toBeTruthy();
-    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.getByText(/12/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue (+10 calls)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue without limit' }));
@@ -52,5 +61,16 @@ describe('ToolCallLimitDialog', () => {
     expect(onResolve).toHaveBeenNthCalledWith(1, 'continue');
     expect(onResolve).toHaveBeenNthCalledWith(2, 'unlimited');
     expect(onResolve).toHaveBeenNthCalledWith(3, 'stop');
+  });
+
+  it('renders the same dark dialog surface in mixed mode', () => {
+    renderWithI18n(
+      <ToolCallLimitDialog isOpen={true} count={5} theme="mixed" onResolve={vi.fn()} />
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const card = dialog.querySelector('.p-6');
+    expect(card).toBeTruthy();
+    expect(card?.className).toContain('bg-brand-gray-900');
   });
 });

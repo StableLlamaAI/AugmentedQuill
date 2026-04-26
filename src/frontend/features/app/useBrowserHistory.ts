@@ -22,6 +22,7 @@ type UseBrowserHistoryParams = {
   redo: () => void;
 };
 
+/** Custom React hook that synchronizes browser history. */
 export function useBrowserHistory({
   historyIndex,
   canUndo,

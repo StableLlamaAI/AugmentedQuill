@@ -192,6 +192,23 @@ class TestChatParser(unittest.TestCase):
         events = parse_stream_channel_fragments(fragments, seen)
         self.assertEqual(events, [])
 
+    def test_parse_stream_channel_fragments_filters_marker_noise_keeps_newlines(self):
+        fragments = [
+            {"channel": "final", "content": "<|channel>thought\n<channel|>"},
+            {"channel": "final", "content": "\n\n"},
+            {"channel": "final", "content": "Paragraph one."},
+            {"channel": "final", "content": "\n\n"},
+            {"channel": "final", "content": "Paragraph two."},
+        ]
+
+        events = parse_stream_channel_fragments(fragments, set())
+        content = "".join(evt.get("content", "") for evt in events if "content" in evt)
+
+        self.assertNotIn("<|channel>", content)
+        self.assertIn("Paragraph one.", content)
+        self.assertIn("Paragraph two.", content)
+        self.assertIn("\n\n", content)
+
     def test_strip_thinking_tags_prefers_final_channel_output(self):
         content = (
             "<|channel|>analysis<|message|>Hidden reasoning<|end|>"
@@ -203,12 +220,51 @@ class TestChatParser(unittest.TestCase):
         content = "Before <thinking>hidden</thinking> After"
         self.assertEqual(strip_thinking_tags(content), "Before  After")
 
+    def test_strip_thinking_tags_removes_leaked_channel_marker_noise(self):
+        content = "<|channel>thought\n<channel|>Visible answer"
+        self.assertEqual(strip_thinking_tags(content), "Visible answer")
+
+    def test_strip_thinking_tags_drops_leaked_multiline_reasoning_block(self):
+        content = (
+            "<|channel>thought\n<channel|>I will reason silently here.\n"
+            "Still thinking...\n\nVisible prose starts now."
+        )
+        self.assertEqual(strip_thinking_tags(content), "Visible prose starts now.")
+
+    def test_parse_stream_channel_fragments_treats_analysis_channel_as_thinking(self):
+        fragments = [{"channel": "analysis", "content": "internal reasoning"}]
+        events = parse_stream_channel_fragments(fragments, set())
+        self.assertEqual(events, [{"thinking": "internal reasoning"}])
+
+    def test_parse_stream_channel_fragments_treats_reasoning_channel_as_thinking(self):
+        fragments = [{"channel": "reasoning", "content": "hidden chain"}]
+        events = parse_stream_channel_fragments(fragments, set())
+        self.assertEqual(events, [{"thinking": "hidden chain"}])
+
     def test_strip_tool_call_tags_removes_tool_markup(self):
         content = (
             'Intro <tool_call>{"name":"x"}</tool_call> '
             "[TOOL_CALL]do_stuff[/TOOL_CALL] Outro"
         )
         self.assertEqual(strip_tool_call_tags(content), "Intro   Outro")
+
+    def test_strip_tool_call_tags_removes_gemini_wrapper_markup(self):
+        content = (
+            'Intro <|tool_call>call:search_sourcebook{"query":"Clara"}<tool_call|> '
+            "Outro"
+        )
+        self.assertEqual(strip_tool_call_tags(content), "Intro  Outro")
+
+    def test_parse_gemini_call_wrapper_format(self):
+        content = (
+            "<|tool_call>call:search_sourcebook{query:<|“|>Clara<|“|>}<tool_call|>"
+        )
+        calls = _parse_tool_calls_from_content(content)
+        self.assertIsNotNone(calls)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["function"]["name"], "search_sourcebook")
+        args = json.loads(calls[0]["function"]["arguments"])
+        self.assertEqual(args["query"], "Clara")
 
     def test_extract_thinking_from_content_returns_first_block(self):
         content = "<thought>internal note</thought> final"

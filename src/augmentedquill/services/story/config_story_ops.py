@@ -121,7 +121,7 @@ def normalize_validate_story_config(
 def clean_story_config_for_disk(config: Dict[str, Any]) -> Dict[str, Any]:
     """Strip runtime-only fields and normalize sourcebook shape before persistence."""
 
-    def _clean_for_disk(data, current_key=None):
+    def _clean_for_disk(data: Any, current_key: Any = None) -> Any:
         """Clean For Disk."""
         if isinstance(data, dict):
             res = {}
