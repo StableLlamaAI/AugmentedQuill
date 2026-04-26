@@ -2,7 +2,7 @@
 
 AugmentedQuill provides a project-wide **Search and Replace** tool that lets you find text across all your writing — chapter prose, metadata summaries, sourcebook entries — and replace it in bulk or one match at a time.
 
-[SCREENSHOT: Search and Replace dialog open with results grouped by section]
+![Search and Replace dialog open with results grouped by section](screenshots/12_search_and_replace_dialog.png)
 
 ---
 
@@ -12,34 +12,6 @@ There are two ways to open the Search and Replace dialog:
 
 - Click the **<img src="assets/search.svg" alt="Search icon" width="16" height="16" style="vertical-align:text-bottom;" /> Search** icon in the top-right toolbar.
 - Press **Ctrl+F** (Windows / Linux) or **Cmd+F** (macOS) from anywhere in the app, including when the editor has focus.
-
----
-
-## The Dialog Layout
-
-```
-┌──────────────────────────────────────────────────────┐
-│ 🔍 Search and Replace                          [✕]   │
-├──────────────────────────────────────────────────────┤
-│ Search: [_______________________________] [Find]      │
-│ Replace:[_______________________________] [Replace]   │
-│                                         [Replace All] │
-├──────────────────────────────────────────────────────┤
-│ [Aa] Case  [.*] Regex  [~] Phonetic                  │
-│ ○ Current  ○ All Chapters  ○ Sourcebook  ○ Metadata  ●All │
-├──────────────────────────────────────────────────────┤
-│ 42 matches found          [▲ prev]  [3 / 42]  [▼ next] │
-├──────────────────────────────────────────────────────┤
-│ ▼ Chapter 3: The Forest  (8 matches)                 │
-│   ...walked past [Elena] towards the…                │
-│ ▼ Sourcebook  (5 matches)                            │
-│   Elena Brown: …protagonist [Elena] is…              │
-│ ▼ Story Metadata  (3 matches)                        │
-│   summary: …[Elena] confronts the duke…              │
-└──────────────────────────────────────────────────────┘
-```
-
----
 
 ## Search Options
 
@@ -51,12 +23,12 @@ By default, search is case-insensitive: searching for `the` also finds `The` and
 
 Enable **`.*`** to use [regular expressions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions). Examples:
 
-| Pattern      | Matches                     |
+| Pattern      | Matches                     |                           |
 | ------------ | --------------------------- | ------------------------- |
-| `\bElena\b`  | Only the whole word "Elena" |
+| `\bElena\b`  | Only the whole word "Elena" |                           |
 | `Elena       | Elara`                      | Either "Elena" or "Elara" |
-| `Chapt(er)?` | "Chapter" or "Chapt"        |
-| `[0-9]+`     | Any sequence of digits      |
+| `Chapt(er)?` | "Chapter" or "Chapt"        |                           |
+| `[0-9]+`     | Any sequence of digits      |                           |
 
 > **Note:** Regex and Phonetic modes are mutually exclusive — enabling one disables the other.
 
