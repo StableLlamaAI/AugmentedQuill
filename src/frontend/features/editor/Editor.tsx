@@ -26,7 +26,6 @@ import {
 import { Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
-import { Button } from '../../components/ui/Button';
 import { notifyError } from '../../services/errorNotifier';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
@@ -98,15 +97,16 @@ export interface EditorHandle {
   jumpToPosition: (start: number, end: number) => void;
 }
 
+/* eslint-disable complexity */
 export const Editor = React.memo(
   React.forwardRef<EditorHandle, EditorProps>(
+    // eslint-disable-next-line max-lines-per-function
     (
       {
         chapter,
         settings,
         viewMode,
         showWhitespace,
-        onToggleShowWhitespace,
         onChange,
         baselineContent = undefined,
         suggestionControls,
@@ -123,7 +123,6 @@ export const Editor = React.memo(
       const editorViewRef = useRef<EditorView | null>(null);
       const paperDivRef = useRef<HTMLDivElement>(null);
       const showInlineTitle = true;
-      const conflictCount = chapter.conflicts?.length ?? 0;
       const { getRanges } = useSearchHighlight();
       const chapterSearchHighlightRanges = getRanges(
         'chapter_content',
@@ -251,21 +250,17 @@ export const Editor = React.memo(
         chapterId: chapter.id,
       });
 
-      const {
-        lastRawSelectionRef,
-        checkContext,
-        scheduleCheckContext,
-        toggleBlockAtCaret,
-      } = useEditorFormatting({
-        editorViewRef,
-        onContextChange,
-        contextDebounceMs: 150,
-      });
+      const { checkContext, scheduleCheckContext, toggleBlockAtCaret } =
+        useEditorFormatting({
+          editorViewRef,
+          onContextChange,
+          contextDebounceMs: 150,
+        });
 
       const writingUnavailableReason =
         'This action is unavailable because no working WRITING model is configured.';
 
-      const handleSuggestionButtonClick = () => {
+      const handleSuggestionButtonClick = (): void => {
         if (isSuggesting || isAiLoading) {
           if (isSuggesting) {
             suggestionControls.onCancelSuggestion?.();
@@ -280,7 +275,7 @@ export const Editor = React.memo(
 
       const [isDragging, setIsDragging] = useState(false);
 
-      const handleImageUpload = async (file: File) => {
+      const handleImageUpload = async (file: File): Promise<void> => {
         try {
           const res = await api.projects.uploadImage(file);
           if (res.ok) {
@@ -291,7 +286,11 @@ export const Editor = React.memo(
         }
       };
 
-      const insertImageMarkdown = (filename: string, url: string, altText?: string) => {
+      const insertImageMarkdown = (
+        filename: string,
+        url: string,
+        altText?: string
+      ): void => {
         const alt = altText || filename;
         if (!isSafeImageUrl(url)) return;
         const md = `![${alt}](${url})`;
@@ -308,17 +307,17 @@ export const Editor = React.memo(
         }
       };
 
-      const handleDragOver = (e: React.DragEvent) => {
+      const handleDragOver = (e: React.DragEvent): void => {
         e.preventDefault();
         setIsDragging(true);
       };
 
-      const handleDragLeave = (e: React.DragEvent) => {
+      const handleDragLeave = (e: React.DragEvent): void => {
         e.preventDefault();
         setIsDragging(false);
       };
 
-      const handleDrop = async (e: React.DragEvent) => {
+      const handleDrop = async (e: React.DragEvent): Promise<void> => {
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -333,12 +332,18 @@ export const Editor = React.memo(
         return editorViewRef.current?.state.selection.main.head ?? null;
       }, []);
 
-      const isEditorFocused = useCallback(() => {
+      const isEditorFocused = useCallback((): boolean => {
         return editorViewRef.current?.hasFocus ?? false;
       }, []);
 
+      const stopPropagationIfAvailable = (
+        e: KeyboardEvent | React.KeyboardEvent
+      ): void => {
+        e.stopPropagation?.();
+      };
+
       const maybeHandleSuggestionHotkey = useCallback(
-        (e: KeyboardEvent | React.KeyboardEvent) => {
+        (e: KeyboardEvent | React.KeyboardEvent): boolean => {
           const key = 'key' in e ? e.key : '';
           const ctrlKey = 'ctrlKey' in e ? e.ctrlKey : false;
           const metaKey = 'metaKey' in e ? e.metaKey : false;
@@ -359,101 +364,52 @@ export const Editor = React.memo(
           if (key === 'Enter' && (ctrlKey || metaKey)) {
             const cursor = getEditorCaretOffset() ?? chapter.content.length;
             e.preventDefault();
-            // @ts-ignore - stopPropagation exists on both KeyboardEvent and React synthetic events
-            e.stopPropagation?.();
+            stopPropagationIfAvailable(e);
             onKeyboardSuggestionAction('trigger', cursor, localContentRef.current);
             return true;
           }
 
           if (!suggestionActive) return false;
 
-          if (key === 'ArrowLeft') {
+          const performSuggestionAction = (
+            action: 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
+            cursor?: number
+          ): boolean => {
             e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction(
-              'chooseLeft',
-              undefined,
-              localContentRef.current
-            );
+            stopPropagationIfAvailable(e);
+            if (action === 'regenerate') {
+              onKeyboardSuggestionAction(
+                'regenerate',
+                cursor ?? localContentRef.current.length,
+                localContentRef.current
+              );
+            } else if (action === 'undo') {
+              onKeyboardSuggestionAction('undo');
+            } else if (action === 'exit') {
+              onKeyboardSuggestionAction('exit', undefined, localContentRef.current);
+            } else {
+              onKeyboardSuggestionAction(action, undefined, localContentRef.current);
+            }
             return true;
+          };
+
+          if (key === 'ArrowLeft') {
+            return performSuggestionAction('chooseLeft');
           }
           if (key === 'ArrowRight') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction(
-              'chooseRight',
-              undefined,
-              localContentRef.current
-            );
-            return true;
+            return performSuggestionAction('chooseRight');
           }
           if (key === 'ArrowDown') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
-            onKeyboardSuggestionAction('regenerate', cursor, localContentRef.current);
-            return true;
+            const cursor = getEditorCaretOffset();
+            return performSuggestionAction('regenerate', cursor ?? undefined);
           }
           if (key === 'ArrowUp') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction('undo');
-            return true;
+            return performSuggestionAction('undo');
           }
           if (key === 'Escape') {
-            if (suggestionActive) {
-              e.preventDefault();
-              // @ts-ignore
-              e.stopPropagation?.();
-              onKeyboardSuggestionAction('exit', undefined, localContentRef.current);
-              return true;
-            }
-            return false;
+            return suggestionActive ? performSuggestionAction('exit') : false;
           }
 
-          if (!suggestionActive) return false;
-
-          if (key === 'ArrowLeft') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction(
-              'chooseLeft',
-              undefined,
-              localContentRef.current
-            );
-            return true;
-          }
-          if (key === 'ArrowRight') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction(
-              'chooseRight',
-              undefined,
-              localContentRef.current
-            );
-            return true;
-          }
-          if (key === 'ArrowDown') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            const cursor = getEditorCaretOffset() ?? localContentRef.current.length;
-            onKeyboardSuggestionAction('regenerate', cursor, localContentRef.current);
-            return true;
-          }
-          if (key === 'ArrowUp') {
-            e.preventDefault();
-            // @ts-ignore
-            e.stopPropagation?.();
-            onKeyboardSuggestionAction('undo');
-            return true;
-          }
           return false;
         },
         [
@@ -471,14 +427,14 @@ export const Editor = React.memo(
       useEffect(() => {
         // Capture shortcuts globally so suggestion controls remain reachable
         // while focus moves across editor-adjacent UI.
-        const onKeyDown = (e: KeyboardEvent) => {
+        const onKeyDown = (e: KeyboardEvent): void => {
           maybeHandleSuggestionHotkey(e);
         };
         window.addEventListener('keydown', onKeyDown, true);
         return () => window.removeEventListener('keydown', onKeyDown, true);
       }, [maybeHandleSuggestionHotkey]);
 
-      const format = (type: string) => {
+      const format = (type: string): void => {
         const view = editorViewRef.current;
         if (!view) return;
 
@@ -582,17 +538,23 @@ export const Editor = React.memo(
       let pageBackgroundColor: string;
       let textColor: string;
       let editorContainerBg: string;
+      let selectionBg: string;
 
       if (settings.theme === 'dark') {
         const b = settings.brightness * 20; // range 10-20% lightness
         pageBackgroundColor = `hsl(24, 10%, ${b}%)`;
         textColor = `rgba(231, 229, 228, ${settings.contrast})`;
         editorContainerBg = 'bg-brand-gray-950';
+        // Dark background: stronger selection to remain visible
+        selectionBg = 'rgba(99,102,241,0.40)';
       } else {
         pageBackgroundColor = `hsl(38, 25%, ${settings.brightness * 100}%)`;
         textColor = `rgba(20, 15, 10, ${settings.contrast})`;
         editorContainerBg =
           settings.theme === 'light' ? 'bg-brand-gray-100' : 'bg-brand-gray-950';
+        // Light/Mixed mode: warm editor background — use a soft semi-transparent
+        // highlight so selected text stays readable without being too vivid
+        selectionBg = 'rgba(99,102,241,0.22)';
       }
 
       const isMonospace = viewMode === 'raw';
@@ -619,14 +581,6 @@ export const Editor = React.memo(
         settings.theme === 'light'
           ? 'bg-brand-gray-50 border-b border-brand-gray-200 shadow-sm'
           : 'bg-brand-gray-900 border-b border-brand-gray-800 shadow-sm';
-      const summaryBg =
-        settings.theme === 'light'
-          ? 'bg-brand-gray-50 border-b border-brand-gray-200'
-          : 'bg-brand-gray-900 border-b border-brand-gray-800';
-      const inputBg =
-        settings.theme === 'light'
-          ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
-          : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
       const textMuted =
         settings.theme === 'light' ? 'text-brand-gray-500' : 'text-brand-gray-500';
       const footerBg =
@@ -734,6 +688,7 @@ export const Editor = React.memo(
                 </div>
               )}
               {/* The Paper - Grows infinitely */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
               <div
                 ref={paperDivRef}
                 role="group"
@@ -829,6 +784,7 @@ export const Editor = React.memo(
                       baselineValue={localBaseline}
                       searchHighlightRanges={chapterSearchHighlightRanges}
                       enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                      selectionBg={selectionBg}
                       placeholder={
                         chapter.scope === 'story'
                           ? 'Start writing your story here...'
@@ -855,5 +811,6 @@ export const Editor = React.memo(
     }
   )
 );
+/* eslint-enable complexity */
 
 Editor.displayName = 'Editor';

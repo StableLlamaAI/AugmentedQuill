@@ -49,7 +49,7 @@ Each project in the list shows:
 
 Clicking **New Project** opens a small dialog:
 
-`[SCREENSHOT: The Create Project dialog showing the name field and three project type radio buttons]`
+![The Create Project dialog showing the name field and three project type radio buttons](screenshots/02_create_project_dialog.png)
 
 | Field                         | Description                                                                                                                              |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,7 +93,7 @@ _Note: Chat histories and generated images are currently not included in project
 
 The Machine Settings tab is where you configure the AI models (providers) that power AugmentedQuill. You can add multiple providers and assign each one to specific roles.
 
-`[SCREENSHOT: The Machine Settings tab showing the provider list on the left and the configuration form on the right]`
+![The Machine Settings tab showing the provider list on the left and the configuration form on the right](screenshots/02_machine_settings_1.png)
 
 ### The Three AI Model Roles
 
@@ -151,7 +151,7 @@ Click the **+** button above the list to add a new provider from scratch. Click 
 
 Selecting a provider opens its configuration in the right two-thirds of the panel.
 
-`[SCREENSHOT: Machine Settings provider form showing role toggles, connection fields, model selector, and parameter sliders]`
+![Machine Settings provider form showing role toggles, connection fields, model selector, and parameter sliders](screenshots/02_machine_settings_2.png)
 
 #### Role Assignment
 
@@ -251,7 +251,7 @@ Like presets, tweaks just write values into the parameter fields — you remain 
 
 Below the parameter sliders is an expandable **Prompt Overrides** section. This is an advanced feature for users who want to customize exactly what the AI receives as its instructions.
 
-`[SCREENSHOT: The Expert Prompt Overrides section expanded, showing several labeled textareas with role badges]`
+![The Expert Prompt Overrides section expanded, showing several labeled textareas with role badges](screenshots/02_machine_settings_3.png)
 
 AugmentedQuill has 22 built-in prompts, split into two groups:
 

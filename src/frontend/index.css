@@ -69,9 +69,9 @@ body.light ::-webkit-scrollbar-thumb:hover {
 }
 
 .cm-ws-marker {
-  opacity: 0.5;
-  pointer-events: none;
-  user-select: none;
+  opacity: 1;
+  pointer-events: auto;
+  user-select: text;
   font-style: normal;
   font-weight: normal;
   font-family: inherit;
@@ -79,20 +79,63 @@ body.light ::-webkit-scrollbar-thumb:hover {
   line-height: inherit;
 }
 
+.cm-ws-marker .cm-ws-glyph {
+  opacity: 1;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker[data-ws-selected='1'] {
+  background-color: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
+.cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  border-bottom-color: rgba(34, 197, 94, 0.4) !important;
+}
+
+.cm-diff-deleted .cm-ws-marker[data-ws-diff='1'][data-ws-selected='1'],
+.cm-ws-marker.cm-diff-deleted[data-ws-diff='1'][data-ws-selected='1'] {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.cm-ws-marker[data-ws-selected='1'] .cm-ws-glyph {
+  /* Selection bg is semi-transparent — no text inversion, keep normal dim colour */
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker::selection,
+.cm-ws-marker .cm-ws-glyph::selection {
+  background-color: transparent;
+}
+
+.cm-ws-marker::-moz-selection,
+.cm-ws-marker .cm-ws-glyph::-moz-selection {
+  background-color: transparent;
+}
+
 .cm-ws-marker[data-ws-marker='1'] {
   display: inline;
   position: relative;
-  color: inherit;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+  white-space: break-spaces;
   background-image: radial-gradient(circle, currentColor 35%, transparent 36%);
   background-position: center;
   background-repeat: no-repeat;
   background-size: 0.35em 0.35em;
 }
 
+.cm-ws-marker[data-ws-marker='1'] .cm-ws-glyph {
+  display: inline;
+  white-space: inherit;
+}
+
 .cm-ws-marker[data-ws-tab='1'] {
-  display: inline-block;
-  min-width: 1ch;
-  width: 1ch;
+  display: inline;
+  min-width: 0;
+  width: auto;
+  padding-right: 0.55ch;
   text-align: center;
   vertical-align: baseline;
   background-image: none;

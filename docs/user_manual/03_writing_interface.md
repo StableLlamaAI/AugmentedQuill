@@ -160,7 +160,7 @@ Each dropdown button shows a colored status dot (green = connected, red = failed
 
 All three writing-focused actions — Extend, Rewrite, and Suggest — use the **WRITING** model (<img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> Book Open, <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> Violet) explained in the machine settings guide. The action buttons live in the floating toolbar and the persistent footer, so they are always available even as you scroll.
 
-`[SCREENSHOT: Chapter AI badge showing Extend and Rewrite on a light background plus the Suggest button in the footer]`
+![Chapter AI badge showing Extend and Rewrite on a light background plus the Suggest button in the footer](screenshots/03_chapter_ai.png)
 
 ### Extend Chapter
 
@@ -172,7 +172,7 @@ Next to Extend is `Rewrite`, decorated with the <img src="assets/file-pen.svg" a
 
 ### Suggest Next Paragraph
 
-`[SCREENSHOT: The suggestion footer open with two or three continuation cards and the Dismiss button]`
+![The suggestion footer open with two or three continuation cards and the Dismiss button](screenshots/03_continuation.png)
 
 At the bottom of the editor sits the pulsing `Suggest next paragraph` pill with the <img src="assets/sparkles.svg" alt="Sparkles icon" width="16" height="16" style="vertical-align:text-bottom;" /> Sparkles icon. Click it to open the **continuation pane**. The <img src="assets/book-open.svg" alt="Book Open icon" width="16" height="16" style="vertical-align:text-bottom;" /> <img src="assets/swatches/violet.svg" alt="Violet swatch" width="16" height="16" style="vertical-align:text-bottom;" /> WRITING model generates two or more short continuation options, each shown as a card. Click any card to insert that text at the cursor and close the pane, or press **Dismiss** to discard all suggestions without changing your draft.
 
@@ -215,7 +215,7 @@ The summary tab inside the Metadata Editor dialog (covered in [Chapters and Book
 
 These controls update the planning layer around a chapter rather than the prose itself. The summaries they produce help CHAT steer the project and help WRITING stay aligned when it generates new text.
 
-`[SCREENSHOT: Metadata summary tab with AI Write/Update/Rewrite buttons highlighted]`
+![Metadata summary tab with AI Write/Update/Rewrite buttons highlighted](screenshots/03_metadata_summary.png)
 
 ---
 
