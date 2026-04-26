@@ -24,6 +24,7 @@ import { diff_match_patch } from 'diff-match-patch';
 
 type WsDiffFlag = '1' | undefined;
 type WsMarkerKind = 'space' | 'tab' | 'newline';
+type WsSelectedFlag = '1' | undefined;
 
 const dmp = new diff_match_patch();
 
@@ -33,7 +34,8 @@ function isVisibleWhitespace(char: string): boolean {
 
 export function createWhitespaceMarkerElement(
   kind: WsMarkerKind,
-  diffFlag?: WsDiffFlag
+  diffFlag?: WsDiffFlag,
+  selectedFlag?: WsSelectedFlag
 ): HTMLSpanElement {
   const el = document.createElement('span');
   el.setAttribute('aria-hidden', 'true');
@@ -55,6 +57,9 @@ export function createWhitespaceMarkerElement(
 
   if (diffFlag) {
     el.dataset.wsDiff = diffFlag;
+  }
+  if (selectedFlag) {
+    el.dataset.wsSelected = selectedFlag;
   }
 
   el.appendChild(glyph);
@@ -113,58 +118,111 @@ function computeInsertedWhitespacePositions(
 
 /** Represents space widget. */
 class WsSpaceWidget extends WidgetType {
-  constructor(private readonly diffFlag?: WsDiffFlag) {
+  constructor(
+    private readonly diffFlag?: WsDiffFlag,
+    private readonly selectedFlag?: WsSelectedFlag
+  ) {
     super();
   }
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    return createWhitespaceMarkerElement('space', this.diffFlag);
+    return createWhitespaceMarkerElement('space', this.diffFlag, this.selectedFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {
-    return true;
+    return false;
   }
 }
 
 /** Represents tab widget. */
 class WsTabWidget extends WidgetType {
-  constructor(private readonly diffFlag?: WsDiffFlag) {
+  constructor(
+    private readonly diffFlag?: WsDiffFlag,
+    private readonly selectedFlag?: WsSelectedFlag
+  ) {
     super();
   }
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    return createWhitespaceMarkerElement('tab', this.diffFlag);
+    return createWhitespaceMarkerElement('tab', this.diffFlag, this.selectedFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {
-    return true;
+    return false;
   }
 }
 
 /** Represents nl widget. */
 class WsNlWidget extends WidgetType {
-  constructor(private readonly diffFlag?: WsDiffFlag) {
+  constructor(
+    private readonly diffFlag?: WsDiffFlag,
+    private readonly selectedFlag?: WsSelectedFlag
+  ) {
     super();
   }
 
   /** Convert dom. */
   toDOM(): HTMLElement {
-    return createWhitespaceMarkerElement('newline', this.diffFlag);
+    return createWhitespaceMarkerElement('newline', this.diffFlag, this.selectedFlag);
   }
   /** Helper for event. */
   ignoreEvent(): boolean {
-    return true;
+    return false;
   }
 }
 
 const wsSpaceWidget = new WsSpaceWidget();
+const wsSpaceSelectedWidget = new WsSpaceWidget(undefined, '1');
 const wsSpaceDiffWidget = new WsSpaceWidget('1');
+const wsSpaceDiffSelectedWidget = new WsSpaceWidget('1', '1');
+
 const wsTabWidget = new WsTabWidget();
+const wsTabSelectedWidget = new WsTabWidget(undefined, '1');
 const wsTabDiffWidget = new WsTabWidget('1');
+const wsTabDiffSelectedWidget = new WsTabWidget('1', '1');
+
 const wsNlWidget = new WsNlWidget();
+const wsNlSelectedWidget = new WsNlWidget(undefined, '1');
 const wsNlDiffWidget = new WsNlWidget('1');
+const wsNlDiffSelectedWidget = new WsNlWidget('1', '1');
+
+function createNewlineWidget(isDiff: boolean, isSelected: boolean): WidgetType {
+  return isDiff
+    ? isSelected
+      ? wsNlDiffSelectedWidget
+      : wsNlDiffWidget
+    : isSelected
+      ? wsNlSelectedWidget
+      : wsNlWidget;
+}
+
+function createWhitespaceWidget(
+  ch: string,
+  isInserted: boolean,
+  isSelected: boolean
+): WidgetType | null {
+  if (ch === ' ') {
+    return isInserted
+      ? isSelected
+        ? wsSpaceDiffSelectedWidget
+        : wsSpaceDiffWidget
+      : isSelected
+        ? wsSpaceSelectedWidget
+        : wsSpaceWidget;
+  }
+  if (ch === '\t') {
+    return isInserted
+      ? isSelected
+        ? wsTabDiffSelectedWidget
+        : wsTabDiffWidget
+      : isSelected
+        ? wsTabSelectedWidget
+        : wsTabWidget;
+  }
+  return null;
+}
 
 export const buildWhitespacePlugin = (
   baseline: string | undefined,
@@ -180,6 +238,8 @@ export const buildWhitespacePlugin = (
       /** Update the requested value. */
       update(u: ViewUpdate): void {
         if (u.viewportChanged || u.geometryChanged) {
+          this.decorations = this.build(u.view);
+        } else if (u.selectionSet) {
           this.decorations = this.build(u.view);
         } else if (u.docChanged) {
           // Fast path: remap positions for single inert-char insertions.
@@ -210,6 +270,13 @@ export const buildWhitespacePlugin = (
       build(view: EditorView): DecorationSet {
         const decs: Range<Decoration>[] = [];
         const docText = view.state.doc.toString();
+        const selectionRanges = view.state.selection.ranges;
+
+        const intersectsSelection = (from: number, to: number): boolean =>
+          selectionRanges.some(
+            (range: { from: number; to: number }) => range.from < to && range.to > from
+          );
+
         const insertedWhitespace =
           showDiff && baseline != null
             ? computeInsertedWhitespacePositions(baseline, docText, streamingMode)
@@ -228,9 +295,12 @@ export const buildWhitespacePlugin = (
         const lastLine = doc.lineAt(Math.min(vpTo, doc.length)).number;
         for (let n = firstLine; n <= lastLine; n++) {
           const line = doc.line(n);
-          const nlWidget = insertedWhitespace?.has(line.to)
-            ? wsNlDiffWidget
-            : wsNlWidget;
+          const hasRealNewline = line.to < doc.length;
+          const isSelectedNewline = hasRealNewline
+            ? intersectsSelection(line.to, line.to + 1)
+            : false;
+          const isDiffNewline = insertedWhitespace?.has(line.to) ?? false;
+          const nlWidget = createNewlineWidget(isDiffNewline, isSelectedNewline);
           // side: 1 places the widget after the position (at the line end,
           // after the logical caret slot), so the cursor appears before the mark.
           decs.push(Decoration.widget({ widget: nlWidget, side: 1 }).range(line.to));
@@ -242,18 +312,10 @@ export const buildWhitespacePlugin = (
           const ch = text[i];
           const pos = vpFrom + i;
           const isInsertedWs = insertedWhitespace?.has(pos) ?? false;
-          if (ch === ' ') {
-            decs.push(
-              Decoration.replace({
-                widget: isInsertedWs ? wsSpaceDiffWidget : wsSpaceWidget,
-              }).range(pos, pos + 1)
-            );
-          } else if (ch === '\t') {
-            decs.push(
-              Decoration.replace({
-                widget: isInsertedWs ? wsTabDiffWidget : wsTabWidget,
-              }).range(pos, pos + 1)
-            );
+          const isSelectedWs = intersectsSelection(pos, pos + 1);
+          const widget = createWhitespaceWidget(ch, isInsertedWs, isSelectedWs);
+          if (widget) {
+            decs.push(Decoration.replace({ widget }).range(pos, pos + 1));
           }
         }
 

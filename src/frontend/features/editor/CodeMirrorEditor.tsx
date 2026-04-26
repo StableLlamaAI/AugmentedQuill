@@ -21,6 +21,7 @@ import {
   ViewPlugin,
   ViewUpdate,
   DecorationSet,
+  drawSelection,
 } from '@codemirror/view';
 import { EditorState, Compartment, Prec, Range, Transaction } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
@@ -77,6 +78,10 @@ const baseTheme = EditorView.theme({
     fontFamily: 'inherit',
     lineHeight: 'inherit',
     height: 'auto',
+    // Fallback selection colours used when the selectionBg prop is not set.
+    // The selectionBgCompartment overrides these at runtime.
+    '--aq-selection-bg': 'rgba(99,102,241,0.25)',
+    '--aq-selection-bg-focused': 'rgba(99,102,241,0.35)',
   },
   '.cm-scroller': {
     fontFamily: 'inherit',
@@ -107,15 +112,15 @@ const baseTheme = EditorView.theme({
     backgroundColor: 'transparent !important',
   },
   '.cm-selectionBackground': {
-    backgroundColor: 'rgba(99,102,241,0.2) !important',
+    backgroundColor: 'var(--aq-selection-bg) !important',
   },
   '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(99,102,241,0.3) !important',
+    backgroundColor: 'var(--aq-selection-bg-focused) !important',
   },
   '.cm-ws-marker': {
-    opacity: '0.35',
-    pointerEvents: 'none',
-    userSelect: 'none',
+    opacity: '1',
+    pointerEvents: 'auto',
+    userSelect: 'text',
     fontStyle: 'normal',
     fontWeight: 'normal',
     fontFamily: 'inherit',
@@ -123,6 +128,21 @@ const baseTheme = EditorView.theme({
     lineHeight: 'inherit',
     verticalAlign: 'baseline',
     boxSizing: 'border-box',
+  },
+  '.cm-ws-marker .cm-ws-glyph': {
+    opacity: '1',
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
+  },
+  // Selected WS markers: let the drawSelection semi-transparent background
+  // show through (transparent) while keeping the glyph at its normal dim
+  // colour — no text inversion because the selection bg is never opaque.
+  ".cm-ws-marker[data-ws-selected='1']": {
+    backgroundColor: 'transparent !important',
+    borderBottomColor: 'transparent !important',
+  },
+  "&.cm-focused .cm-ws-marker[data-ws-selected='1']": {
+    backgroundColor: 'transparent !important',
+    borderBottomColor: 'transparent !important',
   },
   ".cm-ws-marker[data-ws-diff='1']": {
     opacity: '1',
@@ -133,7 +153,8 @@ const baseTheme = EditorView.theme({
     borderRadius: '0',
   },
   ".cm-ws-marker[data-ws-diff='1'] .cm-ws-glyph": {
-    opacity: '0.35',
+    opacity: '1',
+    color: 'color-mix(in srgb, currentColor 35%, transparent)',
   },
   ".cm-ws-marker[data-ws-diff='1'][data-ws-tab='1']": {
     backgroundColor: 'rgba(34, 197, 94, 0.15)',
@@ -264,6 +285,16 @@ export interface CodeMirrorEditorProps {
   spellCheck?: boolean;
   /** Called when the user presses Ctrl+F / Cmd+F inside the editor */
   onOpenSearch?: () => void;
+  /**
+   * CSS colour value used as the selection background (both focused and
+   * unfocused, via --aq-selection-bg / --aq-selection-bg-focused).
+   * Should be a semi-transparent colour so text remains readable without
+   * inversion.  Defaults to indigo-500 @ 25 / 35 %.
+   *
+   * Pass a theme-appropriate value from the parent so Light, Mixed, and Dark
+   * modes each get the right contrast level.
+   */
+  selectionBg?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -272,6 +303,7 @@ export const CodeMirrorEditor = React.forwardRef<
   EditorView | null,
   CodeMirrorEditorProps
 >(
+  // eslint-disable-next-line max-lines-per-function
   (
     {
       value,
@@ -291,6 +323,7 @@ export const CodeMirrorEditor = React.forwardRef<
       language = 'en',
       spellCheck = false,
       onOpenSearch,
+      selectionBg,
     }: CodeMirrorEditorProps,
     ref: React.ForwardedRef<EditorView | null>
   ) => {
@@ -331,6 +364,7 @@ export const CodeMirrorEditor = React.forwardRef<
     const placeholderCompartment = useRef(new Compartment());
     const attributesCompartment = useRef(new Compartment());
     const mdDecorationCompartment = useRef(new Compartment());
+    const selectionBgCompartment = useRef(new Compartment());
 
     // ── Extension builders ──────────────────────────────────────────────────
 
@@ -437,6 +471,21 @@ export const CodeMirrorEditor = React.forwardRef<
     const buildMdDecorationExtension = (vm: DecorationViewMode): Extension =>
       buildMarkdownDecorationPlugin(vm);
 
+    // Builds a per-instance EditorView.theme() that overrides the selection
+    // background directly on .cm-selectionBackground.  Registered after
+    // baseTheme, so its stylesheet wins the CSS cascade.
+    const buildSelectionBgExtension = (bg: string | undefined): Extension => {
+      if (!bg) return [];
+      return EditorView.theme({
+        '.cm-selectionBackground': {
+          backgroundColor: `${bg} !important`,
+        },
+        '&.cm-focused .cm-selectionBackground': {
+          backgroundColor: `${bg} !important`,
+        },
+      });
+    };
+
     // ── Mount / unmount ─────────────────────────────────────────────────────
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
@@ -446,6 +495,10 @@ export const CodeMirrorEditor = React.forwardRef<
       const extensions: Extension[] = [
         baseTheme,
         markdownDecorationTheme,
+        // drawSelection takes control of selection rendering via
+        // .cm-selectionBackground divs so that WS marker widgets and plain
+        // text receive identical selection colours (Highlight / HighlightText).
+        drawSelection(),
         EditorView.lineWrapping,
         buildClipboardExtension(),
         // Spellcheck / autocorrect / platform-native behavior in its own compartment
@@ -486,6 +539,7 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
+        selectionBgCompartment.current.of(buildSelectionBgExtension(selectionBg)),
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (update.docChanged) {
             const isExternalSync = update.transactions.some((tx: Transaction) =>
@@ -562,6 +616,14 @@ export const CodeMirrorEditor = React.forwardRef<
         ),
       });
     }, [enterBehavior]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: selectionBgCompartment.current.reconfigure(
+          buildSelectionBgExtension(selectionBg)
+        ),
+      });
+    }, [selectionBg]);
 
     useEffect(() => {
       viewRef.current?.dispatch({

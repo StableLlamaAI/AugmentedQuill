@@ -69,14 +69,39 @@ body.light ::-webkit-scrollbar-thumb:hover {
 }
 
 .cm-ws-marker {
-  opacity: 0.5;
-  pointer-events: none;
-  user-select: none;
+  opacity: 1;
+  pointer-events: auto;
+  user-select: text;
   font-style: normal;
   font-weight: normal;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
+}
+
+.cm-ws-marker .cm-ws-glyph {
+  opacity: 1;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker[data-ws-selected='1'] {
+  background-color: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
+.cm-ws-marker[data-ws-selected='1'] .cm-ws-glyph {
+  /* Selection bg is semi-transparent — no text inversion, keep normal dim colour */
+  color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cm-ws-marker::selection,
+.cm-ws-marker .cm-ws-glyph::selection {
+  background-color: transparent;
+}
+
+.cm-ws-marker::-moz-selection,
+.cm-ws-marker .cm-ws-glyph::-moz-selection {
+  background-color: transparent;
 }
 
 .cm-ws-marker[data-ws-marker='1'] {
