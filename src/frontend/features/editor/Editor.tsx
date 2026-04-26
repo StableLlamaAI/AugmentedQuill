@@ -400,7 +400,8 @@ export const Editor = React.memo(
             return performSuggestionAction('chooseRight');
           }
           if (key === 'ArrowDown') {
-            return performSuggestionAction('regenerate', getEditorCaretOffset());
+            const cursor = getEditorCaretOffset();
+            return performSuggestionAction('regenerate', cursor ?? undefined);
           }
           if (key === 'ArrowUp') {
             return performSuggestionAction('undo');
