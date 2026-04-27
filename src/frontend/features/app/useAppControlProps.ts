@@ -84,7 +84,13 @@ type UseAppMainLayoutPropsParams = {
   currentChapterId: string | null;
   handleChapterSelect: (chapterId: string | null) => void;
   deleteChapter: (chapterId: string) => Promise<void>;
-  updateChapter: (id: string, partial: Record<string, unknown>) => Promise<void>;
+  updateChapter: (
+    id: string,
+    partial: Record<string, unknown>,
+    sync?: boolean,
+    pushHistory?: boolean,
+    isUserEdit?: boolean
+  ) => Promise<void>;
   updateBook: (id: string, partial: Record<string, unknown>) => Promise<void>;
   addChapter: (title?: string, content?: string, bookId?: string) => Promise<void>;
   handleBookCreate: (title: string) => Promise<void>;
@@ -336,6 +342,7 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   sidebarControls: AppMainLayoutProps['sidebarControls'];
   editorControls: AppMainLayoutProps['editorControls'];
@@ -373,8 +380,6 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     refreshStory,
     undo,
     redo,
-    canUndo,
-    canRedo,
     searchState,
     currentChapter,
     isChapterLoading,
@@ -464,11 +469,14 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     ]
   );
   const editorUpdateChapter = useCallback(
-    (id: string, partial: Record<string, unknown>) => {
+    (id: string, partial: Record<string, unknown>, isUndoRedo?: boolean) => {
       if ('content' in partial) {
         searchStateRef.current.notifyContentChanged(Number.parseInt(id, 10));
       }
-      return updateChapter(id, partial);
+      if (isUndoRedo) {
+        return updateChapter(id, partial, true, false, false);
+      }
+      return updateChapter(id, partial, true, true, true);
     },
     [updateChapter]
   );

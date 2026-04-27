@@ -187,7 +187,7 @@ export const useStoryStore = create<StoryStoreState>()(
       } else {
         const idx = prev.findIndex((e: SourcebookEntry) => e.id === entry.id);
         if (idx >= 0) {
-          const sig = (e: SourcebookEntry) =>
+          const sig = (e: SourcebookEntry): string =>
             JSON.stringify({
               name: e.name,
               description: e.description,
@@ -231,7 +231,23 @@ export const useStoryStore = create<StoryStoreState>()(
       currentChapterId: string | null;
       currentIndex: number;
       baselineState: StoryState;
-    }) => set({ story, currentChapterId, currentIndex, baselineState }),
+    }) =>
+      set((state: StoryStoreState) => {
+        const preservedCurrentChapterId = state.currentChapterId
+          ? story.chapters.some(
+              (chapter: Chapter) => chapter.id === state.currentChapterId
+            )
+            ? state.currentChapterId
+            : currentChapterId
+          : currentChapterId;
+
+        return {
+          story,
+          currentChapterId: preservedCurrentChapterId,
+          currentIndex,
+          baselineState,
+        };
+      }),
   })
 );
 

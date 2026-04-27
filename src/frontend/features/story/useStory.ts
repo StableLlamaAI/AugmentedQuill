@@ -34,6 +34,7 @@ import {
   buildDraftUpdateLabel,
   createHistoryEntry,
 } from './historyUtils';
+import type { StoryHistoryEntry } from './historyUtils';
 import { useStoryStore, StoryStoreState } from '../../stores/storyStore';
 
 /** Maximum number of undo/redo states retained in memory. */
@@ -119,6 +120,7 @@ export const buildInitialStoryState = (
   lastUpdated: Date.now(),
 });
 
+// eslint-disable-next-line max-lines-per-function, @typescript-eslint/explicit-function-return-type
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   // --- State now lives in the Zustand storyStore --------------------------------
   // Components that subscribe to the store with granular selectors only re-render
@@ -148,8 +150,19 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
 
   const pushState = useCallback(
     (newState: StoryState, label: string, isUserEdit: boolean = true) => {
-      const { history, currentIndex } = useStoryStore.getState();
-      const updatedState = { ...newState, lastUpdated: Date.now() };
+      const {
+        history,
+        currentIndex,
+        currentChapterId: selectedChapterId,
+      } = useStoryStore.getState();
+      const updatedState = {
+        ...newState,
+        lastUpdated: Date.now(),
+        currentChapterId:
+          newState.currentChapterId !== undefined
+            ? newState.currentChapterId
+            : selectedChapterId,
+      };
       const currentEntry = history[currentIndex];
       if (
         !isUserEdit &&
@@ -176,6 +189,9 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentIndex: bounded.length - 1,
         baselineState: newBaseline,
       });
+      useStoryStore
+        .getState()
+        .setCurrentChapterId(updatedState.currentChapterId ?? null);
       latestStoryRef.current = updatedState;
     },
     [] // empty – all state accessed via useStoryStore.getState()
@@ -216,7 +232,15 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         latestStoryRef.current,
         latestStoryRef.current
       );
-      const updatedState = { ...sourceState, lastUpdated: Date.now() };
+      const selectedChapterId = useStoryStore.getState().currentChapterId;
+      const updatedState = {
+        ...sourceState,
+        lastUpdated: Date.now(),
+        currentChapterId:
+          sourceState.currentChapterId !== undefined
+            ? sourceState.currentChapterId
+            : selectedChapterId,
+      };
 
       const currentEntry = history[currentIndex];
       if (
@@ -342,9 +366,12 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   );
 
   const selectChapter = useCallback((id: string | null) => {
-    if (id !== useStoryStore.getState().currentChapterId) {
+    const state = useStoryStore.getState();
+    if (id !== state.currentChapterId) {
       lastLoadedChapterId.current = null;
-      useStoryStore.getState().setCurrentChapterId(id);
+      state.setCurrentChapterId(id);
+      state.setStory((prev: StoryState) => ({ ...prev, currentChapterId: id }));
+      latestStoryRef.current = { ...latestStoryRef.current, currentChapterId: id };
     }
   }, []);
 
@@ -352,30 +379,85 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   useEffect(() => {
     if (currentChapterId && currentChapterId !== lastLoadedChapterId.current) {
       useStoryStore.setState({ isChapterLoading: true });
-      const loadContent = async () => {
+      const loadContent = async (): Promise<void> => {
         try {
           const res = await api.chapters.get(Number(currentChapterId));
           lastLoadedChapterId.current = currentChapterId;
           startTransition(() => {
-            useStoryStore.setState((state: StoryStoreState) => ({
-              story: {
-                ...state.story,
-                chapters: state.story.chapters.map((c: Chapter) =>
-                  c.id === currentChapterId
-                    ? {
-                        ...c,
-                        content: res.content,
-                        notes: res.notes ?? undefined,
-                        private_notes: res.private_notes ?? undefined,
-                        conflicts: (res.conflicts ?? []) as Conflict[],
-                        title: res.title ?? undefined,
-                        summary: res.summary ?? undefined,
-                      }
-                    : c
-                ),
-              },
-              isChapterLoading: false,
-            }));
+            useStoryStore.setState((state: StoryStoreState) => {
+              const baselineChapter = state.baselineState.chapters.find(
+                (chapter: Chapter) => chapter.id === currentChapterId
+              );
+              const shouldSyncBaseline =
+                baselineChapter !== undefined && (baselineChapter.content ?? '') === '';
+              const updatedChapters = state.story.chapters.map((c: Chapter) =>
+                c.id === currentChapterId
+                  ? {
+                      ...c,
+                      content: res.content,
+                      notes: res.notes ?? undefined,
+                      private_notes: res.private_notes ?? undefined,
+                      conflicts: (res.conflicts ?? []) as Conflict[],
+                      title: res.title ?? undefined,
+                      summary: res.summary ?? undefined,
+                    }
+                  : c
+              );
+
+              const nextHistory =
+                state.currentIndex === 0 && state.history.length === 1
+                  ? state.history.map((entry: StoryHistoryEntry, idx: number) =>
+                      idx !== 0
+                        ? entry
+                        : {
+                            ...entry,
+                            state: {
+                              ...entry.state,
+                              chapters: entry.state.chapters.map((chapter: Chapter) =>
+                                chapter.id === currentChapterId
+                                  ? {
+                                      ...chapter,
+                                      content: res.content,
+                                      notes: res.notes ?? undefined,
+                                      private_notes: res.private_notes ?? undefined,
+                                      conflicts: (res.conflicts ?? []) as Conflict[],
+                                      title: res.title ?? undefined,
+                                      summary: res.summary ?? undefined,
+                                    }
+                                  : chapter
+                              ),
+                            },
+                          }
+                    )
+                  : state.history;
+
+              return {
+                story: {
+                  ...state.story,
+                  chapters: updatedChapters,
+                },
+                baselineState: shouldSyncBaseline
+                  ? {
+                      ...state.baselineState,
+                      chapters: state.baselineState.chapters.map((chapter: Chapter) =>
+                        chapter.id === currentChapterId
+                          ? {
+                              ...chapter,
+                              content: res.content,
+                              notes: res.notes ?? undefined,
+                              private_notes: res.private_notes ?? undefined,
+                              conflicts: (res.conflicts ?? []) as Conflict[],
+                              title: res.title ?? undefined,
+                              summary: res.summary ?? undefined,
+                            }
+                          : chapter
+                      ),
+                    }
+                  : state.baselineState,
+                history: nextHistory,
+                isChapterLoading: false,
+              };
+            });
           });
         } catch (e) {
           console.error('Failed to load chapter content', e);
@@ -490,6 +572,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     []
   );
 
+  /* eslint-disable complexity */
   const updateStoryDraft = useCallback(
     async (
       partial: Partial<WritingUnit>,
@@ -551,6 +634,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
     },
     []
   );
+  /* eslint-enable complexity */
 
   const updateStoryImageSettings = useCallback(async (style: string, info: string) => {
     const story = latestStoryRef.current;
@@ -652,7 +736,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   }, []);
 
   const addChapter = useCallback(
-    async (title: string = 'New Chapter', summary: string = '', bookId?: string) => {
+    async (title: string = 'New Chapter', _summary: string = '', bookId?: string) => {
       try {
         const res = await api.chapters.create(title, '', bookId);
         const chaptersRes = await api.chapters.list();
@@ -725,14 +809,19 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   }, []);
 
   const loadStory = useCallback(
-    (newStory: StoryState) => {
+    (storyToLoad: StoryState) => {
       // Keep backend active-project context aligned before local state updates.
-      if (newStory.id) {
+      if (storyToLoad.id) {
         api.projects
-          .select(newStory.id)
+          .select(storyToLoad.id)
           .then(() => fetchStory())
           .catch((e: unknown) => console.error('Failed to select project', e));
       }
+
+      const loadedChapterId =
+        storyToLoad.currentChapterId ??
+        (storyToLoad.chapters.length > 0 ? storyToLoad.chapters[0].id : null);
+      const newStory = { ...storyToLoad, currentChapterId: loadedChapterId };
 
       useStoryStore.setState({
         story: newStory,
@@ -740,14 +829,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         currentIndex: 0,
         baselineState: newStory,
         isChapterLoading: false,
+        currentChapterId: loadedChapterId,
       });
       latestStoryRef.current = newStory;
       lastLoadedChapterId.current = null;
       useStoryStore.getState().incrementLoadChapterSignal();
-      const newChapterId =
-        newStory.currentChapterId ??
-        (newStory.chapters.length > 0 ? newStory.chapters[0].id : null);
-      useStoryStore.setState({ currentChapterId: newChapterId });
     },
     [story.id, fetchStory]
   );
@@ -881,7 +967,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         if (idx >= 0) {
           // Compare only user-editable fields; keywords are auto-generated and
           // must not cause a spurious content-changed detection.
-          const sig = (e: SourcebookEntry) =>
+          const sig = (e: SourcebookEntry): string =>
             JSON.stringify({
               name: e.name,
               description: e.description,
