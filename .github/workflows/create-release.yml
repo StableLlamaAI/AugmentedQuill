@@ -93,13 +93,37 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: backend-onedir-${{ runner.os }}
-          path: dist/run_app
+          path: dist/release
+      - name: Extract Backend Artifact
+        run: |
+          mkdir -p dist/run_app
+          python - <<'PY'
+import os
+import tarfile
+archive = f"dist/release/backend-onedir-{os.environ['RUNNER_OS']}.tar.gz"
+with tarfile.open(archive, 'r:gz') as archive_file:
+    archive_file.extractall('dist')
+PY
+          ls -la dist/run_app
+        shell: bash
+      - name: Verify Extracted Backend Bundle
+        run: |
+          python - <<'PY'
+import os
+import sys
+runner_os = os.environ['RUNNER_OS']
+expected = os.path.join('dist', 'run_app', 'run_app.exe' if runner_os == 'Windows' else 'run_app')
+if not os.path.isfile(expected):
+    raise SystemExit(f'Expected backend executable not found after extraction: {expected}')
+print(f'Verified backend bundle exists: {expected}')
+PY
+        shell: bash
       - name: Set version in electron/package.json
         run: |
           VERSION="${{ env.RELEASE_VERSION }}"
           VERSION_CLEAN="${VERSION#v}"
           # Use python for cross-platform JSON editing to avoid sed incompatibilities
-          python3 -c "import json; p='electron/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
+          python -c "import json; p='electron/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
         shell: bash
       - name: Build Electron App
         run: |
