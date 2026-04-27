@@ -97,26 +97,12 @@ jobs:
       - name: Extract Backend Artifact
         run: |
           mkdir -p dist/run_app
-          python - <<'PY'
-import os
-import tarfile
-archive = f"dist/release/backend-onedir-{os.environ['RUNNER_OS']}.tar.gz"
-with tarfile.open(archive, 'r:gz') as archive_file:
-    archive_file.extractall('dist')
-PY
+          python -c "import os, tarfile; archive = f'dist/release/backend-onedir-{os.environ[\"RUNNER_OS\"]}.tar.gz'; tarfile.open(archive, 'r:gz').extractall('dist')"
           ls -la dist/run_app
         shell: bash
       - name: Verify Extracted Backend Bundle
         run: |
-          python - <<'PY'
-import os
-import sys
-runner_os = os.environ['RUNNER_OS']
-expected = os.path.join('dist', 'run_app', 'run_app.exe' if runner_os == 'Windows' else 'run_app')
-if not os.path.isfile(expected):
-    raise SystemExit(f'Expected backend executable not found after extraction: {expected}')
-print(f'Verified backend bundle exists: {expected}')
-PY
+          python -c "import os; runner_os = os.environ['RUNNER_OS']; expected = os.path.join('dist', 'run_app', 'run_app.exe' if runner_os == 'Windows' else 'run_app'); import sys; import pathlib; expected_path = pathlib.Path(expected); sys.exit(0 if expected_path.is_file() else f'Expected backend executable not found after extraction: {expected}')"
         shell: bash
       - name: Set version in electron/package.json
         run: |
