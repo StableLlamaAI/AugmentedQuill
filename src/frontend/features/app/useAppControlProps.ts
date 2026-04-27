@@ -380,8 +380,6 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     refreshStory,
     undo,
     redo,
-    _canUndo,
-    _canRedo,
     searchState,
     currentChapter,
     isChapterLoading,

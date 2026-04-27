@@ -34,6 +34,7 @@ import {
   buildDraftUpdateLabel,
   createHistoryEntry,
 } from './historyUtils';
+import type { StoryHistoryEntry } from './historyUtils';
 import { useStoryStore, StoryStoreState } from '../../stores/storyStore';
 
 /** Maximum number of undo/redo states retained in memory. */
