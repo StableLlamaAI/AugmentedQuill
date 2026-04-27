@@ -14,7 +14,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { StoryState } from '../../types';
 import { api } from '../../services/api';
-import { resetStoryStore } from '../../stores/storyStore';
+import { resetStoryStore, useStoryStore } from '../../stores/storyStore';
 import {
   buildInitialStoryState,
   resolveExternalHistorySourceState,
@@ -56,25 +56,38 @@ const buildStory = (summary: string): StoryState => ({
   draft: null,
 });
 
-const buildChapter = (id: string, content: string) => ({
+type StoryTestChapter = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  filename: string;
+  book_id: string | undefined;
+  notes: string;
+  private_notes: string;
+  conflicts: Array<{ id: string; description: string; resolution: string }>;
+};
+
+const buildChapter = (id: string, content: string): StoryTestChapter => ({
   id,
   title: `Chapter ${id}`,
   summary: '',
   content,
   filename: `ch${id}.md`,
-  book_id: undefined as string | undefined,
+  book_id: undefined,
   notes: '',
   private_notes: '',
-  conflicts: [] as { id: string; description: string; resolution: string }[],
+  conflicts: [],
 });
 
-const baseHook = () => useStory({ confirm: async () => true, alert: () => {} });
+const baseHook = (): ReturnType<typeof useStory> =>
+  useStory({ confirm: async () => true, alert: () => {} });
 
 /** Render the hook and perform the initial loadStory so history starts clean. */
 const hookWithStory = async (
   summary: string = 'initial',
   chapters: ReturnType<typeof buildChapter>[] = []
-) => {
+): Promise<ReturnType<typeof renderHook>> => {
   // The lazy-load useEffect inside useStory calls api.chapters.get whenever
   // currentChapterId changes.  A previous test in this file may have left a
   // mock that returns {content: ''}, which would silently overwrite the
@@ -149,6 +162,7 @@ describe('resolveExternalHistorySourceState', () => {
   });
 });
 
+// eslint-disable-next-line max-lines-per-function
 describe('buildInitialStoryState', () => {
   it('hydrates story-level notes fields from selected project payload', () => {
     const state = buildInitialStoryState(
@@ -357,6 +371,55 @@ describe('buildInitialStoryState', () => {
     expect(result.current.historySize).toBe(2); // no-op duplicate suppressed
   });
 
+  it('preserves selected chapter when undoing after editing a later chapter', async () => {
+    const first = buildChapter('1', 'First chapter');
+    const second = buildChapter('2', 'Second chapter');
+    const { result } = await hookWithStory('initial', [first, second]);
+
+    act(() => {
+      result.current.selectChapter('2');
+    });
+
+    await act(async () => {
+      await result.current.updateChapter(
+        '2',
+        { content: 'Second chapter edited' },
+        false,
+        true,
+        true
+      );
+    });
+
+    expect(result.current.currentChapterId).toBe('2');
+
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    expect(result.current.currentChapterId).toBe('2');
+    expect(
+      result.current.story.chapters.find((ch: { id: string }) => ch.id === '2')?.content
+    ).toBe('Second chapter');
+  });
+
+  it('restores original chapter content when undoing a deletion', async () => {
+    const chapter = buildChapter('1', 'Hello world');
+    const { result } = await hookWithStory('initial', [chapter]);
+
+    await act(async () => {
+      await result.current.updateChapter('1', { content: 'Hello ' }, false, true, true);
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Hello ');
+
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Hello world');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Hello ');
+  });
+
   it('preserves the pre-update baseline when pushing external history entries', async () => {
     const ch = buildChapter('1', 'Original content');
     const { result } = await hookWithStory('initial', [ch]);
@@ -387,6 +450,70 @@ describe('buildInitialStoryState', () => {
 
     expect(result.current.story.chapters[0]?.content).toBe('Loaded content');
     expect(result.current.baselineState.chapters[0]?.content).toBe('Loaded content');
+  });
+
+  it('preserves the lazily loaded original chapter state in the undo stack', async () => {
+    const chapter = {
+      id: '1',
+      title: 'Chapter 1',
+      summary: '',
+      content: '',
+      filename: 'ch1.md',
+      book_id: undefined as string | undefined,
+      notes: '',
+      private_notes: '',
+      conflicts: [],
+    };
+    const hook = renderHook(() => baseHook());
+
+    vi.mocked(api.chapters.get).mockResolvedValue({
+      content: 'Hello world',
+      notes: '',
+      private_notes: '',
+      conflicts: [],
+      title: 'Chapter 1',
+      summary: '',
+    } as unknown as Awaited<ReturnType<typeof api.chapters.get>>);
+
+    await act(async () => {
+      hook.result.current.loadStory({
+        ...buildStory('initial'),
+        id: 'demo',
+        title: 'Demo',
+        chapters: [chapter],
+        currentChapterId: '1',
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hook.result.current.story.chapters[0]?.content).toBe('Hello world');
+    expect(useStoryStore.getState().history[0].state.chapters[0]?.content).toBe(
+      'Hello world'
+    );
+
+    await act(async () => {
+      await hook.result.current.updateChapter(
+        '1',
+        { content: 'Hello ' },
+        false,
+        true,
+        true
+      );
+    });
+
+    expect(hook.result.current.story.chapters[0]?.content).toBe('Hello ');
+
+    await act(async () => {
+      await hook.result.current.undo();
+    });
+
+    expect(hook.result.current.story.chapters[0]?.content).toBe('Hello world');
+    expect(useStoryStore.getState().history[0].state.chapters[0]?.content).toBe(
+      'Hello world'
+    );
   });
 
   it('merges undo/redo handlers into current history entry if state is unchanged', async () => {
@@ -532,6 +659,7 @@ describe('buildInitialStoryState', () => {
 //  - redo              → baseline = state we left (shows re-inserted text)
 //  - loadStory         → baseline = the loaded state (no highlight)
 
+// eslint-disable-next-line max-lines-per-function
 describe('baselineState diff highlighting', () => {
   it('starts with baseline equal to current state (no highlight on load)', async () => {
     const ch = buildChapter('1', 'Hello world');

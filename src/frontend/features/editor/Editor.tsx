@@ -55,7 +55,7 @@ interface EditorProps {
   viewMode: ViewMode;
   showWhitespace?: boolean;
   onToggleShowWhitespace?: () => void;
-  onChange: (id: string, updates: Partial<WritingUnit>) => void;
+  onChange: (id: string, updates: Partial<WritingUnit>, isUndoRedo?: boolean) => void;
   baselineContent?: string;
   language?: string;
   spellCheck?: boolean;
@@ -779,10 +779,11 @@ export const Editor = React.memo(
                           setLocalBaseline(undefined);
                         }
                         scheduleCheckContext();
-                        if (contentDebounceRef.current)
+                        if (contentDebounceRef.current) {
                           clearTimeout(contentDebounceRef.current);
+                        }
                         contentDebounceRef.current = setTimeout(() => {
-                          onChange(chapter.id, { content: val });
+                          onChange(chapter.id, { content: val }, isUndoRedo);
                         }, DEBOUNCE_MS);
                       }}
                       onSelectionChange={scheduleCheckContext}
