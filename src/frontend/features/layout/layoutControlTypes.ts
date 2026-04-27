@@ -124,7 +124,13 @@ export type MainSidebarControls = {
   currentChapterId: string | null;
   handleChapterSelect: (id: string | null) => void;
   deleteChapter: (id: string) => Promise<void>;
-  updateChapter: (id: string, partial: Partial<Chapter>) => Promise<void>;
+  updateChapter: (
+    id: string,
+    partial: Partial<Chapter>,
+    sync?: boolean,
+    pushHistory?: boolean,
+    isUserEdit?: boolean
+  ) => Promise<void>;
   updateBook: (
     id: string,
     partial: { title?: string; summary?: string }
@@ -223,7 +229,13 @@ export type MainEditorControls = {
     v: EditorSettings | ((prev: EditorSettings) => EditorSettings)
   ) => void;
   viewMode: ViewMode;
-  updateChapter: (id: string, partial: Partial<WritingUnit>) => Promise<void>;
+  updateChapter: (
+    id: string,
+    partial: Partial<WritingUnit>,
+    sync?: boolean,
+    pushHistory?: boolean,
+    isUserEdit?: boolean
+  ) => Promise<void>;
   suggestionControls: MainEditorSuggestionControls;
   aiControls: MainEditorAiControls;
   setActiveFormats: (v: string[]) => void;

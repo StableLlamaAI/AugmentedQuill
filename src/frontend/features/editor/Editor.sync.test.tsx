@@ -117,6 +117,33 @@ describe('Editor diff highlighting', () => {
     expect(cmContent?.innerHTML).not.toContain('diff-inserted');
   });
 
+  it('resets diff baseline when switching to a new chapter with no baseline', async () => {
+    const firstChapter = { ...mockChapter, content: 'Original content with AI' };
+    const secondChapter = {
+      ...mockChapter,
+      id: '2',
+      title: 'Chapter 2',
+      content: 'Second chapter text',
+    };
+
+    const { rerender } = render(
+      <Editor
+        {...defaultProps}
+        chapter={firstChapter}
+        baselineContent="Original content"
+      />
+    );
+
+    await act(async () => {
+      rerender(
+        <Editor {...defaultProps} chapter={secondChapter} baselineContent={undefined} />
+      );
+    });
+
+    const cmContent = document.querySelector('.cm-content');
+    expect(cmContent?.innerHTML).not.toContain('diff-inserted');
+  });
+
   it('shows streaming content from store slot with correct diff during streaming', async () => {
     const { rerender } = render(<Editor {...defaultProps} />);
 

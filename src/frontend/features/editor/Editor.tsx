@@ -55,7 +55,7 @@ interface EditorProps {
   viewMode: ViewMode;
   showWhitespace?: boolean;
   onToggleShowWhitespace?: () => void;
-  onChange: (id: string, updates: Partial<WritingUnit>) => void;
+  onChange: (id: string, updates: Partial<WritingUnit>, isUndoRedo?: boolean) => void;
   baselineContent?: string;
   language?: string;
   spellCheck?: boolean;
@@ -153,6 +153,22 @@ export const Editor = React.memo(
       const prevBaselineRef = useRef<string | undefined>(baselineContent);
       // Keep the last non-undefined baseline so undo can restore the diff view.
       const savedBaselineRef = useRef<string | undefined>(baselineContent);
+      const lastChapterIdRef = useRef(chapter.id);
+
+      useEffect(() => {
+        const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
+        if (!isChapterSwitch) return;
+
+        lastChapterIdRef.current = chapter.id;
+        prevBaselineRef.current = baselineContent;
+        setLocalBaseline(baselineContent);
+        if (baselineContent !== undefined && baselineContent !== chapter.content) {
+          savedBaselineRef.current = baselineContent;
+        } else if (baselineContent === undefined) {
+          savedBaselineRef.current = undefined;
+        }
+      }, [chapter.id, baselineContent, chapter.content]);
+
       if (baselineContent !== prevBaselineRef.current) {
         prevBaselineRef.current = baselineContent;
         setLocalBaseline(baselineContent);
@@ -181,7 +197,6 @@ export const Editor = React.memo(
       // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
       // for chapter switches; also watch chapter.content so AI insertions and
       // undo/redo (which can change content without changing id) are reflected.
-      const lastChapterIdRef = useRef(chapter.id);
       useEffect(() => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
         lastChapterIdRef.current = chapter.id;
@@ -764,10 +779,11 @@ export const Editor = React.memo(
                           setLocalBaseline(undefined);
                         }
                         scheduleCheckContext();
-                        if (contentDebounceRef.current)
+                        if (contentDebounceRef.current) {
                           clearTimeout(contentDebounceRef.current);
+                        }
                         contentDebounceRef.current = setTimeout(() => {
-                          onChange(chapter.id, { content: val });
+                          onChange(chapter.id, { content: val }, isUndoRedo);
                         }, DEBOUNCE_MS);
                       }}
                       onSelectionChange={scheduleCheckContext}
