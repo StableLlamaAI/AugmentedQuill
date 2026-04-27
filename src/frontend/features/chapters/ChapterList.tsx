@@ -433,8 +433,8 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
           }`}
         >
           <button
-            className="flex flex-col w-full text-left cursor-row-resize"
-            style={{ cursor: 'row-resize' }}
+            type="button"
+            className="flex flex-col w-full text-left cursor-pointer"
             draggable
             onDragStart={(e: React.DragEvent<HTMLButtonElement>) =>
               handleDragStart(e, 'chapter', chapter.id, index, chapter.book_id)
@@ -466,6 +466,9 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                 )}
               </div>
             </div>
+            <div className="mt-2 text-xs text-brand-gray-500 line-clamp-2">
+              {renderSummary()}
+            </div>
           </button>
           <div className="absolute top-2 right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
             <button
@@ -488,9 +491,6 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
               <Trash2 size={14} />
             </button>
           </div>
-          <p className="text-xs text-brand-gray-500 line-clamp-2 pointer-events-none">
-            {renderSummary()}
-          </p>
         </div>
       );
     };
