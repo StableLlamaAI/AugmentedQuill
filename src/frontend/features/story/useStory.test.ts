@@ -377,6 +377,18 @@ describe('buildInitialStoryState', () => {
     expect(result.current.baselineState.chapters[0]?.content).toBe('Original content');
   });
 
+  it('syncs baselineState when the current chapter content is loaded lazily', async () => {
+    const chapter = buildChapter('1', 'Loaded content');
+    const { result } = await hookWithStory('initial', [chapter]);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.story.chapters[0]?.content).toBe('Loaded content');
+    expect(result.current.baselineState.chapters[0]?.content).toBe('Loaded content');
+  });
+
   it('merges undo/redo handlers into current history entry if state is unchanged', async () => {
     const { result } = renderHook(() =>
       useStory({

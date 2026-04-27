@@ -357,25 +357,51 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
           const res = await api.chapters.get(Number(currentChapterId));
           lastLoadedChapterId.current = currentChapterId;
           startTransition(() => {
-            useStoryStore.setState((state: StoryStoreState) => ({
-              story: {
-                ...state.story,
-                chapters: state.story.chapters.map((c: Chapter) =>
-                  c.id === currentChapterId
-                    ? {
-                        ...c,
-                        content: res.content,
-                        notes: res.notes ?? undefined,
-                        private_notes: res.private_notes ?? undefined,
-                        conflicts: (res.conflicts ?? []) as Conflict[],
-                        title: res.title ?? undefined,
-                        summary: res.summary ?? undefined,
-                      }
-                    : c
-                ),
-              },
-              isChapterLoading: false,
-            }));
+            useStoryStore.setState((state: StoryStoreState) => {
+              const baselineChapter = state.baselineState.chapters.find(
+                (chapter: Chapter) => chapter.id === currentChapterId
+              );
+              const shouldSyncBaseline =
+                baselineChapter !== undefined && (baselineChapter.content ?? '') === '';
+
+              return {
+                story: {
+                  ...state.story,
+                  chapters: state.story.chapters.map((c: Chapter) =>
+                    c.id === currentChapterId
+                      ? {
+                          ...c,
+                          content: res.content,
+                          notes: res.notes ?? undefined,
+                          private_notes: res.private_notes ?? undefined,
+                          conflicts: (res.conflicts ?? []) as Conflict[],
+                          title: res.title ?? undefined,
+                          summary: res.summary ?? undefined,
+                        }
+                      : c
+                  ),
+                },
+                baselineState: shouldSyncBaseline
+                  ? {
+                      ...state.baselineState,
+                      chapters: state.baselineState.chapters.map((chapter: Chapter) =>
+                        chapter.id === currentChapterId
+                          ? {
+                              ...chapter,
+                              content: res.content,
+                              notes: res.notes ?? undefined,
+                              private_notes: res.private_notes ?? undefined,
+                              conflicts: (res.conflicts ?? []) as Conflict[],
+                              title: res.title ?? undefined,
+                              summary: res.summary ?? undefined,
+                            }
+                          : chapter
+                      ),
+                    }
+                  : state.baselineState,
+                isChapterLoading: false,
+              };
+            });
           });
         } catch (e) {
           console.error('Failed to load chapter content', e);
