@@ -16,6 +16,7 @@ import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
 import { useStoryStore } from '../../stores/storyStore';
+import { useChatStore } from '../../stores/chatStore';
 
 type PromptsState = {
   system_messages: Record<string, string>;
@@ -31,7 +32,9 @@ type UseAiActionsParams = {
   updateChapter: (
     id: string,
     partial: Partial<WritingUnit>,
-    sync?: boolean
+    sync?: boolean,
+    pushHistory?: boolean,
+    isUserEdit?: boolean
   ) => Promise<void>;
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
@@ -91,6 +94,86 @@ const getSeparator = (
     ? '\n\n'
     : '';
 
+/** Extracted to keep useAiActions under the line-per-function limit. */
+type StreamedContent = { chapterId: string; content: string };
+
+/**
+ * Creates a throttled progress pusher for streaming AI chapter content previews.
+ * 150ms macrotask throttle avoids "Maximum update depth exceeded" in React 19.
+ */
+function createStreamingPusher(
+  isChapterStreamingAction: boolean,
+  baseContent: string,
+  separator: string,
+  action: 'update' | 'rewrite' | 'extend',
+  chapterId: string,
+  stripPrefillEcho: (text: string) => string,
+  onLastStreamed: (sc: StreamedContent) => void
+): {
+  pushProgress: (partial: string) => void;
+  cancelThrottle: () => void;
+} {
+  let pendingPartial: string | null = null;
+  let throttleHandle: ReturnType<typeof setTimeout> | null = null;
+
+  const flushPending = (): void => {
+    throttleHandle = null;
+    if (pendingPartial === null) return;
+    const partial = pendingPartial;
+    pendingPartial = null;
+    const normalizedPartial = stripPrefillEcho(partial);
+    const nextContent =
+      action === 'extend'
+        ? `${baseContent}${separator}${normalizedPartial}`
+        : normalizedPartial;
+    onLastStreamed({ chapterId, content: nextContent });
+    useStoryStore.getState().setStreamingContent({ chapterId, content: nextContent });
+  };
+
+  const pushProgress = (partial: string): void => {
+    if (!isChapterStreamingAction) return;
+    pendingPartial = partial;
+    if (throttleHandle === null) {
+      throttleHandle = setTimeout(flushPending, 150);
+    }
+  };
+
+  const cancelThrottle = (): void => {
+    if (throttleHandle !== null) {
+      clearTimeout(throttleHandle);
+      throttleHandle = null;
+      pendingPartial = null;
+    }
+  };
+
+  return { pushProgress, cancelThrottle };
+}
+
+/**
+ * Commits partial streamed content after a cancel, freezes the prose streaming
+ * highlight, and clears the streaming slot once the commit resolves.
+ * Extracted from useAiActions to keep the hook under the line-length limit.
+ */
+async function commitCancelledProseContent(
+  chapterId: string,
+  content: string,
+  updateChapter: (
+    id: string,
+    partial: Partial<WritingUnit>,
+    sync?: boolean,
+    pushHistory?: boolean,
+    isUserEdit?: boolean
+  ) => Promise<void>,
+  onDone: () => void
+): Promise<void> {
+  try {
+    await updateChapter(chapterId, { content }, true, true, false);
+    useStoryStore.getState().setStreamingContent(null);
+  } finally {
+    onDone();
+  }
+}
+
 /** Custom React hook that manages ai actions. */
 export function useAiActions({
   currentUnit,
@@ -122,6 +205,10 @@ export function useAiActions({
     reader?: ReadableStreamDefaultReader<Uint8Array>;
   }>({ cancelled: false });
   const isMountedRef = useRef(true);
+  // Tracks the latest content flushed to the streaming slot for cancel-commit.
+  const lastStreamedContentRef = useRef<StreamedContent | null>(null);
+  // True while a cancel-triggered commit is in progress.
+  const cancelCommitInProgressRef = useRef(false);
 
   // Avoid updating state after the component has unmounted.
   // This can happen if the user cancels a streaming action while the component is still tearing down.
@@ -131,8 +218,26 @@ export function useAiActions({
     cancelSignalRef.current.cancelled = true;
     cancelSignalRef.current.reader?.cancel();
     cancelSignalRef.current.reader = undefined;
-    // Clear streaming slot so the editor reverts to committed chapter content.
-    useStoryStore.getState().setStreamingContent(null);
+
+    const lastStreamed = lastStreamedContentRef.current;
+    if (lastStreamed) {
+      // Set frozen flag BEFORE clearing isAiActionLoading so no render frame
+      // sees streamingModeActive=false while partial content is still visible.
+      useChatStore.getState().setIsProseStreamingFrozen(true);
+      cancelCommitInProgressRef.current = true;
+      void commitCancelledProseContent(
+        lastStreamed.chapterId,
+        lastStreamed.content,
+        updateChapter,
+        () => {
+          cancelCommitInProgressRef.current = false;
+          lastStreamedContentRef.current = null;
+        }
+      );
+    } else {
+      useStoryStore.getState().setStreamingContent(null);
+    }
+
     if (isMountedRef.current) {
       setIsAiActionLoading(false);
     }
@@ -149,6 +254,10 @@ export function useAiActions({
     setIsAiActionLoading(true);
 
     cancelSignalRef.current = { cancelled: false };
+    // Reset tracking state and clear any frozen highlight from a prior stop.
+    lastStreamedContentRef.current = null;
+    cancelCommitInProgressRef.current = false;
+    useChatStore.getState().setIsProseStreamingFrozen(false);
 
     try {
       const isChapterStreamingAction =
@@ -172,42 +281,17 @@ export function useAiActions({
       );
       const separator = getSeparator(action, baseContent);
 
-      let pendingPartial: string | null = null;
-      let throttleHandle: ReturnType<typeof setTimeout> | null = null;
-      // Throttle interval for streaming preview updates. Fires via setTimeout
-      // (macrotask) so it is always outside React's render cycle, avoiding the
-      // "Maximum update depth exceeded" error that requestAnimationFrame can
-      // trigger when React 19 concurrent rendering is mid-flight.
-      const PREVIEW_INTERVAL_MS = 150;
-
-      const flushPending = (): void => {
-        throttleHandle = null;
-        if (pendingPartial === null) return;
-        const partial = pendingPartial;
-        pendingPartial = null;
-        const normalizedPartial = stripPrefillEcho(partial);
-        const nextContent =
-          action === 'extend'
-            ? `${baseContent}${separator}${normalizedPartial}`
-            : normalizedPartial;
-        // Write into the dedicated streaming slot instead of story.chapters so
-        // only the editor re-renders; sourcebook, chat, and sidebar are unaffected.
-        useStoryStore.getState().setStreamingContent({
-          chapterId: currentUnit.id,
-          content: nextContent,
-        });
-      };
-
-      const pushProgress = (partial: string): void => {
-        if (!isChapterStreamingAction) return;
-        // Coalesce all SSE chunks arriving within PREVIEW_INTERVAL_MS into a
-        // single state update. Storing the latest value means we never render
-        // a stale intermediate — only the most-recent accumulated text is shown.
-        pendingPartial = partial;
-        if (throttleHandle === null) {
-          throttleHandle = setTimeout(flushPending, PREVIEW_INTERVAL_MS);
+      const { pushProgress, cancelThrottle } = createStreamingPusher(
+        isChapterStreamingAction,
+        baseContent,
+        separator,
+        action,
+        currentUnit.id,
+        stripPrefillEcho,
+        (sc: StreamedContent) => {
+          lastStreamedContentRef.current = sc;
         }
-      };
+      );
 
       const selectedTarget = getAiActionTarget(target, currentUnit.scope);
 
@@ -223,24 +307,15 @@ export function useAiActions({
         cancelSignalRef.current
       );
 
-      // Cancel any pending throttle flush before applying the final result to
-      // avoid a stale intermediate state overwriting the completed content.
-      if (throttleHandle !== null) {
-        clearTimeout(throttleHandle);
-        throttleHandle = null;
-        pendingPartial = null;
-      }
+      // Clear pending throttle flush before applying the final result.
+      cancelThrottle();
 
-      // If the user cancelled the action while it was streaming, avoid
-      // applying any final updates and exit quickly so the UI can return to
-      // an idle state.
+      // If cancelled, bail out before applying any final updates.
       if (cancelSignalRef.current.cancelled) {
         return;
       }
 
-      // Clear the streaming slot before committing the final result so the
-      // editor transitions directly from streaming text → final text without
-      // a flash back to the pre-AI baseline content.
+      // Clear streaming slot so the editor transitions directly to final text.
       useStoryStore.getState().setStreamingContent(null);
 
       if (target === 'summary') {
@@ -258,9 +333,11 @@ export function useAiActions({
       console.error('AI Action Error:', error);
       notifyError(getErrorMessage(error, 'Failed to perform AI action'));
     } finally {
-      // Safety-net: clear the streaming slot in case the try block exited
-      // via an exception before reaching the explicit clearance above.
-      useStoryStore.getState().setStreamingContent(null);
+      // Safety-net: clear the streaming slot unless cancelAiAction is handling
+      // an async commit (which will clear it after the commit resolves).
+      if (!cancelCommitInProgressRef.current) {
+        useStoryStore.getState().setStreamingContent(null);
+      }
       if (isMountedRef.current) {
         setIsAiActionLoading(false);
       }
