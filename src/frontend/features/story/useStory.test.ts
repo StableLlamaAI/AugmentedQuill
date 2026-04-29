@@ -15,6 +15,7 @@ import { act, renderHook } from '@testing-library/react';
 import { StoryState } from '../../types';
 import { api } from '../../services/api';
 import { resetStoryStore, useStoryStore } from '../../stores/storyStore';
+import { useChatStore } from '../../stores/chatStore';
 import {
   buildInitialStoryState,
   resolveExternalHistorySourceState,
@@ -131,6 +132,9 @@ const hookWithStory = async (
 // Reset Zustand store between tests to prevent state leaking across test cases.
 beforeEach(() => {
   resetStoryStore();
+  useChatStore.setState({
+    sessionMutations: [],
+  });
 });
 
 describe('resolveExternalHistorySourceState', () => {
@@ -160,6 +164,34 @@ describe('resolveExternalHistorySourceState', () => {
 
     expect(selected.summary).toBe('explicit summary snapshot');
   });
+});
+
+it('clears chat session mutation tags when undo is used', async () => {
+  vi.mocked(api.projects.list).mockResolvedValue({
+    available: [],
+    current: null,
+  } as Awaited<ReturnType<typeof api.projects.list>>);
+  vi.mocked(api.projects.select).mockResolvedValue({ ok: false } as Awaited<
+    ReturnType<typeof api.projects.select>
+  >);
+
+  const hook = await hookWithStory('initial', [buildChapter('1', 'Hello')]);
+  useChatStore.setState({
+    sessionMutations: [{ type: 'chapter', label: 'Updated chapter', targetId: '1' }],
+  });
+
+  await act(async () => {
+    hook.result.current.pushExternalHistoryEntry({
+      label: 'Manual history entry',
+      forceNewHistory: true,
+    });
+  });
+
+  await act(async () => {
+    await hook.result.current.undo();
+  });
+
+  expect(useChatStore.getState().sessionMutations).toEqual([]);
 });
 
 // eslint-disable-next-line max-lines-per-function

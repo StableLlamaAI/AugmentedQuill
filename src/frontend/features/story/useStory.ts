@@ -36,6 +36,7 @@ import {
 } from './historyUtils';
 import type { StoryHistoryEntry } from './historyUtils';
 import { useStoryStore, StoryStoreState } from '../../stores/storyStore';
+import { useChatStore } from '../../stores/chatStore';
 
 /** Maximum number of undo/redo states retained in memory. */
 const MAX_HISTORY = 50;
@@ -850,6 +851,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       }
 
       const prevState = history[targetIndex].state;
+      useChatStore.getState().setSessionMutations([]);
 
       // Mark the re-render as a transition so React can time-slice it,
       // keeping the main thread responsive (avoids click-handler violations).

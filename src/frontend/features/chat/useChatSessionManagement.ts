@@ -28,6 +28,7 @@ type UseChatSessionManagementParams = {
 };
 
 /** Custom React hook that manages chat session management. */
+// eslint-disable-next-line max-lines-per-function
 export function useChatSessionManagement({
   storyId,
   getSystemPrompt,
@@ -52,6 +53,7 @@ export function useChatSessionManagement({
     setSystemPrompt,
     setScratchpad,
     setIncognitoSessions,
+    setSessionMutations,
     // Setters are stable — read via getState() to avoid subscribing to every token.
   } = useChatStore.getState();
 
@@ -97,6 +99,7 @@ export function useChatSessionManagement({
         setScratchpad('');
       }
       setSystemPrompt(getSystemPrompt());
+      setSessionMutations([]);
     },
     [
       getSystemPrompt,
@@ -140,6 +143,7 @@ export function useChatSessionManagement({
             }
             setAllowWebSearch(chat.allowWebSearch || false);
           });
+          setSessionMutations([]);
         }
       } catch (error) {
         console.error('Failed to load chat', error);
@@ -225,7 +229,7 @@ export function useChatSessionManagement({
   useEffect(() => {
     const { currentChatId, isIncognito } = useChatStore.getState();
     if (storyId && !currentChatId && !isIncognito) {
-      const loadInitialChats = async () => {
+      const loadInitialChats = async (): Promise<void> => {
         try {
           const chats = await api.chat.list();
           startTransition(() => setChatHistoryList(chats));
