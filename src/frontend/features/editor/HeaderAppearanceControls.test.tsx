@@ -113,4 +113,35 @@ describe('HeaderAppearanceControls', () => {
 
     expect(sidebarSlider.getAttribute('max')).toBe('600');
   });
+
+  it('renders the debug logs button in the header appearance controls', () => {
+    const localRef = React.createRef<HTMLDivElement>();
+
+    render(
+      <HeaderAppearanceControls
+        appearanceRef={localRef}
+        isAppearanceOpen={true}
+        setIsAppearanceOpen={() => {}}
+        isLight={true}
+        textMain="text-brand-gray-900"
+        buttonActive="bg-blue-500 text-white"
+        currentTheme="light"
+        setAppTheme={() => {}}
+        editorSettings={{
+          brightness: 1,
+          contrast: 1,
+          fontSize: 16,
+          maxWidth: 80,
+          sidebarWidth: 320,
+          theme: 'light',
+          showDiff: true,
+        }}
+        setEditorSettings={() => {}}
+        sliderClass=""
+        setIsDebugLogsOpen={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Debug Logs/i })).toBeTruthy();
+  });
 });
