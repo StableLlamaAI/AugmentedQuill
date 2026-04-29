@@ -102,7 +102,7 @@ export const useUIStore = create<UIStoreState>()(
       _get: StoreApi<UIStoreState>['getState']
     ) => ({
       // ── Panel state (persisted) ──────────────────────────────────────────
-      isChatOpen: false,
+      isChatOpen: true,
       isSidebarOpen: false,
       isAppearanceOpen: false,
       isSettingsOpen: false,
@@ -217,7 +217,7 @@ export function useSourcebookDialog(): SourcebookDialogState {
 /** Reset the UI store to its initial state. Use in beforeEach in unit tests. */
 export function resetUIStore(): void {
   useUIStore.setState({
-    isChatOpen: false,
+    isChatOpen: true,
     isSidebarOpen: false,
     isAppearanceOpen: false,
     isSettingsOpen: false,
