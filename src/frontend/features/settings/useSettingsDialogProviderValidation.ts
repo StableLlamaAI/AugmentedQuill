@@ -22,9 +22,9 @@ interface UseSettingsDialogProviderValidationParams {
 
 const toConnectionTestKey = (provider: LLMConfig): string => {
   const baseUrl = (provider.baseUrl || '').trim();
-  const apiKey = (provider.apiKey || '').trim();
+  const apiKey = provider.apiKeyEnabled ? (provider.apiKey || '').trim() : '';
   const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
-  return `${baseUrl}|${apiKey}|${timeoutS}`;
+  return `${baseUrl}|${apiKey}|${timeoutS}|${provider.apiKeyEnabled ? 'enabled' : 'disabled'}`;
 };
 
 /** Custom React hook that manages settings dialog provider validation. */
@@ -68,11 +68,13 @@ export function useSettingsDialogProviderValidation({
     providers.forEach((provider: LLMConfig) => {
       const providerId = provider.id;
       const baseUrl = (provider.baseUrl || '').trim();
-      const apiKey = (provider.apiKey || '').trim();
+      const apiKey = provider.apiKeyEnabled
+        ? (provider.apiKey || '').trim()
+        : undefined;
       const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
       const testKey = toConnectionTestKey(provider);
 
-      if (!baseUrl || !apiKey) {
+      if (!baseUrl || (provider.apiKeyEnabled && !apiKey)) {
         setConnectionStatus((state: Record<string, ProviderStatus>) => ({
           ...state,
           [providerId]: 'idle',
@@ -173,7 +175,9 @@ export function useSettingsDialogProviderValidation({
       }
 
       const baseUrl = (provider.baseUrl || '').trim();
-      const apiKey = (provider.apiKey || '').trim();
+      const apiKey = provider.apiKeyEnabled
+        ? (provider.apiKey || '').trim()
+        : undefined;
       const timeoutS = Math.max(1, Math.round((provider.timeout || 10000) / 1000));
 
       const run = async () => {

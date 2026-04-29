@@ -21,6 +21,7 @@ import {
   Terminal,
   Key,
   ChevronDown,
+  Check,
 } from 'lucide-react';
 import { AppTheme, LLMConfig } from '../../../types';
 import { ModelPresetEntry } from '../../../services/apiTypes';
@@ -478,9 +479,35 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2">
-              <Key size={12} /> API Key
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-brand-gray-500 uppercase flex items-center gap-2 dark:text-brand-gray-400">
+                <Key size={12} /> API Key
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-brand-gray-500 dark:text-brand-gray-400">
+                  Enable API Key
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateProvider(activeProvider.id, {
+                      apiKeyEnabled: !activeProvider.apiKeyEnabled,
+                    })
+                  }
+                  aria-pressed={activeProvider.apiKeyEnabled}
+                  title={
+                    activeProvider.apiKeyEnabled ? 'Disable API key' : 'Enable API key'
+                  }
+                  className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                    activeProvider.apiKeyEnabled
+                      ? 'bg-brand-500 border-brand-500 text-white'
+                      : `${isLight ? 'border-brand-gray-300' : 'border-brand-gray-600'} hover:border-brand-500`
+                  }`}
+                >
+                  {activeProvider.apiKeyEnabled && <Check size={10} strokeWidth={4} />}
+                </button>
+              </div>
+            </div>
             <div className="relative">
               <input
                 data-no-smart-quotes="true"
@@ -490,7 +517,8 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   onUpdateProvider(activeProvider.id, { apiKey: e.target.value })
                 }
                 placeholder="sk... (visible)"
-                className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
+                disabled={!activeProvider.apiKeyEnabled}
+                className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
                   isLight
                     ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
                     : 'bg-brand-gray-950 border-brand-gray-700 text-brand-gray-300'
