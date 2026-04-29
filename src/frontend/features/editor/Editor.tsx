@@ -799,7 +799,7 @@ export const Editor = React.memo(
                       streamingMode={proseStreamingActive}
                       baselineValue={localBaseline}
                       searchHighlightRanges={chapterSearchHighlightRanges}
-                      enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                      enterBehavior="softbreak"
                       selectionBg={selectionBg}
                       placeholder={
                         chapter.scope === 'story'

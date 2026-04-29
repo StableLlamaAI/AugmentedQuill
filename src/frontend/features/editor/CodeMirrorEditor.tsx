@@ -351,8 +351,7 @@ export const CodeMirrorEditor = React.forwardRef<
         : (viewModeProp ?? (legacyMode === 'markdown' ? 'markdown' : 'raw'));
 
     // Derive enter behavior from viewMode unless explicitly overridden
-    const enterBehavior =
-      enterBehaviorProp ?? (viewMode === 'raw' ? 'newline' : 'softbreak');
+    const enterBehavior = enterBehaviorProp ?? 'softbreak';
 
     // Derive CodeMirror language mode from viewMode
     const mode: 'plain' | 'markdown' = viewMode === 'raw' ? 'plain' : 'markdown';
