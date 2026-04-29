@@ -185,6 +185,12 @@ export const Editor = React.memo(
       const isChatStreaming = useChatStore(
         (s: ChatStoreState) => s.isProseStreamingFromChat
       );
+      // True after the user stops chat mid-write: streaming has ended but we
+      // keep streamingMode=true so the prefix-based green highlight stays visible
+      // (as it appeared during streaming) rather than switching to LCS diff.
+      const isChatStreamingFrozen = useChatStore(
+        (s: ChatStoreState) => s.isProseStreamingFrozen
+      );
       // Subscribe to the ephemeral streaming slot — only this editor instance
       // re-renders on each chunk, not the entire component tree.
       const streamingContent = useStoryStore((s: StoryStoreState) =>
@@ -192,6 +198,9 @@ export const Editor = React.memo(
       );
       const proseStreamingActive =
         (aiControls.isProseStreaming ?? false) || isChatStreaming;
+      // streamingModeActive keeps streamingMode=true even after active streaming
+      // ends (frozen state) so the green prefix-diff stays visible.
+      const streamingModeActive = proseStreamingActive || isChatStreamingFrozen;
 
       // Keep local state in sync when the chapter changes externally (chapter
       // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
@@ -796,7 +805,7 @@ export const Editor = React.memo(
                       }
                       showWhitespace={showWhitespace}
                       showDiff={settings.showDiff}
-                      streamingMode={proseStreamingActive}
+                      streamingMode={streamingModeActive}
                       baselineValue={localBaseline}
                       searchHighlightRanges={chapterSearchHighlightRanges}
                       enterBehavior="softbreak"

@@ -592,19 +592,17 @@ const executeChatRequestImpl = async (
       });
     }
 
-    if (!context.stopSignalRef.current) {
-      const botMessage = context.createAssistantMessage(currentMsgId, {
-        text: result.text,
-        thinking: result.thinking,
-        functionCalls: normalizeFunctionCalls(result.functionCalls),
-      });
-      upsertChatMessage(
-        context.setChatMessages,
-        ensureUniqueMessages,
-        currentMsgId,
-        botMessage
-      );
-    }
+    const botMessage = context.createAssistantMessage(currentMsgId, {
+      text: result.text,
+      thinking: result.thinking,
+      functionCalls: normalizeFunctionCalls(result.functionCalls),
+    });
+    upsertChatMessage(
+      context.setChatMessages,
+      ensureUniqueMessages,
+      currentMsgId,
+      botMessage
+    );
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;

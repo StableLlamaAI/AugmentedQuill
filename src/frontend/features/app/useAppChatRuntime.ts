@@ -17,14 +17,7 @@ import { useChatSessionManagement } from '../chat/useChatSessionManagement';
 import { MUTATION_TOOL_REGISTRY } from '../chat/mutationToolRegistry';
 import type { SessionMutation } from '../chat';
 import { applySmartQuotes } from '../../utils/textUtils';
-import type {
-  AppSettings,
-  ChatAttachment,
-  ChatMessage,
-  LLMConfig,
-  MetadataTab,
-  StoryState,
-} from '../../types';
+import type { ChatAttachment, LLMConfig, MetadataTab, StoryState } from '../../types';
 import type { PromptsState } from '../settings/usePrompts';
 import type { ChatToolExecutionResponse } from '../../services/apiTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
@@ -88,6 +81,7 @@ type ToolMutationPayload = ChatToolExecutionResponse & {
   }>;
 };
 
+// eslint-disable-next-line max-lines-per-function
 export function useAppChatRuntime({
   storyId,
   storyRef,
@@ -109,8 +103,7 @@ export function useAppChatRuntime({
 }: UseAppChatRuntimeParams): UseAppChatRuntimeResult {
   // Setters are stable function references — use getState() to avoid subscribing
   // this hook (and its App.tsx caller) to every streaming token update.
-  const { setChatMessages, setIsChatLoading, setSessionMutations } =
-    useChatStore.getState();
+  const { setChatMessages, setSessionMutations } = useChatStore.getState();
 
   const getSystemPrompt = useCallback(
     () => prompts.system_messages.chat_llm || '',
@@ -128,6 +121,10 @@ export function useAppChatRuntime({
 
   const onChatNewMessageBegin = useCallback(() => {
     setSessionMutations([]);
+    // Clear any frozen prose streaming state left over from a previous stop so
+    // the green diff overlay is dismissed before the new interaction starts.
+    useChatStore.getState().setIsProseStreamingFrozen(false);
+    useStoryStore.getState().setStreamingContent(null);
     advanceBaselineToCurrentStory();
   }, [advanceBaselineToCurrentStory, setSessionMutations]);
 
@@ -180,6 +177,15 @@ export function useAppChatRuntime({
     >
   >({});
 
+  // Stable ref so the isChatLoading subscriber below can call updateChapter without
+  // needing to re-register the subscription every render.
+  const updateChapterRef = useRef(updateChapter);
+  updateChapterRef.current = updateChapter;
+
+  // Whether the user explicitly stopped generation while prose was streaming.
+  // Set by the handleStopChat wrapper below; cleared when loading ends.
+  const stoppedDuringProseRef = useRef(false);
+
   useEffect(() => {
     if (!useChatStore.getState().isChatLoading) {
       prosePreviewStateRef.current = {};
@@ -188,7 +194,44 @@ export function useAppChatRuntime({
     const unsubscribe = useChatStore.subscribe(
       (state: ChatStoreState, prevState: ChatStoreState) => {
         if (prevState.isChatLoading && !state.isChatLoading) {
+          const pendingProse = prosePreviewStateRef.current;
+          const wasStopped = stoppedDuringProseRef.current;
+          stoppedDuringProseRef.current = false;
           prosePreviewStateRef.current = {};
+
+          // If the user stopped while prose was being streamed, the backend write was
+          // cancelled. Commit the partial content to the story now so the editor keeps
+          // the streamed text and an undo entry is pushed.
+          if (wasStopped) {
+            const writes = Object.entries(pendingProse).filter(
+              ([, s]: [string, { lastAppliedContent?: string }]) =>
+                s.lastAppliedContent !== undefined
+            );
+            if (writes.length > 0) {
+              void (async () => {
+                for (const [streamKey, streamState] of writes) {
+                  const chapId = streamKey.split(':')[0];
+                  if (chapId && streamState.lastAppliedContent !== undefined) {
+                    await updateChapterRef.current(
+                      chapId,
+                      { content: streamState.lastAppliedContent },
+                      true, // sync
+                      true, // pushHistory
+                      false // isUserEdit=false keeps old baseline so diff stays green
+                    );
+                  }
+                }
+                // Atomically transition active→frozen so no render frame sees both
+                // flags false (which would drop the green prefix-diff highlight).
+                useChatStore.getState().freezeProseStreaming();
+                useStoryStore.getState().setStreamingContent(null);
+              })();
+              // Async commit in progress — skip the synchronous clear below so the
+              // editor keeps showing the streamed preview until the commit resolves.
+              return;
+            }
+          }
+
           // Clear the streaming slot so the editor shows the committed chapter content.
           useStoryStore.getState().setStreamingContent(null);
           useChatStore.getState().setIsProseStreamingFromChat(false);
@@ -196,7 +239,7 @@ export function useAppChatRuntime({
       }
     );
     return unsubscribe;
-  }, []);
+  }, [refreshStory]);
 
   const { handleSendMessage, handleStopChat, handleRegenerate } = useChatExecution({
     getSystemPrompt: () => useChatStore.getState().systemPrompt,
@@ -313,7 +356,14 @@ export function useAppChatRuntime({
     ...sessionState,
     onMutationClick,
     handleSendMessageWithReset,
-    handleStopChat,
+    handleStopChat: useCallback(() => {
+      // Record that a stop was triggered while prose may be streaming, so the
+      // isChatLoading subscriber can commit the partial text to the story.
+      if (useChatStore.getState().isProseStreamingFromChat) {
+        stoppedDuringProseRef.current = true;
+      }
+      handleStopChat();
+    }, [handleStopChat]),
     handleRegenerateWithReset,
     handleEditMessage,
     handleDeleteMessage,
