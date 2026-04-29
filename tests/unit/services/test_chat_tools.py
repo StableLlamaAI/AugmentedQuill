@@ -721,9 +721,9 @@ class ChatToolsTest(TestCase):
                 },
             )
 
-        # Verify content was appended
+        # Verify content was appended with inline continuation semantics
         new_content = chapter_file.read_text(encoding="utf-8")
-        self.assertEqual(new_content, original_content + "\nNew generated content.")
+        self.assertEqual(new_content, original_content + " New generated content.")
 
         # Verify response structure
         appended = data.get("appended_messages") or []
@@ -737,6 +737,98 @@ class ChatToolsTest(TestCase):
         # Verify mutations for undo/redo support
         mutations = data.get("mutations") or {}
         self.assertTrue(mutations.get("story_changed"))
+
+    def test_call_writing_llm_append_mode_with_trailing_newline(self):
+        """Test append mode consumes trailing newline when continuation is inline."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        chapter_file.write_text("Line one.\n", encoding="utf-8")
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("Second sentence."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "Current text",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(new_content, "Line one. Second sentence.")
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(result.get("generated_text"), "Second sentence.")
+        self.assertTrue(result.get("written"))
+        self.assertEqual(result.get("write_mode"), "append")
+        self.assertEqual(result.get("chap_id"), 1)
+
+    def test_call_writing_llm_append_mode_with_paragraph_break(self):
+        """Test append mode preserves paragraph boundary when model starts with double newline."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        chapter_file.write_text("Line one.\n", encoding="utf-8")
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("\n\nSecond paragraph."),
+            ),
+        ):
+            _ = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "Current text",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(new_content, "Line one.\n\nSecond paragraph.")
 
     def test_call_writing_llm_append_mode_short_story_auto_detect(self):
         """Test write_mode='append' auto-detects chap_id=1 for short-story projects."""
@@ -786,7 +878,7 @@ class ChatToolsTest(TestCase):
         # Verify content was appended
         new_content = content_file.read_text(encoding="utf-8")
         self.assertEqual(
-            new_content, "Original short story content.\n Continuation text."
+            new_content, "Original short story content. Continuation text."
         )
 
         # Verify response has chap_id=1 set automatically

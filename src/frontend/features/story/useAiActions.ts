@@ -15,6 +15,7 @@ import { WritingUnit } from '../../types';
 import { streamAiAction } from '../../services/openaiService';
 import { notifyError } from '../../services/errorNotifier';
 import { setupMountedRefLifecycle } from '../../utils/mountedRef';
+import { joinSuggestionToContent } from '../../utils/textUtils';
 import { useStoryStore } from '../../stores/storyStore';
 import { useChatStore } from '../../stores/chatStore';
 
@@ -86,17 +87,6 @@ const getAiActionTarget = (
 ): 'summary' | 'story_summary' | 'chapter' =>
   target === 'chapter' ? 'chapter' : scope === 'chapter' ? 'summary' : 'story_summary';
 
-const getSeparator = (
-  action: 'update' | 'rewrite' | 'extend',
-  baseContent: string
-): string =>
-  action === 'extend' && baseContent.length > 0 && !baseContent.endsWith('\n')
-    ? '\n\n'
-    : '';
-
-/** Extracted to keep useAiActions under the line-per-function limit. */
-type StreamedContent = { chapterId: string; content: string };
-
 /**
  * Creates a throttled progress pusher for streaming AI chapter content previews.
  * 150ms macrotask throttle avoids "Maximum update depth exceeded" in React 19.
@@ -104,7 +94,6 @@ type StreamedContent = { chapterId: string; content: string };
 function createStreamingPusher(
   isChapterStreamingAction: boolean,
   baseContent: string,
-  separator: string,
   action: 'update' | 'rewrite' | 'extend',
   chapterId: string,
   stripPrefillEcho: (text: string) => string,
@@ -124,7 +113,7 @@ function createStreamingPusher(
     const normalizedPartial = stripPrefillEcho(partial);
     const nextContent =
       action === 'extend'
-        ? `${baseContent}${separator}${normalizedPartial}`
+        ? joinSuggestionToContent(baseContent, normalizedPartial)
         : normalizedPartial;
     onLastStreamed({ chapterId, content: nextContent });
     useStoryStore.getState().setStreamingContent({ chapterId, content: nextContent });
@@ -279,12 +268,10 @@ export function useAiActions({
         imposedActionPrefill,
         imposedHeadingPrefix
       );
-      const separator = getSeparator(action, baseContent);
 
       const { pushProgress, cancelThrottle } = createStreamingPusher(
         isChapterStreamingAction,
         baseContent,
-        separator,
         action,
         currentUnit.id,
         stripPrefillEcho,
@@ -322,7 +309,7 @@ export function useAiActions({
         await updateChapter(currentUnit.id, { summary: result });
       } else if (action === 'extend') {
         await updateChapter(currentUnit.id, {
-          content: baseContent + separator + stripPrefillEcho(result),
+          content: joinSuggestionToContent(baseContent, stripPrefillEcho(result)),
         });
       } else {
         await updateChapter(currentUnit.id, {

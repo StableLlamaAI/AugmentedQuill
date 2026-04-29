@@ -194,11 +194,26 @@ describe('useAiActions', () => {
     await waitFor(() => {
       expect(updateChapter).toHaveBeenCalledWith(
         '1',
-        { content: 'Existing content\n\nHello' },
+        { content: 'Existing content Hello' },
         true,
         true,
         false
       );
+    });
+  });
+
+  it('does not force a paragraph break when final extend content continues the current sentence', async () => {
+    const updateChapter = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(streamAiAction).mockResolvedValue('continued text.');
+
+    const { result } = renderHook(() => useAiActions(makeParams(updateChapter)));
+
+    await act(async () => {
+      await result.current.handleAiAction('chapter', 'extend');
+    });
+
+    expect(updateChapter).toHaveBeenCalledWith('1', {
+      content: 'Existing content continued text.',
     });
   });
 
