@@ -26,11 +26,11 @@ export function makeProviderKey(
   modelId?: string,
   apiKeyEnabled?: boolean
 ): string {
+  const usesApiKey = apiKeyEnabled !== false;
   const b = (baseUrl || '').trim();
-  const k = apiKeyEnabled ? (apiKey || '').trim() : '';
+  const k = usesApiKey ? (apiKey || '').trim() : '';
   const m = (modelId || '').trim();
-  const enabled = apiKeyEnabled ? 'enabled' : 'disabled';
-  return `${b}||${k}||${m}||${enabled}`;
+  return `${b}||${k}||${m}`;
 }
 
 /**
@@ -72,13 +72,9 @@ export function groupProviders(
     if (!activeIds.has(provider.id)) return;
     const modelId = (provider.modelId || '').trim();
     if (!modelId) return;
-    const apiKey = provider.apiKeyEnabled ? provider.apiKey : undefined;
-    const key = makeProviderKey(
-      provider.baseUrl || '',
-      apiKey,
-      modelId,
-      provider.apiKeyEnabled
-    );
+    const apiKeyEnabled = provider.apiKeyEnabled !== false;
+    const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
+    const key = makeProviderKey(provider.baseUrl || '', apiKey, modelId, apiKeyEnabled);
     if (!groups[key]) {
       groups[key] = {
         ids: [],
@@ -177,12 +173,13 @@ export function useProviderHealth(appSettings: AppSettings): {
         appSettings.activeEditingProviderId,
       ]);
       const groupedProviders = groupProviders(appSettings.providers, activeIds);
-      const apiKey = provider.apiKeyEnabled ? provider.apiKey : undefined;
+      const apiKeyEnabled = provider.apiKeyEnabled !== false;
+      const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
       const key = makeProviderKey(
         provider.baseUrl || '',
         apiKey,
         modelId,
-        provider.apiKeyEnabled
+        apiKeyEnabled
       );
       const relatedProviderIds = groupedProviders[key]?.ids || [provider.id];
       const payload = groupedProviders[key]?.payload || {

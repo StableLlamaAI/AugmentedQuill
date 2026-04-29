@@ -122,7 +122,7 @@ async function readSSEStream(
     cancelSignal.reader = reader;
   }
 
-  const shouldStop = (): boolean => cancelSignal?.cancelled || isStopped?.();
+  const shouldStop = (): boolean => Boolean(cancelSignal?.cancelled || isStopped?.());
 
   const cancelAndBreak = async (): Promise<void> => {
     try {
