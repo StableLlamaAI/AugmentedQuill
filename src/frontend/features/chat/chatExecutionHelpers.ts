@@ -387,6 +387,7 @@ const handleToolResponse = async (
     {
       allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
+      isStopped: () => context.stopSignalRef.current,
     }
   );
 
@@ -462,7 +463,8 @@ const runToolCallLoop = async (
     const currentChatId = context.getCurrentChatId();
     const toolResponse = await api.chat.executeTools(
       buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
-      context.onProseChunk
+      context.onProseChunk,
+      () => context.stopSignalRef.current
     );
 
     if (context.stopSignalRef.current) break;
@@ -519,6 +521,7 @@ const executeChatRequestImpl = async (
       {
         allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
+        isStopped: () => context.stopSignalRef.current,
       }
     );
 

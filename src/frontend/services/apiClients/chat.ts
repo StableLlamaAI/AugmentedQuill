@@ -74,7 +74,8 @@ export const createChatApi = (projectName: string) => ({
       model_name?: string;
       chat_id?: string;
     },
-    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
+    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void,
+    isStopped?: () => boolean
   ): Promise<ChatToolExecutionResponse> => {
     const res = await fetch(`/api/v1${projectEndpoint(projectName, '/chat/tools')}`, {
       method: 'POST',
@@ -141,8 +142,17 @@ export const createChatApi = (projectName: string) => ({
 
     try {
       while (true) {
+        if (isStopped?.()) {
+          // User stopped generation — close the stream so the backend disconnects.
+          reader.cancel().catch(() => undefined);
+          return { ok: false, appended_messages: [] };
+        }
         const { done, value } = await reader.read();
         if (done) break;
+        if (isStopped?.()) {
+          reader.cancel().catch(() => undefined);
+          return { ok: false, appended_messages: [] };
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');

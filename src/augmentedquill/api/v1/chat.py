@@ -298,6 +298,9 @@ async def api_chat_tools(
                 result_holder.append(
                     (appended_inner, mutations_inner, names_inner, None)
                 )
+            except asyncio.CancelledError:
+                result_holder.append(([], initial_mutations, [], None))
+                raise
             except Exception as exc:  # noqa: BLE001
                 result_holder.append(([], initial_mutations, [], exc))
             finally:
@@ -305,18 +308,37 @@ async def api_chat_tools(
 
         task = asyncio.create_task(_run_and_signal())
 
-        # Relay prose-streaming events emitted by call_writing_llm.
-        while True:
-            item = await stream_queue.get()
-            if item is None:
-                break
-            kind, data = item
-            if kind == "prose_start":
-                yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
-            elif kind == "prose_chunk":
-                yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+        # Cancel the tool task if the client disconnects mid-stream.
+        async def _watch_disconnect() -> None:
+            """Cancel the running tool task when the HTTP client disconnects."""
+            disconnected = await request.is_disconnected()
+            if disconnected:
+                task.cancel()
 
-        await task  # ensure the background task has fully finished
+        watcher = asyncio.create_task(_watch_disconnect())
+
+        # Relay prose-streaming events emitted by call_writing_llm.
+        try:
+            while True:
+                try:
+                    item = await stream_queue.get()
+                except asyncio.CancelledError:
+                    task.cancel()
+                    raise
+                if item is None:
+                    break
+                kind, data = item
+                if kind == "prose_start":
+                    yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
+                elif kind == "prose_chunk":
+                    yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+        finally:
+            watcher.cancel()
+
+        try:
+            await task  # ensure the background task has fully finished
+        except asyncio.CancelledError:
+            return
 
         if not result_holder:
             yield f"data: {_json.dumps({'type': 'error', 'error': 'Tool execution produced no result'})}\n\n"

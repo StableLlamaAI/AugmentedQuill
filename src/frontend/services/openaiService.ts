@@ -202,6 +202,7 @@ export const createChatSession = (
     allowWebSearch?: boolean;
     currentChapter?: { id: string; title: string } | null;
     onContextUsage?: (usage: ChatContextUsage) => void;
+    isStopped?: () => boolean;
   }
 ): UnifiedChat => {
   return {
@@ -249,6 +250,7 @@ export const createChatSession = (
           [];
         let thinking = '';
         let fullText = '';
+        const cancelSignal: CancelSignal = { cancelled: false };
         const text = await readSSEStream(
           reader,
           (calls: ToolCallChunk[]) => {
@@ -274,11 +276,18 @@ export const createChatSession = (
           (t: string) => {
             thinking += t;
             if (onUpdate) onUpdate({ thinking: applySmartQuotes(thinking) });
+            if (options?.isStopped?.()) {
+              cancelSignal.cancelled = true;
+            }
           },
           (chunk: string) => {
             fullText += chunk;
             if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
-          }
+            if (options?.isStopped?.()) {
+              cancelSignal.cancelled = true;
+            }
+          },
+          cancelSignal
         );
 
         const functionCalls = toolCallsAccumulator
