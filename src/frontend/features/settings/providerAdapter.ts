@@ -47,6 +47,14 @@ const toNumberWithDefault = (value: unknown, fallback: number): number => {
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 
+const toNumberWithOptionalDefault = (
+  value: unknown,
+  fallback?: number
+): number | undefined => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
 const toBooleanWithDefault = (value: unknown, fallback: boolean): boolean =>
   value === null || value === undefined ? fallback : Boolean(value);
 
@@ -68,14 +76,20 @@ export const machineModelToProvider = (
     timeout: Math.max(1, timeoutS) * 1000,
     modelId: String(model.model || '').trim(),
     contextWindowTokens: toNumberOrUndefined(model.context_window_tokens),
-    temperature: toNumberWithDefault(model.temperature, fallbackProvider.temperature),
-    topP: toNumberWithDefault(model.top_p, fallbackProvider.topP),
-    maxTokens: toNumberWithDefault(model.max_tokens, fallbackProvider.maxTokens),
-    presencePenalty: toNumberWithDefault(
+    temperature: toNumberWithOptionalDefault(
+      model.temperature,
+      fallbackProvider.temperature
+    ),
+    topP: toNumberWithOptionalDefault(model.top_p, fallbackProvider.topP),
+    maxTokens: toNumberWithOptionalDefault(
+      model.max_tokens,
+      fallbackProvider.maxTokens
+    ),
+    presencePenalty: toNumberWithOptionalDefault(
       model.presence_penalty,
       fallbackProvider.presencePenalty
     ),
-    frequencyPenalty: toNumberWithDefault(
+    frequencyPenalty: toNumberWithOptionalDefault(
       model.frequency_penalty,
       fallbackProvider.frequencyPenalty
     ),
