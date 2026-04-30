@@ -35,6 +35,13 @@ export interface SourcebookDialogState {
   entryId: string | null;
 }
 
+export interface ChapterMetadataDialogState {
+  isOpen: boolean;
+  version: number;
+  chapterId: string | null;
+  initialTab?: MetadataTab;
+}
+
 // ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
@@ -51,6 +58,7 @@ export interface UIStoreState {
   // ── Dialog state (replaces trigger-counter pattern) ───────────────────────
   metadataDialog: MetadataDialogState;
   sourcebookDialog: SourcebookDialogState;
+  chapterMetadataDialog: ChapterMetadataDialogState;
 
   // ── Editor UI flags ───────────────────────────────────────────────────────
   viewMode: ViewMode;
@@ -72,6 +80,8 @@ export interface UIStoreState {
   closeMetadataDialog: () => void;
   openSourcebookDialog: (entryId: string) => void;
   closeSourcebookDialog: () => void;
+  openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
+  closeChapterMetadataDialog: () => void;
 
   setViewMode: (mode: ViewMode | ((prev: ViewMode) => ViewMode)) => void;
   setShowWhitespace: (show: boolean | ((prev: boolean) => boolean)) => void;
@@ -112,6 +122,12 @@ export const useUIStore = create<UIStoreState>()(
       // ── Dialogs (not persisted – reset on page load) ─────────────────────
       metadataDialog: { isOpen: false, version: 0 },
       sourcebookDialog: { isOpen: false, version: 0, entryId: null },
+      chapterMetadataDialog: {
+        isOpen: false,
+        version: 0,
+        chapterId: null,
+        initialTab: undefined,
+      },
 
       // ── Editor UI flags (not persisted) ─────────────────────────────────
       viewMode: 'raw' as ViewMode,
@@ -165,6 +181,19 @@ export const useUIStore = create<UIStoreState>()(
         set((s: UIStoreState) => ({
           sourcebookDialog: { ...s.sourcebookDialog, isOpen: false },
         })),
+      openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) =>
+        set((s: UIStoreState) => ({
+          chapterMetadataDialog: {
+            isOpen: true,
+            version: s.chapterMetadataDialog.version + 1,
+            chapterId,
+            initialTab,
+          },
+        })),
+      closeChapterMetadataDialog: () =>
+        set((s: UIStoreState) => ({
+          chapterMetadataDialog: { ...s.chapterMetadataDialog, isOpen: false },
+        })),
 
       // ── Editor UI actions ────────────────────────────────────────────────
       setViewMode: (v: ViewMode | ((prev: ViewMode) => ViewMode)) =>
@@ -210,6 +239,11 @@ export function useSourcebookDialog(): SourcebookDialogState {
   return useUIStore((s: UIStoreState) => s.sourcebookDialog);
 }
 
+/** Subscribe to chapter metadata dialog state only. */
+export function useChapterMetadataDialog(): ChapterMetadataDialogState {
+  return useUIStore((s: UIStoreState) => s.chapterMetadataDialog);
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -225,6 +259,12 @@ export function resetUIStore(): void {
     isDebugLogsOpen: false,
     metadataDialog: { isOpen: false, version: 0 },
     sourcebookDialog: { isOpen: false, version: 0, entryId: null },
+    chapterMetadataDialog: {
+      isOpen: false,
+      version: 0,
+      chapterId: null,
+      initialTab: undefined,
+    },
     viewMode: 'raw' as ViewMode,
     showWhitespace: false,
     activeFormats: [],
@@ -246,4 +286,7 @@ export const uiStoreActions = {
     useUIStore.getState().openMetadataDialog(tab),
   openSourcebookDialog: (entryId: string) =>
     useUIStore.getState().openSourcebookDialog(entryId),
+  openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) =>
+    useUIStore.getState().openChapterMetadataDialog(chapterId, initialTab),
+  closeChapterMetadataDialog: () => useUIStore.getState().closeChapterMetadataDialog(),
 };

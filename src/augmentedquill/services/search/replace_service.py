@@ -19,8 +19,9 @@ from pathlib import Path
 
 from augmentedquill.models.search import (
     ReplaceAllRequest,
-    ReplaceSingleRequest,
+    ReplaceChangeLocation,
     ReplaceResponse,
+    ReplaceSingleRequest,
     SearchScope,
 )
 from augmentedquill.services.search.search_service import (
@@ -28,6 +29,20 @@ from augmentedquill.services.search.search_service import (
     _get_all_chapter_ids,
     _read_chapter_content,
 )
+
+
+def _make_change_location(
+    type: str,
+    target_id: str | None,
+    field: str | None,
+    label: str,
+) -> ReplaceChangeLocation:
+    return ReplaceChangeLocation(
+        type=type,
+        target_id=target_id,
+        field=field,
+        label=label,
+    )
 
 
 def _apply_replace(
@@ -136,13 +151,13 @@ def _replace_in_chapter_content(
     is_regex: bool,
     is_phonetic: bool,
     match_index: int | None,
-) -> tuple[int, str | None]:
-    """Replace in a single chapter's prose.  Returns (count, label_or_None)."""
+) -> tuple[int, str | None, ReplaceChangeLocation | None]:
+    """Replace in a single chapter's prose.  Returns (count, label_or_None, location_or_None)."""
     from augmentedquill.services.projects.projects import write_chapter_content
 
     content = _read_chapter_content(chap_id)
     if not content:
-        return 0, None
+        return 0, None, None
 
     if match_index is None:
         new_content, count = _apply_replace(
@@ -161,8 +176,13 @@ def _replace_in_chapter_content(
 
     if count > 0:
         write_chapter_content(chap_id, new_content)
-        return count, f"Chapter {chap_id} content"
-    return 0, None
+        label = f"Chapter {chap_id} content"
+        return (
+            count,
+            label,
+            _make_change_location("chapter", str(chap_id), "content", label),
+        )
+    return 0, None, None
 
 
 # ─── Chapter metadata ────────────────────────────────────────────────────────
@@ -179,7 +199,7 @@ def _replace_in_chapter_metadata(
     target_section_id: str | None = None,
     target_field: str | None = None,
     match_index: int | None = None,
-) -> tuple[int, list[str]]:
+) -> tuple[int, list[str], list[ReplaceChangeLocation]]:
     """Replace in chapter metadata fields across all (or a targeted) chapter."""
     from augmentedquill.core.config import load_story_config, save_story_config
 
@@ -187,7 +207,7 @@ def _replace_in_chapter_metadata(
     try:
         story = load_story_config(story_path) or {}
     except Exception:
-        return 0, []
+        return 0, [], []
 
     p_type = story.get("project_type", "novel")
     if p_type == "series":
@@ -199,6 +219,7 @@ def _replace_in_chapter_metadata(
 
     total = 0
     changed = []
+    change_locations: list[ReplaceChangeLocation] = []
 
     for idx, entry in enumerate(all_chapters):
         chap_id = chapter_ids[idx] if idx < len(chapter_ids) else idx + 1
@@ -231,7 +252,16 @@ def _replace_in_chapter_metadata(
             if count > 0:
                 entry[field_key] = new_val
                 total += count
-                changed.append(f"{title_label} {field_key}")
+                label = f"{title_label} {field_key}"
+                changed.append(label)
+                change_locations.append(
+                    _make_change_location(
+                        "metadata",
+                        str(chap_id),
+                        field_key,
+                        label,
+                    )
+                )
 
         for cidx, conflict in enumerate(entry.get("conflicts") or []):
             for sub_field in ["description", "resolution"]:
@@ -258,12 +288,21 @@ def _replace_in_chapter_metadata(
                 if count > 0:
                     conflict[sub_field] = new_val
                     total += count
-                    changed.append(f"{title_label} conflict {cidx + 1} {sub_field}")
+                    label = f"{title_label} conflict {cidx + 1} {sub_field}"
+                    changed.append(label)
+                    change_locations.append(
+                        _make_change_location(
+                            "metadata",
+                            str(chap_id),
+                            full_field,
+                            label,
+                        )
+                    )
 
     if total > 0:
         save_story_config(story_path, story)
 
-    return total, changed
+    return total, changed, change_locations
 
 
 # ─── Story metadata ──────────────────────────────────────────────────────────
@@ -279,7 +318,7 @@ def _replace_in_story_metadata(
     target_section_id: str | None = None,
     target_field: str | None = None,
     match_index: int | None = None,
-) -> tuple[int, list[str]]:
+) -> tuple[int, list[str], list[ReplaceChangeLocation]]:
     """Replace in story metadata."""
     from augmentedquill.core.config import load_story_config, save_story_config
 
@@ -287,10 +326,11 @@ def _replace_in_story_metadata(
     try:
         story = load_story_config(story_path) or {}
     except Exception:
-        return 0, []
+        return 0, [], []
 
     total = 0
     changed = []
+    change_locations: list[ReplaceChangeLocation] = []
 
     story_fields = ["project_title", "story_summary", "notes", "private_notes"]
     for field_key in story_fields:
@@ -318,7 +358,11 @@ def _replace_in_story_metadata(
         if count > 0:
             story[field_key] = new_val
             total += count
-            changed.append(f"Story {field_key}")
+            label = f"Story {field_key}"
+            changed.append(label)
+            change_locations.append(
+                _make_change_location("metadata", "story", field_key, label)
+            )
 
     for cidx, conflict in enumerate(story.get("conflicts") or []):
         for sub_field in ["description", "resolution"]:
@@ -347,7 +391,11 @@ def _replace_in_story_metadata(
             if count > 0:
                 conflict[sub_field] = new_val
                 total += count
-                changed.append(f"Story conflict {cidx + 1} {sub_field}")
+                label = f"Story conflict {cidx + 1} {sub_field}"
+                changed.append(label)
+                change_locations.append(
+                    _make_change_location("metadata", "story", full_field, label)
+                )
 
     # Series books metadata
     for book in story.get("books", []):
@@ -379,12 +427,21 @@ def _replace_in_story_metadata(
             if count > 0:
                 book[field_key] = new_val
                 total += count
-                changed.append(f"Book '{book_title}' {field_key}")
+                label = f"Book '{book_title}' {field_key}"
+                changed.append(label)
+                change_locations.append(
+                    _make_change_location(
+                        "book",
+                        str(book_id),
+                        field_key,
+                        label,
+                    )
+                )
 
     if total > 0:
         save_story_config(story_path, story)
 
-    return total, changed
+    return total, changed, change_locations
 
 
 # ─── Sourcebook ──────────────────────────────────────────────────────────────
@@ -400,7 +457,7 @@ def _replace_in_sourcebook(
     target_section_id: str | None = None,
     target_field: str | None = None,
     match_index: int | None = None,
-) -> tuple[int, list[str]]:
+) -> tuple[int, list[str], list[ReplaceChangeLocation]]:
     """Replace text in sourcebook entries in story.json."""
     from augmentedquill.core.config import load_story_config, save_story_config
 
@@ -408,11 +465,11 @@ def _replace_in_sourcebook(
     try:
         story = load_story_config(story_path) or {}
     except Exception:
-        return 0, []
+        return 0, [], []
 
     sourcebook = story.get("sourcebook") or {}
     if not isinstance(sourcebook, dict):
-        return 0, []
+        return 0, [], []
 
     global_rels = story.get("sourcebook_relations") or []
     if not isinstance(global_rels, list):
@@ -420,6 +477,7 @@ def _replace_in_sourcebook(
 
     total = 0
     changed = []
+    change_locations: list[ReplaceChangeLocation] = []
     rename_map: dict[str, str] = {}
 
     for entry_key, entry_data in list(sourcebook.items()):
@@ -460,13 +518,28 @@ def _replace_in_sourcebook(
 
             if count > 0:
                 total += count
-                changed.append(f"Sourcebook '{entry_id}' {field_label}")
                 if field_key == "name":
                     new_name = new_val
-                    if new_name != entry_key and new_name not in sourcebook:
+                    label = f"Sourcebook '{new_name}' {field_label}"
+                    target_id = new_name
+                    if new_name != entry_id and new_name not in sourcebook:
                         rename_map[entry_key] = new_name
+                    else:
+                        target_id = entry_id
                 else:
+                    label = f"Sourcebook '{entry_id}' {field_label}"
+                    target_id = entry_id
                     entry_data[field_key] = new_val
+
+                changed.append(label)
+                change_locations.append(
+                    _make_change_location(
+                        "sourcebook",
+                        target_id,
+                        field_key,
+                        label,
+                    )
+                )
 
         if target_field in (None, "synonyms"):
             synonyms = entry_data.get("synonyms") or []
@@ -492,7 +565,16 @@ def _replace_in_sourcebook(
             if synonym_count > 0:
                 entry_data["synonyms"] = new_synonyms
                 total += synonym_count
-                changed.append(f"Sourcebook '{entry_id}' synonyms")
+                label = f"Sourcebook '{entry_id}' synonyms"
+                changed.append(label)
+                change_locations.append(
+                    _make_change_location(
+                        "sourcebook",
+                        entry_id,
+                        "synonyms",
+                        label,
+                    )
+                )
 
         if target_field in (None, "relations") or (
             target_field is not None and target_field.startswith("relations[")
@@ -547,7 +629,16 @@ def _replace_in_sourcebook(
                     if count > 0:
                         rel[rel_field] = new_val
                         total += count
-                        changed.append(f"Sourcebook '{entry_id}' relation {rel_label}")
+                        label = f"Sourcebook '{entry_id}' relation {rel_label}"
+                        changed.append(label)
+                        change_locations.append(
+                            _make_change_location(
+                                "sourcebook",
+                                entry_id,
+                                field_path,
+                                label,
+                            )
+                        )
 
     for old_name, new_name in rename_map.items():
         if old_name in sourcebook and new_name not in sourcebook:
@@ -557,13 +648,20 @@ def _replace_in_sourcebook(
                     rel["source_id"] = new_name
                 if rel.get("target_id") == old_name:
                     rel["target_id"] = new_name
+            for location in change_locations:
+                if location.type == "sourcebook" and location.target_id == old_name:
+                    location.target_id = new_name
+                    location.label = location.label.replace(
+                        f"Sourcebook '{old_name}'",
+                        f"Sourcebook '{new_name}'",
+                    )
 
     if total > 0:
         story["sourcebook"] = sourcebook
         story["sourcebook_relations"] = global_rels
         save_story_config(story_path, story)
 
-    return total, changed
+    return total, changed, change_locations
 
 
 # ─── Public API ──────────────────────────────────────────────────────────────
@@ -583,6 +681,7 @@ def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
     scope = req.scope
     total = 0
     changed: list[str] = []
+    changed_locations: list[ReplaceChangeLocation] = []
 
     chapter_ids = _get_all_chapter_ids()
 
@@ -598,27 +697,38 @@ def replace_all(req: ReplaceAllRequest, active: Path) -> ReplaceResponse:
             else chapter_ids
         )
         for chap_id in ids:
-            count, label = _replace_in_chapter_content(
+            count, label, location = _replace_in_chapter_content(
                 chap_id, q, r, cs, rx, ph, match_index=None
             )
             if count > 0 and label:
                 total += count
                 changed.append(label)
+                if location is not None:
+                    changed_locations.append(location)
 
     if scope in (SearchScope.metadata, SearchScope.all):
-        n, labels = _replace_in_chapter_metadata(active, chapter_ids, q, r, cs, rx, ph)
+        n, labels, locations = _replace_in_chapter_metadata(
+            active, chapter_ids, q, r, cs, rx, ph
+        )
         total += n
         changed.extend(labels)
-        n, labels = _replace_in_story_metadata(active, q, r, cs, rx, ph)
+        changed_locations.extend(locations)
+        n, labels, locations = _replace_in_story_metadata(active, q, r, cs, rx, ph)
         total += n
         changed.extend(labels)
+        changed_locations.extend(locations)
 
     if scope in (SearchScope.sourcebook, SearchScope.all):
-        n, labels = _replace_in_sourcebook(active, q, r, cs, rx, ph)
+        n, labels, locations = _replace_in_sourcebook(active, q, r, cs, rx, ph)
         total += n
         changed.extend(labels)
+        changed_locations.extend(locations)
 
-    return ReplaceResponse(replacements_made=total, changed_sections=changed)
+    return ReplaceResponse(
+        replacements_made=total,
+        changed_sections=changed,
+        changed_sections_meta=changed_locations,
+    )
 
 
 def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
@@ -640,15 +750,17 @@ def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
             chap_id = int(sec_id)
         except ValueError:
             return ReplaceResponse(replacements_made=0, changed_sections=[])
-        count, label = _replace_in_chapter_content(
+        count, label, location = _replace_in_chapter_content(
             chap_id, q, r, cs, rx, ph, match_index=idx
         )
-        if count and label:
-            return ReplaceResponse(replacements_made=count, changed_sections=[label])
-        return ReplaceResponse(replacements_made=0, changed_sections=[])
+        return ReplaceResponse(
+            replacements_made=count,
+            changed_sections=[label] if count and label else [],
+            changed_sections_meta=[location] if location is not None else [],
+        )
 
     if sec_type == "chapter_metadata":
-        n, labels = _replace_in_chapter_metadata(
+        n, labels, locations = _replace_in_chapter_metadata(
             active,
             chapter_ids,
             q,
@@ -660,10 +772,14 @@ def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
             target_field=field,
             match_index=idx,
         )
-        return ReplaceResponse(replacements_made=n, changed_sections=labels)
+        return ReplaceResponse(
+            replacements_made=n,
+            changed_sections=labels,
+            changed_sections_meta=locations,
+        )
 
     if sec_type == "story_metadata":
-        n, labels = _replace_in_story_metadata(
+        n, labels, locations = _replace_in_story_metadata(
             active,
             q,
             r,
@@ -674,10 +790,14 @@ def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
             target_field=field,
             match_index=idx,
         )
-        return ReplaceResponse(replacements_made=n, changed_sections=labels)
+        return ReplaceResponse(
+            replacements_made=n,
+            changed_sections=labels,
+            changed_sections_meta=locations,
+        )
 
     if sec_type == "sourcebook":
-        n, labels = _replace_in_sourcebook(
+        n, labels, locations = _replace_in_sourcebook(
             active,
             q,
             r,
@@ -688,6 +808,10 @@ def replace_single(req: ReplaceSingleRequest, active: Path) -> ReplaceResponse:
             target_field=field,
             match_index=idx,
         )
-        return ReplaceResponse(replacements_made=n, changed_sections=labels)
+        return ReplaceResponse(
+            replacements_made=n,
+            changed_sections=labels,
+            changed_sections_meta=locations,
+        )
 
     return ReplaceResponse(replacements_made=0, changed_sections=[])

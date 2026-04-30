@@ -325,7 +325,8 @@ const handleToolResponse = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -355,8 +356,7 @@ const handleToolResponse = async (
   }
 
   if (toolResponse.mutations?.story_changed) {
-    await context.refreshProjects();
-    await context.refreshStory();
+    storyChangedState.value = true;
   }
 
   if (toolResponse.mutations) {
@@ -424,7 +424,8 @@ const runToolCallLoop = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -476,7 +477,8 @@ const runToolCallLoop = async (
       assistantMessage,
       currentHistory,
       currentMsgId,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     if (!nextState) break;
@@ -547,17 +549,24 @@ const executeChatRequestImpl = async (
       operation_count?: number;
     }> = [];
 
+    const storyChangedState = { value: false };
     const loopResult = await runToolCallLoop(
       context,
       currentHistory,
       currentMsgId,
       result,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     currentHistory = loopResult.currentHistory;
     currentMsgId = loopResult.currentMsgId;
     result = loopResult.result;
+
+    if (storyChangedState.value) {
+      await context.refreshProjects();
+      await context.refreshStory();
+    }
 
     if (accumulatedToolBatches.length > 0) {
       const entryLabel =
@@ -575,6 +584,7 @@ const executeChatRequestImpl = async (
 
       await context.pushExternalHistoryEntry?.({
         label: entryLabel,
+        forceNewHistory: true,
         onUndo: async () => {
           for (const batch of [...accumulatedToolBatches].reverse()) {
             await api.chat.undoToolBatch(batch.batch_id);
@@ -589,6 +599,11 @@ const executeChatRequestImpl = async (
           await context.refreshProjects();
           await context.refreshStory();
         },
+      });
+    } else if (storyChangedState.value) {
+      await context.pushExternalHistoryEntry?.({
+        label: 'AI tool changes',
+        forceNewHistory: true,
       });
     }
 

@@ -5673,6 +5673,48 @@
         "title": "ReplaceAllRequest",
         "description": "Request to replace all occurrences of a search query."
       },
+      "ReplaceChangeLocation": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "One of: chapter, story, metadata, sourcebook, book"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id",
+            "description": "Target identifier for the changed section, e.g. chapter ID or sourcebook entry name"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field",
+            "description": "Optional field name or metadata subfield affected by the replacement"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable label for the changed section"
+          }
+        },
+        "type": "object",
+        "required": ["type", "label"],
+        "title": "ReplaceChangeLocation",
+        "description": "Structured information about a single replaced section."
+      },
       "ReplaceResponse": {
         "properties": {
           "replacements_made": {
@@ -5688,6 +5730,14 @@
             "type": "array",
             "title": "Changed Sections",
             "description": "Human-readable labels for each changed section"
+          },
+          "changed_sections_meta": {
+            "items": {
+              "$ref": "#/components/schemas/ReplaceChangeLocation"
+            },
+            "type": "array",
+            "title": "Changed Sections Meta",
+            "description": "Structured information for each changed section"
           }
         },
         "type": "object",

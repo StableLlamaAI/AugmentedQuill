@@ -59,6 +59,7 @@ type UseAppChatRuntimeParams = {
   openAndExpandStory: () => void;
   openSourcebookEntryDialog: (entryId: string) => void;
   openStoryMetadataDialog: (tab?: MetadataTab) => void;
+  openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
 };
 
 type UseAppChatRuntimeResult = ReturnType<typeof useChatSessionManagement> & {
@@ -100,6 +101,7 @@ export function useAppChatRuntime({
   openAndExpandStory,
   openSourcebookEntryDialog,
   openStoryMetadataDialog,
+  openChapterMetadataDialog,
 }: UseAppChatRuntimeParams): UseAppChatRuntimeResult {
   // Setters are stable function references — use getState() to avoid subscribing
   // this hook (and its App.tsx caller) to every streaming token update.
@@ -332,15 +334,26 @@ export function useAppChatRuntime({
       startTransition(() => {
         requestAnimationFrame(() => {
           if (mutation.type === 'chapter') {
+            openAndExpandStory();
             handleChapterSelect(mutation.targetId ?? null);
           } else if (mutation.type === 'story') {
+            openAndExpandStory();
             handleChapterSelect(null);
           } else if (mutation.type === 'metadata') {
-            openStoryMetadataDialog(mutation.subType as MetadataTab);
-          } else if (mutation.type === 'sourcebook') {
-            openSourcebookEntryDialog(mutation.targetId ?? '');
-          } else if (mutation.type === 'book') {
             openAndExpandStory();
+            if (mutation.targetId && mutation.targetId !== 'story') {
+              handleChapterSelect(mutation.targetId);
+              openChapterMetadataDialog(
+                mutation.targetId,
+                mutation.subType as MetadataTab | undefined
+              );
+            } else {
+              openStoryMetadataDialog(mutation.subType as MetadataTab | undefined);
+            }
+          } else if (mutation.type === 'sourcebook') {
+            if (mutation.targetId) {
+              openSourcebookEntryDialog(mutation.targetId);
+            }
           }
         });
       });

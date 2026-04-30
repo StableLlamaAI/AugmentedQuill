@@ -2388,6 +2388,32 @@ export interface components {
       active_chapter_id?: number | null;
     };
     /**
+     * ReplaceChangeLocation
+     * @description Structured information about a single replaced section.
+     */
+    ReplaceChangeLocation: {
+      /**
+       * Type
+       * @description One of: chapter, story, metadata, sourcebook, book
+       */
+      type: string;
+      /**
+       * Target Id
+       * @description Target identifier for the changed section, e.g. chapter ID or sourcebook entry name
+       */
+      target_id?: string | null;
+      /**
+       * Field
+       * @description Optional field name or metadata subfield affected by the replacement
+       */
+      field?: string | null;
+      /**
+       * Label
+       * @description Human-readable label for the changed section
+       */
+      label: string;
+    };
+    /**
      * ReplaceResponse
      * @description Result of a replace operation.
      */
@@ -2403,6 +2429,11 @@ export interface components {
        * @description Human-readable labels for each changed section
        */
       changed_sections?: string[];
+      /**
+       * Changed Sections Meta
+       * @description Structured information for each changed section
+       */
+      changed_sections_meta?: components['schemas']['ReplaceChangeLocation'][];
     };
     /**
      * ReplaceSingleRequest

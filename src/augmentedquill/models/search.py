@@ -83,6 +83,23 @@ class SearchResultSection(BaseModel):
     matches: list[SearchMatch] = Field(default_factory=list)
 
 
+class ReplaceChangeLocation(BaseModel):
+    """Structured information about a single replaced section."""
+
+    type: str = Field(
+        ..., description="One of: chapter, story, metadata, sourcebook, book"
+    )
+    target_id: str | None = Field(
+        None,
+        description="Target identifier for the changed section, e.g. chapter ID or sourcebook entry name",
+    )
+    field: str | None = Field(
+        None,
+        description="Optional field name or metadata subfield affected by the replacement",
+    )
+    label: str = Field(..., description="Human-readable label for the changed section")
+
+
 class SearchResponse(BaseModel):
     """Top-level response for a search request."""
 
@@ -137,4 +154,8 @@ class ReplaceResponse(BaseModel):
     changed_sections: list[str] = Field(
         default_factory=list,
         description="Human-readable labels for each changed section",
+    )
+    changed_sections_meta: list[ReplaceChangeLocation] = Field(
+        default_factory=list,
+        description="Structured information for each changed section",
     )

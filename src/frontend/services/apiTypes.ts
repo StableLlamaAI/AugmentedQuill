@@ -117,6 +117,12 @@ export interface ChatToolExecutionResponse {
       operation_count: number;
       label: string;
     };
+    change_locations?: Array<{
+      type: string;
+      target_id?: string;
+      field?: string;
+      label: string;
+    }>;
   };
 }
 

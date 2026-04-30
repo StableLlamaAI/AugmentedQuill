@@ -119,6 +119,8 @@ describe('useChatExecution', () => {
     });
 
     expect(pushExternalHistoryEntry).toHaveBeenCalledTimes(1);
+    expect(refreshProjects).toHaveBeenCalledTimes(1);
+    expect(refreshStory).toHaveBeenCalledTimes(1);
 
     const entry = pushExternalHistoryEntry.mock.calls[0][0];
     expect(entry.label).toContain('AI tools');
@@ -138,6 +140,61 @@ describe('useChatExecution', () => {
     expect(api.chat.redoToolBatch).toHaveBeenCalledTimes(2);
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(1, 'batch1');
     expect(api.chat.redoToolBatch).toHaveBeenNthCalledWith(2, 'batch2');
+  });
+
+  it('creates an external history entry for story_changed mutations without a tool_batch', async () => {
+    const refreshProjects = vi.fn().mockResolvedValue(undefined);
+    const refreshStory = vi.fn().mockResolvedValue(undefined);
+    const pushExternalHistoryEntry = vi.fn();
+
+    const sendMessageMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [{ id: 'c1', name: 'write_story_summary', args: {} }],
+      })
+      .mockResolvedValueOnce({
+        text: 'Done',
+        functionCalls: [],
+      });
+
+    vi.mocked(createChatSession).mockReturnValue({
+      sendMessage: sendMessageMock,
+    } as UnifiedChat);
+
+    vi.mocked(api.chat.executeTools).mockResolvedValueOnce({
+      ok: true,
+      appended_messages: [
+        { content: 'ok', name: 'write_story_summary', tool_call_id: 'c1' },
+      ],
+      mutations: {
+        story_changed: true,
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useChatExecution({
+        getSystemPrompt: () => 'system',
+        activeChatConfig: { model: 'test', temperature: 0.5 },
+        isChatAvailable: true,
+        getAllowWebSearch: () => false,
+        currentChapterId: '1',
+        getCurrentChatId: () => 'chat-1',
+        currentChapter: { id: '1', title: 'Intro' },
+        refreshProjects,
+        refreshStory,
+        pushExternalHistoryEntry,
+        requestToolCallLoopAccess: vi.fn().mockResolvedValue('unlimited'),
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleSendMessage('Update summary');
+    });
+
+    expect(pushExternalHistoryEntry).toHaveBeenCalledTimes(1);
+    expect(pushExternalHistoryEntry.mock.calls[0][0].label).toBe('AI tool changes');
+    expect(pushExternalHistoryEntry.mock.calls[0][0].forceNewHistory).toBe(true);
   });
 
   it('passes attachments through to the chat session payload', async () => {
