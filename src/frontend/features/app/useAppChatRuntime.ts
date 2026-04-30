@@ -301,6 +301,7 @@ export function useAppChatRuntime({
         void useStoryStore.getState().setStreamingContent({
           chapterId: unit.id,
           content: newContent,
+          writeMode,
         });
         useChatStore.getState().setIsProseStreamingFromChat(true);
       },

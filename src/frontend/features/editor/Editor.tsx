@@ -196,8 +196,15 @@ export const Editor = React.memo(
       const streamingContent = useStoryStore((s: StoryStoreState) =>
         s.streamingContent?.chapterId === chapter.id ? s.streamingContent.content : null
       );
+      const streamingWriteMode = useStoryStore((s: StoryStoreState) =>
+        s.streamingContent?.chapterId === chapter.id
+          ? (s.streamingContent.writeMode ?? 'append')
+          : null
+      );
       const proseStreamingActive =
         (aiControls.isProseStreaming ?? false) || isChatStreaming;
+      const isReplaceStreaming =
+        proseStreamingActive && streamingWriteMode === 'replace';
       // streamingModeActive keeps streamingMode=true even after active streaming
       // ends (frozen state) so the green prefix-diff stays visible.
       const streamingModeActive = proseStreamingActive || isChatStreamingFrozen;
@@ -235,10 +242,27 @@ export const Editor = React.memo(
       // only this component re-renders — story.chapters stays untouched.
       useEffect(() => {
         if (streamingContent !== null) {
+          const container = scrollContainerRef.current;
+          const liveDistanceFromBottom = container
+            ? container.scrollHeight - container.scrollTop - container.clientHeight
+            : Number.POSITIVE_INFINITY;
+          const isLiveAtBottom = liveDistanceFromBottom <= 50;
+
+          const shouldDeferStreamingChunk =
+            proseStreamingActive &&
+            isDetachedFromBottomRef.current &&
+            distanceFromBottomRef.current > 120 &&
+            !isLiveAtBottom;
+
+          // While detached from the bottom, freeze chunk-by-chunk updates so
+          // stream geometry changes cannot pull the viewport unexpectedly.
+          // Final content still syncs via chapter.content once streaming ends.
+          if (shouldDeferStreamingChunk) return;
+
           localContentRef.current = streamingContent;
           setLocalContent(streamingContent);
         }
-      }, [streamingContent]);
+      }, [streamingContent, proseStreamingActive]);
 
       useEffect(() => {
         setLocalTitle(chapter.title);
@@ -265,12 +289,16 @@ export const Editor = React.memo(
       const {
         scrollContainerRef,
         handleScroll,
+        handleWheel,
+        handleTouchStart,
+        handleTouchMove,
         scrollMainContentToBottom,
         isDetachedFromBottomRef,
         distanceFromBottomRef,
       } = useEditorScroll({
         localContent,
         isProseStreaming,
+        isReplaceStreaming,
         chapterId: chapter.id,
       });
 
@@ -700,6 +728,9 @@ export const Editor = React.memo(
               className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
               style={{ overflowAnchor: 'none' }}
               onScroll={handleScroll}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
             >
               {isDragging && (
                 <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">

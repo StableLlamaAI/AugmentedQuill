@@ -40,6 +40,11 @@ type UseAiActionsParams = {
   getErrorMessage: (error: unknown, fallback: string) => string;
 };
 
+type StreamedContent = {
+  chapterId: string;
+  content: string;
+};
+
 const createPrefillStripper =
   (imposedActionPrefill: string, imposedHeadingPrefix: string) =>
   (text: string): string => {
@@ -115,8 +120,11 @@ function createStreamingPusher(
       action === 'extend'
         ? joinSuggestionToContent(baseContent, normalizedPartial)
         : normalizedPartial;
+    const writeMode = action === 'rewrite' ? 'replace' : 'append';
     onLastStreamed({ chapterId, content: nextContent });
-    useStoryStore.getState().setStreamingContent({ chapterId, content: nextContent });
+    useStoryStore
+      .getState()
+      .setStreamingContent({ chapterId, content: nextContent, writeMode });
   };
 
   const pushProgress = (partial: string): void => {

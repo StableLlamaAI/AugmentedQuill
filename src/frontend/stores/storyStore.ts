@@ -88,8 +88,10 @@ export interface StoryStoreState {
    * story.chapters and triggering a full-app re-render cascade every chunk.
    * Cleared to null when streaming ends (success, cancel, or error).
    */
-  streamingContent: { chapterId: string; content: string } | null;
-  setStreamingContent: (data: { chapterId: string; content: string } | null) => void;
+  streamingContent: { chapterId: string; content: string; writeMode?: string } | null;
+  setStreamingContent: (
+    data: { chapterId: string; content: string; writeMode?: string } | null
+  ) => void;
 }
 
 // ---------------------------------------------------------------------------
