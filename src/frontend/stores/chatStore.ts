@@ -44,6 +44,12 @@ export interface ChatStoreState {
   // ── Prose streaming flag (only flips at turn start/end) ──────────────────
   /** True only while chat is actively writing prose into the editor. */
   isProseStreamingFromChat: boolean;
+  /**
+   * True after the user stops chat mid-write: streaming is done but the
+   * editor keeps streamingMode=true (prefix diff) so the green block stays
+   * visible.  Cleared when the next chat interaction begins.
+   */
+  isProseStreamingFrozen: boolean;
 
   // ── Session management ────────────────────────────────────────────────────
   chatHistoryList: ChatSession[];
@@ -62,6 +68,10 @@ export interface ChatStoreState {
   ) => void;
   setIsChatLoading: (v: boolean) => void;
   setIsProseStreamingFromChat: (v: boolean) => void;
+  setIsProseStreamingFrozen: (v: boolean) => void;
+  /** Atomically clears isProseStreamingFromChat and sets isProseStreamingFrozen=true
+   * so no render frame sees both flags false (which would drop the green highlight). */
+  freezeProseStreaming: () => void;
   setSessionMutations: (
     v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
   ) => void;
@@ -87,6 +97,7 @@ export const useChatStore = create<ChatStoreState>()(
     chatMessages: [],
     isChatLoading: false,
     isProseStreamingFromChat: false,
+    isProseStreamingFrozen: false,
     sessionMutations: [],
     chatHistoryList: [],
     currentChatId: null,
@@ -101,6 +112,10 @@ export const useChatStore = create<ChatStoreState>()(
     setIsChatLoading: (v: boolean) => set(() => ({ isChatLoading: v })),
     setIsProseStreamingFromChat: (v: boolean) =>
       set(() => ({ isProseStreamingFromChat: v })),
+    setIsProseStreamingFrozen: (v: boolean) =>
+      set(() => ({ isProseStreamingFrozen: v })),
+    freezeProseStreaming: () =>
+      set(() => ({ isProseStreamingFromChat: false, isProseStreamingFrozen: true })),
     setSessionMutations: (
       v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
     ) =>

@@ -116,7 +116,14 @@ export interface ChatToolExecutionResponse {
       tool_names: string[];
       operation_count: number;
       label: string;
+      changed_chapter_ids?: number[];
     };
+    change_locations?: Array<{
+      type: string;
+      target_id?: string;
+      field?: string;
+      label: string;
+    }>;
   };
 }
 

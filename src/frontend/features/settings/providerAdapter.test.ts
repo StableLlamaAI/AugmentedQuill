@@ -86,4 +86,21 @@ describe('provider mapping roundtrip', () => {
     expect(back.is_multimodal).toBeUndefined();
     expect(back.supports_function_calling).toBeUndefined();
   });
+
+  it('omits api_key when apiKeyEnabled is disabled', () => {
+    const provider = {
+      ...DEFAULT_LLM_CONFIG,
+      id: 'disabled-key',
+      name: 'Disabled Key',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'k',
+      apiKeyEnabled: false,
+      timeout: 10000,
+      modelId: 'gpt-test',
+      prompts: DEFAULT_LLM_CONFIG.prompts,
+    };
+
+    const back = providerToMachineModel(provider);
+    expect(back.api_key).toBeUndefined();
+  });
 });

@@ -23,10 +23,12 @@ import { api } from '../../services/api';
 export function makeProviderKey(
   baseUrl: string,
   apiKey?: string,
-  modelId?: string
+  modelId?: string,
+  apiKeyEnabled?: boolean
 ): string {
+  const usesApiKey = apiKeyEnabled !== false;
   const b = (baseUrl || '').trim();
-  const k = (apiKey || '').trim();
+  const k = usesApiKey ? (apiKey || '').trim() : '';
   const m = (modelId || '').trim();
   return `${b}||${k}||${m}`;
 }
@@ -70,13 +72,15 @@ export function groupProviders(
     if (!activeIds.has(provider.id)) return;
     const modelId = (provider.modelId || '').trim();
     if (!modelId) return;
-    const key = makeProviderKey(provider.baseUrl || '', provider.apiKey, modelId);
+    const apiKeyEnabled = provider.apiKeyEnabled !== false;
+    const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
+    const key = makeProviderKey(provider.baseUrl || '', apiKey, modelId, apiKeyEnabled);
     if (!groups[key]) {
       groups[key] = {
         ids: [],
         payload: {
           base_url: provider.baseUrl,
-          api_key: provider.apiKey,
+          api_key: apiKey,
           timeout_s: Math.round((provider.timeout || 10000) / 1000),
           model_id: modelId,
         },
@@ -169,11 +173,18 @@ export function useProviderHealth(appSettings: AppSettings): {
         appSettings.activeEditingProviderId,
       ]);
       const groupedProviders = groupProviders(appSettings.providers, activeIds);
-      const key = makeProviderKey(provider.baseUrl || '', provider.apiKey, modelId);
+      const apiKeyEnabled = provider.apiKeyEnabled !== false;
+      const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
+      const key = makeProviderKey(
+        provider.baseUrl || '',
+        apiKey,
+        modelId,
+        apiKeyEnabled
+      );
       const relatedProviderIds = groupedProviders[key]?.ids || [provider.id];
       const payload = groupedProviders[key]?.payload || {
         base_url: provider.baseUrl,
-        api_key: provider.apiKey,
+        api_key: apiKey,
         timeout_s: Math.round((provider.timeout || 10000) / 1000),
         model_id: modelId,
       };

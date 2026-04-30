@@ -36,6 +36,7 @@ import {
 } from './historyUtils';
 import type { StoryHistoryEntry } from './historyUtils';
 import { useStoryStore, StoryStoreState } from '../../stores/storyStore';
+import { useChatStore } from '../../stores/chatStore';
 
 /** Maximum number of undo/redo states retained in memory. */
 const MAX_HISTORY = 50;
@@ -224,6 +225,11 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
        *  (e.g. after patchSourcebook confirmed a diff), avoiding an expensive
        *  full-story JSON.stringify. */
       forceNewHistory?: boolean;
+      /** Pre-fetched "before" content for chapters that were not loaded in
+       *  memory when the AI tool ran.  Applied to the baseline so the diff
+       *  view highlights changes in those chapters when the user navigates
+       *  to them for the first time after an AI edit. */
+      baselineChapterOverrides?: { id: string; content: string }[];
     }) => {
       const history = historyRef.current;
       const currentIndex = currentIndexRef.current;
@@ -281,6 +287,20 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       );
       const bounded = trimmed.slice(-MAX_HISTORY);
       const previousBaseline = history[currentIndex]?.state ?? updatedState;
+      // Apply any pre-fetched "before" chapter content into the baseline so the
+      // diff view can show accurate highlights for chapters that weren't loaded
+      // in memory when the AI tool ran.
+      const patchedBaseline = params.baselineChapterOverrides?.length
+        ? {
+            ...previousBaseline,
+            chapters: previousBaseline.chapters.map((ch: Chapter) => {
+              const override = params.baselineChapterOverrides!.find(
+                (o: { id: string; content: string }) => o.id === ch.id
+              );
+              return override ? { ...ch, content: override.content } : ch;
+            }),
+          }
+        : previousBaseline;
       // Preserve the pre-update baseline for external history entries. This
       // keeps AI-generated prose and metadata changes highlighted until the
       // next user action advances the baseline.
@@ -288,7 +308,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
         story: updatedState,
         history: bounded,
         currentIndex: bounded.length - 1,
-        baselineState: previousBaseline,
+        baselineState: patchedBaseline,
       });
       latestStoryRef.current = updatedState;
       useStoryStore
@@ -388,8 +408,18 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
               const baselineChapter = state.baselineState.chapters.find(
                 (chapter: Chapter) => chapter.id === currentChapterId
               );
+              // Only advance the baseline when its content is empty AND there is no
+              // pending AI diff.  After an AI tool runs, pushExternalHistoryEntry sets
+              // history[currentIndex].state to the same object as story, while
+              // baselineState points to the older pre-AI snapshot.  If we advanced the
+              // baseline here we would silently discard the pending diff for chapters
+              // that had not been loaded into memory at the time the AI ran.
+              const isAiDiffPending =
+                state.history[state.currentIndex]?.state !== state.baselineState;
               const shouldSyncBaseline =
-                baselineChapter !== undefined && (baselineChapter.content ?? '') === '';
+                !isAiDiffPending &&
+                baselineChapter !== undefined &&
+                (baselineChapter.content ?? '') === '';
               const updatedChapters = state.story.chapters.map((c: Chapter) =>
                 c.id === currentChapterId
                   ? {
@@ -404,6 +434,13 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
                   : c
               );
 
+              // Only back-fill `content` in the history entry: it is the sole
+              // field that is absent from the chapter-list payload and therefore
+              // genuinely lazy-loaded.  All other fields (summary, notes,
+              // private_notes, conflicts, title) are already present in the
+              // history entry from the initial chapter-list load.  Writing them
+              // here would overwrite the pre-AI values with AI-new values from
+              // the disk response, corrupting the diff baseline.
               const nextHistory =
                 state.currentIndex === 0 && state.history.length === 1
                   ? state.history.map((entry: StoryHistoryEntry, idx: number) =>
@@ -415,15 +452,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
                               ...entry.state,
                               chapters: entry.state.chapters.map((chapter: Chapter) =>
                                 chapter.id === currentChapterId
-                                  ? {
-                                      ...chapter,
-                                      content: res.content,
-                                      notes: res.notes ?? undefined,
-                                      private_notes: res.private_notes ?? undefined,
-                                      conflicts: (res.conflicts ?? []) as Conflict[],
-                                      title: res.title ?? undefined,
-                                      summary: res.summary ?? undefined,
-                                    }
+                                  ? { ...chapter, content: res.content }
                                   : chapter
                               ),
                             },
@@ -850,6 +879,7 @@ export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
       }
 
       const prevState = history[targetIndex].state;
+      useChatStore.getState().setSessionMutations([]);
 
       // Mark the re-render as a transition so React can time-slice it,
       // keeping the main thread responsive (avoids click-handler violations).

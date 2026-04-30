@@ -479,5 +479,13 @@ export const en = {
     'Model settings': 'Model settings',
     Models: 'Models',
     'Close model menu': 'Close model menu',
+    // MutationTags
+    'Story prose': 'Story prose',
+    'Story title': 'Story title',
+    'Story summary': 'Story summary',
+    'Story notes': 'Story notes',
+    'Story private notes': 'Story private notes',
+    'Chapter prose': 'Chapter prose',
+    'Project replace': 'Project replace',
   },
 };

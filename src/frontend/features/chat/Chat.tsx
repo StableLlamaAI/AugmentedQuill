@@ -9,7 +9,7 @@
  * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatAttachment } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -29,7 +29,8 @@ import { useChatEditing } from './hooks/useChatEditing';
 import { useChatUIState } from './hooks/useChatUIState';
 import { useChatMessages } from './hooks/useChatMessages';
 
-export const Chat: React.FC = React.memo(() => {
+/* eslint-disable max-lines-per-function, complexity */
+function ChatComponent(): React.JSX.Element {
   const {
     messages,
     isLoading,
@@ -86,7 +87,14 @@ export const Chat: React.FC = React.memo(() => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
 
-  const { scrollContainerRef, handleScroll, scrollToBottom } = useChatScroll({
+  const {
+    scrollContainerRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    scrollToBottom,
+  } = useChatScroll({
     messages,
     isLoading,
     editingMessageId,
@@ -114,7 +122,7 @@ export const Chat: React.FC = React.memo(() => {
     ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
     : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
-  const handleSubmit = (text: string, files?: ChatAttachment[]) => {
+  const handleSubmit = (text: string, files?: ChatAttachment[]): void => {
     if (isLoading || !isModelAvailable) return;
 
     onSendMessage(text, files);
@@ -206,6 +214,9 @@ export const Chat: React.FC = React.memo(() => {
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         className={`flex-1 overflow-y-auto p-4 space-y-4 ${
           isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
@@ -362,6 +373,8 @@ export const Chat: React.FC = React.memo(() => {
       </div>
     </div>
   );
-});
+}
+/* eslint-enable max-lines-per-function, complexity */
 
+export const Chat: React.FC = React.memo(ChatComponent);
 Chat.displayName = 'Chat';

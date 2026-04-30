@@ -88,8 +88,10 @@ export interface StoryStoreState {
    * story.chapters and triggering a full-app re-render cascade every chunk.
    * Cleared to null when streaming ends (success, cancel, or error).
    */
-  streamingContent: { chapterId: string; content: string } | null;
-  setStreamingContent: (data: { chapterId: string; content: string } | null) => void;
+  streamingContent: { chapterId: string; content: string; writeMode?: string } | null;
+  setStreamingContent: (
+    data: { chapterId: string; content: string; writeMode?: string } | null
+  ) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +333,11 @@ function chaptersStructuralEqual(
   if (a.length !== b.length) return false;
   return a.every(
     (ch: Chapter, i: number) =>
-      ch.id === b[i].id && ch.title === b[i].title && ch.book_id === b[i].book_id
+      ch.id === b[i].id &&
+      ch.title === b[i].title &&
+      ch.book_id === b[i].book_id &&
+      ch.summary === b[i].summary &&
+      ch.notes === b[i].notes
   );
 }
 

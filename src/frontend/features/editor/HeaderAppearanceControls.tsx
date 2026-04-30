@@ -310,18 +310,16 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
           </div>
         </div>
       )}
-      {import.meta.env.DEV && (
-        <Button
-          theme={currentTheme}
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsDebugLogsOpen(true)}
-          title={t('Debug Logs')}
-          className="mr-1"
-        >
-          <Bug size={18} />
-        </Button>
-      )}
+      <Button
+        theme={currentTheme}
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsDebugLogsOpen(true)}
+        title={t('Debug Logs')}
+        className="mr-1"
+      >
+        <Bug size={18} />
+      </Button>
     </div>
   );
 };

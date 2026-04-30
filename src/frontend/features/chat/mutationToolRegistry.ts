@@ -23,6 +23,13 @@ import { SessionMutation } from './components/MutationTags';
 type MutCallResult = { args: Record<string, unknown>; result: Record<string, unknown> };
 type MutFactory = (res: MutCallResult) => SessionMutation | SessionMutation[] | null;
 
+type ReplaceChangeLocation = {
+  type: string;
+  target_id?: string;
+  field?: string;
+  label: string;
+};
+
 /** Build sourcebook mutation. */
 function buildSourcebookMutation(
   args: Record<string, unknown>,
@@ -170,5 +177,150 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
       label: 'Book',
       targetId: bookId as string | undefined,
     };
+  },
+
+  replace_in_project: ({ result }: MutCallResult) => {
+    const changeLocations = Array.isArray(result.change_locations)
+      ? result.change_locations
+      : [];
+    const changedSections = Array.isArray(result.changed_sections)
+      ? result.changed_sections.map(String)
+      : [];
+
+    const parseMetadataSubType = (
+      field: string
+    ): SessionMutation['subType'] | undefined => {
+      const normalized = field.toLowerCase();
+      if (normalized.endsWith('summary')) return 'summary';
+      if (normalized.endsWith('notes')) return 'notes';
+      if (normalized.endsWith('private_notes') || normalized.endsWith('private notes'))
+        return 'private';
+      if (normalized.includes('conflict')) return 'conflicts';
+      return undefined;
+    };
+
+    const mutations = changeLocations.map((location: ReplaceChangeLocation) => {
+      const targetId = location.target_id;
+      switch (location.type) {
+        case 'chapter':
+          return {
+            id: `chap-replace-${targetId ?? 'unknown'}-${Date.now()}-${Math.random()}`,
+            type: 'chapter' as const,
+            label: location.label,
+            targetId: targetId as string | undefined,
+          };
+        case 'sourcebook':
+          return {
+            id: `sb-replace-${targetId ?? 'unknown'}-${Date.now()}-${Math.random()}`,
+            type: 'sourcebook' as const,
+            label: location.label,
+            targetId: targetId as string | undefined,
+          };
+        case 'book':
+          return {
+            id: `book-replace-${targetId ?? 'unknown'}-${Date.now()}-${Math.random()}`,
+            type: 'book' as const,
+            label: location.label,
+            targetId: targetId as string | undefined,
+          };
+        case 'metadata': {
+          const subType = location.field
+            ? parseMetadataSubType(location.field)
+            : parseMetadataSubType(location.label);
+          return {
+            id: `meta-replace-${Date.now()}-${Math.random()}`,
+            type: 'metadata' as const,
+            label: location.label,
+            targetId: location.target_id as string | undefined,
+            subType,
+          };
+        }
+        case 'story':
+          return {
+            id: `story-replace-${Date.now()}-${Math.random()}`,
+            type: 'story' as const,
+            label: location.label,
+          };
+        default:
+          return {
+            id: `story-replace-${Date.now()}-${Math.random()}`,
+            type: 'story' as const,
+            label: location.label,
+          };
+      }
+    });
+
+    if (mutations.length > 0) {
+      return mutations;
+    }
+
+    const fallbackMutations = changedSections.map((section: string) => {
+      const chapterMatch = section.match(/Chapter\s+(\d+)/i);
+      if (chapterMatch) {
+        return {
+          id: `chap-replace-${chapterMatch[1]}-${Date.now()}-${Math.random()}`,
+          type: 'chapter' as const,
+          label: section,
+          targetId: chapterMatch[1],
+        };
+      }
+
+      const sourcebookMatch = section.match(/Sourcebook\s+'([^']+)'/i);
+      if (sourcebookMatch) {
+        return {
+          id: `sb-replace-${sourcebookMatch[1]}-${Date.now()}-${Math.random()}`,
+          type: 'sourcebook' as const,
+          label: section,
+          targetId: sourcebookMatch[1],
+        };
+      }
+
+      const bookMatch = section.match(/Book\s+'([^']+)'/i);
+      if (bookMatch) {
+        return {
+          id: `book-replace-${bookMatch[1]}-${Date.now()}-${Math.random()}`,
+          type: 'book' as const,
+          label: section,
+          targetId: bookMatch[1],
+        };
+      }
+
+      const storyMatch = section.match(/^Story\s+(.*)$/i);
+      if (storyMatch) {
+        const subType = parseMetadataSubType(storyMatch[1]);
+        return {
+          id: `story-replace-${Date.now()}-${Math.random()}`,
+          type: subType ? ('metadata' as const) : ('story' as const),
+          label: section,
+          subType,
+        };
+      }
+
+      const inferredSubType = parseMetadataSubType(section);
+      if (inferredSubType) {
+        return {
+          id: `story-replace-${Date.now()}-${Math.random()}`,
+          type: 'metadata' as const,
+          label: section,
+          subType: inferredSubType,
+        };
+      }
+
+      return {
+        id: `story-replace-${Date.now()}-${Math.random()}`,
+        type: 'story' as const,
+        label: section,
+      };
+    });
+
+    return fallbackMutations.length > 0
+      ? fallbackMutations
+      : [
+          {
+            id: `story-replace-${Date.now()}-${Math.random()}`,
+            type: 'story',
+            label: 'Project replace',
+          },
+        ];
   },
 };

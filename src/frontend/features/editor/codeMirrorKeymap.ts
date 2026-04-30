@@ -153,8 +153,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from - 1) === '\n'
             ) {
               view.dispatch({
-                changes: { from: from - 3, to: from, insert: '' },
-                selection: { anchor: from - 3 },
+                changes: { from: from - 3, to: from, insert: ' ' },
+                selection: { anchor: from - 2 },
               });
               return true;
             }
@@ -165,8 +165,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from) === '\n'
             ) {
               view.dispatch({
-                changes: { from: from - 2, to: from + 1, insert: '' },
-                selection: { anchor: from - 2 },
+                changes: { from: from - 2, to: from + 1, insert: ' ' },
+                selection: { anchor: from - 1 },
               });
               return true;
             }
@@ -177,8 +177,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from + 1) === '\n'
             ) {
               view.dispatch({
-                changes: { from: from - 1, to: from + 2, insert: '' },
-                selection: { anchor: from - 1 },
+                changes: { from: from - 1, to: from + 2, insert: ' ' },
+                selection: { anchor: from },
               });
               return true;
             }
@@ -239,8 +239,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from + 2) === '\n'
             ) {
               view.dispatch({
-                changes: { from, to: from + 3, insert: '' },
-                selection: { anchor: from },
+                changes: { from, to: from + 3, insert: ' ' },
+                selection: { anchor: from + 1 },
               });
               return true;
             }
@@ -251,8 +251,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from + 1) === '\n'
             ) {
               view.dispatch({
-                changes: { from: from - 1, to: from + 2, insert: '' },
-                selection: { anchor: from - 1 },
+                changes: { from: from - 1, to: from + 2, insert: ' ' },
+                selection: { anchor: from },
               });
               return true;
             }
@@ -263,8 +263,8 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
               ch(doc, from) === '\n'
             ) {
               view.dispatch({
-                changes: { from: from - 2, to: from + 1, insert: '' },
-                selection: { anchor: from - 2 },
+                changes: { from: from - 2, to: from + 1, insert: ' ' },
+                selection: { anchor: from - 1 },
               });
               return true;
             }

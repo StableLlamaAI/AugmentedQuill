@@ -479,5 +479,13 @@ export const es = {
     'Model settings': 'Configuración de modelos',
     Models: 'Modelos',
     'Close model menu': 'Cerrar menú de modelos',
+    // MutationTags
+    'Story prose': 'Historia (texto)',
+    'Story title': 'Historia (título)',
+    'Story summary': 'Historia (resumen)',
+    'Story notes': 'Historia (notas)',
+    'Story private notes': 'Historia (notas privadas)',
+    'Chapter prose': 'Capítulo (texto)',
+    'Project replace': 'Reemplazo en el proyecto',
   },
 };

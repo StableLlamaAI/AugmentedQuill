@@ -181,10 +181,14 @@ const App: React.FC = () => {
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
-  const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
-    useSidebarIntents({
-      setEditorSettings,
-    });
+  const {
+    openAndExpandStory,
+    openSourcebookEntryDialog,
+    openStoryMetadataDialog,
+    openChapterMetadataDialog,
+  } = useSidebarIntents({
+    setEditorSettings,
+  });
 
   // Get Active LLM Configs — memoized so hooks that receive these as params
   // don't re-run unnecessarily when unrelated appSettings fields change.
@@ -232,7 +236,6 @@ const App: React.FC = () => {
     handleDeleteAllChats,
     onUpdateScratchpad,
     onDeleteScratchpad,
-    refreshChatList,
   } = useAppChatRuntime({
     storyId: story.id,
 
@@ -254,6 +257,7 @@ const App: React.FC = () => {
     openAndExpandStory,
     openSourcebookEntryDialog,
     openStoryMetadataDialog,
+    openChapterMetadataDialog,
   });
 
   // sessionMutations changes only when LLM tool calls complete (a few times per
@@ -276,7 +280,6 @@ const App: React.FC = () => {
     setSuggestionMode,
     isSuggesting,
     isSuggestionMode,
-    suggestCursor,
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,

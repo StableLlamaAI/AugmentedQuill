@@ -11,6 +11,7 @@ API endpoints for chat sessions and conversational interactions with the LLM wri
 """
 
 import asyncio
+import base64
 import datetime
 import re
 import augmentedquill.services.llm.llm as llm
@@ -61,6 +62,7 @@ from typing import Any, Dict
 from augmentedquill.models.chat import (
     ChatInitialStateResponse,
     ChatToolBatchMutationResponse,
+    ChapterBeforeContentResponse,
     ChatListItem,
     ChatListResponse,
     ChatDetailResponse,
@@ -156,24 +158,49 @@ def _snapshot_storage_dir(project_dir: Path, batch_id: str) -> Path:
     return _safe_child_path(project_dir, _CHAT_TOOL_BATCH_DIR, safe_batch_id)
 
 
+def _compute_changed_chapter_ids(
+    project_dir: Path,
+    before: Dict[str, str],
+    after: Dict[str, str],
+) -> list[int]:
+    """Return the virtual chapter IDs whose file content differs between snapshots."""
+    from augmentedquill.services.chapters.chapter_helpers import _scan_chapter_files
+
+    changed: list[int] = []
+    for vid, abs_path in _scan_chapter_files(project_dir):
+        rel_path = str(abs_path.relative_to(project_dir))
+        if before.get(rel_path) != after.get(rel_path):
+            changed.append(vid)
+    return changed
+
+
 def _store_chat_tool_batch_snapshot(
     project_dir: Path,
     batch_id: str,
     before_snapshot: Dict[str, str],
     after_snapshot: Dict[str, str],
     tool_names: list[str],
-) -> Any:
-    """Persist before/after snapshots for reversible tool-call batches."""
+) -> list[int]:
+    """Persist before/after snapshots for reversible tool-call batches.
+
+    Returns the list of changed chapter IDs so callers can include them in
+    the mutations payload without recomputing.
+    """
     target_dir = _snapshot_storage_dir(project_dir, batch_id)
     target_dir.mkdir(parents=True, exist_ok=True)
+    changed_chapter_ids = _compute_changed_chapter_ids(
+        project_dir, before_snapshot, after_snapshot
+    )
     metadata = {
         "batch_id": batch_id,
         "created_at": datetime.datetime.now().isoformat(),
         "tool_names": tool_names,
+        "changed_chapter_ids": changed_chapter_ids,
         "before": before_snapshot,
         "after": after_snapshot,
     }
     (target_dir / "batch.json").write_text(_json.dumps(metadata), encoding="utf-8")
+    return changed_chapter_ids
 
 
 def _load_chat_tool_batch_snapshot(project_dir: Path, batch_id: str) -> Dict[str, Any]:
@@ -298,6 +325,9 @@ async def api_chat_tools(
                 result_holder.append(
                     (appended_inner, mutations_inner, names_inner, None)
                 )
+            except asyncio.CancelledError:
+                result_holder.append(([], initial_mutations, [], None))
+                raise
             except Exception as exc:  # noqa: BLE001
                 result_holder.append(([], initial_mutations, [], exc))
             finally:
@@ -305,18 +335,37 @@ async def api_chat_tools(
 
         task = asyncio.create_task(_run_and_signal())
 
-        # Relay prose-streaming events emitted by call_writing_llm.
-        while True:
-            item = await stream_queue.get()
-            if item is None:
-                break
-            kind, data = item
-            if kind == "prose_start":
-                yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
-            elif kind == "prose_chunk":
-                yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+        # Cancel the tool task if the client disconnects mid-stream.
+        async def _watch_disconnect() -> None:
+            """Cancel the running tool task when the HTTP client disconnects."""
+            disconnected = await request.is_disconnected()
+            if disconnected:
+                task.cancel()
 
-        await task  # ensure the background task has fully finished
+        watcher = asyncio.create_task(_watch_disconnect())
+
+        # Relay prose-streaming events emitted by call_writing_llm.
+        try:
+            while True:
+                try:
+                    item = await stream_queue.get()
+                except asyncio.CancelledError:
+                    task.cancel()
+                    raise
+                if item is None:
+                    break
+                kind, data = item
+                if kind == "prose_start":
+                    yield f"data: {_json.dumps({'type': 'prose_start', **data})}\n\n"
+                elif kind == "prose_chunk":
+                    yield f"data: {_json.dumps({'type': 'prose_chunk', **data})}\n\n"
+        finally:
+            watcher.cancel()
+
+        try:
+            await task  # ensure the background task has fully finished
+        except asyncio.CancelledError:
+            return
 
         if not result_holder:
             yield f"data: {_json.dumps({'type': 'error', 'error': 'Tool execution produced no result'})}\n\n"
@@ -340,7 +389,7 @@ async def api_chat_tools(
             and mutations.get("story_changed")
         ):
             after_snapshot = capture_project_snapshot(active_project_dir)
-            _store_chat_tool_batch_snapshot(
+            changed_chapter_ids = _store_chat_tool_batch_snapshot(
                 active_project_dir,
                 batch_id,
                 before_snapshot,
@@ -352,6 +401,7 @@ async def api_chat_tools(
                 "tool_names": tool_names,
                 "operation_count": len(tool_names),
                 "label": _build_chat_tool_batch_label(tool_names),
+                "changed_chapter_ids": changed_chapter_ids,
             }
 
         # Log tool execution if there were any
@@ -402,6 +452,45 @@ async def api_chat_tools_redo(
 
     restore_project_snapshot(project_dir, after_snapshot)
     return ChatToolBatchMutationResponse(ok=True, batch_id=batch_id)
+
+
+@router.get(
+    "/projects/{project_name}/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}",
+    response_model=ChapterBeforeContentResponse,
+)
+async def api_chat_batch_chapter_before(
+    batch_id: str, chapter_id: int, project_dir: ProjectDep
+) -> ChapterBeforeContentResponse:
+    """Return the pre-batch content of a chapter for diff-baseline restoration.
+
+    Used by the frontend to reconstruct the baseline state for chapters that
+    were not loaded in memory when an AI tool modified them.
+    """
+    from augmentedquill.services.chapters.chapter_helpers import _scan_chapter_files
+
+    batch = _load_chat_tool_batch_snapshot(project_dir, batch_id)
+    before_snapshot: Dict[str, str] = batch.get("before") or {}
+
+    chapter_files = _scan_chapter_files(project_dir)
+    rel_path: str | None = None
+    for vid, abs_path in chapter_files:
+        if vid == chapter_id:
+            rel_path = str(abs_path.relative_to(project_dir))
+            break
+
+    if rel_path is None:
+        raise HTTPException(status_code=404, detail="Chapter not found in project")
+
+    content_b64 = before_snapshot.get(rel_path)
+    if content_b64 is None:
+        raise HTTPException(
+            status_code=404, detail="Chapter not found in batch before-snapshot"
+        )
+
+    content = base64.b64decode(content_b64.encode("ascii")).decode(
+        "utf-8", errors="replace"
+    )
+    return ChapterBeforeContentResponse(content=content)
 
 
 @router.post("/projects/{project_name}/chat/stream")

@@ -127,7 +127,7 @@ export const machineModelToProvider = (
 export const providerToMachineModel = (provider: LLMConfig): MachineModelConfig => ({
   name: (provider.name || '').trim(),
   base_url: (provider.baseUrl || '').trim(),
-  api_key: provider.apiKey || '',
+  api_key: provider.apiKeyEnabled ? provider.apiKey || undefined : undefined,
   timeout_s: Math.max(1, Math.round((provider.timeout || 10000) / 1000)),
   model: (provider.modelId || '').trim(),
   context_window_tokens: provider.contextWindowTokens,

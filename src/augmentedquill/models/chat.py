@@ -43,6 +43,12 @@ class ChatToolBatchMutationResponse(BaseModel):
     detail: Optional[str] = None
 
 
+class ChapterBeforeContentResponse(BaseModel):
+    """Response body for ``GET /api/v1/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}``."""
+
+    content: str
+
+
 # ---------------------------------------------------------------------------
 # Chat session list / load
 # ---------------------------------------------------------------------------

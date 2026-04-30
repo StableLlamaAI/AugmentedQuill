@@ -26,6 +26,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
+import { JsonSyntaxView } from '../../../components/ui/JsonSyntaxView';
 import { MarkdownView } from '../../editor/MarkdownView';
 import { CollapsibleToolSection } from './CollapsibleToolSection';
 import { WebSearchResults, VisitPageResult } from './ToolResultViews';
@@ -37,21 +38,27 @@ import { WebSearchResults, VisitPageResult } from './ToolResultViews';
 
 type ToolCallArgumentsProps = { args: unknown };
 
+const tryParseJson = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
 const ToolCallArguments = React.memo(function ToolCallArguments({
   args,
 }: ToolCallArgumentsProps) {
-  const formattedArgs = useMemo(() => {
-    if (typeof args === 'string') return args;
-    try {
-      return JSON.stringify(args, null, 2);
-    } catch {
-      return String(args);
-    }
-  }, [args]);
+  const formattedArgs = useMemo(() => tryParseJson(args), [args]);
 
   return (
-    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
-      {formattedArgs}
+    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar font-mono text-[11px]">
+      {typeof formattedArgs === 'string' ? (
+        formattedArgs
+      ) : (
+        <JsonSyntaxView data={formattedArgs} />
+      )}
     </div>
   );
 });
@@ -90,6 +97,7 @@ export interface ChatMessageItemProps {
   onThinkingToggle: (id: string, next: boolean) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity
 export const ChatMessageItem = React.memo(function ChatMessageItem({
   msg,
   isLast,
@@ -207,7 +215,11 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   <CollapsibleToolSection
                     title={t('Tool Result: {{name}}', { name: msg.name })}
                   >
-                    <MarkdownView content={msg.text} />
+                    {tryParseJson(msg.text) !== msg.text ? (
+                      <JsonSyntaxView data={tryParseJson(msg.text)} />
+                    ) : (
+                      <MarkdownView content={msg.text} />
+                    )}
                     {msg.name === 'create_project' &&
                       msg.text.includes('Project created:') &&
                       onSwitchProject && (
@@ -224,7 +236,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                                 const innerMsg = parsed.message || '';
                                 const match = innerMsg.match(/Project created: (.+)/);
                                 if (match) projectName = match[1];
-                              } catch (e) {
+                              } catch {
                                 /* ignore */
                               }
                               if (!projectName) {

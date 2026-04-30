@@ -49,6 +49,7 @@ export type ExecuteChatRequestContext = {
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
     forceNewHistory?: boolean;
+    baselineChapterOverrides?: { id: string; content: string }[];
   }) => void;
   setChatMessages: (
     v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
@@ -325,7 +326,9 @@ const handleToolResponse = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+    changed_chapter_ids?: number[];
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -355,8 +358,7 @@ const handleToolResponse = async (
   }
 
   if (toolResponse.mutations?.story_changed) {
-    await context.refreshProjects();
-    await context.refreshStory();
+    storyChangedState.value = true;
   }
 
   if (toolResponse.mutations) {
@@ -372,6 +374,9 @@ const handleToolResponse = async (
       batch_id: toolBatch.batch_id,
       label: toolBatch.label || `AI tools (${toolBatch.operation_count})`,
       operation_count: toolBatch.operation_count,
+      changed_chapter_ids: Array.isArray(toolBatch.changed_chapter_ids)
+        ? (toolBatch.changed_chapter_ids as number[])
+        : undefined,
     });
   }
 
@@ -387,6 +392,7 @@ const handleToolResponse = async (
     {
       allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
+      isStopped: () => context.stopSignalRef.current,
     }
   );
 
@@ -423,7 +429,9 @@ const runToolCallLoop = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+    changed_chapter_ids?: number[];
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -462,7 +470,8 @@ const runToolCallLoop = async (
     const currentChatId = context.getCurrentChatId();
     const toolResponse = await api.chat.executeTools(
       buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
-      context.onProseChunk
+      context.onProseChunk,
+      () => context.stopSignalRef.current
     );
 
     if (context.stopSignalRef.current) break;
@@ -474,7 +483,8 @@ const runToolCallLoop = async (
       assistantMessage,
       currentHistory,
       currentMsgId,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     if (!nextState) break;
@@ -519,6 +529,7 @@ const executeChatRequestImpl = async (
       {
         allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
+        isStopped: () => context.stopSignalRef.current,
       }
     );
 
@@ -542,19 +553,47 @@ const executeChatRequestImpl = async (
       batch_id: string;
       label: string;
       operation_count?: number;
+      changed_chapter_ids?: number[];
     }> = [];
-
+    const storyChangedState = { value: false };
     const loopResult = await runToolCallLoop(
       context,
       currentHistory,
       currentMsgId,
       result,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     currentHistory = loopResult.currentHistory;
     currentMsgId = loopResult.currentMsgId;
     result = loopResult.result;
+
+    if (storyChangedState.value) {
+      await context.refreshProjects();
+      await context.refreshStory();
+    }
+
+    // Pre-fetch "before" content for chapters modified by AI tools so the diff
+    // baseline is accurate when the user switches to a not-yet-loaded chapter.
+    const baselineChapterOverrides: { id: string; content: string }[] = [];
+    if (storyChangedState.value && accumulatedToolBatches.length > 0) {
+      const seen = new Set<number>();
+      for (const batch of accumulatedToolBatches) {
+        if (!batch.changed_chapter_ids?.length) continue;
+        for (const chapterId of batch.changed_chapter_ids) {
+          if (seen.has(chapterId)) continue;
+          seen.add(chapterId);
+          const content = await api.chat.getChapterBeforeContent(
+            batch.batch_id,
+            chapterId
+          );
+          if (content !== null) {
+            baselineChapterOverrides.push({ id: String(chapterId), content });
+          }
+        }
+      }
+    }
 
     if (accumulatedToolBatches.length > 0) {
       const entryLabel =
@@ -566,12 +605,15 @@ const executeChatRequestImpl = async (
                   batch_id: string;
                   label: string;
                   operation_count?: number;
+                  changed_chapter_ids?: number[];
                 }) => batch.label
               )
               .join(', ')}`;
 
       await context.pushExternalHistoryEntry?.({
         label: entryLabel,
+        forceNewHistory: true,
+        baselineChapterOverrides,
         onUndo: async () => {
           for (const batch of [...accumulatedToolBatches].reverse()) {
             await api.chat.undoToolBatch(batch.batch_id);
@@ -587,21 +629,24 @@ const executeChatRequestImpl = async (
           await context.refreshStory();
         },
       });
+    } else if (storyChangedState.value) {
+      await context.pushExternalHistoryEntry?.({
+        label: 'AI tool changes',
+        forceNewHistory: true,
+      });
     }
 
-    if (!context.stopSignalRef.current) {
-      const botMessage = context.createAssistantMessage(currentMsgId, {
-        text: result.text,
-        thinking: result.thinking,
-        functionCalls: normalizeFunctionCalls(result.functionCalls),
-      });
-      upsertChatMessage(
-        context.setChatMessages,
-        ensureUniqueMessages,
-        currentMsgId,
-        botMessage
-      );
-    }
+    const botMessage = context.createAssistantMessage(currentMsgId, {
+      text: result.text,
+      thinking: result.thinking,
+      functionCalls: normalizeFunctionCalls(result.functionCalls),
+    });
+    upsertChatMessage(
+      context.setChatMessages,
+      ensureUniqueMessages,
+      currentMsgId,
+      botMessage
+    );
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;

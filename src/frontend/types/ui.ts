@@ -40,6 +40,7 @@ export interface LLMConfig {
   name: string;
   baseUrl: string;
   apiKey: string;
+  apiKeyEnabled?: boolean;
   timeout: number;
   modelId: string;
   contextWindowTokens?: number;
@@ -74,6 +75,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   name: 'OpenAI (Default)',
   baseUrl: 'https://api.openai.com/v1',
   apiKey: '',
+  apiKeyEnabled: false,
   timeout: 30000,
   modelId: 'gpt-4o',
   temperature: 0.7,

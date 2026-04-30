@@ -46,6 +46,14 @@ const exampleProviders: AppSettings['providers'] = [
     modelId: 'foo',
     timeout: 10000,
   },
+  {
+    id: 'e',
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'key1',
+    apiKeyEnabled: false,
+    modelId: 'foo',
+    timeout: 10000,
+  },
 ];
 
 describe('makeProviderKey', () => {
@@ -62,11 +70,11 @@ describe('makeProviderKey', () => {
 
 describe('groupProviders', () => {
   it('groups active providers by identical model keys', () => {
-    const active = new Set(['a', 'b', 'c', 'd']);
+    const active = new Set(['a', 'b', 'c', 'd', 'e']);
     const groups = groupProviders(exampleProviders, active);
 
-    // there should be three distinct keys: (foo,key1,example), (bar,key1,example), (foo,key2,other)
-    expect(Object.keys(groups).length).toBe(3);
+    // there should be four distinct keys: (foo,key1,example), (bar,key1,example), (foo,key2,other), (foo,no-key,example)
+    expect(Object.keys(groups).length).toBe(4);
 
     // providers a and b share the same key
     const fooKey = makeProviderKey('https://api.example.com/v1', 'key1', 'foo');
@@ -77,6 +85,32 @@ describe('groupProviders', () => {
 
     const otherKey = makeProviderKey('https://other.invalid', 'key2', 'foo');
     expect(groups[otherKey].ids).toEqual(['d']);
+
+    const noKeyKey = makeProviderKey(
+      'https://api.example.com/v1',
+      undefined,
+      'foo',
+      true
+    );
+    expect(groups[noKeyKey].ids).toEqual(['e']);
+  });
+
+  it('treats no-api-key providers as distinct from regular api key providers', () => {
+    const active = new Set(['a', 'e']);
+    const groups = groupProviders(exampleProviders, active);
+
+    expect(Object.keys(groups).length).toBe(2);
+    const regularKey = makeProviderKey('https://api.example.com/v1', 'key1', 'foo');
+    const disabledKey = makeProviderKey(
+      'https://api.example.com/v1',
+      undefined,
+      'foo',
+      false
+    );
+
+    expect(groups[regularKey].ids).toEqual(['a']);
+    expect(groups[disabledKey].ids).toEqual(['e']);
+    expect(groups[disabledKey].payload.api_key).toBeUndefined();
   });
 
   it('ignores providers that are not active or that lack a modelId', () => {

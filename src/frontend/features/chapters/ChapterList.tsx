@@ -16,6 +16,7 @@ import { MetadataParams } from '../story/metadataSync';
 import { useConfirm } from '../layout/ConfirmDialogContext';
 import { useThemeClasses } from '../layout/ThemeContext';
 import { MetadataEditorDialog } from '../story/MetadataEditorDialog';
+import { useChapterMetadataDialog, useUIStore } from '../../stores/uiStore';
 import { api } from '../../services/api';
 import { diff_match_patch } from 'diff-match-patch';
 import {
@@ -43,7 +44,6 @@ interface ChapterListProps {
   ) => void;
   onUpdateBook?: (id: string, updates: Partial<Book>) => void;
   onCreate: (bookId?: string) => void;
-  onBookCreate?: (title: string) => void;
   onBookDelete?: (id: string) => void;
   onReorderChapters?: (chapterIds: number[], bookId?: string) => void;
   onReorderBooks?: (bookIds: string[]) => void;
@@ -57,6 +57,7 @@ interface ChapterListProps {
   ) => Promise<string | undefined>;
   isAiAvailable?: boolean;
   theme?: AppTheme;
+  onBookCreate?: (title: string) => void;
   onOpenImages?: () => void;
   languages?: string[];
   language?: string;
@@ -64,6 +65,7 @@ interface ChapterListProps {
   spellCheck?: boolean;
 }
 
+/* eslint-disable complexity, max-lines-per-function */
 export const ChapterList: React.FC<ChapterListProps> = React.memo(
   ({
     chapters,
@@ -82,9 +84,9 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     onAiAction,
     isAiAvailable = true,
     theme = 'mixed',
-    onOpenImages,
     languages = [],
     language,
+    onOpenImages,
     baselineChapters = [],
     spellCheck = true,
   }: ChapterListProps) => {
@@ -201,24 +203,24 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       id: string,
       index: number,
       bookId?: string
-    ) => {
+    ): void => {
       setDraggedItem({ type, id, bookId, originalIndex: index });
       e.dataTransfer.effectAllowed = 'move';
     };
 
-    const handleDragEnter = (index: number, bookId?: string) => {
+    const handleDragEnter = (index: number, bookId?: string): void => {
       if (dragOverIndex !== index || (bookId && dragOverBookId !== bookId)) {
         setDragOverIndex(index);
         if (bookId) setDragOverBookId(bookId);
       }
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
+    const handleDragOver = (e: React.DragEvent): void => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
     };
 
-    const handleDrop = (e: React.DragEvent) => {
+    const handleDrop = (e: React.DragEvent): void => {
       e.preventDefault();
       const targetIdx = dragOverIndex;
       const dragged = draggedItem;
@@ -269,13 +271,13 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       setDraggedItem(null);
     };
 
-    const handleDragEnd = () => {
+    const handleDragEnd = (): void => {
       setDraggedItem(null);
       setDragOverIndex(null);
       setDragOverBookId(null);
     };
 
-    const toggleBook = (id: string) => {
+    const toggleBook = (id: string): void => {
       setExpandedBooks((prev: Record<string, boolean>) => ({
         ...prev,
         [id]: !prev[id],
@@ -323,12 +325,24 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       }
     }, [editingMetadata, displayChapters, displayBooks]);
 
-    const handleEditChapterMetadata = (e: React.MouseEvent, chapter: Chapter) => {
+    const chapterMetadataDialog = useChapterMetadataDialog();
+    useEffect(() => {
+      if (!chapterMetadataDialog.isOpen || !chapterMetadataDialog.chapterId) {
+        return;
+      }
+      setEditingMetadata({ type: 'chapter', id: chapterMetadataDialog.chapterId });
+    }, [
+      chapterMetadataDialog.isOpen,
+      chapterMetadataDialog.chapterId,
+      chapterMetadataDialog.version,
+    ]);
+
+    const handleEditChapterMetadata = (e: React.MouseEvent, chapter: Chapter): void => {
       e.stopPropagation();
       setEditingMetadata({ type: 'chapter', id: chapter.id });
     };
 
-    const handleEditBookMetadata = (e: React.MouseEvent, book: Book) => {
+    const handleEditBookMetadata = (e: React.MouseEvent, book: Book): void => {
       e.stopPropagation();
       setEditingMetadata({ type: 'book', id: book.id });
     };
@@ -339,7 +353,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       notes?: string;
       private_notes?: string;
       conflicts?: Chapter['conflicts'];
-    }) => {
+    }): Promise<void> => {
       if (!editingMetadata || !activeEditingData) return;
       try {
         if (editingMetadata.type === 'chapter') {
@@ -374,7 +388,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       }
     };
 
-    const renderChapter = (chapter: Chapter, index: number) => {
+    const renderChapter = (chapter: Chapter, index: number): React.JSX.Element => {
       const isDragging =
         draggedItem?.type === 'chapter' && draggedItem.id === chapter.id;
 
@@ -383,7 +397,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       );
       const baselineSummary = baselineChapter?.summary || '';
 
-      const renderSummary = () => {
+      const renderSummary = (): React.ReactNode => {
         const summary = chapter.summary || t('No summary available...');
         if (!baselineSummary || baselineSummary === summary) {
           return <Fragment>{summary}</Fragment>;
@@ -554,6 +568,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
               }
               setPendingMetadataUpdate(null);
               setEditingMetadata(null);
+              useUIStore.getState().closeChapterMetadataDialog();
             }}
             theme={theme}
             aiDisabledReason={
@@ -824,3 +839,4 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     );
   }
 );
+/* eslint-enable complexity, max-lines-per-function */

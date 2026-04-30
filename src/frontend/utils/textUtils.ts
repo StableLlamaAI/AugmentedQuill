@@ -94,9 +94,11 @@ export function computeContentWithSeparator(
  * the joined result never has more than two consecutive `\n` at the boundary.
  */
 export function joinSuggestionToContent(prefix: string, suggestion: string): string {
-  // Count trailing \n characters on the prefix.
+  // Trim trailing spaces/tabs before counting semantic newline boundaries.
+  const prefixTrimmed = prefix.replace(/[ \t]+$/, '');
+
   let trailingNL = 0;
-  for (let i = prefix.length - 1; i >= 0 && prefix[i] === '\n'; i--) {
+  for (let i = prefixTrimmed.length - 1; i >= 0 && prefixTrimmed[i] === '\n'; i--) {
     trailingNL++;
   }
 
@@ -106,18 +108,21 @@ export function joinSuggestionToContent(prefix: string, suggestion: string): str
     leadingNL++;
   }
   const prose = suggestion.substring(leadingNL);
+  const base = prefixTrimmed.substring(0, prefixTrimmed.length - trailingNL);
 
   if (trailingNL >= 2 || leadingNL >= 2) {
     // Paragraph break: strip all trailing newlines from prefix, join with \n\n.
-    const base = prefix.substring(0, prefix.length - trailingNL);
     return base + '\n\n' + prose;
   } else if (leadingNL === 1) {
     // Markdown hard line break: two trailing spaces + newline.
-    const base = prefix.substring(0, prefix.length - trailingNL);
     return base + '  \n' + prose;
   } else {
-    // No leading newline in suggestion: inline continuation, prefix unchanged.
-    return prefix + prose;
+    // No leading newline in suggestion: inline continuation.
+    // Consume any trailing inline formatting newlines from the prefix so generic
+    // editor noise does not introduce an unintended hard break.
+    const needsSpace =
+      base.length > 0 && !/\s$/.test(base) && prose.length > 0 && !/^\s/.test(prose);
+    return base + (needsSpace ? ' ' : '') + prose;
   }
 }
 

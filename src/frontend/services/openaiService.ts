@@ -105,12 +105,14 @@ export type CancelSignal = {
 };
 
 /** Read ssestream. */
+// eslint-disable-next-line complexity
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onToolCalls?: (toolCalls: ToolCallChunk[]) => void,
   onThinking?: (thinking: string) => void,
   onContent?: (content: string) => void,
-  cancelSignal?: CancelSignal
+  cancelSignal?: CancelSignal,
+  isStopped?: () => boolean
 ): Promise<string> {
   let text = '';
   let buffer = '';
@@ -120,19 +122,30 @@ async function readSSEStream(
     cancelSignal.reader = reader;
   }
 
+  const shouldStop = (): boolean => Boolean(cancelSignal?.cancelled || isStopped?.());
+
+  const cancelAndBreak = async (): Promise<void> => {
+    try {
+      await reader.cancel();
+    } catch {
+      // ignore
+    }
+  };
+
   while (true) {
-    if (cancelSignal?.cancelled) {
-      // Stop reading further and close the stream.
-      try {
-        await reader.cancel();
-      } catch {
-        // ignore
-      }
+    if (shouldStop()) {
+      await cancelAndBreak();
       break;
     }
 
     const { done, value } = await reader.read();
     if (done) break;
+
+    // Check immediately after the read resolves — stop may have fired while we were waiting.
+    if (shouldStop()) {
+      await cancelAndBreak();
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n\n');
@@ -155,7 +168,7 @@ async function readSSEStream(
             tool_calls?: ToolCallChunk[];
           };
           if (data.error) {
-            let msg = data.message || data.error;
+            const msg = data.message || data.error;
             throw new ChatError(msg, {
               traceback: data.traceback,
               status: data.status,
@@ -202,6 +215,7 @@ export const createChatSession = (
     allowWebSearch?: boolean;
     currentChapter?: { id: string; title: string } | null;
     onContextUsage?: (usage: ChatContextUsage) => void;
+    isStopped?: () => boolean;
   }
 ): UnifiedChat => {
   return {
@@ -249,6 +263,7 @@ export const createChatSession = (
           [];
         let thinking = '';
         let fullText = '';
+        const cancelSignal: CancelSignal = { cancelled: false };
         const text = await readSSEStream(
           reader,
           (calls: ToolCallChunk[]) => {
@@ -278,7 +293,9 @@ export const createChatSession = (
           (chunk: string) => {
             fullText += chunk;
             if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
-          }
+          },
+          cancelSignal,
+          options?.isStopped
         );
 
         const functionCalls = toolCallsAccumulator
@@ -313,7 +330,7 @@ export const generateSimpleContent = async (
     tool_choice?: string;
     onUpdate?: (partialText: string) => void;
   }
-) => {
+): Promise<string> => {
   const messages = [
     { role: 'system', content: systemInstruction },
     { role: 'user', content: prompt },
@@ -435,7 +452,8 @@ export const generateContinuations = async (
   if (!chapterId) return [];
   const scope = chapterId === 'story' ? 'story' : 'chapter';
 
-  const fetchSuggestion = async (index: number) => {
+  // eslint-disable-next-line complexity
+  const fetchSuggestion = async (index: number): Promise<string> => {
     try {
       const body: Record<string, unknown> = {
         scope,
@@ -496,7 +514,7 @@ export const generateContinuations = async (
         options?.onSuggestionUpdate?.(index, applySmartQuotes(text));
       }
       return applySmartQuotes(text);
-    } catch (e) {
+    } catch {
       return '';
     }
   };

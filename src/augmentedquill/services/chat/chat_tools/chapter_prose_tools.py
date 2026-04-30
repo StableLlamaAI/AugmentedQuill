@@ -26,6 +26,39 @@ from augmentedquill.services.projects.projects import (
 )
 from augmentedquill.services.chat.chat_tools.chapter_tools import MARKER
 
+
+def _count_leading_newlines(text: str) -> int:
+    count = 0
+    for char in text:
+        if char != "\n":
+            break
+        count += 1
+    return count
+
+
+def _join_appended_prose(existing: str, generated_text: str) -> str:
+    if not generated_text:
+        return existing
+
+    leading_nl = _count_leading_newlines(generated_text)
+    if leading_nl >= 2:
+        body = generated_text.lstrip("\n")
+        return existing.rstrip("\n") + "\n\n" + body
+
+    if leading_nl == 1:
+        body = generated_text.lstrip("\n")
+        return existing.rstrip("\n") + "\n" + body
+
+    prefix = existing.rstrip("\n")
+    if (
+        prefix
+        and not prefix[-1].isspace()
+        and not generated_text.startswith((" ", "\t", "\n"))
+    ):
+        return prefix + " " + generated_text
+    return prefix + generated_text
+
+
 # ============================================================================
 # call_writing_llm
 # ============================================================================
@@ -208,11 +241,7 @@ async def call_writing_llm(
         if params.write_mode == "append":
             # Append to end of chapter (like continue_chapter)
             existing = path.read_text(encoding="utf-8")
-            new_content = (
-                existing
-                + ("\n" if existing and not existing.endswith("\n") else "")
-                + generated_text
-            )
+            new_content = _join_appended_prose(existing, generated_text)
             _write_chapter_content(chap_id, new_content)
             mutations["story_changed"] = True
             return {

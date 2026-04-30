@@ -141,15 +141,18 @@ describe('joinSuggestionToContent', () => {
 
   it('no leading newline in suggestion: inline concatenation, prefix unchanged', () => {
     expect(joinSuggestionToContent('The door opened.', 'She entered.')).toBe(
-      'The door opened.She entered.'
+      'The door opened. She entered.'
     );
   });
 
-  it('no leading newline, prefix has single trailing newline: append directly', () => {
-    // The trailing \n is part of the prefix and is kept as-is.
+  it('no leading newline, prefix has single trailing newline: strip newline and join inline', () => {
     expect(joinSuggestionToContent('The door opened.\n', 'She entered.')).toBe(
-      'The door opened.\nShe entered.'
+      'The door opened. She entered.'
     );
+    expect(joinSuggestionToContent('The door opened.\n ', 'She entered.')).toBe(
+      'The door opened. She entered.'
+    );
+    expect(joinSuggestionToContent('Hello\n', ' world')).toBe('Hello world');
   });
 
   it('single leading newline in suggestion: markdown hard line break (  \\n)', () => {
