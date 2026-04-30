@@ -43,16 +43,22 @@ export const SearchHighlightProvider: React.FC<{
   </SearchHighlightContext.Provider>
 );
 
-export const useSearchHighlight = () => {
+export interface SearchHighlightHookResult {
+  highlightActive: boolean;
+  getRanges: (sectionType: string, sectionId: string, field: string) => unknown[];
+  getMatchTexts: (sectionType: string, sectionId: string, field: string) => string[];
+}
+
+export const useSearchHighlight = (): SearchHighlightHookResult => {
   const context = useContext(SearchHighlightContext);
-  const getKey = (sectionType: string, sectionId: string, field: string) =>
+  const getKey = (sectionType: string, sectionId: string, field: string): string =>
     buildSearchSectionKey(sectionType, sectionId, field);
 
   return {
     highlightActive: context?.highlightActive ?? false,
     getRanges: (sectionType: string, sectionId: string, field: string) =>
       context?.ranges[getKey(sectionType, sectionId, field)] ?? [],
-    getMatchTexts: (sectionType: string, sectionId: string, field: string) =>
+    getMatchTexts: (sectionType: string, sectionId: string, field: string): string[] =>
       context?.texts[getKey(sectionType, sectionId, field)] ?? [],
   };
 };

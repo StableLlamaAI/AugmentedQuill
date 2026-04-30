@@ -49,7 +49,7 @@ interface MarkdownViewProps {
 // Configure markdown rendering once to keep parsing behavior stable.
 const renderer = new marked.Renderer();
 // @ts-ignore
-renderer.image = function (token: import('marked').Tokens.Image) {
+renderer.image = function (token: import('marked').Tokens.Image): string {
   let href = typeof token === 'object' && token !== null ? token.href : arguments[0];
   let title = typeof token === 'object' && token !== null ? token.title : arguments[1];
   let text = typeof token === 'object' && token !== null ? token.text : arguments[2];
@@ -73,13 +73,13 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   baseline = '',
   language,
   searchHighlightRanges,
-}: MarkdownViewProps) => {
+}: MarkdownViewProps): JSX.Element => {
   const safeContent = typeof content === 'string' ? content : '';
 
   // Diff case (editor diff viewer, one instance at a time): render synchronously so
   // the diff appears immediately when the user opens a checkpoint comparison.
   const hasDiff = !simple && !!baseline && baseline !== safeContent;
-  const diffHtml = useMemo(() => {
+  const diffHtml = useMemo((): string | null => {
     if (!hasDiff || !baseline) return null;
 
     const diffs = dmp.diff_main(baseline, safeContent);
@@ -114,15 +114,15 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   // initialise from the module-level cache so already-seen content is instant, then
   // defer first-time parsing to a setTimeout so it runs outside the React scheduler's
   // message-handler and cannot cause '[Violation] message handler took Xms' warnings.
-  const [asyncHtml, setAsyncHtml] = useState<string>(() =>
+  const [asyncHtml, setAsyncHtml] = useState<string>((): string =>
     simple || hasDiff ? '' : (htmlCache.get(safeContent) ?? '')
   );
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (simple || hasDiff) return;
     if (htmlCache.has(safeContent)) {
       const cached = htmlCache.get(safeContent)!;
-      setAsyncHtml((prev: string) => (prev === cached ? prev : cached));
+      setAsyncHtml((prev: string): string => (prev === cached ? prev : cached));
       return;
     }
     // Defer expensive markdown parsing off the synchronous render path.
@@ -130,18 +130,18 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     // browser is idle, avoiding long-task violations during streaming.
     const scheduleWork =
       typeof requestIdleCallback === 'function'
-        ? (cb: () => void) => requestIdleCallback(cb)
-        : (cb: () => void) => setTimeout(cb, 0);
+        ? (cb: () => void): number => requestIdleCallback(cb)
+        : (cb: () => void): NodeJS.Timeout => setTimeout(cb, 0);
     const cancelWork =
       typeof cancelIdleCallback === 'function'
-        ? (id: number) => cancelIdleCallback(id)
-        : (id: number) => clearTimeout(id);
-    const id = scheduleWork(() => {
+        ? (id: number): void => cancelIdleCallback(id)
+        : (id: number): void => clearTimeout(id);
+    const id = scheduleWork((): void => {
       const html = parseAndSanitize(safeContent);
       htmlCache.set(safeContent, html);
       setAsyncHtml(html);
     });
-    return () => cancelWork(id as number);
+    return (): void => cancelWork(id as number);
   }, [safeContent, simple, hasDiff]);
 
   const cleanHtml = hasDiff ? (diffHtml ?? '') : asyncHtml;
@@ -168,18 +168,22 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     line: string,
     lineStart: number,
     ranges?: Array<{ start: number; end: number }>
-  ) => {
+  ): { text: string; highlight: boolean }[] => {
     if (!ranges || ranges.length === 0) return [{ text: line, highlight: false }];
 
     const normalized = ranges
-      .map((range: { start: number; end: number }) => ({
+      .map((range: { start: number; end: number }): { start: number; end: number } => ({
         start: Math.max(0, range.start - lineStart),
         end: Math.max(0, range.end - lineStart),
       }))
-      .filter((range: { start: number; end: number }) => range.start < range.end)
+      .filter(
+        (range: { start: number; end: number }): boolean => range.start < range.end
+      )
       .sort(
-        (a: { start: number; end: number }, b: { start: number; end: number }) =>
-          a.start - b.start
+        (
+          a: { start: number; end: number },
+          b: { start: number; end: number }
+        ): number => a.start - b.start
       );
 
     const fragments: Array<{ text: string; highlight: boolean }> = [];
@@ -204,7 +208,12 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     return fragments;
   };
 
-  const renderLine = (line: string, i: number, la?: string, lineStart: number = 0) => {
+  const renderLine = (
+    line: string,
+    i: number,
+    la?: string,
+    lineStart: number = 0
+  ): JSX.Element => {
     // Simple mode preserves source for complex markdown to avoid misleading preview fidelity.
     if (!searchHighlightRanges?.length) {
       return (
@@ -238,7 +247,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     );
   };
 
-  const renderInline = (text: string) => {
+  const renderInline = (text: string): (JSX.Element | null)[] | null => {
     if (!text) return null;
 
     // Tokenize minimal inline markdown for lightweight summary previews.
@@ -301,11 +310,14 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
               );
             return null; // deletions: not shown
           })
-        : safeContent.split('\n').map((line: string, i: number, all: string[]) => {
+        : safeContent.split('\n').map((line: string, i: number, _all: string[]) => {
             const lineStart = safeContent
               .split('\n')
               .slice(0, i)
-              .reduce((sum: number, current: string) => sum + current.length + 1, 0);
+              .reduce(
+                (sum: number, current: string): number => sum + current.length + 1,
+                0
+              );
             return renderLine(line, i, language, lineStart);
           })}
     </div>

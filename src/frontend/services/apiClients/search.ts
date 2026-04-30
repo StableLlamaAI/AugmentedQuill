@@ -32,7 +32,13 @@ export type ReplaceResponse = components['schemas']['ReplaceResponse'];
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 
-export const createSearchApi = (projectName: string) => ({
+export interface SearchApi {
+  search: (opts: SearchOptions) => Promise<SearchResponse>;
+  replaceAll: (req: ReplaceAllRequest) => Promise<ReplaceResponse>;
+  replaceSingle: (req: ReplaceSingleRequest) => Promise<ReplaceResponse>;
+}
+
+export const createSearchApi = (projectName: string): SearchApi => ({
   search: (opts: SearchOptions): Promise<SearchResponse> =>
     fetchJson<SearchResponse>(
       projectEndpoint(projectName, '/search'),

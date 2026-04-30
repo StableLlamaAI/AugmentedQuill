@@ -74,7 +74,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   onSetActiveChatProvider,
   onUpdateProvider,
   onRemoveProvider,
-}: ProviderConfigFormProps) => {
+}: ProviderConfigFormProps): JSX.Element => {
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
   const [suggestedPresetByProvider, setSuggestedPresetByProvider] = useState<
     Record<string, string | null>
@@ -84,15 +84,17 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   >({});
 
   const absolutePresets = modelPresets.filter(
-    (p: ModelPresetEntry) => (p.preset_type ?? 'absolute') === 'absolute'
+    (p: ModelPresetEntry): boolean => (p.preset_type ?? 'absolute') === 'absolute'
   );
   const deltaPresets = modelPresets.filter(
-    (p: ModelPresetEntry) => p.preset_type === 'delta'
+    (p: ModelPresetEntry): boolean => p.preset_type === 'delta'
   );
 
-  const getPresetById = (id?: string | null) => {
+  const getPresetById = (id?: string | null): ModelPresetEntry | null => {
     if (!id) return null;
-    return modelPresets.find((preset: ModelPresetEntry) => preset.id === id) || null;
+    return (
+      modelPresets.find((preset: ModelPresetEntry): boolean => preset.id === id) || null
+    );
   };
 
   const suggestPresetForModelId = (modelId: string): ModelPresetEntry | null => {
@@ -100,7 +102,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     if (!modelIdTrimmed) return null;
     for (const preset of absolutePresets) {
       if (!Array.isArray(preset.model_id_patterns)) continue;
-      const matches = preset.model_id_patterns.some((pattern: string) => {
+      const matches = preset.model_id_patterns.some((pattern: string): boolean => {
         try {
           return new RegExp(pattern, 'i').test(modelIdTrimmed);
         } catch {
@@ -116,9 +118,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   const getMatchingAbsolutePresets = (modelId: string): ModelPresetEntry[] => {
     const modelIdTrimmed = (modelId || '').trim();
     if (!modelIdTrimmed) return [];
-    return absolutePresets.filter((preset: ModelPresetEntry) => {
+    return absolutePresets.filter((preset: ModelPresetEntry): boolean => {
       if (!Array.isArray(preset.model_id_patterns)) return false;
-      return preset.model_id_patterns.some((pattern: string) => {
+      return preset.model_id_patterns.some((pattern: string): boolean => {
         try {
           return new RegExp(pattern, 'i').test(modelIdTrimmed);
         } catch {
@@ -128,11 +130,11 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     });
   };
 
-  const applyPreset = (providerId: string, preset: ModelPresetEntry | null) => {
+  const applyPreset = (providerId: string, preset: ModelPresetEntry | null): void => {
     if (!preset) return;
     const p = preset.parameters || {};
     const nextStop = Array.isArray(p.stop)
-      ? p.stop.map((entry: string) => String(entry))
+      ? p.stop.map((entry: string): string => String(entry))
       : [];
     onUpdateProvider(providerId, {
       temperature: p.temperature ?? undefined,
@@ -148,19 +150,23 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       presetId: preset.id,
       writingWarning: preset.warnings?.writing ?? null,
     });
-    setSuggestedPresetByProvider((previous: Record<string, string | null>) => ({
-      ...previous,
-      [providerId]: null,
-    }));
+    setSuggestedPresetByProvider(
+      (previous: Record<string, string | null>): { [x: string]: string | null } => ({
+        ...previous,
+        [providerId]: null,
+      })
+    );
   };
 
   /** Applies only the non-null fields from a delta preset without locking the provider. */
-  const applyDelta = (providerId: string, preset: ModelPresetEntry | null) => {
+  const applyDelta = (providerId: string, preset: ModelPresetEntry | null): void => {
     if (!preset) {
-      setLastDeltaByProvider((prev: Record<string, string | null>) => ({
-        ...prev,
-        [providerId]: null,
-      }));
+      setLastDeltaByProvider(
+        (prev: Record<string, string | null>): { [x: string]: string | null } => ({
+          ...prev,
+          [providerId]: null,
+        })
+      );
       return;
     }
     const p = preset.parameters || {};
@@ -170,23 +176,26 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     if (p.max_tokens != null) updates.maxTokens = p.max_tokens;
     if (p.presence_penalty != null) updates.presencePenalty = p.presence_penalty;
     if (p.frequency_penalty != null) updates.frequencyPenalty = p.frequency_penalty;
-    if (Array.isArray(p.stop)) updates.stop = p.stop.map((s: string) => String(s));
+    if (Array.isArray(p.stop))
+      updates.stop = p.stop.map((s: string): string => String(s));
     if (p.seed != null) updates.seed = p.seed;
     if (p.top_k != null) updates.topK = p.top_k;
     if (p.min_p != null) updates.minP = p.min_p;
     if (p.extra_body != null) updates.extraBody = p.extra_body;
     onUpdateProvider(providerId, updates);
-    setLastDeltaByProvider((prev: Record<string, string | null>) => ({
-      ...prev,
-      [providerId]: preset.id,
-    }));
+    setLastDeltaByProvider(
+      (prev: Record<string, string | null>): { [x: string]: string | null } => ({
+        ...prev,
+        [providerId]: preset.id,
+      })
+    );
   };
 
   const renderCapabilitySelect = (
     label: string,
     field: 'isMultimodal' | 'supportsFunctionCalling',
     detectedField: 'is_multimodal' | 'supports_function_calling'
-  ) => {
+  ): JSX.Element | null => {
     if (!activeProvider) return null;
     const val = activeProvider[field];
     const detected = detectedCapabilities[activeProvider.id]?.[detectedField];
@@ -202,7 +211,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
         <select
           id={id}
           value={val === true ? 'true' : val === false ? 'false' : 'auto'}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) => {
+          onChange={(
+            e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+          ): void => {
             const v = e.target.value;
             onUpdateProvider(activeProvider.id, {
               [field]: v === 'auto' ? null : v === 'true',
@@ -232,7 +243,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     max: number,
     step: number,
     tooltip?: string
-  ) => {
+  ): JSX.Element | null => {
     if (!activeProvider) return null;
     const id = `provider-${field}`;
     return (
@@ -262,7 +273,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           max={max}
           step={step}
           value={activeProvider[field] ?? 0}
-          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>): void =>
             onUpdateProvider(activeProvider.id, {
               [field]: Number(e.target.value),
             })
@@ -284,7 +295,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       | 'topK',
     placeholder: string = '',
     tooltip?: string
-  ) => {
+  ): JSX.Element | null => {
     if (!activeProvider) return null;
     return (
       <div className="space-y-1">
@@ -313,7 +324,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           }
           value={activeProvider[field] ?? ''}
           placeholder={placeholder}
-          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) => {
+          onChange={(
+            e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+          ): void => {
             const raw = e.target.value;
             onUpdateProvider(activeProvider.id, {
               [field]: raw === '' ? undefined : Number(raw),
@@ -356,7 +369,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               theme={theme}
               size="sm"
               variant="danger"
-              onClick={() => onRemoveProvider(activeProvider.id)}
+              onClick={(): void => onRemoveProvider(activeProvider.id)}
             >
               <Trash2 size={16} />
             </Button>
@@ -372,7 +385,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
           }`}
         >
           <button
-            onClick={() => onSetActiveWritingProvider(activeProvider.id)}
+            onClick={(): void => onSetActiveWritingProvider(activeProvider.id)}
             disabled={!isActiveProviderAvailable}
             className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
               activeWritingProviderId === activeProvider.id
@@ -392,7 +405,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               )}
           </button>
           <button
-            onClick={() => onSetActiveEditingProvider(activeProvider.id)}
+            onClick={(): void => onSetActiveEditingProvider(activeProvider.id)}
             disabled={!isActiveProviderAvailable}
             className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
               activeEditingProviderId === activeProvider.id
@@ -408,7 +421,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             Editing
           </button>
           <button
-            onClick={() => onSetActiveChatProvider(activeProvider.id)}
+            onClick={(): void => onSetActiveChatProvider(activeProvider.id)}
             disabled={!isActiveProviderAvailable}
             className={`flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-all ${
               activeChatProviderId === activeProvider.id
@@ -447,7 +460,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               <input
                 data-no-smart-quotes="true"
                 value={activeProvider.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                onChange={(
+                  e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ): void =>
                   onUpdateProvider(activeProvider.id, { name: e.target.value })
                 }
                 className={`w-full border rounded p-2 text-sm focus:border-brand-500 focus:outline-none ${
@@ -466,7 +481,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
             <input
               data-no-smart-quotes="true"
               value={activeProvider.baseUrl}
-              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ): void =>
                 onUpdateProvider(activeProvider.id, { baseUrl: e.target.value })
               }
               placeholder="https://api.openai.com/v1"
@@ -489,7 +506,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={(): void =>
                     onUpdateProvider(activeProvider.id, {
                       apiKeyEnabled: !activeProvider.apiKeyEnabled,
                     })
@@ -513,7 +530,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 data-no-smart-quotes="true"
                 type="text"
                 value={activeProvider.apiKey}
-                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                onChange={(
+                  e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ): void =>
                   onUpdateProvider(activeProvider.id, { apiKey: e.target.value })
                 }
                 placeholder="sk... (visible)"
@@ -566,18 +585,20 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               <input
                 data-no-smart-quotes="true"
                 value={activeProvider.modelId}
-                onFocus={() => setModelPickerOpenFor(activeProvider.id)}
-                onBlur={() => {
-                  setTimeout(() => setModelPickerOpenFor(null), 120);
+                onFocus={(): void => setModelPickerOpenFor(activeProvider.id)}
+                onBlur={(): void => {
+                  setTimeout((): void => setModelPickerOpenFor(null), 120);
                 }}
                 onChange={(
                   e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                ) => {
+                ): void => {
                   const nextModelId = e.target.value;
                   onUpdateProvider(activeProvider.id, { modelId: nextModelId });
                   const suggested = suggestPresetForModelId(nextModelId);
                   setSuggestedPresetByProvider(
-                    (previous: Record<string, string | null>) => ({
+                    (
+                      previous: Record<string, string | null>
+                    ): { [x: string]: string | null } => ({
                       ...previous,
                       [activeProvider.id]: suggested?.id || null,
                     })
@@ -592,11 +613,13 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               />
               <button
                 type="button"
-                onMouseDown={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+                onMouseDown={(
+                  e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+                ): void => {
                   e.preventDefault();
                   const models = modelLists[activeProvider.id] || [];
                   if (models.length === 0) return;
-                  setModelPickerOpenFor((cur: string | null) =>
+                  setModelPickerOpenFor((cur: string | null): string | null =>
                     cur === activeProvider.id ? null : activeProvider.id
                   );
                 }}
@@ -633,12 +656,14 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                           title={m}
                           onMouseDown={(
                             e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-                          ) => {
+                          ): void => {
                             e.preventDefault();
                             onUpdateProvider(activeProvider.id, { modelId: m });
                             const suggested = suggestPresetForModelId(m);
                             setSuggestedPresetByProvider(
-                              (previous: Record<string, string | null>) => ({
+                              (
+                                previous: Record<string, string | null>
+                              ): { [x: string]: string | null } => ({
                                 ...previous,
                                 [activeProvider.id]: suggested?.id || null,
                               })
@@ -670,7 +695,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={(): void =>
                     applyPreset(
                       activeProvider.id,
                       getPresetById(suggestedPresetByProvider[activeProvider.id])
@@ -740,7 +765,9 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
               <input
                 type="number"
                 value={activeProvider.timeout}
-                onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+                onChange={(
+                  e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+                ): void =>
                   onUpdateProvider(activeProvider.id, {
                     timeout: Number(e.target.value),
                   })
@@ -767,7 +794,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 value={activeProvider.maxTokens ?? ''}
                 onChange={(
                   e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                ) => {
+                ): void => {
                   const raw = e.target.value;
                   onUpdateProvider(activeProvider.id, {
                     maxTokens: raw === '' ? undefined : Number(raw),
@@ -792,7 +819,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 value={activeProvider.presetId || ''}
                 onChange={(
                   e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                ) => {
+                ): void => {
                   const preset = getPresetById(e.target.value || null);
                   if (!preset) {
                     onUpdateProvider(activeProvider.id, {
@@ -817,10 +844,10 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                 {(() => {
                   const matching = getMatchingAbsolutePresets(activeProvider.modelId);
                   const matchingIds = new Set(
-                    matching.map((p: ModelPresetEntry) => p.id)
+                    matching.map((p: ModelPresetEntry): string => p.id)
                   );
                   const others = absolutePresets.filter(
-                    (p: ModelPresetEntry) => !matchingIds.has(p.id)
+                    (p: ModelPresetEntry): boolean => !matchingIds.has(p.id)
                   );
                   return (
                     <>
@@ -872,7 +899,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value=""
                   onChange={(
                     e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                  ) => {
+                  ): void => {
                     const preset = getPresetById(e.target.value || null);
                     applyDelta(activeProvider.id, preset);
                   }}
@@ -987,7 +1014,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   }
                   onChange={(
                     e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                  ) => {
+                  ): void => {
                     onUpdateProvider(activeProvider.id, {
                       suggestLoopGuardEnabled: e.target.value === 'on',
                     });
@@ -1016,7 +1043,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value={activeProvider.suggestLoopGuardNgram === 4 ? '4' : '3'}
                   onChange={(
                     e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                  ) => {
+                  ): void => {
                     onUpdateProvider(activeProvider.id, {
                       suggestLoopGuardNgram: e.target.value === '4' ? 4 : 3,
                     });
@@ -1049,7 +1076,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value={activeProvider.suggestLoopGuardMinRepeats ?? 3}
                   onChange={(
                     e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                  ) =>
+                  ): void =>
                     onUpdateProvider(activeProvider.id, {
                       suggestLoopGuardMinRepeats: Math.max(
                         2,
@@ -1082,7 +1109,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value={activeProvider.suggestLoopGuardMaxRegens ?? 1}
                   onChange={(
                     e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                  ) =>
+                  ): void =>
                     onUpdateProvider(activeProvider.id, {
                       suggestLoopGuardMaxRegens: Math.max(
                         0,
@@ -1115,11 +1142,11 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value={(activeProvider.stop || []).join('\n')}
                   onChange={(
                     e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                  ) =>
+                  ): void =>
                     onUpdateProvider(activeProvider.id, {
                       stop: e.target.value
                         .split('\n')
-                        .map((line: string) => line.trim())
+                        .map((line: string): string => line.trim())
                         .filter(Boolean),
                     })
                   }
@@ -1145,7 +1172,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
                   value={activeProvider.extraBody || ''}
                   onChange={(
                     e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                  ) =>
+                  ): void =>
                     onUpdateProvider(activeProvider.id, {
                       extraBody: e.target.value,
                     })

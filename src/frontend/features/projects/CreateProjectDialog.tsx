@@ -36,7 +36,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [type, setType] = useState('novel');
-  const [language, setLanguage] = useState(() =>
+  const [language, setLanguage] = useState((): string =>
     languages && languages.length ? languages[0] : 'en'
   );
   const { isLight } = useThemeClasses();
@@ -87,9 +87,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               type="text"
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-                setName(e.target.value)
-              }
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ): void => setName(e.target.value)}
               placeholder={t('My Story')}
             />
           </div>
@@ -100,9 +100,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
             <select
               className={`w-full p-2 rounded border focus:ring-2 focus:ring-brand-500 outline-none ${inputClass}`}
               value={language}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
-                setLanguage(e.target.value)
-              }
+              onChange={(
+                e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+              ): void => setLanguage(e.target.value)}
             >
               {languages.map((lng: string) => (
                 <option key={lng} value={lng}>
@@ -127,7 +127,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   checked={type === 'short-story'}
                   onChange={(
                     e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                  ) => setType(e.target.value)}
+                  ): void => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
@@ -155,7 +155,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   checked={type === 'novel'}
                   onChange={(
                     e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                  ) => setType(e.target.value)}
+                  ): void => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
@@ -181,7 +181,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                   checked={type === 'series'}
                   onChange={(
                     e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                  ) => setType(e.target.value)}
+                  ): void => setType(e.target.value)}
                   className="mt-1"
                 />
                 <div>
@@ -205,7 +205,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
             </Button>
             <Button
               variant="primary"
-              onClick={() => {
+              onClick={(): void => {
                 if (name.trim()) onCreate(name, type, language);
               }}
               disabled={!name.trim()}

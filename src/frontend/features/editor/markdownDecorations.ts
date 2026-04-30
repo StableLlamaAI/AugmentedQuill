@@ -77,7 +77,7 @@ class ImageWidget extends WidgetType {
     img.draggable = false;
     img.loading = 'lazy';
 
-    img.onerror = () => {
+    img.onerror = (): void => {
       img.style.display = 'none';
       const fallback = document.createElement('span');
       fallback.className = 'cm-image-error';
@@ -487,7 +487,7 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
             _fromB: number,
             _toB: number,
             inserted: import('@codemirror/state').Text
-          ) => {
+          ): void => {
             if (toA !== fromA) {
               isSafeInsert = false; // deletion present
               return;
@@ -512,7 +512,7 @@ export function buildMarkdownDecorationPlugin(mode: DecorationViewMode): Extensi
         }
       }
     },
-    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }): DecorationSet => v.decorations }
   );
 }
 

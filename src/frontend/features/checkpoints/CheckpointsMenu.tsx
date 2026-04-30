@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Save, ChevronDown, Download, Trash2, Plus } from 'lucide-react';
+import { Save, ChevronDown, Trash2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../layout/ThemeContext';
 import { Button } from '../../components/ui/Button';
@@ -39,7 +39,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
 
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchCheckpoints = async () => {
+  const fetchCheckpoints = async (): Promise<void> => {
     try {
       const res = await api.checkpoints.list();
       setCheckpoints(res.checkpoints || []);
@@ -48,13 +48,13 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
     }
   };
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       fetchCheckpoints();
     }
   }, [isOpen]);
 
-  useEffect(() => {
+  useEffect((): void => {
     // If external state indicates no changes, reset our session backup flag.
     // This handles cases where user undoes everything manually.
     if (!hasUnsavedChanges) {
@@ -62,18 +62,18 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
     }
   }, [hasUnsavedChanges]);
 
-  useEffect(() => {
-    const onDocumentClick = (event: MouseEvent) => {
+  useEffect((): (() => void) => {
+    const onDocumentClick = (event: MouseEvent): void => {
       const target = event.target as Node;
       if (menuRef.current && !menuRef.current.contains(target)) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', onDocumentClick);
-    return () => document.removeEventListener('mousedown', onDocumentClick);
+    return (): void => document.removeEventListener('mousedown', onDocumentClick);
   }, []);
 
-  const handleCreate = async () => {
+  const handleCreate = async (): Promise<void> => {
     setIsCreating(true);
     try {
       await api.checkpoints.create();
@@ -87,7 +87,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
     }
   };
 
-  const handleLoad = async (timestamp: string) => {
+  const handleLoad = async (timestamp: string): Promise<void> => {
     const reallyHasUnsavedWork = hasUnsavedChanges && !isStateAlreadyBackedUpInSession;
     if (reallyHasUnsavedWork) {
       const sure = await confirm({
@@ -110,7 +110,10 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, timestamp: string) => {
+  const handleDelete = async (
+    e: React.MouseEvent,
+    timestamp: string
+  ): Promise<void> => {
     e.stopPropagation();
     const sure = await confirm({
       title: t('Delete Checkpoint'),
@@ -141,7 +144,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
         theme={currentTheme}
         variant="ghost"
         size="sm"
-        onClick={() => setIsOpen((open: boolean) => !open)}
+        onClick={(): void => setIsOpen((open: boolean): boolean => !open)}
         title={t('Checkpoints')}
         className="px-2 border-l"
       >
@@ -177,7 +180,7 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                   <button
                     type="button"
                     className="flex flex-col truncate w-full pr-2 text-left"
-                    onClick={() => handleLoad(cp.timestamp)}
+                    onClick={(): Promise<void> => handleLoad(cp.timestamp)}
                     title={t('Load checkpoint {{timestamp}}', {
                       timestamp: cp.timestamp,
                     })}
@@ -187,9 +190,9 @@ export const CheckpointsMenu: React.FC<CheckpointsMenuProps> = ({
                   <button
                     type="button"
                     className="p-1 hover:text-red-500 rounded-full flex-shrink-0"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) =>
-                      handleDelete(e, cp.timestamp)
-                    }
+                    onClick={(
+                      e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+                    ): Promise<void> => handleDelete(e, cp.timestamp)}
                     title={t('Delete')}
                   >
                     <Trash2 size={14} />

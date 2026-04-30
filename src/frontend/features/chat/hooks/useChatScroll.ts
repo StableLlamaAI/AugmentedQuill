@@ -61,7 +61,7 @@ export function useChatScroll({
    */
   const isProgrammaticScrollRef = useRef(false);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth'): void => {
     if (!scrollContainerRef.current) return;
     const { scrollHeight } = scrollContainerRef.current;
     if (behavior === 'auto' || behavior === 'instant') {
@@ -70,7 +70,7 @@ export function useChatScroll({
     scrollContainerRef.current.scrollTo({ top: scrollHeight, behavior });
   }, []);
 
-  const handleScroll = useCallback(() => {
+  const handleScroll = useCallback((): void => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
@@ -96,7 +96,7 @@ export function useChatScroll({
     }
   }, []);
 
-  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>): void => {
     if (event.deltaY < 0) {
       isAtBottomRef.current = false;
     } else if (event.deltaY > 0 && scrollContainerRef.current) {
@@ -108,11 +108,11 @@ export function useChatScroll({
     }
   }, []);
 
-  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>): void => {
     lastTouchYRef.current = event.touches[0]?.clientY ?? null;
   }, []);
 
-  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>): void => {
     const currentY = event.touches[0]?.clientY ?? null;
     const previousY = lastTouchYRef.current;
     lastTouchYRef.current = currentY;
@@ -131,7 +131,7 @@ export function useChatScroll({
     }
   }, []);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     const el = scrollContainerRef.current;
     if (!el) return undefined;
 
@@ -140,10 +140,10 @@ export function useChatScroll({
     // RAF-throttled so that rapid DOM mutations during streaming don't pile up
     // redundant scroll operations.
     let rafId: number | null = null;
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((): void => {
       if (!isAtBottomRef.current) return;
       if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame((): void => {
         rafId = null;
         scrollToBottom(isLoading ? 'auto' : 'smooth');
       });
@@ -156,14 +156,14 @@ export function useChatScroll({
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
 
-    return () => {
+    return (): void => {
       observer.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [messages, isLoading, editingMessageId, scrollToBottom]);
 
   // Always scroll to bottom on session switch
-  useEffect(() => {
+  useEffect((): void => {
     isAtBottomRef.current = true;
     scrollToBottom('auto');
   }, [currentSessionId, scrollToBottom]);

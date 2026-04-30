@@ -31,18 +31,18 @@ export function useChatMessages(
   const deferredMessages = useDeferredValue(messages);
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY);
 
-  useEffect(() => {
+  useEffect((): void => {
     setDisplayCount(INITIAL_DISPLAY);
   }, [currentSessionId]);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (displayCount >= deferredMessages.length) return;
-    const raf = requestAnimationFrame(() => {
-      setDisplayCount((prev: number) =>
+    const raf = requestAnimationFrame((): void => {
+      setDisplayCount((prev: number): number =>
         Math.min(prev + INITIAL_DISPLAY, deferredMessages.length)
       );
     });
-    return () => cancelAnimationFrame(raf);
+    return (): void => cancelAnimationFrame(raf);
   }, [displayCount, deferredMessages.length]);
 
   const visibleMessages = deferredMessages.slice(

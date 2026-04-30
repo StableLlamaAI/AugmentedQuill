@@ -86,7 +86,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     theme = 'mixed',
     languages = [],
     language,
-    onOpenImages,
+    onOpenImages: _onOpenImages,
     baselineChapters = [],
     spellCheck = true,
   }: ChapterListProps) => {
@@ -112,13 +112,13 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     const [optimisticBooks, setOptimisticBooks] = useState<Book[] | null>(null);
 
     // Server-confirmed props always win over optimistic previews.
-    useEffect(() => {
+    useEffect((): void => {
       if (optimisticChapters !== null) {
         setOptimisticChapters(null);
       }
     }, [chapters, optimisticChapters]);
 
-    useEffect(() => {
+    useEffect((): void => {
       if (optimisticBooks !== null) {
         setOptimisticBooks(null);
       }
@@ -142,25 +142,27 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
           const targetBookId = dragOverBookId || draggedItem.bookId;
           if (targetBookId === draggedItem.bookId) {
             const bookChapters = chapters.filter(
-              (c: Chapter) => c.book_id === draggedItem.bookId
+              (c: Chapter): boolean => c.book_id === draggedItem.bookId
             );
             const reordered = moveInArray(
               bookChapters,
               draggedItem.originalIndex,
               dragOverIndex
             );
-            displayChapters = chapters.map((c: Chapter) => {
+            displayChapters = chapters.map((c: Chapter): Chapter => {
               if (c.book_id !== draggedItem.bookId) return c;
-              const subIdx = bookChapters.findIndex((sc: Chapter) => sc.id === c.id);
+              const subIdx = bookChapters.findIndex(
+                (sc: Chapter): boolean => sc.id === c.id
+              );
               return reordered[subIdx];
             });
           } else {
             // Cross-book preview keeps chapter context visible before persistence.
             const sourceChapters = chapters.filter(
-              (c: Chapter) => c.book_id === draggedItem.bookId
+              (c: Chapter): boolean => c.book_id === draggedItem.bookId
             );
             const targetChapters = chapters.filter(
-              (c: Chapter) => c.book_id === targetBookId
+              (c: Chapter): boolean => c.book_id === targetBookId
             );
 
             const movingChapter = sourceChapters[draggedItem.originalIndex];
@@ -177,7 +179,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
 
               displayChapters = chapters
                 .filter(
-                  (c: Chapter) =>
+                  (c: Chapter): boolean =>
                     c.book_id !== draggedItem.bookId && c.book_id !== targetBookId
                 )
                 .concat(newSourceChapters)
@@ -245,22 +247,26 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
 
           if (targetBookId && onReorderChapters) {
             const bookChaptersFinal = displayChapters.filter(
-              (c: Chapter) => c.book_id === targetBookId
+              (c: Chapter): boolean => c.book_id === targetBookId
             );
-            const chapterIds = bookChaptersFinal.map((c: Chapter) => parseInt(c.id));
+            const chapterIds = bookChaptersFinal.map((c: Chapter): number =>
+              parseInt(c.id)
+            );
             setOptimisticChapters(displayChapters);
             onReorderChapters(chapterIds, targetBookId);
           }
         } else {
           if (onReorderChapters) {
-            const chapterIds = displayChapters.map((c: Chapter) => parseInt(c.id));
+            const chapterIds = displayChapters.map((c: Chapter): number =>
+              parseInt(c.id)
+            );
             setOptimisticChapters(displayChapters);
             onReorderChapters(chapterIds);
           }
         }
       } else if (dragged.type === 'book') {
         if (onReorderBooks) {
-          const bookIds = displayBooks.map((b: Book) => b.id);
+          const bookIds = displayBooks.map((b: Book): string => b.id);
           setOptimisticBooks(displayBooks);
           onReorderBooks(bookIds);
         }
@@ -278,7 +284,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     };
 
     const toggleBook = (id: string): void => {
-      setExpandedBooks((prev: Record<string, boolean>) => ({
+      setExpandedBooks((prev: Record<string, boolean>): { [x: string]: boolean } => ({
         ...prev,
         [id]: !prev[id],
       }));
@@ -316,17 +322,19 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       };
     } | null>(null);
 
-    const activeEditingData = useMemo(() => {
+    const activeEditingData = useMemo((): Chapter | Book | null | undefined => {
       if (!editingMetadata) return null;
       if (editingMetadata.type === 'chapter') {
-        return displayChapters.find((c: Chapter) => c.id === editingMetadata.id);
+        return displayChapters.find(
+          (c: Chapter): boolean => c.id === editingMetadata.id
+        );
       } else {
-        return displayBooks.find((b: Book) => b.id === editingMetadata.id);
+        return displayBooks.find((b: Book): boolean => b.id === editingMetadata.id);
       }
     }, [editingMetadata, displayChapters, displayBooks]);
 
     const chapterMetadataDialog = useChapterMetadataDialog();
-    useEffect(() => {
+    useEffect((): void => {
       if (!chapterMetadataDialog.isOpen || !chapterMetadataDialog.chapterId) {
         return;
       }
@@ -393,7 +401,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
         draggedItem?.type === 'chapter' && draggedItem.id === chapter.id;
 
       const baselineChapter = baselineChapters.find(
-        (c: Chapter) => String(c.id) === String(chapter.id)
+        (c: Chapter): boolean => String(c.id) === String(chapter.id)
       );
       const baselineSummary = baselineChapter?.summary || '';
 
@@ -450,10 +458,10 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
             type="button"
             className="flex flex-col w-full text-left cursor-pointer"
             draggable
-            onDragStart={(e: React.DragEvent<HTMLButtonElement>) =>
+            onDragStart={(e: React.DragEvent<HTMLButtonElement>): void =>
               handleDragStart(e, 'chapter', chapter.id, index, chapter.book_id)
             }
-            onDragEnter={() => {
+            onDragEnter={(): void => {
               if (draggedItem?.type === 'chapter' && !isDragging) {
                 handleDragEnter(index, chapter.book_id);
               }
@@ -461,7 +469,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            onClick={() => onSelect(chapter.id)}
+            onClick={(): void => onSelect(chapter.id)}
             aria-current={currentChapterId === chapter.id ? 'true' : undefined}
           >
             <div className="flex justify-between items-start w-full">
@@ -486,7 +494,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
           </button>
           <div className="absolute top-2 right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) =>
+              onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void =>
                 handleEditChapterMetadata(e, chapter)
               }
               className="p-1 text-brand-gray-400 hover:text-blue-500"
@@ -495,7 +503,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
               <Edit size={14} />
             </button>
             <button
-              onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
                 e.stopPropagation();
                 onDelete(chapter.id);
               }}
@@ -528,18 +536,18 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
             baseline={
               editingMetadata.type === 'chapter'
                 ? baselineChapters.find(
-                    (c: Chapter) => String(c.id) === String(editingMetadata.id)
+                    (c: Chapter): boolean => String(c.id) === String(editingMetadata.id)
                   )
                 : undefined
             }
             onSave={saveMetadata as (data: MetadataParams) => Promise<void>}
-            onClose={() => {
+            onClose={(): void => {
               if (
                 pendingMetadataUpdate &&
                 pendingMetadataUpdate.id === editingMetadata.id
               ) {
                 const currentChapter = displayChapters.find(
-                  (c: Chapter) => c.id === pendingMetadataUpdate.id
+                  (c: Chapter): boolean => c.id === pendingMetadataUpdate.id
                 );
                 const isDifferent =
                   currentChapter &&
@@ -547,7 +555,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                     ([key, value]: [
                       string,
                       string | import('../../types').Conflict[],
-                    ]) => {
+                    ]): boolean => {
                       if (value === undefined) return false;
                       return (
                         JSON.stringify(value) !==
@@ -595,7 +603,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                     onProgress: ((text: string) => void) | undefined,
                     currentText: string | undefined,
                     onThinking: ((thinking: string) => void) | undefined
-                  ) =>
+                  ): Promise<string | undefined> =>
                     onAiAction(
                       editingMetadata.type,
                       editingMetadata.id,
@@ -623,7 +631,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
             </h2>
             {projectType === 'novel' && (
               <button
-                onClick={() => onCreate()}
+                onClick={(): void => onCreate()}
                 className={`p-1 rounded-full transition-colors ${btnHover}`}
                 title={t('New Chapter')}
               >
@@ -638,7 +646,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
             <div className="space-y-4">
               {displayBooks.map((book: Book, bIdx: number) => {
                 const bookChapters = displayChapters.filter(
-                  (c: Chapter) => c.book_id === book.id
+                  (c: Chapter): boolean => c.book_id === book.id
                 );
                 const isExpanded = expandedBooks[book.id] ?? true;
                 const isBookDragging =
@@ -662,10 +670,10 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                           className="flex items-center space-x-2 font-bold text-sm cursor-row-resize"
                           style={{ cursor: 'row-resize' }}
                           draggable
-                          onDragStart={(e: React.DragEvent<HTMLButtonElement>) =>
+                          onDragStart={(e: React.DragEvent<HTMLButtonElement>): void =>
                             handleDragStart(e, 'book', book.id, bIdx)
                           }
-                          onDragEnter={() => {
+                          onDragEnter={(): void => {
                             if (draggedItem?.type === 'book' && !isBookDragging) {
                               handleDragEnter(bIdx);
                             } else if (draggedItem?.type === 'chapter') {
@@ -675,7 +683,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                           onDragOver={handleDragOver}
                           onDrop={handleDrop}
                           onDragEnd={handleDragEnd}
-                          onClick={() => toggleBook(book.id)}
+                          onClick={(): void => toggleBook(book.id)}
                           aria-expanded={isExpanded}
                           aria-label={t('Toggle book {{title}}', { title: book.title })}
                         >
@@ -696,7 +704,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                             <button
                               onClick={(
                                 e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-                              ) => handleEditBookMetadata(e, book)}
+                              ): void => handleEditBookMetadata(e, book)}
                               className={`p-1 opacity-0 group-hover:opacity-100 hover:text-blue-500 ${textHeader}`}
                               title={t('Edit Book Metadata')}
                             >
@@ -705,7 +713,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                             <button
                               onClick={(
                                 e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-                              ) => {
+                              ): void => {
                                 e.stopPropagation();
                                 onCreate(book.id);
                               }}
@@ -717,7 +725,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                             <button
                               onClick={async (
                                 e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-                              ) => {
+                              ): Promise<void> => {
                                 e.stopPropagation();
                                 if (
                                   await confirm(t('Delete Book and all its chapters?'))
@@ -751,7 +759,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                           type="button"
                           aria-label={t('Add Chapter')}
                           className={`w-full text-left text-xs p-2 rounded flex items-center space-x-2 opacity-60 hover:opacity-100 ${titleInactive}`}
-                          onClick={() => {
+                          onClick={(): void => {
                             onCreate(book.id);
                           }}
                         >
@@ -775,8 +783,8 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                       value={newBookTitle}
                       onChange={(
                         e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                      ) => setNewBookTitle(e.target.value)}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      ): void => setNewBookTitle(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>): void => {
                         if (e.key === 'Enter') {
                           onBookCreate?.(newBookTitle);
                           setNewBookTitle('');
@@ -789,7 +797,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                       <button
                         type="button"
                         aria-label={t('Cancel create book')}
-                        onClick={() => setIsCreatingBook(false)}
+                        onClick={(): void => setIsCreatingBook(false)}
                         className="text-xs opacity-50"
                       >
                         {t('Cancel')}
@@ -797,7 +805,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                       <button
                         type="button"
                         aria-label={t('Create book')}
-                        onClick={() => {
+                        onClick={(): void => {
                           onBookCreate?.(newBookTitle);
                           setNewBookTitle('');
                           setIsCreatingBook(false);
@@ -812,7 +820,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                   <button
                     type="button"
                     aria-label={t('Start creating a new book')}
-                    onClick={() => setIsCreatingBook(true)}
+                    onClick={(): void => setIsCreatingBook(true)}
                     className={`w-full flex items-center justify-center gap-2 p-2 rounded border border-dashed text-sm opacity-60 hover:opacity-100 ${
                       isLight ? 'border-brand-gray-300' : 'border-brand-gray-700'
                     }`}

@@ -45,8 +45,8 @@ const normalizeConflict = (value: Partial<Conflict> | undefined | null): Conflic
 
 const normalizeMetadataParams = (value: MetadataParams): MetadataParams => ({
   ...value,
-  conflicts: (value.conflicts || []).map((conflict: Conflict) =>
-    normalizeConflict(conflict)
+  conflicts: (value.conflicts || []).map(
+    (conflict: Conflict): Conflict => normalizeConflict(conflict)
   ),
 });
 
@@ -99,8 +99,8 @@ function useMetadataDataState({
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [showDiff, setShowDiff] = useState(true);
   const [conflicts, setConflicts] = useState<Conflict[]>(
-    (initialData.conflicts || []).map((conflict: Conflict) =>
-      normalizeConflict(conflict)
+    (initialData.conflicts || []).map(
+      (conflict: Conflict): Conflict => normalizeConflict(conflict)
     )
   );
 
@@ -112,7 +112,10 @@ function useMetadataDataState({
     'story',
     'private_notes'
   );
-  const getConflictRanges = (index: number, field: 'description' | 'resolution') =>
+  const getConflictRanges = (
+    index: number,
+    field: 'description' | 'resolution'
+  ): SearchHighlightRange[] =>
     getRanges('story_metadata', 'story', `conflicts[${index}].${field}`);
 
   const { history, historyIndex, restoreMetadataHistory } = useMetadataDialogHistory({
@@ -126,7 +129,7 @@ function useMetadataDataState({
   });
 
   const dataRef = useRef<MetadataParams>(data);
-  useEffect(() => {
+  useEffect((): void => {
     dataRef.current = data;
   }, [data]);
 
@@ -134,24 +137,24 @@ function useMetadataDataState({
     const raw = baseline || initialData;
     return {
       ...raw,
-      conflicts: (raw.conflicts || []).map((conflict: Conflict) =>
-        normalizeConflict(conflict)
+      conflicts: (raw.conflicts || []).map(
+        (conflict: Conflict): Conflict => normalizeConflict(conflict)
       ),
     };
   });
 
-  useEffect(() => {
+  useEffect((): void => {
     const normalizedBaseline = baseline
       ? {
           ...baseline,
-          conflicts: (baseline.conflicts || []).map((conflict: Conflict) =>
-            normalizeConflict(conflict)
+          conflicts: (baseline.conflicts || []).map(
+            (conflict: Conflict): Conflict => normalizeConflict(conflict)
           ),
         }
       : null;
 
     if (normalizedBaseline) {
-      setBaselineData((prev: MetadataParams) => {
+      setBaselineData((prev: MetadataParams): MetadataParams => {
         const currentData = dataRef.current;
         const isSaveRoundTrip =
           diffFieldsEqual(normalizedBaseline, currentData) &&
@@ -169,12 +172,12 @@ function useMetadataDataState({
     // baseline data unchanged for external updates. This preserves the prior
     // state so that LLM-driven changes to notes or conflicts continue to
     // appear as diff highlights instead of immediately advancing the baseline.
-    setBaselineData((prev: MetadataParams) => prev);
+    setBaselineData((prev: MetadataParams): MetadataParams => prev);
   }, [initialData, baseline]);
 
   const prevInitialRef = useRef<MetadataParams>(initialData);
 
-  useEffect(() => {
+  useEffect((): void => {
     const updates = computeSyncUpdates(prevInitialRef.current, initialData, data);
     prevInitialRef.current = initialData;
     if (Object.keys(updates).length === 0) {
@@ -184,19 +187,21 @@ function useMetadataDataState({
     setData((prev: MetadataParams) => ({ ...prev, ...updates }));
     if (updates.conflicts) {
       setConflicts(
-        updates.conflicts.map((conflict: Conflict) => normalizeConflict(conflict))
+        updates.conflicts.map(
+          (conflict: Conflict): Conflict => normalizeConflict(conflict)
+        )
       );
     }
   }, [initialData]);
 
-  useEffect(() => {
-    setData((prev: MetadataParams) => {
+  useEffect((): void => {
+    setData((prev: MetadataParams): MetadataParams => {
       if (JSON.stringify(prev.conflicts) === JSON.stringify(conflicts)) return prev;
       return { ...prev, conflicts };
     });
   }, [conflicts]);
 
-  const addConflict = () => {
+  const addConflict = (): void => {
     const newConflict: Conflict = {
       id: crypto.randomUUID(),
       description: '',
@@ -209,19 +214,20 @@ function useMetadataDataState({
     }));
   };
 
-  const deleteConflict = (id: string) => {
-    setConflicts(conflicts.filter((conflict: Conflict) => conflict.id !== id));
+  const deleteConflict = (id: string): void => {
+    setConflicts(conflicts.filter((conflict: Conflict): boolean => conflict.id !== id));
   };
 
-  const updateConflict = (id: string, field: keyof Conflict, value: string) => {
+  const updateConflict = (id: string, field: keyof Conflict, value: string): void => {
     setConflicts(
-      conflicts.map((conflict: Conflict) =>
-        conflict.id === id ? { ...conflict, [field]: value } : conflict
+      conflicts.map(
+        (conflict: Conflict): Conflict =>
+          conflict.id === id ? { ...conflict, [field]: value } : conflict
       )
     );
   };
 
-  const moveConflict = (index: number, direction: 'up' | 'down') => {
+  const moveConflict = (index: number, direction: 'up' | 'down'): void => {
     if (direction === 'up' && index > 0) {
       const nextConflicts = [...conflicts];
       [nextConflicts[index], nextConflicts[index - 1]] = [
@@ -285,18 +291,18 @@ function useMetadataAutosaveState({
   const isFirstRun = useRef(true);
   const lastSavedDataRef = useRef<MetadataParams>(initialData);
 
-  useEffect(() => {
+  useEffect((): void => {
     onSaveRef.current = onSave;
   }, [onSave]);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
       return;
     }
 
     setSaveStatus('saving');
-    const timer = setTimeout(async () => {
+    const timer = setTimeout(async (): Promise<void> => {
       const lastSaved = lastSavedDataRef.current;
       const isTitleSame = (data.title || '') === (lastSaved.title || '');
       const isSummarySame = (data.summary || '') === (lastSaved.summary || '');
@@ -331,10 +337,10 @@ function useMetadataAutosaveState({
       }
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return (): void => clearTimeout(timer);
   }, [data]);
 
-  const handleClose = async () => {
+  const handleClose = async (): Promise<void> => {
     if (saveStatus !== 'saved') {
       try {
         await onSave(data);
@@ -395,7 +401,7 @@ function useMetadataAiState({
   const handleAiGenerate = async (
     action: MetadataAction,
     source: MetadataAiSource = 'chapter'
-  ) => {
+  ): Promise<void> => {
     if (aiDisabledReason || !onAiGenerate) {
       return;
     }
@@ -409,14 +415,14 @@ function useMetadataAiState({
       let lastProgressAt = 0;
       const result = await onAiGenerate(
         action,
-        (partialText: string) => {
+        (partialText: string): void => {
           const now = Date.now();
           if (now - lastProgressAt < 50) return;
           lastProgressAt = now;
           setData((prev: MetadataParams) => ({ ...prev, summary: partialText }));
         },
         sourceText,
-        (thinking: string) => {
+        (thinking: string): void => {
           setAiThinking(thinking);
         },
         source
@@ -440,7 +446,7 @@ function useMetadataAiState({
   const hasNotesSource = !!data.notes?.trim();
   const hasPrimarySource = !!primarySourceAvailable;
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!hasPrimarySource && hasNotesSource && aiWriteSource !== 'notes') {
       setAiWriteSource('notes');
       return;

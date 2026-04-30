@@ -9,7 +9,7 @@
  * Defines chat context budgeting helpers so oversized histories are compacted before they hit upstream LLM limits.
  */
 
-import { ChatAttachment, ChatMessage, ChatToolCall, LLMConfig } from '../../types';
+import { ChatAttachment, ChatMessage, LLMConfig } from '../../types';
 
 export type ChatHistoryMessage = {
   role: 'user' | 'model' | 'assistant' | 'tool' | 'system';
@@ -93,7 +93,7 @@ function estimateToolCallsTokens(
         type: 'function';
         function: { name: string; arguments: string };
       }
-    ) => {
+    ): number => {
       const args = toolCall.function.arguments || '';
       return (
         total +
@@ -108,7 +108,7 @@ function estimateToolCallsTokens(
 
 /** Estimate prompt tokens. */
 function estimatePromptTokens(messages: MutablePreparedMessage[]): number {
-  return messages.reduce((total: number, message: ChatApiPreparedMessage) => {
+  return messages.reduce((total: number, message: ChatApiPreparedMessage): number => {
     const content = message.content || '';
     return (
       total +
@@ -177,7 +177,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     const limit = depth === 0 ? 6 : 4;
     const trimmed = value
       .slice(0, limit)
-      .map((entry: unknown) => summarizeStructuredValue(entry, depth + 1));
+      .map((entry: unknown): unknown => summarizeStructuredValue(entry, depth + 1));
     if (value.length > limit) {
       trimmed.push({ omitted_items: value.length - limit });
     }
@@ -206,9 +206,9 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   ];
 
   const keys = Object.keys(record);
-  const selectedKeys = preferredKeys.filter((key: string) => key in record);
+  const selectedKeys = preferredKeys.filter((key: string): boolean => key in record);
   const fallbackKeys = keys
-    .filter((key: string) => !selectedKeys.includes(key))
+    .filter((key: string): boolean => !selectedKeys.includes(key))
     .slice(0, Math.max(0, 8 - selectedKeys.length));
   const finalKeys = [...selectedKeys, ...fallbackKeys];
   const summarized: Record<string, unknown> = {};
@@ -216,7 +216,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
   for (const key of finalKeys) {
     const current = record[key];
     if (key === 'chapters' && Array.isArray(current)) {
-      summarized[key] = current.slice(0, 8).map((chapter: unknown) => {
+      summarized[key] = current.slice(0, 8).map((chapter: unknown): unknown => {
         if (!chapter || typeof chapter !== 'object') {
           return summarizeStructuredValue(chapter, depth + 1);
         }
@@ -238,7 +238,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     }
 
     if (key === 'books' && Array.isArray(current)) {
-      summarized[key] = current.slice(0, 5).map((book: unknown) => {
+      summarized[key] = current.slice(0, 5).map((book: unknown): unknown => {
         if (!book || typeof book !== 'object') {
           return summarizeStructuredValue(book, depth + 1);
         }
@@ -260,7 +260,7 @@ function summarizeStructuredValue(value: unknown, depth: number = 0): unknown {
     summarized[key] = summarizeStructuredValue(current, depth + 1);
   }
 
-  const omittedKeys = keys.filter((key: string) => !finalKeys.includes(key));
+  const omittedKeys = keys.filter((key: string): boolean => !finalKeys.includes(key));
   if (omittedKeys.length > 0) {
     summarized.omitted_keys = omittedKeys.length;
   }
@@ -371,7 +371,7 @@ function buildPreparedMessages(
 ): MutablePreparedMessage[] {
   const messages: MutablePreparedMessage[] = [
     { role: 'system', content: systemInstruction },
-    ...history.map((historyMessage: ChatHistoryMessage) => {
+    ...history.map((historyMessage: ChatHistoryMessage): ChatApiPreparedMessage => {
       const prepared: MutablePreparedMessage = {
         role: historyMessage.role === 'model' ? 'assistant' : historyMessage.role,
         content:
@@ -389,7 +389,11 @@ function buildPreparedMessages(
             id: string;
             name: string;
             args: string | Record<string, unknown>;
-          }) => ({
+          }): {
+            id: string;
+            type: 'function';
+            function: { name: string; arguments: string };
+          } => ({
             id: toolCall.id,
             type: 'function',
             function: {
@@ -465,7 +469,84 @@ function isCriticalToolMessage(message: MutablePreparedMessage): boolean {
   );
 }
 
-/** Helper for prepared messages. */
+function shouldSkipDuringCompaction(
+  message: MutablePreparedMessage,
+  index: number,
+  excludedIndexes: Set<number>
+): boolean {
+  return (
+    message.role !== 'tool' ||
+    excludedIndexes.has(index) ||
+    isCriticalToolMessage(message)
+  );
+}
+
+function summarizeToolMessage(message: MutablePreparedMessage): boolean {
+  const summarized = summarizeToolContent(message.name, message.content);
+  if (!summarized || summarized === message.content) {
+    return false;
+  }
+
+  message.content = summarized;
+  return true;
+}
+
+function summarizeAssistantToolCalls(message: MutablePreparedMessage): boolean {
+  const summarizedCalls = message.tool_calls.map(summarizeToolCall);
+  const callsChanged =
+    JSON.stringify(summarizedCalls) !== JSON.stringify(message.tool_calls);
+  if (!callsChanged) {
+    return false;
+  }
+
+  message.tool_calls = summarizedCalls;
+  if (!message.content) {
+    message.content = `[Earlier tool planning] ${summarizedCalls
+      .map(
+        (call: {
+          function: { arguments: string; name: string };
+          id: string;
+          type: 'function';
+        }): string => call.function.name
+      )
+      .join(', ')}`;
+  }
+  return true;
+}
+
+function processCompactionStage(
+  messages: MutablePreparedMessage[],
+  promptBudgetTokens: number,
+  estimatedTokens: number,
+  shouldCompress: (message: MutablePreparedMessage, index: number) => boolean,
+  compress: (message: MutablePreparedMessage) => boolean
+): { estimatedTokens: number; count: number } {
+  let count = 0;
+  for (
+    let index = 1;
+    index < messages.length && estimatedTokens > promptBudgetTokens;
+    index++
+  ) {
+    const message = messages[index];
+    if (!shouldCompress(message, index)) continue;
+    if (!compress(message)) continue;
+    count += 1;
+    estimatedTokens = estimatePromptTokens(messages);
+  }
+  return { estimatedTokens, count };
+}
+
+const isToolMessage = (message: MutablePreparedMessage): boolean =>
+  message.role === 'tool';
+
+const isAssistantToolMessage = (message: MutablePreparedMessage): boolean =>
+  message.role === 'assistant' && Boolean(message.tool_calls?.length);
+
+const getToolFallback = (message: MutablePreparedMessage): string =>
+  message.name
+    ? `[Earlier tool result omitted to stay within context budget: ${message.name}]`
+    : '[Earlier tool result omitted to stay within context budget]';
+
 function compactPreparedMessages(
   originalMessages: MutablePreparedMessage[],
   promptBudgetTokens: number
@@ -477,7 +558,11 @@ function compactPreparedMessages(
         id: string;
         type: 'function';
         function: { name: string; arguments: string };
-      }) => ({
+      }): {
+        function: { name: string; arguments: string };
+        id: string;
+        type: 'function';
+      } => ({
         ...toolCall,
         function: { ...toolCall.function },
       })
@@ -492,135 +577,85 @@ function compactPreparedMessages(
 
   const { recentNonSystem, recentUsers } = getRecentIndexes(messages);
 
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (
-      message.role !== 'tool' ||
-      recentNonSystem.has(index) ||
-      isCriticalToolMessage(message)
-    )
-      continue;
-    const summarized = summarizeToolContent(message.name, message.content);
-    if (summarized && summarized !== message.content) {
-      message.content = summarized;
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
-    }
-  }
+  const stageOne = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage, index: number) =>
+      !shouldSkipDuringCompaction(message, index, recentNonSystem),
+    summarizeToolMessage
+  );
+  estimatedTokens = stageOne.estimatedTokens;
+  compactedMessages += stageOne.count;
 
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (message.role !== 'tool') continue;
-    const summarized = summarizeToolContent(message.name, message.content);
-    if (summarized && summarized !== message.content) {
-      message.content = summarized;
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
-    }
-  }
+  const stageTwo = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage) => isToolMessage(message),
+    summarizeToolMessage
+  );
+  estimatedTokens = stageTwo.estimatedTokens;
+  compactedMessages += stageTwo.count;
 
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (
-      message.role !== 'assistant' ||
-      recentNonSystem.has(index) ||
-      !message.tool_calls?.length
-    ) {
-      continue;
-    }
+  const stageThree = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage, index: number) =>
+      isAssistantToolMessage(message) && !recentNonSystem.has(index),
+    summarizeAssistantToolCalls
+  );
+  estimatedTokens = stageThree.estimatedTokens;
+  compactedMessages += stageThree.count;
 
-    const summarizedCalls = message.tool_calls.map(summarizeToolCall);
-    const callsChanged =
-      JSON.stringify(summarizedCalls) !== JSON.stringify(message.tool_calls);
-    if (callsChanged) {
-      message.tool_calls = summarizedCalls;
-      if (!message.content) {
-        message.content = `[Earlier tool planning] ${summarizedCalls.map((call: { function: { arguments: string; name: string }; id: string; type: 'function' }) => call.function.name).join(', ')}`;
+  const stageFour = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage) => isAssistantToolMessage(message),
+    summarizeAssistantToolCalls
+  );
+  estimatedTokens = stageFour.estimatedTokens;
+  compactedMessages += stageFour.count;
+
+  const stageFive = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage, index: number) => {
+      if (recentNonSystem.has(index)) return false;
+      if (message.role === 'system' || message.role === 'tool') return false;
+      if (message.role === 'user' && recentUsers.has(index)) return false;
+      return true;
+    },
+    (message: MutablePreparedMessage) => {
+      const summarized = summarizeConversationMessage(message);
+      if (!summarized || summarized === message.content) {
+        return false;
       }
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
-    }
-  }
-
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (message.role !== 'assistant' || !message.tool_calls?.length) {
-      continue;
-    }
-
-    const summarizedCalls = message.tool_calls.map(summarizeToolCall);
-    const callsChanged =
-      JSON.stringify(summarizedCalls) !== JSON.stringify(message.tool_calls);
-    if (callsChanged) {
-      message.tool_calls = summarizedCalls;
-      if (!message.content) {
-        message.content = `[Earlier tool planning] ${summarizedCalls.map((call: { function: { arguments: string; name: string }; id: string; type: 'function' }) => call.function.name).join(', ')}`;
-      }
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
-    }
-  }
-
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (
-      recentNonSystem.has(index) ||
-      message.role === 'system' ||
-      message.role === 'tool'
-    ) {
-      continue;
-    }
-    if (message.role === 'user' && recentUsers.has(index)) continue;
-
-    const summarized = summarizeConversationMessage(message);
-    if (summarized && summarized !== message.content) {
       message.content = summarized;
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
+      return true;
     }
-  }
+  );
+  estimatedTokens = stageFive.estimatedTokens;
+  compactedMessages += stageFive.count;
 
-  for (
-    let index = 1;
-    index < messages.length && estimatedTokens > promptBudgetTokens;
-    index++
-  ) {
-    const message = messages[index];
-    if (
-      message.role !== 'tool' ||
-      recentNonSystem.has(index) ||
-      isCriticalToolMessage(message)
-    )
-      continue;
-    const fallback = message.name
-      ? `[Earlier tool result omitted to stay within context budget: ${message.name}]`
-      : '[Earlier tool result omitted to stay within context budget]';
-    if (message.content !== fallback) {
+  const stageSix = processCompactionStage(
+    messages,
+    promptBudgetTokens,
+    estimatedTokens,
+    (message: MutablePreparedMessage, index: number) =>
+      !shouldSkipDuringCompaction(message, index, recentNonSystem),
+    (message: MutablePreparedMessage) => {
+      const fallback = getToolFallback(message);
+      if (message.content === fallback) return false;
       message.content = fallback;
-      compactedMessages += 1;
-      estimatedTokens = estimatePromptTokens(messages);
+      return true;
     }
-  }
+  );
+  estimatedTokens = stageSix.estimatedTokens;
+  compactedMessages += stageSix.count;
 
   return { messages, compactedMessages };
 }

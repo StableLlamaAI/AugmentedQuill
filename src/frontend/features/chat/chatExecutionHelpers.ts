@@ -72,7 +72,7 @@ export type ExecuteChatRequestContext = {
 
 export const ensureUniqueMessages = (messages: ChatMessage[]): ChatMessage[] => {
   const seen = new Set<string>();
-  return messages.filter((message: ChatMessage) => {
+  return messages.filter((message: ChatMessage): boolean => {
     if (!message.id) return true;
     if (seen.has(message.id)) return false;
     seen.add(message.id);
@@ -88,8 +88,10 @@ export const upsertChatMessage = (
   msgId: string,
   messageUpdate: Partial<ChatMessage>
 ): void => {
-  setChatMessages((prev: ChatMessage[]) => {
-    const messageIndex = prev.findIndex((item: ChatMessage) => item.id === msgId);
+  setChatMessages((prev: ChatMessage[]): ChatMessage[] => {
+    const messageIndex = prev.findIndex(
+      (item: ChatMessage): boolean => item.id === msgId
+    );
     if (messageIndex !== -1) {
       const next = [...prev];
       next[messageIndex] = {
@@ -164,7 +166,8 @@ const parseToolCallResults = (
 
   for (const message of messages) {
     const toolCall = assistantMessage.tool_calls?.find(
-      (tc: import('../../types').ChatToolCall) => tc.id === message.tool_call_id
+      (tc: import('../../types').ChatToolCall): boolean =>
+        tc.id === message.tool_call_id
     );
     if (!toolCall) continue;
 
@@ -193,8 +196,10 @@ export const makeMessageUpdater =
   ): ((
     msgId: string
   ) => (update: { text?: string; thinking?: string; traceback?: string }) => void) =>
-  (msgId: string) =>
-  (update: { text?: string; thinking?: string; traceback?: string }) => {
+  (
+    msgId: string
+  ): ((update: { text?: string; thinking?: string; traceback?: string }) => void) =>
+  (update: { text?: string; thinking?: string; traceback?: string }): void => {
     upsertChatMessage(setChatMessages, ensureUniqueMessages, msgId, update);
   };
 
@@ -206,7 +211,11 @@ const normalizeFunctionCalls = (
   }>
 ): Array<ChatToolFunctionCall> | undefined =>
   functionCalls?.map(
-    (call: { id: string; name: string; args: Record<string, unknown> | string }) => ({
+    (call: {
+      id: string;
+      name: string;
+      args: Record<string, unknown> | string;
+    }): { id: string; name: string; args: Record<string, unknown> } => ({
       id: call.id,
       name: call.name,
       args: typeof call.args === 'string' ? { raw: call.args } : call.args,
@@ -241,7 +250,13 @@ const buildToolPayload = (
       | 'tool',
     content: message.text || null,
     tool_calls: message.tool_calls?.map(
-      (toolCall: import('../../types').ChatToolCall) => ({
+      (
+        toolCall: import('../../types').ChatToolCall
+      ): {
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      } => ({
         id: toolCall.id,
         type: 'function' as const,
         function: {
@@ -308,9 +323,10 @@ export const applyScratchpadToolResult = (
   setScratchpad(content);
 
   if (isIncognito && currentChatId) {
-    setIncognitoSessions((prev: ChatSession[]) =>
-      prev.map((session: ChatSession) =>
-        session.id === currentChatId ? { ...session, scratchpad: content } : session
+    setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+      prev.map(
+        (session: ChatSession): ChatSession =>
+          session.id === currentChatId ? { ...session, scratchpad: content } : session
       )
     );
   }
@@ -392,7 +408,7 @@ const handleToolResponse = async (
     {
       allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
-      isStopped: () => context.stopSignalRef.current,
+      isStopped: (): boolean => context.stopSignalRef.current,
     }
   );
 
@@ -471,7 +487,7 @@ const runToolCallLoop = async (
     const toolResponse = await api.chat.executeTools(
       buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
       context.onProseChunk,
-      () => context.stopSignalRef.current
+      (): boolean => context.stopSignalRef.current
     );
 
     if (context.stopSignalRef.current) break;
@@ -504,7 +520,7 @@ export const buildExecuteChatRequest =
     history: ChatMessage[],
     attachments?: ChatAttachment[],
     userMsgId?: string
-  ) =>
+  ): Promise<void> =>
     executeChatRequestImpl(context, userText, history, attachments, userMsgId);
 
 const executeChatRequestImpl = async (
@@ -529,7 +545,7 @@ const executeChatRequestImpl = async (
       {
         allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
-        isStopped: () => context.stopSignalRef.current,
+        isStopped: (): boolean => context.stopSignalRef.current,
       }
     );
 
@@ -540,7 +556,9 @@ const executeChatRequestImpl = async (
     );
 
     const effectiveUserMsgId = userMsgId || uuidv4();
-    if (!currentHistory.some((msg: ChatMessage) => msg.id === effectiveUserMsgId)) {
+    if (
+      !currentHistory.some((msg: ChatMessage): boolean => msg.id === effectiveUserMsgId)
+    ) {
       currentHistory.push({
         id: effectiveUserMsgId,
         role: 'user',
@@ -574,61 +592,15 @@ const executeChatRequestImpl = async (
       await context.refreshStory();
     }
 
-    // Pre-fetch "before" content for chapters modified by AI tools so the diff
-    // baseline is accurate when the user switches to a not-yet-loaded chapter.
-    const baselineChapterOverrides: { id: string; content: string }[] = [];
-    if (storyChangedState.value && accumulatedToolBatches.length > 0) {
-      const seen = new Set<number>();
-      for (const batch of accumulatedToolBatches) {
-        if (!batch.changed_chapter_ids?.length) continue;
-        for (const chapterId of batch.changed_chapter_ids) {
-          if (seen.has(chapterId)) continue;
-          seen.add(chapterId);
-          const content = await api.chat.getChapterBeforeContent(
-            batch.batch_id,
-            chapterId
-          );
-          if (content !== null) {
-            baselineChapterOverrides.push({ id: String(chapterId), content });
-          }
-        }
-      }
-    }
+    const baselineChapterOverrides =
+      await fetchBaselineChapterOverrides(accumulatedToolBatches);
 
     if (accumulatedToolBatches.length > 0) {
-      const entryLabel =
-        accumulatedToolBatches.length === 1
-          ? accumulatedToolBatches[0].label
-          : `AI tools: ${accumulatedToolBatches
-              .map(
-                (batch: {
-                  batch_id: string;
-                  label: string;
-                  operation_count?: number;
-                  changed_chapter_ids?: number[];
-                }) => batch.label
-              )
-              .join(', ')}`;
-
-      await context.pushExternalHistoryEntry?.({
-        label: entryLabel,
-        forceNewHistory: true,
-        baselineChapterOverrides,
-        onUndo: async () => {
-          for (const batch of [...accumulatedToolBatches].reverse()) {
-            await api.chat.undoToolBatch(batch.batch_id);
-          }
-          await context.refreshProjects();
-          await context.refreshStory();
-        },
-        onRedo: async () => {
-          for (const batch of accumulatedToolBatches) {
-            await api.chat.redoToolBatch(batch.batch_id);
-          }
-          await context.refreshProjects();
-          await context.refreshStory();
-        },
-      });
+      await pushExternalHistoryEntryForToolBatches(
+        context,
+        accumulatedToolBatches,
+        baselineChapterOverrides
+      );
     } else if (storyChangedState.value) {
       await context.pushExternalHistoryEntry?.({
         label: 'AI tool changes',
@@ -671,9 +643,71 @@ const executeChatRequestImpl = async (
       isError: true,
       traceback: detailedError.traceback,
     };
-    context.setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
+    context.setChatMessages((prev: ChatMessage[]): ChatMessage[] => [
+      ...prev,
+      errorMessage,
+    ]);
   } finally {
     context.setIsChatLoading(false);
     context.stopSignalRef.current = false;
   }
+};
+
+type ToolBatchSummary = {
+  batch_id: string;
+  label: string;
+  operation_count?: number;
+  changed_chapter_ids?: number[];
+};
+
+const fetchBaselineChapterOverrides = async (
+  accumulatedToolBatches: ToolBatchSummary[]
+): Promise<Array<{ id: string; content: string }>> => {
+  const baselineChapterOverrides: Array<{ id: string; content: string }> = [];
+  const seen = new Set<number>();
+
+  for (const batch of accumulatedToolBatches) {
+    if (!batch.changed_chapter_ids?.length) continue;
+    for (const chapterId of batch.changed_chapter_ids) {
+      if (seen.has(chapterId)) continue;
+      seen.add(chapterId);
+      const content = await api.chat.getChapterBeforeContent(batch.batch_id, chapterId);
+      if (content !== null) {
+        baselineChapterOverrides.push({ id: String(chapterId), content });
+      }
+    }
+  }
+
+  return baselineChapterOverrides;
+};
+
+const buildToolBatchLabel = (batches: ToolBatchSummary[]): string =>
+  batches.length === 1
+    ? batches[0].label
+    : `AI tools: ${batches.map((batch: ToolBatchSummary) => batch.label).join(', ')}`;
+
+const pushExternalHistoryEntryForToolBatches = async (
+  context: ExecuteChatRequestContext,
+  accumulatedToolBatches: ToolBatchSummary[],
+  baselineChapterOverrides: Array<{ id: string; content: string }>
+): Promise<void> => {
+  await context.pushExternalHistoryEntry?.({
+    label: buildToolBatchLabel(accumulatedToolBatches),
+    forceNewHistory: true,
+    baselineChapterOverrides,
+    onUndo: async (): Promise<void> => {
+      for (const batch of [...accumulatedToolBatches].reverse()) {
+        await api.chat.undoToolBatch(batch.batch_id);
+      }
+      await context.refreshProjects();
+      await context.refreshStory();
+    },
+    onRedo: async (): Promise<void> => {
+      for (const batch of accumulatedToolBatches) {
+        await api.chat.redoToolBatch(batch.batch_id);
+      }
+      await context.refreshProjects();
+      await context.refreshStory();
+    },
+  });
 };

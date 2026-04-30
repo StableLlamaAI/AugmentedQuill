@@ -10,7 +10,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState, startTransition } from 'react';
-import { AppSettings, ConnectionStatus, ProviderCapabilities } from '../../types';
+import {
+  AppSettings,
+  ConnectionStatus,
+  ProviderCapabilities,
+  LLMConfig,
+} from '../../types';
 import { api } from '../../services/api';
 
 /**
@@ -68,7 +73,7 @@ export function groupProviders(
       };
     }
   > = {};
-  providers.forEach((provider: import('../../types').LLMConfig) => {
+  providers.forEach((provider: import('../../types').LLMConfig): void => {
     if (!activeIds.has(provider.id)) return;
     const modelId = (provider.modelId || '').trim();
     if (!modelId) return;
@@ -89,6 +94,182 @@ export function groupProviders(
     groups[key].ids.push(provider.id);
   });
   return groups;
+}
+
+function getActiveProviderIds(appSettings: AppSettings): Set<string> {
+  return new Set([
+    appSettings.activeChatProviderId,
+    appSettings.activeWritingProviderId,
+    appSettings.activeEditingProviderId,
+  ]);
+}
+
+function resolveProviderHealthGroup(
+  appSettings: AppSettings,
+  providerId: string
+): {
+  provider: LLMConfig;
+  relatedProviderIds: string[];
+  payload: {
+    base_url: string;
+    api_key?: string;
+    timeout_s: number;
+    model_id: string;
+  };
+} | null {
+  const provider = appSettings.providers.find(
+    (entry: LLMConfig): boolean => entry.id === providerId
+  );
+  if (!provider) return null;
+
+  const modelId = (provider.modelId || '').trim();
+  if (!modelId) return null;
+
+  const activeIds = getActiveProviderIds(appSettings);
+  const groupedProviders = groupProviders(appSettings.providers, activeIds);
+  const apiKeyEnabled = provider.apiKeyEnabled !== false;
+  const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
+  const key = makeProviderKey(provider.baseUrl || '', apiKey, modelId, apiKeyEnabled);
+
+  return {
+    provider,
+    relatedProviderIds: groupedProviders[key]?.ids || [provider.id],
+    payload: groupedProviders[key]?.payload || {
+      base_url: provider.baseUrl,
+      api_key: apiKey,
+      timeout_s: Math.round((provider.timeout || 10000) / 1000),
+      model_id: modelId,
+    },
+  };
+}
+
+async function runProviderChecks(
+  appSettings: AppSettings,
+  promiseCache: React.MutableRefObject<
+    Record<
+      string,
+      Promise<{
+        model_ok: boolean;
+        capabilities?: ProviderCapabilities;
+      }>
+    >
+  >,
+  setModelConnectionStatus: React.Dispatch<
+    React.SetStateAction<Record<string, ConnectionStatus>>
+  >,
+  setDetectedCapabilities: React.Dispatch<
+    React.SetStateAction<Record<string, ProviderCapabilities>>
+  >,
+  markChecked: (providerIds: string[]) => void,
+  isCancelled: () => boolean
+): Promise<void> {
+  const activeIds = getActiveProviderIds(appSettings);
+  const providersToCheck = appSettings.providers.filter(
+    (provider: LLMConfig): boolean => activeIds.has(provider.id)
+  );
+  const groups = groupProviders(appSettings.providers, activeIds);
+
+  await Promise.all(
+    Object.entries(groups).map(
+      async ([key, { ids, payload }]: [
+        string,
+        {
+          ids: string[];
+          payload: {
+            base_url: string;
+            api_key?: string;
+            timeout_s: number;
+            model_id: string;
+          };
+        },
+      ]): Promise<void> => {
+        if (isCancelled()) return;
+
+        startTransition((): void => {
+          ids.forEach((pid: string): void => {
+            setModelConnectionStatus(
+              (
+                prev: Record<string, ConnectionStatus>
+              ): { [x: string]: ConnectionStatus } => ({
+                ...prev,
+                [pid]: 'loading',
+              })
+            );
+          });
+        });
+
+        let promise = promiseCache.current[key];
+        if (!promise) {
+          promise = api.machine.testModel(payload);
+          promiseCache.current[key] = promise;
+        }
+
+        try {
+          const result = await promise;
+          if (isCancelled()) return;
+
+          const status: ConnectionStatus = result.model_ok ? 'success' : 'error';
+          startTransition((): void => {
+            ids.forEach((pid: string): void => {
+              setModelConnectionStatus(
+                (
+                  prev: Record<string, ConnectionStatus>
+                ): { [x: string]: ConnectionStatus } => ({
+                  ...prev,
+                  [pid]: status,
+                })
+              );
+            });
+
+            if (result.model_ok && result.capabilities) {
+              ids.forEach((pid: string): void => {
+                setDetectedCapabilities(
+                  (
+                    prev: Record<string, ProviderCapabilities>
+                  ): { [x: string]: ProviderCapabilities } => ({
+                    ...prev,
+                    [pid]: result.capabilities!,
+                  })
+                );
+              });
+            }
+          });
+          markChecked(ids);
+        } catch {
+          if (isCancelled()) return;
+          startTransition((): void => {
+            ids.forEach((pid: string): void => {
+              setModelConnectionStatus(
+                (
+                  prev: Record<string, ConnectionStatus>
+                ): { [x: string]: ConnectionStatus } => ({
+                  ...prev,
+                  [pid]: 'error',
+                })
+              );
+            });
+          });
+          markChecked(ids);
+        }
+      }
+    )
+  );
+
+  startTransition((): void => {
+    providersToCheck.forEach((provider: LLMConfig): void => {
+      if (!provider.modelId?.trim()) {
+        setModelConnectionStatus(
+          (
+            prev: Record<string, ConnectionStatus>
+          ): { [x: string]: ConnectionStatus } => ({
+            ...prev,
+            [provider.id]: 'idle',
+          })
+        );
+        markChecked([provider.id]);
+      }
+    });
+  });
 }
 
 /** Custom React hook that manages provider health. */
@@ -123,30 +304,34 @@ export function useProviderHealth(appSettings: AppSettings): {
   const lastCheckedAt = useRef<Record<string, number>>({});
 
   const setStatusForProviderIds = useCallback(
-    (providerIds: string[], status: ConnectionStatus) => {
-      providerIds.forEach((providerId: string) => {
-        setModelConnectionStatus((prev: Record<string, ConnectionStatus>) => ({
-          ...prev,
-          [providerId]: status,
-        }));
+    (providerIds: string[], status: ConnectionStatus): void => {
+      providerIds.forEach((providerId: string): void => {
+        setModelConnectionStatus(
+          (
+            prev: Record<string, ConnectionStatus>
+          ): { [x: string]: ConnectionStatus } => ({
+            ...prev,
+            [providerId]: status,
+          })
+        );
       });
     },
     []
   );
 
-  const markChecked = useCallback((providerIds: string[]) => {
+  const markChecked = useCallback((providerIds: string[]): void => {
     const now = Date.now();
-    providerIds.forEach((providerId: string) => {
+    providerIds.forEach((providerId: string): void => {
       lastCheckedAt.current[providerId] = now;
     });
   }, []);
 
-  const refreshHealth = () => {
+  const refreshHealth = (): void => {
     promiseCache.current = {};
   };
 
   const recheckUnavailableProviderIfStale = useCallback(
-    async (providerId: string, minAgeMs: number = 5000) => {
+    async (providerId: string, minAgeMs: number = 5000): Promise<void> => {
       if (!providerId) return;
 
       const status = modelConnectionStatus[providerId] || 'idle';
@@ -155,41 +340,20 @@ export function useProviderHealth(appSettings: AppSettings): {
       const lastCheck = lastCheckedAt.current[providerId] || 0;
       if (Date.now() - lastCheck < minAgeMs) return;
 
-      const provider = appSettings.providers.find(
-        (entry: import('../../types').LLMConfig) => entry.id === providerId
-      );
-      if (!provider) return;
+      const resolved = resolveProviderHealthGroup(appSettings, providerId);
+      if (!resolved) return;
 
-      const modelId = (provider.modelId || '').trim();
-      if (!modelId) {
-        setStatusForProviderIds([provider.id], 'idle');
-        markChecked([provider.id]);
-        return;
-      }
+      const { provider, relatedProviderIds, payload } = resolved;
 
-      const activeIds = new Set([
-        appSettings.activeChatProviderId,
-        appSettings.activeWritingProviderId,
-        appSettings.activeEditingProviderId,
-      ]);
-      const groupedProviders = groupProviders(appSettings.providers, activeIds);
+      // Force a fresh network request for this provider key.
       const apiKeyEnabled = provider.apiKeyEnabled !== false;
       const apiKey = apiKeyEnabled ? provider.apiKey : undefined;
       const key = makeProviderKey(
         provider.baseUrl || '',
         apiKey,
-        modelId,
+        payload.model_id,
         apiKeyEnabled
       );
-      const relatedProviderIds = groupedProviders[key]?.ids || [provider.id];
-      const payload = groupedProviders[key]?.payload || {
-        base_url: provider.baseUrl,
-        api_key: apiKey,
-        timeout_s: Math.round((provider.timeout || 10000) / 1000),
-        model_id: modelId,
-      };
-
-      // Force a fresh network request for this provider key.
       delete promiseCache.current[key];
       setStatusForProviderIds(relatedProviderIds, 'loading');
 
@@ -199,11 +363,19 @@ export function useProviderHealth(appSettings: AppSettings): {
         setStatusForProviderIds(relatedProviderIds, nextStatus);
 
         if (result.model_ok && result.capabilities) {
-          relatedProviderIds.forEach((id: string) => {
-            setDetectedCapabilities((prev: Record<string, ProviderCapabilities>) => ({
-              ...prev,
-              [id]: result.capabilities!,
-            }));
+          relatedProviderIds.forEach((id: string): void => {
+            setDetectedCapabilities(
+              (
+                prev: Record<string, ProviderCapabilities>
+              ): {
+                [x: string]:
+                  | ProviderCapabilities
+                  | { is_multimodal: boolean; supports_function_calling: boolean };
+              } => ({
+                ...prev,
+                [id]: result.capabilities!,
+              })
+            );
           });
         }
       } catch {
@@ -223,122 +395,21 @@ export function useProviderHealth(appSettings: AppSettings): {
     ]
   );
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let cancelled = false;
 
-    const checkProviders = async () => {
-      const activeIds = new Set([
-        appSettings.activeChatProviderId,
-        appSettings.activeWritingProviderId,
-        appSettings.activeEditingProviderId,
-      ]);
-
-      // only evaluate providers that are currently active in the UI
-      const providersToCheck = appSettings.providers.filter(
-        (provider: import('../../types').LLMConfig) => activeIds.has(provider.id)
+    const timer = setTimeout((): void => {
+      runProviderChecks(
+        appSettings,
+        promiseCache,
+        setModelConnectionStatus,
+        setDetectedCapabilities,
+        markChecked,
+        (): boolean => cancelled
       );
-      const groups = groupProviders(appSettings.providers, activeIds);
-
-      // kick off checks for each group
-      await Promise.all(
-        Object.entries(groups).map(
-          async ([key, { ids, payload }]: [
-            string,
-            {
-              ids: string[];
-              payload: {
-                base_url: string;
-                api_key?: string;
-                timeout_s: number;
-                model_id: string;
-              };
-            },
-          ]) => {
-            if (cancelled) return;
-
-            // set all related providers to loading
-            startTransition(() => {
-              ids.forEach((pid: string) => {
-                setModelConnectionStatus((prev: Record<string, ConnectionStatus>) => ({
-                  ...prev,
-                  [pid]: 'loading',
-                }));
-              });
-            });
-
-            let promise = promiseCache.current[key];
-            if (!promise) {
-              promise = api.machine.testModel(payload);
-              promiseCache.current[key] = promise;
-            }
-
-            try {
-              const result = await promise;
-              if (cancelled) return;
-
-              const status: ConnectionStatus = result.model_ok ? 'success' : 'error';
-              startTransition(() => {
-                ids.forEach((pid: string) => {
-                  setModelConnectionStatus(
-                    (prev: Record<string, ConnectionStatus>) => ({
-                      ...prev,
-                      [pid]: status,
-                    })
-                  );
-                });
-
-                if (result.model_ok && result.capabilities) {
-                  ids.forEach((pid: string) => {
-                    setDetectedCapabilities(
-                      (prev: Record<string, ProviderCapabilities>) => ({
-                        ...prev,
-                        [pid]: result.capabilities!,
-                      })
-                    );
-                  });
-                }
-              });
-              markChecked(ids);
-            } catch {
-              if (cancelled) return;
-              startTransition(() => {
-                ids.forEach((pid: string) => {
-                  setModelConnectionStatus(
-                    (prev: Record<string, ConnectionStatus>) => ({
-                      ...prev,
-                      [pid]: 'error',
-                    })
-                  );
-                });
-              });
-              markChecked(ids);
-            }
-          }
-        )
-      );
-
-      // finally, mark any active providers without a modelId as idle
-      // providers without a model ID don’t require a network check; mark idle
-      startTransition(() => {
-        providersToCheck.forEach((provider: import('../../types').LLMConfig) => {
-          if (!provider.modelId?.trim()) {
-            setModelConnectionStatus((prev: Record<string, ConnectionStatus>) => ({
-              ...prev,
-              [provider.id]: 'idle',
-            }));
-            markChecked([provider.id]);
-          }
-        });
-      });
-    };
-
-    // Debounce so rapid provider changes (e.g. typing in settings) don't
-    // fire many network requests simultaneously.
-    const timer = setTimeout(() => {
-      checkProviders();
     }, 500);
 
-    return () => {
+    return (): void => {
       cancelled = true;
       clearTimeout(timer);
     };

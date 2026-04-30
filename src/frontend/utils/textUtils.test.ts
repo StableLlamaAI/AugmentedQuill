@@ -16,7 +16,6 @@ import {
   applySmartQuotes,
   resetSmartQuoteChars,
   setSmartQuoteChars,
-  setupSmartQuotesProxy,
   convertContentEditableQuotes,
   maybeReplaceInsertedQuoteInContentEditable,
 } from './textUtils';

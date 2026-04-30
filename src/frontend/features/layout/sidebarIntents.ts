@@ -28,7 +28,10 @@ export const useSidebarIntents = ({
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
   openSourcebookEntryDialog: (entryId: string) => void;
 } => {
-  const setIsSidebarOpen = useUIStore((s: UIStoreState) => s.setIsSidebarOpen);
+  const setIsSidebarOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsSidebarOpen
+  );
 
   const openAndExpandStory = useCallback((): void => {
     setIsSidebarOpen(true);

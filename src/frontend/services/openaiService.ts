@@ -266,7 +266,7 @@ export const createChatSession = (
         const cancelSignal: CancelSignal = { cancelled: false };
         const text = await readSSEStream(
           reader,
-          (calls: ToolCallChunk[]) => {
+          (calls: ToolCallChunk[]): void => {
             for (const call of calls) {
               const index = call.index ?? 0;
               if (!toolCallsAccumulator[index]) {
@@ -286,11 +286,11 @@ export const createChatSession = (
               }
             }
           },
-          (t: string) => {
+          (t: string): void => {
             thinking += t;
             if (onUpdate) onUpdate({ thinking: applySmartQuotes(thinking) });
           },
-          (chunk: string) => {
+          (chunk: string): void => {
             fullText += chunk;
             if (onUpdate) onUpdate({ text: applySmartQuotes(fullText) });
           },
@@ -300,7 +300,8 @@ export const createChatSession = (
 
         const functionCalls = toolCallsAccumulator
           .filter(
-            (c: { id: string; name: string; args: string }) => c && (c.name || c.args)
+            (c: { id: string; name: string; args: string }): string =>
+              c && (c.name || c.args)
           )
           .map((c: { id: string; name: string; args: string }) => ({
             id: c.id,
@@ -358,7 +359,7 @@ export const generateSimpleContent = async (
       reader,
       undefined,
       undefined,
-      (delta: string) => {
+      (delta: string): void => {
         accumulated += delta;
         options?.onUpdate?.(applySmartQuotes(accumulated));
       }
@@ -402,7 +403,9 @@ export const streamAiAction = async (
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    const error = await res
+      .json()
+      .catch((): { detail: string } => ({ detail: 'Unknown error' }));
     throw new Error(error.detail || 'Action failed');
   }
 
@@ -414,11 +417,11 @@ export const streamAiAction = async (
   const finalResult = await readSSEStream(
     reader,
     undefined,
-    (t: string) => {
+    (t: string): void => {
       thinking += t;
       onThinking?.(thinking);
     },
-    (delta: string) => {
+    (delta: string): void => {
       accumulated += delta;
       onUpdate?.(applySmartQuotes(accumulated));
     },

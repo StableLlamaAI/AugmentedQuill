@@ -203,7 +203,10 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
     openSearch,
   } = params;
 
-  const searchControls = useMemo(() => ({ onOpenSearch: openSearch }), [openSearch]);
+  const searchControls = useMemo(
+    (): { onOpenSearch: () => void } => ({ onOpenSearch: openSearch }),
+    [openSearch]
+  );
   const historyControls = useMemo(
     () => ({
       undo,
@@ -421,7 +424,7 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   searchStateRef.current = searchState;
 
   const checkedSourcebookIds = useMemo(
-    () => Array.from(checkedEntries),
+    (): string[] => Array.from(checkedEntries),
     [checkedEntries]
   );
   const handleSourcebookMutated = useCallback(
@@ -432,11 +435,11 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
       entryId?: string;
       entryExistsInBaseline?: boolean;
       updatedEntry?: SourcebookEntry | null;
-    }) => {
+    }): Promise<void> => {
       const existsInBaseline = Boolean(
         mutation.entryExistsInBaseline ??
         baselineStateRef.current.sourcebook?.some(
-          (entry: SourcebookEntry) => entry.id === mutation.entryId
+          (entry: SourcebookEntry): boolean => entry.id === mutation.entryId
         )
       );
       if (mutation.updatedEntry !== undefined) {
@@ -469,7 +472,11 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
     ]
   );
   const editorUpdateChapter = useCallback(
-    (id: string, partial: Record<string, unknown>, isUndoRedo?: boolean) => {
+    (
+      id: string,
+      partial: Record<string, unknown>,
+      isUndoRedo?: boolean
+    ): Promise<void> => {
       if ('content' in partial) {
         searchStateRef.current.notifyContentChanged(Number.parseInt(id, 10));
       }

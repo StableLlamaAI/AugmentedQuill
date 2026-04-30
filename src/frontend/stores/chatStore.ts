@@ -108,33 +108,51 @@ export const useChatStore = create<ChatStoreState>()(
     scratchpad: '',
 
     setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) =>
-      set((s: ChatStoreState) => ({ chatMessages: resolve(v, s.chatMessages) })),
-    setIsChatLoading: (v: boolean) => set(() => ({ isChatLoading: v })),
+      set((s: ChatStoreState): { chatMessages: ChatMessage[] } => ({
+        chatMessages: resolve(v, s.chatMessages),
+      })),
+    setIsChatLoading: (v: boolean) =>
+      set((): { isChatLoading: boolean } => ({ isChatLoading: v })),
     setIsProseStreamingFromChat: (v: boolean) =>
-      set(() => ({ isProseStreamingFromChat: v })),
+      set((): { isProseStreamingFromChat: boolean } => ({
+        isProseStreamingFromChat: v,
+      })),
     setIsProseStreamingFrozen: (v: boolean) =>
-      set(() => ({ isProseStreamingFrozen: v })),
+      set((): { isProseStreamingFrozen: boolean } => ({ isProseStreamingFrozen: v })),
     freezeProseStreaming: () =>
-      set(() => ({ isProseStreamingFromChat: false, isProseStreamingFrozen: true })),
+      set(
+        (): { isProseStreamingFromChat: boolean; isProseStreamingFrozen: boolean } => ({
+          isProseStreamingFromChat: false,
+          isProseStreamingFrozen: true,
+        })
+      ),
     setSessionMutations: (
       v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
     ) =>
-      set((s: ChatStoreState) => ({
+      set((s: ChatStoreState): { sessionMutations: SessionMutation[] } => ({
         sessionMutations: resolve(v, s.sessionMutations),
       })),
     setChatHistoryList: (v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])) =>
-      set((s: ChatStoreState) => ({ chatHistoryList: resolve(v, s.chatHistoryList) })),
-    setCurrentChatId: (id: string | null) => set(() => ({ currentChatId: id })),
+      set((s: ChatStoreState): { chatHistoryList: ChatSession[] } => ({
+        chatHistoryList: resolve(v, s.chatHistoryList),
+      })),
+    setCurrentChatId: (id: string | null) =>
+      set((): { currentChatId: string | null } => ({ currentChatId: id })),
     setIncognitoSessions: (
       v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])
     ) =>
-      set((s: ChatStoreState) => ({
+      set((s: ChatStoreState): { incognitoSessions: ChatSession[] } => ({
         incognitoSessions: resolve(v, s.incognitoSessions),
       })),
-    setIsIncognito: (v: boolean) => set(() => ({ isIncognito: v })),
-    setAllowWebSearch: (v: boolean) => set(() => ({ allowWebSearch: v })),
+    setIsIncognito: (v: boolean) =>
+      set((): { isIncognito: boolean } => ({ isIncognito: v })),
+    setAllowWebSearch: (v: boolean) =>
+      set((): { allowWebSearch: boolean } => ({ allowWebSearch: v })),
     setSystemPrompt: (v: string | ((prev: string) => string)) =>
-      set((s: ChatStoreState) => ({ systemPrompt: resolve(v, s.systemPrompt) })),
-    setScratchpad: (v: string) => set(() => ({ scratchpad: v })),
+      set((s: ChatStoreState): { systemPrompt: string } => ({
+        systemPrompt: resolve(v, s.systemPrompt),
+      })),
+    setScratchpad: (v: string) =>
+      set((): { scratchpad: string } => ({ scratchpad: v })),
   })
 );

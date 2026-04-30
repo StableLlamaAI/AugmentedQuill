@@ -24,7 +24,7 @@ export function computeContentWithSeparator(
   const needsTokenBoundary =
     prefix.length > 0 && !endsWithWhitespace && !startsWithWhitespace;
 
-  const countTrailingNewlines = (value: string) => {
+  const countTrailingNewlines = (value: string): number => {
     let index = value.length - 1;
     let count = 0;
     while (index >= 0 && value[index] === '\n') {
@@ -33,7 +33,7 @@ export function computeContentWithSeparator(
     }
     return count;
   };
-  const countLeadingNewlines = (value: string) => {
+  const countLeadingNewlines = (value: string): number => {
     let index = 0;
     let count = 0;
     while (index < value.length && value[index] === '\n') {
@@ -351,7 +351,7 @@ export function setupSmartQuotesProxy(): void {
   if (typeof window === 'undefined') return;
   document.addEventListener(
     'input',
-    (e: InputEvent) => {
+    (e: InputEvent): void => {
       const targetNode = e.target as Node | null;
       if (!targetNode) return;
 

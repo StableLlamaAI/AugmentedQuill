@@ -16,7 +16,7 @@ const escapeTableCell = (text: string): string =>
   text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
 const renderTableRow = (cells: Element[]): string => {
-  const cellTexts = cells.map((cell: Element) =>
+  const cellTexts = cells.map((cell: Element): string =>
     escapeTableCell((cell.textContent || '').trim())
   );
   return `| ${cellTexts.join(' | ')} |`;
@@ -42,11 +42,11 @@ const renderTable = (table: Element): string => {
   const lines = [renderTableRow(headerCells)];
   lines.push(
     renderTableRow(
-      headerCells.map(() => ({ textContent: '---' }) as unknown as Element)
+      headerCells.map((): Element => ({ textContent: '---' }) as unknown as Element)
     )
   );
 
-  sourceBodyRows.forEach((row: Element) => {
+  sourceBodyRows.forEach((row: Element): void => {
     const rowCells = Array.from(row.querySelectorAll('th,td'));
     lines.push(renderTableRow(rowCells));
   });
@@ -63,38 +63,38 @@ export function createEditorTurndownService(): TurndownService {
   });
 
   td.addRule('softBreak', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node.nodeName === 'BR' && node.parentNode?.nodeName !== 'PRE',
-    replacement: () => '\n',
+    replacement: (): string => '\n',
   });
 
   td.addRule('tabMarker', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'SPAN' &&
       node.getAttribute('data-ws-tab') === '1',
-    replacement: () => '\t',
+    replacement: (): string => '\t',
   });
 
   td.addRule('wsNewlineMarker', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'SPAN' &&
       node.getAttribute('data-ws-nl') === '1',
-    replacement: () => '',
+    replacement: (): string => '',
   });
 
   td.addRule('wsMarker', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'SPAN' &&
       node.getAttribute('data-ws-marker') === '1',
-    replacement: () => ' ',
+    replacement: (): string => ' ',
   });
 
   td.addRule('table', {
     filter: 'table',
-    replacement: (_content: string, node: Node) => {
+    replacement: (_content: string, node: Node): string => {
       if (!(node instanceof Element)) return '';
       return renderTable(node);
     },
@@ -102,25 +102,25 @@ export function createEditorTurndownService(): TurndownService {
 
   // Strikethrough: <del>, <s>, <strike> → ~~text~~
   td.addRule('strikethrough', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node.nodeName === 'DEL' || node.nodeName === 'S' || node.nodeName === 'STRIKE',
-    replacement: (content: string) => `~~${content}~~`,
+    replacement: (content: string): string => `~~${content}~~`,
   });
 
   // Subscript: <sub> → ~text~
   td.addRule('subscript', {
     filter: 'sub',
-    replacement: (content: string) => `~${content}~`,
+    replacement: (content: string): string => `~${content}~`,
   });
 
   // Footnote reference: <sup class="footnote-ref"> → [^N]
   td.addRule('footnoteRef', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'SUP' &&
       typeof node.className === 'string' &&
       node.className.includes('footnote-ref'),
-    replacement: (_content: string, node: Node) => {
+    replacement: (_content: string, node: Node): string => {
       if (!(node instanceof Element)) return '';
       const a = node.querySelector('a');
       const text = a ? a.textContent || '' : node.textContent || '';
@@ -132,12 +132,12 @@ export function createEditorTurndownService(): TurndownService {
 
   // Footnote definition: <p class="footnote-def"> → [^N]: text
   td.addRule('footnoteDef', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'P' &&
       typeof node.className === 'string' &&
       node.className.includes('footnote-def'),
-    replacement: (_content: string, node: Node) => {
+    replacement: (_content: string, node: Node): string => {
       if (!(node instanceof HTMLElement)) return '';
       const id = (node.id || '').replace('fn-', '');
       // Get text without the leading "[N] " marker and the ↩ backref
@@ -151,11 +151,11 @@ export function createEditorTurndownService(): TurndownService {
 
   // Superscript: <sup> (without footnote-ref class) → ^text^
   td.addRule('superscript', {
-    filter: (node: Node) =>
+    filter: (node: Node): boolean =>
       node instanceof Element &&
       node.nodeName === 'SUP' &&
       !(typeof node.className === 'string' && node.className.includes('footnote-ref')),
-    replacement: (content: string) => `^${content}^`,
+    replacement: (content: string): string => `^${content}^`,
   });
 
   return td;

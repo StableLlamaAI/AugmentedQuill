@@ -31,8 +31,12 @@ export const useMetadataDialogHistory = ({
   diffFieldsEqual,
   setData,
   setConflicts,
-}: UseMetadataDialogHistoryParams) => {
-  const [history, setHistory] = useState<MetadataParams[]>(() => {
+}: UseMetadataDialogHistoryParams): {
+  history: MetadataParams[];
+  historyIndex: number;
+  restoreMetadataHistory: (index: number) => void;
+} => {
+  const [history, setHistory] = useState<MetadataParams[]>((): MetadataParams[] => {
     const current = normalizeMetadataParams(initialData);
     if (baseline) {
       const base = normalizeMetadataParams(baseline);
@@ -43,7 +47,7 @@ export const useMetadataDialogHistory = ({
     return [current];
   });
 
-  const [historyIndex, setHistoryIndex] = useState(() => {
+  const [historyIndex, setHistoryIndex] = useState((): 1 | 0 => {
     if (baseline) {
       const base = normalizeMetadataParams(baseline);
       const current = normalizeMetadataParams(initialData);
@@ -57,7 +61,7 @@ export const useMetadataDialogHistory = ({
   const isRestoringRef = useRef(false);
   const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (isRestoringRef.current) {
       return;
     }
@@ -68,7 +72,7 @@ export const useMetadataDialogHistory = ({
       currentData: MetadataParams,
       currentHistory: MetadataParams[],
       currentIndex: number
-    ) => {
+    ): void => {
       const snapshot = normalizeMetadataParams(
         JSON.parse(JSON.stringify(currentData)) as MetadataParams
       );
@@ -78,33 +82,33 @@ export const useMetadataDialogHistory = ({
       }
 
       const snapshotJson = JSON.stringify(snapshot);
-      const historyJson = currentHistory.map((entry: MetadataParams) =>
+      const historyJson = currentHistory.map((entry: MetadataParams): string =>
         JSON.stringify(entry)
       );
       const matchedIndex = historyJson.findIndex(
-        (entryJson: string) => entryJson === snapshotJson
+        (entryJson: string): boolean => entryJson === snapshotJson
       );
       if (matchedIndex !== -1) {
         setHistoryIndex(matchedIndex);
         return;
       }
 
-      setHistory((prev: MetadataParams[]) => {
+      setHistory((prev: MetadataParams[]): MetadataParams[] => {
         const next = [...prev.slice(0, currentIndex + 1), snapshot];
         return next.length > 100 ? next.slice(next.length - 100) : next;
       });
-      setHistoryIndex((prev: number) => Math.min(prev + 1, 99));
+      setHistoryIndex((prev: number): number => Math.min(prev + 1, 99));
     };
 
     if (historyDebounceRef.current) {
       clearTimeout(historyDebounceRef.current);
     }
-    historyDebounceRef.current = setTimeout(() => {
+    historyDebounceRef.current = setTimeout((): void => {
       historyDebounceRef.current = null;
       pushNow(data, history, historyIndex);
     }, DEBOUNCE_MS);
 
-    return () => {
+    return (): void => {
       if (historyDebounceRef.current) {
         clearTimeout(historyDebounceRef.current);
         historyDebounceRef.current = null;
@@ -112,7 +116,7 @@ export const useMetadataDialogHistory = ({
     };
   }, [data, history, historyIndex, normalizeMetadataParams]);
 
-  const restoreMetadataHistory = (index: number) => {
+  const restoreMetadataHistory = (index: number): void => {
     if (index < 0 || index >= history.length) {
       return;
     }
@@ -126,7 +130,7 @@ export const useMetadataDialogHistory = ({
     setData(JSON.parse(JSON.stringify(entry)));
     setConflicts(JSON.parse(JSON.stringify(entry.conflicts || [])));
     setHistoryIndex(index);
-    setTimeout(() => {
+    setTimeout((): void => {
       isRestoringRef.current = false;
     }, 0);
   };

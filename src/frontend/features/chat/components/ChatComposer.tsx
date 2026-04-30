@@ -9,7 +9,7 @@
  * Defines chat composer UI so input handling is separated from message rendering.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Paperclip, FileText } from 'lucide-react';
 import { useConfirm } from '../../layout/ConfirmDialogContext';
@@ -52,7 +52,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       t('Chat is unavailable because no working CHAT model is configured.')
     : t('Send Message (CHAT model)');
 
-  const formatFileSize = (size: number) => {
+  const formatFileSize = (size: number): string => {
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
@@ -89,11 +89,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     return btoa(binary);
   };
 
-  const addFiles = async (files: FileList | null) => {
+  const addFiles = async (files: FileList | null): Promise<void> => {
     if (!files?.length) return;
 
     const nextAttachments: ChatAttachment[] = await Promise.all(
-      Array.from(files).map(async (file: File) => {
+      Array.from(files).map(async (file: File): Promise<ChatAttachment> => {
         const attachment: ChatAttachment = {
           id: `${file.name}-${file.size}-${Date.now()}-${Math.random()
             .toString(36)
@@ -123,19 +123,21 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     onAttachmentsChange([...attachments, ...nextAttachments]);
   };
 
-  const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelection = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
     await addFiles(e.target.files);
     e.target.value = '';
   };
 
-  const handleDragEnter = (e: React.DragEvent<HTMLElement>) => {
+  const handleDragEnter = (e: React.DragEvent<HTMLElement>): void => {
     e.preventDefault();
     if (!isDisabled) {
       setIsDragActive(true);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLElement>): void => {
     e.preventDefault();
     if (!isDisabled) {
       e.dataTransfer.dropEffect = 'copy';
@@ -143,31 +145,31 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     }
   };
 
-  const handleDragLeave = (e: React.DragEvent<HTMLElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLElement>): void => {
     e.preventDefault();
     setIsDragActive(false);
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLElement>): Promise<void> => {
     e.preventDefault();
     setIsDragActive(false);
     await addFiles(e.dataTransfer.files);
   };
 
-  const handleRemoveAttachment = async (attachmentId: string) => {
+  const handleRemoveAttachment = async (attachmentId: string): Promise<void> => {
     const attachment = attachments.find(
-      (item: ChatAttachment) => item.id === attachmentId
+      (item: ChatAttachment): boolean => item.id === attachmentId
     );
     if (!attachment) return;
     if (!(await confirm(`Remove attachment “${attachment.name}”?`))) return;
     onAttachmentsChange(
-      attachments.filter((item: ChatAttachment) => item.id !== attachmentId)
+      attachments.filter((item: ChatAttachment): boolean => item.id !== attachmentId)
     );
   };
 
   const confirm = useConfirm();
 
-  const adjustTextareaHeight = useCallback(() => {
+  const adjustTextareaHeight = useCallback((): void => {
     if (!textareaRef.current) return;
 
     const el = textareaRef.current;
@@ -180,7 +182,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     el.style.overflowY = sh > maxHeight ? 'auto' : 'hidden';
   }, [textareaRef]);
 
-  const submitCurrentInput = useCallback(() => {
+  const submitCurrentInput = useCallback((): void => {
     const trimmed = input.trim();
     const hasContent = trimmed || attachments.length > 0;
     if (!hasContent || isDisabled) return;
@@ -195,18 +197,18 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     }
   }, [input, attachments, isDisabled, onSubmit, onAttachmentsChange, textareaRef]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submitCurrentInput();
     }
   };
 
-  useEffect(() => {
+  useEffect((): void => {
     adjustTextareaHeight();
   }, [adjustTextareaHeight, input]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
     submitCurrentInput();
   };
@@ -222,7 +224,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             <button
               key={attachment.id}
               type="button"
-              onClick={() => handleRemoveAttachment(attachment.id)}
+              onClick={(): Promise<void> => handleRemoveAttachment(attachment.id)}
               title={t('Click to remove {{name}}', { name: attachment.name })}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition ${
                 isLight
@@ -268,7 +270,9 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         value={input}
         lang={language || undefined}
         spellCheck={true}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>) => {
+        onChange={(
+          e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+        ): void => {
           setInput(e.target.value);
           adjustTextareaHeight();
         }}

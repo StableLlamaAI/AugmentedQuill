@@ -21,17 +21,23 @@ type ProjectImagesProps = React.ComponentProps<
   typeof import('../projects/ProjectImages').ProjectImages
 >;
 
-const SettingsDialogLazy = React.lazy(async () => ({
-  default: (await import('../settings/SettingsDialog')).SettingsDialog,
-}));
+const SettingsDialogLazy = React.lazy(
+  async (): Promise<{ default: React.FC<SettingsDialogProps> }> => ({
+    default: (await import('../settings/SettingsDialog')).SettingsDialog,
+  })
+);
 
-const ProjectImagesLazy = React.lazy(async () => ({
-  default: (await import('../projects/ProjectImages')).ProjectImages,
-}));
+const ProjectImagesLazy = React.lazy(
+  async (): Promise<{ default: React.FC<ProjectImagesProps> }> => ({
+    default: (await import('../projects/ProjectImages')).ProjectImages,
+  })
+);
 
-const CreateProjectDialogLazy = React.lazy(async () => ({
-  default: (await import('../projects/CreateProjectDialog')).CreateProjectDialog,
-}));
+const CreateProjectDialogLazy = React.lazy(
+  async (): Promise<{ default: React.FC<CreateProjectDialogProps> }> => ({
+    default: (await import('../projects/CreateProjectDialog')).CreateProjectDialog,
+  })
+);
 
 type SettingsValue = SettingsDialogProps['settings'];
 type PromptsValue = SettingsDialogProps['defaultPrompts'];
@@ -105,7 +111,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
       {isSettingsOpen && (
         <SettingsDialogLazy
           isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={(): void => setIsSettingsOpen(false)}
           settings={appSettings}
           onSaveSettings={setAppSettings}
           projects={projects}
@@ -132,7 +138,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
         <ProjectImagesLazy
           isOpen={isImagesOpen}
           projectLanguage={story.language || 'en'}
-          onClose={() => setIsImagesOpen(false)}
+          onClose={(): void => setIsImagesOpen(false)}
           theme={currentTheme}
           settings={appSettings}
           prompts={prompts}
@@ -145,7 +151,7 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
             filename: string,
             url: string | null,
             altText: string | undefined
-          ) => {
+          ): void => {
             if (url && editorRef.current) {
               editorRef.current.insertImage(filename, url, altText);
               setIsImagesOpen(false);
@@ -157,9 +163,13 @@ export const AppDialogs: React.FC<AppDialogsProps> = ({
       {isCreateProjectOpen && (
         <CreateProjectDialogLazy
           isOpen={isCreateProjectOpen}
-          onClose={() => setIsCreateProjectOpen(false)}
+          onClose={(): void => setIsCreateProjectOpen(false)}
           languages={instructionLanguages}
-          onCreate={(name: string, type: string, language: string) =>
+          onCreate={(
+            name: string,
+            type: string,
+            language: string
+          ): void | Promise<void> =>
             handleCreateProjectConfirm(
               name,
               type as 'short-story' | 'novel' | 'series',

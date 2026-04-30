@@ -82,11 +82,13 @@ export const api = {
       currentProjectApi().books.delete(...args),
     restore: (...args: Parameters<ProjectApiClients['books']['restore']>) =>
       currentProjectApi().books.restore(...args),
-    reorder: (...args: Parameters<ProjectApiClients['books']['reorder']>) =>
-      currentProjectApi().books.reorder(...args),
+    reorder: (
+      ...args: Parameters<ProjectApiClients['books']['reorder']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().books.reorder(...args),
     updateBookMetadata: (
       ...args: Parameters<ProjectApiClients['books']['updateBookMetadata']>
-    ) => currentProjectApi().books.updateBookMetadata(...args),
+    ): Promise<{ ok: boolean; detail?: string | undefined }> =>
+      currentProjectApi().books.updateBookMetadata(...args),
   },
   chapters: {
     list: (...args: Parameters<ProjectApiClients['chapters']['list']>) =>
@@ -95,46 +97,70 @@ export const api = {
         : unscopedChaptersApi.list(...args),
     get: (...args: Parameters<ProjectApiClients['chapters']['get']>) =>
       currentProjectApi().chapters.get(...args),
-    create: (...args: Parameters<ProjectApiClients['chapters']['create']>) =>
-      currentProjectApi().chapters.create(...args),
+    create: (
+      ...args: Parameters<ProjectApiClients['chapters']['create']>
+    ): Promise<{
+      ok: boolean;
+      id: number;
+      title: string;
+      book_id?: string | undefined;
+    }> => currentProjectApi().chapters.create(...args),
     updateContent: (
       ...args: Parameters<ProjectApiClients['chapters']['updateContent']>
-    ) => currentProjectApi().chapters.updateContent(...args),
-    updateTitle: (...args: Parameters<ProjectApiClients['chapters']['updateTitle']>) =>
-      currentProjectApi().chapters.updateTitle(...args),
+    ): Promise<{ ok: boolean }> => currentProjectApi().chapters.updateContent(...args),
+    updateTitle: (
+      ...args: Parameters<ProjectApiClients['chapters']['updateTitle']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chapters.updateTitle(...args),
     updateSummary: (
       ...args: Parameters<ProjectApiClients['chapters']['updateSummary']>
-    ) => currentProjectApi().chapters.updateSummary(...args),
+    ): Promise<{ ok: boolean }> => currentProjectApi().chapters.updateSummary(...args),
     updateMetadata: (
       ...args: Parameters<ProjectApiClients['chapters']['updateMetadata']>
-    ) => currentProjectApi().chapters.updateMetadata(...args),
-    delete: (...args: Parameters<ProjectApiClients['chapters']['delete']>) =>
-      currentProjectApi().chapters.delete(...args),
-    reorder: (...args: Parameters<ProjectApiClients['chapters']['reorder']>) =>
-      currentProjectApi().chapters.reorder(...args),
+    ): Promise<{
+      ok: boolean;
+      id?: number | undefined;
+      message?: string | undefined;
+    }> => currentProjectApi().chapters.updateMetadata(...args),
+    delete: (
+      ...args: Parameters<ProjectApiClients['chapters']['delete']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chapters.delete(...args),
+    reorder: (
+      ...args: Parameters<ProjectApiClients['chapters']['reorder']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chapters.reorder(...args),
   },
   story: {
-    updateTitle: (...args: Parameters<ProjectApiClients['story']['updateTitle']>) =>
+    updateTitle: (
+      ...args: Parameters<ProjectApiClients['story']['updateTitle']>
+    ): Promise<{ ok: boolean; detail?: string | undefined }> =>
       currentProjectApi().story.updateTitle(...args),
-    updateSummary: (...args: Parameters<ProjectApiClients['story']['updateSummary']>) =>
+    updateSummary: (
+      ...args: Parameters<ProjectApiClients['story']['updateSummary']>
+    ): Promise<{ ok: boolean; summary?: string | undefined }> =>
       currentProjectApi().story.updateSummary(...args),
-    updateTags: (...args: Parameters<ProjectApiClients['story']['updateTags']>) =>
-      currentProjectApi().story.updateTags(...args),
+    updateTags: (
+      ...args: Parameters<ProjectApiClients['story']['updateTags']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().story.updateTags(...args),
     updateSettings: (
       ...args: Parameters<ProjectApiClients['story']['updateSettings']>
-    ) => currentProjectApi().story.updateSettings(...args),
+    ): Promise<{ ok: boolean; story?: unknown }> =>
+      currentProjectApi().story.updateSettings(...args),
     updateMetadata: (
       ...args: Parameters<ProjectApiClients['story']['updateMetadata']>
-    ) => currentProjectApi().story.updateMetadata(...args),
-    getContent: (...args: Parameters<ProjectApiClients['story']['getContent']>) =>
+    ): Promise<{ ok: boolean; detail?: string | undefined }> =>
+      currentProjectApi().story.updateMetadata(...args),
+    getContent: (
+      ...args: Parameters<ProjectApiClients['story']['getContent']>
+    ): Promise<{ ok: boolean; content: string }> =>
       getCurrentProjectName()
         ? currentProjectApi().story.getContent(...args)
         : unscopedStoryApi.getContent(...args),
-    updateContent: (...args: Parameters<ProjectApiClients['story']['updateContent']>) =>
-      currentProjectApi().story.updateContent(...args),
+    updateContent: (
+      ...args: Parameters<ProjectApiClients['story']['updateContent']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().story.updateContent(...args),
     computeSourcebookRelevance: (
       ...args: Parameters<ProjectApiClients['story']['computeSourcebookRelevance']>
-    ) => currentProjectApi().story.computeSourcebookRelevance(...args),
+    ): Promise<{ relevant: string[] }> =>
+      currentProjectApi().story.computeSourcebookRelevance(...args),
   },
   settings: {
     getPrompts: (...args: Parameters<ProjectApiClients['settings']['getPrompts']>) =>
@@ -147,21 +173,35 @@ export const api = {
       currentProjectApi().chat.list(...args),
     load: (...args: Parameters<ProjectApiClients['chat']['load']>) =>
       currentProjectApi().chat.load(...args),
-    save: (...args: Parameters<ProjectApiClients['chat']['save']>) =>
-      currentProjectApi().chat.save(...args),
-    delete: (...args: Parameters<ProjectApiClients['chat']['delete']>) =>
-      currentProjectApi().chat.delete(...args),
-    deleteAll: (...args: Parameters<ProjectApiClients['chat']['deleteAll']>) =>
-      currentProjectApi().chat.deleteAll(...args),
+    save: (
+      ...args: Parameters<ProjectApiClients['chat']['save']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chat.save(...args),
+    delete: (
+      ...args: Parameters<ProjectApiClients['chat']['delete']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chat.delete(...args),
+    deleteAll: (
+      ...args: Parameters<ProjectApiClients['chat']['deleteAll']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().chat.deleteAll(...args),
     executeTools: (...args: Parameters<ProjectApiClients['chat']['executeTools']>) =>
       currentProjectApi().chat.executeTools(...args),
-    undoToolBatch: (...args: Parameters<ProjectApiClients['chat']['undoToolBatch']>) =>
-      currentProjectApi().chat.undoToolBatch(...args),
-    redoToolBatch: (...args: Parameters<ProjectApiClients['chat']['redoToolBatch']>) =>
-      currentProjectApi().chat.redoToolBatch(...args),
+    undoToolBatch: (
+      ...args: Parameters<ProjectApiClients['chat']['undoToolBatch']>
+    ): Promise<{
+      ok: boolean;
+      batch_id?: string | null | undefined;
+      detail?: string | null | undefined;
+    }> => currentProjectApi().chat.undoToolBatch(...args),
+    redoToolBatch: (
+      ...args: Parameters<ProjectApiClients['chat']['redoToolBatch']>
+    ): Promise<{
+      ok: boolean;
+      batch_id?: string | null | undefined;
+      detail?: string | null | undefined;
+    }> => currentProjectApi().chat.redoToolBatch(...args),
     getChapterBeforeContent: (
       ...args: Parameters<ProjectApiClients['chat']['getChapterBeforeContent']>
-    ) => currentProjectApi().chat.getChapterBeforeContent(...args),
+    ): Promise<string | null> =>
+      currentProjectApi().chat.getChapterBeforeContent(...args),
   },
   sourcebook: {
     list: (...args: Parameters<ProjectApiClients['sourcebook']['list']>) =>
@@ -170,22 +210,28 @@ export const api = {
       currentProjectApi().sourcebook.create(...args),
     update: (...args: Parameters<ProjectApiClients['sourcebook']['update']>) =>
       currentProjectApi().sourcebook.update(...args),
-    delete: (...args: Parameters<ProjectApiClients['sourcebook']['delete']>) =>
-      currentProjectApi().sourcebook.delete(...args),
+    delete: (
+      ...args: Parameters<ProjectApiClients['sourcebook']['delete']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().sourcebook.delete(...args),
     generateKeywords: (
       ...args: Parameters<ProjectApiClients['sourcebook']['generateKeywords']>
-    ) => currentProjectApi().sourcebook.generateKeywords(...args),
+    ): Promise<{ keywords: string[] }> =>
+      currentProjectApi().sourcebook.generateKeywords(...args),
   },
   debug: debugApi,
   checkpoints: {
     list: (...args: Parameters<ProjectApiClients['checkpoints']['list']>) =>
       currentProjectApi().checkpoints.list(...args),
-    create: (...args: Parameters<ProjectApiClients['checkpoints']['create']>) =>
+    create: (
+      ...args: Parameters<ProjectApiClients['checkpoints']['create']>
+    ): Promise<{ ok: boolean; timestamp: string }> =>
       currentProjectApi().checkpoints.create(...args),
-    load: (...args: Parameters<ProjectApiClients['checkpoints']['load']>) =>
-      currentProjectApi().checkpoints.load(...args),
-    delete: (...args: Parameters<ProjectApiClients['checkpoints']['delete']>) =>
-      currentProjectApi().checkpoints.delete(...args),
+    load: (
+      ...args: Parameters<ProjectApiClients['checkpoints']['load']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().checkpoints.load(...args),
+    delete: (
+      ...args: Parameters<ProjectApiClients['checkpoints']['delete']>
+    ): Promise<{ ok: boolean }> => currentProjectApi().checkpoints.delete(...args),
   },
   search: {
     search: (...args: Parameters<ProjectApiClients['search']['search']>) =>

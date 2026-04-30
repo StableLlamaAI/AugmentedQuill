@@ -137,7 +137,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
 
     const { isLight } = useThemeClasses();
 
-    const loadEntries = async (query?: string) => {
+    const loadEntries = async (query?: string): Promise<void> => {
       try {
         const data = await listSourcebookEntries(query, 'extensive');
         setEntries(data);
@@ -146,7 +146,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       }
     };
 
-    useEffect(() => {
+    useEffect((): (() => void) => {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
       const hasQuery = search.trim().length > 0;
 
@@ -159,12 +159,12 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
           setEntries(filterSourcebookEntries(externalEntries, search));
         }
       } else {
-        timeoutId = setTimeout(() => {
+        timeoutId = setTimeout((): void => {
           loadEntries(search);
         }, 300);
       }
 
-      return () => {
+      return (): void => {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -184,27 +184,29 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     });
 
     // Compute diff status for each entry relative to the baseline snapshot.
-    const createdEntryIds = useMemo<Set<string>>(() => {
+    const createdEntryIds = useMemo<Set<string>>((): Set<string> => {
       if (!baselineEntries) return new Set();
-      const baselineIds = new Set(baselineEntries.map((b: SourcebookEntry) => b.id));
+      const baselineIds = new Set(
+        baselineEntries.map((b: SourcebookEntry): string => b.id)
+      );
       return new Set(
         entries
-          .filter((e: SourcebookEntry) => !baselineIds.has(e.id))
-          .map((e: SourcebookEntry) => e.id)
+          .filter((e: SourcebookEntry): boolean => !baselineIds.has(e.id))
+          .map((e: SourcebookEntry): string => e.id)
       );
     }, [entries, baselineEntries]);
 
-    useEffect(() => {
+    useEffect((): void => {
       createdEntryIdsRef.current = createdEntryIds;
     }, [createdEntryIds]);
 
-    const modifiedEntryIds = useMemo<Set<string>>(() => {
+    const modifiedEntryIds = useMemo<Set<string>>((): Set<string> => {
       if (!baselineEntries) return new Set();
       return new Set(
         entries
-          .filter((e: SourcebookEntry) => {
+          .filter((e: SourcebookEntry): boolean | undefined => {
             const baseline = baselineEntries.find(
-              (b: SourcebookEntry) => b.id === e.id
+              (b: SourcebookEntry): boolean => b.id === e.id
             );
             // Use entryDiffSignature to normalize optional arrays and field
             // ordering so that semantically identical entries stored at different
@@ -212,15 +214,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
             // flagged as modified.
             return baseline && entryDiffSignature(baseline) !== entryDiffSignature(e);
           })
-          .map((e: SourcebookEntry) => e.id)
+          .map((e: SourcebookEntry): string => e.id)
       );
     }, [entries, baselineEntries]);
     const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
 
-    const deletedEntries = useMemo<SourcebookEntry[]>(() => {
+    const deletedEntries = useMemo<SourcebookEntry[]>((): SourcebookEntry[] => {
       if (!baselineEntries) return [];
-      const currentIds = new Set(entries.map((e: SourcebookEntry) => e.id));
-      return baselineEntries.filter((b: SourcebookEntry) => !currentIds.has(b.id));
+      const currentIds = new Set(entries.map((e: SourcebookEntry): string => e.id));
+      return baselineEntries.filter(
+        (b: SourcebookEntry): boolean => !currentIds.has(b.id)
+      );
     }, [entries, baselineEntries]);
 
     const { handleCreate, handleUpdate, handleDelete } = useSourcebookListMutations({
@@ -278,11 +282,11 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
         onAppRedo={onAppRedo}
         onToggleAutoSelection={onToggleAutoSelection}
         onSearchChange={setSearch}
-        onOpenCreate={() => {
+        onOpenCreate={(): void => {
           setSelectedEntry(null);
           setIsDialogOpen(true);
         }}
-        onDialogClose={() => {
+        onDialogClose={(): void => {
           setIsDialogOpen(false);
           setDialogOpenedViaTrigger(false);
           useUIStore.getState().closeSourcebookDialog();

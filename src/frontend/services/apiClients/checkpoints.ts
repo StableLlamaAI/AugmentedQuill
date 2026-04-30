@@ -18,7 +18,14 @@ export interface CheckpointListResponse {
   checkpoints: CheckpointInfo[];
 }
 
-export const createCheckpointsApi = (projectName: string) => ({
+export interface CheckpointsApi {
+  list: () => Promise<CheckpointListResponse>;
+  create: () => Promise<{ ok: boolean; timestamp: string }>;
+  load: (timestamp: string) => Promise<{ ok: boolean }>;
+  delete: (timestamp: string) => Promise<{ ok: boolean }>;
+}
+
+export const createCheckpointsApi = (projectName: string): CheckpointsApi => ({
   list: async (): Promise<CheckpointListResponse> => {
     return fetchJson<CheckpointListResponse>(
       projectEndpoint(projectName, '/checkpoints'),

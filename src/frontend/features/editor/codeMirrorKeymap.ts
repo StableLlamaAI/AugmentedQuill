@@ -22,8 +22,8 @@ type EnterBehavior = 'ignore' | 'softbreak' | 'newline';
 export const buildEnterExtension = (eb: EnterBehavior): Extension => {
   if (eb === 'ignore') {
     return keymap.of([
-      { key: 'Enter', run: () => true }, // swallow silently
-      { key: 'Shift-Enter', run: () => true },
+      { key: 'Enter', run: (): boolean => true }, // swallow silently
+      { key: 'Shift-Enter', run: (): boolean => true },
     ]);
   }
   if (eb === 'softbreak') {
@@ -98,7 +98,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // • cursor in "\n\n" zone   → insert plain "\n"
           // • otherwise               → insert "  \n" as a line-break
           key: 'Enter',
-          run: (view: import('@codemirror/view').EditorView) => {
+          run: (view: import('@codemirror/view').EditorView): boolean => {
             const { from, to } = view.state.selection.main;
             const doc = view.state.doc;
 
@@ -139,7 +139,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // "  \n" — remove whole sequence when cursor at lb+1, lb+2, lb+3.
           // "\n\n" — downgrade to "  \n" when cursor at pb+1 or pb+2.
           key: 'Backspace',
-          run: (view: import('@codemirror/view').EditorView) => {
+          run: (view: import('@codemirror/view').EditorView): boolean => {
             const sel = view.state.selection.main;
             if (!sel.empty) return false;
             const from = sel.from;
@@ -226,7 +226,7 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
           // "  \n" — remove whole sequence when cursor at lb+0, lb+1, lb+2.
           // "\n\n" — downgrade to "  \n" when cursor at pb+1 or pb+0.
           key: 'Delete',
-          run: (view: import('@codemirror/view').EditorView) => {
+          run: (view: import('@codemirror/view').EditorView): boolean => {
             const sel = view.state.selection.main;
             if (!sel.empty) return false;
             const from = sel.from;
@@ -345,7 +345,13 @@ export const buildEnterExtension = (eb: EnterBehavior): Extension => {
 
           let insertedText = '';
           tr.changes.iterChanges(
-            (_fA: number, _tA: number, _fB: number, _tB: number, inserted: Text) => {
+            (
+              _fA: number,
+              _tA: number,
+              _fB: number,
+              _tB: number,
+              inserted: Text
+            ): void => {
               insertedText += inserted.toString();
             }
           );
@@ -368,7 +374,7 @@ export const buildTabExtension = (): Extension =>
   keymap.of([
     {
       key: 'Tab',
-      run: (view: import('@codemirror/view').EditorView) => {
+      run: (view: import('@codemirror/view').EditorView): boolean => {
         const { from, to } = view.state.selection.main;
         view.dispatch({
           changes: { from, to, insert: '\t' },
@@ -380,7 +386,7 @@ export const buildTabExtension = (): Extension =>
     },
     {
       key: 'Shift-Tab',
-      run: (view: import('@codemirror/view').EditorView) => {
+      run: (view: import('@codemirror/view').EditorView): boolean => {
         const { from, to } = view.state.selection.main;
         view.dispatch({
           changes: { from, to, insert: '\t' },

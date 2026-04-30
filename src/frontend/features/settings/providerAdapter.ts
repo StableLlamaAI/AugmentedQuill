@@ -33,18 +33,31 @@ export const toPromptOverrides = (
 ): Record<string, string> | undefined => {
   const cleaned = Object.fromEntries(
     Object.entries(prompts || {}).filter(
-      ([, value]: [string, string]) => String(value || '').trim() !== ''
+      ([, value]: [string, string]): boolean => String(value || '').trim() !== ''
     )
   );
   return Object.keys(cleaned).length > 0 ? cleaned : undefined;
 };
+
+const toNumberOrUndefined = (value: unknown): number | undefined =>
+  value === null || value === undefined ? undefined : Number(value);
+
+const toNumberWithDefault = (value: unknown, fallback: number): number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const toBooleanWithDefault = (value: unknown, fallback: boolean): boolean =>
+  value === null || value === undefined ? fallback : Boolean(value);
+
+const normalizeNgram = (value: unknown): 3 | 4 => (value === 4 ? 4 : 3);
 
 export const machineModelToProvider = (
   model: MachineModelConfig,
   fallbackProvider: LLMConfig
 ): LLMConfig => {
   const name = String(model.name || '').trim() || fallbackProvider.name;
-  const timeoutS = Number(model.timeout_s ?? 60);
+  const timeoutS = toNumberWithDefault(model.timeout_s, 60);
 
   return {
     ...fallbackProvider,
@@ -52,45 +65,26 @@ export const machineModelToProvider = (
     name,
     baseUrl: String(model.base_url || '').trim(),
     apiKey: String(model.api_key || ''),
-    timeout: Number.isFinite(timeoutS) ? Math.max(1, timeoutS) * 1000 : 60000,
+    timeout: Math.max(1, timeoutS) * 1000,
     modelId: String(model.model || '').trim(),
-    contextWindowTokens:
-      model.context_window_tokens === null || model.context_window_tokens === undefined
-        ? undefined
-        : Number(model.context_window_tokens),
-    temperature:
-      model.temperature === null || model.temperature === undefined
-        ? fallbackProvider.temperature
-        : Number(model.temperature),
-    topP:
-      model.top_p === null || model.top_p === undefined
-        ? fallbackProvider.topP
-        : Number(model.top_p),
-    maxTokens:
-      model.max_tokens === null || model.max_tokens === undefined
-        ? fallbackProvider.maxTokens
-        : Number(model.max_tokens),
-    presencePenalty:
-      model.presence_penalty === null || model.presence_penalty === undefined
-        ? fallbackProvider.presencePenalty
-        : Number(model.presence_penalty),
-    frequencyPenalty:
-      model.frequency_penalty === null || model.frequency_penalty === undefined
-        ? fallbackProvider.frequencyPenalty
-        : Number(model.frequency_penalty),
+    contextWindowTokens: toNumberOrUndefined(model.context_window_tokens),
+    temperature: toNumberWithDefault(model.temperature, fallbackProvider.temperature),
+    topP: toNumberWithDefault(model.top_p, fallbackProvider.topP),
+    maxTokens: toNumberWithDefault(model.max_tokens, fallbackProvider.maxTokens),
+    presencePenalty: toNumberWithDefault(
+      model.presence_penalty,
+      fallbackProvider.presencePenalty
+    ),
+    frequencyPenalty: toNumberWithDefault(
+      model.frequency_penalty,
+      fallbackProvider.frequencyPenalty
+    ),
     stop: Array.isArray(model.stop)
-      ? model.stop.map((entry: string) => String(entry))
+      ? model.stop.map((entry: string): string => String(entry))
       : [],
-    seed:
-      model.seed === null || model.seed === undefined ? undefined : Number(model.seed),
-    topK:
-      model.top_k === null || model.top_k === undefined
-        ? undefined
-        : Number(model.top_k),
-    minP:
-      model.min_p === null || model.min_p === undefined
-        ? undefined
-        : Number(model.min_p),
+    seed: toNumberOrUndefined(model.seed),
+    topK: toNumberOrUndefined(model.top_k),
+    minP: toNumberOrUndefined(model.min_p),
     extraBody: String(model.extra_body || ''),
     presetId: model.preset_id || null,
     writingWarning: model.writing_warning || null,
@@ -99,27 +93,19 @@ export const machineModelToProvider = (
       model.supports_function_calling === null
         ? undefined
         : model.supports_function_calling,
-    suggestLoopGuardEnabled:
-      model.suggest_loop_guard_enabled === null ||
-      model.suggest_loop_guard_enabled === undefined
-        ? true
-        : Boolean(model.suggest_loop_guard_enabled),
-    suggestLoopGuardNgram:
-      model.suggest_loop_guard_ngram === 4
-        ? 4
-        : model.suggest_loop_guard_ngram === 3
-          ? 3
-          : 3,
-    suggestLoopGuardMinRepeats:
-      model.suggest_loop_guard_min_repeats === null ||
-      model.suggest_loop_guard_min_repeats === undefined
-        ? 3
-        : Number(model.suggest_loop_guard_min_repeats),
-    suggestLoopGuardMaxRegens:
-      model.suggest_loop_guard_max_regens === null ||
-      model.suggest_loop_guard_max_regens === undefined
-        ? 1
-        : Number(model.suggest_loop_guard_max_regens),
+    suggestLoopGuardEnabled: toBooleanWithDefault(
+      model.suggest_loop_guard_enabled,
+      true
+    ),
+    suggestLoopGuardNgram: normalizeNgram(model.suggest_loop_guard_ngram),
+    suggestLoopGuardMinRepeats: toNumberWithDefault(
+      model.suggest_loop_guard_min_repeats,
+      3
+    ),
+    suggestLoopGuardMaxRegens: toNumberWithDefault(
+      model.suggest_loop_guard_max_regens,
+      1
+    ),
     prompts: normalizeProviderPrompts(model.prompt_overrides, fallbackProvider.prompts),
   };
 };

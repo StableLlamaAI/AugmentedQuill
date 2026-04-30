@@ -57,14 +57,14 @@ export const projectsApi = {
     );
   },
 
-  export: async (name?: string) => {
+  export: async (name?: string): Promise<Blob> => {
     const path = name
       ? `/projects/export?name=${encodeURIComponent(name)}`
       : '/projects/export';
     return fetchBlob(path, undefined, 'Failed to export project');
   },
 
-  exportEpub: async (name?: string) => {
+  exportEpub: async (name?: string): Promise<Blob> => {
     const path = name
       ? `/projects/export/epub?name=${encodeURIComponent(name)}`
       : '/projects/export/epub';
@@ -84,7 +84,15 @@ export const projectsApi = {
     );
   },
 
-  uploadImage: async (file: File, targetName?: string) => {
+  uploadImage: async (
+    file: File,
+    targetName?: string
+  ): Promise<{
+    ok: boolean;
+    filename: string;
+    url: string;
+    restore_id?: string | undefined;
+  }> => {
     const formData = new FormData();
     formData.append('file', file);
     const path = targetName
@@ -98,7 +106,11 @@ export const projectsApi = {
     }>(path, { method: 'POST', body: formData }, 'Failed to upload image');
   },
 
-  updateImage: async (filename: string, description?: string, title?: string) => {
+  updateImage: async (
+    filename: string,
+    description?: string,
+    title?: string
+  ): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(
       '/projects/images/update_description',
       { filename, description, title },
@@ -106,7 +118,10 @@ export const projectsApi = {
     );
   },
 
-  createImagePlaceholder: async (description: string, title?: string) => {
+  createImagePlaceholder: async (
+    description: string,
+    title?: string
+  ): Promise<{ ok: boolean; filename: string }> => {
     return postJson<{ ok: boolean; filename: string }>(
       '/projects/images/create_placeholder',
       { description, title },
@@ -122,7 +137,9 @@ export const projectsApi = {
     );
   },
 
-  deleteImage: async (filename: string) => {
+  deleteImage: async (
+    filename: string
+  ): Promise<{ ok: boolean; restore_id?: string | undefined }> => {
     return postJson<{ ok: boolean; restore_id?: string }>(
       '/projects/images/delete',
       { filename },
@@ -130,7 +147,9 @@ export const projectsApi = {
     );
   },
 
-  restoreImage: async (restoreId: string) => {
+  restoreImage: async (
+    restoreId: string
+  ): Promise<{ ok: boolean; filename?: string | undefined }> => {
     return postJson<{ ok: boolean; filename?: string }>(
       '/projects/images/restore',
       { restore_id: restoreId },

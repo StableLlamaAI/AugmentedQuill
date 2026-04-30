@@ -50,8 +50,9 @@ export const updateSourcebookEntryInList = (
   previousId: string,
   updated: SourcebookEntry
 ): SourcebookEntry[] => {
-  return entries.map((value: SourcebookEntry) =>
-    value.id === previousId ? updated : value
+  return entries.map(
+    (value: SourcebookEntry): SourcebookEntry =>
+      value.id === previousId ? updated : value
   );
 };
 
@@ -69,20 +70,20 @@ export const filterSourcebookEntries = (
     return entries;
   }
 
-  return entries.filter((entry: SourcebookEntry) => {
+  return entries.filter((entry: SourcebookEntry): boolean => {
     const description = (entry.description || '').toLowerCase();
     if (entry.name.toLowerCase().includes(normalizedQuery)) {
       return true;
     }
     if (
-      (entry.synonyms || []).some((syn: string) =>
+      (entry.synonyms || []).some((syn: string): boolean =>
         syn.toLowerCase().includes(normalizedQuery)
       )
     ) {
       return true;
     }
     if (
-      (entry.keywords || []).some((kw: string) =>
+      (entry.keywords || []).some((kw: string): boolean =>
         kw.toLowerCase().includes(normalizedQuery)
       )
     ) {
@@ -104,10 +105,10 @@ export const filterSourcebookEntries = (
       ...(entry.synonyms || []),
       ...(entry.keywords || []),
       entry.description || '',
-    ].map((value: string) => value.toLowerCase());
+    ].map((value: string): string => value.toLowerCase());
 
-    return tokens.every((token: string) =>
-      fields.some((field: string) => field.includes(token))
+    return tokens.every((token: string): boolean =>
+      fields.some((field: string): boolean => field.includes(token))
     );
   });
 };

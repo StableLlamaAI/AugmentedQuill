@@ -301,7 +301,7 @@ describe('Editor diff highlighting – smart-quote regression', () => {
     // just the quote-character positions.
     expect(cmContent?.innerHTML).toContain('goodbye');
     // Verify the post-streaming diff decorates a meaningful amount of content.
-    const countInserted = (html: string) =>
+    const countInserted = (html: string): number =>
       (html.match(/class="cm-diff-inserted"/g) ?? []).length;
     expect(countInserted(cmContent?.innerHTML ?? '')).toBeGreaterThan(0);
   });

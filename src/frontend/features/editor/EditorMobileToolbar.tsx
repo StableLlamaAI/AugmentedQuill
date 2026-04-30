@@ -53,7 +53,7 @@ export const EditorMobileToolbar: React.FC = () => {
               size="sm"
               variant="ghost"
               className="text-xs h-7"
-              onClick={() => onAiAction('chapter', 'extend')}
+              onClick={(): void => onAiAction('chapter', 'extend')}
               disabled={isAiLoading || !isWritingAvailable}
               icon={<Wand2 size={12} />}
               title={
@@ -71,7 +71,7 @@ export const EditorMobileToolbar: React.FC = () => {
               size="sm"
               variant="ghost"
               className="text-xs h-7"
-              onClick={() => onAiAction('chapter', 'rewrite')}
+              onClick={(): void => onAiAction('chapter', 'rewrite')}
               disabled={isAiLoading || !isWritingAvailable || isChapterEmpty}
               icon={<FileEdit size={12} />}
               title={

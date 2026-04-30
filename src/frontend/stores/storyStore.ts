@@ -144,7 +144,7 @@ export const useStoryStore = create<StoryStoreState>()(
     ...buildInitialState(),
 
     setStory: (storyOrUpdater: StoryState | ((prev: StoryState) => StoryState)) =>
-      set((state: StoryStoreState) => ({
+      set((state: StoryStoreState): { story: StoryState } => ({
         story:
           typeof storyOrUpdater === 'function'
             ? storyOrUpdater(state.story)
@@ -158,7 +158,7 @@ export const useStoryStore = create<StoryStoreState>()(
         | StoryHistoryEntry[]
         | ((prev: StoryHistoryEntry[]) => StoryHistoryEntry[])
     ) =>
-      set((state: StoryStoreState) => ({
+      set((state: StoryStoreState): { history: StoryHistoryEntry[] } => ({
         history:
           typeof historyOrUpdater === 'function'
             ? historyOrUpdater(state.history)
@@ -170,7 +170,7 @@ export const useStoryStore = create<StoryStoreState>()(
     setBaselineState: (baselineState: StoryState) => set({ baselineState }),
 
     incrementLoadChapterSignal: () =>
-      set((state: StoryStoreState) => ({
+      set((state: StoryStoreState): { loadChapterSignal: number } => ({
         loadChapterSignal: state.loadChapterSignal + 1,
       })),
 
@@ -180,14 +180,17 @@ export const useStoryStore = create<StoryStoreState>()(
       streamingContent: { chapterId: string; content: string } | null
     ) => set({ streamingContent }),
 
-    patchSourcebookEntry: (entry: SourcebookEntry | null, entryId?: string) => {
+    patchSourcebookEntry: (
+      entry: SourcebookEntry | null,
+      entryId?: string
+    ): boolean => {
       const prev = get().story.sourcebook ?? [];
       let next: SourcebookEntry[];
       if (entry === null) {
-        next = prev.filter((e: SourcebookEntry) => e.id !== entryId);
+        next = prev.filter((e: SourcebookEntry): boolean => e.id !== entryId);
         if (next.length === prev.length) return false;
       } else {
-        const idx = prev.findIndex((e: SourcebookEntry) => e.id === entry.id);
+        const idx = prev.findIndex((e: SourcebookEntry): boolean => e.id === entry.id);
         if (idx >= 0) {
           const sig = (e: SourcebookEntry): string =>
             JSON.stringify({
@@ -234,22 +237,31 @@ export const useStoryStore = create<StoryStoreState>()(
       currentIndex: number;
       baselineState: StoryState;
     }) =>
-      set((state: StoryStoreState) => {
-        const preservedCurrentChapterId = state.currentChapterId
-          ? story.chapters.some(
-              (chapter: Chapter) => chapter.id === state.currentChapterId
-            )
-            ? state.currentChapterId
-            : currentChapterId
-          : currentChapterId;
+      set(
+        (
+          state: StoryStoreState
+        ): {
+          story: StoryState;
+          currentChapterId: string | null;
+          currentIndex: number;
+          baselineState: StoryState;
+        } => {
+          const preservedCurrentChapterId = state.currentChapterId
+            ? story.chapters.some(
+                (chapter: Chapter): boolean => chapter.id === state.currentChapterId
+              )
+              ? state.currentChapterId
+              : currentChapterId
+            : currentChapterId;
 
-        return {
-          story,
-          currentChapterId: preservedCurrentChapterId,
-          currentIndex,
-          baselineState,
-        };
-      }),
+          return {
+            story,
+            currentChapterId: preservedCurrentChapterId,
+            currentIndex,
+            baselineState,
+          };
+        }
+      ),
   })
 );
 
@@ -317,12 +329,12 @@ export function useStoryMeta(): StoryMetadataSnapshot {
 
 /** Subscribe only to the current project language. */
 export function useStoryLanguage(): StoryState['language'] {
-  return useStoryStore((s: StoryStoreState) => s.story.language);
+  return useStoryStore((s: StoryStoreState): string | undefined => s.story.language);
 }
 
 /** Subscribe to the chapter list. */
 export function useStoryChaptersMeta(): StoryState['chapters'] {
-  return useStoryStore((s: StoryStoreState) => s.story.chapters);
+  return useStoryStore((s: StoryStoreState): Chapter[] => s.story.chapters);
 }
 
 /** Structural equality for chapter list: ignores content-only changes. */
@@ -332,7 +344,7 @@ function chaptersStructuralEqual(
 ): boolean {
   if (a.length !== b.length) return false;
   return a.every(
-    (ch: Chapter, i: number) =>
+    (ch: Chapter, i: number): boolean =>
       ch.id === b[i].id &&
       ch.title === b[i].title &&
       ch.book_id === b[i].book_id &&
@@ -374,12 +386,14 @@ export function useStoryBooks(): StoryState['books'] {
 
 /** Subscribe to the sourcebook entries list. */
 export function useStorySourcebook(): StoryState['sourcebook'] {
-  return useStoryStore((s: StoryStoreState) => s.story.sourcebook);
+  return useStoryStore(
+    (s: StoryStoreState): SourcebookEntry[] | undefined => s.story.sourcebook
+  );
 }
 
 /** Subscribe to the baseline state (for diff highlighting). */
 export function useStoryBaseline(): StoryState {
-  return useStoryStore((s: StoryStoreState) => s.baselineState);
+  return useStoryStore((s: StoryStoreState): StoryState => s.baselineState);
 }
 
 /** Subscribe to undo/redo availability. */
@@ -403,12 +417,14 @@ export function useStoryHistoryState(): StoryHistorySnapshot {
 
 /** Subscribe only to whether undo is available. */
 export function useStoryCanUndo(): boolean {
-  return useStoryStore((s: StoryStoreState) => s.currentIndex > 0);
+  return useStoryStore((s: StoryStoreState): boolean => s.currentIndex > 0);
 }
 
 /** Subscribe only to whether redo is available. */
 export function useStoryCanRedo(): boolean {
-  return useStoryStore((s: StoryStoreState) => s.currentIndex < s.history.length - 1);
+  return useStoryStore(
+    (s: StoryStoreState): boolean => s.currentIndex < s.history.length - 1
+  );
 }
 
 function buildHistoryOptions(

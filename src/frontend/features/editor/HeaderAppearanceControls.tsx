@@ -68,28 +68,28 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
 }: HeaderAppearanceControlsProps) => {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(isAppearanceOpen, panelRef, () => setIsAppearanceOpen(false));
+  useFocusTrap(isAppearanceOpen, panelRef, (): void => setIsAppearanceOpen(false));
 
-  const [windowWidth, setWindowWidth] = useState<number>(() =>
+  const [windowWidth, setWindowWidth] = useState<number>((): number =>
     typeof window !== 'undefined' ? window.innerWidth : 0
   );
 
   const sidebarWidthMax = useMemo(
-    () => getDynamicSidebarWidthMax(windowWidth),
+    (): number => getDynamicSidebarWidthMax(windowWidth),
     [windowWidth]
   );
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (typeof window === 'undefined') {
       return undefined;
     }
 
     const handleResize = (): void => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return (): void => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (editorSettings.sidebarWidth > sidebarWidthMax) {
       setEditorSettings((prev: EditorSettings) => ({
         ...prev,
@@ -121,9 +121,9 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         max={max}
         {...(step ? { step } : {})}
         value={value}
-        onChange={(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-          onChange(Number(event.target.value))
-        }
+        onChange={(
+          event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+        ): void => onChange(Number(event.target.value))}
         className={sliderClass}
       />
     </div>
@@ -141,7 +141,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
       <div className="flex rounded-lg overflow-hidden border border-brand-gray-700">
         <button
           type="button"
-          onClick={() => onChange(true)}
+          onClick={(): void => onChange(true)}
           className={`flex-1 py-1.5 text-xs font-medium ${
             enabled
               ? buttonActive
@@ -154,7 +154,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         </button>
         <button
           type="button"
-          onClick={() => onChange(false)}
+          onClick={(): void => onChange(false)}
           className={`flex-1 py-1.5 text-xs font-medium ${
             !enabled
               ? buttonActive
@@ -175,7 +175,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         theme={currentTheme}
         variant={isAppearanceOpen ? 'secondary' : 'ghost'}
         size="sm"
-        onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
+        onClick={(): void => setIsAppearanceOpen(!isAppearanceOpen)}
         icon={<SlidersHorizontal size={16} />}
         title={t('Page Appearance')}
         className="hidden sm:inline-flex"
@@ -205,7 +205,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               {t('Page Appearance')}
             </h3>
             <button
-              onClick={() => setIsAppearanceOpen(false)}
+              onClick={(): void => setIsAppearanceOpen(false)}
               className="text-brand-gray-500 hover:text-brand-gray-400"
             >
               <X size={14} />
@@ -220,7 +220,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
               </div>
               <div className="flex rounded-lg overflow-hidden border border-brand-gray-700">
                 <button
-                  onClick={() => setAppTheme('light')}
+                  onClick={(): void => setAppTheme('light')}
                   className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                     currentTheme === 'light'
                       ? buttonActive
@@ -230,7 +230,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
                   <Sun size={12} /> Light
                 </button>
                 <button
-                  onClick={() => setAppTheme('mixed')}
+                  onClick={(): void => setAppTheme('mixed')}
                   className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                     currentTheme === 'mixed'
                       ? buttonActive
@@ -240,7 +240,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
                   <LayoutTemplate size={12} /> Mixed
                 </button>
                 <button
-                  onClick={() => setAppTheme('dark')}
+                  onClick={(): void => setAppTheme('dark')}
                   className={`flex-1 py-1.5 text-xs font-medium flex justify-center items-center gap-1 ${
                     currentTheme === 'dark'
                       ? buttonActive
@@ -314,7 +314,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         theme={currentTheme}
         variant="ghost"
         size="sm"
-        onClick={() => setIsDebugLogsOpen(true)}
+        onClick={(): void => setIsDebugLogsOpen(true)}
         title={t('Debug Logs')}
         className="mr-1"
       >

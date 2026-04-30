@@ -206,7 +206,7 @@ describe('onMutated async sequencing', () => {
       order.push('after-mutated');
     };
 
-    const onMutated = async () => {
+    const onMutated = async (): Promise<void> => {
       order.push('refreshStory-start');
       await Promise.resolve(); // simulated async work
       order.push('refreshStory-done');
@@ -237,7 +237,7 @@ describe('onMutated async sequencing', () => {
       order.push('after-mutated');
     };
 
-    const onMutated = async () => {
+    const onMutated = async (): Promise<void> => {
       order.push('refreshStory');
       await Promise.resolve();
       order.push('pushHistory');
@@ -266,7 +266,7 @@ describe('onMutated async sequencing', () => {
     let storySnapshot: Snapshot | null = null;
 
     // Simulate App.tsx's onSourcebookMutated wrapper.
-    const onSourcebookMutated = async (_params: { label: string }) => {
+    const onSourcebookMutated = async (_params: { label: string }): Promise<void> => {
       // Simulated refreshStory: removes 'hero' from sourcebook.
       await Promise.resolve();
       storySnapshot = { sourcebook: [] }; // reflects deletion
@@ -274,7 +274,7 @@ describe('onMutated async sequencing', () => {
     };
 
     // Simulate SourcebookList.handleDelete.
-    const simulateHandleDelete = async () => {
+    const simulateHandleDelete = async (): Promise<void> => {
       // api.sourcebook.delete called already; local UI updated.
       await onSourcebookMutated({ label: 'Delete hero' });
       // At this point the App wrapper has already captured the correct state.
@@ -887,7 +887,7 @@ describe('sourcebook list-click diff for created entries', () => {
   it('clicking a created entry (in createdEntryIds) sets dialogOpenedViaTrigger=true', () => {
     // Simulate the list-click decision: use createdEntryIds.has(e.id)
     const createdIds = new Set(['hero', 'wizard']);
-    const isCreated = (id: string) => createdIds.has(id);
+    const isCreated = (id: string): boolean => createdIds.has(id);
 
     expect(isCreated('hero')).toBe(true); // → dialogOpenedViaTrigger=true → showDiffForNew=true
     expect(isCreated('villain')).toBe(false); // → dialogOpenedViaTrigger=false → no diff

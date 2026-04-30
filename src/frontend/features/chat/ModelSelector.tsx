@@ -37,25 +37,25 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSelectorClick,
   options,
   label,
-  theme,
+  _theme,
   connectionStatus = {},
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',
-}: ModelSelectorProps) => {
+}: ModelSelectorProps): JSX.Element => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isLight } = useThemeClasses();
 
-  const selectedOption = options.find((o: LLMConfig) => o.id === value);
+  const selectedOption = options.find((o: LLMConfig): boolean => o.id === value);
 
   // If the provided value (ID) is not in our current options (e.g., after duplication or name change),
   // but we find an option with the same name, we should probably switch to that ID.
   // This helps when the backend/dialog uses names as IDs but the UI uses stable IDs or vice-versa.
-  useEffect(() => {
+  useEffect((): void => {
     if (value && options.length > 0 && !selectedOption) {
       // Try finding by name if ID mismatch (common if names are used as human-readable IDs in some places)
-      const byName = options.find((o: LLMConfig) => o.name === value);
+      const byName = options.find((o: LLMConfig): boolean => o.name === value);
       if (byName && byName.id !== value) {
         onChange(byName.id);
       }
@@ -64,9 +64,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const activeOption = selectedOption || options[0];
 
-  useClickOutside(containerRef, () => setIsOpen(false), isOpen);
+  useClickOutside(containerRef, (): void => setIsOpen(false), isOpen);
 
-  const getStatusIcon = (id: string) => {
+  const getStatusIcon = (id: string): JSX.Element => {
     const status = connectionStatus[id] || 'idle';
     if (status === 'loading')
       return <Loader2 size={10} className="animate-spin text-brand-500" />;
@@ -82,7 +82,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     opt: LLMConfig,
     cap: 'isMultimodal' | 'supportsFunctionCalling',
     detectedKey: 'is_multimodal' | 'supports_function_calling'
-  ) => {
+  ): boolean => {
     if (opt[cap] === true) return true;
     if (opt[cap] === false) return false;
     // Auto (null/undefined)
@@ -123,7 +123,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       </div>
 
       <button
-        onClick={() => {
+        onClick={(): void => {
           onSelectorClick?.();
           setIsOpen(!isOpen);
         }}
@@ -149,7 +149,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           {options.map((opt: LLMConfig) => (
             <button
               key={opt.id}
-              onClick={() => {
+              onClick={(): void => {
                 onChange(opt.id);
                 setIsOpen(false);
               }}

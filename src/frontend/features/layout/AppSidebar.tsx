@@ -117,7 +117,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
         {isSidebarOpen && (
           <button
             className="fixed inset-0 bg-brand-gray-950/60 z-30 lg:hidden cursor-default"
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={(): void => setIsSidebarOpen(false)}
             aria-label={t('Close sidebar')}
           ></button>
         )}
@@ -125,9 +125,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
         <CollapsibleSection
           title={t('Story')}
           isCollapsed={!!sidebarPrefs.isStoryCollapsed}
-          onToggle={() => toggleCollapsed('isStoryCollapsed')}
+          onToggle={(): void => toggleCollapsed('isStoryCollapsed')}
           height={sidebarPrefs.storyHeight}
-          onHeightChange={(h: number) => updateHeight('storyHeight', h)}
+          onHeightChange={(h: number): void => updateHeight('storyHeight', h)}
           isLight={isLight}
         >
           <StoryMetadata
@@ -149,7 +149,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
               currentText: string | undefined,
               onThinking: ((thinking: string) => void) | undefined,
               source: 'notes' | 'chapter' | undefined
-            ) =>
+            ): Promise<string | undefined> =>
               handleSidebarAiAction(
                 'story',
                 storyMeta.id,
@@ -183,9 +183,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
           <CollapsibleSection
             title={t('Chapters')}
             isCollapsed={!!sidebarPrefs.isChaptersCollapsed}
-            onToggle={() => toggleCollapsed('isChaptersCollapsed')}
+            onToggle={(): void => toggleCollapsed('isChaptersCollapsed')}
             height={sidebarPrefs.chaptersHeight}
-            onHeightChange={(h: number) => updateHeight('chaptersHeight', h)}
+            onHeightChange={(h: number): void => updateHeight('chaptersHeight', h)}
             isLight={isLight}
           >
             <ChapterList
@@ -217,7 +217,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = React.memo(
         <CollapsibleSection
           title={t('Sourcebook')}
           isCollapsed={!!sidebarPrefs.isSourcebookCollapsed}
-          onToggle={() => toggleCollapsed('isSourcebookCollapsed')}
+          onToggle={(): void => toggleCollapsed('isSourcebookCollapsed')}
           isLast
           isLight={isLight}
         >

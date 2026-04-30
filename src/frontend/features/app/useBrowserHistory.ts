@@ -37,20 +37,20 @@ export function useBrowserHistory({
   const canRedoRef = useRef(canRedo);
   const isPopStateUndoRedoRef = useRef(false);
 
-  useEffect(() => {
+  useEffect((): void => {
     historyIndexRef.current = historyIndex;
     canUndoRef.current = canUndo;
     canRedoRef.current = canRedo;
   }, [historyIndex, canUndo, canRedo]);
 
-  useEffect(() => {
+  useEffect((): void => {
     const existing = window.history.state || {};
     if (existing.aqUndoIndex !== historyIndex) {
       window.history.replaceState({ ...existing, aqUndoIndex: historyIndex }, '');
     }
   }, [historyIndex]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isPopStateUndoRedoRef.current) {
       isPopStateUndoRedoRef.current = false;
       return;
@@ -61,8 +61,8 @@ export function useBrowserHistory({
     window.history.pushState({ ...currentState, aqUndoIndex: historyIndex }, '');
   }, [historyIndex]);
 
-  useEffect(() => {
-    const onPopState = (event: PopStateEvent) => {
+  useEffect((): (() => void) => {
+    const onPopState = (event: PopStateEvent): void => {
       const targetIndex =
         typeof event.state?.aqUndoIndex === 'number' ? event.state.aqUndoIndex : null;
       if (targetIndex === null) return;
@@ -84,13 +84,13 @@ export function useBrowserHistory({
     };
 
     window.addEventListener('popstate', onPopState);
-    return () => {
+    return (): void => {
       window.removeEventListener('popstate', onPopState);
     };
   }, [undoSteps, redoSteps]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+  useEffect((): (() => void) => {
+    const onKeyDown = (event: KeyboardEvent): void => {
       const isCmdOrCtrl = event.metaKey || event.ctrlKey;
       if (!isCmdOrCtrl || event.altKey) return;
 
@@ -111,7 +111,7 @@ export function useBrowserHistory({
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => {
+    return (): void => {
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [undo, redo]);

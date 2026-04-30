@@ -155,7 +155,7 @@ export const Editor = React.memo(
       const savedBaselineRef = useRef<string | undefined>(baselineContent);
       const lastChapterIdRef = useRef(chapter.id);
 
-      useEffect(() => {
+      useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
         if (!isChapterSwitch) return;
 
@@ -183,20 +183,20 @@ export const Editor = React.memo(
       }
 
       const isChatStreaming = useChatStore(
-        (s: ChatStoreState) => s.isProseStreamingFromChat
+        (s: ChatStoreState): boolean => s.isProseStreamingFromChat
       );
       // True after the user stops chat mid-write: streaming has ended but we
       // keep streamingMode=true so the prefix-based green highlight stays visible
       // (as it appeared during streaming) rather than switching to LCS diff.
       const isChatStreamingFrozen = useChatStore(
-        (s: ChatStoreState) => s.isProseStreamingFrozen
+        (s: ChatStoreState): boolean => s.isProseStreamingFrozen
       );
       // Subscribe to the ephemeral streaming slot — only this editor instance
       // re-renders on each chunk, not the entire component tree.
-      const streamingContent = useStoryStore((s: StoryStoreState) =>
+      const streamingContent = useStoryStore((s: StoryStoreState): string | null =>
         s.streamingContent?.chapterId === chapter.id ? s.streamingContent.content : null
       );
-      const streamingWriteMode = useStoryStore((s: StoryStoreState) =>
+      const streamingWriteMode = useStoryStore((s: StoryStoreState): string | null =>
         s.streamingContent?.chapterId === chapter.id
           ? (s.streamingContent.writeMode ?? 'append')
           : null
@@ -213,7 +213,7 @@ export const Editor = React.memo(
       // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
       // for chapter switches; also watch chapter.content so AI insertions and
       // undo/redo (which can change content without changing id) are reflected.
-      useEffect(() => {
+      useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
         lastChapterIdRef.current = chapter.id;
 
@@ -240,7 +240,7 @@ export const Editor = React.memo(
 
       // Push each streamed chunk directly into the editor's local state so
       // only this component re-renders — story.chapters stays untouched.
-      useEffect(() => {
+      useEffect((): void => {
         if (streamingContent !== null) {
           const container = scrollContainerRef.current;
           const liveDistanceFromBottom = container
@@ -264,7 +264,7 @@ export const Editor = React.memo(
         }
       }, [streamingContent, proseStreamingActive]);
 
-      useEffect(() => {
+      useEffect((): void => {
         setLocalTitle(chapter.title);
       }, [chapter.id, chapter.title]);
 
@@ -476,14 +476,14 @@ export const Editor = React.memo(
         ]
       );
 
-      useEffect(() => {
+      useEffect((): (() => void) => {
         // Capture shortcuts globally so suggestion controls remain reachable
         // while focus moves across editor-adjacent UI.
         const onKeyDown = (e: KeyboardEvent): void => {
           maybeHandleSuggestionHotkey(e);
         };
         window.addEventListener('keydown', onKeyDown, true);
-        return () => window.removeEventListener('keydown', onKeyDown, true);
+        return (): void => window.removeEventListener('keydown', onKeyDown, true);
       }, [maybeHandleSuggestionHotkey]);
 
       const format = (type: string): void => {
@@ -569,13 +569,13 @@ export const Editor = React.memo(
       };
 
       useImperativeHandle(ref, () => ({
-        insertImage: (filename: string, url: string, altText?: string) =>
+        insertImage: (filename: string, url: string, altText?: string): void =>
           insertImageMarkdown(filename, url, altText),
-        focus: () => {
+        focus: (): void => {
           editorViewRef.current?.focus();
         },
-        format: (type: string) => format(type),
-        jumpToPosition: (start: number, end: number) => {
+        format: (type: string): void => format(type),
+        jumpToPosition: (start: number, end: number): void => {
           const view = editorViewRef.current;
           if (!view) return;
           view.dispatch({
@@ -640,11 +640,13 @@ export const Editor = React.memo(
           ? 'bg-brand-gray-50 border-t border-brand-gray-200'
           : 'bg-brand-gray-900 border-t border-brand-gray-800';
       const hasContinuationOptions = continuations.some(
-        (option: string) => option && option.trim().length > 0
+        (option: string): boolean | '' => option && option.trim().length > 0
       );
       const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
       const displayedContinuations =
-        continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
+        continuations.length > 0
+          ? continuations
+          : Array.from({ length: 2 }, (): string => '');
       const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
 
       // We need to scroll in a few scenarios:
@@ -663,19 +665,19 @@ export const Editor = React.memo(
       // panel is already present; the guard below prevents scrolling unless an
       // LLM action is active or the panel just opened.
       const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
-      useEffect(() => {
+      useEffect((): (() => void) | undefined => {
         const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
         prevHasContinuationRef.current = hasContinuationOptions;
 
         if (isProseStreaming) return undefined;
         if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
-        const raf = window.requestAnimationFrame(() => {
+        const raf = window.requestAnimationFrame((): void => {
           if (!isDetachedFromBottomRef.current) {
             scrollMainContentToBottom();
           }
         });
-        return () => {
+        return (): void => {
           window.cancelAnimationFrame(raf);
         };
       }, [
@@ -708,7 +710,7 @@ export const Editor = React.memo(
             localContentRef,
             onSuggestionButtonClick: handleSuggestionButtonClick,
             onAcceptContinuation,
-            onRegenerate: (cursor: number, content: string) =>
+            onRegenerate: (cursor: number, content: string): void =>
               suggestionControls.onKeyboardSuggestionAction?.(
                 'regenerate',
                 cursor,
@@ -767,12 +769,12 @@ export const Editor = React.memo(
                       value={localTitle}
                       onChange={(
                         e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                      ) => {
+                      ): void => {
                         const val = e.target.value.replace(/\n/g, '');
                         setLocalTitle(val);
                         if (titleDebounceRef.current)
                           clearTimeout(titleDebounceRef.current);
-                        titleDebounceRef.current = setTimeout(() => {
+                        titleDebounceRef.current = setTimeout((): void => {
                           onChange(chapter.id, { title: val });
                         }, DEBOUNCE_MS);
                       }}
@@ -802,7 +804,7 @@ export const Editor = React.memo(
                       language={language}
                       spellCheck={spellCheck}
                       onOpenSearch={onOpenSearch}
-                      onChange={(val: string, isUndoRedo?: boolean) => {
+                      onChange={(val: string, isUndoRedo?: boolean): void => {
                         setLocalContent(val);
                         localContentRef.current = val;
                         // Clear diff immediately on user input so typed text is
@@ -822,7 +824,7 @@ export const Editor = React.memo(
                         if (contentDebounceRef.current) {
                           clearTimeout(contentDebounceRef.current);
                         }
-                        contentDebounceRef.current = setTimeout(() => {
+                        contentDebounceRef.current = setTimeout((): void => {
                           onChange(chapter.id, { content: val }, isUndoRedo);
                         }, DEBOUNCE_MS);
                       }}

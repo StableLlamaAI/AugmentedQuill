@@ -41,7 +41,7 @@ export function useEditorPreferences(): {
     }
   });
 
-  useEffect(() => {
+  useEffect((): void => {
     localStorage.setItem(
       'augmentedquill_editor_settings',
       JSON.stringify(editorSettings)
@@ -51,7 +51,7 @@ export function useEditorPreferences(): {
   const currentTheme: AppTheme = editorSettings.theme || 'mixed';
   const isLight = currentTheme === 'light';
 
-  useEffect(() => {
+  useEffect((): void => {
     // Tailwind `dark:` utilities are activated by the `dark` class.
     // Mixed mode should behave like dark mode in the UI, so we map
     // both `dark` and `mixed` to the same body class while preserving

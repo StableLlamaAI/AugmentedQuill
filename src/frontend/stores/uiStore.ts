@@ -139,48 +139,94 @@ export const useUIStore = create<UIStoreState>()(
 
       // ── Panel actions ────────────────────────────────────────────────────
       setIsChatOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isChatOpen: resolve(v, s.isChatOpen) })),
+        set((s: UIStoreState): { isChatOpen: boolean } => ({
+          isChatOpen: resolve(v, s.isChatOpen),
+        })),
       setIsSidebarOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isSidebarOpen: resolve(v, s.isSidebarOpen) })),
+        set((s: UIStoreState): { isSidebarOpen: boolean } => ({
+          isSidebarOpen: resolve(v, s.isSidebarOpen),
+        })),
       setIsAppearanceOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({
+        set((s: UIStoreState): { isAppearanceOpen: boolean } => ({
           isAppearanceOpen: resolve(v, s.isAppearanceOpen),
         })),
       setIsSettingsOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isSettingsOpen: resolve(v, s.isSettingsOpen) })),
+        set((s: UIStoreState): { isSettingsOpen: boolean } => ({
+          isSettingsOpen: resolve(v, s.isSettingsOpen),
+        })),
       setIsImagesOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isImagesOpen: resolve(v, s.isImagesOpen) })),
+        set((s: UIStoreState): { isImagesOpen: boolean } => ({
+          isImagesOpen: resolve(v, s.isImagesOpen),
+        })),
       setIsDebugLogsOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isDebugLogsOpen: resolve(v, s.isDebugLogsOpen) })),
+        set((s: UIStoreState): { isDebugLogsOpen: boolean } => ({
+          isDebugLogsOpen: resolve(v, s.isDebugLogsOpen),
+        })),
 
       // ── Dialog actions ───────────────────────────────────────────────────
       openMetadataDialog: (initialTab?: MetadataTab) =>
-        set((s: UIStoreState) => ({
-          metadataDialog: {
-            isOpen: true,
-            version: s.metadataDialog.version + 1,
-            initialTab,
-          },
-        })),
+        set(
+          (
+            s: UIStoreState
+          ): {
+            metadataDialog: {
+              isOpen: boolean;
+              version: number;
+              initialTab: MetadataTab | undefined;
+            };
+          } => ({
+            metadataDialog: {
+              isOpen: true,
+              version: s.metadataDialog.version + 1,
+              initialTab,
+            },
+          })
+        ),
 
       closeMetadataDialog: () =>
-        set((s: UIStoreState) => ({
-          metadataDialog: { ...s.metadataDialog, isOpen: false },
-        })),
+        set(
+          (
+            s: UIStoreState
+          ): {
+            metadataDialog: {
+              isOpen: boolean;
+              version: number;
+              initialTab?: MetadataTab | undefined;
+            };
+          } => ({
+            metadataDialog: { ...s.metadataDialog, isOpen: false },
+          })
+        ),
 
       openSourcebookDialog: (entryId: string) =>
-        set((s: UIStoreState) => ({
-          sourcebookDialog: {
-            isOpen: true,
-            version: s.sourcebookDialog.version + 1,
-            entryId,
-          },
-        })),
+        set(
+          (
+            s: UIStoreState
+          ): {
+            sourcebookDialog: { isOpen: boolean; version: number; entryId: string };
+          } => ({
+            sourcebookDialog: {
+              isOpen: true,
+              version: s.sourcebookDialog.version + 1,
+              entryId,
+            },
+          })
+        ),
 
       closeSourcebookDialog: () =>
-        set((s: UIStoreState) => ({
-          sourcebookDialog: { ...s.sourcebookDialog, isOpen: false },
-        })),
+        set(
+          (
+            s: UIStoreState
+          ): {
+            sourcebookDialog: {
+              isOpen: boolean;
+              version: number;
+              entryId: string | null;
+            };
+          } => ({
+            sourcebookDialog: { ...s.sourcebookDialog, isOpen: false },
+          })
+        ),
       openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) =>
         set((s: UIStoreState) => ({
           chapterMetadataDialog: {
@@ -197,19 +243,27 @@ export const useUIStore = create<UIStoreState>()(
 
       // ── Editor UI actions ────────────────────────────────────────────────
       setViewMode: (v: ViewMode | ((prev: ViewMode) => ViewMode)) =>
-        set((s: UIStoreState) => ({ viewMode: resolve(v, s.viewMode) })),
+        set((s: UIStoreState): { viewMode: ViewMode } => ({
+          viewMode: resolve(v, s.viewMode),
+        })),
       setShowWhitespace: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ showWhitespace: resolve(v, s.showWhitespace) })),
+        set((s: UIStoreState): { showWhitespace: boolean } => ({
+          showWhitespace: resolve(v, s.showWhitespace),
+        })),
       setActiveFormats: (v: string[] | ((prev: string[]) => string[])) =>
-        set((s: UIStoreState) => ({ activeFormats: resolve(v, s.activeFormats) })),
+        set((s: UIStoreState): { activeFormats: string[] } => ({
+          activeFormats: resolve(v, s.activeFormats),
+        })),
       setIsViewMenuOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({ isViewMenuOpen: resolve(v, s.isViewMenuOpen) })),
+        set((s: UIStoreState): { isViewMenuOpen: boolean } => ({
+          isViewMenuOpen: resolve(v, s.isViewMenuOpen),
+        })),
       setIsFormatMenuOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({
+        set((s: UIStoreState): { isFormatMenuOpen: boolean } => ({
           isFormatMenuOpen: resolve(v, s.isFormatMenuOpen),
         })),
       setIsMobileFormatMenuOpen: (v: boolean | ((prev: boolean) => boolean)) =>
-        set((s: UIStoreState) => ({
+        set((s: UIStoreState): { isMobileFormatMenuOpen: boolean } => ({
           isMobileFormatMenuOpen: resolve(v, s.isMobileFormatMenuOpen),
         })),
     }),
@@ -217,7 +271,9 @@ export const useUIStore = create<UIStoreState>()(
       name: 'aq_ui_panels',
       // Only persist panel open/close state – dialogs and editor flags are
       // transient and should reset on page load.
-      partialize: (state: UIStoreState) => ({
+      partialize: (
+        state: UIStoreState
+      ): { isChatOpen: boolean; isSidebarOpen: boolean } => ({
         isChatOpen: state.isChatOpen,
         isSidebarOpen: state.isSidebarOpen,
       }),
@@ -231,17 +287,19 @@ export const useUIStore = create<UIStoreState>()(
 
 /** Subscribe to metadata dialog state only. */
 export function useMetadataDialog(): MetadataDialogState {
-  return useUIStore((s: UIStoreState) => s.metadataDialog);
+  return useUIStore((s: UIStoreState): MetadataDialogState => s.metadataDialog);
 }
 
 /** Subscribe to sourcebook dialog state only. */
 export function useSourcebookDialog(): SourcebookDialogState {
-  return useUIStore((s: UIStoreState) => s.sourcebookDialog);
+  return useUIStore((s: UIStoreState): SourcebookDialogState => s.sourcebookDialog);
 }
 
 /** Subscribe to chapter metadata dialog state only. */
 export function useChapterMetadataDialog(): ChapterMetadataDialogState {
-  return useUIStore((s: UIStoreState) => s.chapterMetadataDialog);
+  return useUIStore(
+    (s: UIStoreState): ChapterMetadataDialogState => s.chapterMetadataDialog
+  );
 }
 
 // ---------------------------------------------------------------------------

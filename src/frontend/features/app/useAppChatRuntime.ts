@@ -108,7 +108,7 @@ export function useAppChatRuntime({
   const { setChatMessages, setSessionMutations } = useChatStore.getState();
 
   const getSystemPrompt = useCallback(
-    () => prompts.system_messages.chat_llm || '',
+    (): string => prompts.system_messages.chat_llm || '',
     [prompts]
   );
 
@@ -121,7 +121,7 @@ export function useAppChatRuntime({
     setChatMessages,
   });
 
-  const onChatNewMessageBegin = useCallback(() => {
+  const onChatNewMessageBegin = useCallback((): void => {
     setSessionMutations([]);
     // Clear any frozen prose streaming state left over from a previous stop so
     // the green diff overlay is dismissed before the new interaction starts.
@@ -130,14 +130,14 @@ export function useAppChatRuntime({
     advanceBaselineToCurrentStory();
   }, [advanceBaselineToCurrentStory, setSessionMutations]);
 
-  const onToolMutations = useCallback((muts: ToolMutationPayload) => {
+  const onToolMutations = useCallback((muts: ToolMutationPayload): void => {
     const newMuts: SessionMutation[] = [];
     (muts?._call_results || []).forEach(
       (res: {
         name: string;
         args?: Record<string, unknown>;
         result?: Record<string, unknown>;
-      }) => {
+      }): void => {
         const factory = MUTATION_TOOL_REGISTRY[res.name];
         if (!factory) {
           return;
@@ -157,9 +157,9 @@ export function useAppChatRuntime({
     }
     setSessionMutations((prev: SessionMutation[]): SessionMutation[] => {
       const combined = [...prev];
-      newMuts.forEach((mutation: SessionMutation) => {
+      newMuts.forEach((mutation: SessionMutation): void => {
         const exists = combined.some(
-          (entry: SessionMutation) =>
+          (entry: SessionMutation): boolean =>
             entry.type === mutation.type &&
             entry.label === mutation.label &&
             entry.targetId === mutation.targetId
@@ -194,7 +194,7 @@ export function useAppChatRuntime({
     }
     // Subscribe to isChatLoading changes imperatively to reset prose preview state
     const unsubscribe = useChatStore.subscribe(
-      (state: ChatStoreState, prevState: ChatStoreState) => {
+      (state: ChatStoreState, prevState: ChatStoreState): void => {
         if (prevState.isChatLoading && !state.isChatLoading) {
           const pendingProse = prosePreviewStateRef.current;
           const wasStopped = stoppedDuringProseRef.current;
@@ -206,11 +206,11 @@ export function useAppChatRuntime({
           // the streamed text and an undo entry is pushed.
           if (wasStopped) {
             const writes = Object.entries(pendingProse).filter(
-              ([, s]: [string, { lastAppliedContent?: string }]) =>
+              ([, s]: [string, { lastAppliedContent?: string }]): boolean =>
                 s.lastAppliedContent !== undefined
             );
             if (writes.length > 0) {
-              void (async () => {
+              void (async (): Promise<void> => {
                 for (const [streamKey, streamState] of writes) {
                   const chapId = streamKey.split(':')[0];
                   if (chapId && streamState.lastAppliedContent !== undefined) {
@@ -254,13 +254,13 @@ export function useAppChatRuntime({
     refreshProjects,
     refreshStory,
     onProseChunk: useCallback(
-      (chapterId: number, writeMode: string, accumulated: string) => {
+      (chapterId: number, writeMode: string, accumulated: string): void => {
         const currentStory = storyRef.current;
         const unit =
           currentStory.projectType === 'short-story' && currentStory.draft
             ? currentStory.draft
             : currentStory.chapters.find(
-                (chapter: { id: string }) => Number(chapter.id) === chapterId
+                (chapter: { id: string }): boolean => Number(chapter.id) === chapterId
               ) || null;
         if (!unit || writeMode === 'insert_at_marker') {
           return;
@@ -312,27 +312,27 @@ export function useAppChatRuntime({
     onMutations: onToolMutations,
     pushExternalHistoryEntry: (
       params: Parameters<NonNullable<typeof pushExternalHistoryEntry>>[0]
-    ) => pushExternalHistoryEntry?.(params),
+    ): void | undefined => pushExternalHistoryEntry?.(params),
     requestToolCallLoopAccess,
   });
 
   const handleSendMessageWithReset = useCallback(
-    async (text: string, attachments?: ChatAttachment[]) => {
+    async (text: string, attachments?: ChatAttachment[]): Promise<void> => {
       onChatNewMessageBegin();
       await handleSendMessage(text, attachments);
     },
     [handleSendMessage, onChatNewMessageBegin]
   );
 
-  const handleRegenerateWithReset = useCallback(async () => {
+  const handleRegenerateWithReset = useCallback(async (): Promise<void> => {
     onChatNewMessageBegin();
     await handleRegenerate();
   }, [handleRegenerate, onChatNewMessageBegin]);
 
   const onMutationClick = useCallback(
-    (mutation: SessionMutation) => {
-      startTransition(() => {
-        requestAnimationFrame(() => {
+    (mutation: SessionMutation): void => {
+      startTransition((): void => {
+        requestAnimationFrame((): void => {
           if (mutation.type === 'chapter') {
             openAndExpandStory();
             handleChapterSelect(mutation.targetId ?? null);
@@ -371,7 +371,7 @@ export function useAppChatRuntime({
     ...sessionState,
     onMutationClick,
     handleSendMessageWithReset,
-    handleStopChat: useCallback(() => {
+    handleStopChat: useCallback((): void => {
       // Record that a stop was triggered while prose may be streaming, so the
       // isChatLoading subscriber can commit the partial text to the story.
       if (useChatStore.getState().isProseStreamingFromChat) {

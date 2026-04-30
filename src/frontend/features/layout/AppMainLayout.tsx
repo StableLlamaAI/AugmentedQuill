@@ -71,7 +71,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     // storyId for the sidebar height initialization effect (avoids importing full story)
     const storyId = sidebarControls.currentChapterId ? 'loaded' : '';
 
-    useEffect(() => {
+    useEffect((): void => {
       const totalHeight = sidebarRef.current?.clientHeight || 0;
       if (
         totalHeight > 0 &&
@@ -244,7 +244,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
                 }}
                 onContextChange={setActiveFormats}
                 showWhitespace={showWhitespace}
-                onToggleShowWhitespace={() => setShowWhitespace(!showWhitespace)}
+                onToggleShowWhitespace={(): void => setShowWhitespace(!showWhitespace)}
                 baselineContent={editorControls.baselineContent}
                 spellCheck={true}
                 onOpenSearch={onOpenSearch}

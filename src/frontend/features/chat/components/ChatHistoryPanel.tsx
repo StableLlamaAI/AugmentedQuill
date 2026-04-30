@@ -71,7 +71,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
           </h3>
           {sessions.length > 0 && onDeleteAllSessions && (
             <button
-              onClick={() => {
+              onClick={(): void => {
                 if (isDisabled) return;
                 onDeleteAllSessions();
               }}
@@ -121,7 +121,7 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                       : 'text-brand-300 font-medium'
                     : ''
                 } ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                onClick={() => {
+                onClick={(): void => {
                   if (isDisabled) return;
                   onSelectSession(session.id);
                   onClose();
@@ -144,7 +144,9 @@ export const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
                 </span>
               </button>
               <button
-                onClick={async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+                onClick={async (
+                  e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+                ): Promise<void> => {
                   e.stopPropagation();
                   if (isDisabled) return;
                   if (await confirm(t('Delete this chat?'))) {

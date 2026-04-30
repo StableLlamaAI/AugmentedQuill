@@ -113,8 +113,8 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
     const redoMenuRef = useRef<HTMLDivElement | null>(null);
     const confirm = useConfirm();
 
-    useClickOutside(undoMenuRef, () => setIsUndoMenuOpen(false), isUndoMenuOpen);
-    useClickOutside(redoMenuRef, () => setIsRedoMenuOpen(false), isRedoMenuOpen);
+    useClickOutside(undoMenuRef, (): void => setIsUndoMenuOpen(false), isUndoMenuOpen);
+    useClickOutside(redoMenuRef, (): void => setIsRedoMenuOpen(false), isRedoMenuOpen);
 
     const menuContainerClass = isLight
       ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
@@ -131,7 +131,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
       >
         <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
           <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            onClick={(): void => setIsSidebarOpen(!isSidebarOpen)}
             className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
             aria-label={isSidebarOpen ? t('Close sidebar') : t('Open sidebar')}
           >
@@ -140,7 +140,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
 
           <button
             type="button"
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={(): void => setIsSettingsOpen(true)}
             className="flex items-center space-x-2"
             aria-label={t('Open settings')}
           >
@@ -191,7 +191,9 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsUndoMenuOpen((open: boolean) => !open)}
+                onClick={(): void =>
+                  setIsUndoMenuOpen((open: boolean): boolean => !open)
+                }
                 disabled={!canUndo}
                 title={t('Undo multiple actions')}
                 aria-label={t('Open undo actions list')}
@@ -217,7 +219,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                         type="button"
                         role="menuitem"
                         className={menuButtonClass}
-                        onClick={() => {
+                        onClick={(): void => {
                           undoSteps(option.steps);
                           setIsUndoMenuOpen(false);
                         }}
@@ -250,7 +252,9 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                 theme={currentTheme}
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsRedoMenuOpen((open: boolean) => !open)}
+                onClick={(): void =>
+                  setIsRedoMenuOpen((open: boolean): boolean => !open)
+                }
                 disabled={!canRedo}
                 title={t('Redo multiple actions')}
                 aria-label={t('Open redo actions list')}
@@ -276,7 +280,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
                         type="button"
                         role="menuitem"
                         className={menuButtonClass}
-                        onClick={() => {
+                        onClick={(): void => {
                           redoSteps(option.steps);
                           setIsRedoMenuOpen(false);
                         }}
@@ -324,7 +328,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
             theme={currentTheme}
             variant="ghost"
             size="sm"
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={(): void => setIsSettingsOpen(true)}
             title={t('Settings')}
             className="mr-1"
           >
@@ -349,7 +353,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
             theme={currentTheme}
             variant="secondary"
             size="sm"
-            onClick={() => setIsChatOpen(!isChatOpen)}
+            onClick={(): void => setIsChatOpen(!isChatOpen)}
             icon={
               isChatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />
             }

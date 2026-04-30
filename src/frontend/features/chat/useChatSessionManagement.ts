@@ -58,11 +58,11 @@ export function useChatSessionManagement({
   } = useChatStore.getState();
 
   // Update systemPrompt when the project changes.
-  useEffect(() => {
+  useEffect((): void => {
     setSystemPrompt(getSystemPrompt());
   }, [storyId, getSystemPrompt, setSystemPrompt]);
 
-  const refreshChatList = useCallback(async () => {
+  const refreshChatList = useCallback(async (): Promise<void> => {
     try {
       const chats = await api.chat.list();
       setChatHistoryList(chats);
@@ -72,7 +72,7 @@ export function useChatSessionManagement({
   }, []);
 
   const handleNewChat = useCallback(
-    (incognito: boolean = false) => {
+    (incognito: boolean = false): void => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const newId = incognito ? uuidv4() : `chat-${timestamp}`;
       if (incognito) {
@@ -85,7 +85,10 @@ export function useChatSessionManagement({
           allowWebSearch: false,
           scratchpad: '',
         };
-        setIncognitoSessions((prev: ChatSession[]) => [newSession, ...prev]);
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] => [
+          newSession,
+          ...prev,
+        ]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
@@ -114,10 +117,10 @@ export function useChatSessionManagement({
   );
 
   const handleSelectChat = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       const incognito = useChatStore
         .getState()
-        .incognitoSessions.find((session: ChatSession) => session.id === id);
+        .incognitoSessions.find((session: ChatSession): boolean => session.id === id);
       if (incognito) {
         setChatMessages(incognito.messages || []);
         setCurrentChatId(id);
@@ -133,7 +136,7 @@ export function useChatSessionManagement({
       try {
         const chat = await api.chat.load(id);
         if (chat) {
-          startTransition(() => {
+          startTransition((): void => {
             setChatMessages(chat.messages || []);
             setCurrentChatId(id);
             setIsIncognito(false);
@@ -160,13 +163,16 @@ export function useChatSessionManagement({
   );
 
   const handleUpdateScratchpad = useCallback(
-    (content: string) => {
+    (content: string): void => {
       setScratchpad(content);
       const { currentChatId, isIncognito } = useChatStore.getState();
       if (isIncognito && currentChatId) {
-        setIncognitoSessions((prev: ChatSession[]) =>
-          prev.map((session: ChatSession) =>
-            session.id === currentChatId ? { ...session, scratchpad: content } : session
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+          prev.map(
+            (session: ChatSession): ChatSession =>
+              session.id === currentChatId
+                ? { ...session, scratchpad: content }
+                : session
           )
         );
       }
@@ -174,16 +180,18 @@ export function useChatSessionManagement({
     [setScratchpad, setIncognitoSessions]
   );
 
-  const handleDeleteScratchpad = useCallback(() => {
+  const handleDeleteScratchpad = useCallback((): void => {
     handleUpdateScratchpad('');
   }, [handleUpdateScratchpad]);
 
   const handleDeleteChat = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       const { incognitoSessions, currentChatId } = useChatStore.getState();
-      if (incognitoSessions.some((session: ChatSession) => session.id === id)) {
-        setIncognitoSessions((prev: ChatSession[]) =>
-          prev.filter((session: ChatSession) => session.id !== id)
+      if (
+        incognitoSessions.some((session: ChatSession): boolean => session.id === id)
+      ) {
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+          prev.filter((session: ChatSession): boolean => session.id !== id)
         );
         if (currentChatId === id) {
           handleNewChat();
@@ -204,7 +212,7 @@ export function useChatSessionManagement({
     [handleNewChat, refreshChatList, setIncognitoSessions]
   );
 
-  const handleDeleteAllChats = useCallback(async () => {
+  const handleDeleteAllChats = useCallback(async (): Promise<void> => {
     if (
       !confirm(
         'Are you sure you want to delete ALL chats (including incognito)? This cannot be undone.'
@@ -226,7 +234,7 @@ export function useChatSessionManagement({
   // ---------------------------------------------------------------------------
   // Initial chat load
   // ---------------------------------------------------------------------------
-  useEffect(() => {
+  useEffect((): void => {
     const { currentChatId, isIncognito } = useChatStore.getState();
     if (storyId && !currentChatId && !isIncognito) {
       const loadInitialChats = async (): Promise<void> => {
@@ -252,11 +260,11 @@ export function useChatSessionManagement({
   // re-renders up to App.tsx).  chatStore.subscribe() fires imperatively
   // without triggering any React render cycle.
   // ---------------------------------------------------------------------------
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const unsubscribe = useChatStore.subscribe(
-      (state: ChatStoreState, prevState: ChatStoreState) => {
+      (state: ChatStoreState, prevState: ChatStoreState): void => {
         // Only fire when persisted session fields actually changed.
         if (
           state.chatMessages === prevState.chatMessages &&
@@ -288,25 +296,28 @@ export function useChatSessionManagement({
 
         if (isIncognito) {
           const firstUserMsg = chatMessages.find(
-            (message: ChatMessage) => message.role === 'user'
+            (message: ChatMessage): boolean => message.role === 'user'
           );
           const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
-          useChatStore.getState().setIncognitoSessions((prev: ChatSession[]) =>
-            prev.map((session: ChatSession) =>
-              session.id === currentChatId
-                ? {
-                    ...session,
-                    name,
-                    messages: chatMessages,
-                    systemPrompt,
-                    allowWebSearch,
-                    scratchpad,
-                  }
-                : session
-            )
-          );
+          useChatStore
+            .getState()
+            .setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+              prev.map(
+                (session: ChatSession): ChatSession =>
+                  session.id === currentChatId
+                    ? {
+                        ...session,
+                        name,
+                        messages: chatMessages,
+                        systemPrompt,
+                        allowWebSearch,
+                        scratchpad,
+                      }
+                    : session
+              )
+            );
         } else {
-          timeout = setTimeout(async () => {
+          timeout = setTimeout(async (): Promise<void> => {
             try {
               const {
                 chatMessages: msgs,
@@ -316,7 +327,9 @@ export function useChatSessionManagement({
                 scratchpad: sc,
               } = useChatStore.getState();
               if (!cid) return;
-              const firstUserMsg = msgs.find((m: ChatMessage) => m.role === 'user');
+              const firstUserMsg = msgs.find(
+                (m: ChatMessage): boolean => m.role === 'user'
+              );
               const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
               await api.chat.save(cid, {
                 name,
@@ -334,7 +347,7 @@ export function useChatSessionManagement({
       }
     );
 
-    return () => {
+    return (): void => {
       clearTimeout(timeout);
       unsubscribe();
     };

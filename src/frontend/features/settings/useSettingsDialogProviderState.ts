@@ -26,12 +26,15 @@ const resolveProviderId = (
   currentId: string | undefined,
   selectedId: string | undefined
 ): string => {
-  if (currentId && providers.some((provider: LLMConfig) => provider.id === currentId)) {
+  if (
+    currentId &&
+    providers.some((provider: LLMConfig): boolean => provider.id === currentId)
+  ) {
     return currentId;
   }
   if (
     selectedId &&
-    providers.some((provider: LLMConfig) => provider.id === selectedId)
+    providers.some((provider: LLMConfig): boolean => provider.id === selectedId)
   ) {
     return selectedId;
   }
@@ -61,14 +64,14 @@ export function useSettingsDialogProviderState({
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [modelPresets, setModelPresets] = useState<ModelPresetEntry[]>([]);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (!isOpen) return undefined;
 
     setLocalSettings(settings);
     setEditingProviderId(settings.activeChatProviderId);
 
     let cancelled = false;
-    (async () => {
+    (async (): Promise<void> => {
       try {
         const [machine, presetsResponse] = await Promise.all([
           api.machine.get(),
@@ -85,15 +88,16 @@ export function useSettingsDialogProviderState({
           .filter((model: MachineModelConfig): model is MachineModelConfig =>
             Boolean(model && typeof model === 'object')
           )
-          .map((model: MachineModelConfig) =>
-            machineModelToProvider(model, DEFAULT_LLM_CONFIG)
+          .map(
+            (model: MachineModelConfig): LLMConfig =>
+              machineModelToProvider(model, DEFAULT_LLM_CONFIG)
           );
 
         if (cancelled || providers.length === 0) return;
 
         const fallbackId =
-          providers.find((provider: LLMConfig) => provider.id === selectedName)?.id ||
-          providers[0].id;
+          providers.find((provider: LLMConfig): boolean => provider.id === selectedName)
+            ?.id || providers[0].id;
 
         setLocalSettings((prev: AppSettings) => {
           const selectedChat = openai.selected_chat ?? undefined;
@@ -107,10 +111,12 @@ export function useSettingsDialogProviderState({
             selectedChat ?? undefined
           );
 
-          setEditingProviderId((currentEditId: string | null) => {
+          setEditingProviderId((currentEditId: string | null): string => {
             if (
               currentEditId &&
-              providers.some((provider: LLMConfig) => provider.id === currentEditId)
+              providers.some(
+                (provider: LLMConfig): boolean => provider.id === currentEditId
+              )
             ) {
               return currentEditId;
             }
@@ -140,12 +146,12 @@ export function useSettingsDialogProviderState({
       }
     })();
 
-    return () => {
+    return (): void => {
       cancelled = true;
     };
   }, [isOpen, settings]);
 
-  const addProvider = () => {
+  const addProvider = (): void => {
     const newProvider: LLMConfig = {
       ...DEFAULT_LLM_CONFIG,
       id: Date.now().toString(),
@@ -162,9 +168,11 @@ export function useSettingsDialogProviderState({
     setEditingProviderId(newProvider.id);
   };
 
-  const duplicateProvider = (id: string) => {
-    setLocalSettings((prev: AppSettings) => {
-      const source = prev.providers.find((provider: LLMConfig) => provider.id === id);
+  const duplicateProvider = (id: string): void => {
+    setLocalSettings((prev: AppSettings): AppSettings => {
+      const source = prev.providers.find(
+        (provider: LLMConfig): boolean => provider.id === id
+      );
       if (!source) return prev;
 
       const newProvider: LLMConfig = {
@@ -180,19 +188,20 @@ export function useSettingsDialogProviderState({
     });
   };
 
-  const updateProvider = (id: string, updates: Partial<LLMConfig>) => {
+  const updateProvider = (id: string, updates: Partial<LLMConfig>): void => {
     setLocalSettings((prev: AppSettings) => ({
       ...prev,
-      providers: prev.providers.map((provider: LLMConfig) =>
-        provider.id === id ? { ...provider, ...updates } : provider
+      providers: prev.providers.map(
+        (provider: LLMConfig): LLMConfig =>
+          provider.id === id ? { ...provider, ...updates } : provider
       ),
     }));
   };
 
-  const removeProvider = (id: string) => {
+  const removeProvider = (id: string): void => {
     setLocalSettings((prev: AppSettings) => {
       const remainingProviders = prev.providers.filter(
-        (provider: LLMConfig) => provider.id !== id
+        (provider: LLMConfig): boolean => provider.id !== id
       );
       const fallbackId = remainingProviders[0]?.id || '';
 
@@ -211,7 +220,9 @@ export function useSettingsDialogProviderState({
             : prev.activeEditingProviderId,
       };
     });
-    setEditingProviderId((current: string | null) => (current === id ? null : current));
+    setEditingProviderId((current: string | null): string | null =>
+      current === id ? null : current
+    );
   };
 
   return {

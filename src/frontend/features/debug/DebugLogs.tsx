@@ -51,17 +51,15 @@ const JsonView: React.FC<{
   theme: AppTheme;
   depth?: number;
   label?: string;
-}) => {
-  const [isCollapsed, setIsCollapsed] = useState(() => {
+}): JSX.Element => {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (label === 'tools') return true;
     return false;
   });
 
-  const { isLight } = useThemeClasses();
-  const textMain = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
   const textMuted = 'text-brand-gray-500';
 
-  const renderValue = () => {
+  const renderValue = (): JSX.Element => {
     if (data === null) return <span className="text-blue-400">null</span>;
     if (typeof data === 'undefined')
       return <span className="text-brand-gray-600">undefined</span>;
@@ -100,7 +98,7 @@ const JsonView: React.FC<{
       <button
         type="button"
         className="flex items-center gap-1 cursor-pointer hover:bg-brand-gray-500/5 -ml-4 px-1 rounded w-full text-left"
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={(): void => setIsCollapsed(!isCollapsed)}
         aria-expanded={!isCollapsed}
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -127,7 +125,9 @@ const JsonView: React.FC<{
   );
 };
 
-const getCallerOrigin = (caller_id?: string) => {
+const getCallerOrigin = (
+  caller_id?: string
+): 'Unknown' | 'User request' | 'Internal workflow' | 'Internal' => {
   if (!caller_id) return 'Unknown';
   if (caller_id.startsWith('api.')) return 'User request';
   if (
@@ -166,13 +166,13 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
   const borderMain = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
   const bgSecondary = isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-900';
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (): void => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   };
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await api.debug.getLogs();
@@ -184,7 +184,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
     }
   };
 
-  const clearLogs = async () => {
+  const clearLogs = async (): Promise<void> => {
     if (!(await confirm(t('Are you sure you want to clear all logs?')))) return;
     try {
       await api.debug.clearLogs();
@@ -194,23 +194,26 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
     }
   };
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       fetchLogs();
     }
   }, [isOpen]);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (isOpen && logs.length > 0) {
       // Defer scroll until layout settles so height calculations are accurate.
       const timeoutId = setTimeout(scrollToBottom, 50);
-      return () => clearTimeout(timeoutId);
+      return (): void => clearTimeout(timeoutId);
     }
     return undefined;
   }, [isOpen, logs.length]);
 
-  const toggleExpand = (id: string) => {
-    setExpandedLogs((prev: Record<string, boolean>) => ({ ...prev, [id]: !prev[id] }));
+  const toggleExpand = (id: string): void => {
+    setExpandedLogs((prev: Record<string, boolean>): { [x: string]: boolean } => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
   if (!isOpen) return null;
@@ -249,7 +252,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
               className={`flex items-center rounded-lg border ${borderMain} overflow-hidden mr-2`}
             >
               <button
-                onClick={() => setStreamMode('aggregated')}
+                onClick={(): void => setStreamMode('aggregated')}
                 className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${
                   streamMode === 'aggregated'
                     ? 'bg-blue-500 text-white'
@@ -260,7 +263,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                 <Layers size={14} /> {t('Aggregated')}
               </button>
               <button
-                onClick={() => setStreamMode('chunks')}
+                onClick={(): void => setStreamMode('chunks')}
                 className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${
                   streamMode === 'chunks'
                     ? 'bg-blue-500 text-white'
@@ -326,7 +329,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
                     <button
                       type="button"
                       className="flex items-center gap-4 min-w-0 flex-1 sm:max-w-[75%] text-left"
-                      onClick={() => toggleExpand(log.id)}
+                      onClick={(): void => toggleExpand(log.id)}
                       aria-expanded={expandedLogs[log.id]}
                     >
                       {expandedLogs[log.id] ? (
