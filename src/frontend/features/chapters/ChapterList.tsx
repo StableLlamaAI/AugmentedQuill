@@ -58,6 +58,7 @@ interface ChapterListProps {
   isAiAvailable?: boolean;
   theme?: AppTheme;
   onBookCreate?: (title: string) => void;
+  onOpenImages?: () => void;
   languages?: string[];
   language?: string;
   baselineChapters?: Chapter[];
@@ -85,6 +86,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     theme = 'mixed',
     languages = [],
     language,
+    onOpenImages,
     baselineChapters = [],
     spellCheck = true,
   }: ChapterListProps) => {
@@ -386,7 +388,7 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
       }
     };
 
-    const renderChapter = (chapter: Chapter, index: number): JSX.Element => {
+    const renderChapter = (chapter: Chapter, index: number): React.JSX.Element => {
       const isDragging =
         draggedItem?.type === 'chapter' && draggedItem.id === chapter.id;
 

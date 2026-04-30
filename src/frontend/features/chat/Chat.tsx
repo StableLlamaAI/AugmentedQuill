@@ -30,7 +30,7 @@ import { useChatUIState } from './hooks/useChatUIState';
 import { useChatMessages } from './hooks/useChatMessages';
 
 /* eslint-disable max-lines-per-function, complexity */
-function ChatComponent(): JSX.Element {
+function ChatComponent(): React.JSX.Element {
   const {
     messages,
     isLoading,
