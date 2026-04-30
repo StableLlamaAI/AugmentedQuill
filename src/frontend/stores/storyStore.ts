@@ -333,7 +333,11 @@ function chaptersStructuralEqual(
   if (a.length !== b.length) return false;
   return a.every(
     (ch: Chapter, i: number) =>
-      ch.id === b[i].id && ch.title === b[i].title && ch.book_id === b[i].book_id
+      ch.id === b[i].id &&
+      ch.title === b[i].title &&
+      ch.book_id === b[i].book_id &&
+      ch.summary === b[i].summary &&
+      ch.notes === b[i].notes
   );
 }
 

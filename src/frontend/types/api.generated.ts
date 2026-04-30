@@ -1252,6 +1252,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/{project_name}/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Api Chat Batch Chapter Before
+     * @description Return the pre-batch content of a chapter for diff-baseline restoration.
+     *
+     *     Used by the frontend to reconstruct the baseline state for chapters that
+     *     were not loaded in memory when an AI tool modified them.
+     */
+    get: operations['api_chat_batch_chapter_before_api_v1_projects__project_name__chat_tools_batches__batch_id__chapter_before__chapter_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/{project_name}/chat/stream': {
     parameters: {
       query?: never;
@@ -1623,6 +1646,14 @@ export interface components {
     BooksReorderRequest: {
       /** Book Ids */
       book_ids: string[];
+    };
+    /**
+     * ChapterBeforeContentResponse
+     * @description Response body for ``GET /api/v1/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}``.
+     */
+    ChapterBeforeContentResponse: {
+      /** Content */
+      content: string;
     };
     /**
      * ChapterContentUpdate
@@ -4902,6 +4933,40 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ChatToolBatchMutationResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  api_chat_batch_chapter_before_api_v1_projects__project_name__chat_tools_batches__batch_id__chapter_before__chapter_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        batch_id: string;
+        chapter_id: number;
+        /** @description Directory name of the project */
+        project_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChapterBeforeContentResponse'];
         };
       };
       /** @description Validation Error */

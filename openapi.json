@@ -2672,6 +2672,67 @@
         }
       }
     },
+    "/api/v1/projects/{project_name}/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}": {
+      "get": {
+        "tags": ["Chat"],
+        "summary": "Api Chat Batch Chapter Before",
+        "description": "Return the pre-batch content of a chapter for diff-baseline restoration.\n\nUsed by the frontend to reconstruct the baseline state for chapters that\nwere not loaded in memory when an AI tool modified them.",
+        "operationId": "api_chat_batch_chapter_before_api_v1_projects__project_name__chat_tools_batches__batch_id__chapter_before__chapter_id__get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "chapter_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Chapter Id"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory name of the project",
+              "title": "Project Name"
+            },
+            "description": "Directory name of the project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChapterBeforeContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_name}/chat/stream": {
       "post": {
         "tags": ["Chat"],
@@ -3627,6 +3688,18 @@
         "required": ["book_ids"],
         "title": "BooksReorderRequest",
         "description": "Request body for reordering books."
+      },
+      "ChapterBeforeContentResponse": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": ["content"],
+        "title": "ChapterBeforeContentResponse",
+        "description": "Response body for ``GET /api/v1/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}``."
       },
       "ChapterContentUpdate": {
         "properties": {

@@ -159,6 +159,9 @@ export const api = {
       currentProjectApi().chat.undoToolBatch(...args),
     redoToolBatch: (...args: Parameters<ProjectApiClients['chat']['redoToolBatch']>) =>
       currentProjectApi().chat.redoToolBatch(...args),
+    getChapterBeforeContent: (
+      ...args: Parameters<ProjectApiClients['chat']['getChapterBeforeContent']>
+    ) => currentProjectApi().chat.getChapterBeforeContent(...args),
   },
   sourcebook: {
     list: (...args: Parameters<ProjectApiClients['sourcebook']['list']>) =>

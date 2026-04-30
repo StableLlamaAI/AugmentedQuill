@@ -459,6 +459,10 @@ class TestReplaceAll(TestCase):
         self.assertEqual(resp.changed_sections_meta[0].field, "summary")
         self.assertEqual(resp.changed_sections_meta[0].label, "Chapter One summary")
 
+        # Verify the change was actually persisted to disk.
+        saved = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["chapters"][0]["summary"], "A lonely beacon.")
+
 
 class TestReplaceSingle(TestCase):
     def setUp(self):

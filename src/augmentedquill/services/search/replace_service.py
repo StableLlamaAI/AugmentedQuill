@@ -332,7 +332,13 @@ def _replace_in_story_metadata(
     changed = []
     change_locations: list[ReplaceChangeLocation] = []
 
-    story_fields = ["project_title", "story_summary", "notes", "private_notes"]
+    _story_field_labels: dict[str, str] = {
+        "project_title": "Story title",
+        "story_summary": "Story summary",
+        "notes": "Story notes",
+        "private_notes": "Story private notes",
+    }
+    story_fields = list(_story_field_labels.keys())
     for field_key in story_fields:
         if target_field is not None and field_key != target_field:
             continue
@@ -358,7 +364,7 @@ def _replace_in_story_metadata(
         if count > 0:
             story[field_key] = new_val
             total += count
-            label = f"Story {field_key}"
+            label = _story_field_labels[field_key]
             changed.append(label)
             change_locations.append(
                 _make_change_location("metadata", "story", field_key, label)

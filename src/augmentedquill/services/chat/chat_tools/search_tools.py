@@ -177,11 +177,11 @@ async def replace_in_project(
         mutations["story_changed"] = True
     if result.changed_sections_meta:
         mutations["change_locations"] = [
-            loc.dict() for loc in result.changed_sections_meta
+            loc.model_dump() for loc in result.changed_sections_meta
         ]
 
     return {
         "replacements_made": result.replacements_made,
         "changed_sections": result.changed_sections,
-        "change_locations": [loc.dict() for loc in result.changed_sections_meta],
+        "change_locations": [loc.model_dump() for loc in result.changed_sections_meta],
     }

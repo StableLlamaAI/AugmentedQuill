@@ -361,6 +361,7 @@ export function useAppChatRuntime({
     [
       handleChapterSelect,
       openAndExpandStory,
+      openChapterMetadataDialog,
       openSourcebookEntryDialog,
       openStoryMetadataDialog,
     ]

@@ -23,10 +23,10 @@ describe('mutationToolRegistry', () => {
       result: {
         change_locations: [
           {
-            type: 'chapter',
+            type: 'metadata',
             target_id: '1',
             field: 'summary',
-            label: 'Chapter 1 summary',
+            label: 'Chapter 1: The Dusty Discovery summary',
           },
           {
             type: 'sourcebook',
@@ -47,9 +47,10 @@ describe('mutationToolRegistry', () => {
     expect(Array.isArray(mutations)).toBe(true);
     expect(mutations).toHaveLength(3);
     expect(mutations[0]).toMatchObject({
-      type: 'chapter',
+      type: 'metadata',
       targetId: '1',
-      label: 'Chapter 1 summary',
+      subType: 'summary',
+      label: 'Chapter 1: The Dusty Discovery summary',
     });
     expect(mutations[1]).toMatchObject({
       type: 'sourcebook',

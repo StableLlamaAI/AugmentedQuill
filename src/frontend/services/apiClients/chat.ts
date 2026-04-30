@@ -227,6 +227,25 @@ export const createChatApi = (projectName: string) => ({
       'Failed to redo AI tool batch'
     );
   },
+
+  getChapterBeforeContent: async (
+    batchId: string,
+    chapterId: number
+  ): Promise<string | null> => {
+    try {
+      const res = await fetchJson<{ content: string }>(
+        projectEndpoint(
+          projectName,
+          `/chat/tools/batches/${encodeURIComponent(batchId)}/chapter-before/${chapterId}`
+        ),
+        undefined,
+        'Failed to get chapter before content'
+      );
+      return res.content ?? null;
+    } catch {
+      return null;
+    }
+  },
 });
 
 export const chatApi = createChatApi('');
