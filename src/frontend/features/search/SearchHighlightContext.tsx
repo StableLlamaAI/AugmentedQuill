@@ -43,9 +43,15 @@ export const SearchHighlightProvider: React.FC<{
   </SearchHighlightContext.Provider>
 );
 
+import type { SearchHighlightRange } from './useSearchReplace';
+
 export interface SearchHighlightHookResult {
   highlightActive: boolean;
-  getRanges: (sectionType: string, sectionId: string, field: string) => unknown[];
+  getRanges: (
+    sectionType: string,
+    sectionId: string,
+    field: string
+  ) => SearchHighlightRange[];
   getMatchTexts: (sectionType: string, sectionId: string, field: string) => string[];
 }
 

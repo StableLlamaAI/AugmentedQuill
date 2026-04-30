@@ -94,7 +94,7 @@ export interface UseSourcebookEntryDialogStateResult {
   showKeywordsPanel: boolean;
   isSaving: boolean;
   relationNameMap: Record<string, string>;
-  descriptionHighlightRanges: unknown[];
+  descriptionHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
   availableImages: ProjectImage[];
   selectedImagesList: ProjectImage[];
   keywords: string[];

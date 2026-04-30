@@ -53,7 +53,7 @@ export function useChapterSuggestions({
   activeWritingConfig,
   isWritingAvailable,
   updateChapter,
-  _viewMode,
+  viewMode,
   getErrorMessage,
 }: UseChapterSuggestionsParams): {
   continuations: string[];

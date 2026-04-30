@@ -73,7 +73,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   baseline = '',
   language,
   searchHighlightRanges,
-}: MarkdownViewProps): JSX.Element => {
+}: MarkdownViewProps): React.ReactElement => {
   const safeContent = typeof content === 'string' ? content : '';
 
   // Diff case (editor diff viewer, one instance at a time): render synchronously so
@@ -213,7 +213,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     i: number,
     la?: string,
     lineStart: number = 0
-  ): JSX.Element => {
+  ): React.ReactElement => {
     // Simple mode preserves source for complex markdown to avoid misleading preview fidelity.
     if (!searchHighlightRanges?.length) {
       return (
@@ -247,7 +247,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
     );
   };
 
-  const renderInline = (text: string): (JSX.Element | null)[] | null => {
+  const renderInline = (text: string): (React.ReactElement | null)[] | null => {
     if (!text) return null;
 
     // Tokenize minimal inline markdown for lightweight summary previews.

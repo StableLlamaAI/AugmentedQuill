@@ -123,7 +123,12 @@ const parseChatToolEvent = (dataStr: string): ParsedChatToolEvent | null => {
   return null;
 };
 
-type ProseChunkScheduler = ReturnType<typeof createProseChunkScheduler>;
+interface ProseChunkScheduler {
+  setPendingProseChunk: (chunk: ToolProseChunk) => void;
+  scheduleProseChunkFlush: () => void;
+  cancelScheduledProseFlush: () => void;
+  flushPendingProseChunk: () => void;
+}
 
 const createProseChunkScheduler = (
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void

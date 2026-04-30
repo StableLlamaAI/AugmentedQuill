@@ -47,7 +47,7 @@ export const useMetadataDialogHistory = ({
     return [current];
   });
 
-  const [historyIndex, setHistoryIndex] = useState((): 1 | 0 => {
+  const [historyIndex, setHistoryIndex] = useState<number>(() => {
     if (baseline) {
       const base = normalizeMetadataParams(baseline);
       const current = normalizeMetadataParams(initialData);

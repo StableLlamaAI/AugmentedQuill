@@ -56,7 +56,7 @@ const renderContextUsagePill = ({
   usageTone: string;
   compactionApplied: boolean;
   t: TranslationFunction;
-}): JSX.Element | null => {
+}): React.ReactElement | null => {
   if (!enabled) {
     return null;
   }

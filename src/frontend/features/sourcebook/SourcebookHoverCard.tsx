@@ -35,9 +35,9 @@ export const SourcebookHoverCard: React.FC<SourcebookHoverCardProps> = ({
   textClass,
   subTextClass,
   availableImages,
-}: SourcebookHoverCardProps): ReactPortal => {
+}: SourcebookHoverCardProps): React.ReactPortal => {
   const { t } = useTranslation();
-  const getEntryImage = (): JSX.Element | null => {
+  const getEntryImage = (): ProjectImage | null => {
     if (!entry.images || entry.images.length === 0) return null;
     const firstImgName = entry.images[0];
     return (

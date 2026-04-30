@@ -134,8 +134,8 @@ interface CollapsibleSectionResizeParams {
 }
 
 interface CollapsibleSectionResizeResult {
-  sectionRef: React.RefObject<HTMLDivElement>;
-  headerRef: React.RefObject<HTMLButtonElement>;
+  sectionRef: React.RefObject<HTMLDivElement | null>;
+  headerRef: React.RefObject<HTMLButtonElement | null>;
   isResizing: boolean;
   minHeaderHeight: number;
   startResizing: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
@@ -284,7 +284,8 @@ function useCollapsibleSectionResize(
 }
 
 const getCollapsibleSectionClassNames = (
-  isLight?: boolean
+  isLight?: boolean,
+  _isResizing?: boolean
 ): {
   borderClass: string;
   headerBg: string;

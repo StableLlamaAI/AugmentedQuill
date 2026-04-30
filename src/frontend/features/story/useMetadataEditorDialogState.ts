@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Conflict, MetadataTab } from '../../types';
 import { MetadataParams, computeSyncUpdates } from './metadataSync';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
+import type { SearchHighlightRange } from '../search/useSearchReplace';
 import { useMetadataDialogHistory } from './useMetadataDialogHistory';
 type MetadataAction = 'write' | 'update' | 'rewrite';
 type MetadataAiSource = 'chapter' | 'notes';
@@ -116,7 +117,11 @@ function useMetadataDataState({
     index: number,
     field: 'description' | 'resolution'
   ): SearchHighlightRange[] =>
-    getRanges('story_metadata', 'story', `conflicts[${index}].${field}`);
+    getRanges(
+      'story_metadata',
+      'story',
+      `conflicts[${index}].${field}`
+    ) as SearchHighlightRange[];
 
   const { history, historyIndex, restoreMetadataHistory } = useMetadataDialogHistory({
     data,

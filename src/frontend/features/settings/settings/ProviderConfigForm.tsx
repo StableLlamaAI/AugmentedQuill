@@ -74,7 +74,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   onSetActiveChatProvider,
   onUpdateProvider,
   onRemoveProvider,
-}: ProviderConfigFormProps): JSX.Element => {
+}: ProviderConfigFormProps): React.ReactElement => {
   const [modelPickerOpenFor, setModelPickerOpenFor] = useState<string | null>(null);
   const [suggestedPresetByProvider, setSuggestedPresetByProvider] = useState<
     Record<string, string | null>
@@ -195,7 +195,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     label: string,
     field: 'isMultimodal' | 'supportsFunctionCalling',
     detectedField: 'is_multimodal' | 'supports_function_calling'
-  ): JSX.Element | null => {
+  ): React.ReactElement | null => {
     if (!activeProvider) return null;
     const val = activeProvider[field];
     const detected = detectedCapabilities[activeProvider.id]?.[detectedField];
@@ -243,7 +243,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
     max: number,
     step: number,
     tooltip?: string
-  ): JSX.Element | null => {
+  ): React.ReactElement | null => {
     if (!activeProvider) return null;
     const id = `provider-${field}`;
     return (
@@ -295,7 +295,7 @@ export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
       | 'topK',
     placeholder: string = '',
     tooltip?: string
-  ): JSX.Element | null => {
+  ): React.ReactElement | null => {
     if (!activeProvider) return null;
     return (
       <div className="space-y-1">

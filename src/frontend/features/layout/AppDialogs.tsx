@@ -33,6 +33,10 @@ const ProjectImagesLazy = React.lazy(
   })
 );
 
+type CreateProjectDialogProps = React.ComponentProps<
+  typeof import('../projects/CreateProjectDialog').CreateProjectDialog
+>;
+
 const CreateProjectDialogLazy = React.lazy(
   async (): Promise<{ default: React.FC<CreateProjectDialogProps> }> => ({
     default: (await import('../projects/CreateProjectDialog')).CreateProjectDialog,

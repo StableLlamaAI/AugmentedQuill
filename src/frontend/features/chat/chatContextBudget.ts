@@ -492,9 +492,9 @@ function summarizeToolMessage(message: MutablePreparedMessage): boolean {
 }
 
 function summarizeAssistantToolCalls(message: MutablePreparedMessage): boolean {
-  const summarizedCalls = message.tool_calls.map(summarizeToolCall);
-  const callsChanged =
-    JSON.stringify(summarizedCalls) !== JSON.stringify(message.tool_calls);
+  const toolCalls = message.tool_calls ?? [];
+  const summarizedCalls = toolCalls.map(summarizeToolCall);
+  const callsChanged = JSON.stringify(summarizedCalls) !== JSON.stringify(toolCalls);
   if (!callsChanged) {
     return false;
   }

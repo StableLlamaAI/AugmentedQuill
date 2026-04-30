@@ -30,7 +30,7 @@ interface MutationTagsProps {
 export const MutationTags: React.FC<MutationTagsProps> = ({
   mutations,
   onMutationClick,
-}: MutationTagsProps): JSX.Element | null => {
+}: MutationTagsProps): React.ReactElement | null => {
   const { isLight } = useTheme();
   const { t } = useTranslation();
 
@@ -42,7 +42,7 @@ export const MutationTags: React.FC<MutationTagsProps> = ({
   const textClass = isLight ? 'text-amber-800' : 'text-amber-200';
   const hoverClass = isLight ? 'hover:bg-amber-100' : 'hover:bg-amber-800/40';
 
-  const getIcon = (type: SessionMutation['type']): JSX.Element => {
+  const getIcon = (type: SessionMutation['type']): React.ReactElement => {
     switch (type) {
       case 'story':
       case 'chapter':

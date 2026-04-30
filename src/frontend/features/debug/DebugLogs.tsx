@@ -51,7 +51,7 @@ const JsonView: React.FC<{
   theme: AppTheme;
   depth?: number;
   label?: string;
-}): JSX.Element => {
+}): React.ReactElement => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (label === 'tools') return true;
     return false;
@@ -59,7 +59,7 @@ const JsonView: React.FC<{
 
   const textMuted = 'text-brand-gray-500';
 
-  const renderValue = (): JSX.Element => {
+  const renderValue = (): React.ReactElement => {
     if (data === null) return <span className="text-blue-400">null</span>;
     if (typeof data === 'undefined')
       return <span className="text-brand-gray-600">undefined</span>;
@@ -148,7 +148,7 @@ export const DebugLogs: React.FC<DebugLogsProps> = ({
   isOpen,
   onClose,
   theme,
-}: DebugLogsProps) => {
+}: DebugLogsProps): React.ReactElement | null => {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});

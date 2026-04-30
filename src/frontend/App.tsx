@@ -269,7 +269,7 @@ const App: React.FC = () => {
   // and per the explicit-mutation exception in the architecture decision.
   const sessionMutations = useChatStore((s: ChatStoreState) => s.sessionMutations);
   const sourcebookMutationEntryIds = useMemo(
-    (): Set<unknown> =>
+    (): Set<string> =>
       new Set(
         sessionMutations
           .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)

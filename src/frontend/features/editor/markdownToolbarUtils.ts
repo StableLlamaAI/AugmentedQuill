@@ -211,6 +211,8 @@ export const isInlineFormatActiveAtSelection = (
 
   const sl = countChar(left, '*');
   const sr = countChar(right, '*');
+  const ul = countChar(left, '_');
+  const ur = countChar(right, '_');
 
   if (type === 'bold') {
     return (sl >= 2 && sr >= 2) || (ul >= 2 && ur >= 2);

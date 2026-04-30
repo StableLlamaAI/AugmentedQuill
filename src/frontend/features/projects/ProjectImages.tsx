@@ -74,7 +74,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   projectLanguage = 'en',
   isOpen,
   onClose,
-  _theme = 'mixed',
+  theme = 'mixed',
   settings,
   imageActionsAvailable = true,
   prompts,

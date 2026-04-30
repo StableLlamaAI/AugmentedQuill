@@ -66,7 +66,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   activeProjectStats,
   theme,
   languages,
-}: SettingsProjectsProps): JSX.Element => {
+}: SettingsProjectsProps): React.ReactElement => {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
   const [tempLang, setTempLang] = useState('');
@@ -105,7 +105,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
     return true;
   };
 
-  const getProjectIcon = (type: string): JSX.Element => {
+  const getProjectIcon = (type: string): React.ReactElement => {
     switch (type) {
       case 'short-story':
         return <FileText size={16} />;

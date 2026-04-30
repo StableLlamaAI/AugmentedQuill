@@ -29,8 +29,8 @@ export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
   activeProvider,
   defaultPrompts,
   onUpdateProvider,
-  _theme,
-}: SettingsPromptsProps): JSX.Element => {
+  theme,
+}: SettingsPromptsProps): React.ReactElement => {
   const { isLight } = useThemeClasses();
 
   const promptMetaById = React.useMemo((): Record<

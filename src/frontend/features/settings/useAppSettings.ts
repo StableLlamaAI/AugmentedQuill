@@ -118,7 +118,7 @@ export function useAppSettings(defaultSettings: AppSettings): {
                 selectedChat,
                 selectedWriting,
                 selectedEditing,
-                machine?.gui_language
+                machine?.gui_language ?? undefined
               )
             )
           );
@@ -133,7 +133,8 @@ export function useAppSettings(defaultSettings: AppSettings): {
 
   useEffect((): void => {
     localStorage.setItem('augmentedquill_settings', JSON.stringify(appSettings));
-    const targetLanguage = appSettings.guiLanguage || detectBrowserLanguage();
+    const targetLanguage =
+      appSettings.guiLanguage || detectBrowserLanguage() || undefined;
     if (i18n.language !== targetLanguage) {
       i18n.changeLanguage(targetLanguage);
     }

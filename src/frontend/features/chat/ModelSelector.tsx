@@ -37,11 +37,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSelectorClick,
   options,
   label,
-  _theme,
+  theme,
   connectionStatus = {},
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',
-}: ModelSelectorProps): JSX.Element => {
+}: ModelSelectorProps): React.ReactElement => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,7 +66,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   useClickOutside(containerRef, (): void => setIsOpen(false), isOpen);
 
-  const getStatusIcon = (id: string): JSX.Element => {
+  const getStatusIcon = (id: string): React.ReactElement => {
     const status = connectionStatus[id] || 'idle';
     if (status === 'loading')
       return <Loader2 size={10} className="animate-spin text-brand-500" />;
