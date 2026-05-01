@@ -194,7 +194,6 @@ it('clears chat session mutation tags when undo is used', async () => {
   expect(useChatStore.getState().sessionMutations).toEqual([]);
 });
 
-// eslint-disable-next-line max-lines-per-function
 describe('buildInitialStoryState', () => {
   it('hydrates story-level notes fields from selected project payload', () => {
     const state = buildInitialStoryState(
@@ -691,7 +690,6 @@ describe('buildInitialStoryState', () => {
 //  - redo              → baseline = state we left (shows re-inserted text)
 //  - loadStory         → baseline = the loaded state (no highlight)
 
-// eslint-disable-next-line max-lines-per-function
 describe('baselineState diff highlighting', () => {
   it('starts with baseline equal to current state (no highlight on load)', async () => {
     const ch = buildChapter('1', 'Hello world');

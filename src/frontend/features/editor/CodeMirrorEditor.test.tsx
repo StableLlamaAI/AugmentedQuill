@@ -14,7 +14,6 @@
 
 // @vitest-environment jsdom
 
-/* eslint-disable max-lines-per-function */
 import React from 'react';
 import { render, act, cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

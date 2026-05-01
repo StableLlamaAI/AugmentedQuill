@@ -52,7 +52,6 @@ const getDynamicSidebarWidthMax = (windowWidth: number): number => {
   return Math.max(DEFAULT_SIDEBAR_WIDTH_MAX, Math.min(halfWidth, availableWidth));
 };
 
-// eslint-disable-next-line max-lines-per-function
 export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> = ({
   appearanceRef,
   isAppearanceOpen,

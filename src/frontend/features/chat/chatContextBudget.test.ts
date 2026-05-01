@@ -9,7 +9,6 @@
  * Defines chat context budget tests so long tool-heavy histories stay compact and predictable.
  */
 
-/* eslint-disable max-lines-per-function */
 import { describe, expect, it } from 'vitest';
 
 import { prepareChatContext, estimateChatContextUsage } from './chatContextBudget';

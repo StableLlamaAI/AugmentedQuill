@@ -28,7 +28,6 @@ type UseChatSessionManagementParams = {
 };
 
 /** Custom React hook that manages chat session management. */
-// eslint-disable-next-line max-lines-per-function
 export function useChatSessionManagement({
   storyId,
   getSystemPrompt,

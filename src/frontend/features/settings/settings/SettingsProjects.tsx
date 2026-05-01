@@ -51,7 +51,6 @@ interface SettingsProjectsProps {
   languages: string[];
 }
 
-// eslint-disable-next-line max-lines-per-function
 export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   projects,
   activeProjectId,
@@ -205,7 +204,6 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {/* eslint-disable-next-line max-lines-per-function, complexity */}
         {projects.map((proj: ProjectMetadata) => (
           <div
             key={proj.id}

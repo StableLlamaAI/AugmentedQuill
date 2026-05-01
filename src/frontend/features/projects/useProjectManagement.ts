@@ -89,7 +89,6 @@ const mapProjectsList = (
   );
 
 /** Custom React hook that manages project management. */
-// eslint-disable-next-line max-lines-per-function
 export function useProjectManagement({
   storyId,
   storyTitle,

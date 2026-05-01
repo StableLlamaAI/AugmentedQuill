@@ -320,7 +320,6 @@ export const CodeMirrorEditor = React.forwardRef<
   EditorView | null,
   CodeMirrorEditorProps
 >(
-  // eslint-disable-next-line max-lines-per-function
   (
     {
       value,

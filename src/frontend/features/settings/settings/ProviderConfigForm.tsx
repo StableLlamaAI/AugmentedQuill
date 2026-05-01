@@ -643,7 +643,6 @@ function renderPresetsSection(
   );
 }
 
-// eslint-disable-next-line max-lines-per-function
 function renderParametersSection(
   activeProvider: LLMConfig,
   isLight: boolean,
@@ -922,7 +921,6 @@ function renderParametersSection(
   );
 }
 
-// eslint-disable-next-line max-lines-per-function
 export const ProviderConfigForm: React.FC<ProviderConfigFormProps> = ({
   activeProvider,
   isActiveProviderAvailable,

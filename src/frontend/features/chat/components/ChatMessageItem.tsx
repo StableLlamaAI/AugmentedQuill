@@ -97,7 +97,7 @@ export interface ChatMessageItemProps {
   onThinkingToggle: (id: string, next: boolean) => void;
 }
 
-// eslint-disable-next-line max-lines-per-function, complexity
+// eslint-disable-next-line complexity
 export const ChatMessageItem = React.memo(function ChatMessageItem({
   msg,
   isLast,

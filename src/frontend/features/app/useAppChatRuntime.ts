@@ -82,7 +82,6 @@ type ToolMutationPayload = ChatToolExecutionResponse & {
   }>;
 };
 
-// eslint-disable-next-line max-lines-per-function
 export function useAppChatRuntime({
   storyId,
   storyRef,

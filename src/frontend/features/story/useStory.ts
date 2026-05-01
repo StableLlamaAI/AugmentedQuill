@@ -122,7 +122,7 @@ export const buildInitialStoryState = (
   lastUpdated: Date.now(),
 });
 
-// eslint-disable-next-line max-lines-per-function, @typescript-eslint/explicit-function-return-type
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const useStory = (dialogs: StoryDialogs = defaultDialogs) => {
   // --- State now lives in the Zustand storyStore --------------------------------
   // Components that subscribe to the store with granular selectors only re-render
