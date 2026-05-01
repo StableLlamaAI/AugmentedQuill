@@ -21,9 +21,9 @@ import {
   ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import type { Extension, Range } from '@codemirror/state';
+import type { Extension, Range, Text } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
-import type { SyntaxNode } from '@lezer/common';
+import type { SyntaxNode, SyntaxNodeRef } from '@lezer/common';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -191,6 +191,169 @@ const HIDDEN_MARKER_NAMES = new Set([
 
 // ─── Decoration builder ─────────────────────────────────────────────────────
 
+/** CSS classes applied per inline format node name in visual mode. */
+const INLINE_FORMAT_CLASSES: Readonly<Record<string, string>> = {
+  Emphasis: 'cm-visual-emphasis',
+  StrongEmphasis: 'cm-visual-strong',
+  Strikethrough: 'cm-visual-strikethrough',
+  InlineCode: 'cm-visual-code',
+  Subscript: 'cm-visual-sub',
+  Superscript: 'cm-visual-sup',
+};
+
+/** Apply list-mark decoration: hide marker and insert a bullet/number widget. */
+function applyListMarkDecoration(
+  node: SyntaxNodeRef,
+  doc: Text,
+  decs: Range<Decoration>[]
+): void {
+  let parent = node.node.parent;
+  while (parent && parent.name !== 'OrderedList' && parent.name !== 'BulletList') {
+    parent = parent.parent;
+  }
+  const ordered = parent?.name === 'OrderedList';
+  const markerText = doc.sliceString(node.from, node.to).trim();
+  decs.push(
+    Decoration.replace({ widget: new ListBulletWidget(markerText, ordered) }).range(
+      node.from,
+      node.to
+    )
+  );
+}
+
+/** Apply link decorations: hide URL/title in visual mode, underline text, dim URL in MD mode. */
+function applyLinkDecorations(
+  node: SyntaxNodeRef,
+  doc: Text,
+  decs: Range<Decoration>[],
+  isVisual: boolean
+): false {
+  const urlNode = childByName(node.node, 'URL');
+  const titleNode = childByName(node.node, 'LinkTitle');
+  if (isVisual) {
+    if (urlNode)
+      decs.push(
+        Decoration.replace({ widget: hiddenWidget }).range(urlNode.from, urlNode.to)
+      );
+    if (titleNode)
+      decs.push(
+        Decoration.replace({ widget: hiddenWidget }).range(titleNode.from, titleNode.to)
+      );
+  }
+  const linkMarks: SyntaxNode[] = [];
+  let child = node.node.firstChild;
+  while (child) {
+    if (child.name === 'LinkMark') linkMarks.push(child);
+    child = child.nextSibling;
+  }
+  if (linkMarks.length >= 2) {
+    const textFrom = linkMarks[0].to;
+    const textTo = linkMarks[1].from;
+    if (textFrom < textTo)
+      decs.push(Decoration.mark({ class: 'cm-link-text' }).range(textFrom, textTo));
+  }
+  if (!isVisual && urlNode)
+    decs.push(
+      Decoration.mark({ class: 'cm-link-url' }).range(urlNode.from, urlNode.to)
+    );
+  return false;
+}
+
+/** Apply image decorations: render widget or append preview. */
+function applyImageDecorations(
+  node: SyntaxNodeRef,
+  doc: Text,
+  decs: Range<Decoration>[],
+  isVisual: boolean
+): false {
+  const urlNode = childByName(node.node, 'URL');
+  const src = urlNode ? nodeText(doc, urlNode) : '';
+  const fullText = doc.sliceString(node.from, node.to);
+  const altMatch = fullText.match(/^!\[([^\]]*)\]/);
+  const altText = altMatch ? altMatch[1] : '';
+  if (src) {
+    if (isVisual) {
+      decs.push(
+        Decoration.replace({ widget: new ImageWidget(src, altText) }).range(
+          node.from,
+          node.to
+        )
+      );
+    } else {
+      decs.push(
+        Decoration.widget({ widget: new ImageWidget(src, altText), side: 1 }).range(
+          node.to
+        )
+      );
+    }
+  }
+  return false;
+}
+
+/** Apply fenced-code decorations: hide opening/closing ``` lines in visual mode. */
+function applyFencedCodeDecorations(
+  node: SyntaxNodeRef,
+  doc: Text,
+  decs: Range<Decoration>[]
+): false {
+  const firstChild = node.node.firstChild;
+  const lastChild = node.node.lastChild;
+  if (firstChild && firstChild.name === 'CodeMark') {
+    const line = doc.lineAt(firstChild.from);
+    decs.push(
+      Decoration.replace({ widget: hiddenWidget }).range(
+        line.from,
+        Math.min(line.to + 1, doc.length)
+      )
+    );
+  }
+  if (lastChild && lastChild.name === 'CodeMark' && lastChild !== firstChild) {
+    const line = doc.lineAt(lastChild.from);
+    if (line.from >= lastChild.from) {
+      decs.push(
+        Decoration.replace({ widget: hiddenWidget }).range(
+          Math.max(node.from, line.from - 1),
+          lastChild.to
+        )
+      );
+    }
+  }
+  return false;
+}
+
+/** Apply block-level line decorations for headings and blockquotes in visual mode. */
+function applyBlockLevelDecorations(
+  node: SyntaxNodeRef,
+  doc: Text,
+  decs: Range<Decoration>[]
+): void {
+  const headingMatch = /^(?:ATXHeading|SetextHeading)(\d)$/.exec(node.name);
+  if (headingMatch) {
+    const line = doc.lineAt(node.from);
+    decs.push(
+      Decoration.line({ class: `cm-visual-h${headingMatch[1]}` }).range(line.from)
+    );
+  }
+  if (node.name === 'Blockquote') {
+    const startLine = doc.lineAt(node.from).number;
+    const endLine = doc.lineAt(Math.min(node.to, doc.length)).number;
+    for (let n = startLine; n <= endLine; n++) {
+      decs.push(
+        Decoration.line({ class: 'cm-visual-blockquote' }).range(doc.line(n).from)
+      );
+    }
+  }
+}
+
+/** Apply inline formatting decoration for the node if its name maps to a CSS class. */
+function applyInlineFormatDecoration(
+  node: SyntaxNodeRef,
+  decs: Range<Decoration>[]
+): void {
+  const cls = INLINE_FORMAT_CLASSES[node.name];
+  if (cls) decs.push(Decoration.mark({ class: cls }).range(node.from, node.to));
+}
+
 /** Build decorations. */
 function buildDecorations(view: EditorView, mode: DecorationViewMode): DecorationSet {
   if (mode === 'raw') return Decoration.none;
@@ -204,246 +367,37 @@ function buildDecorations(view: EditorView, mode: DecorationViewMode): Decoratio
     tree.iterate({
       from,
       to,
-      /** Helper for the requested value. */
-      enter(node: import('@lezer/common').SyntaxNodeRef): false | undefined {
+      enter(node: SyntaxNodeRef): false | undefined {
         const { name } = node;
-
-        // ── Hide syntax markers in visual mode ──────────────────────
         if (isVisual && HIDDEN_MARKER_NAMES.has(name)) {
           decs.push(
             Decoration.replace({ widget: hiddenWidget }).range(node.from, node.to)
           );
           return;
         }
-
-        // ── Hide ListMark in visual, replace with bullet widget ─────
         if (isVisual && name === 'ListMark') {
-          // Determine if ordered or unordered from parent
-          let parent = node.node.parent;
-          while (
-            parent &&
-            parent.name !== 'OrderedList' &&
-            parent.name !== 'BulletList'
-          ) {
-            parent = parent.parent;
-          }
-          const ordered = parent?.name === 'OrderedList';
-          const markerText = doc.sliceString(node.from, node.to).trim();
-          decs.push(
-            Decoration.replace({
-              widget: new ListBulletWidget(markerText, ordered),
-            }).range(node.from, node.to)
-          );
+          applyListMarkDecoration(node, doc, decs);
           return;
         }
-
-        // ── Link marks: hide [ ]( ) in visual mode ─────────────────
         if (isVisual && name === 'LinkMark') {
           decs.push(
             Decoration.replace({ widget: hiddenWidget }).range(node.from, node.to)
           );
           return;
         }
-
-        // ── Links: hide URL portion in visual ───────────────────────
-        if (name === 'Link') {
-          const urlNode = childByName(node.node, 'URL');
-          const titleNode = childByName(node.node, 'LinkTitle');
-
-          if (isVisual) {
-            // Hide URL and LinkTitle nodes
-            if (urlNode) {
-              decs.push(
-                Decoration.replace({ widget: hiddenWidget }).range(
-                  urlNode.from,
-                  urlNode.to
-                )
-              );
-            }
-            if (titleNode) {
-              decs.push(
-                Decoration.replace({ widget: hiddenWidget }).range(
-                  titleNode.from,
-                  titleNode.to
-                )
-              );
-            }
-          }
-
-          // In both modes: add underline decoration to link text content
-          // The link text is between first LinkMark and second LinkMark
-          const linkMarks: SyntaxNode[] = [];
-          let child = node.node.firstChild;
-          while (child) {
-            if (child.name === 'LinkMark') linkMarks.push(child);
-            child = child.nextSibling;
-          }
-          if (linkMarks.length >= 2) {
-            const textFrom = linkMarks[0].to;
-            const textTo = linkMarks[1].from;
-            if (textFrom < textTo) {
-              decs.push(
-                Decoration.mark({ class: 'cm-link-text' }).range(textFrom, textTo)
-              );
-            }
-          }
-
-          // In MD mode: dim the URL portion
-          if (!isVisual && urlNode) {
-            decs.push(
-              Decoration.mark({ class: 'cm-link-url' }).range(urlNode.from, urlNode.to)
-            );
-          }
-          return false; // don't recurse into link children (we handled them)
-        }
-
-        // ── Images ──────────────────────────────────────────────────
-        if (name === 'Image') {
-          const urlNode = childByName(node.node, 'URL');
-          const src = urlNode ? nodeText(doc, urlNode) : '';
-
-          // Extract alt text: text between first ! and LinkMark pair
-          let altText = '';
-          const fullText = doc.sliceString(node.from, node.to);
-          const altMatch = fullText.match(/^!\[([^\]]*)\]/);
-          if (altMatch) altText = altMatch[1];
-
-          if (src) {
-            if (isVisual) {
-              // Replace entire image syntax with rendered image.
-              // The widget DOM is block-level, so block semantics are preserved
-              // without using a block decoration via a plugin.
-              decs.push(
-                Decoration.replace({
-                  widget: new ImageWidget(src, altText),
-                }).range(node.from, node.to)
-              );
-            } else {
-              // MD mode: append image preview after the markdown text.
-              decs.push(
-                Decoration.widget({
-                  widget: new ImageWidget(src, altText),
-                  side: 1,
-                }).range(node.to)
-              );
-            }
-          }
-          return false;
-        }
-
-        // ── Horizontal rule: replace with <hr> in visual ────────────
+        if (name === 'Link') return applyLinkDecorations(node, doc, decs, isVisual);
+        if (name === 'Image') return applyImageDecorations(node, doc, decs, isVisual);
         if (isVisual && name === 'HorizontalRule') {
-          decs.push(
-            Decoration.replace({
-              widget: hrWidget,
-            }).range(node.from, node.to)
-          );
+          decs.push(Decoration.replace({ widget: hrWidget }).range(node.from, node.to));
           return false;
         }
-
-        // ── FencedCode: visual mode styling ─────────────────────────
-        if (isVisual && name === 'FencedCode') {
-          // Hide the opening ``` line and closing ``` line
-          const firstChild = node.node.firstChild;
-          const lastChild = node.node.lastChild;
-          if (firstChild && firstChild.name === 'CodeMark') {
-            // Hide opening code mark line (including CodeInfo if present)
-            const line = doc.lineAt(firstChild.from);
-            decs.push(
-              Decoration.replace({ widget: hiddenWidget }).range(
-                line.from,
-                Math.min(line.to + 1, doc.length)
-              )
-            );
-          }
-          if (lastChild && lastChild.name === 'CodeMark' && lastChild !== firstChild) {
-            const line = doc.lineAt(lastChild.from);
-            // If closing mark is on its own line, hide it
-            if (line.from >= lastChild.from) {
-              const hideFrom = Math.max(node.from, line.from - 1);
-              decs.push(
-                Decoration.replace({ widget: hiddenWidget }).range(
-                  hideFrom,
-                  lastChild.to
-                )
-              );
-            }
-          }
-          return false;
-        }
-
-        // ── Block-level line decorations (visual mode) ──────────────
+        if (isVisual && name === 'FencedCode')
+          return applyFencedCodeDecorations(node, doc, decs);
         if (isVisual) {
-          if (
-            name === 'ATXHeading1' ||
-            name === 'ATXHeading2' ||
-            name === 'ATXHeading3' ||
-            name === 'ATXHeading4' ||
-            name === 'ATXHeading5' ||
-            name === 'ATXHeading6' ||
-            name === 'SetextHeading1' ||
-            name === 'SetextHeading2'
-          ) {
-            const headingLevel = name.match(/(\d)/)?.[1] || '1';
-            const line = doc.lineAt(node.from);
-            decs.push(
-              Decoration.line({ class: `cm-visual-h${headingLevel}` }).range(line.from)
-            );
-          }
-
-          if (name === 'Blockquote') {
-            // Add left-border styling to all lines in the blockquote
-            const startLine = doc.lineAt(node.from).number;
-            const endLine = doc.lineAt(Math.min(node.to, doc.length)).number;
-            for (let n = startLine; n <= endLine; n++) {
-              decs.push(
-                Decoration.line({ class: 'cm-visual-blockquote' }).range(
-                  doc.line(n).from
-                )
-              );
-            }
-          }
+          applyBlockLevelDecorations(node, doc, decs);
+          applyInlineFormatDecoration(node, decs);
         }
-
-        // ── Inline formatting marks in visual mode ──────────────────
-        if (isVisual) {
-          if (name === 'Emphasis') {
-            // Apply italic to content (excluding marks)
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-emphasis' }).range(node.from, node.to)
-            );
-          }
-          if (name === 'StrongEmphasis') {
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-strong' }).range(node.from, node.to)
-            );
-          }
-          if (name === 'Strikethrough') {
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-strikethrough' }).range(
-                node.from,
-                node.to
-              )
-            );
-          }
-          if (name === 'InlineCode') {
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-code' }).range(node.from, node.to)
-            );
-          }
-          if (name === 'Subscript') {
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-sub' }).range(node.from, node.to)
-            );
-          }
-          if (name === 'Superscript') {
-            decs.push(
-              Decoration.mark({ class: 'cm-visual-sup' }).range(node.from, node.to)
-            );
-          }
-        }
-
-        return undefined; // continue traversal
+        return undefined;
       },
     });
   }

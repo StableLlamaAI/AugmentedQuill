@@ -32,6 +32,51 @@ type AppMainLayoutProps = {
   instructionLanguages: string[];
 };
 
+interface SkeletonBarProps {
+  isLight: boolean;
+  widthClass?: string;
+}
+
+const SkeletonBar: React.FC<SkeletonBarProps> = ({
+  isLight,
+  widthClass = 'w-full',
+}: SkeletonBarProps) => (
+  <div
+    className={`h-3 rounded ${widthClass} ${
+      isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'
+    }`}
+  />
+);
+
+interface ChapterLoadingSkeletonProps {
+  isLight: boolean;
+  t: (key: string) => string;
+}
+
+const ChapterLoadingSkeleton: React.FC<ChapterLoadingSkeletonProps> = ({
+  isLight,
+  t,
+}: ChapterLoadingSkeletonProps) => (
+  <div
+    className="flex-1 p-8 space-y-4 animate-pulse"
+    aria-busy="true"
+    aria-label={t('Loading chapter')}
+  >
+    <div
+      className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+    />
+    <SkeletonBar isLight={isLight} />
+    <SkeletonBar isLight={isLight} widthClass="w-5/6" />
+    <SkeletonBar isLight={isLight} />
+    <SkeletonBar isLight={isLight} widthClass="w-3/4" />
+    <div className="pt-2" />
+    <SkeletonBar isLight={isLight} />
+    <SkeletonBar isLight={isLight} widthClass="w-4/5" />
+    <SkeletonBar isLight={isLight} />
+    <SkeletonBar isLight={isLight} widthClass="w-2/3" />
+  </div>
+);
+
 export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
   ({
     sidebarControls,
@@ -181,40 +226,7 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
         >
           <div className="flex-1 overflow-hidden h-full flex flex-col">
             {isChapterLoading ? (
-              <div
-                className="flex-1 p-8 space-y-4 animate-pulse"
-                aria-busy="true"
-                aria-label={t('Loading chapter')}
-              >
-                <div
-                  className={`h-5 w-1/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-5/6 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-3/4 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div className="pt-2" />
-                <div
-                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-4/5 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-full rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-                <div
-                  className={`h-3 w-2/3 rounded ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
-                />
-              </div>
+              <ChapterLoadingSkeleton isLight={isLight} t={t} />
             ) : currentChapter ? (
               <Editor
                 ref={editorRef}

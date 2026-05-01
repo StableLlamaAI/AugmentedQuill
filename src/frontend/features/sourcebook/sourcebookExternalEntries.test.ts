@@ -408,187 +408,97 @@ describe('sourcebook dialog app-level undo/redo delegation', () => {
 // Verifies the pure helper logic used to compute diff status sets for the
 // list view (created / modified / deleted entries relative to baseline).
 
-describe('sourcebook list diff indicators', () => {
-  type Entry = {
-    id: string;
-    name: string;
-    description: string;
-    category?: string;
-    synonyms?: string[];
-    images?: string[];
-    keywords?: string[];
-    relations?: { target_id: string; relation: string }[];
-  };
+type DiffEntry = {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  synonyms?: string[];
+  images?: string[];
+  keywords?: string[];
+  relations?: { target_id: string; relation: string }[];
+};
 
-  const makeEntry = (id: string, description: string, name: string = id): Entry => ({
-    id,
-    name,
-    description,
+const makeDiffEntry = (
+  id: string,
+  description: string,
+  name: string = id
+): DiffEntry => ({
+  id,
+  name,
+  description,
+});
+
+/** Mirrors diffEntrySignature from SourcebookList. */
+const diffEntrySignature = (e: DiffEntry): string =>
+  JSON.stringify({
+    name: e.name,
+    description: e.description,
+    category: e.category ?? '',
+    synonyms: [...(e.synonyms ?? [])].sort(),
+    images: [...(e.images ?? [])].sort(),
   });
 
-  /** Mirrors the createdEntryIds computation in SourcebookList. */
-  const computeCreatedIds = (current: Entry[], baseline: Entry[]): Set<string> => {
-    const baselineIds = new Set(
-      baseline.map(
-        (b: {
-          id: string;
-          name: string;
-          description: string;
-          category?: string;
-          synonyms?: string[];
-          images?: string[];
-          keywords?: string[];
-          relations?: { target_id: string; relation: string }[];
-        }) => b.id
-      )
-    );
-    return new Set(
-      current
-        .filter(
-          (e: {
-            id: string;
-            name: string;
-            description: string;
-            category?: string;
-            synonyms?: string[];
-            images?: string[];
-            keywords?: string[];
-            relations?: { target_id: string; relation: string }[];
-          }) => !baselineIds.has(e.id)
-        )
-        .map(
-          (e: {
-            id: string;
-            name: string;
-            description: string;
-            category?: string;
-            synonyms?: string[];
-            images?: string[];
-            keywords?: string[];
-            relations?: { target_id: string; relation: string }[];
-          }) => e.id
-        )
-    );
-  };
+/** Mirrors the createdEntryIds computation in SourcebookList. */
+const computeCreatedIds = (
+  current: DiffEntry[],
+  baseline: DiffEntry[]
+): Set<string> => {
+  const baselineIds = new Set(baseline.map((b: DiffEntry) => b.id));
+  return new Set(
+    current.filter((e: DiffEntry) => !baselineIds.has(e.id)).map((e: DiffEntry) => e.id)
+  );
+};
 
-  /**
-   * Mirrors entryDiffSignature from SourcebookList.
-   * Keywords and relations are intentionally excluded — see the comment in the
-   * production code for the full rationale (data-source inconsistencies between
-   * the story-select and sourcebook-list endpoints).
-   */
-  const entryDiffSignature = (e: Entry): string =>
-    JSON.stringify({
-      name: e.name,
-      description: e.description,
-      category: e.category ?? '',
-      synonyms: [...(e.synonyms ?? [])].sort(),
-      images: [...(e.images ?? [])].sort(),
-    });
+/** Mirrors the modifiedEntryIds computation in SourcebookList (with normalization). */
+const computeModifiedIds = (current: DiffEntry[], baseline: DiffEntry[]): Set<string> =>
+  new Set(
+    current
+      .filter((e: DiffEntry) => {
+        const b = baseline.find((x: DiffEntry) => x.id === e.id);
+        return b && diffEntrySignature(b) !== diffEntrySignature(e);
+      })
+      .map((e: DiffEntry) => e.id)
+  );
 
-  /** Mirrors the modifiedEntryIds computation in SourcebookList (with normalization). */
-  const computeModifiedIds = (current: Entry[], baseline: Entry[]): Set<string> => {
-    return new Set(
-      current
-        .filter(
-          (e: {
-            id: string;
-            name: string;
-            description: string;
-            category?: string;
-            synonyms?: string[];
-            images?: string[];
-            keywords?: string[];
-            relations?: { target_id: string; relation: string }[];
-          }) => {
-            const b = baseline.find(
-              (x: {
-                id: string;
-                name: string;
-                description: string;
-                category?: string;
-                synonyms?: string[];
-                images?: string[];
-                keywords?: string[];
-                relations?: { target_id: string; relation: string }[];
-              }) => x.id === e.id
-            );
-            return b && entryDiffSignature(b) !== entryDiffSignature(e);
-          }
-        )
-        .map(
-          (e: {
-            id: string;
-            name: string;
-            description: string;
-            category?: string;
-            synonyms?: string[];
-            images?: string[];
-            keywords?: string[];
-            relations?: { target_id: string; relation: string }[];
-          }) => e.id
-        )
-    );
-  };
+/** Mirrors the deletedEntries computation in SourcebookList. */
+const computeDeletedEntries = (
+  current: DiffEntry[],
+  baseline: DiffEntry[]
+): DiffEntry[] => {
+  const currentIds = new Set(current.map((e: DiffEntry) => e.id));
+  return baseline.filter((b: DiffEntry) => !currentIds.has(b.id));
+};
 
-  /** Mirrors the deletedEntries computation in SourcebookList. */
-  const computeDeletedEntries = (current: Entry[], baseline: Entry[]): Entry[] => {
-    const currentIds = new Set(
-      current.map(
-        (e: {
-          id: string;
-          name: string;
-          description: string;
-          category?: string;
-          synonyms?: string[];
-          images?: string[];
-          keywords?: string[];
-          relations?: { target_id: string; relation: string }[];
-        }) => e.id
-      )
-    );
-    return baseline.filter(
-      (b: {
-        id: string;
-        name: string;
-        description: string;
-        category?: string;
-        synonyms?: string[];
-        images?: string[];
-        keywords?: string[];
-        relations?: { target_id: string; relation: string }[];
-      }) => !currentIds.has(b.id)
-    );
-  };
-
+describe('sourcebook list diff indicators', () => {
   it('no diff when baseline and current are identical', () => {
-    const entries = [makeEntry('a', 'desc A'), makeEntry('b', 'desc B')];
+    const entries = [makeDiffEntry('a', 'desc A'), makeDiffEntry('b', 'desc B')];
     expect(computeCreatedIds(entries, entries)).toEqual(new Set());
     expect(computeModifiedIds(entries, entries)).toEqual(new Set());
     expect(computeDeletedEntries(entries, entries)).toEqual([]);
   });
 
   it('detects a newly created entry (present in current, absent from baseline)', () => {
-    const baseline = [makeEntry('a', 'desc A')];
-    const current = [makeEntry('a', 'desc A'), makeEntry('b', 'desc B')];
+    const baseline = [makeDiffEntry('a', 'desc A')];
+    const current = [makeDiffEntry('a', 'desc A'), makeDiffEntry('b', 'desc B')];
     expect(computeCreatedIds(current, baseline)).toEqual(new Set(['b']));
     expect(computeModifiedIds(current, baseline)).toEqual(new Set());
     expect(computeDeletedEntries(current, baseline)).toEqual([]);
   });
 
   it('detects a deleted entry (absent from current, present in baseline)', () => {
-    const baseline = [makeEntry('a', 'desc A'), makeEntry('b', 'desc B')];
-    const current = [makeEntry('a', 'desc A')];
+    const baseline = [makeDiffEntry('a', 'desc A'), makeDiffEntry('b', 'desc B')];
+    const current = [makeDiffEntry('a', 'desc A')];
     expect(computeCreatedIds(current, baseline)).toEqual(new Set());
     expect(computeModifiedIds(current, baseline)).toEqual(new Set());
     expect(computeDeletedEntries(current, baseline)).toEqual([
-      makeEntry('b', 'desc B'),
+      makeDiffEntry('b', 'desc B'),
     ]);
   });
 
   it('detects a modified entry (same id, different content)', () => {
-    const baseline = [makeEntry('a', 'old desc')];
-    const current = [makeEntry('a', 'new desc')];
+    const baseline = [makeDiffEntry('a', 'old desc')];
+    const current = [makeDiffEntry('a', 'new desc')];
     expect(computeCreatedIds(current, baseline)).toEqual(new Set());
     expect(computeModifiedIds(current, baseline)).toEqual(new Set(['a']));
     expect(computeDeletedEntries(current, baseline)).toEqual([]);
@@ -598,43 +508,43 @@ describe('sourcebook list diff indicators', () => {
     // When baselineEntries is undefined, the SourcebookList useMemo returns
     // new Set() / [] early.  The helpers below require an array, so we pass
     // the same list as both arguments to model "no change from baseline".
-    const current = [makeEntry('a', 'desc A')];
+    const current = [makeDiffEntry('a', 'desc A')];
     // Passing current as its own baseline → nothing is created/modified/deleted.
     expect(computeCreatedIds(current, current)).toEqual(new Set());
     expect(computeModifiedIds(current, current)).toEqual(new Set());
     expect(computeDeletedEntries(current, current)).toEqual([]);
     // And an explicit undefined guard mirrors the component's early return.
-    const noBaseline: Entry[] | undefined = undefined;
+    const noBaseline: DiffEntry[] | undefined = undefined;
     expect(noBaseline).toBeUndefined();
   });
 
   it('handles simultaneous create, modify, and delete in one baseline compare', () => {
     const baseline = [
-      makeEntry('keep', 'same'),
-      makeEntry('modify', 'old'),
-      makeEntry('gone', 'bye'),
+      makeDiffEntry('keep', 'same'),
+      makeDiffEntry('modify', 'old'),
+      makeDiffEntry('gone', 'bye'),
     ];
     const current = [
-      makeEntry('keep', 'same'),
-      makeEntry('modify', 'new'),
-      makeEntry('fresh', 'hello'),
+      makeDiffEntry('keep', 'same'),
+      makeDiffEntry('modify', 'new'),
+      makeDiffEntry('fresh', 'hello'),
     ];
     expect(computeCreatedIds(current, baseline)).toEqual(new Set(['fresh']));
     expect(computeModifiedIds(current, baseline)).toEqual(new Set(['modify']));
     expect(computeDeletedEntries(current, baseline)).toEqual([
-      makeEntry('gone', 'bye'),
+      makeDiffEntry('gone', 'bye'),
     ]);
   });
 
   it('undefined optional arrays are normalised to empty → no false positive when shape differs between snapshots', () => {
-    const fromHistory: Entry = {
+    const fromHistory: DiffEntry = {
       id: 'x',
       name: 'Hero',
       description: 'brave',
       synonyms: undefined,
       images: undefined,
     };
-    const fromRefresh: Entry = {
+    const fromRefresh: DiffEntry = {
       id: 'x',
       name: 'Hero',
       description: 'brave',
@@ -643,7 +553,7 @@ describe('sourcebook list diff indicators', () => {
     };
     // Raw JSON comparison would differ; the signature must not:
     expect(JSON.stringify(fromHistory)).not.toEqual(JSON.stringify(fromRefresh));
-    expect(entryDiffSignature(fromHistory)).toEqual(entryDiffSignature(fromRefresh));
+    expect(diffEntrySignature(fromHistory)).toEqual(diffEntrySignature(fromRefresh));
   });
 
   // ─── Root-cause regression: keywords excluded from diff signature ──────────
@@ -654,13 +564,13 @@ describe('sourcebook list diff indicators', () => {
   // therefore cause false amber on every entry whose keywords were truncated.
 
   it('keywords differing between history snapshot and list-endpoint response do not trigger amber', () => {
-    const baselineEntry: Entry = {
+    const baselineEntry: DiffEntry = {
       id: 'b',
       name: 'Villain',
       description: 'evil',
       keywords: ['villain', 'enemy', 'dark', 'power', 'corrupt', 'scheme'],
     };
-    const currentEntry: Entry = {
+    const currentEntry: DiffEntry = {
       id: 'b',
       name: 'Villain',
       description: 'evil',
@@ -668,8 +578,8 @@ describe('sourcebook list diff indicators', () => {
     };
     // Raw JSON comparison would differ:
     expect(JSON.stringify(baselineEntry)).not.toEqual(JSON.stringify(currentEntry));
-    // entryDiffSignature (keywords excluded) must be equal → no amber:
-    expect(entryDiffSignature(baselineEntry)).toEqual(entryDiffSignature(currentEntry));
+    // diffEntrySignature (keywords excluded) must be equal → no amber:
+    expect(diffEntrySignature(baselineEntry)).toEqual(diffEntrySignature(currentEntry));
     // Verify via the helpers:
     expect(computeModifiedIds([currentEntry], [baselineEntry])).toEqual(new Set());
   });
@@ -684,25 +594,25 @@ describe('sourcebook list diff indicators', () => {
   // the signature causes false amber on ALL entries with relations.
 
   it('relations present in list-endpoint but absent in history snapshot do not trigger amber', () => {
-    const baselineEntry: Entry = {
+    const baselineEntry: DiffEntry = {
       id: 'c',
       name: 'Hero',
       description: 'brave',
       relations: undefined, // from story-select / history — never includes relations
     };
-    const currentEntry: Entry = {
+    const currentEntry: DiffEntry = {
       id: 'c',
       name: 'Hero',
       description: 'brave',
       relations: [{ target_id: 'villain', relation: 'enemy' }], // from list endpoint
     };
-    // entryDiffSignature (relations excluded) must be equal → no amber:
-    expect(entryDiffSignature(baselineEntry)).toEqual(entryDiffSignature(currentEntry));
+    // diffEntrySignature (relations excluded) must be equal → no amber:
+    expect(diffEntrySignature(baselineEntry)).toEqual(diffEntrySignature(currentEntry));
     expect(computeModifiedIds([currentEntry], [baselineEntry])).toEqual(new Set());
   });
 
   it('actual name / description / category / synonyms / images changes ARE still detected', () => {
-    const baseline: Entry = {
+    const baseline: DiffEntry = {
       id: 'a',
       name: 'Hero',
       description: 'brave',
@@ -710,11 +620,11 @@ describe('sourcebook list diff indicators', () => {
       synonyms: ['hero'],
       images: [],
     };
-    const withNewDesc: Entry = { ...baseline, description: 'very brave' };
-    const withNewName: Entry = { ...baseline, name: 'Champion' };
-    const withNewCat: Entry = { ...baseline, category: 'Other' };
-    const withNewSyn: Entry = { ...baseline, synonyms: ['champion'] };
-    const withNewImg: Entry = { ...baseline, images: ['portrait.png'] };
+    const withNewDesc: DiffEntry = { ...baseline, description: 'very brave' };
+    const withNewName: DiffEntry = { ...baseline, name: 'Champion' };
+    const withNewCat: DiffEntry = { ...baseline, category: 'Other' };
+    const withNewSyn: DiffEntry = { ...baseline, synonyms: ['champion'] };
+    const withNewImg: DiffEntry = { ...baseline, images: ['portrait.png'] };
 
     for (const changed of [
       withNewDesc,
@@ -723,7 +633,7 @@ describe('sourcebook list diff indicators', () => {
       withNewSyn,
       withNewImg,
     ]) {
-      expect(entryDiffSignature(baseline)).not.toEqual(entryDiffSignature(changed));
+      expect(diffEntrySignature(baseline)).not.toEqual(diffEntrySignature(changed));
       expect(computeModifiedIds([changed], [baseline])).toContain('a');
     }
   });

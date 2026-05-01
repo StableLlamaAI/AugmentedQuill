@@ -71,7 +71,7 @@ const baseData = {
   tags: ['tag1'],
 };
 
-describe('MetadataEditorDialog', () => {
+describe('MetadataEditorDialog: rendering and state sync', () => {
   it('syncs external initialData updates into local state when not dirty', () => {
     const onSave = vi.fn(async () => undefined);
     const onClose = vi.fn();
@@ -162,7 +162,9 @@ describe('MetadataEditorDialog', () => {
     // Summary is now a CodeMirrorEditor which does not expose an HTML lang attribute;
     // spellchecking language is passed via the `language` prop to the editor.
   });
+});
 
+describe('MetadataEditorDialog: undo / redo history', () => {
   it('supports undo and redo via metadata dialog header buttons', async () => {
     vi.useFakeTimers();
     const onSave = vi.fn(async () => undefined);
@@ -364,7 +366,9 @@ describe('MetadataEditorDialog', () => {
     ).toBeTruthy();
     expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
   });
+});
 
+describe('MetadataEditorDialog: baseline and external updates', () => {
   it('preserves the original baseline when story notes and conflicts update externally', async () => {
     const initialConflict = {
       id: 'c1',
@@ -504,7 +508,9 @@ describe('MetadataEditorDialog', () => {
     expect(chapterLabelActive).toBe(true);
     expect(notesLabelActive).toBe(true);
   });
+});
 
+describe('MetadataEditorDialog: LLM conflict integration', () => {
   it('preserves undo/redo history when the LLM adds a conflict while the dialog is open', async () => {
     vi.useFakeTimers();
     const onSave = vi.fn(async () => undefined);

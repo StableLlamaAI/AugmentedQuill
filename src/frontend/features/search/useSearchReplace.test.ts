@@ -47,20 +47,21 @@ const emptyResponse: SearchResponse = { total_matches: 0, results: [] };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe('useSearchReplace', () => {
-  let searchSpy: ReturnType<typeof vi.spyOn>;
+let searchSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
-    searchSpy = vi.spyOn(api.search, 'search').mockResolvedValue(emptyResponse);
-    vi.useFakeTimers();
-  });
+function setupSearchSpy(): void {
+  searchSpy = vi.spyOn(api.search, 'search').mockResolvedValue(emptyResponse);
+  vi.useFakeTimers();
+}
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.useRealTimers();
-  });
+function teardownSearchSpy(): void {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+}
 
-  // ── open / close state ────────────────────────────────────────────────────
+describe('useSearchReplace: open / close state', () => {
+  beforeEach(setupSearchSpy);
+  afterEach(teardownSearchSpy);
 
   it('starts closed with empty query and no highlights', () => {
     const { result } = renderHook(() => useSearchReplace());
@@ -77,8 +78,6 @@ describe('useSearchReplace', () => {
     });
     expect(result.current.isOpen).toBe(true);
   });
-
-  // ── normal close clears everything ───────────────────────────────────────
 
   it('close() without keepHighlight clears query, results, and highlights', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
@@ -112,8 +111,6 @@ describe('useSearchReplace', () => {
     expect(result.current.currentMatchIndex).toBeNull();
   });
 
-  // ── close with keepHighlight preserves state ──────────────────────────────
-
   it('close(true) preserves highlights, query and results', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
     const { result } = renderHook(() => useSearchReplace());
@@ -129,7 +126,6 @@ describe('useSearchReplace', () => {
     });
 
     expect(result.current.highlightActive).toBe(true);
-
     act(() => {
       result.current.close(true);
     });
@@ -139,13 +135,10 @@ describe('useSearchReplace', () => {
     expect(result.current.highlightActive).toBe(true);
     expect(result.current.totalMatches).toBe(1);
     expect(result.current.flatMatches).toHaveLength(1);
-    // Highlight ranges should still contain the section key with the match
     const key = 'chapter_content:42:content';
     expect(result.current.highlightRanges[key]).toHaveLength(1);
     expect(result.current.highlightRanges[key][0]).toEqual({ start: 10, end: 15 });
   });
-
-  // ── opening after normal close gives empty state ──────────────────────────
 
   it('re-opening after a normal close has an empty query', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
@@ -160,7 +153,6 @@ describe('useSearchReplace', () => {
     await act(async () => {
       await result.current.runSearch(42);
     });
-
     act(() => {
       result.current.close();
     }); // normal close — clears
@@ -172,8 +164,6 @@ describe('useSearchReplace', () => {
     expect(result.current.query).toBe('');
     expect(result.current.highlightActive).toBe(false);
   });
-
-  // ── opening after keepHighlight close preserves the old query ─────────────
 
   it('re-opening after close(true) still has the previous query', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
@@ -188,7 +178,6 @@ describe('useSearchReplace', () => {
     await act(async () => {
       await result.current.runSearch(42);
     });
-
     act(() => {
       result.current.close(true);
     }); // keepHighlight — preserves
@@ -200,10 +189,13 @@ describe('useSearchReplace', () => {
     expect(result.current.query).toBe('hello');
     expect(result.current.highlightActive).toBe(true);
   });
+});
 
-  // ── runSearch activates highlights ────────────────────────────────────────
+describe('useSearchReplace: runSearch', () => {
+  beforeEach(setupSearchSpy);
+  afterEach(teardownSearchSpy);
 
-  it('runSearch sets highlightActive and populates ranges', async () => {
+  it('sets highlightActive and populates ranges', async () => {
     searchSpy.mockResolvedValue(makeResponse('world'));
     const { result } = renderHook(() => useSearchReplace());
 
@@ -220,7 +212,7 @@ describe('useSearchReplace', () => {
     expect(result.current.highlightTexts[key]).toContain('world');
   });
 
-  it('runSearch with empty query clears highlights', async () => {
+  it('with empty query clears highlights', async () => {
     searchSpy.mockResolvedValue(makeResponse('world'));
     const { result } = renderHook(() => useSearchReplace());
 
@@ -243,10 +235,13 @@ describe('useSearchReplace', () => {
     expect(result.current.highlightActive).toBe(false);
     expect(result.current.highlightRanges).toEqual({});
   });
+});
 
-  // ── notifyContentChanged debounces and refreshes highlights ───────────────
+describe('useSearchReplace: notifyContentChanged', () => {
+  beforeEach(setupSearchSpy);
+  afterEach(teardownSearchSpy);
 
-  it('notifyContentChanged does nothing when highlights are not active', async () => {
+  it('does nothing when highlights are not active', async () => {
     const { result } = renderHook(() => useSearchReplace());
 
     act(() => {
@@ -259,11 +254,10 @@ describe('useSearchReplace', () => {
     expect(searchSpy).not.toHaveBeenCalled();
   });
 
-  it('notifyContentChanged triggers a refresh search after debounce', async () => {
+  it('triggers a refresh search after debounce', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
     const { result } = renderHook(() => useSearchReplace());
 
-    // Activate highlights first
     act(() => {
       result.current.setQuery('hello');
     });
@@ -273,27 +267,21 @@ describe('useSearchReplace', () => {
 
     expect(searchSpy).toHaveBeenCalledTimes(1);
 
-    // Simulate a content change
     act(() => {
       result.current.notifyContentChanged(42);
     });
-
-    // Debounce has not fired yet — no second call
     expect(searchSpy).toHaveBeenCalledTimes(1);
 
-    // Advance past the 800ms debounce; advanceTimersByTimeAsync also flushes
-    // the async IIFE that fires inside the setTimeout callback.
     searchSpy.mockResolvedValue(emptyResponse);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
 
-    // After refresh with no matches, highlight ranges should be cleared
     expect(searchSpy).toHaveBeenCalledTimes(2);
     expect(result.current.highlightRanges).toEqual({});
   });
 
-  it('notifyContentChanged rapid calls only fire one debounced search', async () => {
+  it('rapid calls only fire one debounced search', async () => {
     searchSpy.mockResolvedValue(makeResponse('hello'));
     const { result } = renderHook(() => useSearchReplace());
 
@@ -306,7 +294,6 @@ describe('useSearchReplace', () => {
 
     expect(searchSpy).toHaveBeenCalledTimes(1);
 
-    // Fire multiple content changes in quick succession
     act(() => {
       result.current.notifyContentChanged(42);
       result.current.notifyContentChanged(42);
@@ -318,7 +305,6 @@ describe('useSearchReplace', () => {
       await vi.advanceTimersByTimeAsync(800);
     });
 
-    // Despite three calls, only one search should have been triggered
     expect(searchSpy).toHaveBeenCalledTimes(2);
   });
 });

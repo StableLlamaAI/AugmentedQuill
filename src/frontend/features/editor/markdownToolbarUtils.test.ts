@@ -23,7 +23,7 @@ import {
   toggleInlineFormatAtSelection,
 } from './markdownToolbarUtils';
 
-describe('markdownToolbarUtils', () => {
+describe('markdownToolbarUtils: block and inline formatting', () => {
   it('detects block type from line prefixes', () => {
     expect(getBlockType('# Title')).toBe('h1');
     expect(getBlockType('## Title')).toBe('h2');
@@ -207,7 +207,9 @@ describe('markdownToolbarUtils', () => {
     );
     expect(nextRawText).toBe('my **boots** on');
   });
+});
 
+describe('markdownToolbarUtils: line bounds, block toggle, and resolveInlineSelection', () => {
   // ── getLineBoundsAtOffset ──────────────────────────────────────────────────
 
   it('getLineBoundsAtOffset returns correct bounds for the first line', () => {
