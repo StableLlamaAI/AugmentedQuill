@@ -28,6 +28,7 @@ const toConnectionTestKey = (provider: LLMConfig): string => {
 };
 
 /** Custom React hook that manages settings dialog provider validation. */
+// eslint-disable-next-line max-lines-per-function
 export function useSettingsDialogProviderValidation({
   isOpen,
   providers,

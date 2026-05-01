@@ -25,11 +25,12 @@ interface SettingsPromptsProps {
   theme: AppTheme;
 }
 
+// eslint-disable-next-line max-lines-per-function
 export const SettingsPrompts: React.FC<SettingsPromptsProps> = ({
   activeProvider,
   defaultPrompts,
   onUpdateProvider,
-  theme,
+  theme: _theme,
 }: SettingsPromptsProps): React.ReactElement => {
   const { isLight } = useThemeClasses();
 

@@ -80,6 +80,34 @@ export {
   updateSourcebookEntryInList,
 } from './sourcebookUtils';
 
+interface SourcebookListTheme {
+  borderClass: string;
+  textHeaderClass: string;
+  textClass: string;
+  subTextClass: string;
+  itemHoverClass: string;
+  inputBg: string;
+  inputBorder: string;
+  inputPlace: string;
+  btnHover: string;
+}
+
+function buildSourcebookTheme(isLight: boolean): SourcebookListTheme {
+  return {
+    borderClass: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
+    textHeaderClass: isLight ? 'text-brand-gray-500' : 'text-brand-gray-400',
+    textClass: isLight ? 'text-brand-gray-900' : 'text-brand-gray-200',
+    subTextClass: isLight ? 'text-brand-gray-500' : 'text-brand-gray-400',
+    itemHoverClass: isLight ? 'hover:bg-brand-gray-100' : 'hover:bg-brand-gray-800',
+    inputBg: isLight ? 'bg-white' : 'bg-brand-gray-950/50',
+    inputBorder: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
+    inputPlace: 'placeholder-brand-gray-500',
+    btnHover: isLight
+      ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
+      : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300',
+  };
+}
+
 export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
   ({
     theme = 'mixed',
@@ -239,19 +267,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       loadEntries,
     });
 
-    const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-    const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-    const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
-    const subTextClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-    const itemHoverClass = isLight
-      ? 'hover:bg-brand-gray-100'
-      : 'hover:bg-brand-gray-800';
-    const inputBg = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
-    const inputBorder = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-    const inputPlace = 'placeholder-brand-gray-500';
-    const btnHover = isLight
-      ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
-      : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
+    const {
+      borderClass,
+      textHeaderClass,
+      textClass,
+      subTextClass,
+      itemHoverClass,
+      inputBg,
+      inputBorder,
+      inputPlace,
+      btnHover,
+    } = buildSourcebookTheme(isLight);
 
     return (
       <SourcebookListView

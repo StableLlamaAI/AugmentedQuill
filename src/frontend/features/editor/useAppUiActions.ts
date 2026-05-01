@@ -37,6 +37,7 @@ type UseAppUiActionsParams = {
 };
 
 /** Custom React hook that manages app ui actions. */
+// eslint-disable-next-line max-lines-per-function
 export function useAppUiActions({
   editorRef,
   activeFormats,

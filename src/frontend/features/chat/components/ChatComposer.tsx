@@ -29,6 +29,7 @@ type ChatComposerProps = {
   onSubmit: (text: string, attachments?: ChatAttachment[]) => void;
 };
 
+// eslint-disable-next-line max-lines-per-function
 export const ChatComposer: React.FC<ChatComposerProps> = ({
   textareaRef,
   fileInputRef,

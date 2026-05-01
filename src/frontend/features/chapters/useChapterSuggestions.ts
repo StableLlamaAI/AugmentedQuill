@@ -45,6 +45,7 @@ type UseChapterSuggestionsParams = {
 };
 
 /** Custom React hook that manages chapter suggestions. */
+// eslint-disable-next-line max-lines-per-function
 export function useChapterSuggestions({
   currentUnit,
   storyTitle,
@@ -53,7 +54,7 @@ export function useChapterSuggestions({
   activeWritingConfig,
   isWritingAvailable,
   updateChapter,
-  viewMode,
+  viewMode: _viewMode,
   getErrorMessage,
 }: UseChapterSuggestionsParams): {
   continuations: string[];

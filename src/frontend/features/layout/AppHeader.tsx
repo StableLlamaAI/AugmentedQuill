@@ -41,6 +41,7 @@ import {
   HeaderSidebarControls,
   HeaderViewControls,
 } from './layoutControlTypes';
+import type { AppTheme } from '../../types/ui';
 
 type AppHeaderProps = {
   storyTitle: string;
@@ -54,6 +55,308 @@ type AppHeaderProps = {
   appearanceControls: HeaderAppearanceControlsState;
   chatPanelControls: HeaderChatPanelControls;
   searchControls: HeaderSearchControls;
+};
+
+interface UndoRedoMenuProps {
+  options: Array<{ id: string; label: string; steps: number }>;
+  label: string;
+  menuContainerClass: string;
+  menuButtonClass: string;
+  onStep: (steps: number) => void;
+  t: (key: string) => string;
+}
+
+const UndoRedoMenu: React.FC<UndoRedoMenuProps> = ({
+  options,
+  label,
+  menuContainerClass,
+  menuButtonClass,
+  onStep,
+  t,
+}: UndoRedoMenuProps) => (
+  <div className={menuContainerClass} role="menu" aria-label={`${label} actions`}>
+    <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
+      {t(`${label} Actions`)}
+    </div>
+    {options.map((option: { id: string; label: string; steps: number }) => (
+      <button
+        key={option.id}
+        type="button"
+        role="menuitem"
+        className={menuButtonClass}
+        onClick={(): void => onStep(option.steps)}
+        title={option.label}
+      >
+        {t(label)} {option.steps}: {option.label}
+      </button>
+    ))}
+  </div>
+);
+
+interface HeaderRightControlsProps {
+  settingsControls: HeaderSettingsControls;
+  appearanceControls: HeaderAppearanceControlsState;
+  chatPanelControls: HeaderChatPanelControls;
+  currentTheme: AppTheme;
+  t: (key: string) => string;
+}
+
+const HeaderRightControls: React.FC<HeaderRightControlsProps> = ({
+  settingsControls,
+  appearanceControls,
+  chatPanelControls,
+  currentTheme,
+  t,
+}: HeaderRightControlsProps) => {
+  const { setIsSettingsOpen, setIsDebugLogsOpen } = settingsControls;
+  const {
+    appearanceRef,
+    isAppearanceOpen,
+    setIsAppearanceOpen,
+    setAppTheme,
+    editorSettings,
+    setEditorSettings,
+  } = appearanceControls;
+  const { isLight, textMain, buttonActive, sliderClass } = useTheme();
+  const { isChatOpen, setIsChatOpen } = chatPanelControls;
+  return (
+    <div className="h-11 sm:h-auto order-2 sm:order-3 flex items-center space-x-2 shrink-0">
+      <Button
+        theme={currentTheme}
+        variant="ghost"
+        size="sm"
+        onClick={(): void => setIsSettingsOpen(true)}
+        title={t('Settings')}
+        className="mr-1"
+      >
+        <SettingsIcon size={18} />
+      </Button>
+      <HeaderAppearanceControls
+        appearanceRef={appearanceRef}
+        isAppearanceOpen={isAppearanceOpen}
+        setIsAppearanceOpen={setIsAppearanceOpen}
+        isLight={isLight}
+        textMain={textMain}
+        buttonActive={buttonActive}
+        currentTheme={currentTheme}
+        setAppTheme={setAppTheme}
+        editorSettings={editorSettings}
+        setEditorSettings={setEditorSettings}
+        sliderClass={sliderClass}
+        setIsDebugLogsOpen={setIsDebugLogsOpen}
+      />
+      <Button
+        theme={currentTheme}
+        variant="secondary"
+        size="sm"
+        onClick={(): void => setIsChatOpen(!isChatOpen)}
+        icon={isChatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+      >
+        {isChatOpen ? t('Hide') : t('AI')}
+      </Button>
+    </div>
+  );
+};
+
+interface HeaderLeftControlsProps {
+  storyTitle: string;
+  sidebarControls: HeaderSidebarControls;
+  settingsControls: Pick<HeaderSettingsControls, 'setIsSettingsOpen'>;
+  historyControls: HeaderHistoryControls;
+  searchControls: HeaderSearchControls;
+  iconColor: string;
+  iconHover: string;
+  dividerColor: string;
+  currentTheme: AppTheme;
+  t: (key: string) => string;
+}
+
+const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
+  storyTitle,
+  sidebarControls,
+  settingsControls,
+  historyControls,
+  searchControls,
+  iconColor,
+  iconHover,
+  dividerColor,
+  currentTheme,
+  t,
+}: HeaderLeftControlsProps) => {
+  const { isLight, textMain } = useTheme();
+  const { isSidebarOpen, setIsSidebarOpen } = sidebarControls;
+  const { setIsSettingsOpen } = settingsControls;
+  const {
+    undo,
+    redo,
+    undoSteps,
+    redoSteps,
+    undoOptions,
+    redoOptions,
+    nextUndoLabel,
+    nextRedoLabel,
+    canUndo,
+    canRedo,
+  } = historyControls;
+  const { onOpenSearch } = searchControls;
+  const [isUndoMenuOpen, setIsUndoMenuOpen] = useState(false);
+  const [isRedoMenuOpen, setIsRedoMenuOpen] = useState(false);
+  const undoMenuRef = useRef<HTMLDivElement | null>(null);
+  const redoMenuRef = useRef<HTMLDivElement | null>(null);
+  const confirm = useConfirm();
+
+  useClickOutside(undoMenuRef, (): void => setIsUndoMenuOpen(false), isUndoMenuOpen);
+  useClickOutside(redoMenuRef, (): void => setIsRedoMenuOpen(false), isRedoMenuOpen);
+
+  const menuContainerClass = isLight
+    ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
+    : 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-700 bg-brand-gray-900 shadow-lg';
+  const menuButtonClass = isLight
+    ? 'w-full px-3 py-2 text-left text-xs text-brand-gray-700 hover:bg-brand-gray-100'
+    : 'w-full px-3 py-2 text-left text-xs text-brand-gray-300 hover:bg-brand-gray-800';
+
+  return (
+    <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
+      <button
+        onClick={(): void => setIsSidebarOpen(!isSidebarOpen)}
+        className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
+        aria-label={isSidebarOpen ? t('Close sidebar') : t('Open sidebar')}
+      >
+        <Menu size={24} />
+      </button>
+
+      <button
+        type="button"
+        onClick={(): void => setIsSettingsOpen(true)}
+        className="flex items-center space-x-2"
+        aria-label={t('Open settings')}
+      >
+        <div
+          className={`rounded-md p-1 shadow-lg ${
+            isLight
+              ? 'bg-brand-gray-100 border border-brand-gray-200 shadow-brand-900/10'
+              : 'bg-brand-gray-600 border border-brand-gray-500 shadow-none'
+          }`}
+        >
+          <img
+            src="/static/images/icon.svg"
+            className="w-6 h-6"
+            alt="AugmentedQuill Logo"
+          />
+        </div>
+        <div className="flex flex-col">
+          <span
+            className={`font-bold tracking-tight leading-none hidden lg:inline ${textMain}`}
+          >
+            AugmentedQuill
+          </span>
+          <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden lg:inline">
+            {storyTitle}
+          </span>
+        </div>
+      </button>
+
+      <div className={`h-6 w-px hidden lg:block ${dividerColor}`} />
+
+      <div className="flex space-x-1">
+        <div className="relative flex" ref={undoMenuRef}>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={undo}
+            disabled={!canUndo}
+            title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            aria-label={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            className="rounded-r-none"
+          >
+            <Undo size={16} />
+          </Button>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={(): void => setIsUndoMenuOpen((o: boolean): boolean => !o)}
+            disabled={!canUndo}
+            title={t('Undo multiple actions')}
+            aria-label={t('Open undo actions list')}
+            aria-haspopup="menu"
+            aria-expanded={isUndoMenuOpen}
+            className="px-2 rounded-l-none border-l"
+          >
+            <ChevronDown size={12} />
+          </Button>
+          {isUndoMenuOpen && canUndo && (
+            <UndoRedoMenu
+              options={undoOptions}
+              label="Undo"
+              menuContainerClass={menuContainerClass}
+              menuButtonClass={menuButtonClass}
+              onStep={(steps: number): void => {
+                undoSteps(steps);
+                setIsUndoMenuOpen(false);
+              }}
+              t={t}
+            />
+          )}
+        </div>
+
+        <div className="relative flex" ref={redoMenuRef}>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={redo}
+            disabled={!canRedo}
+            title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+            aria-label={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+            className="rounded-r-none"
+          >
+            <Redo size={16} />
+          </Button>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={(): void => setIsRedoMenuOpen((o: boolean): boolean => !o)}
+            disabled={!canRedo}
+            title={t('Redo multiple actions')}
+            aria-label={t('Open redo actions list')}
+            aria-haspopup="menu"
+            aria-expanded={isRedoMenuOpen}
+            className="px-2 rounded-l-none border-l"
+          >
+            <ChevronDown size={12} />
+          </Button>
+          {isRedoMenuOpen && canRedo && (
+            <UndoRedoMenu
+              options={redoOptions}
+              label="Redo"
+              menuContainerClass={menuContainerClass}
+              menuButtonClass={menuButtonClass}
+              onStep={(steps: number): void => {
+                redoSteps(steps);
+                setIsRedoMenuOpen(false);
+              }}
+              t={t}
+            />
+          )}
+        </div>
+        <CheckpointsMenu hasUnsavedChanges={canUndo} confirm={confirm} />
+        <Button
+          theme={currentTheme}
+          variant="ghost"
+          size="sm"
+          onClick={onOpenSearch}
+          title={t('Search and Replace (Ctrl+F)')}
+          aria-label={t('Search and Replace')}
+          className="ml-1"
+        >
+          <Search size={18} />
+        </Button>
+      </div>
+    </div>
+  );
 };
 
 export const AppHeader: React.FC<AppHeaderProps> = React.memo(
@@ -77,51 +380,9 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
       iconHover,
       dividerColor,
       buttonActive,
-      textMain,
       isLight,
       currentTheme,
-      sliderClass,
     } = useTheme();
-
-    const { isSidebarOpen, setIsSidebarOpen } = sidebarControls;
-    const { setIsSettingsOpen, setIsDebugLogsOpen } = settingsControls;
-    const {
-      undo,
-      redo,
-      undoSteps,
-      redoSteps,
-      undoOptions,
-      redoOptions,
-      nextUndoLabel,
-      nextRedoLabel,
-      canUndo,
-      canRedo,
-    } = historyControls;
-    const {
-      appearanceRef,
-      isAppearanceOpen,
-      setIsAppearanceOpen,
-      setAppTheme,
-      editorSettings,
-      setEditorSettings,
-    } = appearanceControls;
-    const { isChatOpen, setIsChatOpen } = chatPanelControls;
-    const { onOpenSearch } = searchControls;
-    const [isUndoMenuOpen, setIsUndoMenuOpen] = useState(false);
-    const [isRedoMenuOpen, setIsRedoMenuOpen] = useState(false);
-    const undoMenuRef = useRef<HTMLDivElement | null>(null);
-    const redoMenuRef = useRef<HTMLDivElement | null>(null);
-    const confirm = useConfirm();
-
-    useClickOutside(undoMenuRef, (): void => setIsUndoMenuOpen(false), isUndoMenuOpen);
-    useClickOutside(redoMenuRef, (): void => setIsRedoMenuOpen(false), isRedoMenuOpen);
-
-    const menuContainerClass = isLight
-      ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
-      : 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-700 bg-brand-gray-900 shadow-lg';
-    const menuButtonClass = isLight
-      ? 'w-full px-3 py-2 text-left text-xs text-brand-gray-700 hover:bg-brand-gray-100'
-      : 'w-full px-3 py-2 text-left text-xs text-brand-gray-300 hover:bg-brand-gray-800';
 
     return (
       <header
@@ -129,184 +390,18 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
         role="banner"
         className={`sm:h-14 py-1.5 sm:py-0 border-b flex flex-wrap sm:flex-nowrap items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
       >
-        <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
-          <button
-            onClick={(): void => setIsSidebarOpen(!isSidebarOpen)}
-            className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
-            aria-label={isSidebarOpen ? t('Close sidebar') : t('Open sidebar')}
-          >
-            <Menu size={24} />
-          </button>
-
-          <button
-            type="button"
-            onClick={(): void => setIsSettingsOpen(true)}
-            className="flex items-center space-x-2"
-            aria-label={t('Open settings')}
-          >
-            <div
-              className={`rounded-md p-1 shadow-lg ${
-                isLight
-                  ? 'bg-brand-gray-100 border border-brand-gray-200 shadow-brand-900/10'
-                  : 'bg-brand-gray-600 border border-brand-gray-500 shadow-none'
-              }`}
-            >
-              <img
-                src="/static/images/icon.svg"
-                className="w-6 h-6"
-                alt="AugmentedQuill Logo"
-              />
-            </div>
-            <div className="flex flex-col">
-              <span
-                className={`font-bold tracking-tight leading-none hidden lg:inline ${textMain}`}
-              >
-                AugmentedQuill
-              </span>
-              <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden lg:inline">
-                {storyTitle}
-              </span>
-            </div>
-          </button>
-
-          <div className={`h-6 w-px hidden lg:block ${dividerColor}`}></div>
-
-          <div className="flex space-x-1">
-            <div className="relative flex" ref={undoMenuRef}>
-              <Button
-                theme={currentTheme}
-                variant="ghost"
-                size="sm"
-                onClick={undo}
-                disabled={!canUndo}
-                title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
-                aria-label={
-                  nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')
-                }
-                className="rounded-r-none"
-              >
-                <Undo size={16} />
-              </Button>
-              <Button
-                theme={currentTheme}
-                variant="ghost"
-                size="sm"
-                onClick={(): void =>
-                  setIsUndoMenuOpen((open: boolean): boolean => !open)
-                }
-                disabled={!canUndo}
-                title={t('Undo multiple actions')}
-                aria-label={t('Open undo actions list')}
-                aria-haspopup="menu"
-                aria-expanded={isUndoMenuOpen}
-                className="px-2 rounded-l-none border-l"
-              >
-                <ChevronDown size={12} />
-              </Button>
-              {isUndoMenuOpen && canUndo && (
-                <div
-                  className={menuContainerClass}
-                  role="menu"
-                  aria-label="Undo actions"
-                >
-                  <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
-                    {t('Undo Actions')}
-                  </div>
-                  {undoOptions.map(
-                    (option: { id: string; label: string; steps: number }) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        role="menuitem"
-                        className={menuButtonClass}
-                        onClick={(): void => {
-                          undoSteps(option.steps);
-                          setIsUndoMenuOpen(false);
-                        }}
-                        title={option.label}
-                      >
-                        {t('Undo')} {option.steps}: {option.label}
-                      </button>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="relative flex" ref={redoMenuRef}>
-              <Button
-                theme={currentTheme}
-                variant="ghost"
-                size="sm"
-                onClick={redo}
-                disabled={!canRedo}
-                title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
-                aria-label={
-                  nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')
-                }
-                className="rounded-r-none"
-              >
-                <Redo size={16} />
-              </Button>
-              <Button
-                theme={currentTheme}
-                variant="ghost"
-                size="sm"
-                onClick={(): void =>
-                  setIsRedoMenuOpen((open: boolean): boolean => !open)
-                }
-                disabled={!canRedo}
-                title={t('Redo multiple actions')}
-                aria-label={t('Open redo actions list')}
-                aria-haspopup="menu"
-                aria-expanded={isRedoMenuOpen}
-                className="px-2 rounded-l-none border-l"
-              >
-                <ChevronDown size={12} />
-              </Button>
-              {isRedoMenuOpen && canRedo && (
-                <div
-                  className={menuContainerClass}
-                  role="menu"
-                  aria-label="Redo actions"
-                >
-                  <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
-                    {t('Redo Actions')}
-                  </div>
-                  {redoOptions.map(
-                    (option: { id: string; label: string; steps: number }) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        role="menuitem"
-                        className={menuButtonClass}
-                        onClick={(): void => {
-                          redoSteps(option.steps);
-                          setIsRedoMenuOpen(false);
-                        }}
-                        title={option.label}
-                      >
-                        {t('Redo')} {option.steps}: {option.label}
-                      </button>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-            <CheckpointsMenu hasUnsavedChanges={canUndo} confirm={confirm} />
-            <Button
-              theme={currentTheme}
-              variant="ghost"
-              size="sm"
-              onClick={onOpenSearch}
-              title={t('Search and Replace (Ctrl+F)')}
-              aria-label={t('Search and Replace')}
-              className="ml-1"
-            >
-              <Search size={18} />
-            </Button>
-          </div>
-        </div>
+        <HeaderLeftControls
+          storyTitle={storyTitle}
+          sidebarControls={sidebarControls}
+          settingsControls={settingsControls}
+          historyControls={historyControls}
+          searchControls={searchControls}
+          iconColor={iconColor}
+          iconHover={iconHover}
+          dividerColor={dividerColor}
+          currentTheme={currentTheme}
+          t={t}
+        />
 
         <HeaderCenterControls
           viewControls={viewControls}
@@ -323,44 +418,13 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
           }}
         />
 
-        <div className="h-11 sm:h-auto order-2 sm:order-3 flex items-center space-x-2 shrink-0">
-          <Button
-            theme={currentTheme}
-            variant="ghost"
-            size="sm"
-            onClick={(): void => setIsSettingsOpen(true)}
-            title={t('Settings')}
-            className="mr-1"
-          >
-            <SettingsIcon size={18} />
-          </Button>
-          <HeaderAppearanceControls
-            appearanceRef={appearanceRef}
-            isAppearanceOpen={isAppearanceOpen}
-            setIsAppearanceOpen={setIsAppearanceOpen}
-            isLight={isLight}
-            textMain={textMain}
-            buttonActive={buttonActive}
-            currentTheme={currentTheme}
-            setAppTheme={setAppTheme}
-            editorSettings={editorSettings}
-            setEditorSettings={setEditorSettings}
-            sliderClass={sliderClass}
-            setIsDebugLogsOpen={setIsDebugLogsOpen}
-          />
-
-          <Button
-            theme={currentTheme}
-            variant="secondary"
-            size="sm"
-            onClick={(): void => setIsChatOpen(!isChatOpen)}
-            icon={
-              isChatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />
-            }
-          >
-            {isChatOpen ? t('Hide') : t('AI')}
-          </Button>
-        </div>
+        <HeaderRightControls
+          settingsControls={settingsControls}
+          appearanceControls={appearanceControls}
+          chatPanelControls={chatPanelControls}
+          currentTheme={currentTheme}
+          t={t}
+        />
       </header>
     );
   }

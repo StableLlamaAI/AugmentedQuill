@@ -94,6 +94,7 @@ interface SourcebookEntryDialogViewProps {
   onCloseImagePicker: () => void;
 }
 
+// eslint-disable-next-line max-lines-per-function
 export const SourcebookEntryDialogView: React.FC<SourcebookEntryDialogViewProps> = (
   props: SourcebookEntryDialogViewProps
 ) => {

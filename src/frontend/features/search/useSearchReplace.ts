@@ -144,6 +144,7 @@ const buildHighlightMaps = (
   return { ranges, texts };
 };
 
+// eslint-disable-next-line max-lines-per-function
 export const useSearchReplace = (): UseSearchReplaceResult => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');

@@ -66,6 +66,7 @@ renderer.image = function (token: import('marked').Tokens.Image): string {
 };
 marked.use({ renderer });
 
+// eslint-disable-next-line max-lines-per-function
 const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({
   content,
   className = '',
