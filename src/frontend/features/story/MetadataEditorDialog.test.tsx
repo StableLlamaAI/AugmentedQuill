@@ -29,10 +29,14 @@ import { MetadataEditorDialog } from './MetadataEditorDialog';
 import { useMetadataEditorDialogState } from './useMetadataEditorDialogState';
 import type { MetadataParams } from './metadataSync';
 
-const renderWithI18n = (ui: React.ReactElement) =>
+const renderWithI18n = (ui: React.ReactElement): ReturnType<typeof render> =>
   render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
 
-const BaselineProbe = ({ initialData }: { initialData: MetadataParams }) => {
+const BaselineProbe = ({
+  initialData,
+}: {
+  initialData: MetadataParams;
+}): JSX.Element => {
   const state = useMetadataEditorDialogState({
     initialData,
     onSave: async () => undefined,
@@ -312,7 +316,7 @@ describe('MetadataEditorDialog', () => {
     const onClose = vi.fn();
 
     // Start with data already diverged from baseline (simulates an AI write).
-    const { rerender } = renderWithI18n(
+    const { rerender: _rerender } = renderWithI18n(
       <MetadataEditorDialog
         type="chapter"
         title="Edit Chapter Metadata"

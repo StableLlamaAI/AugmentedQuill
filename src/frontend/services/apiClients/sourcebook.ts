@@ -13,12 +13,31 @@ import { SourcebookEntry } from '../../types';
 import { SourcebookUpsertPayload } from '../apiTypes';
 import { fetchJson, postJson, putJson, deleteJson, projectEndpoint } from './shared';
 
-export const createSourcebookApi = (projectName: string) => ({
+export interface SourcebookApi {
+  list: (
+    query?: string,
+    matchMode?: 'direct' | 'extensive',
+    splitQueryFallback?: boolean
+  ) => Promise<SourcebookEntry[]>;
+  create: (entry: SourcebookUpsertPayload) => Promise<SourcebookEntry>;
+  update: (
+    id: string,
+    updates: Partial<SourcebookUpsertPayload>
+  ) => Promise<SourcebookEntry>;
+  delete: (id: string) => Promise<{ ok: boolean }>;
+  generateKeywords: (payload: {
+    name: string;
+    description: string;
+    synonyms?: string[];
+  }) => Promise<{ keywords: string[] }>;
+}
+
+export const createSourcebookApi = (projectName: string): SourcebookApi => ({
   list: async (
     query?: string,
     matchMode: 'direct' | 'extensive' = 'extensive',
     splitQueryFallback: boolean = false
-  ) => {
+  ): Promise<SourcebookEntry[]> => {
     const params = new URLSearchParams();
     if (query !== undefined) {
       params.set('query', query);
@@ -31,7 +50,7 @@ export const createSourcebookApi = (projectName: string) => ({
     return fetchJson<SourcebookEntry[]>(url, undefined, 'Failed to load sourcebook');
   },
 
-  create: async (entry: SourcebookUpsertPayload) => {
+  create: async (entry: SourcebookUpsertPayload): Promise<SourcebookEntry> => {
     return postJson<SourcebookEntry>(
       projectEndpoint(projectName, '/sourcebook'),
       entry,
@@ -39,7 +58,10 @@ export const createSourcebookApi = (projectName: string) => ({
     );
   },
 
-  update: async (id: string, updates: Partial<SourcebookUpsertPayload>) => {
+  update: async (
+    id: string,
+    updates: Partial<SourcebookUpsertPayload>
+  ): Promise<SourcebookEntry> => {
     const escapedId = encodeURIComponent(id);
     return putJson<SourcebookEntry>(
       projectEndpoint(projectName, `/sourcebook/${escapedId}`),
@@ -48,7 +70,7 @@ export const createSourcebookApi = (projectName: string) => ({
     );
   },
 
-  delete: async (id: string) => {
+  delete: async (id: string): Promise<{ ok: boolean }> => {
     const escapedId = encodeURIComponent(id);
     return deleteJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/sourcebook/${escapedId}`),
@@ -60,7 +82,7 @@ export const createSourcebookApi = (projectName: string) => ({
     name: string;
     description: string;
     synonyms?: string[];
-  }) => {
+  }): Promise<{ keywords: string[] }> => {
     return postJson<{ keywords: string[] }>(
       projectEndpoint(projectName, '/sourcebook/keywords'),
       payload,

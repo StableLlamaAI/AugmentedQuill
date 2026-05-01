@@ -98,10 +98,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const { isLight, iconColor, iconHover, dividerColor, buttonActive, currentTheme } =
     themeTokens;
 
-  const updateAppSettings = (nextSettings: typeof appSettings) => {
+  const updateAppSettings = (nextSettings: typeof appSettings): void => {
     setAppSettings(nextSettings);
     if (saveSettings) {
-      void saveSettings(nextSettings).catch((error: unknown) => {
+      void saveSettings(nextSettings).catch((error: unknown): void => {
         console.error('Failed to persist model selection', error);
       });
     }
@@ -112,15 +112,19 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const formatMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Track window width to compute which format buttons collapse into the dropdown.
-  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const onResize = () => setWindowWidth(window.innerWidth);
+  const [windowWidth, setWindowWidth] = useState((): number => window.innerWidth);
+  useEffect((): (() => void) => {
+    const onResize = (): void => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    return (): void => window.removeEventListener('resize', onResize);
   }, []);
 
-  useClickOutside(modelMenuRef, () => setIsModelMenuOpen(false), isModelMenuOpen);
-  useClickOutside(formatMenuRef, () => setIsFormatMenuOpen(false), isFormatMenuOpen);
+  useClickOutside(modelMenuRef, (): void => setIsModelMenuOpen(false), isModelMenuOpen);
+  useClickOutside(
+    formatMenuRef,
+    (): void => setIsFormatMenuOpen(false),
+    isFormatMenuOpen
+  );
 
   // Format buttons ordered from MOST important (index 0) to LEAST important (last).
   // The least-important ones collapse into the Formatting dropdown first.
@@ -135,13 +139,13 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
       key: 'bold',
       icon: <Bold size={16} />,
       label: 'Bold',
-      onClick: () => handleFormat('bold'),
+      onClick: (): void => handleFormat('bold'),
     },
     {
       key: 'italic',
       icon: <Italic size={16} />,
       label: 'Italic',
-      onClick: () => handleFormat('italic'),
+      onClick: (): void => handleFormat('italic'),
     },
     {
       key: 'image',
@@ -153,79 +157,79 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
       key: 'h1',
       icon: <span className="font-serif font-bold text-xs">H1</span>,
       label: 'Heading 1',
-      onClick: () => handleFormat('h1'),
+      onClick: (): void => handleFormat('h1'),
     },
     {
       key: 'h2',
       icon: <span className="font-serif font-bold text-xs">H2</span>,
       label: 'Heading 2',
-      onClick: () => handleFormat('h2'),
+      onClick: (): void => handleFormat('h2'),
     },
     {
       key: 'h3',
       icon: <span className="font-serif font-bold text-xs">H3</span>,
       label: 'Heading 3',
-      onClick: () => handleFormat('h3'),
+      onClick: (): void => handleFormat('h3'),
     },
     {
       key: 'ul',
       icon: <List size={16} />,
       label: 'List',
-      onClick: () => handleFormat('ul'),
+      onClick: (): void => handleFormat('ul'),
     },
     {
       key: 'ol',
       icon: <ListOrdered size={16} />,
       label: 'Numbered List',
-      onClick: () => handleFormat('ol'),
+      onClick: (): void => handleFormat('ol'),
     },
     {
       key: 'quote',
       icon: <Quote size={16} />,
       label: 'Blockquote',
-      onClick: () => handleFormat('quote'),
+      onClick: (): void => handleFormat('quote'),
     },
     {
       key: 'link',
       icon: <LinkIcon size={16} />,
       label: 'Link',
-      onClick: () => handleFormat('link'),
+      onClick: (): void => handleFormat('link'),
     },
     {
       key: 'footnote',
       icon: <Hash size={14} />,
       label: 'Footnote',
-      onClick: () => handleFormat('footnote'),
+      onClick: (): void => handleFormat('footnote'),
     },
     {
       key: 'codeblock',
       icon: <Code2 size={16} />,
       label: 'Fenced Code Block',
-      onClick: () => handleFormat('codeblock'),
+      onClick: (): void => handleFormat('codeblock'),
     },
     {
       key: 'subscript',
       icon: <Subscript size={16} />,
       label: 'Subscript',
-      onClick: () => handleFormat('subscript'),
+      onClick: (): void => handleFormat('subscript'),
     },
     {
       key: 'superscript',
       icon: <Superscript size={16} />,
       label: 'Superscript',
-      onClick: () => handleFormat('superscript'),
+      onClick: (): void => handleFormat('superscript'),
     },
     {
       key: 'strikethrough',
       icon: <Strikethrough size={16} />,
       label: 'Strikethrough',
-      onClick: () => handleFormat('strikethrough'),
+      onClick: (): void => handleFormat('strikethrough'),
     },
   ];
 
   // How many buttons are shown inline at current width (rest go to dropdown).
   // Thresholds chosen so the toolbar never overflows before the next step kicks in.
-  const inlineCount = (() => {
+  const inlineCount = ((): number => {
     if (windowWidth >= 1920) return allFormatButtons.length; // all inline
     if (windowWidth >= 1700) return 14; // hide strikethrough
     if (windowWidth >= 1536) return 13; // hide strikethrough + superscript
@@ -247,7 +251,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           }`}
         >
           <button
-            onClick={() => setViewMode('raw')}
+            onClick={(): void => setViewMode('raw')}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
               viewMode === 'raw' ? buttonActive : `${iconColor} ${iconHover}`
             }`}
@@ -256,7 +260,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             <span>Raw</span>
           </button>
           <button
-            onClick={() => setViewMode('markdown')}
+            onClick={(): void => setViewMode('markdown')}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
               viewMode === 'markdown' ? buttonActive : `${iconColor} ${iconHover}`
             }`}
@@ -265,7 +269,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             <span>MD</span>
           </button>
           <button
-            onClick={() => setViewMode('wysiwyg')}
+            onClick={(): void => setViewMode('wysiwyg')}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
               viewMode === 'wysiwyg' ? buttonActive : `${iconColor} ${iconHover}`
             }`}
@@ -279,7 +283,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             }`}
           />
           <button
-            onClick={() => setShowWhitespace(!showWhitespace)}
+            onClick={(): void => setShowWhitespace(!showWhitespace)}
             title={t('Toggle whitespace characters')}
             className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
               showWhitespace ? buttonActive : `${iconColor} ${iconHover}`
@@ -292,7 +296,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
 
         <div className="2xl:hidden relative">
           <button
-            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+            onClick={(): void => setIsViewMenuOpen(!isViewMenuOpen)}
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium border ${
               isLight
                 ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700'
@@ -324,7 +328,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             <>
               <button
                 className="fixed inset-0 z-10 cursor-default"
-                onClick={() => setIsViewMenuOpen(false)}
+                onClick={(): void => setIsViewMenuOpen(false)}
                 aria-label={t('Close menu')}
               ></button>
               <div
@@ -336,7 +340,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 }`}
               >
                 <button
-                  onClick={() => {
+                  onClick={(): void => {
                     setViewMode('raw');
                     setIsViewMenuOpen(false);
                   }}
@@ -350,7 +354,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                   <span>Raw</span>
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(): void => {
                     setViewMode('markdown');
                     setIsViewMenuOpen(false);
                   }}
@@ -364,7 +368,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                   <span>MD</span>
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(): void => {
                     setViewMode('wysiwyg');
                     setIsViewMenuOpen(false);
                   }}
@@ -413,7 +417,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           {inlineCount < allFormatButtons.length && (
             <div className="relative" ref={formatMenuRef}>
               <button
-                onClick={() => setIsFormatMenuOpen(!isFormatMenuOpen)}
+                onClick={(): void => setIsFormatMenuOpen(!isFormatMenuOpen)}
                 className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
                   isFormatMenuOpen
                     ? buttonActive
@@ -430,7 +434,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 <>
                   <button
                     className="fixed inset-0 z-10 cursor-default"
-                    onClick={() => setIsFormatMenuOpen(false)}
+                    onClick={(): void => setIsFormatMenuOpen(false)}
                     aria-label={t('Close formatting menu')}
                   ></button>
                   <div
@@ -452,7 +456,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                         }) => (
                           <button
                             key={btn.key}
-                            onClick={() => {
+                            onClick={(): void => {
                               btn.onClick();
                               setIsFormatMenuOpen(false);
                             }}
@@ -474,7 +478,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
       {/* Mobile format button: all buttons in one menu */}
       <div className="lg:hidden relative">
         <button
-          onClick={() => setIsMobileFormatMenuOpen(!isMobileFormatMenuOpen)}
+          onClick={(): void => setIsMobileFormatMenuOpen(!isMobileFormatMenuOpen)}
           className={`p-2 rounded-md border flex items-center gap-2 text-xs font-medium ${
             isMobileFormatMenuOpen
               ? buttonActive
@@ -491,7 +495,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           <>
             <button
               className="fixed inset-0 z-10 cursor-default"
-              onClick={() => setIsMobileFormatMenuOpen(false)}
+              onClick={(): void => setIsMobileFormatMenuOpen(false)}
               aria-label={t('Close mobile format menu')}
             ></button>
             <div
@@ -511,7 +515,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 }) => (
                   <button
                     key={btn.key}
-                    onClick={() => {
+                    onClick={(): void => {
                       btn.onClick();
                       setIsMobileFormatMenuOpen(false);
                     }}
@@ -547,7 +551,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             size="sm"
             variant="ghost"
             className="text-xs h-6"
-            onClick={() => handleAiAction('chapter', 'extend')}
+            onClick={(): Promise<void> => handleAiAction('chapter', 'extend')}
             disabled={chapterExtendDisabled}
             icon={<Wand2 size={12} />}
             title={
@@ -563,7 +567,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             size="sm"
             variant="ghost"
             className="text-xs h-6"
-            onClick={() => handleAiAction('chapter', 'rewrite')}
+            onClick={(): Promise<void> => handleAiAction('chapter', 'rewrite')}
             disabled={chapterRewriteDisabled}
             icon={<FileEdit size={12} />}
             title={
@@ -588,7 +592,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         {/* Compact dropdown for xl–2xl */}
         <div className="2xl:hidden relative" ref={modelMenuRef}>
           <button
-            onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+            onClick={(): void => setIsModelMenuOpen(!isModelMenuOpen)}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
               isLight
                 ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700 hover:bg-brand-gray-100'
@@ -604,7 +608,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
             <>
               <button
                 className="fixed inset-0 z-10 cursor-default"
-                onClick={() => setIsModelMenuOpen(false)}
+                onClick={(): void => setIsModelMenuOpen(false)}
                 aria-label={t('Close model menu')}
               ></button>
               <div
@@ -617,12 +621,12 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 <ModelSelector
                   label="Writing"
                   value={appSettings.activeWritingProviderId}
-                  onSelectorClick={() => {
+                  onSelectorClick={(): void => {
                     void recheckUnavailableProviderIfStale(
                       appSettings.activeWritingProviderId
                     );
                   }}
-                  onChange={(value: string) =>
+                  onChange={(value: string): void =>
                     updateAppSettings({
                       ...appSettings,
                       activeWritingProviderId: value,
@@ -637,12 +641,12 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 <ModelSelector
                   label="Editing"
                   value={appSettings.activeEditingProviderId}
-                  onSelectorClick={() => {
+                  onSelectorClick={(): void => {
                     void recheckUnavailableProviderIfStale(
                       appSettings.activeEditingProviderId
                     );
                   }}
-                  onChange={(value: string) =>
+                  onChange={(value: string): void =>
                     updateAppSettings({
                       ...appSettings,
                       activeEditingProviderId: value,
@@ -657,12 +661,12 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
                 <ModelSelector
                   label="Chat"
                   value={appSettings.activeChatProviderId}
-                  onSelectorClick={() => {
+                  onSelectorClick={(): void => {
                     void recheckUnavailableProviderIfStale(
                       appSettings.activeChatProviderId
                     );
                   }}
-                  onChange={(value: string) =>
+                  onChange={(value: string): void =>
                     updateAppSettings({
                       ...appSettings,
                       activeChatProviderId: value,
@@ -684,12 +688,12 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           <ModelSelector
             label="Writing"
             value={appSettings.activeWritingProviderId}
-            onSelectorClick={() => {
+            onSelectorClick={(): void => {
               void recheckUnavailableProviderIfStale(
                 appSettings.activeWritingProviderId
               );
             }}
-            onChange={(value: string) =>
+            onChange={(value: string): void =>
               updateAppSettings({
                 ...appSettings,
                 activeWritingProviderId: value,
@@ -704,12 +708,12 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           <ModelSelector
             label="Editing"
             value={appSettings.activeEditingProviderId}
-            onSelectorClick={() => {
+            onSelectorClick={(): void => {
               void recheckUnavailableProviderIfStale(
                 appSettings.activeEditingProviderId
               );
             }}
-            onChange={(value: string) =>
+            onChange={(value: string): void =>
               updateAppSettings({
                 ...appSettings,
                 activeEditingProviderId: value,
@@ -724,10 +728,10 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
           <ModelSelector
             label="Chat"
             value={appSettings.activeChatProviderId}
-            onSelectorClick={() => {
+            onSelectorClick={(): void => {
               void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
             }}
-            onChange={(value: string) =>
+            onChange={(value: string): void =>
               updateAppSettings({
                 ...appSettings,
                 activeChatProviderId: value,

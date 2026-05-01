@@ -51,13 +51,13 @@ export const ChatSystemPromptPanel: React.FC<ChatSystemPromptPanelProps> = ({
 
   useFocusTrap(isOpen, panelRef, onClose);
 
-  useEffect(() => {
+  useEffect((): void => {
     setTempSystemPrompt(systemPrompt);
   }, [systemPrompt]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = (): void => {
     onSave(tempSystemPrompt);
     onClose();
   };
@@ -79,9 +79,9 @@ export const ChatSystemPromptPanel: React.FC<ChatSystemPromptPanelProps> = ({
         lang={storyLanguage || 'en'}
         value={tempSystemPrompt}
         spellCheck={true}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>) =>
-          setTempSystemPrompt(e.target.value)
-        }
+        onChange={(
+          e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+        ): void => setTempSystemPrompt(e.target.value)}
         className={`w-full h-32 rounded-md p-3 text-sm focus:ring-1 focus:ring-brand-500 focus:outline-none resize-none mb-3 border ${inputBg}`}
         placeholder={t("Define the AI's persona and rules...")}
         disabled={!isModelAvailable}

@@ -92,7 +92,7 @@ export function useEditorScroll({
    * Marks the resulting scroll event as programmatic so it is not mistaken for
    * a user gesture.
    */
-  const pinToBottom = useCallback((container: HTMLDivElement) => {
+  const pinToBottom = useCallback((container: HTMLDivElement): void => {
     const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
     if (Math.abs(maxScrollTop - container.scrollTop) > 1) {
       isProgrammaticScrollRef.current = true;
@@ -100,7 +100,7 @@ export function useEditorScroll({
     }
   }, []);
 
-  const handleScroll = useCallback(() => {
+  const handleScroll = useCallback((): void => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
@@ -130,7 +130,7 @@ export function useEditorScroll({
     }
   }, []);
 
-  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>): void => {
     // Wheel fires before the DOM scroll updates — earliest possible signal of
     // user intent. Primary detach trigger for the "first wheel tick" case where
     // scrollTop hasn't changed yet when the next useLayoutEffect runs.
@@ -149,11 +149,11 @@ export function useEditorScroll({
     }
   }, []);
 
-  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>): void => {
     lastTouchYRef.current = event.touches[0]?.clientY ?? null;
   }, []);
 
-  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>): void => {
     const currentY = event.touches[0]?.clientY ?? null;
     const previousY = lastTouchYRef.current;
     lastTouchYRef.current = currentY;
@@ -175,7 +175,7 @@ export function useEditorScroll({
     }
   }, []);
 
-  const scrollMainContentToBottom = useCallback(() => {
+  const scrollMainContentToBottom = useCallback((): void => {
     const container = scrollContainerRef.current;
     if (!container) return;
     isProgrammaticScrollRef.current = true;
@@ -192,7 +192,7 @@ export function useEditorScroll({
    * position. No RAF is used, eliminating the timing window where a RAF could
    * move the viewport after the wheel event set the detach flag.
    */
-  useLayoutEffect(() => {
+  useLayoutEffect((): void => {
     if (!isProseStreamingRef.current) return;
 
     const container = scrollContainerRef.current;
@@ -266,7 +266,7 @@ export function useEditorScroll({
   }, [localContent, pinToBottom]);
 
   // Chapter switch: reset scroll so the new chapter starts at the top.
-  useLayoutEffect(() => {
+  useLayoutEffect((): void => {
     const container = scrollContainerRef.current;
     if (!container) return;
     isProgrammaticScrollRef.current = true;
@@ -278,7 +278,7 @@ export function useEditorScroll({
   }, [chapterId]);
 
   // No cleanup needed (no pending animation frames).
-  useEffect(() => undefined, []);
+  useEffect((): undefined => undefined, []);
 
   return {
     scrollContainerRef,

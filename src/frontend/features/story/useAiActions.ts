@@ -46,7 +46,10 @@ type StreamedContent = {
 };
 
 const createPrefillStripper =
-  (imposedActionPrefill: string, imposedHeadingPrefix: string) =>
+  (
+    imposedActionPrefill: string,
+    imposedHeadingPrefix: string
+  ): ((text: string) => string) =>
   (text: string): string => {
     if (!text) return text;
     let cleaned = text;
@@ -209,7 +212,7 @@ export function useAiActions({
 
   // Avoid updating state after the component has unmounted.
   // This can happen if the user cancels a streaming action while the component is still tearing down.
-  useEffect(() => setupMountedRefLifecycle(isMountedRef), []);
+  useEffect((): (() => void) => setupMountedRefLifecycle(isMountedRef), []);
 
   const cancelAiAction = (): void => {
     cancelSignalRef.current.cancelled = true;
@@ -226,7 +229,7 @@ export function useAiActions({
         lastStreamed.chapterId,
         lastStreamed.content,
         updateChapter,
-        () => {
+        (): void => {
           cancelCommitInProgressRef.current = false;
           lastStreamedContentRef.current = null;
         }
@@ -283,7 +286,7 @@ export function useAiActions({
         action,
         currentUnit.id,
         stripPrefillEcho,
-        (sc: StreamedContent) => {
+        (sc: StreamedContent): void => {
           lastStreamedContentRef.current = sc;
         }
       );
@@ -369,7 +372,9 @@ export function useAiActions({
         action,
         type === 'story' ? 'story' : id,
         currentText ?? '',
-        onProgress ? (partial: string) => onProgress(cleanText(partial)) : undefined,
+        onProgress
+          ? (partial: string): void => onProgress(cleanText(partial))
+          : undefined,
         onThinking,
         source,
         undefined,

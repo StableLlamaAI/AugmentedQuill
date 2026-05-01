@@ -98,23 +98,6 @@ const getInlineMarkers = (type: InlineFormatType): { open: string; close: string
   return { open: '_', close: '_' };
 };
 
-const getCandidateInlineMarkers = (
-  type: InlineFormatType
-): Array<{ open: string; close: string }> => {
-  if (type === 'bold')
-    return [
-      { open: '**', close: '**' },
-      { open: '__', close: '__' },
-    ];
-  if (type === 'strikethrough') return [{ open: '~~', close: '~~' }];
-  if (type === 'subscript') return [{ open: '~', close: '~' }];
-  if (type === 'superscript') return [{ open: '^', close: '^' }];
-  return [
-    { open: '_', close: '_' },
-    { open: '*', close: '*' },
-  ];
-};
-
 const findWordBoundsAtOffset = (
   rawText: string,
   offset: number
@@ -153,7 +136,7 @@ const resolveInlineTarget = (
   return { start, end };
 };
 
-const countChar = (s: string, c: string) => {
+const countChar = (s: string, c: string): number => {
   let n = 0;
   for (let i = 0; i < s.length; i++) {
     if (s[i] === c) n++;
@@ -161,25 +144,25 @@ const countChar = (s: string, c: string) => {
   return n;
 };
 
-const getLeftFormat = (str: string, start: number) => {
+const getLeftFormat = (str: string, start: number): string => {
   let L = start;
   while (L > 0 && (str[L - 1] === '*' || str[L - 1] === '_')) L--;
   return str.slice(L, start);
 };
 
-const getRightFormat = (str: string, end: number) => {
+const getRightFormat = (str: string, end: number): string => {
   let R = end;
   while (R < str.length && (str[R] === '*' || str[R] === '_')) R++;
   return str.slice(end, R);
 };
 
-const replaceLast = (str: string, find: string) => {
+const replaceLast = (str: string, find: string): string => {
   const idx = str.lastIndexOf(find);
   if (idx === -1) return str;
   return str.slice(0, idx) + str.slice(idx + find.length);
 };
 
-const replaceFirst = (str: string, find: string) => {
+const replaceFirst = (str: string, find: string): string => {
   const idx = str.indexOf(find);
   if (idx === -1) return str;
   return str.slice(0, idx) + str.slice(idx + find.length);
@@ -376,8 +359,6 @@ export const toggleInlineFormatAtSelection = (
   if (active) {
     const sl = countChar(left, '*');
     const sr = countChar(right, '*');
-    const ul = countChar(left, '_');
-    const ur = countChar(right, '_');
 
     let markerToRemove = '';
     if (type === 'bold') {
@@ -439,7 +420,7 @@ export const insertFootnote = (
 ): { nextRawText: string; nextCaret: number } => {
   // Find the next available footnote number.
   const existing = rawText.match(/\[\^(\d+)\]/g) ?? [];
-  const maxNum = existing.reduce((max: number, m: string) => {
+  const maxNum = existing.reduce((max: number, m: string): number => {
     const n = parseInt(m.replace(/\[\^|\]/g, ''), 10);
     return n > max ? n : max;
   }, 0);

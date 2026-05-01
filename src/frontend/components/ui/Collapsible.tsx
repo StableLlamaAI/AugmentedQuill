@@ -41,14 +41,14 @@ export function useCollapsible(
   const isControlled = isExpandedProp !== undefined;
   const isExpanded = isControlled ? (isExpandedProp as boolean) : internalExpanded;
 
-  const toggle = useCallback(() => {
+  const toggle = useCallback((): void => {
     const next = !isExpanded;
     if (onExpandedChange) onExpandedChange(next);
     if (!isControlled) setInternalExpanded(next);
   }, [isExpanded, isControlled, onExpandedChange]);
 
   const setIsExpanded = useCallback(
-    (expanded: boolean) => {
+    (expanded: boolean): void => {
       if (onExpandedChange) onExpandedChange(expanded);
       if (!isControlled) setInternalExpanded(expanded);
     },

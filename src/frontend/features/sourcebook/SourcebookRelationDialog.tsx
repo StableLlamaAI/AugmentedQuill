@@ -64,9 +64,9 @@ const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
             type="text"
             placeholder={t('Filter entries...')}
             value={filter}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onFilterChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onFilterChange(e.target.value)}
             className={`w-full pl-9 pr-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         </div>
@@ -81,7 +81,7 @@ const TargetEntrySection: React.FC<TargetEntrySectionProps> = ({
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => onTargetSelect(entry.id)}
+                  onClick={(): void => onTargetSelect(entry.id)}
                   className={`w-full text-left px-3 py-2 cursor-pointer rounded-md border text-sm transition-colors ${
                     targetId === entry.id
                       ? 'bg-brand-500 text-white border-brand-500'
@@ -154,7 +154,7 @@ const RelationLogicSection: React.FC<RelationLogicSectionProps> = ({
           type="text"
           placeholder={t("e.g. 'owns', 'is married to'")}
           value={relationStatement}
-          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
+          onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>): void =>
             onRelationStatementChange(e.target.value)
           }
           className={`w-full md:w-1/3 px-3 flex-shrink-0 text-center py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
@@ -218,9 +218,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Chapter 3')}
             value={startChapter}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onStartChapterChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onStartChapterChange(e.target.value)}
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
           />
         )}
@@ -229,9 +229,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Book 1')}
             value={startBook}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onStartBookChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onStartBookChange(e.target.value)}
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         )}
@@ -244,9 +244,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Chapter 10')}
             value={endChapter}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onEndChapterChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onEndChapterChange(e.target.value)}
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2`}
           />
         )}
@@ -255,9 +255,9 @@ const ConstraintSection: React.FC<ConstraintSectionProps> = ({
             type="text"
             placeholder={t('e.g. Book 1')}
             value={endBook}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onEndBookChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onEndBookChange(e.target.value)}
             className={`w-full px-3 py-2 rounded-md border ${inputBorderClass} ${inputBgClass} ${textClass} focus:outline-none focus:ring-2 focus:ring-brand-500`}
           />
         )}
@@ -302,7 +302,7 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   } = useThemeClasses();
   const inputBorderClass = borderClass;
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       if (initialRelation) {
         setTargetId(initialRelation.target_id);
@@ -328,17 +328,18 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
   if (!isOpen) return null;
 
   const filteredEntries = entries.filter(
-    (e: import('../../types').SourcebookEntry) =>
+    (e: import('../../types').SourcebookEntry): boolean | '' =>
       e.name.toLowerCase().includes(filter.toLowerCase()) ||
       (e.description && e.description.toLowerCase().includes(filter.toLowerCase()))
   );
 
   const targetName =
-    entries.find((e: import('../../types').SourcebookEntry) => e.id === targetId)
-      ?.name || t('Target Entry');
+    entries.find(
+      (e: import('../../types').SourcebookEntry): boolean => e.id === targetId
+    )?.name || t('Target Entry');
   const mainName = currentEntryName || t('Current Entry');
 
-  const handleSave = () => {
+  const handleSave = (): void => {
     if (!targetId || !relationStatement.trim()) return;
     onSave({
       target_id: targetId,
@@ -409,8 +410,8 @@ export const SourcebookRelationDialog: React.FC<SourcebookRelationDialogProps> =
             inputBgClass={inputBgClass}
             textClass={textClass}
             theme={theme}
-            onToggleDirection={() =>
-              setDirection((d: 'reverse' | 'forward') =>
+            onToggleDirection={(): void =>
+              setDirection((d: 'reverse' | 'forward'): 'reverse' | 'forward' =>
                 d === 'forward' ? 'reverse' : 'forward'
               )
             }

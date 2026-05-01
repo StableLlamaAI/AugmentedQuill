@@ -51,6 +51,53 @@ const SCOPES: { value: SearchScope; labelKey: string }[] = [
   { value: 'all', labelKey: 'All' },
 ];
 
+function navigateSearchMatch(
+  sectionType: string,
+  sectionId: string,
+  field: string,
+  start: number,
+  end: number,
+  activeChapterId: number | null,
+  onJumpToPosition: (start: number, end: number) => void,
+  onNavigateToChapter: (
+    chapterId: number,
+    jumpStart?: number,
+    jumpEnd?: number
+  ) => void,
+  onNavigateToSourcebookEntry: (entryId: string) => void,
+  onNavigateToStoryMetadata: (field: string) => void
+): void {
+  if (sectionType === 'chapter_content') {
+    if (activeChapterId !== null && sectionId === String(activeChapterId)) {
+      onJumpToPosition(start, end);
+      return;
+    }
+
+    const chapId = parseInt(sectionId, 10);
+    if (!Number.isNaN(chapId)) {
+      onNavigateToChapter(chapId, start, end);
+    }
+    return;
+  }
+
+  if (sectionType === 'chapter_metadata') {
+    const chapId = parseInt(sectionId, 10);
+    if (!Number.isNaN(chapId)) {
+      onNavigateToChapter(chapId);
+    }
+    return;
+  }
+
+  if (sectionType === 'story_metadata') {
+    onNavigateToStoryMetadata(field);
+    return;
+  }
+
+  if (sectionType === 'sourcebook') {
+    onNavigateToSourcebookEntry(sectionId);
+  }
+}
+
 export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   searchState,
   activeChapterId,
@@ -100,18 +147,18 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   useFocusTrap(isOpen, dialogRef, close);
 
   // Focus query input when dialog opens
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
-      setTimeout(() => queryInputRef.current?.focus(), 50);
+      setTimeout((): void | undefined => queryInputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback((): void => {
     void runSearch(activeChapterId);
   }, [runSearch, activeChapterId]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent): void => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSearch();
@@ -120,18 +167,18 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
     [handleSearch]
   );
 
-  const handleReplaceCurrent = useCallback(async () => {
+  const handleReplaceCurrent = useCallback(async (): Promise<void> => {
     const changed = await replaceCurrent(activeChapterId);
     if (changed) onStoryChanged();
   }, [replaceCurrent, activeChapterId, onStoryChanged]);
 
-  const handleReplaceAll = useCallback(async () => {
+  const handleReplaceAll = useCallback(async (): Promise<void> => {
     const { storyChanged } = await replaceAllMatches(activeChapterId);
     if (storyChanged) onStoryChanged();
   }, [replaceAllMatches, activeChapterId, onStoryChanged]);
 
-  const toggleSection = useCallback((key: string) => {
-    setCollapsedSections((prev: Set<string>) => {
+  const toggleSection = useCallback((key: string): void => {
+    setCollapsedSections((prev: Set<string>): Set<string> => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -146,22 +193,19 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
       field: string,
       start: number,
       end: number
-    ) => {
-      if (sectionType === 'chapter_content') {
-        if (activeChapterId !== null && sectionId === String(activeChapterId)) {
-          onJumpToPosition(start, end);
-        } else {
-          const chapId = parseInt(sectionId, 10);
-          if (!isNaN(chapId)) onNavigateToChapter(chapId, start, end);
-        }
-      } else if (sectionType === 'chapter_metadata') {
-        const chapId = parseInt(sectionId, 10);
-        if (!isNaN(chapId)) onNavigateToChapter(chapId);
-      } else if (sectionType === 'story_metadata') {
-        onNavigateToStoryMetadata(field);
-      } else if (sectionType === 'sourcebook') {
-        onNavigateToSourcebookEntry(sectionId);
-      }
+    ): void => {
+      navigateSearchMatch(
+        sectionType,
+        sectionId,
+        field,
+        start,
+        end,
+        activeChapterId,
+        onJumpToPosition,
+        onNavigateToChapter,
+        onNavigateToSourcebookEntry,
+        onNavigateToStoryMetadata
+      );
     },
     [
       activeChapterId,
@@ -197,7 +241,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
   const matchItemClass = isLight
     ? 'text-xs text-brand-gray-600 py-0.5 pl-4 hover:bg-brand-gray-50 cursor-pointer rounded transition-colors'
     : 'text-xs text-brand-gray-400 py-0.5 pl-4 hover:bg-brand-gray-800 cursor-pointer rounded transition-colors';
-  const errorClass = 'text-xs text-red-600 px-4 py-2';
+  const _errorClass = 'text-xs text-red-600 px-4 py-2';
   const statusClass = isLight
     ? 'text-xs text-brand-gray-500 flex-1'
     : 'text-xs text-brand-gray-400 flex-1';
@@ -225,7 +269,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
           </span>
           <button
             type="button"
-            onClick={() => close()}
+            onClick={(): void => close()}
             aria-label={t('Close search')}
             className={closeClass}
           >
@@ -240,9 +284,9 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
               ref={queryInputRef}
               type="text"
               value={query}
-              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-                setQuery(e.target.value)
-              }
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ): void => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t('Search...')}
               aria-label={t('Search...')}
@@ -266,9 +310,9 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
             <input
               type="text"
               value={replacement}
-              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-                setReplacement(e.target.value)
-              }
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ): void => setReplacement(e.target.value)}
               placeholder={t('Replace...')}
               aria-label={t('Replace...')}
               lang={storyLanguage}
@@ -304,7 +348,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() => setCaseSensitive(!caseSensitive)}
+              onClick={(): void => setCaseSensitive(!caseSensitive)}
               className={caseSensitive ? toggleActiveClass : toggleInactiveClass}
               aria-pressed={caseSensitive}
               title={t('Case Sensitive')}
@@ -313,7 +357,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 setIsRegex(!isRegex);
                 if (!isRegex) setIsPhonetic(false);
               }}
@@ -325,7 +369,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 setIsPhonetic(!isPhonetic);
                 if (!isPhonetic) setIsRegex(false);
               }}
@@ -345,7 +389,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                     name="search-scope"
                     value={value}
                     checked={scope === value}
-                    onChange={() => setScope(value)}
+                    onChange={(): void => setScope(value)}
                     className="accent-brand-600"
                   />
                   {t(labelKey)}
@@ -425,7 +469,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                 <div key={sectionKey}>
                   <button
                     type="button"
-                    onClick={() => toggleSection(sectionKey)}
+                    onClick={(): void => toggleSection(sectionKey)}
                     className={sectionHeaderClass}
                   >
                     {isCollapsed ? (
@@ -475,7 +519,7 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                                     : 'bg-brand-950 border-l-2 border-brand-500 pl-3 py-0.5 text-xs text-brand-gray-200 rounded-r cursor-pointer'
                                   : matchItemClass
                               }
-                              onClick={() => {
+                              onClick={(): void => {
                                 selectMatch(flatIdx);
                                 handleMatchClick(
                                   section.section_type,
@@ -485,8 +529,10 @@ export const SearchReplaceDialog: React.FC<SearchReplaceDialogProps> = ({
                                   match.end
                                 );
                               }}
-                              onDoubleClick={() => close(true)}
-                              onKeyDown={(e: React.KeyboardEvent<HTMLLIElement>) => {
+                              onDoubleClick={(): void => close(true)}
+                              onKeyDown={(
+                                e: React.KeyboardEvent<HTMLLIElement>
+                              ): void => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   selectMatch(flatIdx);
                                   handleMatchClick(

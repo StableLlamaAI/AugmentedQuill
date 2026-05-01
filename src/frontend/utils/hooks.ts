@@ -31,7 +31,7 @@ export function useDebounce<T extends readonly unknown[]>(
         clearTimeout(timeoutRef.current);
       }
 
-      timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = setTimeout((): void => {
         callback(...args);
       }, delay);
     },
@@ -52,11 +52,11 @@ export function useClickOutside<T extends HTMLElement>(
   enabled: boolean = true
 ): void {
   const callbackRef = useRef(callback);
-  useEffect(() => {
+  useEffect((): void => {
     callbackRef.current = callback;
   }, [callback]);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (!enabled) return;
     const handler = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
@@ -64,6 +64,6 @@ export function useClickOutside<T extends HTMLElement>(
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    return (): void => document.removeEventListener('mousedown', handler);
   }, [ref, enabled]);
 }

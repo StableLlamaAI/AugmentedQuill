@@ -32,13 +32,13 @@ export function useChatEditing(
   const editContentRef = useRef(editContent);
   editContentRef.current = editContent;
 
-  const handleStartEditing = useCallback((msg: ChatMessage) => {
+  const handleStartEditing = useCallback((msg: ChatMessage): void => {
     setEditingMessageId(msg.id);
     setEditContent(msg.text);
   }, []);
 
   const handleSaveEdit = useCallback(
-    (id: string) => {
+    (id: string): void => {
       if (editContentRef.current.trim()) {
         onEditMessage(id, editContentRef.current.trim());
         setEditingMessageId(null);
@@ -48,7 +48,7 @@ export function useChatEditing(
     [onEditMessage]
   );
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = useCallback((): void => {
     setEditingMessageId(null);
     setEditContent('');
   }, []);

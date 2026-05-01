@@ -203,7 +203,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => historyIndex > 0 && onRestoreHistory(historyIndex - 1)}
+                onClick={(): false | void =>
+                  historyIndex > 0 && onRestoreHistory(historyIndex - 1)
+                }
                 disabled={historyIndex === 0}
                 className="text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={t('Undo')}
@@ -212,7 +214,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 <Undo size={16} />
               </button>
               <button
-                onClick={() =>
+                onClick={(): false | void =>
                   historyIndex < historyLength - 1 && onRestoreHistory(historyIndex + 1)
                 }
                 disabled={historyIndex >= historyLength - 1}
@@ -232,7 +234,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 <MessageSquareDiff size={16} />
               </button>
               <button
-                onClick={() => onSetIsFullscreen((value: boolean) => !value)}
+                onClick={() => onSetIsFullscreen((value: boolean): boolean => !value)}
                 className="text-gray-500 hover:text-gray-700 dark:text-brand-gray-500 dark:hover:text-brand-gray-300"
                 title={
                   isFullscreen
@@ -290,11 +292,11 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                         spellCheck={true}
                         onChange={(
                           event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                        ) => {
+                        ): void => {
                           const val = event.target.value;
                           const tags = val
                             .split(',')
-                            .map((item: string) => item.trimStart());
+                            .map((item: string): string => item.trimStart());
                           onSetData({ ...data, tags });
                         }}
                         className="w-full p-2 border rounded dark:bg-brand-gray-950 dark:border-brand-gray-800 text-brand-gray-900 dark:text-brand-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-sans text-sm"
@@ -336,7 +338,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
 
             <div className="flex border-b dark:border-brand-gray-800 overflow-x-auto flex-shrink-0">
               <button
-                onClick={() => onSetActiveTab('summary')}
+                onClick={(): void => onSetActiveTab('summary')}
                 className={`px-4 py-2 flex items-center gap-2 whitespace-nowrap text-sm ${
                   activeTab === 'summary'
                     ? 'border-b-2 border-primary text-primary font-semibold'
@@ -347,7 +349,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 {t('Summary')}
               </button>
               <button
-                onClick={() => onSetActiveTab('notes')}
+                onClick={(): void => onSetActiveTab('notes')}
                 className={`px-4 py-2 flex items-center gap-2 whitespace-nowrap text-sm ${
                   activeTab === 'notes'
                     ? 'border-b-2 border-primary text-primary font-semibold'
@@ -358,7 +360,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                 {t('Notes')}
               </button>
               <button
-                onClick={() => onSetActiveTab('private')}
+                onClick={(): void => onSetActiveTab('private')}
                 className={`px-4 py-2 flex items-center gap-2 whitespace-nowrap text-sm ${
                   activeTab === 'private'
                     ? 'border-b-2 border-primary text-primary font-semibold'
@@ -370,7 +372,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
               </button>
               {(type === 'chapter' || allowConflicts) && (
                 <button
-                  onClick={() => onSetActiveTab('conflicts')}
+                  onClick={(): void => onSetActiveTab('conflicts')}
                   className={`px-4 py-2 flex items-center gap-2 whitespace-nowrap text-sm ${
                     activeTab === 'conflicts'
                       ? 'border-b-2 border-primary text-primary font-semibold'
@@ -398,7 +400,9 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                           {aiThinking && (
                             <button
                               onClick={() =>
-                                onSetIsThinkingExpanded((value: boolean) => !value)
+                                onSetIsThinkingExpanded(
+                                  (value: boolean): boolean => !value
+                                )
                               }
                               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors bg-brand-500/10 text-brand-600 hover:bg-brand-500/20 dark:bg-brand-500/20 dark:text-brand-400 dark:hover:bg-brand-500/30"
                               title={
@@ -457,7 +461,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 variant="ghost"
                                 size="sm"
                                 icon={<Wand2 size={12} />}
-                                onClick={() => {
+                                onClick={(): void => {
                                   onSetAiWriteSource('chapter');
                                   void onAiGenerate('write', 'chapter');
                                 }}
@@ -487,7 +491,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                 variant="ghost"
                                 size="sm"
                                 icon={<StickyNote size={12} />}
-                                onClick={() => {
+                                onClick={(): void => {
                                   onSetAiWriteSource('notes');
                                   void onAiGenerate('write', 'notes');
                                 }}
@@ -541,7 +545,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   variant="ghost"
                                   size="sm"
                                   icon={<RefreshCw size={12} />}
-                                  onClick={() => {
+                                  onClick={(): void => {
                                     onSetAiWriteSource('chapter');
                                     void onAiGenerate('update', 'chapter');
                                   }}
@@ -567,7 +571,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   variant="ghost"
                                   size="sm"
                                   icon={<PenLine size={12} />}
-                                  onClick={() => {
+                                  onClick={(): void => {
                                     onSetAiWriteSource('chapter');
                                     void onAiGenerate('rewrite', 'chapter');
                                   }}
@@ -620,7 +624,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   variant="ghost"
                                   size="sm"
                                   icon={<RefreshCw size={12} />}
-                                  onClick={() => {
+                                  onClick={(): void => {
                                     onSetAiWriteSource('notes');
                                     void onAiGenerate('update', 'notes');
                                   }}
@@ -646,7 +650,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                                   variant="ghost"
                                   size="sm"
                                   icon={<PenLine size={12} />}
-                                  onClick={() => {
+                                  onClick={(): void => {
                                     onSetAiWriteSource('notes');
                                     void onAiGenerate('rewrite', 'notes');
                                   }}
@@ -688,7 +692,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   )}
                   <CodeMirrorEditor
                     value={data.summary || ''}
-                    onChange={(value: string) => {
+                    onChange={(value: string): void => {
                       onSetBaselineData((prev: MetadataParams) => ({
                         ...prev,
                         summary: value,
@@ -722,7 +726,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   </div>
                   <CodeMirrorEditor
                     value={data.notes || ''}
-                    onChange={(value: string) => {
+                    onChange={(value: string): void => {
                       onSetBaselineData((prev: MetadataParams) => ({
                         ...prev,
                         notes: value,
@@ -753,7 +757,7 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   </div>
                   <CodeMirrorEditor
                     value={data.private_notes || ''}
-                    onChange={(value: string) => {
+                    onChange={(value: string): void => {
                       onSetBaselineData((prev: MetadataParams) => ({
                         ...prev,
                         private_notes: value,
@@ -792,7 +796,8 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                   <div className="space-y-4">
                     {conflicts.map((conflict: Conflict, idx: number) => {
                       const baselineConflict = (baselineData.conflicts || []).find(
-                        (baselineItem: Conflict) => baselineItem.id === conflict.id
+                        (baselineItem: Conflict): boolean =>
+                          baselineItem.id === conflict.id
                       );
                       const isNewConflict = showDiff && baselineConflict === undefined;
 
@@ -816,21 +821,21 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                             </span>
                             <div className="space-x-2 flex items-center">
                               <button
-                                onClick={() => onMoveConflict(idx, 'up')}
+                                onClick={(): void => onMoveConflict(idx, 'up')}
                                 disabled={idx === 0}
                                 className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
                               >
                                 ↑
                               </button>
                               <button
-                                onClick={() => onMoveConflict(idx, 'down')}
+                                onClick={(): void => onMoveConflict(idx, 'down')}
                                 disabled={idx === conflicts.length - 1}
                                 className="disabled:opacity-30 dark:text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300 px-1"
                               >
                                 ↓
                               </button>
                               <button
-                                onClick={() => onDeleteConflict(conflict.id)}
+                                onClick={(): void => onDeleteConflict(conflict.id)}
                                 className="text-gray-400 hover:text-red-500 transition-colors p-1 ml-2"
                                 title={t('Delete Conflict')}
                               >
@@ -847,12 +852,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.description}
-                                onChange={(value: string) => {
+                                onChange={(value: string): void => {
                                   onUpdateConflict(conflict.id, 'description', value);
                                   onSetBaselineData((prev: MetadataParams) => ({
                                     ...prev,
                                     conflicts: (prev.conflicts || []).map(
-                                      (baselineItem: Conflict) =>
+                                      (baselineItem: Conflict): Conflict =>
                                         baselineItem.id === conflict.id
                                           ? { ...baselineItem, description: value }
                                           : baselineItem
@@ -881,12 +886,12 @@ export const MetadataEditorDialogView: React.FC<MetadataEditorDialogViewProps> =
                               </label>
                               <CodeMirrorEditor
                                 value={conflict.resolution}
-                                onChange={(value: string) => {
+                                onChange={(value: string): void => {
                                   onUpdateConflict(conflict.id, 'resolution', value);
                                   onSetBaselineData((prev: MetadataParams) => ({
                                     ...prev,
                                     conflicts: (prev.conflicts || []).map(
-                                      (baselineItem: Conflict) =>
+                                      (baselineItem: Conflict): Conflict =>
                                         baselineItem.id === conflict.id
                                           ? { ...baselineItem, resolution: value }
                                           : baselineItem

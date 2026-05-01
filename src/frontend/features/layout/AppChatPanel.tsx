@@ -17,7 +17,7 @@ import { Chat } from '../chat/Chat';
 import { ChatProvider } from '../chat/ChatContext';
 import { MainChatControls } from './layoutControlTypes';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
-import type { AppTheme } from '../../types';
+import type { AppTheme, ChatSession } from '../../types';
 
 export interface AppChatPanelProps {
   chatControls: MainChatControls;
@@ -84,7 +84,7 @@ export const AppChatPanel: React.FC<AppChatPanelProps> = React.memo(
     // Memoize merged session list so Chat's React.memo isn't defeated by a
     // new array reference on every parent render.
     const chatSessions = useMemo(
-      () => [...incognitoSessions, ...(chatHistoryList ?? [])],
+      (): ChatSession[] => [...incognitoSessions, ...(chatHistoryList ?? [])],
       [incognitoSessions, chatHistoryList]
     );
 

@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../app/i18n';
 import { ToolCallLimitDialog } from './ToolCallLimitDialog';
 
-const renderWithI18n = (ui: React.ReactElement) =>
+const renderWithI18n = (ui: React.ReactElement): ReturnType<typeof render> =>
   render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
 
 afterEach(() => {

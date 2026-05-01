@@ -80,21 +80,23 @@ export function useChapterSuggestions({
   setIsAutoSourcebookSelectionEnabled: Dispatch<SetStateAction<boolean>>;
   isSourcebookSelectionRunning: boolean;
 } {
-  const [suggestionMode, setSuggestionMode] = useState<SuggestionGenerationMode>(() => {
-    const saved = localStorage.getItem('aq_suggest_next_mode');
-    if (saved === 'original') {
-      return 'instructed';
+  const [suggestionMode, setSuggestionMode] = useState<SuggestionGenerationMode>(
+    (): 'instructed' | 'guided' | 'pure' => {
+      const saved = localStorage.getItem('aq_suggest_next_mode');
+      if (saved === 'original') {
+        return 'instructed';
+      }
+      if (saved === 'guided' || saved === 'instructed' || saved === 'pure') {
+        return saved;
+      }
+      return 'guided';
     }
-    if (saved === 'guided' || saved === 'instructed' || saved === 'pure') {
-      return saved;
-    }
-    return 'guided';
-  });
+  );
   const [continuations, setContinuations] = useState<string[]>([]);
   // ids of sourcebook entries currently checked (suggested by model or user)
   const [checkedEntries, setCheckedEntries] = useState<Set<string>>(new Set());
   const [isAutoSourcebookSelectionEnabled, setIsAutoSourcebookSelectionEnabled] =
-    useState(() => {
+    useState((): boolean => {
       const saved = localStorage.getItem('aq_auto_sourcebook_selection');
       return saved !== null ? saved === 'true' : true;
     });
@@ -110,9 +112,9 @@ export function useChapterSuggestions({
   const relevanceInFlightRef = useRef(0);
   const isMountedRef = useRef(true);
 
-  useEffect(() => setupMountedRefLifecycle(isMountedRef), []);
+  useEffect((): (() => void) => setupMountedRefLifecycle(isMountedRef), []);
 
-  useEffect(() => {
+  useEffect((): void => {
     autoSelectionEnabledRef.current = isAutoSourcebookSelectionEnabled;
     localStorage.setItem(
       'aq_auto_sourcebook_selection',
@@ -120,18 +122,18 @@ export function useChapterSuggestions({
     );
   }, [isAutoSourcebookSelectionEnabled]);
 
-  useEffect(() => {
+  useEffect((): void => {
     localStorage.setItem('aq_suggest_next_mode', suggestionMode);
   }, [suggestionMode]);
 
-  const clampCursor = (cursor: number, content: string) => {
+  const clampCursor = (cursor: number, content: string): number => {
     if (!Number.isFinite(cursor)) return content.length;
     return Math.max(0, Math.min(Math.floor(cursor), content.length));
   };
 
   // request the backend to recompute which sourcebook entries appear
   // relevant given the provided text; results replace the current checks.
-  const fetchRelevance = async (text: string) => {
+  const fetchRelevance = async (text: string): Promise<void> => {
     if (!currentUnit || !autoSelectionEnabledRef.current) return;
     relevanceInFlightRef.current += 1;
     setIsSourcebookSelectionRunning(true);
@@ -153,8 +155,8 @@ export function useChapterSuggestions({
   // allow user to manually override a checkbox; these will be overwritten
   // on the next model recompute triggered by text changes or suggestion
   // acceptance.
-  const handleToggleEntry = (id: string, checked: boolean) => {
-    setCheckedEntries((prev: Set<string>) => {
+  const handleToggleEntry = (id: string, checked: boolean): void => {
+    setCheckedEntries((prev: Set<string>): Set<string> => {
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
@@ -164,12 +166,12 @@ export function useChapterSuggestions({
 
   // when chapter content changes, recompute sourcebook relevance after a
   // pause; this prevents a flood of model calls while the user types.
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (!currentUnit || !isAutoSourcebookSelectionEnabled) return;
-    const timer = setTimeout(() => {
+    const timer = setTimeout((): void => {
       fetchRelevance(currentUnit.content);
     }, 2000);
-    return () => clearTimeout(timer);
+    return (): void => clearTimeout(timer);
   }, [currentUnit?.content, isAutoSourcebookSelectionEnabled]);
 
   const cancelSignalRef = useRef<{
@@ -179,7 +181,7 @@ export function useChapterSuggestions({
   const suggestionUpdateQueueRef = useRef<Record<number, string>>({});
   const suggestionUpdateTimerRef = useRef<number | null>(null);
 
-  const flushSuggestionUpdates = () => {
+  const flushSuggestionUpdates = (): void => {
     const queued = suggestionUpdateQueueRef.current;
     if (Object.keys(queued).length === 0) {
       suggestionUpdateTimerRef.current = null;
@@ -190,8 +192,8 @@ export function useChapterSuggestions({
     suggestionUpdateQueueRef.current = {};
     suggestionUpdateTimerRef.current = null;
 
-    startTransition(() => {
-      setContinuations((previous: string[]) => {
+    startTransition((): void => {
+      setContinuations((previous: string[]): string[] => {
         const next = [...previous];
         for (const [idxStr, text] of Object.entries(updates)) {
           const index = Number(idxStr);
@@ -204,14 +206,14 @@ export function useChapterSuggestions({
     });
   };
 
-  const scheduleSuggestionUpdate = (index: number, text: string) => {
+  const scheduleSuggestionUpdate = (index: number, text: string): void => {
     suggestionUpdateQueueRef.current[index] = text;
     if (suggestionUpdateTimerRef.current === null) {
       suggestionUpdateTimerRef.current = window.setTimeout(flushSuggestionUpdates, 100);
     }
   };
 
-  const cancelSuggestions = () => {
+  const cancelSuggestions = (): void => {
     cancelSignalRef.current.cancelled = true;
     cancelSignalRef.current.reader?.cancel();
     cancelSignalRef.current.reader = undefined;
@@ -226,14 +228,14 @@ export function useChapterSuggestions({
     setContinuations([]);
   };
 
-  const isAbortError = (error: unknown): boolean =>
+  const _isAbortError = (error: unknown): boolean =>
     error instanceof Error && error.name === 'AbortError';
 
   const handleTriggerSuggestions = async (
     cursor?: number,
     contentOverride?: string,
     enableSuggestionMode: boolean = true
-  ) => {
+  ): Promise<void> => {
     if (!currentUnit) return;
     if (!isWritingAvailable) return;
     if (isSuggesting) return;
@@ -267,7 +269,7 @@ export function useChapterSuggestions({
           loopGuardMinRepeats: activeWritingConfig.suggestLoopGuardMinRepeats ?? 3,
           loopGuardMaxRegens: activeWritingConfig.suggestLoopGuardMaxRegens ?? 1,
           suggestionMode,
-          onSuggestionUpdate: (index: number, text: string) => {
+          onSuggestionUpdate: (index: number, text: string): void => {
             if (!text) return;
             scheduleSuggestionUpdate(index, text);
           },
@@ -288,7 +290,10 @@ export function useChapterSuggestions({
       };
       useChatStore
         .getState()
-        .setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
+        .setChatMessages((prev: ChatMessage[]): ChatMessage[] => [
+          ...prev,
+          errorMessage,
+        ]);
     } finally {
       if (isMountedRef.current) {
         setIsSuggesting(false);
@@ -297,7 +302,10 @@ export function useChapterSuggestions({
     }
   };
 
-  const handleAcceptContinuation = async (text: string, contentOverride?: string) => {
+  const handleAcceptContinuation = async (
+    text: string,
+    contentOverride?: string
+  ): Promise<void> => {
     if (!currentUnit) return;
 
     if (!text) {
@@ -321,10 +329,14 @@ export function useChapterSuggestions({
     // paragraph break). See textUtils.ts for the full rule set.
     const newContent = joinSuggestionToContent(currentContent, text);
 
-    setSuggestUndoStack((prev: { content: string; cursor: number }[]) => [
-      ...prev,
-      { content: currentContent, cursor: c },
-    ]);
+    setSuggestUndoStack(
+      (
+        prev: { content: string; cursor: number }[]
+      ): { content: string; cursor: number }[] => [
+        ...prev,
+        { content: currentContent, cursor: c },
+      ]
+    );
     await updateChapter(currentUnit.id, { content: newContent });
 
     const newCursor = newContent.length;
@@ -341,7 +353,7 @@ export function useChapterSuggestions({
     action: 'trigger' | 'chooseLeft' | 'chooseRight' | 'regenerate' | 'undo' | 'exit',
     cursor?: number,
     contentOverride?: string
-  ) => {
+  ): Promise<void> => {
     if (!currentUnit) return;
     if (isSuggesting && action !== 'exit') return;
 

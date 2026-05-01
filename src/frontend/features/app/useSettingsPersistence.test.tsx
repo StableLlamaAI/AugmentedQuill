@@ -62,7 +62,7 @@ describe('useSettingsPersistence', () => {
 
     let handleSaveSettings: ((settings: AppSettings) => Promise<void>) | null = null;
 
-    const TestComponent = () => {
+    const TestComponent = (): JSX.Element | null => {
       const hook = useSettingsPersistence({
         appSettings: mockAppSettings,
         setAppSettings,

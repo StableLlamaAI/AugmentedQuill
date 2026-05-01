@@ -20,8 +20,8 @@ let appVersion = 'unknown';
 try {
   const pkgJson = JSON.parse(fs.readFileSync(frontendPackagePath, 'utf-8'));
   appVersion = String(pkgJson.version || 'unknown');
-} catch (e) {
-  console.warn('Unable to resolve frontend version from package.json', e);
+} catch (_e) {
+  console.warn('Unable to resolve frontend version from package.json', _e);
 }
 
 let gitRevision = 'unknown';
@@ -29,8 +29,8 @@ try {
   gitRevision = child_process
     .execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
     .trim();
-} catch (e) {
-  console.warn('Unable to resolve git revision at build time', e);
+} catch (_e) {
+  console.warn('Unable to resolve git revision at build time', _e);
 }
 
 let pythonVersion = 'unknown';
@@ -38,7 +38,7 @@ try {
   pythonVersion = child_process
     .execSync('python --version', { encoding: 'utf-8' })
     .trim();
-} catch (e) {
+} catch {
   try {
     pythonVersion = child_process
       .execSync('python3 --version', { encoding: 'utf-8' })

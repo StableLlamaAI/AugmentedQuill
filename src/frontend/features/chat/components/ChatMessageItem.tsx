@@ -50,7 +50,7 @@ const tryParseJson = (value: unknown): unknown => {
 const ToolCallArguments = React.memo(function ToolCallArguments({
   args,
 }: ToolCallArgumentsProps) {
-  const formattedArgs = useMemo(() => tryParseJson(args), [args]);
+  const formattedArgs = useMemo((): unknown => tryParseJson(args), [args]);
 
   return (
     <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar font-mono text-[11px]">
@@ -168,7 +168,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               spellCheck={true}
               onChange={(
                 e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-              ) => onSetEditContent(e.target.value)}
+              ): void => onSetEditContent(e.target.value)}
               className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
             />
             <div className="flex justify-end space-x-2 mt-2">
@@ -181,7 +181,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 <X size={14} />
               </button>
               <button
-                onClick={() => onSaveEdit(msg.id)}
+                onClick={(): void => onSaveEdit(msg.id)}
                 className="p-1 text-brand-500 hover:opacity-80"
                 aria-label={t('Save message edit')}
                 title={t('Save edit')}
@@ -228,7 +228,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                             theme={theme}
                             size="sm"
                             variant="secondary"
-                            onClick={() => {
+                            onClick={(): void => {
                               if (!isModelAvailable) return;
                               let projectName = '';
                               try {
@@ -274,7 +274,9 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                         ? isThinkingExpanded
                         : isLoading && isLast
                     }
-                    onExpandedChange={(next: boolean) => onThinkingToggle(msg.id, next)}
+                    onExpandedChange={(next: boolean): void =>
+                      onThinkingToggle(msg.id, next)
+                    }
                   >
                     <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
                       {msg.thinking}
@@ -326,7 +328,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                           : '{{count}} Tool Call',
                         { count: msg.tool_calls.length }
                       ) +
-                      ` [${msg.tool_calls.map((tc: import('../../../types').ChatToolCall) => tc.name).join(', ')}]`
+                      ` [${msg.tool_calls.map((tc: import('../../../types').ChatToolCall): string => tc.name).join(', ')}]`
                     }
                   >
                     <div className="space-y-2">
@@ -356,7 +358,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         {!anyMessageBeingEdited && !isLoading && (
           <div className="mt-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={() => onStartEditing(msg)}
+              onClick={(): void => onStartEditing(msg)}
               className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
               title={!isModelAvailable ? chatDisabledReason : t('Edit')}
               disabled={!isModelAvailable}
@@ -364,7 +366,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               <Edit2 size={12} />
             </button>
             <button
-              onClick={() => onDeleteMessage(msg.id)}
+              onClick={(): void => onDeleteMessage(msg.id)}
               className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
               title={!isModelAvailable ? chatDisabledReason : t('Delete')}
               disabled={!isModelAvailable}

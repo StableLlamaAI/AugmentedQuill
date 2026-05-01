@@ -73,7 +73,14 @@ export function buildMetadataFields(
   if (args.conflicts !== undefined) changedFields.push('conflicts');
   if (changedFields.length === 0) changedFields.push('summary');
   return changedFields.map(
-    (subType: 'summary' | 'notes' | 'conflicts' | 'private') => ({
+    (
+      subType: 'summary' | 'notes' | 'conflicts' | 'private'
+    ): {
+      id: string;
+      type: 'metadata';
+      label: string;
+      subType: 'summary' | 'notes' | 'private' | 'conflicts';
+    } => ({
       id: `meta-${Date.now()}-${Math.random()}`,
       type: 'metadata' as const,
       label: subType.charAt(0).toUpperCase() + subType.slice(1),
@@ -92,14 +99,21 @@ export function buildMetadataFields(
  */
 export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
   // --- Sourcebook tools ---
-  create_sourcebook_entry: ({ args, result }: MutCallResult) =>
+  create_sourcebook_entry: ({ args, result }: MutCallResult): SessionMutation =>
     buildSourcebookMutation(args, result),
-  update_sourcebook_entry: ({ args, result }: MutCallResult) =>
+  update_sourcebook_entry: ({ args, result }: MutCallResult): SessionMutation =>
     buildSourcebookMutation(args, result),
-  delete_sourcebook_entry: ({ args, result }: MutCallResult) =>
+  delete_sourcebook_entry: ({ args, result }: MutCallResult): SessionMutation =>
     buildSourcebookMutation(args, result),
 
-  add_sourcebook_relation: ({ args }: MutCallResult) => {
+  add_sourcebook_relation: ({
+    args,
+  }: MutCallResult): {
+    id: string;
+    type: 'sourcebook';
+    label: string;
+    targetId: string | undefined;
+  } => {
     const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
     const targetId = args.target_id || args.targetId;
     const label = sourceId
@@ -115,7 +129,14 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
     };
   },
 
-  remove_sourcebook_relation: ({ args }: MutCallResult) => {
+  remove_sourcebook_relation: ({
+    args,
+  }: MutCallResult): {
+    id: string;
+    type: 'sourcebook';
+    label: string;
+    targetId: string | undefined;
+  } => {
     const sourceId = args.source_id || args.sourceId || args.name_or_id || args.name;
     const targetId = args.target_id || args.targetId;
     const label = sourceId
@@ -132,44 +153,54 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
   },
 
   // --- Metadata tools (one badge per changed field) ---
-  update_story_metadata: ({ args }: MutCallResult) => buildMetadataFields(args, false),
-  update_chapter_metadata: ({ args }: MutCallResult) =>
+  update_story_metadata: ({ args }: MutCallResult): SessionMutation[] =>
     buildMetadataFields(args, false),
-  update_book_metadata: ({ args }: MutCallResult) => buildMetadataFields(args, false),
-  set_story_tags: () => buildMetadataFields({}, true),
-  set_story_summary: () => buildMetadataFields({}, true),
-  sync_story_summary: () => buildMetadataFields({}, true),
-  write_story_summary: () => buildMetadataFields({}, true),
+  update_chapter_metadata: ({ args }: MutCallResult): SessionMutation[] =>
+    buildMetadataFields(args, false),
+  update_book_metadata: ({ args }: MutCallResult): SessionMutation[] =>
+    buildMetadataFields(args, false),
+  set_story_tags: (): SessionMutation[] => buildMetadataFields({}, true),
+  set_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
+  sync_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
+  write_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
 
   // --- Chapter prose tools ---
-  write_chapter_content: ({ args, result }: MutCallResult) =>
+  write_chapter_content: ({ args, result }: MutCallResult): SessionMutation =>
     buildChapterMutation(args, result),
-  replace_text_in_chapter: ({ args, result }: MutCallResult) =>
+  replace_text_in_chapter: ({ args, result }: MutCallResult): SessionMutation =>
     buildChapterMutation(args, result),
-  apply_chapter_replacements: ({ args, result }: MutCallResult) =>
+  apply_chapter_replacements: ({ args, result }: MutCallResult): SessionMutation =>
     buildChapterMutation(args, result),
-  write_chapter: ({ args, result }: MutCallResult) =>
+  write_chapter: ({ args, result }: MutCallResult): SessionMutation =>
     buildChapterMutation(args, result),
 
   // --- Story prose tools ---
-  write_story_content: () => ({
+  write_story_content: (): { id: string; type: 'story'; label: string } => ({
     id: `story-${Date.now()}-${Math.random()}`,
     type: 'story',
     label: 'Story prose',
   }),
-  call_editing_assistant: () => ({
+  call_editing_assistant: (): { id: string; type: 'story'; label: string } => ({
     id: `story-${Date.now()}-${Math.random()}`,
     type: 'story',
     label: 'Story prose',
   }),
-  call_writing_llm: () => ({
+  call_writing_llm: (): { id: string; type: 'story'; label: string } => ({
     id: `story-${Date.now()}-${Math.random()}`,
     type: 'story',
     label: 'Story prose',
   }),
 
   // --- Book tools ---
-  write_book_content: ({ args, result }: MutCallResult) => {
+  write_book_content: ({
+    args,
+    result,
+  }: MutCallResult): {
+    id: string;
+    type: 'book';
+    label: string;
+    targetId: string | undefined;
+  } => {
     const bookId = result.book_id || args.book_id;
     return {
       id: `book-${Date.now()}-${Math.random()}`,

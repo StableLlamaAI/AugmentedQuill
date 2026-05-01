@@ -131,11 +131,11 @@ function ChatComponent(): React.JSX.Element {
     }
 
     // Force scroll to bottom on user message
-    setTimeout(() => scrollToBottom('auto'), 0);
+    setTimeout((): void => scrollToBottom('auto'), 0);
   };
 
   const hasUserMessage = messages.some(
-    (msg: import('../../types').ChatMessage) => msg.role === 'user'
+    (msg: import('../../types').ChatMessage): boolean => msg.role === 'user'
   );
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
   const contextUsage = useMemo(
@@ -169,7 +169,7 @@ function ChatComponent(): React.JSX.Element {
         allowWebSearch={allowWebSearch}
         onDeleteSession={onDeleteSession}
         onNewSession={onNewSession}
-        onScratchpadOpen={() => setShowScratchpad(true)}
+        onScratchpadOpen={(): void => setShowScratchpad(true)}
         onToggleWebSearch={onToggleWebSearch}
       />
 
@@ -182,7 +182,7 @@ function ChatComponent(): React.JSX.Element {
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
           onDeleteAllSessions={onDeleteAllSessions}
-          onClose={() => setShowHistory(false)}
+          onClose={(): void => setShowHistory(false)}
         />
       )}
 
@@ -191,7 +191,7 @@ function ChatComponent(): React.JSX.Element {
         isLight={isLight}
         storyLanguage={storyLanguage}
         scratchpad={scratchpad}
-        onClose={() => setShowScratchpad(false)}
+        onClose={(): void => setShowScratchpad(false)}
         onDelete={onDeleteScratchpad}
         onSave={onUpdateScratchpad}
       />
@@ -207,7 +207,7 @@ function ChatComponent(): React.JSX.Element {
         chatDisabledReason={chatDisabledReason}
         storyLanguage={storyLanguage}
         theme={theme}
-        onClose={() => setShowSystemPrompt(false)}
+        onClose={(): void => setShowSystemPrompt(false)}
         onSave={onUpdateSystemPrompt}
       />
 
@@ -343,7 +343,7 @@ function ChatComponent(): React.JSX.Element {
             {attachments.length === 0 && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={(): void | undefined => fileInputRef.current?.click()}
                 title={t('Attach files')}
                 aria-label={t('Attach files')}
                 className={`absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition ${

@@ -88,8 +88,8 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
             key={p.id}
             role="button"
             tabIndex={0}
-            onClick={() => onSelectProvider(p.id)}
-            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+            onClick={(): void => onSelectProvider(p.id)}
+            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>): void => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 onSelectProvider(p.id);
@@ -184,7 +184,7 @@ export const ProviderListPanel: React.FC<ProviderListPanelProps> = ({
               </div>
               <button
                 type="button"
-                onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
                   e.stopPropagation();
                   onDuplicateProvider(p.id);
                 }}

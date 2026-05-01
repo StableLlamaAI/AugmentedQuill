@@ -21,7 +21,7 @@ export const debugApi = {
     );
   },
 
-  clearLogs: async () => {
+  clearLogs: async (): Promise<{ status: string }> => {
     return deleteJson<{ status: string }>(
       '/debug/llm_logs?_t=' + Date.now(),
       'Failed to clear debug logs'

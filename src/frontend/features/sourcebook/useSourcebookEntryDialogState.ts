@@ -9,9 +9,9 @@
  * Purpose: Isolate sourcebook entry dialog state and behavior from the UI shell.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Dispatch, SetStateAction } from 'react';
 import { SourcebookEntry, SourcebookRelation } from '../../types';
-import { SourcebookUpsertPayload } from '../../services/apiTypes';
+import { ProjectImage, SourcebookUpsertPayload } from '../../services/apiTypes';
 import { useSearchHighlight } from '../search/SearchHighlightContext';
 import {
   SourcebookEntryHistoryState,
@@ -76,6 +76,53 @@ interface UseSourcebookEntryDialogStateParams {
   onClose: () => void;
 }
 
+export interface UseSourcebookEntryDialogStateResult {
+  name: string;
+  description: string;
+  descriptionBaseline: string | undefined;
+  showDiff: boolean;
+  category: string;
+  synonyms: string[];
+  newSynonym: string;
+  images: string[];
+  relations: SourcebookRelation[];
+  isImagesExpanded: boolean;
+  isRelationsExpanded: boolean;
+  isRelationDialogVisible: boolean;
+  editingRelationIndex: number | null;
+  isImagePickerOpen: boolean;
+  showKeywordsPanel: boolean;
+  isSaving: boolean;
+  relationNameMap: Record<string, string>;
+  descriptionHighlightRanges: import('../search/useSearchReplace').SearchHighlightRange[];
+  availableImages: ProjectImage[];
+  selectedImagesList: ProjectImage[];
+  keywords: string[];
+  isGeneratingKeywords: boolean;
+  history: import('./useSourcebookEntryHistory').SourcebookEntryHistoryState[];
+  historyIndex: number;
+  setName: Dispatch<SetStateAction<string>>;
+  setDescription: Dispatch<SetStateAction<string>>;
+  setDescriptionBaseline: Dispatch<SetStateAction<string | undefined>>;
+  setShowDiff: Dispatch<SetStateAction<boolean>>;
+  setCategory: Dispatch<SetStateAction<string>>;
+  setSynonyms: Dispatch<SetStateAction<string[]>>;
+  setNewSynonym: Dispatch<SetStateAction<string>>;
+  setImages: Dispatch<SetStateAction<string[]>>;
+  setRelations: Dispatch<SetStateAction<SourcebookRelation[]>>;
+  setIsImagesExpanded: Dispatch<SetStateAction<boolean>>;
+  setIsRelationsExpanded: Dispatch<SetStateAction<boolean>>;
+  setIsRelationDialogVisible: Dispatch<SetStateAction<boolean>>;
+  setEditingRelationIndex: Dispatch<SetStateAction<number | null>>;
+  setIsImagePickerOpen: Dispatch<SetStateAction<boolean>>;
+  setShowKeywordsPanel: Dispatch<SetStateAction<boolean>>;
+  handleSave: () => Promise<void>;
+  addSynonym: () => void;
+  removeSynonym: (index: number) => void;
+  toggleImage: (filename: string) => void;
+  restoreFromHistory: (index: number) => void;
+}
+
 export const useSourcebookEntryDialogState = ({
   entry,
   allEntries,
@@ -84,7 +131,7 @@ export const useSourcebookEntryDialogState = ({
   showDiffForNew,
   onSave,
   onClose,
-}: UseSourcebookEntryDialogStateParams) => {
+}: UseSourcebookEntryDialogStateParams): UseSourcebookEntryDialogStateResult => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionBaseline, setDescriptionBaseline] = useState<string | undefined>(
@@ -104,9 +151,9 @@ export const useSourcebookEntryDialogState = ({
   const [showKeywordsPanel, setShowKeywordsPanel] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const relationNameMap = useMemo(() => {
+  const relationNameMap = useMemo((): Record<string, string> => {
     const map: Record<string, string> = {};
-    allEntries.forEach((item: SourcebookEntry) => {
+    allEntries.forEach((item: SourcebookEntry): void => {
       map[item.id] = item.name;
     });
     return map;
@@ -144,7 +191,7 @@ export const useSourcebookEntryDialogState = ({
     }
   );
 
-  useEffect(() => {
+  useEffect((): void => {
     const initialState = buildEntryHistoryState(entry);
 
     setName(initialState.name);
@@ -164,13 +211,13 @@ export const useSourcebookEntryDialogState = ({
     setIsRelationsExpanded(initialState.relations.length > 0);
   }, [entry?.id, isOpen, baselineEntry, showDiffForNew]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (relations.length > 0) {
       setIsRelationsExpanded(true);
     }
   }, [relations]);
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     setIsSaving(true);
     try {
       await onSave({
@@ -190,7 +237,7 @@ export const useSourcebookEntryDialogState = ({
     }
   };
 
-  const addSynonym = () => {
+  const addSynonym = (): void => {
     if (!newSynonym.trim()) {
       return;
     }
@@ -199,23 +246,25 @@ export const useSourcebookEntryDialogState = ({
     setNewSynonym('');
   };
 
-  const removeSynonym = (index: number) => {
+  const removeSynonym = (index: number): void => {
     setSynonyms(
-      synonyms.filter((_: string, currentIndex: number) => currentIndex !== index)
+      synonyms.filter(
+        (_: string, currentIndex: number): boolean => currentIndex !== index
+      )
     );
   };
 
-  const toggleImage = (filename: string) => {
+  const toggleImage = (filename: string): void => {
     if (images.includes(filename)) {
-      setImages(images.filter((value: string) => value !== filename));
+      setImages(images.filter((value: string): boolean => value !== filename));
       return;
     }
 
     setImages([...images, filename]);
   };
 
-  const restoreFromHistory = (index: number) => {
-    restoreSourcebookHistory(index, (snapshot: SourcebookEntryHistoryState) => {
+  const restoreFromHistory = (index: number): void => {
+    restoreSourcebookHistory(index, (snapshot: SourcebookEntryHistoryState): void => {
       setName(snapshot.name);
       setDescription(snapshot.description);
       setCategory(snapshot.category);

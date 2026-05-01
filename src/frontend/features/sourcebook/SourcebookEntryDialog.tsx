@@ -72,7 +72,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
   const imagePickerRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(isOpen, entryDialogRef, onClose);
-  useFocusTrap(state.isImagePickerOpen, imagePickerRef, () =>
+  useFocusTrap(state.isImagePickerOpen, imagePickerRef, (): void =>
     state.setIsImagePickerOpen(false)
   );
 
@@ -97,7 +97,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     return null;
   }
 
-  const handleUndo = () => {
+  const handleUndo = (): void => {
     if (state.historyIndex > 0) {
       state.restoreFromHistory(state.historyIndex - 1);
       return;
@@ -105,7 +105,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     onAppUndo?.();
   };
 
-  const handleRedo = () => {
+  const handleRedo = (): void => {
     if (state.historyIndex < state.history.length - 1) {
       state.restoreFromHistory(state.historyIndex + 1);
       return;
@@ -113,7 +113,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     onAppRedo?.();
   };
 
-  const handleDeleteEntry = async () => {
+  const handleDeleteEntry = async (): Promise<void> => {
     if (!entry || !onDelete) {
       return;
     }
@@ -124,7 +124,7 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
     }
   };
 
-  const handleRelationSave = (rel: SourcebookRelation) => {
+  const handleRelationSave = (rel: SourcebookRelation): void => {
     if (state.editingRelationIndex !== null) {
       const nextRelations = [...state.relations];
       nextRelations[state.editingRelationIndex] = rel;
@@ -182,48 +182,49 @@ export const SourcebookEntryDialog: React.FC<SourcebookEntryDialogProps> = ({
       t={t}
       onUndo={handleUndo}
       onRedo={handleRedo}
-      onToggleDiff={() => state.setShowDiff((value: boolean) => !value)}
+      onToggleDiff={(): void => state.setShowDiff((value: boolean): boolean => !value)}
       onClose={onClose}
       onNameChange={state.setName}
       onCategoryChange={state.setCategory}
       onSynonymInputChange={state.setNewSynonym}
       onAddSynonym={state.addSynonym}
       onRemoveSynonym={state.removeSynonym}
-      onToggleImagesExpanded={() =>
-        state.setIsImagesExpanded((value: boolean) => !value)
+      onToggleImagesExpanded={(): void =>
+        state.setIsImagesExpanded((value: boolean): boolean => !value)
       }
-      onOpenImagePicker={() => state.setIsImagePickerOpen(true)}
+      onOpenImagePicker={(): void => state.setIsImagePickerOpen(true)}
       onToggleImage={state.toggleImage}
-      onToggleRelationsExpanded={() =>
-        state.setIsRelationsExpanded((value: boolean) => !value)
+      onToggleRelationsExpanded={(): void =>
+        state.setIsRelationsExpanded((value: boolean): boolean => !value)
       }
-      onOpenAddRelation={() => (
+      onOpenAddRelation={(): void => (
         state.setEditingRelationIndex(null),
         state.setIsRelationDialogVisible(true)
       )}
-      onEditRelation={(index: number) => (
+      onEditRelation={(index: number): void => (
         state.setEditingRelationIndex(index),
         state.setIsRelationDialogVisible(true)
       )}
-      onDeleteRelation={(index: number) =>
+      onDeleteRelation={(index: number): void =>
         state.setRelations(
           state.relations.filter(
-            (_: SourcebookRelation, relationIndex: number) => relationIndex !== index
+            (_: SourcebookRelation, relationIndex: number): boolean =>
+              relationIndex !== index
           )
         )
       }
-      onDescriptionChange={(value: string) => (
+      onDescriptionChange={(value: string): void => (
         state.setDescriptionBaseline(value),
         state.setDescription(value)
       )}
-      onToggleKeywordsPanel={() =>
-        state.setShowKeywordsPanel((value: boolean) => !value)
+      onToggleKeywordsPanel={(): void =>
+        state.setShowKeywordsPanel((value: boolean): boolean => !value)
       }
       onDeleteEntry={handleDeleteEntry}
       onSaveEntry={state.handleSave}
       onSaveRelation={handleRelationSave}
-      onCloseRelationDialog={() => state.setIsRelationDialogVisible(false)}
-      onCloseImagePicker={() => state.setIsImagePickerOpen(false)}
+      onCloseRelationDialog={(): void => state.setIsRelationDialogVisible(false)}
+      onCloseImagePicker={(): void => state.setIsImagePickerOpen(false)}
     />
   );
 };

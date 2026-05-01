@@ -50,7 +50,7 @@ export const EditorSuggestionPanel: React.FC = () => {
       <select
         id="suggestion-mode-select"
         value={suggestionMode}
-        onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
+        onChange={(event: React.ChangeEvent<HTMLSelectElement>): void =>
           onSuggestionModeChange(event.target.value as 'guided' | 'instructed' | 'pure')
         }
         className={`text-xs rounded-md border px-2 py-1 ${
@@ -86,7 +86,7 @@ export const EditorSuggestionPanel: React.FC = () => {
                 {t('Choose a continuation')}
               </span>
               <button
-                onClick={() => {
+                onClick={(): void => {
                   const cursor = localContentRef.current.length;
                   onRegenerate(cursor, localContentRef.current);
                 }}
@@ -100,7 +100,7 @@ export const EditorSuggestionPanel: React.FC = () => {
             <div className="flex items-center gap-3">
               {modeSelector}
               <button
-                onClick={() => onAcceptContinuation('', localContentRef.current)}
+                onClick={(): void => onAcceptContinuation('', localContentRef.current)}
                 className={`${textMuted} hover:text-brand-gray-800 text-xs`}
               >
                 {t('Dismiss')}
@@ -122,7 +122,8 @@ export const EditorSuggestionPanel: React.FC = () => {
                   onClick={
                     isEmpty
                       ? undefined
-                      : () => onAcceptContinuation(option, localContentRef.current)
+                      : (): void =>
+                          onAcceptContinuation(option, localContentRef.current)
                   }
                   className={`group relative flex flex-col justify-start h-full p-5 rounded-lg border transition-all text-left ${
                     isEmpty

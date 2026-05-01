@@ -24,7 +24,7 @@ export interface Toast {
 
 type ToastFn = (message: string, variant?: ToastVariant) => void;
 
-const ToastContext = createContext<ToastFn>(() => {});
+const ToastContext = createContext<ToastFn>((): void => {});
 
 /** Custom React hook that returns a toast dispatch function. */
 export function useToast(): ToastFn {
@@ -66,7 +66,7 @@ function ToastItem({
       {ICONS[toast.variant]}
       <span className="flex-1 leading-snug">{toast.message}</span>
       <button
-        onClick={() => onDismiss(toast.id)}
+        onClick={(): void => onDismiss(toast.id)}
         className="text-brand-gray-400 hover:text-brand-gray-100 transition-colors shrink-0 -mt-0.5"
         aria-label={t('Dismiss notification')}
       >
@@ -85,8 +85,10 @@ export function ToastProvider({
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev: Toast[]) => prev.filter((t: Toast) => t.id !== id));
+  const dismiss = useCallback((id: string): void => {
+    setToasts((prev: Toast[]): Toast[] =>
+      prev.filter((t: Toast): boolean => t.id !== id)
+    );
     const t = timers.current.get(id);
     if (t) {
       clearTimeout(t);
@@ -95,10 +97,10 @@ export function ToastProvider({
   }, []);
 
   const addToast = useCallback(
-    (message: string, variant: ToastVariant = 'info') => {
+    (message: string, variant: ToastVariant = 'info'): void => {
       const id = `toast-${Date.now()}-${Math.random()}`;
-      setToasts((prev: Toast[]) => [...prev, { id, message, variant }]);
-      const timer = setTimeout(() => dismiss(id), AUTO_DISMISS_MS[variant]);
+      setToasts((prev: Toast[]): Toast[] => [...prev, { id, message, variant }]);
+      const timer = setTimeout((): void => dismiss(id), AUTO_DISMISS_MS[variant]);
       timers.current.set(id, timer);
     },
     [dismiss]

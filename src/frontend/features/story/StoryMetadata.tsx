@@ -102,7 +102,7 @@ export const StoryMetadata: React.FC<StoryMetadataProps> = ({
       ? t('Books')
       : t('Chapters');
 
-  const handleMetadataSave = async (data: MetadataParams) => {
+  const handleMetadataSave = async (data: MetadataParams): Promise<void> => {
     await onUpdate(
       data.title || '',
       data.summary || '',

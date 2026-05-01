@@ -100,11 +100,11 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
   const selectedImageRef = useRef<HTMLDivElement>(null);
   const promptPopupRef = useRef<HTMLDivElement>(null);
 
-  useFocusTrap(!!selectedImage, selectedImageRef, () => setSelectedImage(null));
+  useFocusTrap(!!selectedImage, selectedImageRef, (): void => setSelectedImage(null));
 
   const { isLight } = useThemeClasses();
   const confirm = useConfirm();
-  const getErrorMessage = (err: unknown, fallback: string) =>
+  const getErrorMessage = (err: unknown, fallback: string): string =>
     err instanceof Error ? err.message : fallback;
   const bgClass = isLight ? 'bg-white' : 'bg-brand-gray-900';
   const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-100';
@@ -118,7 +118,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     is_placeholder: Boolean(img.is_placeholder),
   });
 
-  const loadImages = async () => {
+  const loadImages = async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
@@ -136,7 +136,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     filename: string,
     field: 'description' | 'title',
     val: string
-  ) => {
+  ): void => {
     setEdits((prev: Record<string, { description?: string; title?: string }>) => ({
       ...prev,
       [filename]: {
@@ -146,7 +146,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     }));
   };
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       loadImages();
     }
@@ -173,8 +173,15 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     setError,
   });
 
-  useFocusTrap(promptPopup.isOpen, promptPopupRef, () =>
-    setPromptPopup((prev: PromptPopupState) => ({ ...prev, isOpen: false }))
+  useFocusTrap(promptPopup.isOpen, promptPopupRef, (): void =>
+    setPromptPopup(
+      (
+        prev: PromptPopupState
+      ): { isOpen: false; content: string; loading: boolean } => ({
+        ...prev,
+        isOpen: false,
+      })
+    )
   );
 
   const {
@@ -193,12 +200,12 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     confirm,
   });
 
-  const handleSaveMetadata = async (filename: string) => {
+  const handleSaveMetadata = async (filename: string): Promise<void> => {
     const edit = edits[filename];
     if (!edit) return;
 
     // Preserve existing fields when only one metadata field is edited.
-    const original = images.find((i: ImageEntry) => i.filename === filename);
+    const original = images.find((i: ImageEntry): boolean => i.filename === filename);
     if (!original) return;
 
     const newDesc =
@@ -210,25 +217,32 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     try {
       await api.projects.updateImage(filename, newDesc, newTitle);
       // Mirror persisted metadata immediately for responsive editing feedback.
-      setImages((prev: ImageEntry[]) =>
-        prev.map((img: ImageEntry) =>
-          img.filename === filename
-            ? { ...img, description: newDesc, title: newTitle }
-            : img
+      setImages((prev: ImageEntry[]): ImageEntry[] =>
+        prev.map(
+          (img: ImageEntry): ImageEntry =>
+            img.filename === filename
+              ? { ...img, description: newDesc, title: newTitle }
+              : img
         )
       );
-      setEdits((prev: Record<string, { description?: string; title?: string }>) => {
-        const next = { ...prev };
-        delete next[filename];
-        return next;
-      });
+      setEdits(
+        (
+          prev: Record<string, { description?: string; title?: string }>
+        ): {
+          [x: string]: { description?: string | undefined; title?: string | undefined };
+        } => {
+          const next = { ...prev };
+          delete next[filename];
+          return next;
+        }
+      );
       onRecordHistory?.({
         label: `Update image metadata: ${filename}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           await api.projects.updateImage(filename, oldDesc, oldTitle);
           await loadImages();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           await api.projects.updateImage(filename, newDesc, newTitle);
           await loadImages();
         },
@@ -242,17 +256,20 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => {
     e.preventDefault();
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent): void => {
     e.preventDefault();
     setIsDragging(false);
   };
 
-  const handleCardDrop = async (e: React.DragEvent, targetName: string) => {
+  const handleCardDrop = async (
+    e: React.DragEvent,
+    targetName: string
+  ): Promise<void> => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -266,7 +283,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
     }
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault();
     setIsDragging(false);
 
@@ -296,7 +313,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         role="button"
         tabIndex={0}
         aria-label={t('Project images drop zone')}
-        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>): void => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             handleUploadClick();
@@ -356,7 +373,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
           >
             <button
               className="w-full flex items-center justify-between p-3 text-left focus:outline-none"
-              onClick={() => setShowImageSettings(!showImageSettings)}
+              onClick={(): void => setShowImageSettings(!showImageSettings)}
             >
               <span className="text-sm font-semibold opacity-80">
                 {t('Project Image Settings')}
@@ -381,7 +398,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     value={imageStyle}
                     onChange={(
                       e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                    ) => onUpdateSettings?.(e.target.value, imageAdditionalInfo)}
+                    ): void | undefined =>
+                      onUpdateSettings?.(e.target.value, imageAdditionalInfo)
+                    }
                   />
                 </div>
                 <div>
@@ -397,7 +416,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                     value={imageAdditionalInfo}
                     onChange={(
                       e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                    ) => onUpdateSettings?.(imageStyle, e.target.value)}
+                    ): void | undefined =>
+                      onUpdateSettings?.(imageStyle, e.target.value)
+                    }
                   />
                 </div>
               </div>
@@ -425,7 +446,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             </Button>
             <Button
               variant="primary"
-              onClick={() => handleUploadClick()}
+              onClick={(): void => handleUploadClick()}
               icon={<Upload className="w-4 h-4" />}
               className="whitespace-nowrap"
             >
@@ -451,7 +472,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                   aria-label={t('Image card {{filename}}', {
                     filename: img.filename,
                   })}
-                  onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                  onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>): void => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       handleUploadClick(img.filename);
@@ -462,22 +483,22 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       ? 'border-4 border-dashed border-brand-blue-500 bg-brand-blue-50 dark:bg-brand-blue-900/20 z-10'
                       : `border ${borderClass} hover:border-brand-gray-300 dark:hover:border-brand-gray-600`
                   }`}
-                  onDragOver={(e: React.DragEvent<HTMLDivElement>) => {
+                  onDragOver={(e: React.DragEvent<HTMLDivElement>): void => {
                     e.preventDefault();
                     e.stopPropagation();
                   }}
-                  onDragEnter={(e: React.DragEvent<HTMLDivElement>) => {
+                  onDragEnter={(e: React.DragEvent<HTMLDivElement>): void => {
                     e.preventDefault();
                     setDragTarget(img.filename);
                   }}
-                  onDragLeave={(e: React.DragEvent<HTMLDivElement>) => {
+                  onDragLeave={(e: React.DragEvent<HTMLDivElement>): void => {
                     e.preventDefault();
                     // Only clear if we're actually leaving the container, not entering a child
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                       setDragTarget(null);
                     }
                   }}
-                  onDrop={(e: React.DragEvent<HTMLDivElement>) =>
+                  onDrop={(e: React.DragEvent<HTMLDivElement>): Promise<void> =>
                     handleCardDrop(e, img.filename)
                   }
                 >
@@ -502,7 +523,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       <button
                         type="button"
                         className="w-full h-full cursor-zoom-in"
-                        onClick={() => setSelectedImage(img)}
+                        onClick={(): void => setSelectedImage(img)}
                         aria-label={t('View {{filename}}', {
                           filename: img.filename,
                         })}
@@ -519,7 +540,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => handleUploadClick(img.filename)}
+                          onClick={(): void => handleUploadClick(img.filename)}
                           icon={<RefreshCw className="w-3 h-3" />}
                         >
                           {t('Replace')}
@@ -542,7 +563,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         )}
                         <button
                           className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-brand-gray-400 hover:text-red-500 rounded transition-colors"
-                          onClick={() => handleDelete(img.filename)}
+                          onClick={(): Promise<void> => handleDelete(img.filename)}
                           title={t('Delete image')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -559,7 +580,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       }
                       onChange={(
                         e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                      ) => handleMetadataChange(img.filename, 'title', e.target.value)}
+                      ): void =>
+                        handleMetadataChange(img.filename, 'title', e.target.value)
+                      }
                     />
                     <textarea
                       lang={projectLanguage}
@@ -572,7 +595,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       }
                       onChange={(
                         e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                      ) =>
+                      ): void =>
                         handleMetadataChange(
                           img.filename,
                           'description',
@@ -587,7 +610,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                           size="sm"
                           variant="secondary"
                           className="whitespace-nowrap flex-grow sm:flex-grow-0"
-                          onClick={() => onInsert(img.filename, img.url, img.title)}
+                          onClick={(): void =>
+                            onInsert(img.filename, img.url, img.title)
+                          }
                           icon={<TextCursor className="w-3 h-3" />}
                           title={t('Insert at cursor')}
                         >
@@ -598,7 +623,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
-                        onClick={() => handleGenerateDescription(img)}
+                        onClick={(): Promise<void> => handleGenerateDescription(img)}
                         disabled={!!generating || !imageActionsAvailable}
                         icon={<Wand2 className="w-3 h-3" />}
                       >
@@ -610,7 +635,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                         size="sm"
                         variant="secondary"
                         className="whitespace-nowrap flex-grow sm:flex-grow-0"
-                        onClick={() => handleCreatePrompt(img)}
+                        onClick={(): Promise<void> => handleCreatePrompt(img)}
                         disabled={!img.description || !imageActionsAvailable}
                         icon={<Sparkles className="w-3 h-3" />}
                         title={t('Create image generation prompt')}
@@ -625,7 +650,9 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                             size="sm"
                             variant="primary"
                             className="whitespace-nowrap ml-auto"
-                            onClick={() => handleSaveMetadata(img.filename)}
+                            onClick={(): Promise<void> =>
+                              handleSaveMetadata(img.filename)
+                            }
                             icon={<Save className="w-3 h-3" />}
                           >
                             {t('Save')}
@@ -652,11 +679,11 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
         <div
           className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
           role="none"
-          onClick={() => setSelectedImage(null)}
+          onClick={(): void => setSelectedImage(null)}
         >
           <button
             className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-50 p-2"
-            onClick={() => setSelectedImage(null)}
+            onClick={(): void => setSelectedImage(null)}
             aria-label={t('Close image preview')}
           >
             <X size={32} />
@@ -673,7 +700,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
             onClick={(e: React.MouseEvent<HTMLDivElement, MouseEvent>) =>
               e.stopPropagation()
             }
-            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>): void => {
               if (e.key === 'Escape') {
                 e.preventDefault();
                 setSelectedImage(null);
@@ -720,7 +747,7 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                 {t('Generated Prompt')}
               </h3>
               <button
-                onClick={() => setPromptPopup({ ...promptPopup, isOpen: false })}
+                onClick={(): void => setPromptPopup({ ...promptPopup, isOpen: false })}
                 className="hover:bg-black/10 rounded-full p-1"
               >
                 <X className="w-4 h-4" />
@@ -754,10 +781,10 @@ export const ProjectImages: React.FC<ProjectImagesProps> = ({
                       <Copy className="w-4 h-4" />
                     )
                   }
-                  onClick={() => {
+                  onClick={(): void => {
                     navigator.clipboard.writeText(promptPopup.content);
                     setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
+                    setTimeout((): void => setCopied(false), 2000);
                   }}
                   disabled={!promptPopup.content}
                 >

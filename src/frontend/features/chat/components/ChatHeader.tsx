@@ -23,6 +23,65 @@ import {
 } from 'lucide-react';
 import { ChatContextUsage } from '../chatContextBudget';
 
+const getUsageTone = (usagePercent: number): string =>
+  usagePercent >= 90
+    ? 'bg-red-500'
+    : usagePercent >= 75
+      ? 'bg-amber-500'
+      : 'bg-emerald-500';
+
+const getContextPillClasses = (isLightTheme: boolean): string =>
+  isLightTheme
+    ? 'border-brand-gray-300/80 bg-brand-gray-100/80 text-brand-gray-600'
+    : 'border-brand-gray-700 bg-brand-gray-800/70 text-brand-gray-300';
+
+type TranslationFunction = ReturnType<typeof useTranslation>['t'];
+
+const getContextTrackClasses = (isLightTheme: boolean): string =>
+  isLightTheme ? 'bg-brand-gray-300/80' : 'bg-brand-gray-700';
+
+const renderContextUsagePill = ({
+  enabled,
+  usagePercent,
+  contextPillClasses,
+  contextTrackClasses,
+  usageTone,
+  compactionApplied,
+  t,
+}: {
+  enabled: boolean;
+  usagePercent: number;
+  contextPillClasses: string;
+  contextTrackClasses: string;
+  usageTone: string;
+  compactionApplied: boolean;
+  t: TranslationFunction;
+}): React.ReactElement | null => {
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`ml-1 inline-flex shrink-0 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] ${contextPillClasses}`}
+      title={`${t('Context usage: {{percent}}%', { percent: usagePercent })}${
+        compactionApplied ? ' (compacted)' : ''
+      }`}
+    >
+      <span className="uppercase tracking-[0.14em] text-[10px] opacity-80">
+        {t('ctx')}
+      </span>
+      <div className={`h-1.5 w-12 overflow-hidden rounded-full ${contextTrackClasses}`}>
+        <div
+          className={`h-full rounded-full transition-all ${usageTone}`}
+          style={{ width: `${Math.max(8, Math.min(usagePercent, 100))}%` }}
+        />
+      </div>
+      <span className="tabular-nums">{usagePercent}%</span>
+    </div>
+  );
+};
+
 type ChatHeaderProps = {
   title: string;
   headerBg?: string;
@@ -67,21 +126,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     'Chat is unavailable because no working CHAT model is configured.';
   const { t } = useTranslation();
   const usagePercent = Math.round(Math.min(contextUsage.usageRatio, 1) * 100);
-  const usageTone =
-    usagePercent >= 90
-      ? 'bg-red-500'
-      : usagePercent >= 75
-        ? 'bg-amber-500'
-        : 'bg-emerald-500';
-  const usageLabel =
-    usagePercent >= 90 ? 'High' : usagePercent >= 75 ? 'Rising' : 'Healthy';
-  const usageTrackWidth = Math.max(8, Math.min(usagePercent, 100));
-  const contextPillClasses = isLightTheme
-    ? 'border-brand-gray-300/80 bg-brand-gray-100/80 text-brand-gray-600'
-    : 'border-brand-gray-700 bg-brand-gray-800/70 text-brand-gray-300';
-  const contextTrackClasses = isLightTheme
-    ? 'bg-brand-gray-300/80'
-    : 'bg-brand-gray-700';
+  const usageTone = getUsageTone(usagePercent);
+  const contextPillClasses = getContextPillClasses(isLightTheme);
+  const contextTrackClasses = getContextTrackClasses(isLightTheme);
+  const contextUsagePill = renderContextUsagePill({
+    enabled: contextUsage.enabled,
+    usagePercent,
+    contextPillClasses,
+    contextTrackClasses,
+    usageTone,
+    compactionApplied: contextUsage.compactionApplied,
+    t,
+  });
 
   return (
     <div
@@ -91,30 +147,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <div className="flex items-center gap-2 overflow-hidden">
           <Sparkles className="text-blue-600 shrink-0" size={20} />
           <h2 className="font-semibold truncate">{title}</h2>
-          {contextUsage.enabled && (
-            <div
-              className={`ml-1 inline-flex shrink-0 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] ${contextPillClasses}`}
-              title={`${t('Context usage: {{percent}}%', { percent: usagePercent })}${contextUsage.compactionApplied ? ' (compacted)' : ''}`}
-            >
-              <span className="uppercase tracking-[0.14em] text-[10px] opacity-80">
-                {t('ctx')}
-              </span>
-              <div
-                className={`h-1.5 w-12 overflow-hidden rounded-full ${contextTrackClasses}`}
-              >
-                <div
-                  className={`h-full rounded-full transition-all ${usageTone}`}
-                  style={{ width: `${usageTrackWidth}%` }}
-                />
-              </div>
-              <span className="tabular-nums">{usagePercent}%</span>
-            </div>
-          )}
+          {contextUsagePill}
         </div>
       </div>
       <div className="flex items-center space-x-1 shrink-0">
         <button
-          onClick={() => {
+          onClick={(): void => {
             onNewSession(false);
           }}
           className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
@@ -124,7 +162,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Plus size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             if (currentSessionId) {
               onDeleteSession(currentSessionId);
             }
@@ -142,7 +180,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Trash2 size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             onNewSession(true);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
@@ -154,7 +192,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Ghost size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             onToggleWebSearch(!allowWebSearch);
           }}
           className={`p-1.5 rounded border transition-all ${
@@ -174,7 +212,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Globe size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             onScratchpadOpen();
           }}
           className="p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors text-brand-gray-500"
@@ -184,7 +222,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Clipboard size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             setShowHistory(!showHistory);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${
@@ -198,7 +236,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <History size={16} />
         </button>
         <button
-          onClick={() => {
+          onClick={(): void => {
             setShowSystemPrompt(!showSystemPrompt);
           }}
           className={`p-1.5 rounded hover:bg-brand-gray-200 dark:hover:bg-brand-gray-800 transition-colors ${

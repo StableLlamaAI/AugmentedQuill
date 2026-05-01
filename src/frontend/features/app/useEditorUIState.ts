@@ -31,21 +31,37 @@ export type EditorUIState = {
 
 /** Custom React hook that manages editor uistate. */
 export function useEditorUIState(): EditorUIState {
-  const viewMode = useUIStore((s: UIStoreState) => s.viewMode);
-  const setViewMode = useUIStore((s: UIStoreState) => s.setViewMode);
-  const showWhitespace = useUIStore((s: UIStoreState) => s.showWhitespace);
-  const setShowWhitespace = useUIStore((s: UIStoreState) => s.setShowWhitespace);
-  const activeFormats = useUIStore((s: UIStoreState) => s.activeFormats);
-  const setActiveFormats = useUIStore((s: UIStoreState) => s.setActiveFormats);
-  const isViewMenuOpen = useUIStore((s: UIStoreState) => s.isViewMenuOpen);
-  const setIsViewMenuOpen = useUIStore((s: UIStoreState) => s.setIsViewMenuOpen);
-  const isFormatMenuOpen = useUIStore((s: UIStoreState) => s.isFormatMenuOpen);
-  const setIsFormatMenuOpen = useUIStore((s: UIStoreState) => s.setIsFormatMenuOpen);
+  const viewMode = useUIStore((s: UIStoreState): ViewMode => s.viewMode);
+  const setViewMode = useUIStore(
+    (s: UIStoreState): ((mode: ViewMode | ((prev: ViewMode) => ViewMode)) => void) =>
+      s.setViewMode
+  );
+  const showWhitespace = useUIStore((s: UIStoreState): boolean => s.showWhitespace);
+  const setShowWhitespace = useUIStore(
+    (s: UIStoreState): ((show: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setShowWhitespace
+  );
+  const activeFormats = useUIStore((s: UIStoreState): string[] => s.activeFormats);
+  const setActiveFormats = useUIStore(
+    (s: UIStoreState): ((formats: string[] | ((prev: string[]) => string[])) => void) =>
+      s.setActiveFormats
+  );
+  const isViewMenuOpen = useUIStore((s: UIStoreState): boolean => s.isViewMenuOpen);
+  const setIsViewMenuOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsViewMenuOpen
+  );
+  const isFormatMenuOpen = useUIStore((s: UIStoreState): boolean => s.isFormatMenuOpen);
+  const setIsFormatMenuOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsFormatMenuOpen
+  );
   const isMobileFormatMenuOpen = useUIStore(
-    (s: UIStoreState) => s.isMobileFormatMenuOpen
+    (s: UIStoreState): boolean => s.isMobileFormatMenuOpen
   );
   const setIsMobileFormatMenuOpen = useUIStore(
-    (s: UIStoreState) => s.setIsMobileFormatMenuOpen
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsMobileFormatMenuOpen
   );
 
   return {

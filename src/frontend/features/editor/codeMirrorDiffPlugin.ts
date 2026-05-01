@@ -255,7 +255,7 @@ export const buildDiffPlugin = (
       /** Schedule build. */
       private scheduleBuild(view: EditorView): void {
         this.cancelPending();
-        this.pending = setTimeout(() => {
+        this.pending = setTimeout((): void => {
           this.pending = null;
           this.decorations = this.build(view);
           view.dispatch(); // trigger decoration update
@@ -311,5 +311,5 @@ export const buildDiffPlugin = (
         return Decoration.set(decs, true);
       }
     },
-    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }): DecorationSet => v.decorations }
   );
