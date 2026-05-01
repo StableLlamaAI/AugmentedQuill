@@ -345,7 +345,6 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
   );
 }
 
-// eslint-disable-next-line max-lines-per-function
 export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   sidebarControls: AppMainLayoutProps['sidebarControls'];
   editorControls: AppMainLayoutProps['editorControls'];

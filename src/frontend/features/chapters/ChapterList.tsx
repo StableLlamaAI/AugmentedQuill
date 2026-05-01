@@ -65,7 +65,7 @@ interface ChapterListProps {
   spellCheck?: boolean;
 }
 
-/* eslint-disable complexity, max-lines-per-function */
+/* eslint-disable complexity */
 export const ChapterList: React.FC<ChapterListProps> = React.memo(
   ({
     chapters,
@@ -847,4 +847,4 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
     );
   }
 );
-/* eslint-enable complexity, max-lines-per-function */
+/* eslint-enable complexity */

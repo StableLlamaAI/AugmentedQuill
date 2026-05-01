@@ -47,7 +47,6 @@ import { setErrorDispatcher } from './services/errorNotifier';
 import { useChatStore, ChatStoreState } from './stores/chatStore';
 import type { SessionMutation } from './features/chat';
 
-// eslint-disable-next-line max-lines-per-function
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
     useConfirmDialog();

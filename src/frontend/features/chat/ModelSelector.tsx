@@ -37,7 +37,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSelectorClick,
   options,
   label,
-  theme,
+  theme: _theme,
   connectionStatus = {},
   detectedCapabilities = {},
   labelColorClass = 'text-brand-gray-500',

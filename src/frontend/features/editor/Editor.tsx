@@ -100,7 +100,6 @@ export interface EditorHandle {
 /* eslint-disable complexity */
 export const Editor = React.memo(
   React.forwardRef<EditorHandle, EditorProps>(
-    // eslint-disable-next-line max-lines-per-function
     (
       {
         chapter,

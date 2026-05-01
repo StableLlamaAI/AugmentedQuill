@@ -29,7 +29,7 @@ import { useChatEditing } from './hooks/useChatEditing';
 import { useChatUIState } from './hooks/useChatUIState';
 import { useChatMessages } from './hooks/useChatMessages';
 
-/* eslint-disable max-lines-per-function, complexity */
+/* eslint-disable complexity */
 function ChatComponent(): React.JSX.Element {
   const {
     messages,
@@ -374,7 +374,7 @@ function ChatComponent(): React.JSX.Element {
     </div>
   );
 }
-/* eslint-enable max-lines-per-function, complexity */
+/* eslint-enable complexity */
 
 export const Chat: React.FC = React.memo(ChatComponent);
 Chat.displayName = 'Chat';
