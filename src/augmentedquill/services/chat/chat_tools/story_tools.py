@@ -9,7 +9,6 @@
 
 from typing import Any
 
-import json as _json
 import os
 
 from pydantic import BaseModel, Field
@@ -112,24 +111,6 @@ class WriteBookContentParams(BaseModel):
     content: str = Field(..., description="The new content for the book")
 
 
-class GetStorySummaryParams(BaseModel):
-    """Parameters for get_story_summary (no parameters needed)."""
-
-    pass
-
-
-class GetStoryTagsParams(BaseModel):
-    """Parameters for get_story_tags (no parameters needed)."""
-
-    pass
-
-
-class SetStoryTagsParams(BaseModel):
-    """Parameters for setting story tags."""
-
-    tags: list[str] = Field(..., description="Array of tag strings")
-
-
 class SyncStorySummaryParams(BaseModel):
     """Parameters for auto-generating story summary."""
 
@@ -137,12 +118,6 @@ class SyncStorySummaryParams(BaseModel):
         "",
         description="Generation mode: 'discard' (new from scratch) or 'update' (refine existing). Empty string defaults to 'update'.",
     )
-
-
-class WriteStorySummaryParams(BaseModel):
-    """Parameters for directly setting story summary."""
-
-    summary: str = Field(..., description="The new story summary text")
 
 
 class ReadScratchpadParams(BaseModel):
@@ -431,45 +406,6 @@ async def write_scratchpad(
     return {"ok": True}
 
 
-async def get_story_summary_tool(
-    params: GetStorySummaryParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use get_story_metadata instead."""
-    active = get_active_project_dir()
-    story = load_story_config((active / "story.json") if active else None) or {}
-    summary = story.get("story_summary", "")
-    return {"story_summary": summary}
-
-
-async def get_story_tags(
-    params: GetStoryTagsParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use get_story_metadata instead."""
-    active = get_active_project_dir()
-    story = load_story_config((active / "story.json") if active else None) or {}
-    tags = story.get("tags", [])
-    return {"tags": tags}
-
-
-async def set_story_tags(
-    params: SetStoryTagsParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use update_story_metadata instead."""
-    active = get_active_project_dir()
-    if not active:
-        return {"error": "No active project"}
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    story["tags"] = params.tags
-
-    with open(story_path, "w", encoding="utf-8") as f:
-        _json.dump(story, f, indent=2, ensure_ascii=False)
-
-    mutations["story_changed"] = True
-    return {"tags": params.tags, "message": "Story tags updated successfully"}
-
-
 @chat_tool(
     description=(
         "Auto-generate a story summary from the current project prose context using AI. "
@@ -489,25 +425,6 @@ async def sync_story_summary(
     data = await generate_story_summary(mode=params.mode)
     mutations["story_changed"] = True
     return data
-
-
-async def write_story_summary(
-    params: WriteStorySummaryParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use update_story_metadata with summary= instead."""
-    active = get_active_project_dir()
-    if not active:
-        return {"error": "No active project"}
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    story["story_summary"] = params.summary.strip()
-
-    with open(story_path, "w", encoding="utf-8") as f:
-        _json.dump(story, f, indent=2, ensure_ascii=False)
-
-    mutations["story_changed"] = True
-    return {"summary": params.summary, "message": "Story summary updated successfully"}
 
 
 # ---------------------------------------------------------------------------

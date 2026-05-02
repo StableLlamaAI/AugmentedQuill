@@ -159,10 +159,7 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
     buildMetadataFields(args, false),
   update_book_metadata: ({ args }: MutCallResult): SessionMutation[] =>
     buildMetadataFields(args, false),
-  set_story_tags: (): SessionMutation[] => buildMetadataFields({}, true),
-  set_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
   sync_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
-  write_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
 
   // --- Chapter prose tools ---
   write_chapter_content: ({ args, result }: MutCallResult): SessionMutation =>
