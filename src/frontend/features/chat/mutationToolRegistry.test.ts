@@ -11,7 +11,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MUTATION_TOOL_REGISTRY } from './mutationToolRegistry';
+import { buildMetadataFields, MUTATION_TOOL_REGISTRY } from './mutationToolRegistry';
+import type { SessionMutation } from './components/MutationTags';
 
 describe('mutationToolRegistry', () => {
   it('produces sensible mutations for replace_in_project change_locations', () => {
@@ -42,7 +43,7 @@ describe('mutationToolRegistry', () => {
           },
         ],
       },
-    });
+    }) as SessionMutation[];
 
     expect(Array.isArray(mutations)).toBe(true);
     expect(mutations).toHaveLength(3);
@@ -75,7 +76,7 @@ describe('mutationToolRegistry', () => {
           'Story summary',
         ],
       },
-    });
+    }) as SessionMutation[];
 
     expect(Array.isArray(mutations)).toBe(true);
     expect(mutations).toHaveLength(3);
@@ -94,5 +95,97 @@ describe('mutationToolRegistry', () => {
       label: 'Story summary',
       subType: 'summary',
     });
+  });
+});
+
+describe('buildMetadataFields', () => {
+  it('detects patch variants as changed fields', () => {
+    const mutations = buildMetadataFields(
+      {
+        conflicts_patch: { operations: [{ op: 'update', index: 0, updates: {} }] },
+      },
+      false
+    );
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0]).toMatchObject({ type: 'metadata', subType: 'conflicts' });
+  });
+
+  it('detects summary_patch and notes_patch', () => {
+    const mutations = buildMetadataFields(
+      {
+        summary_patch: { operation: 'append', value: ' extra' },
+        notes_patch: { operation: 'replace', value: 'new' },
+      },
+      false
+    );
+    expect(mutations).toHaveLength(2);
+    expect(mutations[0]).toMatchObject({ subType: 'summary' });
+    expect(mutations[1]).toMatchObject({ subType: 'notes' });
+  });
+
+  it('does not duplicate fields when both direct and patch args are present', () => {
+    const mutations = buildMetadataFields(
+      { conflicts: [], conflicts_patch: {} },
+      false
+    );
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0]).toMatchObject({ subType: 'conflicts' });
+  });
+
+  it('attaches chapter target id for update_chapter_metadata mutations', () => {
+    const factory = MUTATION_TOOL_REGISTRY.update_chapter_metadata;
+    const mutations = factory({
+      args: {
+        chap_id: 2,
+        conflicts_patch: { operations: [{ op: 'update', index: 0, updates: {} }] },
+      },
+      result: {},
+    }) as SessionMutation[];
+
+    expect(Array.isArray(mutations)).toBe(true);
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0]).toMatchObject({
+      type: 'metadata',
+      subType: 'conflicts',
+      targetId: '2',
+      label: 'Chapter 2 Conflicts',
+    });
+  });
+
+  it('uses changed_fields from tool result and suppresses no-op tags', () => {
+    const factory = MUTATION_TOOL_REGISTRY.update_chapter_metadata;
+
+    const changed = factory({
+      args: {
+        chap_id: 2,
+        summary_patch: { operation: 'append', value: 'x' },
+        notes_patch: { operation: 'append', value: 'y' },
+      },
+      result: {
+        changed_fields: ['notes'],
+      },
+    }) as SessionMutation[];
+
+    expect(Array.isArray(changed)).toBe(true);
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({
+      type: 'metadata',
+      subType: 'notes',
+      targetId: '2',
+      label: 'Chapter 2 Notes',
+    });
+
+    const noOp = factory({
+      args: {
+        chap_id: 2,
+        summary_patch: { operation: 'append', value: '' },
+      },
+      result: {
+        changed_fields: [],
+      },
+    }) as SessionMutation[];
+
+    expect(Array.isArray(noOp)).toBe(true);
+    expect(noOp).toHaveLength(0);
   });
 });

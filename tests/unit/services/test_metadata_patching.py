@@ -94,3 +94,16 @@ class MetadataPatchingTest(TestCase):
     def test_conflict_patch_missing_required_fields_fails_validation(self):
         with self.assertRaises(ValidationError):
             ConflictListPatch(operations=[{"op": "replace", "index": 0}])
+
+    def test_conflict_patch_rejects_json_patch_path_field(self):
+        with self.assertRaises(ValidationError):
+            ConflictListPatch(
+                operations=[
+                    {
+                        "op": "update",
+                        "index": 0,
+                        "path": "$.conflicts[0]",
+                        "updates": {"description": "x"},
+                    }
+                ]
+            )

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TextPatch(BaseModel):
@@ -84,12 +84,14 @@ class StringListPatch(BaseModel):
 class ConflictPatchOperation(BaseModel):
     """One atomic conflict-list change."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["add", "insert", "replace", "update", "remove", "clear"] = Field(
         ...,
         description=(
             "add appends, insert inserts at index, replace overwrites at index, "
             "update merges fields into conflict at index, remove removes at index, "
-            "clear removes all conflicts."
+            "clear removes all conflicts. Operations are index-based; do not use JSON Patch-style path pointers."
         ),
     )
     index: int | None = Field(
@@ -121,7 +123,10 @@ class ConflictListPatch(BaseModel):
 
     operations: list[ConflictPatchOperation] = Field(
         ...,
-        description="Ordered operations to apply to the conflicts list.",
+        description=(
+            "Ordered index-based operations to apply to the conflicts list. "
+            "Use numeric index for update/insert/replace/remove operations."
+        ),
     )
 
 

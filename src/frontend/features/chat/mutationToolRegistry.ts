@@ -64,14 +64,45 @@ function buildChapterMutation(
 /** Build metadata fields. */
 export function buildMetadataFields(
   args: Record<string, unknown>,
-  forceSummary: boolean
+  forceSummary: boolean,
+  targetId?: string,
+  targetLabelPrefix?: string,
+  changedFieldsInput?: unknown
 ): SessionMutation[] {
+  const normalizeChangedField = (
+    field: unknown
+  ): 'summary' | 'notes' | 'private' | 'conflicts' | undefined => {
+    if (typeof field !== 'string') return undefined;
+    const normalized = field.toLowerCase();
+    if (normalized.endsWith('summary')) return 'summary';
+    if (normalized.endsWith('notes')) return 'notes';
+    if (normalized.endsWith('private_notes') || normalized.endsWith('private notes'))
+      return 'private';
+    if (normalized.includes('conflict')) return 'conflicts';
+    return undefined;
+  };
+
   const changedFields: Array<'summary' | 'notes' | 'private' | 'conflicts'> = [];
-  if (forceSummary || args.summary !== undefined) changedFields.push('summary');
-  if (args.notes !== undefined) changedFields.push('notes');
-  if (args.private_notes !== undefined) changedFields.push('private');
-  if (args.conflicts !== undefined) changedFields.push('conflicts');
-  if (changedFields.length === 0) changedFields.push('summary');
+  if (Array.isArray(changedFieldsInput)) {
+    changedFieldsInput.forEach((field: unknown): void => {
+      const mapped = normalizeChangedField(field);
+      if (mapped && !changedFields.includes(mapped)) {
+        changedFields.push(mapped);
+      }
+    });
+    if (changedFields.length === 0 && !forceSummary) {
+      return [];
+    }
+  } else {
+    if (forceSummary || args.summary !== undefined || args.summary_patch !== undefined)
+      changedFields.push('summary');
+    if (args.notes !== undefined || args.notes_patch !== undefined)
+      changedFields.push('notes');
+    if (args.private_notes !== undefined) changedFields.push('private');
+    if (args.conflicts !== undefined || args.conflicts_patch !== undefined)
+      changedFields.push('conflicts');
+    if (changedFields.length === 0) changedFields.push('summary');
+  }
   return changedFields.map(
     (
       subType: 'summary' | 'notes' | 'conflicts' | 'private'
@@ -80,11 +111,15 @@ export function buildMetadataFields(
       type: 'metadata';
       label: string;
       subType: 'summary' | 'notes' | 'private' | 'conflicts';
+      targetId?: string;
     } => ({
       id: `meta-${Date.now()}-${Math.random()}`,
       type: 'metadata' as const,
-      label: subType.charAt(0).toUpperCase() + subType.slice(1),
+      label: targetLabelPrefix
+        ? `${targetLabelPrefix} ${subType.charAt(0).toUpperCase() + subType.slice(1)}`
+        : subType.charAt(0).toUpperCase() + subType.slice(1),
       subType,
+      targetId,
     })
   );
 }
@@ -153,12 +188,25 @@ export const MUTATION_TOOL_REGISTRY: Record<string, MutFactory> = {
   },
 
   // --- Metadata tools (one badge per changed field) ---
-  update_story_metadata: ({ args }: MutCallResult): SessionMutation[] =>
-    buildMetadataFields(args, false),
-  update_chapter_metadata: ({ args }: MutCallResult): SessionMutation[] =>
-    buildMetadataFields(args, false),
-  update_book_metadata: ({ args }: MutCallResult): SessionMutation[] =>
-    buildMetadataFields(args, false),
+  update_story_metadata: ({ args, result }: MutCallResult): SessionMutation[] =>
+    buildMetadataFields(args, false, undefined, undefined, result.changed_fields),
+  update_chapter_metadata: ({ args, result }: MutCallResult): SessionMutation[] => {
+    const chapId = args.chap_id;
+    const targetId =
+      typeof chapId === 'string' || typeof chapId === 'number'
+        ? String(chapId)
+        : undefined;
+    const labelPrefix = targetId ? `Chapter ${targetId}` : undefined;
+    return buildMetadataFields(
+      args,
+      false,
+      targetId,
+      labelPrefix,
+      result.changed_fields
+    );
+  },
+  update_book_metadata: ({ args, result }: MutCallResult): SessionMutation[] =>
+    buildMetadataFields(args, false, undefined, undefined, result.changed_fields),
   sync_story_summary: (): SessionMutation[] => buildMetadataFields({}, true),
 
   // --- Chapter prose tools ---

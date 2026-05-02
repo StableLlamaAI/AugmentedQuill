@@ -1319,6 +1319,57 @@ class ChatToolsTest(TestCase):
             (chapter.get("conflicts") or [])[0].get("resolution"), "resolved"
         )
 
+    def test_update_chapter_metadata_conflicts_patch_does_not_touch_story_conflicts(
+        self,
+    ):
+        self._bootstrap_project()
+        story_path = self.projects_root / "demo" / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["conflicts"] = [
+            {"description": "Story-level conflict", "resolution": "story"}
+        ]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts": [
+                    {
+                        "description": "Chapter conflict",
+                        "resolution": "chapter",
+                    }
+                ],
+            },
+        )
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 0,
+                            "updates": {"description": "Chapter conflict updated"},
+                        }
+                    ]
+                },
+            },
+        )
+
+        story_after = json.loads(story_path.read_text(encoding="utf-8"))
+        chapter = (story_after.get("chapters") or [])[0]
+        self.assertEqual(
+            (chapter.get("conflicts") or [])[0].get("description"),
+            "Chapter conflict updated",
+        )
+        self.assertEqual(
+            (story_after.get("conflicts") or [])[0].get("description"),
+            "Story-level conflict",
+        )
+
     def test_update_book_metadata_supports_non_destructive_patches(self):
         self._bootstrap_project()
         pdir = self.projects_root / "demo"
@@ -1436,6 +1487,55 @@ class ChatToolsTest(TestCase):
         content = json.loads(payload[0]["content"])
         self.assertIn("error", content)
         self.assertIn("out of bounds", content.get("error", ""))
+
+    def test_update_chapter_metadata_noop_reports_no_change(self):
+        self._bootstrap_project()
+
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "summary": "",
+                "notes": None,
+            },
+        )
+
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertTrue(content.get("ok"))
+        self.assertFalse(content.get("changed"))
+        self.assertEqual(content.get("changed_fields"), [])
+
+        mutations = result.get("mutations") or {}
+        self.assertFalse(mutations.get("story_changed", False))
+
+    def test_update_chapter_metadata_patch_with_path_returns_invalid_parameters(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 0,
+                            "path": "$.conflicts[0]",
+                            "updates": {"resolution": "done"},
+                        }
+                    ]
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        self.assertTrue(
+            any(d.get("type") == "extra_forbidden" for d in content.get("details", []))
+        )
 
     def test_update_book_metadata_missing_book_returns_error(self):
         self._bootstrap_project()

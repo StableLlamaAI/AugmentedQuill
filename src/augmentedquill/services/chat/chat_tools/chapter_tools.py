@@ -189,7 +189,10 @@ class UpdateChapterMetadataParams(BaseModel):
     )
     conflicts_patch: ConflictListPatch | None = Field(
         None,
-        description="Optional ordered operations for partial conflict updates.",
+        description=(
+            "Optional ordered index-based operations for partial conflict updates. "
+            "Use operations[].index to select the conflict and operations[].updates for patch fields; do not use path."
+        ),
     )
 
 
@@ -405,7 +408,8 @@ async def get_chapter_metadata(
     description=(
         "Update metadata for a specific chapter (title, summary, notes, conflicts). "
         "Use summary_patch/notes_patch/conflicts_patch for safe partial edits that keep existing content. "
-        "Chapter conflicts are treated as active story arcs; include resolved status changes when needed."
+        "Chapter conflicts are treated as active story arcs; include resolved status changes when needed. "
+        "conflicts_patch is index-based (operations[].index) and does not support JSON Patch path pointers."
     ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
@@ -423,8 +427,18 @@ async def update_chapter_metadata(
 
     active = get_active_project_dir()
     story = load_story_config((active / "story.json") if active else None) or {}
-    _, path, _ = _chapter_by_id_or_404(params.chap_id)
-    current_meta = _get_chapter_metadata_entry(story, params.chap_id, path) or {}
+    files = _scan_chapter_files(active)
+    _, path, _ = _chapter_by_id_or_404(params.chap_id, active=active)
+    current_meta = (
+        _get_chapter_metadata_entry(
+            story,
+            params.chap_id,
+            path,
+            files=files,
+            active=active,
+        )
+        or {}
+    )
 
     summary_value = params.summary
     if params.summary_patch is not None:
@@ -448,15 +462,73 @@ async def update_chapter_metadata(
             params.conflicts_patch,
         )
 
+    fields_set = set(params.model_fields_set)
+    current_summary = current_meta.get("summary") or ""
+    current_notes = current_meta.get("notes")
+    current_conflicts = current_meta.get("conflicts")
+    if not isinstance(current_conflicts, list):
+        current_conflicts = []
+
+    changed_fields: list[str] = []
+
+    title_to_write: str | None = None
+    if "title" in fields_set and params.title is not None:
+        next_title = params.title.strip()
+        if next_title != str(current_meta.get("title") or "").strip():
+            title_to_write = params.title
+            changed_fields.append("title")
+
+    summary_requested = "summary" in fields_set or params.summary_patch is not None
+    summary_to_write: str | None = None
+    if summary_requested and summary_value is not None:
+        next_summary = summary_value.strip()
+        if next_summary != current_summary:
+            summary_to_write = summary_value
+            changed_fields.append("summary")
+
+    notes_requested = "notes" in fields_set or params.notes_patch is not None
+    notes_to_write: str | None = None
+    if notes_requested and notes_value is not None and notes_value != current_notes:
+        notes_to_write = notes_value
+        changed_fields.append("notes")
+
+    conflicts_requested = (
+        "conflicts" in fields_set or params.conflicts_patch is not None
+    )
+    conflicts_to_write: list | None = None
+    if (
+        conflicts_requested
+        and conflicts_value is not None
+        and conflicts_value != current_conflicts
+    ):
+        conflicts_to_write = conflicts_value
+        changed_fields.append("conflicts")
+
+    if not changed_fields:
+        return {
+            "ok": True,
+            "changed": False,
+            "changed_fields": [],
+            "message": f"No metadata changes for chapter {params.chap_id}",
+            "chap_id": params.chap_id,
+        }
+
     _update_chapter_metadata(
         params.chap_id,
-        title=params.title,
-        summary=summary_value,
-        notes=notes_value,
-        conflicts=conflicts_value,
+        title=title_to_write,
+        summary=summary_to_write,
+        notes=notes_to_write,
+        conflicts=conflicts_to_write,
+        active=active,
     )
     mutations["story_changed"] = True
-    return {"ok": True, "message": f"Metadata updated for chapter {params.chap_id}"}
+    return {
+        "ok": True,
+        "changed": True,
+        "changed_fields": changed_fields,
+        "message": f"Metadata updated for chapter {params.chap_id}",
+        "chap_id": params.chap_id,
+    }
 
 
 @chat_tool(
