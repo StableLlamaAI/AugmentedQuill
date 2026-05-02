@@ -4055,6 +4055,17 @@
             ],
             "title": "Editing Scratchpad"
           },
+          "projectContextRevision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectcontextrevision"
+          },
           "created_at": {
             "anyOf": [
               {

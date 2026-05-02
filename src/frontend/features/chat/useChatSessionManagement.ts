@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatSession, ChatMessage } from '../../types';
 import { api } from '../../services/api';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
+import { useStoryStore } from '../../stores/storyStore';
 
 type UseChatSessionManagementParams = {
   storyId: string;
@@ -53,6 +54,7 @@ export function useChatSessionManagement({
     setScratchpad,
     setIncognitoSessions,
     setSessionMutations,
+    setProjectContextRevision,
     // Setters are stable — read via getState() to avoid subscribing to every token.
   } = useChatStore.getState();
 
@@ -74,6 +76,7 @@ export function useChatSessionManagement({
     (incognito: boolean = false): void => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const newId = incognito ? uuidv4() : `chat-${timestamp}`;
+      const projectContextRevision = useStoryStore.getState().story.lastUpdated ?? null;
       if (incognito) {
         const newSession: ChatSession = {
           id: newId,
@@ -83,6 +86,7 @@ export function useChatSessionManagement({
           isIncognito: true,
           allowWebSearch: false,
           scratchpad: '',
+          projectContextRevision,
         };
         setIncognitoSessions((prev: ChatSession[]): ChatSession[] => [
           newSession,
@@ -93,12 +97,14 @@ export function useChatSessionManagement({
         setCurrentChatId(newId);
         setAllowWebSearch(false);
         setScratchpad('');
+        setProjectContextRevision(projectContextRevision);
       } else {
         setChatMessages([]);
         setIsIncognito(false);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
         setScratchpad('');
+        setProjectContextRevision(projectContextRevision);
       }
       setSystemPrompt(getSystemPrompt());
       setSessionMutations([]);
@@ -111,6 +117,7 @@ export function useChatSessionManagement({
       setCurrentChatId,
       setAllowWebSearch,
       setScratchpad,
+      setProjectContextRevision,
       setSystemPrompt,
     ]
   );
@@ -125,6 +132,7 @@ export function useChatSessionManagement({
         setCurrentChatId(id);
         setIsIncognito(true);
         setScratchpad(incognito.scratchpad || '');
+        setProjectContextRevision(incognito.projectContextRevision ?? null);
         if (incognito.systemPrompt) {
           setSystemPrompt(incognito.systemPrompt);
         }
@@ -140,6 +148,7 @@ export function useChatSessionManagement({
             setCurrentChatId(id);
             setIsIncognito(false);
             setScratchpad(chat.scratchpad || '');
+            setProjectContextRevision(chat.projectContextRevision ?? null);
             if (chat.systemPrompt) {
               setSystemPrompt(chat.systemPrompt);
             }
@@ -156,6 +165,7 @@ export function useChatSessionManagement({
       setCurrentChatId,
       setIsIncognito,
       setScratchpad,
+      setProjectContextRevision,
       setSystemPrompt,
       setAllowWebSearch,
     ]
@@ -287,6 +297,7 @@ export function useChatSessionManagement({
           systemPrompt,
           scratchpad,
           allowWebSearch,
+          projectContextRevision,
         } = state;
 
         if (!currentChatId || isChatLoading) {
@@ -311,6 +322,7 @@ export function useChatSessionManagement({
                         systemPrompt,
                         allowWebSearch,
                         scratchpad,
+                        projectContextRevision,
                       }
                     : session
               )
@@ -324,6 +336,7 @@ export function useChatSessionManagement({
                 systemPrompt: sp,
                 allowWebSearch: aws,
                 scratchpad: sc,
+                projectContextRevision: pcr,
               } = useChatStore.getState();
               if (!cid) return;
               const firstUserMsg = msgs.find(
@@ -336,6 +349,7 @@ export function useChatSessionManagement({
                 systemPrompt: sp,
                 allowWebSearch: aws,
                 scratchpad: sc,
+                projectContextRevision: pcr,
               });
               refreshChatList();
             } catch (error) {

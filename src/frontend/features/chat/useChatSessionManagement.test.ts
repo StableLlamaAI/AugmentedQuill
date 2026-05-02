@@ -48,6 +48,7 @@ describe('useChatSessionManagement', () => {
       chatHistoryList: [],
       currentChatId: null,
       incognitoSessions: [],
+      projectContextRevision: null,
       isIncognito: false,
       allowWebSearch: false,
       systemPrompt: '',
@@ -88,6 +89,7 @@ describe('useChatSessionManagement', () => {
       systemPrompt: 'Saved prompt',
       allowWebSearch: true,
       scratchpad: 'My Scratch',
+      projectContextRevision: 17,
     } as ChatSession);
 
     const { result } = renderHook(() =>
@@ -110,6 +112,7 @@ describe('useChatSessionManagement', () => {
     expect(useChatStore.getState().isIncognito).toBe(false);
     expect(useChatStore.getState().systemPrompt).toBe('Saved prompt');
     expect(useChatStore.getState().scratchpad).toBe('My Scratch');
+    expect(useChatStore.getState().projectContextRevision).toBe(17);
     expect(useChatStore.getState().chatMessages).toEqual([
       { id: 'm1', role: 'user', text: 'hello' },
     ]);
@@ -128,6 +131,7 @@ describe('useChatSessionManagement', () => {
           isIncognito: true,
           allowWebSearch: true,
           scratchpad: 'Incognito memory',
+          projectContextRevision: 9,
         },
       ],
       scratchpad: '',
@@ -147,6 +151,7 @@ describe('useChatSessionManagement', () => {
     expect(useChatStore.getState().isIncognito).toBe(true);
     expect(useChatStore.getState().currentChatId).toBe('inc-1');
     expect(useChatStore.getState().scratchpad).toBe('Incognito memory');
+    expect(useChatStore.getState().projectContextRevision).toBe(9);
   });
 
   it('clears session mutation tags when a new chat is started', () => {
@@ -227,6 +232,7 @@ describe('useChatSessionManagement', () => {
           messages: [],
           allowWebSearch: false,
           scratchpad: 'Persistent memory text',
+          projectContextRevision: null,
         })
       );
     } finally {

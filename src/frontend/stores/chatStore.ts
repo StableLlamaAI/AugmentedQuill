@@ -55,6 +55,7 @@ export interface ChatStoreState {
   chatHistoryList: ChatSession[];
   currentChatId: string | null;
   incognitoSessions: ChatSession[];
+  projectContextRevision: number | null;
 
   // ── User preferences (rarely changing) ───────────────────────────────────
   isIncognito: boolean;
@@ -82,6 +83,7 @@ export interface ChatStoreState {
   setIncognitoSessions: (
     v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])
   ) => void;
+  setProjectContextRevision: (v: number | null) => void;
   setIsIncognito: (v: boolean) => void;
   setAllowWebSearch: (v: boolean) => void;
   setSystemPrompt: (v: string | ((prev: string) => string)) => void;
@@ -102,6 +104,7 @@ export const useChatStore = create<ChatStoreState>()(
     chatHistoryList: [],
     currentChatId: null,
     incognitoSessions: [],
+    projectContextRevision: null,
     isIncognito: false,
     allowWebSearch: false,
     systemPrompt: '',
@@ -143,6 +146,10 @@ export const useChatStore = create<ChatStoreState>()(
     ) =>
       set((s: ChatStoreState): { incognitoSessions: ChatSession[] } => ({
         incognitoSessions: resolve(v, s.incognitoSessions),
+      })),
+    setProjectContextRevision: (v: number | null) =>
+      set((): { projectContextRevision: number | null } => ({
+        projectContextRevision: v,
       })),
     setIsIncognito: (v: boolean) =>
       set((): { isIncognito: boolean } => ({ isIncognito: v })),

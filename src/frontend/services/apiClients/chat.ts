@@ -29,6 +29,7 @@ export interface ChatApi {
       systemPrompt: string;
       allowWebSearch?: boolean;
       scratchpad?: string;
+      projectContextRevision?: number | null;
     }
   ) => Promise<{ ok: boolean }>;
   delete: (id: string) => Promise<{ ok: boolean }>;
@@ -210,6 +211,7 @@ export const createChatApi = (projectName: string): ChatApi => ({
       systemPrompt: string;
       allowWebSearch?: boolean;
       scratchpad?: string;
+      projectContextRevision?: number | null;
     }
   ): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(

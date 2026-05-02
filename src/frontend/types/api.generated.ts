@@ -1791,6 +1791,8 @@ export interface components {
       scratchpad?: string | null;
       /** Editing Scratchpad */
       editing_scratchpad?: string | null;
+      /** Projectcontextrevision */
+      projectContextRevision?: number | null;
       /** Created At */
       created_at?: string | null;
       /** Updated At */
