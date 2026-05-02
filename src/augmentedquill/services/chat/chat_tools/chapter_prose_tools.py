@@ -69,10 +69,11 @@ class CallWritingLlmParams(BaseModel):
 
     instruction: str = Field(
         ...,
-        description="The task for the WRITING LLM for the active draft or chapter (e.g. 'Rewrite this paragraph to be more descriptive').",
+        description="The task for the WRITING LLM for this single stateless request (e.g. 'Rewrite this paragraph to be more descriptive'). Do not assume it has prior chapter knowledge.",
     )
     context: str = Field(
-        ..., description="The text context the WRITING LLM needs to operate on."
+        ...,
+        description="All text/context the WRITING LLM needs for this stateless call (relevant chapter excerpt, constraints, conflict status, style/POV requirements, and any needed identifiers).",
     )
     write_mode: str | None = Field(
         None,
@@ -85,7 +86,7 @@ class CallWritingLlmParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a creative writing or rewriting task to the WRITING LLM. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Stateless behavior: it only sees instruction/context provided in this call, so include all required chapter context and exact IDs explicitly. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="delegation",
     project_types=("short-story", "novel", "series"),
