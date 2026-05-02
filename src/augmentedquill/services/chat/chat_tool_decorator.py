@@ -174,6 +174,7 @@ def chat_tool(
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                     "additionalProperties": False,
+                    "$defs": schema.get("$defs", {}),
                 },
             },
         }
@@ -246,7 +247,14 @@ def chat_tool(
                 return _tool_message(
                     tool_name,
                     call_id,
-                    {"error": "Invalid parameters", "details": e.errors()},
+                    {
+                        "error": "Invalid parameters",
+                        "details": e.errors(
+                            include_url=False,
+                            include_context=False,
+                            include_input=True,
+                        ),
+                    },
                 )
             except Exception as e:
                 return _tool_message(
@@ -313,6 +321,7 @@ def get_tool_schemas(
         if func_name == "update_story_metadata" and project_type in ("novel", "series"):
             if properties is not None:
                 properties.pop("conflicts", None)
+                properties.pop("conflicts_patch", None)
 
         if func_name == "call_writing_llm" and properties is not None:
             chap_prop = properties.get("chap_id")

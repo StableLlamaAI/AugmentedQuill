@@ -9,10 +9,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Iterator, List, Tuple
 import os
 
 from augmentedquill.services.projects.project_story_ops import (
@@ -61,6 +63,10 @@ from augmentedquill.core.config import (
     DEFAULT_PROJECTS_REGISTRY_PATH,
 )
 
+_ACTIVE_PROJECT_OVERRIDE: ContextVar[Path | None] = ContextVar(
+    "active_project_override", default=None
+)
+
 
 def get_projects_root() -> Path:
     """Return the root directory where projects (stories) are stored.
@@ -106,7 +112,20 @@ def set_active_project(path: Path) -> None:
 
 def get_active_project_dir() -> Path | None:
     """Return active project dir."""
+    overridden = _ACTIVE_PROJECT_OVERRIDE.get()
+    if overridden is not None:
+        return overridden
     return get_active_project_dir_from_registry(load_registry())
+
+
+@contextmanager
+def use_project_context(path: Path | None) -> Iterator[None]:
+    """Temporarily resolve active-project lookups to a request-scoped path."""
+    token = _ACTIVE_PROJECT_OVERRIDE.set(path)
+    try:
+        yield
+    finally:
+        _ACTIVE_PROJECT_OVERRIDE.reset(token)
 
 
 def _require_active_project() -> Path:

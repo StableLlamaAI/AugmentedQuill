@@ -42,6 +42,12 @@ from augmentedquill.services.projects.projects import (
     write_chapter_summary as _write_chapter_summary,
     write_chapter_title,
 )
+from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictListPatch,
+    TextPatch,
+    apply_conflict_list_patch,
+    apply_text_patch,
+)
 
 _MAX_CHAPTER_CHARS = 8000
 
@@ -166,12 +172,24 @@ class UpdateChapterMetadataParams(BaseModel):
     title: str | None = Field(None, description="The chapter title")
     summary: str | None = Field(None, description="The chapter summary")
     notes: str | None = Field(None, description="Public notes about the chapter")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing summary.",
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing notes.",
+    )
     conflicts: list | str | None = Field(
         None,
         description=(
             "List of conflicts in the chapter (can be JSON string). "
             "Each conflict should include description, resolution, and optional resolved status."
         ),
+    )
+    conflicts_patch: ConflictListPatch | None = Field(
+        None,
+        description="Optional ordered operations for partial conflict updates.",
     )
 
 
@@ -384,8 +402,11 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, conflicts). "
-    "Chapter conflicts are treated as active story arcs; include any resolved status changes.",
+    description=(
+        "Update metadata for a specific chapter (title, summary, notes, conflicts). "
+        "Use summary_patch/notes_patch/conflicts_patch for safe partial edits that keep existing content. "
+        "Chapter conflicts are treated as active story arcs; include resolved status changes when needed."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
@@ -400,12 +421,39 @@ async def update_chapter_metadata(
         except Exception:
             conflicts = None
 
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    _, path, _ = _chapter_by_id_or_404(params.chap_id)
+    current_meta = _get_chapter_metadata_entry(story, params.chap_id, path) or {}
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            current_meta.get("summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(
+            current_meta.get("notes", ""), params.notes_patch
+        )
+
+    conflicts_value = conflicts
+    if params.conflicts_patch is not None:
+        current_conflicts = current_meta.get("conflicts")
+        if not isinstance(current_conflicts, list):
+            current_conflicts = []
+        conflicts_value = apply_conflict_list_patch(
+            current_conflicts,
+            params.conflicts_patch,
+        )
+
     _update_chapter_metadata(
         params.chap_id,
         title=params.title,
-        summary=params.summary,
-        notes=params.notes,
-        conflicts=conflicts,
+        summary=summary_value,
+        notes=notes_value,
+        conflicts=conflicts_value,
     )
     mutations["story_changed"] = True
     return {"ok": True, "message": f"Metadata updated for chapter {params.chap_id}"}

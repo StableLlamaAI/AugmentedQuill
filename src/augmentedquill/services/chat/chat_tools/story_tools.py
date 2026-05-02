@@ -33,6 +33,14 @@ from augmentedquill.services.projects.projects import (
     read_editing_scratchpad as _read_editing_scratchpad,
     write_editing_scratchpad as _write_editing_scratchpad,
 )
+from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictListPatch,
+    StringListPatch,
+    TextPatch,
+    apply_conflict_list_patch,
+    apply_string_list_patch,
+    apply_text_patch,
+)
 
 # Pydantic models for tool parameters
 
@@ -49,10 +57,26 @@ class UpdateStoryMetadataParams(BaseModel):
     title: str | None = Field(None, description="The new story title")
     summary: str | None = Field(None, description="The new story summary")
     notes: str | None = Field(None, description="General notes for the story")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing summary.",
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing notes.",
+    )
     tags: list[str] | None = Field(None, description="List of tags for the story")
+    tags_patch: StringListPatch | None = Field(
+        None,
+        description="Optional patch operation for tags (add/remove/set/clear).",
+    )
     conflicts: list[dict] | None = Field(
         None,
         description="List of active story conflicts with description and optional resolution.",
+    )
+    conflicts_patch: ConflictListPatch | None = Field(
+        None,
+        description="Optional ordered operations for partial conflict updates.",
     )
 
 
@@ -88,6 +112,14 @@ class UpdateBookMetadataParams(BaseModel):
     title: str | None = Field(None, description="The new book title")
     summary: str | None = Field(None, description="The new book summary")
     notes: str | None = Field(None, description="General notes for the book")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing summary.",
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing notes.",
+    )
 
 
 class ReadBookContentParams(BaseModel):
@@ -182,7 +214,11 @@ async def get_story_metadata(
 
 
 @chat_tool(
-    description="Update story-level metadata such as title, summary, notes, or tags. Provide only the fields you want to change.",
+    description=(
+        "Update story-level metadata such as title, summary, notes, tags, and conflicts. "
+        "Use *_patch fields (notes_patch, summary_patch, tags_patch, conflicts_patch) for "
+        "safe partial edits that keep untouched content."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
@@ -190,12 +226,36 @@ async def update_story_metadata(
     params: UpdateStoryMetadataParams, payload: dict, mutations: dict
 ) -> Any:
     """Update Story Metadata."""
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            story.get("story_summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(story.get("notes", ""), params.notes_patch)
+
+    tags_value = params.tags
+    if params.tags_patch is not None:
+        tags_value = apply_string_list_patch(story.get("tags") or [], params.tags_patch)
+
+    conflicts_value = params.conflicts
+    if params.conflicts_patch is not None:
+        conflicts_value = apply_conflict_list_patch(
+            story.get("conflicts") or [],
+            params.conflicts_patch,
+        )
+
     _update_story_metadata(
         title=params.title,
-        summary=params.summary,
-        notes=params.notes,
-        tags=params.tags,
-        conflicts=params.conflicts,
+        summary=summary_value,
+        notes=notes_value,
+        tags=tags_value,
+        conflicts=conflicts_value,
     )
     mutations["story_changed"] = True
     return {"ok": True, "message": "Story metadata updated successfully"}
@@ -267,7 +327,10 @@ async def get_book_metadata(
 
 
 @chat_tool(
-    description="Update the title, summary, or notes of a specific book. Provide only the fields you want to change.",
+    description=(
+        "Update the title, summary, or notes of a specific book. "
+        "Use summary_patch/notes_patch for safe partial edits that preserve remaining text."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
     project_types=("series",),
@@ -276,8 +339,33 @@ async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
 ) -> Any:
     """Update Book Metadata."""
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    books = story.get("books", [])
+
+    book_id = os.path.basename(params.book_id) if params.book_id else ""
+    target = next(
+        (b for b in books if b.get("id") == book_id or b.get("folder") == book_id),
+        None,
+    )
+    if not target:
+        return {"error": f"Book ID {book_id} not found"}
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            target.get("summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(target.get("notes", ""), params.notes_patch)
+
     _update_book_metadata(
-        params.book_id, title=params.title, summary=params.summary, notes=params.notes
+        params.book_id,
+        title=params.title,
+        summary=summary_value,
+        notes=notes_value,
     )
     mutations["story_changed"] = True
     return {"ok": True}
