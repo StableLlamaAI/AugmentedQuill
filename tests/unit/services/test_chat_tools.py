@@ -1537,6 +1537,62 @@ class ChatToolsTest(TestCase):
             any(d.get("type") == "extra_forbidden" for d in content.get("details", []))
         )
 
+    def test_invalid_parameters_details_do_not_echo_input_payload(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "summary_patch": {
+                    "operation": "replace",
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        details = content.get("details", [])
+        self.assertTrue(details)
+        self.assertTrue(all("input" not in d for d in details if isinstance(d, dict)))
+
+    def test_update_chapter_metadata_conflicts_patch_op_inferred_from_updates(self):
+        self._bootstrap_project()
+        # Seed a conflict first
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts": [
+                    {"description": "Hiding in library", "resolution": "Open"}
+                ],
+            },
+        )
+        # LLM-style call: op omitted, updates present → inferred as "update"
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "index": 0,
+                            "updates": {
+                                "description": "Must hide within the city",
+                                "resolution": "She evades Silas but cannot flee.",
+                            },
+                        }
+                    ]
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertTrue(content.get("ok"))
+        self.assertTrue(content.get("changed"))
+        self.assertIn("conflicts", content.get("changed_fields", []))
+
     def test_update_book_metadata_missing_book_returns_error(self):
         self._bootstrap_project()
         result = self._post_single_tool(

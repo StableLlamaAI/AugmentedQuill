@@ -174,11 +174,19 @@ class UpdateChapterMetadataParams(BaseModel):
     notes: str | None = Field(None, description="Public notes about the chapter")
     summary_patch: TextPatch | None = Field(
         None,
-        description="Optional patch operation for partially editing summary.",
+        description=(
+            "Optional partial summary edit object. "
+            "Use {operation:'replace'|'append'|'prepend', value:'...'} or "
+            "{operation:'replace_text', old_text:'...', new_text:'...', occurrence:'first|last|all|unique'}."
+        ),
     )
     notes_patch: TextPatch | None = Field(
         None,
-        description="Optional patch operation for partially editing notes.",
+        description=(
+            "Optional partial notes edit object. "
+            "Use {operation:'replace'|'append'|'prepend', value:'...'} or "
+            "{operation:'replace_text', old_text:'...', new_text:'...', occurrence:'first|last|all|unique'}."
+        ),
     )
     conflicts: list | str | None = Field(
         None,
@@ -190,8 +198,11 @@ class UpdateChapterMetadataParams(BaseModel):
     conflicts_patch: ConflictListPatch | None = Field(
         None,
         description=(
-            "Optional ordered index-based operations for partial conflict updates. "
-            "Use operations[].index to select the conflict and operations[].updates for patch fields; do not use path."
+            "Optional conflict patch object: {operations:[...]}. "
+            "Each operation: {index:<int>, updates:{...}} to update fields of an existing conflict, "
+            "{conflict:{...}} to append a new conflict, "
+            "{index:<int>} to remove a conflict. "
+            "op is inferred automatically; only set it explicitly for 'insert' or 'clear'."
         ),
     )
 
@@ -408,6 +419,8 @@ async def get_chapter_metadata(
     description=(
         "Update metadata for a specific chapter (title, summary, notes, conflicts). "
         "Use summary_patch/notes_patch/conflicts_patch for safe partial edits that keep existing content. "
+        "summary_patch/notes_patch must be patch objects. "
+        "conflicts_patch should be {operations:[...]} with index-based operations. "
         "Chapter conflicts are treated as active story arcs; include resolved status changes when needed. "
         "conflicts_patch is index-based (operations[].index) and does not support JSON Patch path pointers."
     ),

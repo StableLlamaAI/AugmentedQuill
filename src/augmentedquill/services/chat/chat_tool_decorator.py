@@ -98,6 +98,22 @@ def _simplify_schema(schema: Any) -> Any:
     return result
 
 
+def _sanitize_validation_details(details: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Strip oversized raw input values from validation details."""
+    sanitized: list[dict[str, Any]] = []
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        sanitized.append(
+            {
+                "type": detail.get("type", "validation_error"),
+                "loc": detail.get("loc", []),
+                "msg": detail.get("msg", "Validation failed"),
+            }
+        )
+    return sanitized
+
+
 def chat_tool(
     description: str,
     name: str | None = None,
@@ -197,7 +213,6 @@ def chat_tool(
                                 "type": "type_error.dict",
                                 "loc": ["arguments"],
                                 "msg": "Tool arguments must be a JSON object",
-                                "input": args_obj,
                             }
                         ],
                     },
@@ -215,7 +230,6 @@ def chat_tool(
                                 "type": "extra_forbidden",
                                 "loc": [key],
                                 "msg": "Extra inputs are not permitted",
-                                "input": args_obj.get(key),
                             }
                             for key in unknown_keys
                         ],
@@ -234,7 +248,6 @@ def chat_tool(
                                 "type": "missing",
                                 "loc": [key],
                                 "msg": "Field required",
-                                "input": args_obj,
                             }
                             for key in missing_required
                         ],
@@ -249,10 +262,12 @@ def chat_tool(
                     call_id,
                     {
                         "error": "Invalid parameters",
-                        "details": e.errors(
-                            include_url=False,
-                            include_context=False,
-                            include_input=True,
+                        "details": _sanitize_validation_details(
+                            e.errors(
+                                include_url=False,
+                                include_context=False,
+                                include_input=False,
+                            )
                         ),
                     },
                 )

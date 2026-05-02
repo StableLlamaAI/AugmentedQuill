@@ -86,17 +86,18 @@ class ConflictPatchOperation(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["add", "insert", "replace", "update", "remove", "clear"] = Field(
-        ...,
+    op: Literal["add", "insert", "replace", "update", "remove", "clear"] | None = Field(
+        None,
         description=(
-            "add appends, insert inserts at index, replace overwrites at index, "
-            "update merges fields into conflict at index, remove removes at index, "
-            "clear removes all conflicts. Operations are index-based; do not use JSON Patch-style path pointers."
+            "Operation type. Inferred automatically when omitted: "
+            "updates present → 'update'; conflict present with index → 'replace'; "
+            "conflict present without index → 'add'; only index present → 'remove'. "
+            "Must be set explicitly for 'insert' and 'clear'."
         ),
     )
     index: int | None = Field(
         None,
-        description="Required for insert/replace/update/remove operations.",
+        description="0-based conflict list index. Required for insert/replace/update/remove.",
     )
     conflict: dict[str, Any] | None = Field(
         None,
@@ -104,11 +105,35 @@ class ConflictPatchOperation(BaseModel):
     )
     updates: dict[str, Any] | None = Field(
         None,
-        description="Field updates for update operation.",
+        description="Fields to merge into the existing conflict for update operations.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _infer_op(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("op") is None:
+            updates = data.get("updates")
+            conflict = data.get("conflict")
+            index = data.get("index")
+            if updates is not None:
+                data = {**data, "op": "update"}
+            elif conflict is not None and index is not None:
+                data = {**data, "op": "replace"}
+            elif conflict is not None:
+                data = {**data, "op": "add"}
+            elif index is not None:
+                data = {**data, "op": "remove"}
+        return data
 
     @model_validator(mode="after")
     def _validate_shape(self) -> "ConflictPatchOperation":
+        if self.op is None:
+            raise ValueError(
+                "op is required and could not be inferred; "
+                "provide op explicitly (add/insert/replace/update/remove/clear)"
+            )
         if self.op in ("insert", "replace", "update", "remove") and self.index is None:
             raise ValueError("index is required for insert/replace/update/remove")
         if self.op in ("add", "insert", "replace") and self.conflict is None:
