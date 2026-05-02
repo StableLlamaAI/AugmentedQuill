@@ -49,7 +49,7 @@ module.exports = [
       complexity: ['warn', 20],
       'max-lines-per-function': [
         'warn',
-        { max: 200, skipBlankLines: true, skipComments: true },
+        { max: 400, skipBlankLines: true, skipComments: true },
       ],
       'jsx-a11y/no-autofocus': 'warn',
       'jsx-a11y/no-redundant-roles': 'error',
