@@ -85,11 +85,15 @@ class ReadStoryContentParams(BaseModel):
 
     start: int = Field(
         0,
-        description="Starting character index (0-based).",
+        description="Starting character index (0-based). Ignored when read_from_end=True.",
     )
     max_chars: int = Field(
         8000,
         description="Maximum number of characters to return (max 8000).",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -128,11 +132,15 @@ class ReadBookContentParams(BaseModel):
     book_id: str = Field(..., description="The UUID of the book")
     start: int = Field(
         0,
-        description="Starting character index (0-based).",
+        description="Starting character index (0-based). Ignored when read_from_end=True.",
     )
     max_chars: int = Field(
         8000,
         description="Maximum number of characters to return (max 8000).",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -262,7 +270,7 @@ async def update_story_metadata(
 
 
 @chat_tool(
-    description="Read the story-level introduction or content file.",
+    description="Read the story-level introduction or content file. Use read_from_end=True to read the last max_chars characters, which is recommended before appending prose.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
 )
@@ -271,14 +279,18 @@ async def read_story_content(
 ) -> Any:
     """Read story content."""
     content = _read_story_content() or ""
-    start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
-    end = min(len(content), start + max_chars)
+    total = len(content)
+    if params.read_from_end:
+        start = max(0, total - max_chars)
+    else:
+        start = max(0, params.start)
+    end = min(total, start + max_chars)
     return {
         "content": content[start:end],
         "start": start,
         "end": end,
-        "total": len(content),
+        "total": total,
     }
 
 
@@ -372,7 +384,7 @@ async def update_book_metadata(
 
 
 @chat_tool(
-    description="Read the content file for a specific book.",
+    description="Read the content file for a specific book. Use read_from_end=True to read the last max_chars characters.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
     project_types=("series",),
@@ -382,14 +394,18 @@ async def read_book_content(
 ) -> Any:
     """Read book content."""
     content = _read_book_content(params.book_id) or ""
-    start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
-    end = min(len(content), start + max_chars)
+    total = len(content)
+    if params.read_from_end:
+        start = max(0, total - max_chars)
+    else:
+        start = max(0, params.start)
+    end = min(total, start + max_chars)
     return {
         "content": content[start:end],
         "start": start,
         "end": end,
-        "total": len(content),
+        "total": total,
     }
 
 

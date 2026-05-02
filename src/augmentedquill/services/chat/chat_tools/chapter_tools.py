@@ -220,10 +220,17 @@ class GetChapterContentParams(BaseModel):
         None,
         description="The chapter ID to get content for. If not provided, uses active chapter.",
     )
-    start: int = Field(0, description="The starting character position")
+    start: int = Field(
+        0,
+        description="The starting character position. Ignored when read_from_end=True.",
+    )
     max_chars: int = Field(
         _MAX_CHAPTER_CHARS,
         description=f"Maximum characters to return (1-{_MAX_CHAPTER_CHARS})",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -576,7 +583,7 @@ async def get_chapter_summaries(
 
 
 @chat_tool(
-    description="Get content from a specific chapter with pagination support.",
+    description="Get content from a specific chapter with pagination support. Use read_from_end=True to read the last max_chars characters, which is recommended before appending prose.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="prose-read",
 )
@@ -592,8 +599,13 @@ async def get_chapter_content(
     if not isinstance(chap_id, int):
         return {"error": "chap_id is required"}
 
-    start = max(0, params.start)
     max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
+    if params.read_from_end:
+        _, path, _ = _chapter_by_id_or_404(chap_id)
+        total = len(path.read_text(encoding="utf-8"))
+        start = max(0, total - max_chars)
+    else:
+        start = max(0, params.start)
     data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
     return data
 
