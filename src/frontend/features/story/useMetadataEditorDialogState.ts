@@ -44,6 +44,28 @@ const normalizeConflict = (value: Partial<Conflict> | undefined | null): Conflic
   resolution: value?.resolution || 'TBD',
 });
 
+const conflictContentSignature = (
+  value: Partial<Conflict> | undefined | null
+): string =>
+  JSON.stringify({
+    description: value?.description || '',
+    resolution: value?.resolution || '',
+  });
+
+const conflictsEqualByContent = (
+  left: Array<Partial<Conflict>> | undefined,
+  right: Array<Partial<Conflict>> | undefined
+): boolean => {
+  const leftConflicts = left || [];
+  const rightConflicts = right || [];
+  if (leftConflicts.length !== rightConflicts.length) return false;
+  return leftConflicts.every(
+    (conflict: Partial<Conflict> | undefined, index: number): boolean =>
+      conflictContentSignature(conflict) ===
+      conflictContentSignature(rightConflicts[index])
+  );
+};
+
 const normalizeMetadataParams = (value: MetadataParams): MetadataParams => ({
   ...value,
   conflicts: (value.conflicts || []).map(
@@ -55,7 +77,7 @@ const diffFieldsEqual = (a: MetadataParams, b: MetadataParams): boolean =>
   (a.summary || '') === (b.summary || '') &&
   (a.notes || '') === (b.notes || '') &&
   (a.private_notes || '') === (b.private_notes || '') &&
-  JSON.stringify(a.conflicts || []) === JSON.stringify(b.conflicts || []);
+  conflictsEqualByContent(a.conflicts, b.conflicts);
 
 /** Custom React hook that manages metadata data state. */
 function useMetadataDataState({
@@ -201,7 +223,7 @@ function useMetadataDataState({
 
   useEffect((): void => {
     setData((prev: MetadataParams): MetadataParams => {
-      if (JSON.stringify(prev.conflicts) === JSON.stringify(conflicts)) return prev;
+      if (conflictsEqualByContent(prev.conflicts, conflicts)) return prev;
       return { ...prev, conflicts };
     });
   }, [conflicts]);
@@ -316,9 +338,10 @@ function useMetadataAutosaveState({
         (data.private_notes || '') === (lastSaved.private_notes || '');
       const isTagsSame =
         JSON.stringify(data.tags || []) === JSON.stringify(lastSaved.tags || []);
-      const isConflictsSame =
-        JSON.stringify(data.conflicts || []) ===
-        JSON.stringify(lastSaved.conflicts || []);
+      const isConflictsSame = conflictsEqualByContent(
+        data.conflicts,
+        lastSaved.conflicts
+      );
 
       if (
         isTitleSame &&

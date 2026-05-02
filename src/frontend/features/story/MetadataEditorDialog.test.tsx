@@ -162,6 +162,37 @@ describe('MetadataEditorDialog: rendering and state sync', () => {
     // Summary is now a CodeMirrorEditor which does not expose an HTML lang attribute;
     // spellchecking language is passed via the `language` prop to the editor.
   });
+
+  it('does not autosave when conflict IDs are the only internal change', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn(async () => undefined);
+    const onClose = vi.fn();
+
+    renderWithI18n(
+      <MetadataEditorDialog
+        type="chapter"
+        title="Edit Chapter Metadata"
+        initialData={{
+          ...baseData,
+          conflicts: [
+            {
+              description: 'Unresolved oath',
+              resolution: 'Pending trial',
+            },
+          ],
+        }}
+        onSave={onSave}
+        onClose={onClose}
+        onAiGenerate={undefined}
+      />
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
 });
 
 describe('MetadataEditorDialog: undo / redo history', () => {
