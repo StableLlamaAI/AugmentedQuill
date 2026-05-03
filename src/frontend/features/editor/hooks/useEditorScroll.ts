@@ -21,6 +21,7 @@ import {
   type WheelEvent,
   type TouchEvent,
 } from 'react';
+import { scrollDistanceFromBottom } from '../../../utils/scrollUtils';
 
 interface UseEditorScrollOptions {
   /** Current text content — triggers stream-follow on change. */
@@ -91,33 +92,17 @@ export function useEditorScroll({
     }
   }, []);
 
-  const distanceFromBottom = useCallback((container: HTMLDivElement): number => {
-    const rawDistance =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    // Guard against sub-pixel rounding drift that can produce tiny negatives.
-    return Math.max(0, rawDistance);
+  const isNearBottom = useCallback((container: HTMLDivElement): boolean => {
+    return scrollDistanceFromBottom(container) <= FOLLOW_ATTACH_DISTANCE;
   }, []);
 
-  const isNearBottom = useCallback(
-    (container: HTMLDivElement): boolean => {
-      return distanceFromBottom(container) <= FOLLOW_ATTACH_DISTANCE;
-    },
-    [distanceFromBottom]
-  );
+  const isWithinReattachRange = useCallback((container: HTMLDivElement): boolean => {
+    return scrollDistanceFromBottom(container) <= FOLLOW_REATTACH_DISTANCE;
+  }, []);
 
-  const isWithinReattachRange = useCallback(
-    (container: HTMLDivElement): boolean => {
-      return distanceFromBottom(container) <= FOLLOW_REATTACH_DISTANCE;
-    },
-    [distanceFromBottom]
-  );
-
-  const updateDistanceFromContainer = useCallback(
-    (container: HTMLDivElement): void => {
-      distanceFromBottomRef.current = distanceFromBottom(container);
-    },
-    [distanceFromBottom]
-  );
+  const updateDistanceFromContainer = useCallback((container: HTMLDivElement): void => {
+    distanceFromBottomRef.current = scrollDistanceFromBottom(container);
+  }, []);
 
   const syncDetachedFlag = useCallback((): void => {
     isDetachedFromBottomRef.current = !shouldAutoFollowRef.current;
@@ -173,7 +158,7 @@ export function useEditorScroll({
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const liveDistance = distanceFromBottom(container);
+    const liveDistance = scrollDistanceFromBottom(container);
     if (liveDistance <= FOLLOW_WRITE_EPSILON_PX) {
       updateDistanceFromContainer(container);
       return;
@@ -202,7 +187,7 @@ export function useEditorScroll({
       if (!shouldAutoFollowRef.current) {
         return;
       }
-      const liveDistance = distanceFromBottom(container);
+      const liveDistance = scrollDistanceFromBottom(container);
       if (liveDistance <= FOLLOW_WRITE_EPSILON_PX) {
         updateDistanceFromContainer(container);
         return;
@@ -220,7 +205,7 @@ export function useEditorScroll({
       void didWrite;
       void maxScrollTop;
     });
-  }, [distanceFromBottom, syncDetachedFlag, updateDistanceFromContainer]);
+  }, [syncDetachedFlag, updateDistanceFromContainer]);
 
   /**
    * Pin the container to its maximum scroll position.
@@ -346,7 +331,7 @@ export function useEditorScroll({
       return;
     }
 
-    const liveDistance = distanceFromBottom(container);
+    const liveDistance = scrollDistanceFromBottom(container);
     if (liveDistance > FOLLOW_WRITE_EPSILON_PX) {
       pinToBottom(container);
     }
@@ -360,7 +345,6 @@ export function useEditorScroll({
     shouldAutoFollowRef.current = true;
     syncDetachedFlag();
   }, [
-    distanceFromBottom,
     isProseStreaming,
     pinToBottom,
     localContent,
