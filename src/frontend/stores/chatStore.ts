@@ -115,13 +115,18 @@ export const useChatStore = create<ChatStoreState>()(
         chatMessages: resolve(v, s.chatMessages),
       })),
     setIsChatLoading: (v: boolean) =>
-      set((): { isChatLoading: boolean } => ({ isChatLoading: v })),
+      set((s: ChatStoreState): ChatStoreState | { isChatLoading: boolean } =>
+        s.isChatLoading === v ? s : { isChatLoading: v }
+      ),
     setIsProseStreamingFromChat: (v: boolean) =>
-      set((): { isProseStreamingFromChat: boolean } => ({
-        isProseStreamingFromChat: v,
-      })),
+      set(
+        (s: ChatStoreState): ChatStoreState | { isProseStreamingFromChat: boolean } =>
+          s.isProseStreamingFromChat === v ? s : { isProseStreamingFromChat: v }
+      ),
     setIsProseStreamingFrozen: (v: boolean) =>
-      set((): { isProseStreamingFrozen: boolean } => ({ isProseStreamingFrozen: v })),
+      set((s: ChatStoreState): ChatStoreState | { isProseStreamingFrozen: boolean } =>
+        s.isProseStreamingFrozen === v ? s : { isProseStreamingFrozen: v }
+      ),
     freezeProseStreaming: () =>
       set(
         (): { isProseStreamingFromChat: boolean; isProseStreamingFrozen: boolean } => ({

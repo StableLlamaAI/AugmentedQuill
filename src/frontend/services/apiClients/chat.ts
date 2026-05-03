@@ -131,12 +131,22 @@ interface ProseChunkScheduler {
   flushPendingProseChunk: () => void;
 }
 
+const yieldToNextAnimationFrame = async (): Promise<void> => {
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    return;
+  }
+  await new Promise<void>((resolve: () => void) => {
+    globalThis.requestAnimationFrame((): void => resolve());
+  });
+};
+
 const createProseChunkScheduler = (
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
 ): ProseChunkScheduler => {
   let pendingProseChunk: ToolProseChunk | null = null;
-  let proseFlushHandle: number | ReturnType<typeof setTimeout> | null = null;
+  let proseFlushHandle: number | null = null;
   let proseFlushUsesRaf = false;
+  let proseFlushToken = 0;
 
   const flushPendingProseChunk = (): void => {
     proseFlushHandle = null;
@@ -149,28 +159,36 @@ const createProseChunkScheduler = (
   const scheduleProseChunkFlush = (): void => {
     if (!onProseChunk || proseFlushHandle !== null) return;
 
+    // Coalesce bursts into a single UI-frame flush so we render the latest
+    // accumulated chunk once per frame without fixed-delay throttling.
     if (typeof globalThis.requestAnimationFrame === 'function') {
       proseFlushUsesRaf = true;
       proseFlushHandle = globalThis.requestAnimationFrame((): void => {
         flushPendingProseChunk();
       });
-    } else {
-      proseFlushUsesRaf = false;
-      proseFlushHandle = setTimeout((): void => {
-        flushPendingProseChunk();
-      }, 16);
+      return;
     }
+
+    proseFlushUsesRaf = false;
+    const token = ++proseFlushToken;
+    proseFlushHandle = token;
+    queueMicrotask((): void => {
+      if (proseFlushHandle !== token || proseFlushToken !== token) {
+        return;
+      }
+      flushPendingProseChunk();
+    });
   };
 
   const cancelScheduledProseFlush = (): void => {
     if (proseFlushHandle === null) return;
 
     if (proseFlushUsesRaf && typeof globalThis.cancelAnimationFrame === 'function') {
-      globalThis.cancelAnimationFrame(proseFlushHandle as number);
-    } else {
-      clearTimeout(proseFlushHandle as ReturnType<typeof setTimeout>);
+      globalThis.cancelAnimationFrame(proseFlushHandle);
     }
+    proseFlushToken += 1;
     proseFlushHandle = null;
+    proseFlushUsesRaf = false;
   };
 
   const setPendingProseChunk = (chunk: ToolProseChunk): void => {
@@ -300,6 +318,9 @@ export const createChatApi = (projectName: string): ChatApi => ({
           } else if (event.type === 'result') {
             proseChunkScheduler.cancelScheduledProseFlush();
             proseChunkScheduler.flushPendingProseChunk();
+            // Let the browser paint the latest prose preview before control
+            // returns to the chat loop and potentially starts more async work.
+            await yieldToNextAnimationFrame();
             return {
               ok: event.ok,
               appended_messages: event.appended_messages,
