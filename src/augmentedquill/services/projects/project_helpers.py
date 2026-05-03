@@ -104,7 +104,7 @@ def normalize_story_for_frontend(story: dict) -> dict:
 
 
 def _project_overview(include_notes: bool = False) -> dict:
-    """Return project title and a list of chapters with id, filename, title, summary.
+    """Return project title and a list of chapters with id, title, and summary.
 
     Notes are excluded by default to keep the overview lightweight.
     """
@@ -122,7 +122,6 @@ def _project_overview(include_notes: bool = False) -> dict:
     if p_type == "short-story":
         fn = story.get("content_file", "content.md")
         draft = {
-            "filename": fn,
             "title": story.get("project_title") or (active.name if active else ""),
             "summary": story.get("story_summary") or "",
         }
@@ -184,7 +183,6 @@ def _project_overview(include_notes: bool = False) -> dict:
                     meta = id_to_meta.get(vid, {})
                     chapter_item = {
                         "id": vid,
-                        "filename": path.name,
                         "title": meta.get("title") or path.stem,
                         "summary": meta.get("summary") or "",
                     }
@@ -216,7 +214,6 @@ def _project_overview(include_notes: bool = False) -> dict:
             title = path.name
         chapter_item = {
             "id": idx,
-            "filename": path.name,
             "title": title,
             "summary": summary,
         }

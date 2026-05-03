@@ -101,7 +101,6 @@ async def get_project_overview(
 ) -> Any:
     """Return project overview."""
     data = _project_overview(include_notes=params.include_notes)
-    # Return data directly - decorator handles wrapping in tool message format
     return data
 
 

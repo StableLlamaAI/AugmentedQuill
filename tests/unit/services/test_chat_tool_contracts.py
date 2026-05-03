@@ -534,6 +534,25 @@ class ChatToolContractsTest(TestCase):
         )
         self._assert_invalid_parameters("get_project_overview", invalid)
 
+    def test_get_project_overview_hides_chapter_filenames(self):
+        content = self._call_tool("get_project_overview", {"include_notes": True})
+
+        def _assert_no_filename_keys(value):
+            if isinstance(value, dict):
+                self.assertNotIn("filename", value)
+                for nested in value.values():
+                    _assert_no_filename_keys(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    _assert_no_filename_keys(nested)
+
+        _assert_no_filename_keys(content)
+
+    def test_get_chapter_metadata_hides_filename(self):
+        content = self._call_tool("get_chapter_metadata", {"chap_id": 1})
+        chapter = content.get("chapter") or {}
+        self.assertNotIn("filename", chapter)
+
     def test_tool_registry_filters_by_model_role(self):
         writing_tools = {
             tool["function"]["name"]

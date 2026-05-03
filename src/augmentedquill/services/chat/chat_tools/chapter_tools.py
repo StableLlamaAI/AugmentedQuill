@@ -393,7 +393,6 @@ async def get_chapter_metadata(
             "id": chap.get("id"),
             "title": chap.get("title"),
             "summary": chap.get("summary"),
-            "filename": chap.get("filename"),
             "notes": meta.get("notes", ""),
             "conflicts": meta.get("conflicts") or [],
         },
