@@ -478,6 +478,38 @@
         "User Request: {user_text}"
       ]
     },
+    "call_writing_llm_request": {
+      "_use": "WRITING",
+      "en": [
+        "Task for this request:",
+        "{instruction}",
+        "",
+        "Context materials:",
+        "{context}"
+      ]
+    },
+    "call_writing_llm_preceding_anchor": {
+      "_use": "WRITING",
+      "en": [
+        "",
+        "",
+        "Immediate preceding prose (anchor for continuation):",
+        "{preceding_content}"
+      ]
+    },
+    "call_editing_assistant_request": {
+      "_use": "EDITING",
+      "en": [
+        "Editing task for this request:",
+        "{task}",
+        "",
+        "Read any additional story, chapter, or sourcebook context you need with tools before editing.{context_note}"
+      ]
+    },
+    "image_describer_request": {
+      "_use": "EDITING",
+      "en": ["Describe this image."]
+    },
     "select_relevant_entries": {
       "_use": "EDITING",
       "en": [

@@ -115,6 +115,7 @@ async def call_writing_llm(
     """Execute the writing LLM tool with provided parameters and return the generated prose."""
     from augmentedquill.core.config import BASE_DIR, load_machine_config
     from augmentedquill.core.prompts import (
+        get_user_prompt,
         get_system_message,
         load_model_prompt_overrides,
     )
@@ -181,15 +182,17 @@ async def call_writing_llm(
     if params.write_mode == "append" and not preceding_content:
         preceding_content = _extract_tail_paragraphs(existing_for_append)
 
-    user_content = (
-        f"Task for this request:\n{params.instruction}\n\n"
-        f"Context materials:\n{params.context}"
+    user_content = get_user_prompt(
+        "call_writing_llm_request",
+        language=project_lang,
+        instruction=params.instruction,
+        context=params.context,
     )
     if preceding_content:
-        user_content += (
-            "\n\n"
-            "Immediate preceding prose (anchor for continuation):\n"
-            f"{preceding_content}"
+        user_content += get_user_prompt(
+            "call_writing_llm_preceding_anchor",
+            language=project_lang,
+            preceding_content=preceding_content,
         )
 
     messages = [
@@ -385,6 +388,7 @@ async def call_editing_assistant(
         get_registered_tool_schemas,
     )
     from augmentedquill.core.prompts import (
+        get_user_prompt,
         load_model_prompt_overrides,
         get_system_message,
     )
@@ -408,17 +412,16 @@ async def call_editing_assistant(
         if params.book_id:
             ctx_note += f", book ID: {params.book_id}"
 
+    user_content = get_user_prompt(
+        "call_editing_assistant_request",
+        language=project_lang,
+        task=params.task,
+        context_note=ctx_note,
+    )
+
     messages = [
         {"role": "system", "content": sys_msg},
-        {
-            "role": "user",
-            "content": (
-                "Editing task for this request:\n"
-                f"{params.task}\n\n"
-                "Read any additional story, chapter, or sourcebook context you need with tools before editing."
-                + ctx_note
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
 
     # Build base payload so EDITING tools can resolve the active chapter automatically
