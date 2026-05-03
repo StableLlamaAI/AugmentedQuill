@@ -26,8 +26,8 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     chat_tool,
 )
 from augmentedquill.services.projects.project_helpers import (
-    _chapter_content_slice,
     _project_overview,
+    _snap_to_boundary,
 )
 from augmentedquill.services.story.story_generation_ops import (
     continue_chapter_from_summary,
@@ -600,14 +600,26 @@ async def get_chapter_content(
         return {"error": "chap_id is required"}
 
     max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    text = path.read_text(encoding="utf-8")
+    total = len(text)
+
     if params.read_from_end:
-        _, path, _ = _chapter_by_id_or_404(chap_id)
-        total = len(path.read_text(encoding="utf-8"))
-        start = max(0, total - max_chars)
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(text, raw_start, forward=False)
+        end = total
     else:
         start = max(0, params.start)
-    data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
-    return data
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(text, raw_end, forward=True))
+
+    return {
+        "id": chap_id,
+        "start": start,
+        "end": end,
+        "total": total,
+        "content": text[start:end],
+    }
 
 
 @chat_tool(

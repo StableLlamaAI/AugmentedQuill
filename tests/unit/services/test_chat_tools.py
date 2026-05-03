@@ -1176,6 +1176,60 @@ class ChatToolsTest(TestCase):
         redone_content = chapter_file.read_text(encoding="utf-8")
         self.assertEqual(redone_content, modified_content)
 
+    def test_call_writing_llm_append_mode_auto_adds_preceding_content(self):
+        """Test append mode injects existing tail prose when preceding_content is omitted."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        chapter_file.write_text(
+            "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+            encoding="utf-8",
+        )
+
+        mock_chat = _CapturingStreamMock(" Continuation.")
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=mock_chat,
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "A high-level summary without exact tail text.",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        sent_messages = mock_chat.await_args.kwargs["messages"]
+        self.assertIn("Immediate preceding prose", sent_messages[1]["content"])
+        self.assertIn("Second paragraph.", sent_messages[1]["content"])
+        self.assertIn("Third paragraph.", sent_messages[1]["content"])
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(result.get("write_mode"), "append")
+        self.assertTrue(result.get("written"))
+
     def test_chat_sourcebook_create_is_visible_in_project_select_payload(self):
         self._bootstrap_project()
         data = self._post_single_tool(

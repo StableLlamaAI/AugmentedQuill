@@ -20,6 +20,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     EDITING_ROLE,
     chat_tool,
 )
+from augmentedquill.services.projects.project_helpers import _snap_to_boundary
 from augmentedquill.services.projects.projects import (
     get_active_project_dir,
     read_book_content as _read_book_content,
@@ -282,10 +283,13 @@ async def read_story_content(
     max_chars = max(1, min(8000, params.max_chars))
     total = len(content)
     if params.read_from_end:
-        start = max(0, total - max_chars)
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(content, raw_start, forward=False)
+        end = total
     else:
         start = max(0, params.start)
-    end = min(total, start + max_chars)
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(content, raw_end, forward=True))
     return {
         "content": content[start:end],
         "start": start,
@@ -397,10 +401,13 @@ async def read_book_content(
     max_chars = max(1, min(8000, params.max_chars))
     total = len(content)
     if params.read_from_end:
-        start = max(0, total - max_chars)
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(content, raw_start, forward=False)
+        end = total
     else:
         start = max(0, params.start)
-    end = min(total, start + max_chars)
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(content, raw_end, forward=True))
     return {
         "content": content[start:end],
         "start": start,

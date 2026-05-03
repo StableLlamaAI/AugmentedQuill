@@ -243,3 +243,48 @@ def _chapter_content_slice(chap_id: int, start: int = 0, max_chars: int = 8000) 
         "total": total,
         "content": text[start:end],
     }
+
+
+def _snap_to_boundary(
+    text: str,
+    pos: int,
+    forward: bool,
+    word_scan: int = 20,
+    sentence_scan: int = 100,
+) -> int:
+    """Adjust a character boundary to avoid mid-word or mid-sentence cuts.
+
+    When forward=True, adjusts an end boundary forward (scans right).
+    When forward=False, adjusts a start boundary backward (scans left).
+    Prefers a newline (sentence boundary) over a space (word boundary).
+    Returns pos unchanged if it is already on a clean break.
+    """
+    total = len(text)
+    _WS = (" ", "\n", "\t", "\r")
+
+    if forward:
+        # Clean if pos is at end or the next char is whitespace.
+        if pos >= total or text[pos] in _WS:
+            return pos
+        snippet_far = text[pos : min(total, pos + sentence_scan)]
+        nl_idx = snippet_far.find("\n")
+        if nl_idx >= 0:
+            return pos + nl_idx + 1
+        snippet_near = text[pos : min(total, pos + word_scan)]
+        sp_idx = snippet_near.find(" ")
+        if sp_idx >= 0:
+            return pos + sp_idx + 1
+        return pos
+    else:
+        # Clean if pos is at start or the previous char is whitespace.
+        if pos <= 0 or text[pos - 1] in _WS:
+            return pos
+        snippet_far = text[max(0, pos - sentence_scan) : pos]
+        nl_idx = snippet_far.rfind("\n")
+        if nl_idx >= 0:
+            return max(0, pos - sentence_scan) + nl_idx + 1
+        snippet_near = text[max(0, pos - word_scan) : pos]
+        sp_idx = snippet_near.rfind(" ")
+        if sp_idx >= 0:
+            return max(0, pos - word_scan) + sp_idx + 1
+        return pos

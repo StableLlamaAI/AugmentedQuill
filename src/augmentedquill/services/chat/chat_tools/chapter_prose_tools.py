@@ -10,7 +10,7 @@
 from typing import Any
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
 from augmentedquill.utils.json_repair import apply_typographic_quotes
@@ -59,6 +59,19 @@ def _join_appended_prose(existing: str, generated_text: str) -> str:
     return prefix + generated_text
 
 
+def _extract_tail_paragraphs(text: str, max_paragraphs: int = 3) -> str:
+    """Return the last few paragraphs used as append anchoring context."""
+    stripped = text.strip()
+    if not stripped:
+        return ""
+
+    paragraphs = [p.strip() for p in stripped.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return stripped
+
+    return "\n\n".join(paragraphs[-max_paragraphs:])
+
+
 # ============================================================================
 # call_writing_llm
 # ============================================================================
@@ -74,6 +87,11 @@ class CallWritingLlmParams(BaseModel):
     context: str = Field(
         ...,
         description="All text/context the WRITING LLM needs for this stateless call (relevant chapter excerpt, constraints, conflict status, style/POV requirements, and any needed identifiers).",
+    )
+    preceding_content: str | None = Field(
+        None,
+        validation_alias=AliasChoices("preceding_content", "preceeding_content"),
+        description="Optional prose immediately preceding the insertion point. In append mode, if omitted, the system auto-fills this with the last paragraphs of the target chapter.",
     )
     write_mode: str | None = Field(
         None,
@@ -143,6 +161,37 @@ async def call_writing_llm(
         "story_writer", model_overrides, language=project_lang
     )
 
+    resolved_chap_id: int | None = None
+    resolved_path = None
+    existing_for_append = ""
+    if params.write_mode == "append":
+        resolved_chap_id = params.chap_id
+        if resolved_chap_id is None:
+            if project_type == "short-story":
+                resolved_chap_id = 1
+            else:
+                raise BadRequestError(
+                    "chap_id is required when write_mode is set for chapter-based projects (novel/series). "
+                    "Call get_project_overview to see available chapter IDs."
+                )
+        _, resolved_path, _ = _chapter_by_id_or_404(resolved_chap_id)
+        existing_for_append = resolved_path.read_text(encoding="utf-8")
+
+    preceding_content = params.preceding_content
+    if params.write_mode == "append" and not preceding_content:
+        preceding_content = _extract_tail_paragraphs(existing_for_append)
+
+    user_content = (
+        f"Task for this request:\n{params.instruction}\n\n"
+        f"Context materials:\n{params.context}"
+    )
+    if preceding_content:
+        user_content += (
+            "\n\n"
+            "Immediate preceding prose (anchor for continuation):\n"
+            f"{preceding_content}"
+        )
+
     messages = [
         {
             "role": "system",
@@ -150,10 +199,7 @@ async def call_writing_llm(
         },
         {
             "role": "user",
-            "content": (
-                f"Task for this request:\n{params.instruction}\n\n"
-                f"Context materials:\n{params.context}"
-            ),
+            "content": user_content,
         },
     ]
 
@@ -166,7 +212,9 @@ async def call_writing_llm(
         # Resolve write_mode and chap_id early so we can include them in events.
         # (Actual persistence happens after streaming completes below.)
         preview_write_mode = params.write_mode or "return_only"
-        preview_chap_id: int | None = params.chap_id
+        preview_chap_id: int | None = (
+            resolved_chap_id if resolved_chap_id is not None else params.chap_id
+        )
         if (
             preview_chap_id is None
             and params.write_mode
@@ -226,7 +274,7 @@ async def call_writing_llm(
     # If write_mode is specified, persist the generated text
     if params.write_mode:
         # Auto-detect chapter ID for short-story projects if not provided
-        chap_id = params.chap_id
+        chap_id = resolved_chap_id if resolved_chap_id is not None else params.chap_id
         if chap_id is None:
             if project_type == "short-story":
                 chap_id = 1  # Short-story projects use pseudo-chapter ID 1
@@ -237,11 +285,14 @@ async def call_writing_llm(
                 )
 
         # Validate chapter exists and get path
-        _, path, _ = _chapter_by_id_or_404(chap_id)
+        if resolved_path is None:
+            _, path, _ = _chapter_by_id_or_404(chap_id)
+        else:
+            path = resolved_path
 
         if params.write_mode == "append":
             # Append to end of chapter (like continue_chapter)
-            existing = path.read_text(encoding="utf-8")
+            existing = existing_for_append or path.read_text(encoding="utf-8")
             new_content = _join_appended_prose(existing, generated_text)
             _write_chapter_content(chap_id, new_content)
             mutations["story_changed"] = True
