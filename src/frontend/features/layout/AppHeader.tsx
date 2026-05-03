@@ -60,8 +60,10 @@ type AppHeaderProps = {
 interface UndoRedoMenuProps {
   options: Array<{ id: string; label: string; steps: number }>;
   label: string;
+  primaryActionLabel: string;
   menuContainerClass: string;
   menuButtonClass: string;
+  onPrimaryAction: () => void;
   onStep: (steps: number) => void;
   t: (key: string) => string;
 }
@@ -69,8 +71,10 @@ interface UndoRedoMenuProps {
 const UndoRedoMenu: React.FC<UndoRedoMenuProps> = ({
   options,
   label,
+  primaryActionLabel,
   menuContainerClass,
   menuButtonClass,
+  onPrimaryAction,
   onStep,
   t,
 }: UndoRedoMenuProps) => (
@@ -78,6 +82,15 @@ const UndoRedoMenu: React.FC<UndoRedoMenuProps> = ({
     <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-70">
       {t(`${label} Actions`)}
     </div>
+    <button
+      type="button"
+      role="menuitem"
+      className={`${menuButtonClass} font-medium border-b border-brand-gray-200 dark:border-brand-gray-700`}
+      onClick={onPrimaryAction}
+      title={primaryActionLabel}
+    >
+      {primaryActionLabel}
+    </button>
     {options.map((option: { id: string; label: string; steps: number }) => (
       <button
         key={option.id}
@@ -119,8 +132,9 @@ const HeaderRightControls: React.FC<HeaderRightControlsProps> = ({
   } = appearanceControls;
   const { isLight, textMain, buttonActive, sliderClass } = useTheme();
   const { isChatOpen, setIsChatOpen } = chatPanelControls;
+
   return (
-    <div className="h-11 sm:h-auto order-2 sm:order-3 flex items-center space-x-2 shrink-0">
+    <div className="order-2 sm:order-3 flex items-center justify-end gap-1 sm:gap-2 min-w-0">
       <Button
         theme={currentTheme}
         variant="ghost"
@@ -145,6 +159,7 @@ const HeaderRightControls: React.FC<HeaderRightControlsProps> = ({
         sliderClass={sliderClass}
         setIsDebugLogsOpen={setIsDebugLogsOpen}
       />
+
       <Button
         theme={currentTheme}
         variant="secondary"
@@ -152,7 +167,7 @@ const HeaderRightControls: React.FC<HeaderRightControlsProps> = ({
         onClick={(): void => setIsChatOpen(!isChatOpen)}
         icon={isChatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
       >
-        {isChatOpen ? t('Hide') : t('AI')}
+        <span className="hidden xl:inline">{isChatOpen ? t('Hide') : t('AI')}</span>
       </Button>
     </div>
   );
@@ -209,14 +224,14 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
   useClickOutside(redoMenuRef, (): void => setIsRedoMenuOpen(false), isRedoMenuOpen);
 
   const menuContainerClass = isLight
-    ? 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-200 bg-white shadow-lg'
-    : 'absolute left-0 top-full z-[90] mt-1 w-80 rounded-md border border-brand-gray-700 bg-brand-gray-900 shadow-lg';
+    ? 'absolute left-0 top-full z-[90] mt-1 w-64 rounded-md border border-brand-gray-200 bg-white shadow-lg'
+    : 'absolute left-0 top-full z-[90] mt-1 w-64 rounded-md border border-brand-gray-700 bg-brand-gray-900 shadow-lg';
   const menuButtonClass = isLight
     ? 'w-full px-3 py-2 text-left text-xs text-brand-gray-700 hover:bg-brand-gray-100'
     : 'w-full px-3 py-2 text-left text-xs text-brand-gray-300 hover:bg-brand-gray-800';
 
   return (
-    <div className="h-11 sm:h-auto order-1 flex items-center space-x-2 md:space-x-4 shrink-0">
+    <div className="order-1 flex items-center gap-1 sm:gap-2 md:gap-3 min-w-0">
       <button
         onClick={(): void => setIsSidebarOpen(!isSidebarOpen)}
         className={`lg:hidden p-1 ${iconColor} ${iconHover}`}
@@ -246,11 +261,11 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
         </div>
         <div className="flex flex-col">
           <span
-            className={`font-bold tracking-tight leading-none hidden lg:inline ${textMain}`}
+            className={`font-bold tracking-tight leading-none hidden xl:inline ${textMain}`}
           >
             AugmentedQuill
           </span>
-          <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden lg:inline">
+          <span className="text-[10px] text-brand-gray-500 font-mono leading-none hidden 2xl:inline">
             {storyTitle}
           </span>
         </div>
@@ -258,31 +273,20 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
 
       <div className={`h-6 w-px hidden lg:block ${dividerColor}`} />
 
-      <div className="flex space-x-1">
+      <div className="flex items-center gap-1 min-w-0">
         <div className="relative flex" ref={undoMenuRef}>
-          <Button
-            theme={currentTheme}
-            variant="ghost"
-            size="sm"
-            onClick={undo}
-            disabled={!canUndo}
-            title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
-            aria-label={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
-            className="rounded-r-none"
-          >
-            <Undo size={16} />
-          </Button>
           <Button
             theme={currentTheme}
             variant="ghost"
             size="sm"
             onClick={(): void => setIsUndoMenuOpen((o: boolean): boolean => !o)}
             disabled={!canUndo}
-            title={t('Undo multiple actions')}
-            aria-label={t('Open undo actions list')}
+            title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            aria-label={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
             aria-haspopup="menu"
             aria-expanded={isUndoMenuOpen}
-            className="px-2 rounded-l-none border-l"
+            className="px-2"
+            icon={<Undo size={14} />}
           >
             <ChevronDown size={12} />
           </Button>
@@ -290,8 +294,15 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
             <UndoRedoMenu
               options={undoOptions}
               label="Undo"
+              primaryActionLabel={
+                nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')
+              }
               menuContainerClass={menuContainerClass}
               menuButtonClass={menuButtonClass}
+              onPrimaryAction={(): void => {
+                undo();
+                setIsUndoMenuOpen(false);
+              }}
               onStep={(steps: number): void => {
                 undoSteps(steps);
                 setIsUndoMenuOpen(false);
@@ -306,25 +317,14 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
             theme={currentTheme}
             variant="ghost"
             size="sm"
-            onClick={redo}
+            onClick={(): void => setIsRedoMenuOpen((o: boolean): boolean => !o)}
             disabled={!canRedo}
             title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
             aria-label={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
-            className="rounded-r-none"
-          >
-            <Redo size={16} />
-          </Button>
-          <Button
-            theme={currentTheme}
-            variant="ghost"
-            size="sm"
-            onClick={(): void => setIsRedoMenuOpen((o: boolean): boolean => !o)}
-            disabled={!canRedo}
-            title={t('Redo multiple actions')}
-            aria-label={t('Open redo actions list')}
             aria-haspopup="menu"
             aria-expanded={isRedoMenuOpen}
-            className="px-2 rounded-l-none border-l"
+            className="px-2"
+            icon={<Redo size={14} />}
           >
             <ChevronDown size={12} />
           </Button>
@@ -332,8 +332,15 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
             <UndoRedoMenu
               options={redoOptions}
               label="Redo"
+              primaryActionLabel={
+                nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')
+              }
               menuContainerClass={menuContainerClass}
               menuButtonClass={menuButtonClass}
+              onPrimaryAction={(): void => {
+                redo();
+                setIsRedoMenuOpen(false);
+              }}
               onStep={(steps: number): void => {
                 redoSteps(steps);
                 setIsRedoMenuOpen(false);
@@ -388,7 +395,7 @@ export const AppHeader: React.FC<AppHeaderProps> = React.memo(
       <header
         id="aq-header"
         role="banner"
-        className={`sm:h-14 py-1.5 sm:py-0 border-b flex flex-wrap sm:flex-nowrap items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
+        className={`min-h-14 py-1.5 border-b flex flex-wrap lg:flex-nowrap items-center justify-between px-3 md:px-4 shadow-sm z-[80] relative shrink-0 ${headerBg}`}
       >
         <HeaderLeftControls
           storyTitle={storyTitle}

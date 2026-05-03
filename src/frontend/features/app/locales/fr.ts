@@ -472,6 +472,8 @@ export const fr = {
       'Cette action est indisponible car aucun modèle WRITING fonctionnel n’est configuré.',
     'Toggle whitespace characters': 'Afficher/masquer les caractères d’espacement',
     'Close menu': 'Fermer le menu',
+    'More tools': 'Plus d’outils',
+    Tools: 'Outils',
     Formatting: 'Mise en forme',
     'Close formatting menu': 'Fermer le menu de mise en forme',
     Format: 'Format',

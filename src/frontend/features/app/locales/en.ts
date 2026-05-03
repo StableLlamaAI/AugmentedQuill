@@ -465,6 +465,8 @@ export const en = {
       'This action is unavailable because no working WRITING model is configured.',
     'Toggle whitespace characters': 'Toggle whitespace characters',
     'Close menu': 'Close menu',
+    'More tools': 'More tools',
+    Tools: 'Tools',
     Formatting: 'Formatting',
     'Close formatting menu': 'Close formatting menu',
     Format: 'Format',
