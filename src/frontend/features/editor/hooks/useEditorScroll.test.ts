@@ -47,9 +47,18 @@ const makeContainer = (
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+    return window.setTimeout((): void => {
+      callback(performance.now());
+    }, 0);
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number): void => {
+    window.clearTimeout(id);
+  });
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -130,7 +139,7 @@ describe('useEditorScroll - detach/reattach intent', () => {
     expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
   });
 
-  it('reattaches when currently at bottom-near position at chunk time', () => {
+  it('stays detached when user scrolled up, even if still near bottom at chunk time', () => {
     const hook: ScrollHookHarness<{ localContent: string }> = renderHook(
       ({ localContent }: { localContent: string }) =>
         useEditorScroll({ localContent, isProseStreaming: true, chapterId: '1' }),
@@ -156,16 +165,16 @@ describe('useEditorScroll - detach/reattach intent', () => {
     expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
 
     // New chunk arrives while currently still near the bottom.
-    // Auto-follow should reattach and keep bottom visibility.
+    // Because user scrolled up, auto-follow must remain detached.
     act(() => {
       hook.rerender({ localContent: 'chunk1' });
     });
 
     expect(container.scrollTop).toBe(1099);
-    expect(hook.result.current.isDetachedFromBottomRef.current).toBe(false);
+    expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
   });
 
-  it('reattaches auto-scroll when the user scrolls back down near the bottom', () => {
+  it('reattaches auto-scroll when the user scrolls back to the bottom', () => {
     const hook: { result: { current: ScrollHookResult } } = renderHook(() =>
       useEditorScroll({ localContent: '', isProseStreaming: true, chapterId: '1' })
     );
@@ -186,7 +195,7 @@ describe('useEditorScroll - detach/reattach intent', () => {
     });
     expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
 
-    container.scrollTop = 1090;
+    container.scrollTop = 1100;
     act(() => {
       hook.result.current.handleScroll();
       vi.runOnlyPendingTimers();
@@ -352,6 +361,9 @@ describe('useEditorScroll - streaming follow behavior', () => {
     act(() => {
       hook.rerender({ content: 'chunk1' });
     });
+    act(() => {
+      vi.runAllTimers();
+    });
 
     // Must stay attached and pinned to the new bottom.
     expect(container.scrollTop).toBe(1200);
@@ -387,6 +399,9 @@ describe('useEditorScroll - streaming follow behavior', () => {
 
     act(() => {
       hook.rerender({ content: 'chunk1' });
+    });
+    act(() => {
+      vi.runAllTimers();
     });
 
     // Must stay attached and pinned to the new bottom.
@@ -425,7 +440,7 @@ describe('useEditorScroll - replace streaming detached behavior', () => {
     expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
   });
 
-  it('restores detached anchor position after temporary clamp during streaming', () => {
+  it('does not auto-restore detached position after temporary clamp during streaming', () => {
     const hook: ScrollHookHarness<{ localContent: string }> = renderHook(
       ({ localContent }: { localContent: string }) =>
         useEditorScroll({ localContent, isProseStreaming: true, chapterId: '1' }),
@@ -456,7 +471,7 @@ describe('useEditorScroll - replace streaming detached behavior', () => {
     });
     expect(container.scrollTop).toBe(660);
 
-    // Later chunk grows content again; anchored detached position should restore.
+    // Later chunk grows content again; detached mode must not auto-move scroll.
     Object.defineProperty(container, 'scrollHeight', {
       value: 1300,
       configurable: true,
@@ -465,7 +480,7 @@ describe('useEditorScroll - replace streaming detached behavior', () => {
       hook.rerender({ localContent: 'chunk2' });
     });
 
-    expect(container.scrollTop).toBe(700);
+    expect(container.scrollTop).toBe(660);
     expect(hook.result.current.isDetachedFromBottomRef.current).toBe(true);
   });
 
