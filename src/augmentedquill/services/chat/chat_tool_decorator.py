@@ -98,6 +98,22 @@ def _simplify_schema(schema: Any) -> Any:
     return result
 
 
+def _sanitize_validation_details(details: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Strip oversized raw input values from validation details."""
+    sanitized: list[dict[str, Any]] = []
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        sanitized.append(
+            {
+                "type": detail.get("type", "validation_error"),
+                "loc": detail.get("loc", []),
+                "msg": detail.get("msg", "Validation failed"),
+            }
+        )
+    return sanitized
+
+
 def chat_tool(
     description: str,
     name: str | None = None,
@@ -174,6 +190,7 @@ def chat_tool(
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                     "additionalProperties": False,
+                    "$defs": schema.get("$defs", {}),
                 },
             },
         }
@@ -196,7 +213,6 @@ def chat_tool(
                                 "type": "type_error.dict",
                                 "loc": ["arguments"],
                                 "msg": "Tool arguments must be a JSON object",
-                                "input": args_obj,
                             }
                         ],
                     },
@@ -214,7 +230,6 @@ def chat_tool(
                                 "type": "extra_forbidden",
                                 "loc": [key],
                                 "msg": "Extra inputs are not permitted",
-                                "input": args_obj.get(key),
                             }
                             for key in unknown_keys
                         ],
@@ -233,7 +248,6 @@ def chat_tool(
                                 "type": "missing",
                                 "loc": [key],
                                 "msg": "Field required",
-                                "input": args_obj,
                             }
                             for key in missing_required
                         ],
@@ -246,7 +260,16 @@ def chat_tool(
                 return _tool_message(
                     tool_name,
                     call_id,
-                    {"error": "Invalid parameters", "details": e.errors()},
+                    {
+                        "error": "Invalid parameters",
+                        "details": _sanitize_validation_details(
+                            e.errors(
+                                include_url=False,
+                                include_context=False,
+                                include_input=False,
+                            )
+                        ),
+                    },
                 )
             except Exception as e:
                 return _tool_message(
@@ -313,6 +336,7 @@ def get_tool_schemas(
         if func_name == "update_story_metadata" and project_type in ("novel", "series"):
             if properties is not None:
                 properties.pop("conflicts", None)
+                properties.pop("conflicts_patch", None)
 
         if func_name == "call_writing_llm" and properties is not None:
             chap_prop = properties.get("chap_id")

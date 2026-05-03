@@ -151,7 +151,7 @@ describe('useChatExecution', () => {
       .fn()
       .mockResolvedValueOnce({
         text: '',
-        functionCalls: [{ id: 'c1', name: 'write_story_summary', args: {} }],
+        functionCalls: [{ id: 'c1', name: 'sync_story_summary', args: {} }],
       })
       .mockResolvedValueOnce({
         text: 'Done',
@@ -165,7 +165,7 @@ describe('useChatExecution', () => {
     vi.mocked(api.chat.executeTools).mockResolvedValueOnce({
       ok: true,
       appended_messages: [
-        { content: 'ok', name: 'write_story_summary', tool_call_id: 'c1' },
+        { content: 'ok', name: 'sync_story_summary', tool_call_id: 'c1' },
       ],
       mutations: {
         story_changed: true,

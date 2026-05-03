@@ -349,7 +349,9 @@ function chaptersStructuralEqual(
       ch.title === b[i].title &&
       ch.book_id === b[i].book_id &&
       ch.summary === b[i].summary &&
-      ch.notes === b[i].notes
+      ch.notes === b[i].notes &&
+      ch.private_notes === b[i].private_notes &&
+      JSON.stringify(ch.conflicts ?? []) === JSON.stringify(b[i].conflicts ?? [])
   );
 }
 

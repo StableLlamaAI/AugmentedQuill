@@ -219,7 +219,7 @@ class ProjectFeaturesTest(TestCase):
         draft = overview["draft"]
         self.assertEqual(draft["title"], "The Beginning")
         self.assertEqual(draft["summary"], "A great start")
-        self.assertEqual(draft["filename"], "content.md")
+        self.assertNotIn("filename", draft)
         self.assertNotIn("chapters", overview)
 
     def test_short_story_project_overview_defaults(self):
@@ -231,7 +231,7 @@ class ProjectFeaturesTest(TestCase):
         draft = overview["draft"]
         self.assertEqual(draft["title"], "test_sm_def")
         self.assertEqual(draft["summary"], "")
-        self.assertEqual(draft["filename"], "content.md")
+        self.assertNotIn("filename", draft)
 
     def test_project_overview_include_notes_for_short_story(self):
         create_project("test_sm_notes", project_type="short-story")

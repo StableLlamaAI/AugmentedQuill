@@ -533,6 +533,11 @@ export const ChapterList: React.FC<ChapterListProps> = React.memo(
                 : t('Edit Book: {{title}}', { title: activeEditingData.title })
             }
             initialData={activeEditingData}
+            initialTab={
+              editingMetadata.type === 'chapter'
+                ? chapterMetadataDialog.initialTab
+                : undefined
+            }
             baseline={
               editingMetadata.type === 'chapter'
                 ? baselineChapters.find(

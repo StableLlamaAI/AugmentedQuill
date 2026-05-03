@@ -1176,6 +1176,60 @@ class ChatToolsTest(TestCase):
         redone_content = chapter_file.read_text(encoding="utf-8")
         self.assertEqual(redone_content, modified_content)
 
+    def test_call_writing_llm_append_mode_auto_adds_preceding_content(self):
+        """Test append mode injects existing tail prose when preceding_content is omitted."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        chapter_file.write_text(
+            "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+            encoding="utf-8",
+        )
+
+        mock_chat = _CapturingStreamMock(" Continuation.")
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=mock_chat,
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Continue the story",
+                    "context": "A high-level summary without exact tail text.",
+                    "write_mode": "append",
+                    "chap_id": 1,
+                },
+            )
+
+        sent_messages = mock_chat.await_args.kwargs["messages"]
+        self.assertIn("Immediate preceding prose", sent_messages[1]["content"])
+        self.assertIn("Second paragraph.", sent_messages[1]["content"])
+        self.assertIn("Third paragraph.", sent_messages[1]["content"])
+
+        appended = data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(result.get("write_mode"), "append")
+        self.assertTrue(result.get("written"))
+
     def test_chat_sourcebook_create_is_visible_in_project_select_payload(self):
         self._bootstrap_project()
         data = self._post_single_tool(
@@ -1234,3 +1288,414 @@ class ChatToolsTest(TestCase):
         content = json.loads(appended[0]["content"])
         # list_images returns a bare list of image entries
         self.assertIsInstance(content, list)
+
+    def test_update_story_metadata_supports_non_destructive_patches(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes": "Seed notes with unresolved ending.",
+                "conflicts": [{"description": "Old conflict", "resolution": ""}],
+            },
+        )
+
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes_patch": {
+                    "operation": "replace_text",
+                    "old_text": "unresolved",
+                    "new_text": "active",
+                    "occurrence": "unique",
+                },
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "add",
+                            "conflict": {
+                                "description": "New conflict",
+                                "resolution": "",
+                            },
+                        }
+                    ]
+                },
+            },
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(story.get("notes"), "Seed notes with active ending.")
+        self.assertEqual(len(story.get("conflicts") or []), 2)
+        self.assertEqual(
+            (story.get("conflicts") or [])[0].get("description"), "Old conflict"
+        )
+
+    def test_update_chapter_metadata_supports_non_destructive_patches(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "notes": "Chapter note base",
+                "conflicts": [{"description": "Conflict", "resolution": "open"}],
+            },
+        )
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "notes_patch": {
+                    "operation": "append",
+                    "value": " and added detail",
+                },
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 0,
+                            "updates": {"resolution": "resolved"},
+                        }
+                    ]
+                },
+            },
+        )
+
+        story = json.loads(
+            (self.projects_root / "demo" / "story.json").read_text(encoding="utf-8")
+        )
+        chapter = (story.get("chapters") or [])[0]
+        self.assertEqual(chapter.get("notes"), "Chapter note base and added detail")
+        self.assertEqual(
+            (chapter.get("conflicts") or [])[0].get("resolution"), "resolved"
+        )
+
+    def test_update_chapter_metadata_conflicts_patch_does_not_touch_story_conflicts(
+        self,
+    ):
+        self._bootstrap_project()
+        story_path = self.projects_root / "demo" / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["conflicts"] = [
+            {"description": "Story-level conflict", "resolution": "story"}
+        ]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts": [
+                    {
+                        "description": "Chapter conflict",
+                        "resolution": "chapter",
+                    }
+                ],
+            },
+        )
+
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 0,
+                            "updates": {"description": "Chapter conflict updated"},
+                        }
+                    ]
+                },
+            },
+        )
+
+        story_after = json.loads(story_path.read_text(encoding="utf-8"))
+        chapter = (story_after.get("chapters") or [])[0]
+        self.assertEqual(
+            (chapter.get("conflicts") or [])[0].get("description"),
+            "Chapter conflict updated",
+        )
+        self.assertEqual(
+            (story_after.get("conflicts") or [])[0].get("description"),
+            "Story-level conflict",
+        )
+
+    def test_update_book_metadata_supports_non_destructive_patches(self):
+        self._bootstrap_project()
+        pdir = self.projects_root / "demo"
+        story_path = pdir / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["project_type"] = "series"
+        story["books"] = [
+            {
+                "id": "book-1",
+                "folder": "book-1",
+                "title": "Book One",
+                "summary": "Summary seed",
+                "notes": "Book note base",
+                "chapters": [],
+            }
+        ]
+        story_path.write_text(json.dumps(story), encoding="utf-8")
+
+        self._post_single_tool(
+            "update_book_metadata",
+            {
+                "book_id": "book-1",
+                "notes_patch": {
+                    "operation": "append",
+                    "value": " plus patch",
+                },
+            },
+        )
+
+        story_after = json.loads(story_path.read_text(encoding="utf-8"))
+        book = (story_after.get("books") or [])[0]
+        self.assertEqual(book.get("notes"), "Book note base plus patch")
+        self.assertEqual(book.get("summary"), "Summary seed")
+
+    def test_update_sourcebook_entry_supports_non_destructive_patches(self):
+        self._bootstrap_project()
+
+        self._post_single_tool(
+            "create_sourcebook_entry",
+            {
+                "name": "Ava",
+                "description": "A careful strategist",
+                "category": "Character",
+                "synonyms": ["Lady Ava"],
+                "images": ["img-1"],
+            },
+        )
+
+        self._post_single_tool(
+            "update_sourcebook_entry",
+            {
+                "name_or_id": "Ava",
+                "description_patch": {
+                    "operation": "replace_text",
+                    "old_text": "careful",
+                    "new_text": "battle-hardened",
+                    "occurrence": "unique",
+                },
+                "synonyms_patch": {
+                    "add": ["Commander Ava"],
+                },
+                "images_patch": {
+                    "add": ["img-2"],
+                },
+            },
+        )
+
+        data = self._post_single_tool("get_sourcebook_entry", {"name_or_id": "Ava"})
+        payload = data.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        entry = json.loads(payload[0]["content"])
+        self.assertEqual(entry.get("description"), "A battle-hardened strategist")
+        self.assertIn("Lady Ava", entry.get("synonyms") or [])
+        self.assertIn("Commander Ava", entry.get("synonyms") or [])
+        self.assertIn("img-1", entry.get("images") or [])
+        self.assertIn("img-2", entry.get("images") or [])
+
+    def test_update_story_metadata_patch_failure_returns_error(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes_patch": {
+                    "operation": "replace_text",
+                    "old_text": "missing",
+                    "new_text": "value",
+                }
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertIn("replace_text failed", content.get("error", ""))
+
+    def test_update_chapter_metadata_patch_out_of_bounds_returns_error(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 2,
+                            "updates": {"resolution": "done"},
+                        }
+                    ]
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertIn("out of bounds", content.get("error", ""))
+
+    def test_update_chapter_metadata_noop_reports_no_change(self):
+        self._bootstrap_project()
+
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "summary": "",
+                "notes": None,
+            },
+        )
+
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertTrue(content.get("ok"))
+        self.assertFalse(content.get("changed"))
+        self.assertEqual(content.get("changed_fields"), [])
+
+        mutations = result.get("mutations") or {}
+        self.assertFalse(mutations.get("story_changed", False))
+
+    def test_update_chapter_metadata_patch_with_path_returns_invalid_parameters(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "op": "update",
+                            "index": 0,
+                            "path": "$.conflicts[0]",
+                            "updates": {"resolution": "done"},
+                        }
+                    ]
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        self.assertTrue(
+            any(d.get("type") == "extra_forbidden" for d in content.get("details", []))
+        )
+
+    def test_invalid_parameters_details_do_not_echo_input_payload(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "summary_patch": {
+                    "operation": "replace",
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        details = content.get("details", [])
+        self.assertTrue(details)
+        self.assertTrue(all("input" not in d for d in details if isinstance(d, dict)))
+
+    def test_update_chapter_metadata_conflicts_patch_op_inferred_from_updates(self):
+        self._bootstrap_project()
+        # Seed a conflict first
+        self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts": [
+                    {"description": "Hiding in library", "resolution": "Open"}
+                ],
+            },
+        )
+        # LLM-style call: op omitted, updates present → inferred as "update"
+        result = self._post_single_tool(
+            "update_chapter_metadata",
+            {
+                "chap_id": 1,
+                "conflicts_patch": {
+                    "operations": [
+                        {
+                            "index": 0,
+                            "updates": {
+                                "description": "Must hide within the city",
+                                "resolution": "She evades Silas but cannot flee.",
+                            },
+                        }
+                    ]
+                },
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertTrue(content.get("ok"))
+        self.assertTrue(content.get("changed"))
+        self.assertIn("conflicts", content.get("changed_fields", []))
+
+    def test_update_book_metadata_missing_book_returns_error(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_book_metadata",
+            {
+                "book_id": "missing-book",
+                "notes_patch": {"operation": "append", "value": "x"},
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertIn("not found", content.get("error", ""))
+
+    def test_update_sourcebook_entry_requires_update_fields(self):
+        self._bootstrap_project()
+        self._post_single_tool(
+            "create_sourcebook_entry",
+            {
+                "name": "Ava",
+                "description": "A strategist",
+                "category": "Character",
+            },
+        )
+        result = self._post_single_tool(
+            "update_sourcebook_entry",
+            {
+                "name_or_id": "Ava",
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertIn("error", content)
+        self.assertIn("No update fields provided", content.get("error", ""))
+
+    def test_update_story_metadata_invalid_patch_shape_fails_validation(self):
+        self._bootstrap_project()
+        result = self._post_single_tool(
+            "update_story_metadata",
+            {
+                "notes_patch": {
+                    "operation": "append",
+                }
+            },
+        )
+        payload = result.get("appended_messages") or []
+        self.assertEqual(len(payload), 1)
+        content = json.loads(payload[0]["content"])
+        self.assertEqual(content.get("error"), "Invalid parameters")
+        self.assertTrue(content.get("details"))

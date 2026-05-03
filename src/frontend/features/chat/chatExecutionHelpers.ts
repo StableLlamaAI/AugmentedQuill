@@ -16,7 +16,17 @@ import type { MutableRefObject } from 'react';
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
 import { useChatStore } from '../../stores/chatStore';
-import type { ChatAttachment, ChatMessage, ChatSession, LLMConfig } from '../../types';
+import { useStoryStore } from '../../stores/storyStore';
+import type {
+  Chapter,
+  ChatAttachment,
+  ChatMessage,
+  ChatToolCall,
+  ChatSession,
+  LLMConfig,
+  SourcebookEntry,
+  StoryState,
+} from '../../types';
 import type {
   ChatToolExecutionResponse,
   ChatToolFunctionCall,
@@ -28,6 +38,283 @@ export type ChatToolMutationPayload = ChatToolExecutionResponse & {
     args: Record<string, unknown>;
     result: Record<string, unknown>;
   }>;
+};
+
+const PROJECT_CONTEXT_TOOL_NAMES = new Set<string>([
+  'refresh_project_context',
+  'get_current_chapter_id',
+  'get_project_overview',
+  'get_story_metadata',
+  'update_story_metadata',
+  'read_story_content',
+  'write_story_content',
+  'get_book_metadata',
+  'update_book_metadata',
+  'read_book_content',
+  'write_book_content',
+  'sync_story_summary',
+  'get_chapter_metadata',
+  'update_chapter_metadata',
+  'get_chapter_summaries',
+  'get_chapter_content',
+  'write_chapter_content',
+  'replace_text_in_chapter',
+  'insert_text_at_marker',
+  'apply_chapter_replacements',
+  'write_chapter_summary',
+  'sync_summary',
+  'write_chapter',
+  'continue_chapter',
+  'create_new_chapter',
+  'get_chapter_heading',
+  'write_chapter_heading',
+  'get_chapter_summary',
+  'delete_chapter',
+  'recommend_metadata_updates',
+  'get_sourcebook_entry',
+  'create_sourcebook_entry',
+  'update_sourcebook_entry',
+  'delete_sourcebook_entry',
+  'list_sourcebook_entries',
+  'add_sourcebook_relation',
+  'remove_sourcebook_relation',
+  'search_in_project',
+  'replace_in_project',
+  'reorder_chapters',
+  'reorder_books',
+  'delete_book',
+  'create_new_book',
+  'change_project_type',
+]);
+
+const trimText = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength)}...`;
+};
+
+const normalizeSourcebookForRefresh = (
+  story: StoryState
+): { entries: Array<Record<string, unknown>>; omittedEntries: number } => {
+  const entries = story.sourcebook ?? [];
+  const maxEntries = 5;
+  return {
+    entries: entries.slice(0, maxEntries).map((entry: SourcebookEntry) => ({
+      id: entry.id,
+      name: entry.name,
+      category: entry.category ?? '',
+      description: trimText(entry.description ?? '', 600),
+      synonyms: entry.synonyms.slice(0, 10),
+      relations: (entry.relations ?? []).slice(0, 10),
+    })),
+    omittedEntries: Math.max(0, entries.length - maxEntries),
+  };
+};
+
+const buildRefreshSections = (
+  story: StoryState,
+  currentChapter?: { id: string; title: string } | null
+): string[] => {
+  const sections = new Set<string>();
+
+  sections.add('story.summary');
+  sections.add('story.notes');
+  sections.add('story.conflicts');
+
+  if (story.projectType === 'short-story' && story.draft) {
+    return Array.from(sections);
+  }
+
+  if (currentChapter?.id) {
+    sections.add(`chapter:${currentChapter.id}.summary`);
+    sections.add(`chapter:${currentChapter.id}.notes`);
+    sections.add(`chapter:${currentChapter.id}.conflicts`);
+  }
+
+  const sourcebook = normalizeSourcebookForRefresh(story);
+  sourcebook.entries.forEach((entry: Record<string, unknown>): void => {
+    const entryId = typeof entry.id === 'string' ? entry.id : '';
+    if (!entryId) {
+      return;
+    }
+    sections.add(`sourcebook:${entryId}.description`);
+    sections.add(`sourcebook:${entryId}.synonyms`);
+    sections.add(`sourcebook:${entryId}.relations`);
+  });
+
+  return Array.from(sections);
+};
+
+const buildSectionRefreshPayload = (
+  story: StoryState,
+  sections: string[]
+): Record<string, unknown> => {
+  const results: Record<string, unknown> = {};
+
+  for (const section of sections) {
+    if (section === 'story.summary') {
+      results[section] = story.summary;
+      continue;
+    }
+    if (section === 'story.notes') {
+      results[section] = story.notes ?? '';
+      continue;
+    }
+    if (section === 'story.conflicts') {
+      results[section] = story.conflicts ?? [];
+      continue;
+    }
+
+    if (section.startsWith('chapter:')) {
+      const chapterMatch = section.match(
+        /^chapter:([^\.]+)\.(summary|notes|conflicts)$/
+      );
+      if (!chapterMatch) {
+        continue;
+      }
+      const [, chapterId, field] = chapterMatch;
+      const chapter = story.chapters.find(
+        (candidate: Chapter): boolean => candidate.id === chapterId
+      );
+      if (!chapter) {
+        continue;
+      }
+      if (field === 'summary') {
+        results[section] = chapter.summary;
+      }
+      if (field === 'notes') {
+        results[section] = chapter.notes ?? '';
+      }
+      if (field === 'conflicts') {
+        results[section] = chapter.conflicts ?? [];
+      }
+      continue;
+    }
+
+    if (section.startsWith('sourcebook:')) {
+      const sourcebookMatch = section.match(
+        /^sourcebook:([^\.]+)\.(description|synonyms|relations)$/
+      );
+      if (!sourcebookMatch) {
+        continue;
+      }
+      const [, entryId, field] = sourcebookMatch;
+      const entry = (story.sourcebook ?? []).find(
+        (candidate: SourcebookEntry): boolean => candidate.id === entryId
+      );
+      if (!entry) {
+        continue;
+      }
+      if (field === 'description') {
+        results[section] = trimText(entry.description ?? '', 600);
+      }
+      if (field === 'synonyms') {
+        results[section] = entry.synonyms.slice(0, 10);
+      }
+      if (field === 'relations') {
+        results[section] = (entry.relations ?? []).slice(0, 10);
+      }
+    }
+  }
+
+  return results;
+};
+
+const hasProjectContextHistory = (history: ChatMessage[]): boolean =>
+  history.some((message: ChatMessage): boolean => {
+    if (message.role === 'tool') {
+      return PROJECT_CONTEXT_TOOL_NAMES.has(message.name ?? '');
+    }
+    return (
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.some((call: ChatToolCall): boolean =>
+        PROJECT_CONTEXT_TOOL_NAMES.has(call.name)
+      )
+    );
+  });
+
+const stripProjectContextMessages = (history: ChatMessage[]): ChatMessage[] =>
+  history.flatMap((message: ChatMessage): ChatMessage[] => {
+    if (message.role === 'tool' && PROJECT_CONTEXT_TOOL_NAMES.has(message.name ?? '')) {
+      return [];
+    }
+
+    if (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0) {
+      return [message];
+    }
+
+    const remainingToolCalls = message.tool_calls.filter(
+      (call: ChatToolCall): boolean => !PROJECT_CONTEXT_TOOL_NAMES.has(call.name)
+    );
+    if (remainingToolCalls.length === message.tool_calls.length) {
+      return [message];
+    }
+
+    if (
+      remainingToolCalls.length === 0 &&
+      !(message.text || '').trim() &&
+      !(message.thinking || '').trim()
+    ) {
+      return [];
+    }
+
+    return [{ ...message, tool_calls: remainingToolCalls }];
+  });
+
+type RefreshHistoryResult = {
+  history: ChatMessage[];
+  injected: boolean;
+};
+
+export const refreshStaleProjectContextHistory = (
+  history: ChatMessage[],
+  story: StoryState,
+  currentChapter?: { id: string; title: string } | null,
+  projectContextRevision?: number | null
+): RefreshHistoryResult => {
+  const currentStoryRevision = story.lastUpdated ?? null;
+  if (
+    currentStoryRevision === projectContextRevision ||
+    !hasProjectContextHistory(history)
+  ) {
+    return { history, injected: false };
+  }
+
+  const sanitizedHistory = stripProjectContextMessages(history);
+  const sections = buildRefreshSections(story, currentChapter);
+  const refreshedSections = buildSectionRefreshPayload(story, sections);
+  const toolCallId = `project-context-refresh-${currentStoryRevision ?? Date.now()}`;
+  const refreshArgs = {
+    sections,
+  };
+  const refreshPayload = refreshedSections;
+
+  return {
+    history: [
+      ...sanitizedHistory,
+      {
+        id: `${toolCallId}-assistant`,
+        role: 'model',
+        text: '',
+        tool_calls: [
+          {
+            id: toolCallId,
+            name: 'refresh_project_context',
+            args: refreshArgs,
+          },
+        ],
+      },
+      {
+        id: `${toolCallId}-tool`,
+        role: 'tool',
+        name: 'refresh_project_context',
+        tool_call_id: toolCallId,
+        text: JSON.stringify(refreshPayload),
+      },
+    ],
+    injected: true,
+  };
 };
 
 export type ExecuteChatRequestContext = {
@@ -536,7 +823,15 @@ const executeChatRequestImpl = async (
   const updateMessage = makeMessageUpdater(context.setChatMessages);
 
   try {
-    let currentHistory = [...history];
+    const story = useStoryStore.getState().story;
+    const projectContextRevision = useChatStore.getState().projectContextRevision;
+    const refreshedHistory = refreshStaleProjectContextHistory(
+      history,
+      story,
+      context.currentChapter,
+      projectContextRevision
+    );
+    let currentHistory = [...refreshedHistory.history];
     const session = createChatSession(
       context.getSystemPrompt(),
       currentHistory,
@@ -619,6 +914,9 @@ const executeChatRequestImpl = async (
       currentMsgId,
       botMessage
     );
+    useChatStore
+      .getState()
+      .setProjectContextRevision(useStoryStore.getState().story.lastUpdated ?? null);
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;

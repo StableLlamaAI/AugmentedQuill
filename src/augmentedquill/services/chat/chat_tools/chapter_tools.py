@@ -26,8 +26,8 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     chat_tool,
 )
 from augmentedquill.services.projects.project_helpers import (
-    _chapter_content_slice,
     _project_overview,
+    _snap_to_boundary,
 )
 from augmentedquill.services.story.story_generation_ops import (
     continue_chapter_from_summary,
@@ -41,6 +41,12 @@ from augmentedquill.services.projects.projects import (
     write_chapter_content as _write_chapter_content,
     write_chapter_summary as _write_chapter_summary,
     write_chapter_title,
+)
+from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictListPatch,
+    TextPatch,
+    apply_conflict_list_patch,
+    apply_text_patch,
 )
 
 _MAX_CHAPTER_CHARS = 8000
@@ -166,11 +172,37 @@ class UpdateChapterMetadataParams(BaseModel):
     title: str | None = Field(None, description="The chapter title")
     summary: str | None = Field(None, description="The chapter summary")
     notes: str | None = Field(None, description="Public notes about the chapter")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description=(
+            "Optional partial summary edit object. "
+            "Use {operation:'replace'|'append'|'prepend', value:'...'} or "
+            "{operation:'replace_text', old_text:'...', new_text:'...', occurrence:'first|last|all|unique'}."
+        ),
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description=(
+            "Optional partial notes edit object. "
+            "Use {operation:'replace'|'append'|'prepend', value:'...'} or "
+            "{operation:'replace_text', old_text:'...', new_text:'...', occurrence:'first|last|all|unique'}."
+        ),
+    )
     conflicts: list | str | None = Field(
         None,
         description=(
             "List of conflicts in the chapter (can be JSON string). "
             "Each conflict should include description, resolution, and optional resolved status."
+        ),
+    )
+    conflicts_patch: ConflictListPatch | None = Field(
+        None,
+        description=(
+            "Optional conflict patch object: {operations:[...]}. "
+            "Each operation: {index:<int>, updates:{...}} to update fields of an existing conflict, "
+            "{conflict:{...}} to append a new conflict, "
+            "{index:<int>} to remove a conflict. "
+            "op is inferred automatically; only set it explicitly for 'insert' or 'clear'."
         ),
     )
 
@@ -188,10 +220,17 @@ class GetChapterContentParams(BaseModel):
         None,
         description="The chapter ID to get content for. If not provided, uses active chapter.",
     )
-    start: int = Field(0, description="The starting character position")
+    start: int = Field(
+        0,
+        description="The starting character position. Ignored when read_from_end=True.",
+    )
     max_chars: int = Field(
         _MAX_CHAPTER_CHARS,
         description=f"Maximum characters to return (1-{_MAX_CHAPTER_CHARS})",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -354,7 +393,6 @@ async def get_chapter_metadata(
             "id": chap.get("id"),
             "title": chap.get("title"),
             "summary": chap.get("summary"),
-            "filename": chap.get("filename"),
             "notes": meta.get("notes", ""),
             "conflicts": meta.get("conflicts") or [],
         },
@@ -384,8 +422,14 @@ async def get_chapter_metadata(
 
 
 @chat_tool(
-    description="Update metadata for a specific chapter (title, summary, notes, conflicts). "
-    "Chapter conflicts are treated as active story arcs; include any resolved status changes.",
+    description=(
+        "Update metadata for a specific chapter (title, summary, notes, conflicts). "
+        "Use summary_patch/notes_patch/conflicts_patch for safe partial edits that keep existing content. "
+        "summary_patch/notes_patch must be patch objects. "
+        "conflicts_patch should be {operations:[...]} with index-based operations. "
+        "Chapter conflicts are treated as active story arcs; include resolved status changes when needed. "
+        "conflicts_patch is index-based (operations[].index) and does not support JSON Patch path pointers."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
@@ -400,15 +444,110 @@ async def update_chapter_metadata(
         except Exception:
             conflicts = None
 
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    files = _scan_chapter_files(active)
+    _, path, _ = _chapter_by_id_or_404(params.chap_id, active=active)
+    current_meta = (
+        _get_chapter_metadata_entry(
+            story,
+            params.chap_id,
+            path,
+            files=files,
+            active=active,
+        )
+        or {}
+    )
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            current_meta.get("summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(
+            current_meta.get("notes", ""), params.notes_patch
+        )
+
+    conflicts_value = conflicts
+    if params.conflicts_patch is not None:
+        current_conflicts = current_meta.get("conflicts")
+        if not isinstance(current_conflicts, list):
+            current_conflicts = []
+        conflicts_value = apply_conflict_list_patch(
+            current_conflicts,
+            params.conflicts_patch,
+        )
+
+    fields_set = set(params.model_fields_set)
+    current_summary = current_meta.get("summary") or ""
+    current_notes = current_meta.get("notes")
+    current_conflicts = current_meta.get("conflicts")
+    if not isinstance(current_conflicts, list):
+        current_conflicts = []
+
+    changed_fields: list[str] = []
+
+    title_to_write: str | None = None
+    if "title" in fields_set and params.title is not None:
+        next_title = params.title.strip()
+        if next_title != str(current_meta.get("title") or "").strip():
+            title_to_write = params.title
+            changed_fields.append("title")
+
+    summary_requested = "summary" in fields_set or params.summary_patch is not None
+    summary_to_write: str | None = None
+    if summary_requested and summary_value is not None:
+        next_summary = summary_value.strip()
+        if next_summary != current_summary:
+            summary_to_write = summary_value
+            changed_fields.append("summary")
+
+    notes_requested = "notes" in fields_set or params.notes_patch is not None
+    notes_to_write: str | None = None
+    if notes_requested and notes_value is not None and notes_value != current_notes:
+        notes_to_write = notes_value
+        changed_fields.append("notes")
+
+    conflicts_requested = (
+        "conflicts" in fields_set or params.conflicts_patch is not None
+    )
+    conflicts_to_write: list | None = None
+    if (
+        conflicts_requested
+        and conflicts_value is not None
+        and conflicts_value != current_conflicts
+    ):
+        conflicts_to_write = conflicts_value
+        changed_fields.append("conflicts")
+
+    if not changed_fields:
+        return {
+            "ok": True,
+            "changed": False,
+            "changed_fields": [],
+            "message": f"No metadata changes for chapter {params.chap_id}",
+            "chap_id": params.chap_id,
+        }
+
     _update_chapter_metadata(
         params.chap_id,
-        title=params.title,
-        summary=params.summary,
-        notes=params.notes,
-        conflicts=conflicts,
+        title=title_to_write,
+        summary=summary_to_write,
+        notes=notes_to_write,
+        conflicts=conflicts_to_write,
+        active=active,
     )
     mutations["story_changed"] = True
-    return {"ok": True, "message": f"Metadata updated for chapter {params.chap_id}"}
+    return {
+        "ok": True,
+        "changed": True,
+        "changed_fields": changed_fields,
+        "message": f"Metadata updated for chapter {params.chap_id}",
+        "chap_id": params.chap_id,
+    }
 
 
 @chat_tool(
@@ -443,7 +582,7 @@ async def get_chapter_summaries(
 
 
 @chat_tool(
-    description="Get content from a specific chapter with pagination support.",
+    description="Get content from a specific chapter with pagination support. Use read_from_end=True to read the last max_chars characters, which is recommended before appending prose.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="prose-read",
 )
@@ -459,10 +598,27 @@ async def get_chapter_content(
     if not isinstance(chap_id, int):
         return {"error": "chap_id is required"}
 
-    start = max(0, params.start)
     max_chars = max(1, min(_MAX_CHAPTER_CHARS, params.max_chars))
-    data = _chapter_content_slice(chap_id, start=start, max_chars=max_chars)
-    return data
+    _, path, _ = _chapter_by_id_or_404(chap_id)
+    text = path.read_text(encoding="utf-8")
+    total = len(text)
+
+    if params.read_from_end:
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(text, raw_start, forward=False)
+        end = total
+    else:
+        start = max(0, params.start)
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(text, raw_end, forward=True))
+
+    return {
+        "id": chap_id,
+        "start": start,
+        "end": end,
+        "total": total,
+        "content": text[start:end],
+    }
 
 
 @chat_tool(

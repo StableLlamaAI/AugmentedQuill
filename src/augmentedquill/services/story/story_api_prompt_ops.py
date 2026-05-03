@@ -40,8 +40,6 @@ def _get_read_only_tool_schemas(project_type: str | None = None) -> list[dict]:
     relevant_names = {
         "get_project_overview",
         "get_story_metadata",
-        "get_story_summary",
-        "get_story_tags",
         "get_chapter_metadata",
         "get_chapter_content",
         "get_chapter_summary",

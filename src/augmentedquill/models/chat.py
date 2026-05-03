@@ -79,6 +79,7 @@ class ChatDetailResponse(BaseModel):
     allowWebSearch: Optional[bool] = None
     scratchpad: Optional[str] = None
     editing_scratchpad: Optional[str] = None
+    projectContextRevision: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
