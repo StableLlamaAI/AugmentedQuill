@@ -274,22 +274,31 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
       <div className={`h-6 w-px hidden lg:block ${dividerColor}`} />
 
       <div className="flex items-center gap-1 min-w-0">
-        <div className="relative flex" ref={undoMenuRef}>
+        <div className="relative inline-flex rounded-md shadow-sm" ref={undoMenuRef}>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={(): void => undo()}
+            disabled={!canUndo}
+            title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            aria-label={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            className="rounded-r-none border-r-0 px-1.5"
+            icon={<Undo size={14} />}
+          />
           <Button
             theme={currentTheme}
             variant="ghost"
             size="sm"
             onClick={(): void => setIsUndoMenuOpen((o: boolean): boolean => !o)}
             disabled={!canUndo}
-            title={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
-            aria-label={nextUndoLabel ? `${t('Undo')}: ${nextUndoLabel}` : t('Undo')}
+            title={t('Show undo history')}
+            aria-label={t('Show undo history')}
             aria-haspopup="menu"
             aria-expanded={isUndoMenuOpen}
-            className="px-2"
-            icon={<Undo size={14} />}
-          >
-            <ChevronDown size={12} />
-          </Button>
+            className="rounded-l-none px-1.5 w-7"
+            icon={<ChevronDown size={12} />}
+          />
           {isUndoMenuOpen && canUndo && (
             <UndoRedoMenu
               options={undoOptions}
@@ -312,22 +321,31 @@ const HeaderLeftControls: React.FC<HeaderLeftControlsProps> = ({
           )}
         </div>
 
-        <div className="relative flex" ref={redoMenuRef}>
+        <div className="relative inline-flex rounded-md shadow-sm" ref={redoMenuRef}>
+          <Button
+            theme={currentTheme}
+            variant="ghost"
+            size="sm"
+            onClick={(): void => redo()}
+            disabled={!canRedo}
+            title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+            aria-label={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+            className="rounded-r-none border-r-0 px-1.5"
+            icon={<Redo size={14} />}
+          />
           <Button
             theme={currentTheme}
             variant="ghost"
             size="sm"
             onClick={(): void => setIsRedoMenuOpen((o: boolean): boolean => !o)}
             disabled={!canRedo}
-            title={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
-            aria-label={nextRedoLabel ? `${t('Redo')}: ${nextRedoLabel}` : t('Redo')}
+            title={t('Show redo history')}
+            aria-label={t('Show redo history')}
             aria-haspopup="menu"
             aria-expanded={isRedoMenuOpen}
-            className="px-2"
-            icon={<Redo size={14} />}
-          >
-            <ChevronDown size={12} />
-          </Button>
+            className="rounded-l-none px-1.5 w-7"
+            icon={<ChevronDown size={12} />}
+          />
           {isRedoMenuOpen && canRedo && (
             <UndoRedoMenu
               options={redoOptions}
