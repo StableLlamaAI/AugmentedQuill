@@ -485,7 +485,8 @@
         "{instruction}",
         "",
         "Context materials:",
-        "{context}"
+        "{context}",
+        "{sourcebook_entries}"
       ]
     },
     "call_writing_llm_preceding_anchor": {
@@ -496,6 +497,30 @@
         "Immediate preceding prose (anchor for continuation):",
         "{preceding_content}"
       ]
+    },
+    "sourcebook_entries_block": {
+      "_use": "WRITING",
+      "en": ["Relevant sourcebook entries:"]
+    },
+    "sourcebook_entry_summary": {
+      "_use": "WRITING",
+      "en": ["- {name} ({category}): {description}"]
+    },
+    "sourcebook_entry_relations": {
+      "_use": "WRITING",
+      "en": ["  Relations: {relation_text}"]
+    },
+    "sourcebook_entry_relations_none": {
+      "_use": "WRITING",
+      "en": ["None"]
+    },
+    "sourcebook_entry_unknown_category": {
+      "_use": "WRITING",
+      "en": ["Unknown"]
+    },
+    "sourcebook_entry_missing_description": {
+      "_use": "WRITING",
+      "en": ["No description available."]
     },
     "call_editing_assistant_request": {
       "_use": "EDITING",

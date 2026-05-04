@@ -681,6 +681,58 @@ class ChatToolsTest(TestCase):
         self.assertIn("error", result)
         self.assertIn("conflicts", result.get("error", ""))
 
+    def test_call_writing_llm_includes_sourcebook_entries_in_prompt(self):
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {
+                        "id": "c1",
+                        "description": "Test conflict",
+                        "resolution": "Test resolution",
+                    }
+                ]
+            },
+        )
+        self._post_single_tool(
+            "create_sourcebook_entry",
+            {
+                "name": "Hero Entry",
+                "description": "A known sourcebook character",
+                "category": "character",
+                "synonyms": ["The Hero"],
+            },
+        )
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_CapturingStreamMock("Generated text."),
+            ) as mock_chat,
+        ):
+            _ = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Include sourcebook context",
+                    "context": "Context text",
+                    "sourcebook_entries": ["Hero Entry", "The Hero"],
+                },
+            )
+
+        sent_messages = mock_chat.await_args.kwargs["messages"]
+        self.assertEqual(len(sent_messages), 2)
+        self.assertIn("Relevant sourcebook entries:", sent_messages[1]["content"])
+        self.assertIn(
+            "- Hero Entry (Character): A known sourcebook character",
+            sent_messages[1]["content"],
+        )
+        self.assertIn("Relations: None", sent_messages[1]["content"])
+
     def test_call_writing_llm_append_mode_with_chap_id(self):
         """Test write_mode='append' appends generated text to chapter."""
         self._bootstrap_project()

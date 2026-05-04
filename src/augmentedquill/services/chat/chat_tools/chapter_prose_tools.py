@@ -13,6 +13,7 @@ import json
 from pydantic import AliasChoices, BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
+from augmentedquill.core.prompts import get_user_prompt
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -72,6 +73,82 @@ def _extract_tail_paragraphs(text: str, max_paragraphs: int = 3) -> str:
     return "\n\n".join(paragraphs[-max_paragraphs:])
 
 
+def _format_sourcebook_entry_prompt(entry: dict, language: str) -> str:
+    """Format a sourcebook entry compactly for the WRITING LLM prompt."""
+    name = entry.get("name", "")
+    category = entry.get("category") or get_user_prompt(
+        "sourcebook_entry_unknown_category", language=language
+    )
+    description = entry.get("description", "").strip()
+    if not description:
+        description = get_user_prompt(
+            "sourcebook_entry_missing_description",
+            language=language,
+        )
+
+    relations = entry.get("relations") or []
+    relation_lines: list[str] = []
+    for relation in relations:
+        relation_type = relation.get("relation", "")
+        target_id = relation.get("target_id", "")
+        direction = relation.get("direction", "forward")
+        if relation_type and target_id:
+            relation_lines.append(f"{relation_type} ({direction}) -> {target_id}")
+    relation_text = (
+        "; ".join(relation_lines)
+        if relation_lines
+        else get_user_prompt(
+            "sourcebook_entry_relations_none",
+            language=language,
+        )
+    )
+
+    summary = get_user_prompt(
+        "sourcebook_entry_summary",
+        language=language,
+        name=name,
+        category=category,
+        description=description,
+    )
+    relations_line = get_user_prompt(
+        "sourcebook_entry_relations",
+        language=language,
+        relation_text=relation_text,
+    )
+
+    return f"{summary}\n{relations_line}"
+
+
+def _build_sourcebook_entries_context(entry_names: list[str], language: str) -> str:
+    """Build a compact sourcebook context block for the writing prompt."""
+    from augmentedquill.services.sourcebook.sourcebook_helpers import (
+        sourcebook_get_entry,
+    )
+
+    seen_ids: set[str] = set()
+    lines: list[str] = []
+    for name_or_synonym in entry_names:
+        if not isinstance(name_or_synonym, str) or not name_or_synonym.strip():
+            continue
+        entry = sourcebook_get_entry(name_or_synonym)
+        if not entry:
+            continue
+        entry_id = str(entry.get("id") or "")
+        if entry_id in seen_ids:
+            continue
+        seen_ids.add(entry_id)
+        lines.append(_format_sourcebook_entry_prompt(entry, language=language))
+
+    if not lines:
+        return ""
+
+    return (
+        get_user_prompt("sourcebook_entries_block", language=language)
+        + "\n"
+        + "\n".join(lines)
+    )
+
+
 # ============================================================================
 # call_writing_llm
 # ============================================================================
@@ -92,6 +169,10 @@ class CallWritingLlmParams(BaseModel):
         None,
         validation_alias=AliasChoices("preceding_content", "preceeding_content"),
         description="Optional prose immediately preceding the insertion point. In append mode, if omitted, the system auto-fills this with the last paragraphs of the target chapter.",
+    )
+    sourcebook_entries: list[str] | None = Field(
+        None,
+        description="Optional list of sourcebook entry names or synonyms to include in the WRITING LLM prompt. Matching entries are resolved by name or synonym and added compactly with category, description, and relations.",
     )
     write_mode: str | None = Field(
         None,
@@ -188,6 +269,18 @@ async def call_writing_llm(
         instruction=params.instruction,
         context=params.context,
     )
+
+    sourcebook_context = _build_sourcebook_entries_context(
+        params.sourcebook_entries or [], project_lang
+    )
+    user_content = get_user_prompt(
+        "call_writing_llm_request",
+        language=project_lang,
+        instruction=params.instruction,
+        context=params.context,
+        sourcebook_entries=sourcebook_context,
+    )
+
     if preceding_content:
         user_content += get_user_prompt(
             "call_writing_llm_preceding_anchor",
