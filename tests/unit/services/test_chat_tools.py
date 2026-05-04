@@ -663,6 +663,9 @@ class ChatToolsTest(TestCase):
         self.assertEqual(len(appended), 1)
         payload = json.loads(appended[0].get("content") or "{}")
         self.assertEqual(payload.get("generated_text"), "Rewritten prose")
+        # Without write_mode, the response must contain ONLY generated_text —
+        # no "written", "write_mode", "chap_id", or any persistence fields.
+        self.assertEqual(set(payload.keys()), {"generated_text"})
 
     def test_call_writing_llm_requires_conflict_metadata(self):
         self._bootstrap_project()
@@ -939,8 +942,8 @@ class ChatToolsTest(TestCase):
         self.assertTrue(result.get("written"))
         self.assertEqual(result.get("chap_id"), 1)
 
-    def test_call_writing_llm_replace_mode(self):
-        """Test write_mode='replace' overwrites entire chapter."""
+    def test_call_writing_llm_replace_all_mode(self):
+        """Test write_mode='replace_all' overwrites the entire chapter."""
         self._bootstrap_project()
         self._post_single_tool(
             "update_story_metadata",
@@ -968,7 +971,7 @@ class ChatToolsTest(TestCase):
                 {
                     "instruction": "Rewrite entirely",
                     "context": "Old content",
-                    "write_mode": "replace",
+                    "write_mode": "replace_all",
                     "chap_id": 1,
                 },
             )
@@ -981,12 +984,143 @@ class ChatToolsTest(TestCase):
         # Verify response
         appended = data.get("appended_messages") or []
         result = json.loads(appended[0].get("content") or "{}")
-        self.assertEqual(result.get("write_mode"), "replace")
+        self.assertEqual(result.get("write_mode"), "replace_all")
         self.assertTrue(result.get("written"))
+        self.assertTrue(result.get("replaced_complete_content"))
+        self.assertIn(
+            "Complete chapter content has been replaced", result.get("status", "")
+        )
 
         # Verify mutations
         mutations = data.get("mutations") or {}
         self.assertTrue(mutations.get("story_changed"))
+
+    def test_call_writing_llm_replace_mode_targeted(self):
+        """Test write_mode='replace' replaces only the specified passage."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {"id": "c1", "description": "Conflict", "resolution": "Resolution"}
+                ]
+            },
+        )
+
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        chapter_file.write_text(
+            "Opening line. Middle passage. Closing line.", encoding="utf-8"
+        )
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("Rewritten middle."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Rewrite the middle passage",
+                    "context": "Middle passage.",
+                    "write_mode": "replace",
+                    "replace_target": "Middle passage.",
+                    "chap_id": 1,
+                },
+            )
+
+        # Only the target passage replaced; surrounding text untouched.
+        new_content = chapter_file.read_text(encoding="utf-8")
+        self.assertEqual(new_content, "Opening line. Rewritten middle. Closing line.")
+
+        # Verify response
+        appended = data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertEqual(result.get("write_mode"), "replace")
+        self.assertTrue(result.get("written"))
+        self.assertNotIn("replaced_complete_content", result)
+
+        mutations = data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+
+    def test_call_writing_llm_replace_mode_target_not_found_returns_error(self):
+        """write_mode='replace' with a replace_target not in the chapter returns an error."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {"id": "c1", "description": "Conflict", "resolution": "Resolution"}
+                ]
+            },
+        )
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("New text."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Rewrite something",
+                    "context": "context",
+                    "write_mode": "replace",
+                    "replace_target": "This text does not exist in the chapter.",
+                    "chap_id": 1,
+                },
+            )
+
+        appended = data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)
+        self.assertIn("replace_target not found", result.get("error", ""))
+
+    def test_call_writing_llm_replace_mode_missing_target_returns_error(self):
+        """write_mode='replace' without replace_target returns an error."""
+        self._bootstrap_project()
+        self._post_single_tool(
+            "update_story_metadata",
+            {
+                "conflicts": [
+                    {"id": "c1", "description": "Conflict", "resolution": "Resolution"}
+                ]
+            },
+        )
+
+        with (
+            patch(
+                "augmentedquill.services.llm.llm.resolve_openai_credentials",
+                return_value=("http://localhost:11434/v1", None, "dummy", 30, "dummy"),
+            ),
+            patch(
+                "augmentedquill.services.llm.llm.unified_chat_stream",
+                new=_fake_llm_stream("New text."),
+            ),
+        ):
+            data = self._post_single_tool(
+                "call_writing_llm",
+                {
+                    "instruction": "Rewrite something",
+                    "context": "context",
+                    "write_mode": "replace",
+                    "chap_id": 1,
+                },
+            )
+
+        appended = data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)
+        self.assertIn("replace_target is required", result.get("error", ""))
 
     def test_call_writing_llm_insert_at_marker_mode(self):
         """Test write_mode='insert_at_marker' inserts at ~~~ marker."""
@@ -1751,3 +1885,157 @@ class ChatToolsTest(TestCase):
         content = json.loads(payload[0]["content"])
         self.assertEqual(content.get("error"), "Invalid parameters")
         self.assertTrue(content.get("details"))
+
+    def test_undo_last_tool_changes_last_call_scope(self):
+        """undo_last_tool_changes with scope='last_call' restores the most recent batch."""
+        self._bootstrap_project()
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_content = chapter_file.read_text(encoding="utf-8")
+
+        # Write something via a tool call so a batch snapshot is created.
+        body = {
+            "model_type": "EDITING",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_write_1",
+                            "type": "function",
+                            "function": {
+                                "name": "write_chapter_content",
+                                "arguments": json.dumps(
+                                    {"chap_id": 1, "content": "Modified by tool."}
+                                ),
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        r = self.client.post("/api/v1/chat/tools", json=body)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), "Modified by tool.")
+
+        # Now call undo_last_tool_changes via the LLM tool interface.
+        undo_data = self._post_single_tool(
+            "undo_last_tool_changes",
+            {"scope": "last_call"},
+        )
+
+        appended = undo_data.get("appended_messages") or []
+        self.assertEqual(len(appended), 1)
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertTrue(result.get("undone"))
+        self.assertEqual(result.get("scope"), "last_call")
+        self.assertIsInstance(result.get("restored_batches"), list)
+        self.assertEqual(len(result["restored_batches"]), 1)
+
+        # Verify the chapter was restored.
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), original_content)
+
+        # Verify story_changed is set so frontend refreshes.
+        mutations = undo_data.get("mutations") or {}
+        self.assertTrue(mutations.get("story_changed"))
+
+    def test_undo_last_tool_changes_all_this_turn_scope(self):
+        """undo_last_tool_changes with scope='all_this_turn' reverses all provided batches."""
+        self._bootstrap_project()
+        chapter_file = self.projects_root / "demo" / "chapters" / "0001.txt"
+        original_content = chapter_file.read_text(encoding="utf-8")
+
+        def _write_tool_call(content: str) -> str:
+            """Write chapter content via tool and return the batch_id."""
+            r = self.client.post(
+                "/api/v1/chat/tools",
+                json={
+                    "model_type": "EDITING",
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_w",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "write_chapter_content",
+                                        "arguments": json.dumps(
+                                            {"chap_id": 1, "content": content}
+                                        ),
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(r.status_code, 200, r.text)
+            data = _parse_tool_sse_result(r.text)
+            return (data.get("mutations") or {}).get("tool_batch", {}).get("batch_id")
+
+        batch_id_1 = _write_tool_call("First modification.")
+        batch_id_2 = _write_tool_call("Second modification.")
+        self.assertTrue(batch_id_1)
+        self.assertTrue(batch_id_2)
+        self.assertEqual(
+            chapter_file.read_text(encoding="utf-8"), "Second modification."
+        )
+
+        # Undo both batches in one call.
+        undo_data = self._post_single_tool(
+            "undo_last_tool_changes",
+            {
+                "scope": "all_this_turn",
+                "batch_ids": [batch_id_1, batch_id_2],
+            },
+        )
+
+        appended = undo_data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertTrue(result.get("undone"))
+        self.assertEqual(result.get("scope"), "all_this_turn")
+        self.assertEqual(len(result.get("restored_batches") or []), 2)
+
+        # Both batches reversed → back to original.
+        self.assertEqual(chapter_file.read_text(encoding="utf-8"), original_content)
+
+    def test_undo_last_tool_changes_no_batches_returns_error(self):
+        """undo_last_tool_changes with no existing batches returns a BadRequestError."""
+        self._bootstrap_project()
+
+        undo_data = self._post_single_tool(
+            "undo_last_tool_changes",
+            {"scope": "last_call"},
+        )
+
+        appended = undo_data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)
+
+    def test_undo_last_tool_changes_invalid_scope_returns_error(self):
+        """undo_last_tool_changes with an unrecognised scope returns an error."""
+        self._bootstrap_project()
+
+        undo_data = self._post_single_tool(
+            "undo_last_tool_changes",
+            {"scope": "bogus_scope"},
+        )
+
+        appended = undo_data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)
+
+    def test_undo_last_tool_changes_all_this_turn_without_batch_ids_returns_error(self):
+        """scope='all_this_turn' without batch_ids must return an error."""
+        self._bootstrap_project()
+
+        undo_data = self._post_single_tool(
+            "undo_last_tool_changes",
+            {"scope": "all_this_turn"},
+        )
+
+        appended = undo_data.get("appended_messages") or []
+        result = json.loads(appended[0].get("content") or "{}")
+        self.assertIn("error", result)

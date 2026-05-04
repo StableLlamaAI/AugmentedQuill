@@ -176,7 +176,11 @@ class CallWritingLlmParams(BaseModel):
     )
     write_mode: str | None = Field(
         None,
-        description="How to persist output: 'append' (add to end of chapter), 'replace' (overwrite entire chapter), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+        description="How to persist output: 'append' (add to end of chapter), 'replace' (replace the single occurrence of replace_target in the chapter with the generated text — replace_target is required), 'replace_all' (REPLACES THE COMPLETE EXISTING CONTENT of the chapter/draft with the newly generated text — all prior content is lost), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+    )
+    replace_target: str | None = Field(
+        None,
+        description="Required when write_mode='replace': the exact text passage to search for in the chapter. The first occurrence is replaced with the generated text. Must match the existing text exactly.",
     )
     chap_id: int | None = Field(
         None,
@@ -185,7 +189,7 @@ class CallWritingLlmParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a creative writing or rewriting task to the WRITING LLM. Stateless behavior: it only sees instruction/context provided in this call, so include all required chapter context and exact IDs explicitly. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Stateless behavior: it only sees instruction/context provided in this call, so include all required chapter context and exact IDs explicitly. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' substitutes a specific passage (set replace_target to the exact text to swap out — only the first occurrence is replaced), 'replace_all' REPLACES THE COMPLETE EXISTING CONTENT of the chapter/draft (all prior text is permanently overwritten — use only for full rewrites), 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="delegation",
     project_types=("short-story", "novel", "series"),
@@ -400,14 +404,39 @@ async def call_writing_llm(
             }
 
         elif params.write_mode == "replace":
-            # Replace entire chapter content
-            _write_chapter_content(chap_id, generated_text)
+            # Replace first occurrence of replace_target with generated text.
+            if not params.replace_target:
+                raise BadRequestError(
+                    "replace_target is required when write_mode='replace'. "
+                    "Provide the exact text passage to search for and replace."
+                )
+            existing = path.read_text(encoding="utf-8")
+            if params.replace_target not in existing:
+                raise BadRequestError(
+                    f"replace_target not found in chapter {chap_id}. "
+                    "Ensure the text matches the chapter content exactly."
+                )
+            new_content = existing.replace(params.replace_target, generated_text, 1)
+            _write_chapter_content(chap_id, new_content)
             mutations["story_changed"] = True
             return {
                 "generated_text": generated_text,
                 "written": True,
                 "write_mode": "replace",
                 "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "replace_all":
+            # Replace entire chapter content — ALL prior content is overwritten.
+            _write_chapter_content(chap_id, generated_text)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "replace_all",
+                "replaced_complete_content": True,
+                "chap_id": chap_id,
+                "status": "Complete chapter content has been replaced with the newly generated text.",
             }
 
         elif params.write_mode == "insert_at_marker":
@@ -436,7 +465,7 @@ async def call_writing_llm(
         else:
             raise BadRequestError(
                 f"Invalid write_mode: {params.write_mode}. "
-                "Use 'append', 'replace', 'insert_at_marker', or omit for return-only."
+                "Use 'append', 'replace', 'replace_all', 'insert_at_marker', or omit for return-only."
             )
 
     # Default: just return the generated text without writing
