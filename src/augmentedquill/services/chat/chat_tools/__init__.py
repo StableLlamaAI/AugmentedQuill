@@ -23,6 +23,7 @@ from augmentedquill.services.chat.chat_tools import sourcebook_tools  # noqa: F4
 from augmentedquill.services.chat.chat_tools import story_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import web_search_tools  # noqa: F401
 from augmentedquill.services.chat.chat_tools import search_tools  # noqa: F401
+from augmentedquill.services.chat.chat_tools import undo_tools  # noqa: F401
 
 __all__ = [
     "chapter_tools",
@@ -34,4 +35,5 @@ __all__ = [
     "story_tools",
     "web_search_tools",
     "search_tools",
+    "undo_tools",
 ]

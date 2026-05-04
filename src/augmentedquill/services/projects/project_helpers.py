@@ -120,7 +120,6 @@ def _project_overview(include_notes: bool = False) -> dict:
     }
 
     if p_type == "short-story":
-        fn = story.get("content_file", "content.md")
         draft = {
             "title": story.get("project_title") or (active.name if active else ""),
             "summary": story.get("story_summary") or "",
@@ -130,7 +129,6 @@ def _project_overview(include_notes: bool = False) -> dict:
 
         return {
             **base_info,
-            "content_file": fn,
             "draft": draft,
         }
 

@@ -537,16 +537,17 @@ class ChatToolContractsTest(TestCase):
     def test_get_project_overview_hides_chapter_filenames(self):
         content = self._call_tool("get_project_overview", {"include_notes": True})
 
-        def _assert_no_filename_keys(value):
+        def _assert_no_storage_file_keys(value):
             if isinstance(value, dict):
                 self.assertNotIn("filename", value)
+                self.assertNotIn("content_file", value)
                 for nested in value.values():
-                    _assert_no_filename_keys(nested)
+                    _assert_no_storage_file_keys(nested)
             elif isinstance(value, list):
                 for nested in value:
-                    _assert_no_filename_keys(nested)
+                    _assert_no_storage_file_keys(nested)
 
-        _assert_no_filename_keys(content)
+        _assert_no_storage_file_keys(content)
 
     def test_get_chapter_metadata_hides_filename(self):
         content = self._call_tool("get_chapter_metadata", {"chap_id": 1})

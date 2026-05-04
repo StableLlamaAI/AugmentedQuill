@@ -178,7 +178,7 @@ export const HeaderAppearanceControls: React.FC<HeaderAppearanceControlsProps> =
         onClick={(): void => setIsAppearanceOpen(!isAppearanceOpen)}
         icon={<SlidersHorizontal size={16} />}
         title={t('Page Appearance')}
-        className="hidden sm:inline-flex"
+        className="inline-flex"
       />
 
       {isAppearanceOpen && (

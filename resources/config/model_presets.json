@@ -115,6 +115,25 @@
       }
     },
     {
+      "id": "delta-gemma4-non-thinking",
+      "name": "Tweak: Gemma 4 Non-Thinking",
+      "description": "Switches Gemma 4 from thinking mode to direct non-thinking responses.",
+      "model_id_patterns": ["^gemma4", "^gemma-4"],
+      "preset_type": "delta",
+      "parameters": {
+        "temperature": null,
+        "top_p": null,
+        "max_tokens": null,
+        "presence_penalty": null,
+        "frequency_penalty": null,
+        "stop": null,
+        "seed": null,
+        "top_k": null,
+        "min_p": null,
+        "extra_body": "{\"generation_config\": {\"thinking_config\": {\"thinking_budget\": 0}}, \"chat_template_kwargs\": {\"enable_thinking\": false}}"
+      }
+    },
+    {
       "id": "delta-creative-writing",
       "name": "Tweak: Creative Writing",
       "description": "Recommended sampling settings for creative prose generation.",
