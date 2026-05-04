@@ -103,4 +103,27 @@ describe('provider mapping roundtrip', () => {
     const back = providerToMachineModel(provider);
     expect(back.api_key).toBeUndefined();
   });
+
+  it('treats blank max_tokens as undefined and falls back to provider default', () => {
+    const model = {
+      name: 'chat-model',
+      base_url: 'https://api.example.com/v1',
+      api_key: 'k',
+      model: 'gpt-test',
+      timeout_s: 22,
+      max_tokens: '',
+      prompt_overrides: {
+        system: 'S',
+      },
+    } as unknown as MachineModelConfig;
+
+    const provider = machineModelToProvider(model, {
+      ...DEFAULT_LLM_CONFIG,
+      id: 'fallback',
+      name: 'Fallback',
+      prompts: { system: 'base-s', continuation: 'base-c', summary: 'base-sum' },
+    });
+
+    expect(provider.maxTokens).toBe(DEFAULT_LLM_CONFIG.maxTokens);
+  });
 });
