@@ -12,7 +12,7 @@
 import { afterEach, vi } from 'vitest';
 
 export const registerSharedApiMockCleanup = (): void => {
-  afterEach(() => {
+  afterEach((): void => {
     vi.clearAllMocks();
   });
 };

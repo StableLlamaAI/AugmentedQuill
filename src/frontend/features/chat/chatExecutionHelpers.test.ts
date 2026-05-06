@@ -11,9 +11,14 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { applyScratchpadToolResult, makeMessageUpdater } from './chatExecutionHelpers';
+import {
+  applyScratchpadToolResult,
+  makeMessageUpdater,
+  refreshStaleProjectContextHistory,
+} from './chatExecutionHelpers';
 import { useChatStore } from '../../stores/chatStore';
-import type { ChatMessage } from '../../types';
+import { INITIAL_STORY, useStoryStore } from '../../stores/storyStore';
+import type { ChatMessage, ChatToolCall } from '../../types';
 
 describe('chatExecutionHelpers streaming cadence', () => {
   it('flushes each incoming stream update immediately', () => {
@@ -104,5 +109,157 @@ describe('scratchpad tool results', () => {
     applyScratchpadToolResult(undefined, { content: 'result scratchpad' });
 
     expect(useChatStore.getState().scratchpad).toBe('result scratchpad');
+  });
+});
+
+describe('project context refresh injection', () => {
+  it('replaces stale project tool messages with a synthetic refresh tool payload', () => {
+    const history: ChatMessage[] = [
+      {
+        id: 'assistant-tool',
+        role: 'model',
+        text: '',
+        tool_calls: [{ id: 'call-1', name: 'get_story_metadata', args: {} }],
+      },
+      {
+        id: 'tool-result',
+        role: 'tool',
+        text: '{"title":"Old"}',
+        name: 'get_story_metadata',
+        tool_call_id: 'call-1',
+      },
+      { id: 'user-1', role: 'user', text: 'Continue.' },
+    ];
+
+    const story = {
+      ...INITIAL_STORY,
+      id: 'story-1',
+      title: 'New title',
+      summary: 'Fresh summary',
+      lastUpdated: 42,
+      chapters: [
+        {
+          id: '1',
+          title: 'Chapter 1',
+          summary: 'Chapter summary',
+          content: 'Fresh chapter content',
+        },
+      ],
+      currentChapterId: '1',
+      sourcebook: [
+        {
+          id: 'sb-1',
+          name: 'Ada',
+          description: 'Sourcebook description',
+          synonyms: [],
+          images: [],
+        },
+      ],
+    };
+    useStoryStore.setState({ story });
+
+    const result = refreshStaleProjectContextHistory(
+      history,
+      story,
+      {
+        id: '1',
+        title: 'Chapter 1',
+      },
+      1
+    );
+
+    expect(result.injected).toBe(true);
+    expect(
+      result.history.some(
+        (message: ChatMessage) => message.name === 'get_story_metadata'
+      )
+    ).toBe(false);
+
+    const refreshAssistant = result.history.find(
+      (message: ChatMessage) =>
+        message.role === 'model' &&
+        message.tool_calls?.some(
+          (toolCall: ChatToolCall) => toolCall.name === 'refresh_project_context'
+        )
+    );
+    expect(refreshAssistant).toBeDefined();
+
+    const refreshTool = result.history.find(
+      (message: ChatMessage) =>
+        message.role === 'tool' && message.name === 'refresh_project_context'
+    );
+    expect(refreshTool).toBeDefined();
+    const refreshArgs =
+      refreshAssistant?.tool_calls?.find(
+        (toolCall: ChatToolCall) => toolCall.name === 'refresh_project_context'
+      )?.args ?? {};
+    expect(refreshArgs).toHaveProperty('sections');
+    expect(Array.isArray((refreshArgs as { sections?: unknown[] }).sections)).toBe(
+      true
+    );
+
+    const refreshPayload = JSON.parse(refreshTool?.text ?? '{}') as {
+      [section: string]: unknown;
+    };
+    expect(Object.keys(refreshPayload).length).toBeGreaterThan(0);
+    expect(refreshPayload['chapter:1.summary']).toBe('Chapter summary');
+    expect(refreshPayload['story.summary']).toBe('Fresh summary');
+  });
+
+  it('keeps short-story current_selection compact to avoid metadata duplication', () => {
+    const history: ChatMessage[] = [
+      {
+        id: 'assistant-tool',
+        role: 'model',
+        text: '',
+        tool_calls: [{ id: 'call-1', name: 'get_story_metadata', args: {} }],
+      },
+      {
+        id: 'tool-result',
+        role: 'tool',
+        text: '{"summary":"Old"}',
+        name: 'get_story_metadata',
+        tool_call_id: 'call-1',
+      },
+    ];
+
+    const story = {
+      ...INITIAL_STORY,
+      id: 'story-short',
+      projectType: 'short-story' as const,
+      title: 'Short story title',
+      summary: 'Story summary',
+      notes: 'Very long notes text that should not be duplicated in current_selection.',
+      lastUpdated: 100,
+      draft: {
+        id: 'draft-story-short',
+        scope: 'story' as const,
+        title: 'Short story title',
+        summary: 'Story summary',
+        content:
+          'Very long story content that should not be duplicated in current_selection.',
+      },
+    };
+    useStoryStore.setState({ story });
+
+    const result = refreshStaleProjectContextHistory(history, story, null, 1);
+    const refreshTool = result.history.find(
+      (message: ChatMessage) =>
+        message.role === 'tool' && message.name === 'refresh_project_context'
+    );
+    const refreshPayload = JSON.parse(refreshTool?.text ?? '{}') as {
+      [section: string]: unknown;
+    };
+    expect(Object.keys(refreshPayload).length).toBeGreaterThan(0);
+    expect(refreshPayload['story.notes']).toBe(
+      'Very long notes text that should not be duplicated in current_selection.'
+    );
+    expect(refreshPayload['story.private_notes']).toBeUndefined();
+    expect(
+      Object.keys(refreshPayload).some((section: string) =>
+        section.startsWith('chapter:')
+      )
+    ).toBe(false);
+    expect(JSON.stringify(refreshPayload)).not.toContain('Very long story content');
   });
 });

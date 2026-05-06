@@ -226,9 +226,9 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
           <input
             type="text"
             value={name}
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onNameChange(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onNameChange(e.target.value)}
             lang={language}
             spellCheck={true}
             className={`w-full pl-10 pr-3 py-2 text-sm rounded-md border ${inputBorderClass} ${inputBgClass} focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors`}
@@ -254,7 +254,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
               return (
                 <button
                   key={cat}
-                  onClick={() => onCategoryChange(cat)}
+                  onClick={(): void => onCategoryChange(cat)}
                   title={t(details.description)}
                   className={`flex flex-col items-center justify-center p-2 rounded-md border transition-all ${
                     isSelected
@@ -298,7 +298,7 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
             >
               {syn}
               <button
-                onClick={() => onRemoveSynonym(idx)}
+                onClick={(): void => onRemoveSynonym(idx)}
                 className="hover:text-red-500 transition-colors"
               >
                 <X size={12} />
@@ -309,12 +309,12 @@ export const SourcebookEntryBasicsSection: React.FC<BasicSectionProps> = ({
             <input
               type="text"
               value={newSynonym}
-              onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-                onSynonymInputChange(e.target.value)
-              }
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ): void => onSynonymInputChange(e.target.value)}
               lang={language}
               spellCheck={true}
-              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>): void => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   onAddSynonym();
@@ -415,7 +415,7 @@ export const SourcebookEntryImagesSection: React.FC<ImagesSectionProps> = ({
                     />
                   )}
                   <button
-                    onClick={() => onToggleImage(img.filename)}
+                    onClick={(): void => onToggleImage(img.filename)}
                     className="absolute top-0 right-0 p-1 bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
                   >
                     <X size={12} />
@@ -532,14 +532,14 @@ export const SourcebookEntryRelationsSection: React.FC<RelationsSectionProps> = 
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
-                  onClick={() => onEditRelation(idx)}
+                  onClick={(): void => onEditRelation(idx)}
                   className="p-1 rounded-md hover:bg-brand-500/10 text-brand-500 transition-colors"
                   title={t('Edit Relation')}
                 >
                   <Edit2 size={14} />
                 </button>
                 <button
-                  onClick={() => onDeleteRelation(idx)}
+                  onClick={(): void => onDeleteRelation(idx)}
                   className="p-1 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
                   title={t('Delete Relation')}
                 >
@@ -822,7 +822,7 @@ export const SourcebookImagePickerModal: React.FC<ImagePickerProps> = ({
                   <button
                     key={img.filename}
                     type="button"
-                    onClick={() => onToggleImage(img.filename)}
+                    onClick={(): void => onToggleImage(img.filename)}
                     title={tooltip}
                     aria-label={`Toggle ${img.title || img.filename} selection`}
                     aria-pressed={isSelected}

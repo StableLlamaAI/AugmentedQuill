@@ -89,7 +89,7 @@ describe('useAppSettings', () => {
       await i18n.changeLanguage('de');
     });
 
-    const TestComponent = () => {
+    const TestComponent = (): JSX.Element | null => {
       useAppSettings(baseSettings);
       return null;
     };

@@ -18,7 +18,7 @@ import { ThemeProvider, useThemeClasses } from './ThemeContext';
 
 describe('useThemeClasses', () => {
   it('returns light-mode class tokens for "light" theme', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: React.ReactNode }): JSX.Element => (
       <ThemeProvider currentTheme="light">{children}</ThemeProvider>
     );
     const { result } = renderHook(() => useThemeClasses(), { wrapper });
@@ -34,7 +34,7 @@ describe('useThemeClasses', () => {
   });
 
   it('returns dark-mode class tokens for "mixed" theme', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: React.ReactNode }): JSX.Element => (
       <ThemeProvider currentTheme="mixed">{children}</ThemeProvider>
     );
     const { result } = renderHook(() => useThemeClasses(), { wrapper });
@@ -50,7 +50,7 @@ describe('useThemeClasses', () => {
   });
 
   it('returns dark-mode class tokens for "dark" theme', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: React.ReactNode }): JSX.Element => (
       <ThemeProvider currentTheme="dark">{children}</ThemeProvider>
     );
     const { result } = renderHook(() => useThemeClasses(), { wrapper });

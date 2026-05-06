@@ -22,29 +22,34 @@ interface UseSourcebookRelationDataParams {
 export const useSourcebookRelationData = ({
   isOpen,
   currentEntryId,
-}: UseSourcebookRelationDataParams) => {
+}: UseSourcebookRelationDataParams): {
+  entries: SourcebookEntry[];
+  projectType: 'short-story' | 'novel' | 'series';
+} => {
   const [entries, setEntries] = useState<SourcebookEntry[]>([]);
   const [projectType, setProjectType] = useState<'short-story' | 'novel' | 'series'>(
     'novel'
   );
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!isOpen) return;
 
     api.sourcebook
       .list()
-      .then((data: SourcebookEntry[]) => {
-        setEntries(data.filter((e: SourcebookEntry) => e.id !== currentEntryId));
+      .then((data: SourcebookEntry[]): void => {
+        setEntries(
+          data.filter((e: SourcebookEntry): boolean => e.id !== currentEntryId)
+        );
       })
       .catch(console.error);
 
     api.projects
       .list()
-      .then((res: import('../../services/apiTypes').ProjectsListResponse) => {
+      .then((res: import('../../services/apiTypes').ProjectsListResponse): void => {
         const currentName = res.current;
         const allProjects = res.available ?? [];
         const currentProj = allProjects.find(
-          (p: import('../../services/apiTypes').ProjectListItem) =>
+          (p: import('../../services/apiTypes').ProjectListItem): boolean =>
             p.name === currentName
         );
         if (currentProj && currentProj.type) {

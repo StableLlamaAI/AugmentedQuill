@@ -402,6 +402,67 @@ class TestReplaceAll(TestCase):
             "Magic Blade",
         )
 
+    def test_replace_all_in_sourcebook_title_change_location_uses_new_name(self):
+        active = self._make_and_select_project("replace_test_sourcebook_title_meta")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["sourcebook"] = {
+            "Magic Sword": {
+                "description": "A legendary sword of fire.",
+                "category": "item",
+                "synonyms": [],
+            }
+        }
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="Sword",
+            scope=SearchScope.sourcebook,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="Blade",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 2)
+        self.assertEqual(len(resp.changed_sections_meta), 2)
+        self.assertEqual(
+            {loc.target_id for loc in resp.changed_sections_meta}, {"Magic Blade"}
+        )
+        self.assertEqual(
+            {loc.label for loc in resp.changed_sections_meta},
+            {"Sourcebook 'Magic Blade' Name", "Sourcebook 'Magic Blade' Description"},
+        )
+
+    def test_replace_all_in_chapter_summary_returns_chapter_location(self):
+        active = self._make_and_select_project("replace_test_chapter_summary_meta")
+        story_path = active / "story.json"
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        story["chapters"][0]["summary"] = "A lonely lighthouse."
+        story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
+
+        req = ReplaceAllRequest(
+            query="lighthouse",
+            scope=SearchScope.all,
+            case_sensitive=False,
+            is_regex=False,
+            is_phonetic=False,
+            active_chapter_id=None,
+            replacement="beacon",
+        )
+        resp = replace_all(req, active)
+        self.assertEqual(resp.replacements_made, 1)
+        self.assertEqual(len(resp.changed_sections_meta), 1)
+        self.assertEqual(resp.changed_sections_meta[0].type, "metadata")
+        self.assertEqual(resp.changed_sections_meta[0].target_id, "1")
+        self.assertEqual(resp.changed_sections_meta[0].field, "summary")
+        self.assertEqual(resp.changed_sections_meta[0].label, "Chapter One summary")
+
+        # Verify the change was actually persisted to disk.
+        saved = json.loads(story_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["chapters"][0]["summary"], "A lonely beacon.")
+
 
 class TestReplaceSingle(TestCase):
     def setUp(self):

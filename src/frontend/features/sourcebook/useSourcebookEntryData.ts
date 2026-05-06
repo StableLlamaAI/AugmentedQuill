@@ -20,6 +20,13 @@ type KeywordInputs = {
   synonyms: string[];
 };
 
+export interface UseSourcebookEntryDataResult {
+  availableImages: ProjectImage[];
+  selectedImagesList: ProjectImage[];
+  keywords: string[];
+  isGeneratingKeywords: boolean;
+}
+
 interface UseSourcebookEntryDataParams {
   isOpen: boolean;
   isImagePickerOpen: boolean;
@@ -36,36 +43,36 @@ export const useSourcebookEntryData = ({
   keywordInputs,
   hasEntry,
   entryKeywords,
-}: UseSourcebookEntryDataParams) => {
+}: UseSourcebookEntryDataParams): UseSourcebookEntryDataResult => {
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
   const [keywords, setKeywords] = useState<string[]>(entryKeywords || []);
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
 
   const lastGeneratedInputs = useRef<KeywordInputs | null>(null);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!isOpen) return;
     api.projects
       .listImages()
-      .then((data: import('../../services/apiTypes').ListImagesResponse) => {
+      .then((data: import('../../services/apiTypes').ListImagesResponse): void => {
         setAvailableImages(data.images || []);
       })
       .catch(console.error);
   }, [isOpen]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!isOpen || !isImagePickerOpen) return;
     if (availableImages.length > 0) return;
 
     api.projects
       .listImages()
-      .then((data: import('../../services/apiTypes').ListImagesResponse) => {
+      .then((data: import('../../services/apiTypes').ListImagesResponse): void => {
         setAvailableImages(data.images || []);
       })
       .catch(console.error);
   }, [isOpen, isImagePickerOpen, availableImages.length]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (hasEntry) {
       setKeywords(entryKeywords || []);
       lastGeneratedInputs.current = {
@@ -86,7 +93,7 @@ export const useSourcebookEntryData = ({
     keywordInputs.synonyms,
   ]);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     const isValid = Boolean(
       keywordInputs.name.trim() && keywordInputs.description.trim()
     );
@@ -101,13 +108,13 @@ export const useSourcebookEntryData = ({
       if (!isValid) {
         setIsGeneratingKeywords(false);
       }
-      return () => {
+      return (): void => {
         /* noop cleanup */
       };
     }
 
     setIsGeneratingKeywords(true);
-    const handle = window.setTimeout(async () => {
+    const handle = window.setTimeout(async (): Promise<void> => {
       try {
         const res = await api.sourcebook.generateKeywords({
           name: keywordInputs.name,
@@ -128,11 +135,14 @@ export const useSourcebookEntryData = ({
       }
     }, 500);
 
-    return () => clearTimeout(handle);
+    return (): void => clearTimeout(handle);
   }, [keywordInputs.name, keywordInputs.description, keywordInputs.synonyms]);
 
   const selectedImagesList = useMemo(
-    () => availableImages.filter((img: ProjectImage) => images.includes(img.filename)),
+    () =>
+      availableImages.filter((img: ProjectImage): boolean =>
+        images.includes(img.filename)
+      ),
     [availableImages, images]
   );
 

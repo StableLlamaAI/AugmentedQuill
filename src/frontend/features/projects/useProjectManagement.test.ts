@@ -46,31 +46,33 @@ const baseStory = {
   conflicts: [] as import('../../types').Conflict[],
 };
 
-describe('useProjectManagement', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    const store: Record<string, string> = {};
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) => (key in store ? store[key] : null),
-      setItem: (key: string, value: string) => {
-        store[key] = String(value);
-      },
-      removeItem: (key: string) => {
+function setupProjectManagementMocks(): void {
+  vi.clearAllMocks();
+  const store: Record<string, string> = {};
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => (key in store ? store[key] : null),
+    setItem: (key: string, value: string) => {
+      store[key] = String(value);
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      for (const key of Object.keys(store)) {
         delete store[key];
-      },
-      clear: () => {
-        for (const key of Object.keys(store)) {
-          delete store[key];
-        }
-      },
-    });
-    vi.mocked(api.projects.list).mockResolvedValue({
-      available: [{ name: 'p1', title: 'Project One', type: 'novel', language: 'en' }],
-    } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
-    vi.mocked(api.settings.getPrompts).mockResolvedValue({
-      languages: ['en', 'de'],
-    } as unknown as Awaited<ReturnType<typeof api.settings.getPrompts>>);
+      }
+    },
   });
+  vi.mocked(api.projects.list).mockResolvedValue({
+    available: [{ name: 'p1', title: 'Project One', type: 'novel', language: 'en' }],
+  } as unknown as Awaited<ReturnType<typeof api.projects.list>>);
+  vi.mocked(api.settings.getPrompts).mockResolvedValue({
+    languages: ['en', 'de'],
+  } as unknown as Awaited<ReturnType<typeof api.settings.getPrompts>>);
+}
+
+describe('useProjectManagement: load and reset', () => {
+  beforeEach(setupProjectManagementMocks);
 
   it('loads project list and instruction languages on mount', async () => {
     const { result } = renderHook(() =>
@@ -143,6 +145,10 @@ describe('useProjectManagement', () => {
     expect(refreshStory).toHaveBeenCalledWith(undefined, true);
     expect(handleNewChat).toHaveBeenCalled();
   });
+});
+
+describe('useProjectManagement: rename and language sync', () => {
+  beforeEach(setupProjectManagementMocks);
 
   it('renames a non-active project and persists language to local storage', async () => {
     localStorage.setItem(
@@ -272,6 +278,10 @@ describe('useProjectManagement', () => {
       )?.language
     ).toBe('de');
   });
+});
+
+describe('useProjectManagement: non-tracked field changes', () => {
+  beforeEach(setupProjectManagementMocks);
 
   it('does not resync project metadata when only non-tracked fields change', async () => {
     const initialProps = {

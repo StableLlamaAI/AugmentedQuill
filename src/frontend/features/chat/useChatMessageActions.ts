@@ -25,10 +25,11 @@ export function useChatMessageActions({
   handleDeleteMessage: (id: string) => void;
 } {
   const handleEditMessage = useCallback(
-    (id: string, newText: string) => {
-      setChatMessages((previous: ChatMessage[]) =>
-        previous.map((message: ChatMessage) =>
-          message.id === id ? { ...message, text: newText } : message
+    (id: string, newText: string): void => {
+      setChatMessages((previous: ChatMessage[]): ChatMessage[] =>
+        previous.map(
+          (message: ChatMessage): ChatMessage =>
+            message.id === id ? { ...message, text: newText } : message
         )
       );
     },
@@ -36,9 +37,9 @@ export function useChatMessageActions({
   );
 
   const handleDeleteMessage = useCallback(
-    (id: string) => {
-      setChatMessages((previous: ChatMessage[]) =>
-        previous.filter((message: ChatMessage) => message.id !== id)
+    (id: string): void => {
+      setChatMessages((previous: ChatMessage[]): ChatMessage[] =>
+        previous.filter((message: ChatMessage): boolean => message.id !== id)
       );
     },
     [setChatMessages]

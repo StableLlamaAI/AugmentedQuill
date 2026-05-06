@@ -325,7 +325,7 @@ export function useSidebarUpdateChapter(): (
 ) => Promise<void> {
   const { updateChapter } = useStoryMutations();
   return useCallback(
-    (id: string, partial: Record<string, unknown>) =>
+    (id: string, partial: Record<string, unknown>): Promise<void> =>
       updateChapter(id, partial, true, true, true),
     [updateChapter]
   );

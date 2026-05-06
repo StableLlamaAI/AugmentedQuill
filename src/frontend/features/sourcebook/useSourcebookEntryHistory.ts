@@ -31,7 +31,14 @@ interface UseSourcebookEntryHistoryParams {
 export const useSourcebookEntryHistory = ({
   initialState,
   currentState,
-}: UseSourcebookEntryHistoryParams) => {
+}: UseSourcebookEntryHistoryParams): {
+  history: SourcebookEntryHistoryState[];
+  historyIndex: number;
+  restoreSourcebookHistory: (
+    index: number,
+    onRestore: (snapshot: SourcebookEntryHistoryState) => void
+  ) => void;
+} => {
   const [history, setHistory] = useState<SourcebookEntryHistoryState[]>([initialState]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const isRestoringRef = useRef(false);
@@ -41,12 +48,12 @@ export const useSourcebookEntryHistory = ({
   historyRef.current = history;
   historyIndexRef.current = historyIndex;
 
-  useEffect(() => {
+  useEffect((): void => {
     setHistory([initialState]);
     setHistoryIndex(0);
   }, [initialState]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isRestoringRef.current) {
       return;
     }
@@ -57,7 +64,7 @@ export const useSourcebookEntryHistory = ({
       return;
     }
 
-    setHistory((prev: SourcebookEntryHistoryState[]) => {
+    setHistory((prev: SourcebookEntryHistoryState[]): SourcebookEntryHistoryState[] => {
       const next = [...prev.slice(0, idx + 1), currentState];
       return next.length > 100 ? next.slice(next.length - 100) : next;
     });
@@ -67,7 +74,7 @@ export const useSourcebookEntryHistory = ({
   const restoreSourcebookHistory = (
     index: number,
     onRestore: (snapshot: SourcebookEntryHistoryState) => void
-  ) => {
+  ): void => {
     if (index < 0 || index >= history.length) {
       return;
     }
@@ -80,7 +87,7 @@ export const useSourcebookEntryHistory = ({
     isRestoringRef.current = true;
     onRestore(snapshot);
     setHistoryIndex(index);
-    setTimeout(() => {
+    setTimeout((): void => {
       isRestoringRef.current = false;
     }, 0);
   };

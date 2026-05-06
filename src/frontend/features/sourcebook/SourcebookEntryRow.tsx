@@ -62,8 +62,8 @@ export const SourcebookEntryRow = React.memo(
       >
         <button
           type="button"
-          onClick={() => onClick(entry)}
-          onMouseEnter={(evt: React.MouseEvent<HTMLButtonElement, MouseEvent>) =>
+          onClick={(): void => onClick(entry)}
+          onMouseEnter={(evt: React.MouseEvent<HTMLButtonElement, MouseEvent>): void =>
             onMouseEnter(evt, entry)
           }
           onMouseLeave={onMouseLeave}
@@ -76,7 +76,7 @@ export const SourcebookEntryRow = React.memo(
           <div className={`text-sm truncate ${textClass}`}>{entry.name}</div>
         </button>
         <button
-          onClick={(ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+          onClick={(ev: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
             ev.stopPropagation();
             if (isAutoSelectionEnabled) return;
             onToggle(entry.id, !isChecked);
@@ -105,7 +105,7 @@ export const SourcebookEntryRow = React.memo(
   (
     prevProps: Readonly<SourcebookEntryRowProps>,
     nextProps: Readonly<SourcebookEntryRowProps>
-  ) =>
+  ): boolean =>
     prevProps.entry.id === nextProps.entry.id &&
     prevProps.entry.name === nextProps.entry.name &&
     prevProps.entry.category === nextProps.entry.category &&

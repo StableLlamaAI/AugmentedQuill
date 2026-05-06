@@ -53,7 +53,7 @@ export function useImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null);
 
-  const handleUploadClick = (targetName?: string) => {
+  const handleUploadClick = (targetName?: string): void => {
     setReplaceTarget(targetName || null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -61,7 +61,10 @@ export function useImageUpload({
     }
   };
 
-  const handleUploadFile = async (file: File, replaceTargetName: string | null) => {
+  const handleUploadFile = async (
+    file: File,
+    replaceTargetName: string | null
+  ): Promise<void> => {
     try {
       if (replaceTargetName) {
         if (file.name === replaceTargetName) {
@@ -69,13 +72,13 @@ export function useImageUpload({
           let previousRestoreId = replaced.restore_id || '';
           onRecordHistory?.({
             label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
+            onUndo: async (): Promise<void> => {
               if (previousRestoreId) {
                 await api.projects.restoreImage(previousRestoreId);
                 await loadImages();
               }
             },
-            onRedo: async () => {
+            onRedo: async (): Promise<void> => {
               const redoReplace = await api.projects.uploadImage(
                 file,
                 replaceTargetName
@@ -89,7 +92,7 @@ export function useImageUpload({
           const newFilename = res.filename;
 
           const oldImage = images.find(
-            (i: ImageEntry) => i.filename === replaceTargetName
+            (i: ImageEntry): boolean => i.filename === replaceTargetName
           );
           if (oldImage) {
             await api.projects.updateImage(
@@ -103,7 +106,7 @@ export function useImageUpload({
           let newRestoreId = '';
           onRecordHistory?.({
             label: `Replace image: ${replaceTargetName}`,
-            onUndo: async () => {
+            onUndo: async (): Promise<void> => {
               const deletedNew = await api.projects.deleteImage(newFilename);
               newRestoreId = deletedNew.restore_id || newRestoreId;
               if (oldRestoreId) {
@@ -111,7 +114,7 @@ export function useImageUpload({
               }
               await loadImages();
             },
-            onRedo: async () => {
+            onRedo: async (): Promise<void> => {
               if (!newRestoreId) return;
               const deletedOldAgain = await api.projects.deleteImage(replaceTargetName);
               oldRestoreId = deletedOldAgain.restore_id || oldRestoreId;
@@ -125,12 +128,12 @@ export function useImageUpload({
         let uploadedRestoreId = '';
         onRecordHistory?.({
           label: `Upload image: ${uploaded.filename}`,
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             const deleted = await api.projects.deleteImage(uploaded.filename);
             uploadedRestoreId = deleted.restore_id || '';
             await loadImages();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             if (uploadedRestoreId) {
               await api.projects.restoreImage(uploadedRestoreId);
               await loadImages();
@@ -145,26 +148,28 @@ export function useImageUpload({
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
     await handleUploadFile(file, replaceTarget);
   };
 
-  const handleDelete = async (filename: string) => {
+  const handleDelete = async (filename: string): Promise<void> => {
     if (!(await confirm('Are you sure you want to delete this image?'))) return;
     try {
       const deleted = await api.projects.deleteImage(filename);
       let latestRestoreId = deleted.restore_id || '';
       onRecordHistory?.({
         label: `Delete image: ${filename}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           if (latestRestoreId) {
             await api.projects.restoreImage(latestRestoreId);
             await loadImages();
           }
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           const redoDelete = await api.projects.deleteImage(filename);
           latestRestoreId = redoDelete.restore_id || latestRestoreId;
           await loadImages();
@@ -176,19 +181,19 @@ export function useImageUpload({
     }
   };
 
-  const handleCreatePlaceholder = async () => {
+  const handleCreatePlaceholder = async (): Promise<void> => {
     try {
       const created = await api.projects.createImagePlaceholder('', '');
       await loadImages();
       let restoreId = '';
       onRecordHistory?.({
         label: `Create image placeholder: ${created.filename}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           const deleted = await api.projects.deleteImage(created.filename);
           restoreId = deleted.restore_id || '';
           await loadImages();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           if (restoreId) {
             await api.projects.restoreImage(restoreId);
           } else {

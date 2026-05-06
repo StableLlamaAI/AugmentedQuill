@@ -503,16 +503,16 @@ describe('CodeMirrorEditor', () => {
       });
     });
 
-    describe('softbreak: Backspace removes line-break "  \\n" entirely', () => {
+    describe('softbreak: Backspace removes line-break "  \\n" and joins with single space', () => {
       // "a  \nb" — lb=1; cursor must be > lb to trigger (pos 2..4)
       it('cursor at lb+1', async () => {
-        expect(await softbreakKey('a  \nb', 2, 'Backspace')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 2, 'Backspace')).toBe('a b');
       });
       it('cursor at lb+2', async () => {
-        expect(await softbreakKey('a  \nb', 3, 'Backspace')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 3, 'Backspace')).toBe('a b');
       });
       it('cursor at lb+3 (just after \\n)', async () => {
-        expect(await softbreakKey('a  \nb', 4, 'Backspace')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 4, 'Backspace')).toBe('a b');
       });
       it('cursor at lb+0 does NOT intercept (let default Backspace run)', async () => {
         // Cursor before the sequence: default Backspace deletes 'a'
@@ -611,16 +611,16 @@ describe('CodeMirrorEditor', () => {
       });
     });
 
-    describe('softbreak: Delete removes line-break "  \\n" entirely', () => {
+    describe('softbreak: Delete removes line-break "  \\n" and joins with single space', () => {
       // "a  \nb" — lb=1; cursor must be <= lb+2 to trigger (pos 1..3)
       it('cursor at lb+0 (before first space)', async () => {
-        expect(await softbreakKey('a  \nb', 1, 'Delete')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 1, 'Delete')).toBe('a b');
       });
       it('cursor at lb+1 (between spaces)', async () => {
-        expect(await softbreakKey('a  \nb', 2, 'Delete')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 2, 'Delete')).toBe('a b');
       });
       it('cursor at lb+2 (before \\n)', async () => {
-        expect(await softbreakKey('a  \nb', 3, 'Delete')).toBe('ab');
+        expect(await softbreakKey('a  \nb', 3, 'Delete')).toBe('a b');
       });
       it('cursor at lb+3 does NOT intercept (let default Delete run)', async () => {
         // Cursor after the sequence: default Delete removes 'b'

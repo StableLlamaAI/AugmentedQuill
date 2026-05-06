@@ -77,8 +77,8 @@ export function MetadataEditorDialog({
     aiDisabledReason,
   });
 
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
+  useEffect((): (() => void) => {
+    const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
         void state.handleClose();
@@ -86,10 +86,10 @@ export function MetadataEditorDialog({
     };
 
     document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    return (): void => document.removeEventListener('keydown', handleEscape);
   }, [state]);
 
-  const handleEditorUndoRedo = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleEditorUndoRedo = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const isCtrlOrMeta = event.ctrlKey || event.metaKey;
     if (!isCtrlOrMeta) return;
     const isUndo = !event.shiftKey && event.key === 'z';
@@ -139,7 +139,7 @@ export function MetadataEditorDialog({
       privateNotesHighlightRanges={state.privateNotesHighlightRanges}
       getConflictRanges={state.getConflictRanges}
       onSetIsFullscreen={state.setIsFullscreen}
-      onToggleShowDiff={() => state.setShowDiff((value: boolean) => !value)}
+      onToggleShowDiff={() => state.setShowDiff((value: boolean): boolean => !value)}
       onRestoreHistory={state.restoreMetadataHistory}
       onClose={state.handleClose}
       onSetActiveTab={state.setActiveTab}

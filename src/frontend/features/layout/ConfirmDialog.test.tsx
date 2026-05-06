@@ -94,8 +94,8 @@ describe('ConfirmDialog accessibility', () => {
     const dialogs = screen.getAllByRole('dialog');
     const dialog = dialogs[dialogs.length - 1];
     expect(dialog).toBeTruthy();
-    const cancelButton = within(dialog).getByText('Cancel');
-    const confirmButton = within(dialog).getByText('OK');
+    const _cancelButton = within(dialog).getByText('Cancel');
+    const _confirmButton = within(dialog).getByText('OK');
 
     expect(dialog.contains(document.activeElement)).toBe(true);
 

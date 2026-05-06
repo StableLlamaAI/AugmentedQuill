@@ -11,7 +11,17 @@
 
 import { fetchJson, projectEndpoint } from './shared';
 
-export const createSettingsApi = (projectName: string) => ({
+export interface SettingsApi {
+  getPrompts: (modelName?: string) => Promise<{
+    ok: boolean;
+    system_messages: Record<string, string>;
+    user_prompts: Record<string, string>;
+    languages?: string[];
+    project_language?: string;
+  }>;
+}
+
+export const createSettingsApi = (projectName: string): SettingsApi => ({
   getPrompts: async (modelName?: string) => {
     const path = modelName
       ? `${projectEndpoint(projectName, '/prompts')}?model_name=${encodeURIComponent(modelName)}`

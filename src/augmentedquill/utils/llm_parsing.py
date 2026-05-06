@@ -78,9 +78,12 @@ def _sanitize_visible_prose(content: str) -> str:
 
     # Remove inline thought/thinking sections (closed and unclosed).
     cleaned = re.sub(
-        r"<(thought|thinking)>.*?</\1>", "", cleaned, flags=re.IGNORECASE | re.DOTALL
+        r"<(thought|thinking|think)>.*?</\1>",
+        "",
+        cleaned,
+        flags=re.IGNORECASE | re.DOTALL,
     )
-    cleaned = re.sub(r"<(thought|thinking)>.*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<(thought|thinking|think)>.*$", "", cleaned, flags=re.IGNORECASE)
 
     # Remove channel protocol tokens, keep actual prose.
     cleaned = re.sub(r"<\|?channel\|?>", "", cleaned, flags=re.IGNORECASE)
@@ -116,6 +119,7 @@ def _sanitize_visible_prose(content: str) -> str:
     if cleaned.strip().lower() in {
         "thought",
         "thinking",
+        "think",
         "analysis",
         "reasoning",
         "final",
@@ -439,7 +443,7 @@ def extract_thinking_from_content(content: str) -> str:
         return ""
 
     match = re.search(
-        r"<(thought|thinking)>(.*?)</\1>",
+        r"<(thought|thinking|think)>(.*?)</\1>",
         content,
         re.DOTALL | re.IGNORECASE,
     )
@@ -568,7 +572,12 @@ def parse_stream_channel_fragments(
         cleaned_piece = _sanitize_visible_prose(piece)
         if cleaned_piece is None or cleaned_piece == "":
             continue
-        if cleaned_piece.strip().lower() in {"thought", "thinking", "analysis"}:
+        if cleaned_piece.strip().lower() in {
+            "thought",
+            "thinking",
+            "think",
+            "analysis",
+        }:
             continue
         events.append({"content": cleaned_piece})
 

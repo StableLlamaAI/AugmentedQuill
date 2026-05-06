@@ -10,8 +10,9 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../layout/ThemeContext';
-import { FileText, Book, Info, ScrollText, User } from 'lucide-react';
+import { FileText, Book, Info, ScrollText } from 'lucide-react';
 
 export type SessionMutation = {
   id: string;
@@ -29,8 +30,9 @@ interface MutationTagsProps {
 export const MutationTags: React.FC<MutationTagsProps> = ({
   mutations,
   onMutationClick,
-}: MutationTagsProps) => {
+}: MutationTagsProps): React.ReactElement | null => {
   const { isLight } = useTheme();
+  const { t } = useTranslation();
 
   if (mutations.length === 0) return null;
 
@@ -40,7 +42,7 @@ export const MutationTags: React.FC<MutationTagsProps> = ({
   const textClass = isLight ? 'text-amber-800' : 'text-amber-200';
   const hoverClass = isLight ? 'hover:bg-amber-100' : 'hover:bg-amber-800/40';
 
-  const getIcon = (type: SessionMutation['type']) => {
+  const getIcon = (type: SessionMutation['type']): React.ReactElement => {
     switch (type) {
       case 'story':
       case 'chapter':
@@ -62,14 +64,14 @@ export const MutationTags: React.FC<MutationTagsProps> = ({
         <button
           type="button"
           key={m.id}
-          onClick={(event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+          onClick={(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
             event.preventDefault();
             onMutationClick(m);
           }}
           className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-medium transition-colors ${bgClass} ${textClass} ${hoverClass}`}
         >
           {getIcon(m.type)}
-          <span>{m.label}</span>
+          <span>{t(m.label)}</span>
         </button>
       ))}
     </div>

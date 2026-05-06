@@ -9,7 +9,6 @@
 
 from typing import Any
 
-import json as _json
 import os
 
 from pydantic import BaseModel, Field
@@ -21,6 +20,7 @@ from augmentedquill.services.chat.chat_tool_decorator import (
     EDITING_ROLE,
     chat_tool,
 )
+from augmentedquill.services.projects.project_helpers import _snap_to_boundary
 from augmentedquill.services.projects.projects import (
     get_active_project_dir,
     read_book_content as _read_book_content,
@@ -33,6 +33,14 @@ from augmentedquill.services.projects.projects import (
     write_scratchpad as _write_scratchpad,
     read_editing_scratchpad as _read_editing_scratchpad,
     write_editing_scratchpad as _write_editing_scratchpad,
+)
+from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    ConflictListPatch,
+    StringListPatch,
+    TextPatch,
+    apply_conflict_list_patch,
+    apply_string_list_patch,
+    apply_text_patch,
 )
 
 # Pydantic models for tool parameters
@@ -50,10 +58,26 @@ class UpdateStoryMetadataParams(BaseModel):
     title: str | None = Field(None, description="The new story title")
     summary: str | None = Field(None, description="The new story summary")
     notes: str | None = Field(None, description="General notes for the story")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing summary.",
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing notes.",
+    )
     tags: list[str] | None = Field(None, description="List of tags for the story")
+    tags_patch: StringListPatch | None = Field(
+        None,
+        description="Optional patch operation for tags (add/remove/set/clear).",
+    )
     conflicts: list[dict] | None = Field(
         None,
         description="List of active story conflicts with description and optional resolution.",
+    )
+    conflicts_patch: ConflictListPatch | None = Field(
+        None,
+        description="Optional ordered operations for partial conflict updates.",
     )
 
 
@@ -62,11 +86,15 @@ class ReadStoryContentParams(BaseModel):
 
     start: int = Field(
         0,
-        description="Starting character index (0-based).",
+        description="Starting character index (0-based). Ignored when read_from_end=True.",
     )
     max_chars: int = Field(
         8000,
         description="Maximum number of characters to return (max 8000).",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -89,6 +117,14 @@ class UpdateBookMetadataParams(BaseModel):
     title: str | None = Field(None, description="The new book title")
     summary: str | None = Field(None, description="The new book summary")
     notes: str | None = Field(None, description="General notes for the book")
+    summary_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing summary.",
+    )
+    notes_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing notes.",
+    )
 
 
 class ReadBookContentParams(BaseModel):
@@ -97,11 +133,15 @@ class ReadBookContentParams(BaseModel):
     book_id: str = Field(..., description="The UUID of the book")
     start: int = Field(
         0,
-        description="Starting character index (0-based).",
+        description="Starting character index (0-based). Ignored when read_from_end=True.",
     )
     max_chars: int = Field(
         8000,
         description="Maximum number of characters to return (max 8000).",
+    )
+    read_from_end: bool = Field(
+        False,
+        description="When True, return the last max_chars characters instead of reading from start. Useful for reading the most recent prose before appending.",
     )
 
 
@@ -112,24 +152,6 @@ class WriteBookContentParams(BaseModel):
     content: str = Field(..., description="The new content for the book")
 
 
-class GetStorySummaryParams(BaseModel):
-    """Parameters for get_story_summary (no parameters needed)."""
-
-    pass
-
-
-class GetStoryTagsParams(BaseModel):
-    """Parameters for get_story_tags (no parameters needed)."""
-
-    pass
-
-
-class SetStoryTagsParams(BaseModel):
-    """Parameters for setting story tags."""
-
-    tags: list[str] = Field(..., description="Array of tag strings")
-
-
 class SyncStorySummaryParams(BaseModel):
     """Parameters for auto-generating story summary."""
 
@@ -137,12 +159,6 @@ class SyncStorySummaryParams(BaseModel):
         "",
         description="Generation mode: 'discard' (new from scratch) or 'update' (refine existing). Empty string defaults to 'update'.",
     )
-
-
-class WriteStorySummaryParams(BaseModel):
-    """Parameters for directly setting story summary."""
-
-    summary: str = Field(..., description="The new story summary text")
 
 
 class ReadScratchpadParams(BaseModel):
@@ -207,7 +223,11 @@ async def get_story_metadata(
 
 
 @chat_tool(
-    description="Update story-level metadata such as title, summary, notes, or tags. Provide only the fields you want to change.",
+    description=(
+        "Update story-level metadata such as title, summary, notes, tags, and conflicts. "
+        "Use *_patch fields (notes_patch, summary_patch, tags_patch, conflicts_patch) for "
+        "safe partial edits that keep untouched content."
+    ),
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-write",
 )
@@ -215,19 +235,43 @@ async def update_story_metadata(
     params: UpdateStoryMetadataParams, payload: dict, mutations: dict
 ) -> Any:
     """Update Story Metadata."""
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            story.get("story_summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(story.get("notes", ""), params.notes_patch)
+
+    tags_value = params.tags
+    if params.tags_patch is not None:
+        tags_value = apply_string_list_patch(story.get("tags") or [], params.tags_patch)
+
+    conflicts_value = params.conflicts
+    if params.conflicts_patch is not None:
+        conflicts_value = apply_conflict_list_patch(
+            story.get("conflicts") or [],
+            params.conflicts_patch,
+        )
+
     _update_story_metadata(
         title=params.title,
-        summary=params.summary,
-        notes=params.notes,
-        tags=params.tags,
-        conflicts=params.conflicts,
+        summary=summary_value,
+        notes=notes_value,
+        tags=tags_value,
+        conflicts=conflicts_value,
     )
     mutations["story_changed"] = True
     return {"ok": True, "message": "Story metadata updated successfully"}
 
 
 @chat_tool(
-    description="Read the story-level introduction or content file.",
+    description="Read the story-level introduction or content file. Use read_from_end=True to read the last max_chars characters, which is recommended before appending prose.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
 )
@@ -236,14 +280,21 @@ async def read_story_content(
 ) -> Any:
     """Read story content."""
     content = _read_story_content() or ""
-    start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
-    end = min(len(content), start + max_chars)
+    total = len(content)
+    if params.read_from_end:
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(content, raw_start, forward=False)
+        end = total
+    else:
+        start = max(0, params.start)
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(content, raw_end, forward=True))
     return {
         "content": content[start:end],
         "start": start,
         "end": end,
-        "total": len(content),
+        "total": total,
     }
 
 
@@ -292,7 +343,10 @@ async def get_book_metadata(
 
 
 @chat_tool(
-    description="Update the title, summary, or notes of a specific book. Provide only the fields you want to change.",
+    description=(
+        "Update the title, summary, or notes of a specific book. "
+        "Use summary_patch/notes_patch for safe partial edits that preserve remaining text."
+    ),
     allowed_roles=(CHAT_ROLE,),
     capability="metadata-write",
     project_types=("series",),
@@ -301,15 +355,40 @@ async def update_book_metadata(
     params: UpdateBookMetadataParams, payload: dict, mutations: dict
 ) -> Any:
     """Update Book Metadata."""
+    active = get_active_project_dir()
+    story = load_story_config((active / "story.json") if active else None) or {}
+    books = story.get("books", [])
+
+    book_id = os.path.basename(params.book_id) if params.book_id else ""
+    target = next(
+        (b for b in books if b.get("id") == book_id or b.get("folder") == book_id),
+        None,
+    )
+    if not target:
+        return {"error": f"Book ID {book_id} not found"}
+
+    summary_value = params.summary
+    if params.summary_patch is not None:
+        summary_value = apply_text_patch(
+            target.get("summary", ""), params.summary_patch
+        )
+
+    notes_value = params.notes
+    if params.notes_patch is not None:
+        notes_value = apply_text_patch(target.get("notes", ""), params.notes_patch)
+
     _update_book_metadata(
-        params.book_id, title=params.title, summary=params.summary, notes=params.notes
+        params.book_id,
+        title=params.title,
+        summary=summary_value,
+        notes=notes_value,
     )
     mutations["story_changed"] = True
     return {"ok": True}
 
 
 @chat_tool(
-    description="Read the content file for a specific book.",
+    description="Read the content file for a specific book. Use read_from_end=True to read the last max_chars characters.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="metadata-read",
     project_types=("series",),
@@ -319,14 +398,21 @@ async def read_book_content(
 ) -> Any:
     """Read book content."""
     content = _read_book_content(params.book_id) or ""
-    start = max(0, params.start)
     max_chars = max(1, min(8000, params.max_chars))
-    end = min(len(content), start + max_chars)
+    total = len(content)
+    if params.read_from_end:
+        raw_start = max(0, total - max_chars)
+        start = _snap_to_boundary(content, raw_start, forward=False)
+        end = total
+    else:
+        start = max(0, params.start)
+        raw_end = min(total, start + max_chars)
+        end = min(total, _snap_to_boundary(content, raw_end, forward=True))
     return {
         "content": content[start:end],
         "start": start,
         "end": end,
-        "total": len(content),
+        "total": total,
     }
 
 
@@ -431,45 +517,6 @@ async def write_scratchpad(
     return {"ok": True}
 
 
-async def get_story_summary_tool(
-    params: GetStorySummaryParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use get_story_metadata instead."""
-    active = get_active_project_dir()
-    story = load_story_config((active / "story.json") if active else None) or {}
-    summary = story.get("story_summary", "")
-    return {"story_summary": summary}
-
-
-async def get_story_tags(
-    params: GetStoryTagsParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use get_story_metadata instead."""
-    active = get_active_project_dir()
-    story = load_story_config((active / "story.json") if active else None) or {}
-    tags = story.get("tags", [])
-    return {"tags": tags}
-
-
-async def set_story_tags(
-    params: SetStoryTagsParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use update_story_metadata instead."""
-    active = get_active_project_dir()
-    if not active:
-        return {"error": "No active project"}
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    story["tags"] = params.tags
-
-    with open(story_path, "w", encoding="utf-8") as f:
-        _json.dump(story, f, indent=2, ensure_ascii=False)
-
-    mutations["story_changed"] = True
-    return {"tags": params.tags, "message": "Story tags updated successfully"}
-
-
 @chat_tool(
     description=(
         "Auto-generate a story summary from the current project prose context using AI. "
@@ -489,25 +536,6 @@ async def sync_story_summary(
     data = await generate_story_summary(mode=params.mode)
     mutations["story_changed"] = True
     return data
-
-
-async def write_story_summary(
-    params: WriteStorySummaryParams, payload: dict, mutations: dict
-) -> Any:
-    """Deprecated: use update_story_metadata with summary= instead."""
-    active = get_active_project_dir()
-    if not active:
-        return {"error": "No active project"}
-
-    story_path = active / "story.json"
-    story = load_story_config(story_path) or {}
-    story["story_summary"] = params.summary.strip()
-
-    with open(story_path, "w", encoding="utf-8") as f:
-        _json.dump(story, f, indent=2, ensure_ascii=False)
-
-    mutations["story_changed"] = True
-    return {"summary": params.summary, "message": "Story summary updated successfully"}
 
 
 # ---------------------------------------------------------------------------

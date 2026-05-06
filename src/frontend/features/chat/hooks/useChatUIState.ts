@@ -31,11 +31,13 @@ export function useChatUIState(): UseChatUIStateResult {
     Record<string, boolean>
   >({});
 
-  const handleThinkingToggle = useCallback((id: string, next: boolean) => {
-    setThinkingProcessExpanded((prev: Record<string, boolean>) => ({
-      ...prev,
-      [id]: next,
-    }));
+  const handleThinkingToggle = useCallback((id: string, next: boolean): void => {
+    setThinkingProcessExpanded(
+      (prev: Record<string, boolean>): { [x: string]: boolean } => ({
+        ...prev,
+        [id]: next,
+      })
+    );
   }, []);
 
   return {

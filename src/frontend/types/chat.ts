@@ -48,4 +48,5 @@ export interface ChatSession {
   allowWebSearch?: boolean;
   scratchpad?: string;
   editing_scratchpad?: string;
+  projectContextRevision?: number | null;
 }

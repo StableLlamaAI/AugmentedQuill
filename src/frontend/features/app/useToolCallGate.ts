@@ -31,10 +31,12 @@ export function useToolCallGate(): UseToolCallGateResult {
 
   const requestToolCallLoopAccess = (count: number): Promise<ToolCallChoice> =>
     new Promise(
-      (resolve: (value: ToolCallChoice | PromiseLike<ToolCallChoice>) => void) => {
+      (
+        resolve: (value: ToolCallChoice | PromiseLike<ToolCallChoice>) => void
+      ): void => {
         setToolCallLoopDialog({
           count,
-          resolver: (choice: ToolCallChoice) => {
+          resolver: (choice: ToolCallChoice): void => {
             setToolCallLoopDialog(null);
             resolve(choice);
           },

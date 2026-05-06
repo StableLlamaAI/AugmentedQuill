@@ -61,7 +61,9 @@ export function useSourcebookListMutations({
   handleDelete: (id: string) => Promise<void>;
 } {
   const syncEntries = useCallback(
-    async (updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]) => {
+    async (
+      updater?: (previous: SourcebookEntry[]) => SourcebookEntry[]
+    ): Promise<void> => {
       if (Array.isArray(externalEntries)) {
         if (search.trim()) {
           await loadEntries(search);
@@ -69,11 +71,11 @@ export function useSourcebookListMutations({
         }
 
         if (updater) {
-          setEntries((prev: SourcebookEntry[]) =>
+          setEntries((prev: SourcebookEntry[]): SourcebookEntry[] =>
             filterSourcebookEntries(updater(prev), search)
           );
         } else {
-          setEntries((prev: SourcebookEntry[]) => {
+          setEntries((prev: SourcebookEntry[]): SourcebookEntry[] => {
             const resolved = resolveExternalSourcebookEntries(externalEntries, prev);
             return filterSourcebookEntries(resolved, search);
           });
@@ -87,17 +89,20 @@ export function useSourcebookListMutations({
   );
 
   const handleCreate = useCallback(
-    async (entry: SourcebookUpsertPayload) => {
+    async (entry: SourcebookUpsertPayload): Promise<void> => {
       const created = await createSourcebookEntry(entry);
-      await syncEntries((prev: SourcebookEntry[]) => [...prev, created]);
+      await syncEntries((prev: SourcebookEntry[]): SourcebookEntry[] => [
+        ...prev,
+        created,
+      ]);
       let createdId = created.id;
       await onMutated?.({
         label: `Create sourcebook entry: ${entry.name}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           await deleteSourcebookEntry(createdId);
           await loadEntries();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           const recreated = await createSourcebookEntry(entry);
           createdId = recreated.id;
           await loadEntries();
@@ -105,7 +110,7 @@ export function useSourcebookListMutations({
         entryId: created.id,
         entryExistsInBaseline: Boolean(
           baselineEntries?.some(
-            (baselineEntry: SourcebookEntry) => baselineEntry.id === created.id
+            (baselineEntry: SourcebookEntry): boolean => baselineEntry.id === created.id
           )
         ),
         updatedEntry: created,
@@ -115,15 +120,17 @@ export function useSourcebookListMutations({
   );
 
   const handleUpdate = useCallback(
-    async (entry: SourcebookUpsertPayload) => {
+    async (entry: SourcebookUpsertPayload): Promise<void> => {
       if (!entry.id) {
         return;
       }
 
-      const previous = entries.find((value: SourcebookEntry) => value.id === entry.id);
+      const previous = entries.find(
+        (value: SourcebookEntry): boolean => value.id === entry.id
+      );
       const previousId = entry.id;
       const updated = await updateSourcebookEntry(entry.id, entry);
-      await syncEntries((prev: SourcebookEntry[]) =>
+      await syncEntries((prev: SourcebookEntry[]): SourcebookEntry[] =>
         updateSourcebookEntryInList(prev, previousId, updated)
       );
 
@@ -136,13 +143,13 @@ export function useSourcebookListMutations({
 
       const entryExistsInBaseline = Boolean(
         baselineEntries?.some(
-          (baselineEntry: SourcebookEntry) => baselineEntry.id === entry.id
+          (baselineEntry: SourcebookEntry): boolean => baselineEntry.id === entry.id
         )
       );
       let activeId = updated.id;
       await onMutated?.({
         label: `Update sourcebook entry: ${entry.name}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           const reverted = await updateSourcebookEntry(activeId, {
             name: previous.name,
             synonyms: previous.synonyms,
@@ -155,7 +162,7 @@ export function useSourcebookListMutations({
           activeId = reverted.id;
           await loadEntries();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           const redone = await updateSourcebookEntry(activeId, {
             name: entry.name,
             synonyms: entry.synonyms,
@@ -184,11 +191,13 @@ export function useSourcebookListMutations({
   );
 
   const handleDelete = useCallback(
-    async (id: string) => {
-      const deletedEntry = entries.find((entry: SourcebookEntry) => entry.id === id);
+    async (id: string): Promise<void> => {
+      const deletedEntry = entries.find(
+        (entry: SourcebookEntry): boolean => entry.id === id
+      );
       await deleteSourcebookEntry(id);
-      await syncEntries((prev: SourcebookEntry[]) =>
-        prev.filter((entry: SourcebookEntry) => entry.id !== id)
+      await syncEntries((prev: SourcebookEntry[]): SourcebookEntry[] =>
+        prev.filter((entry: SourcebookEntry): boolean => entry.id !== id)
       );
       if (!deletedEntry) {
         return;
@@ -196,13 +205,14 @@ export function useSourcebookListMutations({
 
       const entryExistsInBaseline = Boolean(
         baselineEntries?.some(
-          (baselineEntry: SourcebookEntry) => baselineEntry.id === deletedEntry.id
+          (baselineEntry: SourcebookEntry): boolean =>
+            baselineEntry.id === deletedEntry.id
         )
       );
       let activeId = deletedEntry.id;
       await onMutated?.({
         label: `Delete sourcebook entry: ${deletedEntry.name}`,
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           const restored = await createSourcebookEntry({
             id: deletedEntry.id,
             name: deletedEntry.name,
@@ -216,7 +226,7 @@ export function useSourcebookListMutations({
           activeId = restored.id;
           await loadEntries();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           await deleteSourcebookEntry(activeId);
           await loadEntries();
         },

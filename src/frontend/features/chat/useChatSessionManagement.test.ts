@@ -48,6 +48,7 @@ describe('useChatSessionManagement', () => {
       chatHistoryList: [],
       currentChatId: null,
       incognitoSessions: [],
+      projectContextRevision: null,
       isIncognito: false,
       allowWebSearch: false,
       systemPrompt: '',
@@ -56,7 +57,7 @@ describe('useChatSessionManagement', () => {
   });
 
   it('creates an incognito session with expected defaults', async () => {
-    const getSystemPrompt = () => 'System Prompt';
+    const getSystemPrompt = (): string => 'System Prompt';
 
     const { result } = renderHook(() =>
       useChatSessionManagement({
@@ -80,7 +81,7 @@ describe('useChatSessionManagement', () => {
   });
 
   it('loads a persisted chat and applies prompt/search settings', async () => {
-    const getSystemPrompt = () => 'System Prompt';
+    const getSystemPrompt = (): string => 'System Prompt';
     vi.mocked(api.chat.load).mockResolvedValue({
       id: 'chat-1',
       name: 'Saved Chat',
@@ -88,6 +89,7 @@ describe('useChatSessionManagement', () => {
       systemPrompt: 'Saved prompt',
       allowWebSearch: true,
       scratchpad: 'My Scratch',
+      projectContextRevision: 17,
     } as ChatSession);
 
     const { result } = renderHook(() =>
@@ -110,13 +112,14 @@ describe('useChatSessionManagement', () => {
     expect(useChatStore.getState().isIncognito).toBe(false);
     expect(useChatStore.getState().systemPrompt).toBe('Saved prompt');
     expect(useChatStore.getState().scratchpad).toBe('My Scratch');
+    expect(useChatStore.getState().projectContextRevision).toBe(17);
     expect(useChatStore.getState().chatMessages).toEqual([
       { id: 'm1', role: 'user', text: 'hello' },
     ]);
   });
 
   it('restores incognito scratchpad when selecting an incognito chat', async () => {
-    const getSystemPrompt = () => 'System Prompt';
+    const getSystemPrompt = (): string => 'System Prompt';
 
     useChatStore.setState({
       incognitoSessions: [
@@ -128,6 +131,7 @@ describe('useChatSessionManagement', () => {
           isIncognito: true,
           allowWebSearch: true,
           scratchpad: 'Incognito memory',
+          projectContextRevision: 9,
         },
       ],
       scratchpad: '',
@@ -147,13 +151,61 @@ describe('useChatSessionManagement', () => {
     expect(useChatStore.getState().isIncognito).toBe(true);
     expect(useChatStore.getState().currentChatId).toBe('inc-1');
     expect(useChatStore.getState().scratchpad).toBe('Incognito memory');
+    expect(useChatStore.getState().projectContextRevision).toBe(9);
+  });
+
+  it('clears session mutation tags when a new chat is started', () => {
+    const getSystemPrompt = (): string => 'System Prompt';
+    useChatStore.setState({
+      sessionMutations: [{ type: 'chapter', label: 'Updated chapter', targetId: '1' }],
+    });
+
+    const { result } = renderHook(() =>
+      useChatSessionManagement({
+        storyId: '',
+        getSystemPrompt,
+      })
+    );
+
+    act(() => {
+      result.current.handleNewChat(false);
+    });
+
+    expect(useChatStore.getState().sessionMutations).toEqual([]);
+  });
+
+  it('clears session mutation tags when selecting a persisted chat', async () => {
+    const getSystemPrompt = (): string => 'System Prompt';
+    useChatStore.setState({
+      sessionMutations: [{ type: 'chapter', label: 'Updated chapter', targetId: '1' }],
+    });
+    vi.mocked(api.chat.load).mockResolvedValue({
+      id: 'chat-1',
+      name: 'Saved Chat',
+      messages: [],
+      systemPrompt: 'Saved prompt',
+      allowWebSearch: false,
+      scratchpad: '',
+    } as ChatSession);
+
+    const { result } = renderHook(() =>
+      useChatSessionManagement({
+        storyId: '',
+        getSystemPrompt,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleSelectChat('chat-1');
+    });
+
+    expect(useChatStore.getState().sessionMutations).toEqual([]);
   });
 
   it('auto-saves non-incognito scratchpad updates even without messages', async () => {
     vi.useFakeTimers();
     try {
-      const getSystemPrompt = () => 'System Prompt';
-
+      const getSystemPrompt = (): string => 'System Prompt';
       const { result } = renderHook(() =>
         useChatSessionManagement({
           storyId: '',
@@ -180,6 +232,7 @@ describe('useChatSessionManagement', () => {
           messages: [],
           allowWebSearch: false,
           scratchpad: 'Persistent memory text',
+          projectContextRevision: null,
         })
       );
     } finally {

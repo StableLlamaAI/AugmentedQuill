@@ -31,15 +31,15 @@ export function resolveActiveProviderConfigs(appSettings: AppSettings): {
   return {
     activeChatConfig:
       appSettings.providers.find(
-        (p: LLMConfig) => p.id === appSettings.activeChatProviderId
+        (p: LLMConfig): boolean => p.id === appSettings.activeChatProviderId
       ) || fallback,
     activeWritingConfig:
       appSettings.providers.find(
-        (p: LLMConfig) => p.id === appSettings.activeWritingProviderId
+        (p: LLMConfig): boolean => p.id === appSettings.activeWritingProviderId
       ) || fallback,
     activeEditingConfig:
       appSettings.providers.find(
-        (p: LLMConfig) => p.id === appSettings.activeEditingProviderId
+        (p: LLMConfig): boolean => p.id === appSettings.activeEditingProviderId
       ) || fallback,
   };
 }
@@ -54,9 +54,12 @@ export function resolveRoleAvailability(
   chat: boolean;
 } {
   const byId = new Map(
-    appSettings.providers.map((provider: LLMConfig) => [provider.id, provider])
+    appSettings.providers.map((provider: LLMConfig): [string, LLMConfig] => [
+      provider.id,
+      provider,
+    ])
   );
-  const isAvailable = (providerId: string) => {
+  const isAvailable = (providerId: string): boolean => {
     const provider = byId.get(providerId);
     if (!provider) return false;
     if (!(provider.modelId || '').trim()) return false;
@@ -77,7 +80,7 @@ export function supportsImageActions(
   modelConnectionStatus: Record<string, ConnectionStatus>
 ): boolean {
   const activeChatProvider = appSettings.providers.find(
-    (provider: LLMConfig) => provider.id === appSettings.activeChatProviderId
+    (provider: LLMConfig): boolean => provider.id === appSettings.activeChatProviderId
   );
   if (!activeChatProvider) return false;
   if (modelConnectionStatus[activeChatProvider.id] !== 'success') return false;

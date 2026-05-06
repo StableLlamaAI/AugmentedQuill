@@ -130,13 +130,13 @@ describe('useFocusTrap', () => {
      * This verifies the jsdom low-level guarantee relied on by useFocusTrap.
      */
     const calls: string[] = [];
-    const handler1 = (e: KeyboardEvent) => {
+    const handler1 = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         calls.push('handler1');
         e.stopImmediatePropagation();
       }
     };
-    const handler2 = (e: KeyboardEvent) => {
+    const handler2 = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') calls.push('handler2');
     };
 

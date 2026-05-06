@@ -14,7 +14,7 @@ import { initReactI18next } from 'react-i18next';
 import { resources } from './locales/index';
 
 // Infer default language from browser
-export const detectBrowserLanguage = () => {
+export const detectBrowserLanguage = (): string => {
   if (typeof window !== 'undefined' && window.navigator) {
     const lang = window.navigator.language;
     return lang.split('-')[0] || 'en';

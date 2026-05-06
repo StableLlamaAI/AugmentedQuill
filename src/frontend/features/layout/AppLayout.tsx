@@ -129,7 +129,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {isDebugLogsOpen && (
             <DebugLogs
               isOpen={isDebugLogsOpen}
-              onClose={() => setIsDebugLogsOpen(false)}
+              onClose={(): void => setIsDebugLogsOpen(false)}
               theme={currentTheme}
             />
           )}
@@ -138,7 +138,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             isOpen={!!toolCallLoopDialog}
             count={toolCallLoopDialog?.count ?? 0}
             theme={currentTheme}
-            onResolve={(choice: 'stop' | 'continue' | 'unlimited') =>
+            onResolve={(choice: 'stop' | 'continue' | 'unlimited'): void | undefined =>
               toolCallLoopDialog?.resolver(choice)
             }
           />

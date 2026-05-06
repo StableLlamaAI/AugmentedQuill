@@ -56,6 +56,13 @@ class SetImageMetadataParams(BaseModel):
 
 async def _tool_generate_image_description(filename: str, payload: dict) -> str:
     """Tool Generate Image Description."""
+    from augmentedquill.core.config import load_story_config
+    from augmentedquill.core.prompts import (
+        get_system_message,
+        get_user_prompt,
+        load_model_prompt_overrides,
+    )
+    from augmentedquill.services.projects.projects import get_active_project_dir
     from augmentedquill.services.llm import llm
     from augmentedquill.utils.image_helpers import get_images_dir, update_image_metadata
 
@@ -98,15 +105,30 @@ async def _tool_generate_image_description(filename: str, payload: dict) -> str:
         with open(img_path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode("utf-8")
 
+        active = get_active_project_dir()
+        story = load_story_config((active / "story.json") if active else None) or {}
+        project_lang = str(story.get("language", "en") or "en")
+
+        from augmentedquill.core.config import BASE_DIR, load_machine_config
+
+        machine_config = load_machine_config(BASE_DIR / "config" / "machine.json") or {}
+        model_overrides = load_model_prompt_overrides(machine_config, model_name)
+        system_prompt = get_system_message(
+            "image_describer",
+            model_overrides,
+            language=project_lang,
+        )
+        user_prompt = get_user_prompt("image_describer_request", language=project_lang)
+
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful assistant that describes images. Provide a detailed description of the image.",
+                "content": system_prompt,
             },
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Describe this image."},
+                    {"type": "text", "text": user_prompt},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},

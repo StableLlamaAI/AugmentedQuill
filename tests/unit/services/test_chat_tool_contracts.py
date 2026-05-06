@@ -7,6 +7,7 @@
 
 """Validates all LLM-callable chat tools for successful execution and graceful handling of malformed and invalid tool-call inputs."""
 
+import datetime
 import json
 import os
 import tempfile
@@ -20,7 +21,11 @@ from fastapi.testclient import TestClient
 import augmentedquill.main as main
 from augmentedquill.services.chat.chat_tools_schema import get_story_tools
 from augmentedquill.services.chat.chat_tool_decorator import get_registered_tool_schemas
-from augmentedquill.services.projects.projects import select_project
+from augmentedquill.services.projects.project_snapshots import capture_project_snapshot
+from augmentedquill.services.projects.projects import (
+    get_active_project_dir,
+    select_project,
+)
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
 )
@@ -43,6 +48,7 @@ class ChatToolContractsTest(TestCase):
     _SPECIAL_CASE_MUTATION_TOOLS = {
         # Covered with nested-tool-call behavior assertions in test_chat_tools.py
         "call_editing_assistant",
+        "undo_last_tool_changes",
     }
 
     _READ_ONLY_TOOLS = {
@@ -432,6 +438,28 @@ class ChatToolContractsTest(TestCase):
         if tool_name in {"delete_project", "delete_book", "delete_chapter"}:
             built["confirm"] = base["confirm"]
 
+        if tool_name == "undo_last_tool_changes":
+            built["scope"] = "last_call"
+            batch_id = "undo_last_tool_changes"
+            project_dir = get_active_project_dir()
+            if project_dir is not None:
+                batch_dir = project_dir / ".aq_history" / "chat_tool_batches" / batch_id
+                if not batch_dir.exists():
+                    batch_dir.mkdir(parents=True, exist_ok=True)
+                    snapshot = capture_project_snapshot(project_dir)
+                    metadata = {
+                        "batch_id": batch_id,
+                        "created_at": datetime.datetime.now().isoformat(),
+                        "tool_names": [tool_name],
+                        "changed_chapter_ids": [],
+                        "before": snapshot,
+                        "after": snapshot,
+                    }
+                    (batch_dir / "batch.json").write_text(
+                        json.dumps(metadata), encoding="utf-8"
+                    )
+            built["batch_ids"] = [batch_id]
+
         if invalid:
             invalid_overrides = {
                 "chap_id": 999999,
@@ -533,6 +561,26 @@ class ChatToolContractsTest(TestCase):
             "get_project_overview", {"include_notes": {"unexpected": True}}
         )
         self._assert_invalid_parameters("get_project_overview", invalid)
+
+    def test_get_project_overview_hides_chapter_filenames(self):
+        content = self._call_tool("get_project_overview", {"include_notes": True})
+
+        def _assert_no_storage_file_keys(value):
+            if isinstance(value, dict):
+                self.assertNotIn("filename", value)
+                self.assertNotIn("content_file", value)
+                for nested in value.values():
+                    _assert_no_storage_file_keys(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    _assert_no_storage_file_keys(nested)
+
+        _assert_no_storage_file_keys(content)
+
+    def test_get_chapter_metadata_hides_filename(self):
+        content = self._call_tool("get_chapter_metadata", {"chap_id": 1})
+        chapter = content.get("chapter") or {}
+        self.assertNotIn("filename", chapter)
 
     def test_tool_registry_filters_by_model_role(self):
         writing_tools = {
@@ -910,3 +958,123 @@ class ChatToolContractsTest(TestCase):
             self.assertTrue(
                 (change_payload.get("mutations") or {}).get("story_changed")
             )
+
+    def _get_tool_properties(
+        self, tool_name: str, project_type: str = "short-story"
+    ) -> set[str]:
+        tools = get_registered_tool_schemas(
+            model_type="CHAT", project_type=project_type
+        )
+        tool = next((t for t in tools if t["function"]["name"] == tool_name), None)
+        self.assertIsNotNone(
+            tool, f"{tool_name} schema should exist for {project_type}"
+        )
+        return set(
+            (
+                tool.get("function", {}).get("parameters", {}).get("properties") or {}
+            ).keys()
+        )
+
+    def test_patch_parameters_present_in_update_story_metadata_schema(self):
+        for project_type in ("short-story", "novel", "series"):
+            props = self._get_tool_properties("update_story_metadata", project_type)
+            for field in ("summary_patch", "notes_patch", "tags_patch"):
+                self.assertIn(
+                    field,
+                    props,
+                    f"update_story_metadata should expose {field} for {project_type}",
+                )
+
+        # conflicts_patch only exposed for short-story (chapter-based projects filter it out)
+        self.assertIn(
+            "conflicts_patch",
+            self._get_tool_properties("update_story_metadata", "short-story"),
+            "update_story_metadata should expose conflicts_patch for short-story",
+        )
+        for project_type in ("novel", "series"):
+            props = self._get_tool_properties("update_story_metadata", project_type)
+            self.assertNotIn(
+                "conflicts_patch",
+                props,
+                f"update_story_metadata should NOT expose conflicts_patch for {project_type}",
+            )
+            self.assertNotIn(
+                "conflicts",
+                props,
+                f"update_story_metadata should NOT expose conflicts for {project_type}",
+            )
+
+    def test_patch_parameters_present_in_update_chapter_metadata_schema(self):
+        # update_chapter_metadata is only available for chapter-based project types
+        for project_type in ("novel", "series"):
+            props = self._get_tool_properties("update_chapter_metadata", project_type)
+            for field in ("summary_patch", "notes_patch", "conflicts_patch"):
+                self.assertIn(
+                    field,
+                    props,
+                    f"update_chapter_metadata should expose {field} for {project_type}",
+                )
+
+    def test_patch_parameters_present_in_update_book_metadata_schema(self):
+        # update_book_metadata is only available for series
+        tools = get_registered_tool_schemas(model_type="CHAT", project_type="series")
+        tool = next(
+            (t for t in tools if t["function"]["name"] == "update_book_metadata"), None
+        )
+        self.assertIsNotNone(
+            tool, "update_book_metadata schema should exist for series"
+        )
+        props = set(
+            (
+                tool.get("function", {}).get("parameters", {}).get("properties") or {}
+            ).keys()
+        )
+        for field in ("summary_patch", "notes_patch"):
+            self.assertIn(
+                field,
+                props,
+                f"update_book_metadata should expose {field}",
+            )
+
+    def test_patch_parameters_present_in_update_sourcebook_entry_schema(self):
+        for project_type in ("short-story", "novel", "series"):
+            props = self._get_tool_properties("update_sourcebook_entry", project_type)
+            for field in ("description_patch", "synonyms_patch", "images_patch"):
+                self.assertIn(
+                    field,
+                    props,
+                    f"update_sourcebook_entry should expose {field} for {project_type}",
+                )
+
+    def test_tool_parameter_refs_are_resolvable(self):
+        def _collect_refs(node: object) -> list[str]:
+            refs: list[str] = []
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k == "$ref" and isinstance(v, str):
+                        refs.append(v)
+                    refs.extend(_collect_refs(v))
+            elif isinstance(node, list):
+                for item in node:
+                    refs.extend(_collect_refs(item))
+            return refs
+
+        for project_type in ("short-story", "novel", "series"):
+            for tool in get_registered_tool_schemas(
+                model_type="CHAT", project_type=project_type
+            ):
+                fn = tool.get("function", {})
+                params = fn.get("parameters", {})
+                refs = _collect_refs(params)
+                if not refs:
+                    continue
+
+                defs = params.get("$defs", {}) if isinstance(params, dict) else {}
+                for ref in refs:
+                    if ref.startswith("#/$defs/"):
+                        def_name = ref.split("/", 2)[-1]
+                        self.assertIn(
+                            def_name,
+                            defs,
+                            f"Unresolvable local ref {ref} in tool {fn.get('name')} for {project_type}",
+                        )

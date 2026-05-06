@@ -43,7 +43,7 @@ export function useEditorFormatting({
   const lastRawSelectionRef = useRef<TextSelectionRange | null>(null);
   const lastReportedFormatsRef = useRef<string[]>([]);
 
-  const checkContext = () => {
+  const checkContext = (): void => {
     if (!onContextChange) return;
 
     const formats: string[] = [];
@@ -96,19 +96,19 @@ export function useEditorFormatting({
     const prev = lastReportedFormatsRef.current;
     const changed =
       prev.length !== formats.length ||
-      formats.some((f: string, i: number) => f !== prev[i]);
+      formats.some((f: string, i: number): boolean => f !== prev[i]);
     if (changed) {
       lastReportedFormatsRef.current = formats;
       onContextChange(formats);
     }
   };
 
-  const scheduleCheckContext = () => {
+  const scheduleCheckContext = (): void => {
     if (contextDebounceRef.current) clearTimeout(contextDebounceRef.current);
     contextDebounceRef.current = setTimeout(checkContext, contextDebounceMs);
   };
 
-  const toggleBlockAtCaret = (type: MarkdownBlockType) => {
+  const toggleBlockAtCaret = (type: MarkdownBlockType): void => {
     const view = editorViewRef.current;
     if (!view) return;
     const rawText = view.state.doc.toString();

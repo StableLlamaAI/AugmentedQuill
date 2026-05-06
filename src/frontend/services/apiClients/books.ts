@@ -11,7 +11,29 @@
 
 import { postJson, projectEndpoint } from './shared';
 
-export const createBooksApi = (projectName: string) => ({
+export interface BooksApi {
+  create: (
+    title: string
+  ) => Promise<{ ok: boolean; book_id?: string; story?: unknown }>;
+  delete: (
+    id: string
+  ) => Promise<{ ok: boolean; story?: unknown; restore_id?: string }>;
+  restore: (
+    restoreId: string
+  ) => Promise<{ ok: boolean; story?: unknown; book_id?: string }>;
+  reorder: (bookIds: string[]) => Promise<{ ok: boolean }>;
+  updateBookMetadata: (
+    bookId: string,
+    data: {
+      title?: string;
+      summary?: string;
+      notes?: string;
+      private_notes?: string;
+    }
+  ) => Promise<{ ok: boolean; detail?: string | undefined }>;
+}
+
+export const createBooksApi = (projectName: string): BooksApi => ({
   create: async (title: string) => {
     return postJson<{ ok: boolean; book_id?: string; story?: unknown }>(
       '/books/create',
@@ -36,7 +58,7 @@ export const createBooksApi = (projectName: string) => ({
     );
   },
 
-  reorder: async (bookIds: string[]) => {
+  reorder: async (bookIds: string[]): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(
       projectEndpoint(projectName, '/books/reorder'),
       { book_ids: bookIds },
@@ -52,7 +74,7 @@ export const createBooksApi = (projectName: string) => ({
       notes?: string;
       private_notes?: string;
     }
-  ) => {
+  ): Promise<{ ok: boolean; detail?: string | undefined }> => {
     return postJson<{ ok: boolean; detail?: string }>(
       projectEndpoint(projectName, `/books/${bookId}/metadata`),
       data,

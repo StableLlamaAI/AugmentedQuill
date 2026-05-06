@@ -41,7 +41,7 @@ export function useCurrentWritingUnit({
 }: UseCurrentWritingUnitParams): UseCurrentWritingUnitResult {
   return useMemo(() => {
     const activeChapter = story.chapters.find(
-      (chapter: Chapter) => chapter.id === currentChapterId
+      (chapter: Chapter): boolean => chapter.id === currentChapterId
     );
 
     const currentChapter =
@@ -68,7 +68,7 @@ export function useCurrentWritingUnit({
       currentChapter?.scope === 'story'
         ? baselineState.draft?.content
         : baselineState.chapters.find(
-            (chapter: Chapter) => chapter.id === currentChapter?.id
+            (chapter: Chapter): boolean => chapter.id === currentChapter?.id
           )?.content;
 
     return {

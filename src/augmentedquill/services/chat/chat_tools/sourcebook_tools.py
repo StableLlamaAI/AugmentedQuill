@@ -28,6 +28,12 @@ from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_update_entry,
     _get_story_data,
 )
+from augmentedquill.services.chat.chat_tools.metadata_patching import (
+    StringListPatch,
+    TextPatch,
+    apply_string_list_patch,
+    apply_text_patch,
+)
 
 
 def _strip_internal_sourcebook_fields(entry: dict | None) -> dict | None:
@@ -167,12 +173,24 @@ class UpdateSourcebookEntryParams(BaseModel):
     name_or_id: str = Field(..., description="The name or ID of the entry to update")
     name: str | None = Field(None, description="New name for the entry")
     description: str | None = Field(None, description="New description for the entry")
+    description_patch: TextPatch | None = Field(
+        None,
+        description="Optional patch operation for partially editing description.",
+    )
     category: str | None = Field(None, description="New category for the entry")
     synonyms: list[str] | None = Field(
         None, description="New list of synonyms for the entry"
     )
+    synonyms_patch: StringListPatch | None = Field(
+        None,
+        description="Optional patch operation for synonyms (add/remove/set/clear).",
+    )
     images: list[str] | None = Field(
         None, description="New list of image IDs for the entry"
+    )
+    images_patch: StringListPatch | None = Field(
+        None,
+        description="Optional patch operation for images (add/remove/set/clear).",
     )
 
 
@@ -240,9 +258,10 @@ async def create_sourcebook_entry(
 @chat_tool(
     description=(
         "Update an existing sourcebook entry. Provide only the fields you want to change; this is a partial replacement. "
-        "At least one of name, description, category, synonyms, or images must be provided. "
+        "At least one of name, description, description_patch, category, synonyms, synonyms_patch, images, or images_patch must be provided. "
         "If category is provided, it must be one of: Character, Location, Organization, Item, Event, Lore, Other. "
-        "For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable."
+        "For better lookup, also update synonyms and relations (e.g., related characters/locations/organizations) when applicable. "
+        "Use add_sourcebook_relation/remove_sourcebook_relation for atomic relation edits without replacing entry fields."
     ),
     allowed_roles=(CHAT_ROLE,),
     capability="sourcebook-write",
@@ -254,21 +273,51 @@ async def update_sourcebook_entry(
     if (
         params.name is None
         and params.description is None
+        and params.description_patch is None
         and params.category is None
         and params.synonyms is None
+        and params.synonyms_patch is None
         and params.images is None
+        and params.images_patch is None
     ):
         return {
-            "error": "No update fields provided. Provide at least one of name, description, category, synonyms, or images with replacement values to update the entry."
+            "error": "No update fields provided. Provide at least one of name, description, description_patch, category, synonyms, synonyms_patch, images, or images_patch."
         }
+
+    current = sourcebook_get_entry(params.name_or_id)
+    if not isinstance(current, dict):
+        return {"error": "Entry not found."}
+
+    description_value = params.description
+    if params.description_patch is not None:
+        description_value = apply_text_patch(
+            str(current.get("description") or ""),
+            params.description_patch,
+        )
+
+    synonyms_value = params.synonyms
+    if params.synonyms_patch is not None:
+        current_synonyms = current.get("synonyms")
+        if not isinstance(current_synonyms, list):
+            current_synonyms = []
+        synonyms_value = apply_string_list_patch(
+            current_synonyms, params.synonyms_patch
+        )
+
+    images_value = params.images
+    if params.images_patch is not None:
+        current_images = current.get("images")
+        if not isinstance(current_images, list):
+            current_images = []
+        images_value = apply_string_list_patch(current_images, params.images_patch)
 
     result = sourcebook_update_entry(
         name_or_id=params.name_or_id,
         name=params.name,
-        description=params.description,
+        description=description_value,
         category=params.category,
-        synonyms=params.synonyms,
-        images=params.images,
+        synonyms=synonyms_value,
+        images=images_value,
     )
     if "error" not in result:
         mutations["story_changed"] = True

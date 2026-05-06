@@ -275,7 +275,7 @@ export const buildWhitespacePlugin = (
               _fB: number,
               _tB: number,
               ins: import('@codemirror/state').Text
-            ) => {
+            ): void => {
               if (toA !== fromA || ins.length !== 1) {
                 safeInsert = false;
                 return;
@@ -297,7 +297,8 @@ export const buildWhitespacePlugin = (
 
         const intersectsSelection = (from: number, to: number): boolean =>
           selectionRanges.some(
-            (range: { from: number; to: number }) => range.from < to && range.to > from
+            (range: { from: number; to: number }): boolean =>
+              range.from < to && range.to > from
           );
 
         const insertedWhitespace =
@@ -357,5 +358,5 @@ export const buildWhitespacePlugin = (
         return Decoration.set(decs, true);
       }
     },
-    { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+    { decorations: (v: { decorations: DecorationSet }): DecorationSet => v.decorations }
   );

@@ -27,17 +27,17 @@ export function buildMachinePayload(settings: AppSettings): {
   const providers = settings.providers || [];
   const activeChat =
     providers.find(
-      (provider: import('../../types').LLMConfig) =>
+      (provider: import('../../types').LLMConfig): boolean =>
         provider.id === settings.activeChatProviderId
     ) || providers[0];
   const activeWriting =
     providers.find(
-      (provider: import('../../types').LLMConfig) =>
+      (provider: import('../../types').LLMConfig): boolean =>
         provider.id === settings.activeWritingProviderId
     ) || providers[0];
   const activeEditing =
     providers.find(
-      (provider: import('../../types').LLMConfig) =>
+      (provider: import('../../types').LLMConfig): boolean =>
         provider.id === settings.activeEditingProviderId
     ) || providers[0];
 

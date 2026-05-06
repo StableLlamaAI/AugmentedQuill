@@ -9,7 +9,7 @@
  * Defines the chat unit so this responsibility stays isolated, testable, and easy to evolve.
  */
 
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatAttachment } from '../../types';
 import { useThemeClasses } from '../layout/ThemeContext';
@@ -29,7 +29,8 @@ import { useChatEditing } from './hooks/useChatEditing';
 import { useChatUIState } from './hooks/useChatUIState';
 import { useChatMessages } from './hooks/useChatMessages';
 
-export const Chat: React.FC = React.memo(() => {
+/* eslint-disable complexity */
+function ChatComponent(): React.JSX.Element {
   const {
     messages,
     isLoading,
@@ -86,7 +87,14 @@ export const Chat: React.FC = React.memo(() => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
 
-  const { scrollContainerRef, handleScroll, scrollToBottom } = useChatScroll({
+  const {
+    scrollContainerRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    scrollToBottom,
+  } = useChatScroll({
     messages,
     isLoading,
     editingMessageId,
@@ -114,7 +122,7 @@ export const Chat: React.FC = React.memo(() => {
     ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-900'
     : 'bg-brand-gray-950 border-brand-gray-800 text-brand-gray-300';
 
-  const handleSubmit = (text: string, files?: ChatAttachment[]) => {
+  const handleSubmit = (text: string, files?: ChatAttachment[]): void => {
     if (isLoading || !isModelAvailable) return;
 
     onSendMessage(text, files);
@@ -123,11 +131,11 @@ export const Chat: React.FC = React.memo(() => {
     }
 
     // Force scroll to bottom on user message
-    setTimeout(() => scrollToBottom('auto'), 0);
+    setTimeout((): void => scrollToBottom('auto'), 0);
   };
 
   const hasUserMessage = messages.some(
-    (msg: import('../../types').ChatMessage) => msg.role === 'user'
+    (msg: import('../../types').ChatMessage): boolean => msg.role === 'user'
   );
   const canRegenerate = !isLoading && isModelAvailable && hasUserMessage;
   const contextUsage = useMemo(
@@ -161,7 +169,7 @@ export const Chat: React.FC = React.memo(() => {
         allowWebSearch={allowWebSearch}
         onDeleteSession={onDeleteSession}
         onNewSession={onNewSession}
-        onScratchpadOpen={() => setShowScratchpad(true)}
+        onScratchpadOpen={(): void => setShowScratchpad(true)}
         onToggleWebSearch={onToggleWebSearch}
       />
 
@@ -174,7 +182,7 @@ export const Chat: React.FC = React.memo(() => {
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
           onDeleteAllSessions={onDeleteAllSessions}
-          onClose={() => setShowHistory(false)}
+          onClose={(): void => setShowHistory(false)}
         />
       )}
 
@@ -183,7 +191,7 @@ export const Chat: React.FC = React.memo(() => {
         isLight={isLight}
         storyLanguage={storyLanguage}
         scratchpad={scratchpad}
-        onClose={() => setShowScratchpad(false)}
+        onClose={(): void => setShowScratchpad(false)}
         onDelete={onDeleteScratchpad}
         onSave={onUpdateScratchpad}
       />
@@ -199,13 +207,16 @@ export const Chat: React.FC = React.memo(() => {
         chatDisabledReason={chatDisabledReason}
         storyLanguage={storyLanguage}
         theme={theme}
-        onClose={() => setShowSystemPrompt(false)}
+        onClose={(): void => setShowSystemPrompt(false)}
         onSave={onUpdateSystemPrompt}
       />
 
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         className={`flex-1 overflow-y-auto p-4 space-y-4 ${
           isLight ? 'bg-brand-gray-50' : 'bg-brand-gray-950/30'
         }`}
@@ -332,7 +343,7 @@ export const Chat: React.FC = React.memo(() => {
             {attachments.length === 0 && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={(): void | undefined => fileInputRef.current?.click()}
                 title={t('Attach files')}
                 aria-label={t('Attach files')}
                 className={`absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition ${
@@ -362,6 +373,8 @@ export const Chat: React.FC = React.memo(() => {
       </div>
     </div>
   );
-});
+}
+/* eslint-enable complexity */
 
+export const Chat: React.FC = React.memo(ChatComponent);
 Chat.displayName = 'Chat';

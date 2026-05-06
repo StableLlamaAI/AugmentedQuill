@@ -18,7 +18,190 @@ import {
 } from '../apiTypes';
 import { fetchJson, postJson, deleteJson, projectEndpoint } from './shared';
 
-export const createChatApi = (projectName: string) => ({
+export interface ChatApi {
+  list: () => Promise<ChatSession[]>;
+  load: (id: string) => Promise<ChatSession>;
+  save: (
+    id: string,
+    data: {
+      name: string;
+      messages: unknown[];
+      systemPrompt: string;
+      allowWebSearch?: boolean;
+      scratchpad?: string;
+      projectContextRevision?: number | null;
+    }
+  ) => Promise<{ ok: boolean }>;
+  delete: (id: string) => Promise<{ ok: boolean }>;
+  deleteAll: () => Promise<{ ok: boolean }>;
+  executeTools: (
+    payload: {
+      messages: ChatApiMessage[];
+      active_chapter_id?: number;
+      model_name?: string;
+      chat_id?: string;
+    },
+    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void,
+    isStopped?: () => boolean
+  ) => Promise<ChatToolExecutionResponse>;
+  undoToolBatch: (batchId: string) => Promise<{
+    ok: boolean;
+    batch_id?: string | null | undefined;
+    detail?: string | null | undefined;
+  }>;
+  redoToolBatch: (batchId: string) => Promise<{
+    ok: boolean;
+    batch_id?: string | null | undefined;
+    detail?: string | null | undefined;
+  }>;
+  getChapterBeforeContent: (
+    batchId: string,
+    chapterId: number
+  ) => Promise<string | null>;
+}
+
+type ToolProseChunk = {
+  chapId: number;
+  writeMode: string;
+  accumulated: string;
+};
+
+type ParsedChatToolEvent =
+  | {
+      type: 'prose_chunk';
+      chapId: number;
+      writeMode: string;
+      accumulated: string;
+    }
+  | {
+      type: 'result';
+      ok: boolean;
+      appended_messages: ChatToolExecutionResponse['appended_messages'];
+      mutations?: ChatToolExecutionResponse['mutations'];
+    }
+  | { type: 'error'; error: string };
+
+const parseChatToolEvent = (dataStr: string): ParsedChatToolEvent | null => {
+  if (dataStr === '[DONE]') return null;
+
+  try {
+    const event = JSON.parse(dataStr) as {
+      type?: string;
+      accumulated?: string;
+      chap_id?: number;
+      write_mode?: string;
+      ok?: boolean;
+      appended_messages?: ChatToolExecutionResponse['appended_messages'];
+      mutations?: ChatToolExecutionResponse['mutations'];
+      error?: string;
+    };
+
+    if (event.type === 'prose_chunk') {
+      return {
+        type: 'prose_chunk',
+        chapId: event.chap_id ?? 0,
+        writeMode: event.write_mode ?? '',
+        accumulated: event.accumulated ?? '',
+      };
+    }
+
+    if (event.type === 'result') {
+      return {
+        type: 'result',
+        ok: event.ok ?? true,
+        appended_messages: event.appended_messages ?? [],
+        mutations: event.mutations,
+      };
+    }
+
+    if (event.type === 'error') {
+      return { type: 'error', error: event.error ?? 'Tool execution failed' };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+interface ProseChunkScheduler {
+  setPendingProseChunk: (chunk: ToolProseChunk) => void;
+  scheduleProseChunkFlush: () => void;
+  cancelScheduledProseFlush: () => void;
+  flushPendingProseChunk: () => void;
+}
+
+/**
+ * Yield to the next macrotask via MessageChannel so Zustand store updates
+ * triggered by the resumed code run outside React's render/commit phase.
+ * Using requestAnimationFrame instead would fire inside React 19's concurrent
+ * renderer commit phase and trigger "Maximum update depth exceeded" errors.
+ */
+const yieldToMacrotask = async (): Promise<void> => {
+  await new Promise<void>((resolve: () => void) => {
+    if (typeof MessageChannel !== 'undefined') {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (): void => resolve();
+      channel.port2.postMessage(null);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+};
+
+const createProseChunkScheduler = (
+  onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
+): ProseChunkScheduler => {
+  let pendingProseChunk: ToolProseChunk | null = null;
+  let proseFlushHandle: ReturnType<typeof setTimeout> | null = null;
+  let proseFlushToken = 0;
+
+  const flushPendingProseChunk = (): void => {
+    proseFlushHandle = null;
+    if (!pendingProseChunk || !onProseChunk) return;
+    const chunk = pendingProseChunk;
+    pendingProseChunk = null;
+    onProseChunk(chunk.chapId, chunk.writeMode, chunk.accumulated);
+  };
+
+  const scheduleProseChunkFlush = (): void => {
+    if (!onProseChunk || proseFlushHandle !== null) return;
+
+    // Coalesce bursts into a single macrotask flush so we render the latest
+    // accumulated chunk without triggering React render-phase store updates.
+    // setTimeout(0) is used (not requestAnimationFrame) because RAF fires
+    // inside React 19's concurrent renderer commit phase, which causes
+    // "Maximum update depth exceeded" errors when Zustand setState is called.
+    const token = ++proseFlushToken;
+    proseFlushHandle = setTimeout((): void => {
+      if (proseFlushHandle === null || proseFlushToken !== token) {
+        return;
+      }
+      flushPendingProseChunk();
+    }, 0);
+  };
+
+  const cancelScheduledProseFlush = (): void => {
+    if (proseFlushHandle === null) return;
+
+    clearTimeout(proseFlushHandle);
+    proseFlushToken += 1;
+    proseFlushHandle = null;
+  };
+
+  const setPendingProseChunk = (chunk: ToolProseChunk): void => {
+    pendingProseChunk = chunk;
+  };
+
+  return {
+    setPendingProseChunk,
+    scheduleProseChunkFlush,
+    cancelScheduledProseFlush,
+    flushPendingProseChunk,
+  };
+};
+
+export const createChatApi = (projectName: string): ChatApi => ({
   list: async () => {
     const response = await fetchJson<ChatListResponse>(
       projectEndpoint(projectName, '/chats'),
@@ -28,7 +211,7 @@ export const createChatApi = (projectName: string) => ({
     return response.chats ?? [];
   },
 
-  load: async (id: string) => {
+  load: async (id: string): Promise<ChatSession> => {
     return fetchJson<ChatSession>(
       projectEndpoint(projectName, `/chats/${id}`),
       undefined,
@@ -44,8 +227,9 @@ export const createChatApi = (projectName: string) => ({
       systemPrompt: string;
       allowWebSearch?: boolean;
       scratchpad?: string;
+      projectContextRevision?: number | null;
     }
-  ) => {
+  ): Promise<{ ok: boolean }> => {
     return postJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chats/${id}`),
       data,
@@ -53,14 +237,14 @@ export const createChatApi = (projectName: string) => ({
     );
   },
 
-  delete: async (id: string) => {
+  delete: async (id: string): Promise<{ ok: boolean }> => {
     return deleteJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chats/${id}`),
       'Failed to delete chat'
     );
   },
 
-  deleteAll: async () => {
+  deleteAll: async (): Promise<{ ok: boolean }> => {
     return deleteJson<{ ok: boolean }>(
       projectEndpoint(projectName, '/chats'),
       'Failed to delete all chats'
@@ -74,7 +258,8 @@ export const createChatApi = (projectName: string) => ({
       model_name?: string;
       chat_id?: string;
     },
-    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
+    onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void,
+    isStopped?: () => boolean
   ): Promise<ChatToolExecutionResponse> => {
     const res = await fetch(`/api/v1${projectEndpoint(projectName, '/chat/tools')}`, {
       method: 'POST',
@@ -94,55 +279,21 @@ export const createChatApi = (projectName: string) => ({
     const decoder = new TextDecoder();
     let buffer = '';
 
-    // Coalesce chunk callbacks to at most once per frame so prose preview
-    // updates do not force token-rate React re-renders.
-    let pendingProseChunk: {
-      chapId: number;
-      writeMode: string;
-      accumulated: string;
-    } | null = null;
-    let proseFlushHandle: number | ReturnType<typeof setTimeout> | null = null;
-    let proseFlushUsesRaf = false;
-
-    const flushPendingProseChunk = () => {
-      proseFlushHandle = null;
-      if (!pendingProseChunk || !onProseChunk) return;
-      const chunk = pendingProseChunk;
-      pendingProseChunk = null;
-      onProseChunk(chunk.chapId, chunk.writeMode, chunk.accumulated);
-    };
-
-    const scheduleProseChunkFlush = () => {
-      if (!onProseChunk || proseFlushHandle !== null) return;
-
-      if (typeof globalThis.requestAnimationFrame === 'function') {
-        proseFlushUsesRaf = true;
-        proseFlushHandle = globalThis.requestAnimationFrame(() => {
-          flushPendingProseChunk();
-        });
-      } else {
-        proseFlushUsesRaf = false;
-        proseFlushHandle = setTimeout(() => {
-          flushPendingProseChunk();
-        }, 16);
-      }
-    };
-
-    const cancelScheduledProseFlush = () => {
-      if (proseFlushHandle === null) return;
-
-      if (proseFlushUsesRaf && typeof globalThis.cancelAnimationFrame === 'function') {
-        globalThis.cancelAnimationFrame(proseFlushHandle as number);
-      } else {
-        clearTimeout(proseFlushHandle as ReturnType<typeof setTimeout>);
-      }
-      proseFlushHandle = null;
-    };
+    const proseChunkScheduler = createProseChunkScheduler(onProseChunk);
 
     try {
       while (true) {
+        if (isStopped?.()) {
+          // User stopped generation — close the stream so the backend disconnects.
+          reader.cancel().catch((): undefined => undefined);
+          return { ok: false, appended_messages: [] };
+        }
         const { done, value } = await reader.read();
         if (done) break;
+        if (isStopped?.()) {
+          reader.cancel().catch((): undefined => undefined);
+          return { ok: false, appended_messages: [] };
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
@@ -152,53 +303,48 @@ export const createChatApi = (projectName: string) => ({
           const trimmed = line.trim();
           if (!trimmed.startsWith('data: ')) continue;
           const dataStr = trimmed.slice(6);
-          if (dataStr === '[DONE]') continue;
-          try {
-            const event = JSON.parse(dataStr) as {
-              type?: string;
-              accumulated?: string;
-              chap_id?: number;
-              write_mode?: string;
-              ok?: boolean;
-              appended_messages?: ChatToolExecutionResponse['appended_messages'];
-              mutations?: ChatToolExecutionResponse['mutations'];
-              error?: string;
-            };
+          const event = parseChatToolEvent(dataStr);
+          if (!event) continue;
 
-            if (event.type === 'prose_chunk') {
-              pendingProseChunk = {
-                chapId: event.chap_id ?? 0,
-                writeMode: event.write_mode ?? '',
-                accumulated: event.accumulated ?? '',
-              };
-              scheduleProseChunkFlush();
-            } else if (event.type === 'result') {
-              cancelScheduledProseFlush();
-              flushPendingProseChunk();
-              return {
-                ok: event.ok ?? true,
-                appended_messages: event.appended_messages ?? [],
-                mutations: event.mutations,
-              };
-            } else if (event.type === 'error') {
-              throw new Error(event.error ?? 'Tool execution failed');
-            }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue; // malformed SSE line – skip
-            throw e;
+          if (event.type === 'prose_chunk') {
+            proseChunkScheduler.setPendingProseChunk({
+              chapId: event.chapId,
+              writeMode: event.writeMode,
+              accumulated: event.accumulated,
+            });
+            proseChunkScheduler.scheduleProseChunkFlush();
+          } else if (event.type === 'result') {
+            proseChunkScheduler.cancelScheduledProseFlush();
+            proseChunkScheduler.flushPendingProseChunk();
+            // Let the browser paint the latest prose preview before control
+            // returns to the chat loop and potentially starts more async work.
+            await yieldToMacrotask();
+            return {
+              ok: event.ok,
+              appended_messages: event.appended_messages,
+              mutations: event.mutations,
+            };
+          } else if (event.type === 'error') {
+            throw new Error(event.error);
           }
         }
       }
     } finally {
-      cancelScheduledProseFlush();
-      flushPendingProseChunk();
+      proseChunkScheduler.cancelScheduledProseFlush();
+      proseChunkScheduler.flushPendingProseChunk();
     }
 
     // Stream ended without a result event (should not normally happen).
     throw new Error('Failed to execute chat tools: stream ended unexpectedly');
   },
 
-  undoToolBatch: async (batchId: string) => {
+  undoToolBatch: async (
+    batchId: string
+  ): Promise<{
+    ok: boolean;
+    batch_id?: string | null | undefined;
+    detail?: string | null | undefined;
+  }> => {
     return fetchJson<ChatToolBatchMutationResponse>(
       projectEndpoint(projectName, `/chat/tools/undo/${encodeURIComponent(batchId)}`),
       {
@@ -208,7 +354,13 @@ export const createChatApi = (projectName: string) => ({
     );
   },
 
-  redoToolBatch: async (batchId: string) => {
+  redoToolBatch: async (
+    batchId: string
+  ): Promise<{
+    ok: boolean;
+    batch_id?: string | null | undefined;
+    detail?: string | null | undefined;
+  }> => {
     return fetchJson<ChatToolBatchMutationResponse>(
       projectEndpoint(projectName, `/chat/tools/redo/${encodeURIComponent(batchId)}`),
       {
@@ -216,6 +368,25 @@ export const createChatApi = (projectName: string) => ({
       },
       'Failed to redo AI tool batch'
     );
+  },
+
+  getChapterBeforeContent: async (
+    batchId: string,
+    chapterId: number
+  ): Promise<string | null> => {
+    try {
+      const res = await fetchJson<{ content: string }>(
+        projectEndpoint(
+          projectName,
+          `/chat/tools/batches/${encodeURIComponent(batchId)}/chapter-before/${chapterId}`
+        ),
+        undefined,
+        'Failed to get chapter before content'
+      );
+      return res.content ?? null;
+    } catch {
+      return null;
+    }
   },
 });
 

@@ -81,9 +81,12 @@ export interface UseSearchReplaceResult {
 
 const buildFlatMatches = (results: SearchResultSection[]): FlatMatch[] => {
   const flat: FlatMatch[] = [];
-  results.forEach((section: SearchResultSection, si: number) => {
+  results.forEach((section: SearchResultSection, si: number): void => {
     (section.matches ?? []).forEach(
-      (match: import('../../services/apiClients/search').SearchMatch, mi: number) => {
+      (
+        match: import('../../services/apiClients/search').SearchMatch,
+        mi: number
+      ): void => {
         flat.push({
           sectionIndex: si,
           matchIndex: mi,
@@ -108,14 +111,16 @@ const buildHighlightMaps = (
   const ranges: SearchHighlightMap = {};
   const texts: SearchHighlightTextMap = {};
 
-  results.forEach((section: SearchResultSection) => {
+  results.forEach((section: SearchResultSection): void => {
     const key = buildSearchSectionKey(
       section.section_type,
       section.section_id,
       section.field
     );
     ranges[key] = (section.matches ?? []).map(
-      (match: import('../../services/apiClients/search').SearchMatch) => ({
+      (
+        match: import('../../services/apiClients/search').SearchMatch
+      ): { start: number; end: number } => ({
         start: match.start,
         end: match.end,
       })
@@ -125,7 +130,7 @@ const buildHighlightMaps = (
       (
         acc: string[],
         match: import('../../services/apiClients/search').SearchMatch
-      ) => {
+      ): string[] => {
         if (!seen.has(match.match_text)) {
           seen.add(match.match_text);
           acc.push(match.match_text);
@@ -164,8 +169,8 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   const searchParamsRef = useRef({ query, scope, caseSensitive, isRegex, isPhonetic });
   searchParamsRef.current = { query, scope, caseSensitive, isRegex, isPhonetic };
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback((keepHighlight: boolean | undefined = false) => {
+  const open = useCallback((): void => setIsOpen(true), []);
+  const close = useCallback((keepHighlight: boolean | undefined = false): void => {
     setIsOpen(false);
     setError(null);
     if (!keepHighlight) {
@@ -181,7 +186,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   }, []);
 
   const runSearch = useCallback(
-    async (activeChapterId?: number | null) => {
+    async (activeChapterId?: number | null): Promise<void> => {
       if (!query.trim()) {
         setResults([]);
         setTotalMatches(0);
@@ -229,24 +234,24 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
     [query, scope, caseSensitive, isRegex, isPhonetic]
   );
 
-  const navigateNext = useCallback(() => {
+  const navigateNext = useCallback((): void => {
     if (flatMatches.length === 0) return;
-    setCurrentMatchIndex((prev: number | null) => {
+    setCurrentMatchIndex((prev: number | null): number => {
       if (prev === null) return 0;
       return (prev + 1) % flatMatches.length;
     });
   }, [flatMatches.length]);
 
-  const navigatePrev = useCallback(() => {
+  const navigatePrev = useCallback((): void => {
     if (flatMatches.length === 0) return;
-    setCurrentMatchIndex((prev: number | null) => {
+    setCurrentMatchIndex((prev: number | null): number => {
       if (prev === null) return flatMatches.length - 1;
       return (prev - 1 + flatMatches.length) % flatMatches.length;
     });
   }, [flatMatches.length]);
 
   const selectMatch = useCallback(
-    (index: number) => {
+    (index: number): void => {
       if (flatMatches.length === 0) return;
       if (index < 0 || index >= flatMatches.length) return;
       setCurrentMatchIndex(index);
@@ -288,7 +293,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         const flat = buildFlatMatches(resp.results);
         setFlatMatches(flat);
         if (flat.length > 0) {
-          setCurrentMatchIndex((prev: number | null) =>
+          setCurrentMatchIndex((prev: number | null): number =>
             prev === null ? 0 : Math.min(prev, flat.length - 1)
           );
         } else {
@@ -320,7 +325,9 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   );
 
   const replaceAllMatches = useCallback(
-    async (activeChapterId?: number | null) => {
+    async (
+      activeChapterId?: number | null
+    ): Promise<{ count: number; storyChanged: boolean }> => {
       setIsLoading(true);
       setError(null);
       try {
@@ -367,7 +374,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   );
 
   const refreshHighlights = useCallback(
-    (activeChapterId?: number | null) => {
+    (activeChapterId?: number | null): void => {
       const {
         query: q,
         scope: s,
@@ -375,7 +382,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
         isRegex: ir,
         isPhonetic: ip,
       } = searchParamsRef.current;
-      void (async () => {
+      void (async (): Promise<void> => {
         try {
           const resp = await api.search.search({
             query: q,
@@ -390,7 +397,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
           setResults(resp.results);
           setTotalMatches(resp.total_matches);
           setFlatMatches(flat);
-          setCurrentMatchIndex((prev: number | null) =>
+          setCurrentMatchIndex((prev: number | null): number | null =>
             flat.length === 0
               ? null
               : prev === null
@@ -410,7 +417,7 @@ export const useSearchReplace = (): UseSearchReplaceResult => {
   const debouncedRefreshHighlights = useDebounce(refreshHighlights, 800);
 
   const notifyContentChanged = useCallback(
-    (activeChapterId?: number | null) => {
+    (activeChapterId?: number | null): void => {
       if (!highlightActiveRef.current || !searchParamsRef.current.query.trim()) return;
       debouncedRefreshHighlights(activeChapterId);
     },

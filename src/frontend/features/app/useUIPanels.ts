@@ -35,18 +35,36 @@ export type UIPanels = {
 
 /** Custom React hook that manages uipanels. */
 export function useUIPanels(): UIPanels {
-  const isChatOpen = useUIStore((s: UIStoreState) => s.isChatOpen);
-  const setIsChatOpen = useUIStore((s: UIStoreState) => s.setIsChatOpen);
-  const isSidebarOpen = useUIStore((s: UIStoreState) => s.isSidebarOpen);
-  const setIsSidebarOpen = useUIStore((s: UIStoreState) => s.setIsSidebarOpen);
-  const isAppearanceOpen = useUIStore((s: UIStoreState) => s.isAppearanceOpen);
-  const setIsAppearanceOpen = useUIStore((s: UIStoreState) => s.setIsAppearanceOpen);
-  const isSettingsOpen = useUIStore((s: UIStoreState) => s.isSettingsOpen);
-  const setIsSettingsOpen = useUIStore((s: UIStoreState) => s.setIsSettingsOpen);
-  const isImagesOpen = useUIStore((s: UIStoreState) => s.isImagesOpen);
-  const setIsImagesOpen = useUIStore((s: UIStoreState) => s.setIsImagesOpen);
-  const isDebugLogsOpen = useUIStore((s: UIStoreState) => s.isDebugLogsOpen);
-  const setIsDebugLogsOpen = useUIStore((s: UIStoreState) => s.setIsDebugLogsOpen);
+  const isChatOpen = useUIStore((s: UIStoreState): boolean => s.isChatOpen);
+  const setIsChatOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsChatOpen
+  );
+  const isSidebarOpen = useUIStore((s: UIStoreState): boolean => s.isSidebarOpen);
+  const setIsSidebarOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsSidebarOpen
+  );
+  const isAppearanceOpen = useUIStore((s: UIStoreState): boolean => s.isAppearanceOpen);
+  const setIsAppearanceOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsAppearanceOpen
+  );
+  const isSettingsOpen = useUIStore((s: UIStoreState): boolean => s.isSettingsOpen);
+  const setIsSettingsOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsSettingsOpen
+  );
+  const isImagesOpen = useUIStore((s: UIStoreState): boolean => s.isImagesOpen);
+  const setIsImagesOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsImagesOpen
+  );
+  const isDebugLogsOpen = useUIStore((s: UIStoreState): boolean => s.isDebugLogsOpen);
+  const setIsDebugLogsOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsDebugLogsOpen
+  );
 
   const appearanceRef = useRef<HTMLDivElement>(null);
   useClickOutside(appearanceRef, () => setIsAppearanceOpen(false), isAppearanceOpen);

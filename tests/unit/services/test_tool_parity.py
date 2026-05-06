@@ -156,6 +156,23 @@ class ToolParityTest(TestCase):
         self.assertEqual(res["end"], 5)
         self.assertEqual(res["total"], len("Story intro content."))
 
+        # read_story_content with read_from_end
+        total = len("Story intro content.")
+        res = self._call_tool(
+            "read_story_content", {"max_chars": 8, "read_from_end": True}
+        )
+        self.assertEqual(res["content"], "content.")
+        self.assertEqual(res["start"], total - 8)
+        self.assertEqual(res["end"], total)
+        self.assertEqual(res["total"], total)
+
+        # read_from_end with max_chars larger than total returns full content
+        res = self._call_tool(
+            "read_story_content", {"max_chars": 9999, "read_from_end": True}
+        )
+        self.assertEqual(res["content"], "Story intro content.")
+        self.assertEqual(res["start"], 0)
+
         # write_story_content
         res = self._call_tool(
             "write_story_content",

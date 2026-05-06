@@ -66,7 +66,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   activeProjectStats,
   theme,
   languages,
-}: SettingsProjectsProps) => {
+}: SettingsProjectsProps): React.ReactElement => {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
   const [tempLang, setTempLang] = useState('');
@@ -75,11 +75,11 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
   const { isLight } = useThemeClasses();
   const confirm = useConfirm();
 
-  const canConvertTo = (target: string) => {
+  const canConvertTo = (target: string): boolean => {
     if (!activeProjectType) return false;
     if (target === activeProjectType) return true;
 
-    const rank = (t: string) => {
+    const rank = (t: string): 0 | 1 | 2 => {
       if (t === 'short-story') return 0;
       if (t === 'novel') return 1;
       if (t === 'series') return 2;
@@ -105,7 +105,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
     return true;
   };
 
-  const getProjectIcon = (type: string) => {
+  const getProjectIcon = (type: string): React.ReactElement => {
     switch (type) {
       case 'short-story':
         return <FileText size={16} />;
@@ -116,7 +116,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
     }
   };
 
-  const handleExport = async (id: string) => {
+  const handleExport = async (id: string): Promise<void> => {
     try {
       const blob = await api.projects.export(id);
       const url = window.URL.createObjectURL(blob);
@@ -131,7 +131,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
     }
   };
 
-  const handleExportEpub = async (id: string) => {
+  const handleExportEpub = async (id: string): Promise<void> => {
     try {
       const blob = await api.projects.exportEpub(id);
       const url = window.URL.createObjectURL(blob);
@@ -171,14 +171,16 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
             ref={fileInputRef}
             className="hidden"
             accept=".zip"
-            onChange={(e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) => {
+            onChange={(
+              e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => {
               if (e.target.files?.[0]) onImportProject(e.target.files[0]);
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}
           />
           <Button
             theme={theme}
-            onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+            onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
               e.currentTarget.blur();
               onRefreshProjects();
             }}
@@ -188,7 +190,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
           />
           <Button
             theme={theme}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={(): void | undefined => fileInputRef.current?.click()}
             variant="secondary"
             icon={<Upload size={16} />}
             title="Import Project (ZIP)"
@@ -230,13 +232,13 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                       value={tempName}
                       onChange={(
                         e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
-                      ) => setTempName(e.target.value)}
+                      ): void => setTempName(e.target.value)}
                       className={`border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 w-full ${
                         isLight
                           ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
                           : 'bg-brand-gray-950 border-brand-gray-600 text-brand-gray-300'
                       }`}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>): void => {
                         if (e.key === 'Enter') {
                           onRenameProject(proj.id, tempName, tempLang);
                           setEditingNameId(null);
@@ -247,7 +249,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                       value={tempLang}
                       onChange={(
                         e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                      ) => setTempLang(e.target.value)}
+                      ): void => setTempLang(e.target.value)}
                       className={`ml-2 border rounded px-2 py-1 text-sm focus:outline-none focus:border-brand-500 ${
                         isLight
                           ? 'bg-brand-gray-50 border-brand-gray-300 text-brand-gray-800'
@@ -261,7 +263,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                       ))}
                     </select>
                     <button
-                      onClick={() => {
+                      onClick={(): void => {
                         onRenameProject(proj.id, tempName, tempLang);
                         setEditingNameId(null);
                       }}
@@ -294,7 +296,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                           </span>
                         )}
                         <button
-                          onClick={() => {
+                          onClick={(): void => {
                             setEditingNameId(proj.id);
                             setTempName(proj.title);
                             setTempLang(proj.language || 'en');
@@ -328,7 +330,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                     ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-100'
                     : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-800'
                 }`}
-                onClick={() => handleExportEpub(proj.id)}
+                onClick={(): Promise<void> => handleExportEpub(proj.id)}
                 title="Export Project (EPUB)"
               >
                 <Book size={18} />
@@ -339,7 +341,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                     ? 'text-brand-gray-400 hover:text-brand-600 hover:bg-brand-gray-100'
                     : 'text-brand-gray-500 hover:text-brand-400 hover:bg-brand-gray-800'
                 }`}
-                onClick={() => handleExport(proj.id)}
+                onClick={(): Promise<void> => handleExport(proj.id)}
                 title="Export Project (ZIP)"
               >
                 <Download size={18} />
@@ -349,7 +351,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                   theme={theme}
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
+                  onClick={(): void => {
                     onLoadProject(proj.id);
                     onCloseDialog();
                   }}
@@ -380,7 +382,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                         value={activeProjectType}
                         onChange={(
                           e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
-                        ) => {
+                        ): void => {
                           onConvertProject(e.target.value);
                         }}
                       >
@@ -403,7 +405,7 @@ export const SettingsProjects: React.FC<SettingsProjectsProps> = ({
                 </div>
               )}
               <button
-                onClick={async () => {
+                onClick={async (): Promise<void> => {
                   if (
                     await confirm(
                       `Are you sure you want to delete "${proj.title}"? This action cannot be undone.`

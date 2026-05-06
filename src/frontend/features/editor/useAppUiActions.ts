@@ -65,7 +65,7 @@ export function useAppUiActions({
   const { buttonActive, isLight } = useTheme();
 
   const handleFormat = useCallback(
-    (type: string) => {
+    (type: string): void => {
       if (editorRef.current) {
         editorRef.current.format(type);
         setIsFormatMenuOpen(false);
@@ -76,7 +76,7 @@ export function useAppUiActions({
   );
 
   const handleChapterSelect = useCallback(
-    (id: string | null) => {
+    (id: string | null): void => {
       selectChapter(id);
       setIsSidebarOpen(false);
     },
@@ -84,7 +84,7 @@ export function useAppUiActions({
   );
 
   const getFormatButtonClass = useCallback(
-    (type: string) => {
+    (type: string): string => {
       const isActive = activeFormats.includes(type);
       if (isActive) return `p-1.5 rounded-md transition-colors ${buttonActive}`;
       return `p-1.5 rounded-md transition-colors ${
@@ -97,18 +97,18 @@ export function useAppUiActions({
   );
 
   const handleConvertProject = useCallback(
-    async (newType: string) => {
+    async (newType: string): Promise<void> => {
       try {
         if (newType === currentProjectType) return;
         await api.projects.convert(newType);
         await refreshStory();
         recordHistoryEntry?.({
           label: `Convert project: ${currentProjectType} -> ${newType}`,
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             await api.projects.convert(currentProjectType);
             await refreshStory();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             await api.projects.convert(newType);
             await refreshStory();
           },
@@ -124,19 +124,19 @@ export function useAppUiActions({
   );
 
   const handleBookCreate = useCallback(
-    async (title: string) => {
+    async (title: string): Promise<void> => {
       try {
         const created = await api.books.create(title);
         let createdBookId = created.book_id || '';
         await refreshStory();
         recordHistoryEntry?.({
           label: `Create book: ${title}`,
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             if (!createdBookId) return;
             await api.books.delete(createdBookId);
             await refreshStory();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             const recreated = await api.books.create(title);
             createdBookId = recreated.book_id || createdBookId;
             await refreshStory();
@@ -153,19 +153,19 @@ export function useAppUiActions({
   );
 
   const handleBookDelete = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       try {
         const deleted = await api.books.delete(id);
         let latestRestoreId = deleted.restore_id || '';
         await refreshStory();
         recordHistoryEntry?.({
           label: `Delete book: ${id}`,
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             if (!latestRestoreId) return;
             await api.books.restore(latestRestoreId);
             await refreshStory();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             const redone = await api.books.delete(id);
             latestRestoreId = redone.restore_id || latestRestoreId;
             await refreshStory();
@@ -182,23 +182,23 @@ export function useAppUiActions({
   );
 
   const handleReorderChapters = useCallback(
-    async (chapterIds: number[], bookId?: string) => {
+    async (chapterIds: number[], bookId?: string): Promise<void> => {
       try {
         const previousChapterIds = story.chapters
-          .filter((chapter: import('../../types').Chapter) =>
+          .filter((chapter: import('../../types').Chapter): boolean =>
             bookId ? chapter.book_id === bookId : true
           )
-          .map((chapter: import('../../types').Chapter) => Number(chapter.id));
+          .map((chapter: import('../../types').Chapter): number => Number(chapter.id));
 
         await api.chapters.reorder(chapterIds, bookId);
         await refreshStory();
         recordHistoryEntry?.({
           label: bookId ? `Reorder chapters in book ${bookId}` : 'Reorder chapters',
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             await api.chapters.reorder(previousChapterIds, bookId);
             await refreshStory();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             await api.chapters.reorder(chapterIds, bookId);
             await refreshStory();
           },
@@ -214,20 +214,20 @@ export function useAppUiActions({
   );
 
   const handleReorderBooks = useCallback(
-    async (bookIds: string[]) => {
+    async (bookIds: string[]): Promise<void> => {
       try {
         const previousBookIds = (story.books || []).map(
-          (book: import('../../types').Book) => book.id
+          (book: import('../../types').Book): string => book.id
         );
         await api.books.reorder(bookIds);
         await refreshStory();
         recordHistoryEntry?.({
           label: 'Reorder books',
-          onUndo: async () => {
+          onUndo: async (): Promise<void> => {
             await api.books.reorder(previousBookIds);
             await refreshStory();
           },
-          onRedo: async () => {
+          onRedo: async (): Promise<void> => {
             await api.books.reorder(bookIds);
             await refreshStory();
           },
@@ -242,14 +242,14 @@ export function useAppUiActions({
     [story.books, refreshStory, getErrorMessage, recordHistoryEntry]
   );
 
-  const handleOpenImages = useCallback(() => {
+  const handleOpenImages = useCallback((): void => {
     if (editorRef.current?.openImageManager) {
       editorRef.current.openImageManager();
     }
   }, [editorRef]);
 
   const setAppTheme = useCallback(
-    (theme: AppTheme) => {
+    (theme: AppTheme): void => {
       setEditorSettings((previous: EditorSettings) => ({ ...previous, theme }));
     },
     [setEditorSettings]

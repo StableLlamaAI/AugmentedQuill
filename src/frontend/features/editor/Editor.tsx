@@ -45,6 +45,8 @@ import {
 import { useEditorScroll } from './hooks/useEditorScroll';
 import { useEditorFormatting } from './hooks/useEditorFormatting';
 
+const STREAM_FOLLOW_ATTACH_DISTANCE_PX = 200;
+
 // URL sanitizer — re-exported for backward compat with Editor.url.test.ts
 export { isSafeImageUrl } from './editorUtils';
 import { isSafeImageUrl } from './editorUtils';
@@ -100,7 +102,6 @@ export interface EditorHandle {
 /* eslint-disable complexity */
 export const Editor = React.memo(
   React.forwardRef<EditorHandle, EditorProps>(
-    // eslint-disable-next-line max-lines-per-function
     (
       {
         chapter,
@@ -138,6 +139,7 @@ export const Editor = React.memo(
       // Local content/title state so the editor div always gets the latest
       // typed value immediately, while the parent onChange (API call) is debounced.
       const [localContent, setLocalContent] = useState(chapter.content);
+      const deferredStreamingContentRef = useRef<string | null>(null);
       // Ref that always holds the current content without triggering re-renders.
       // Used in callbacks that need the latest value at call time (e.g. suggestion
       // hotkeys) so those callbacks don't need localContent in their deps arrays.
@@ -155,51 +157,74 @@ export const Editor = React.memo(
       const savedBaselineRef = useRef<string | undefined>(baselineContent);
       const lastChapterIdRef = useRef(chapter.id);
 
-      useEffect(() => {
+      useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
-        if (!isChapterSwitch) return;
+        if (isChapterSwitch) {
+          lastChapterIdRef.current = chapter.id;
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
+          return;
+        }
 
-        lastChapterIdRef.current = chapter.id;
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        } else if (baselineContent === undefined) {
-          savedBaselineRef.current = undefined;
+        if (baselineContent !== prevBaselineRef.current) {
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          // Only preserve as the real AI baseline when baselineContent differs from
+          // chapter.content. When isUserEdit=true, pushState sets baselineContent
+          // equal to chapter.content (no diff), so we must not overwrite the saved
+          // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+          // that wrong baseline instead of the original AI-written baseline.
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
         }
       }, [chapter.id, baselineContent, chapter.content]);
 
-      if (baselineContent !== prevBaselineRef.current) {
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        // Only preserve as the real AI baseline when baselineContent differs from
-        // chapter.content. When isUserEdit=true, pushState sets baselineContent
-        // equal to chapter.content (no diff), so we must not overwrite the saved
-        // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
-        // that wrong baseline instead of the original AI-written baseline.
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        }
-      }
-
       const isChatStreaming = useChatStore(
-        (s: ChatStoreState) => s.isProseStreamingFromChat
+        (s: ChatStoreState): boolean => s.isProseStreamingFromChat
+      );
+      // True after the user stops chat mid-write: streaming has ended but we
+      // keep streamingMode=true so the prefix-based green highlight stays visible
+      // (as it appeared during streaming) rather than switching to LCS diff.
+      const isChatStreamingFrozen = useChatStore(
+        (s: ChatStoreState): boolean => s.isProseStreamingFrozen
       );
       // Subscribe to the ephemeral streaming slot — only this editor instance
       // re-renders on each chunk, not the entire component tree.
-      const streamingContent = useStoryStore((s: StoryStoreState) =>
+      const streamingContent = useStoryStore((s: StoryStoreState): string | null =>
         s.streamingContent?.chapterId === chapter.id ? s.streamingContent.content : null
+      );
+      const streamingWriteMode = useStoryStore((s: StoryStoreState): string | null =>
+        s.streamingContent?.chapterId === chapter.id
+          ? (s.streamingContent.writeMode ?? 'append')
+          : null
       );
       const proseStreamingActive =
         (aiControls.isProseStreaming ?? false) || isChatStreaming;
+      const isReplaceStreaming =
+        proseStreamingActive && streamingWriteMode === 'replace';
+      // streamingModeActive keeps streamingMode=true even after active streaming
+      // ends (frozen state) so the green prefix-diff stays visible.
+      const streamingModeActive = proseStreamingActive || isChatStreamingFrozen;
 
       // Keep local state in sync when the chapter changes externally (chapter
       // switch, AI update, undo/redo).  Use chapter.id as the primary trigger
       // for chapter switches; also watch chapter.content so AI insertions and
       // undo/redo (which can change content without changing id) are reflected.
-      useEffect(() => {
+      useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
         lastChapterIdRef.current = chapter.id;
+
+        if (isChapterSwitch) {
+          deferredStreamingContentRef.current = null;
+        }
 
         // During active streaming the streaming-slot effect below owns
         // localContent; skip the chapter.content sync to avoid flashing the
@@ -213,7 +238,7 @@ export const Editor = React.memo(
         const shouldDeferStreamingSync =
           proseStreamingActive &&
           isDetachedFromBottomRef.current &&
-          distanceFromBottomRef.current > 120 &&
+          distanceFromBottomRef.current > STREAM_FOLLOW_ATTACH_DISTANCE_PX &&
           !isChapterSwitch;
 
         if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
@@ -224,14 +249,46 @@ export const Editor = React.memo(
 
       // Push each streamed chunk directly into the editor's local state so
       // only this component re-renders — story.chapters stays untouched.
-      useEffect(() => {
+      useEffect((): void => {
         if (streamingContent !== null) {
+          const container = scrollContainerRef.current;
+          const liveDistanceFromBottom = container
+            ? container.scrollHeight - container.scrollTop - container.clientHeight
+            : Number.POSITIVE_INFINITY;
+          const isLiveAtBottom = liveDistanceFromBottom <= 50;
+
+          const shouldDeferStreamingChunk =
+            proseStreamingActive &&
+            isDetachedFromBottomRef.current &&
+            distanceFromBottomRef.current > STREAM_FOLLOW_ATTACH_DISTANCE_PX &&
+            !isLiveAtBottom;
+
+          // While detached from the bottom, freeze chunk-by-chunk updates so
+          // stream geometry changes cannot pull the viewport unexpectedly.
+          if (shouldDeferStreamingChunk) {
+            deferredStreamingContentRef.current = streamingContent;
+            return;
+          }
+
+          deferredStreamingContentRef.current = null;
           localContentRef.current = streamingContent;
           setLocalContent(streamingContent);
         }
-      }, [streamingContent]);
+      }, [streamingContent, proseStreamingActive]);
 
-      useEffect(() => {
+      // If the stream ends while a chunk was deferred, flush the latest deferred
+      // content immediately so the editor doesn't lag until a later model update.
+      useEffect((): void => {
+        if (proseStreamingActive) return;
+        const deferred = deferredStreamingContentRef.current;
+        if (deferred === null) return;
+
+        deferredStreamingContentRef.current = null;
+        localContentRef.current = deferred;
+        setLocalContent(deferred);
+      }, [proseStreamingActive]);
+
+      useEffect((): void => {
         setLocalTitle(chapter.title);
       }, [chapter.id, chapter.title]);
 
@@ -256,12 +313,16 @@ export const Editor = React.memo(
       const {
         scrollContainerRef,
         handleScroll,
+        handleWheel,
+        handleTouchStart,
+        handleTouchMove,
         scrollMainContentToBottom,
         isDetachedFromBottomRef,
         distanceFromBottomRef,
       } = useEditorScroll({
         localContent,
-        isProseStreaming,
+        isProseStreaming: proseStreamingActive,
+        isReplaceStreaming,
         chapterId: chapter.id,
       });
 
@@ -439,14 +500,14 @@ export const Editor = React.memo(
         ]
       );
 
-      useEffect(() => {
+      useEffect((): (() => void) => {
         // Capture shortcuts globally so suggestion controls remain reachable
         // while focus moves across editor-adjacent UI.
         const onKeyDown = (e: KeyboardEvent): void => {
           maybeHandleSuggestionHotkey(e);
         };
         window.addEventListener('keydown', onKeyDown, true);
-        return () => window.removeEventListener('keydown', onKeyDown, true);
+        return (): void => window.removeEventListener('keydown', onKeyDown, true);
       }, [maybeHandleSuggestionHotkey]);
 
       const format = (type: string): void => {
@@ -532,13 +593,13 @@ export const Editor = React.memo(
       };
 
       useImperativeHandle(ref, () => ({
-        insertImage: (filename: string, url: string, altText?: string) =>
+        insertImage: (filename: string, url: string, altText?: string): void =>
           insertImageMarkdown(filename, url, altText),
-        focus: () => {
+        focus: (): void => {
           editorViewRef.current?.focus();
         },
-        format: (type: string) => format(type),
-        jumpToPosition: (start: number, end: number) => {
+        format: (type: string): void => format(type),
+        jumpToPosition: (start: number, end: number): void => {
           const view = editorViewRef.current;
           if (!view) return;
           view.dispatch({
@@ -603,11 +664,13 @@ export const Editor = React.memo(
           ? 'bg-brand-gray-50 border-t border-brand-gray-200'
           : 'bg-brand-gray-900 border-t border-brand-gray-800';
       const hasContinuationOptions = continuations.some(
-        (option: string) => option && option.trim().length > 0
+        (option: string): boolean | '' => option && option.trim().length > 0
       );
       const shouldShowContinuationPanel = isSuggestionMode || hasContinuationOptions;
       const displayedContinuations =
-        continuations.length > 0 ? continuations : Array.from({ length: 2 }, () => '');
+        continuations.length > 0
+          ? continuations
+          : Array.from({ length: 2 }, (): string => '');
       const isChapterEmpty = !chapter.content || chapter.content.trim().length === 0;
 
       // We need to scroll in a few scenarios:
@@ -626,26 +689,26 @@ export const Editor = React.memo(
       // panel is already present; the guard below prevents scrolling unless an
       // LLM action is active or the panel just opened.
       const prevHasContinuationRef = useRef<boolean>(hasContinuationOptions);
-      useEffect(() => {
+      useEffect((): (() => void) | undefined => {
         const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
         prevHasContinuationRef.current = hasContinuationOptions;
 
-        if (isProseStreaming) return undefined;
+        if (proseStreamingActive) return undefined;
         if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
-        const raf = window.requestAnimationFrame(() => {
+        const raf = window.requestAnimationFrame((): void => {
           if (!isDetachedFromBottomRef.current) {
             scrollMainContentToBottom();
           }
         });
-        return () => {
+        return (): void => {
           window.cancelAnimationFrame(raf);
         };
       }, [
         continuations,
         isAiLoading,
         isSuggesting,
-        isProseStreaming,
+        proseStreamingActive,
         hasContinuationOptions,
         scrollMainContentToBottom,
       ]);
@@ -671,7 +734,7 @@ export const Editor = React.memo(
             localContentRef,
             onSuggestionButtonClick: handleSuggestionButtonClick,
             onAcceptContinuation,
-            onRegenerate: (cursor: number, content: string) =>
+            onRegenerate: (cursor: number, content: string): void =>
               suggestionControls.onKeyboardSuggestionAction?.(
                 'regenerate',
                 cursor,
@@ -691,6 +754,9 @@ export const Editor = React.memo(
               className="flex-1 overflow-y-auto px-4 py-6 md:py-8 flex flex-col items-center relative"
               style={{ overflowAnchor: 'none' }}
               onScroll={handleScroll}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
             >
               {isDragging && (
                 <div className="absolute inset-0 bg-blue-500/10 z-50 flex items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-xl pointer-events-none">
@@ -727,12 +793,12 @@ export const Editor = React.memo(
                       value={localTitle}
                       onChange={(
                         e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-                      ) => {
+                      ): void => {
                         const val = e.target.value.replace(/\n/g, '');
                         setLocalTitle(val);
                         if (titleDebounceRef.current)
                           clearTimeout(titleDebounceRef.current);
-                        titleDebounceRef.current = setTimeout(() => {
+                        titleDebounceRef.current = setTimeout((): void => {
                           onChange(chapter.id, { title: val });
                         }, DEBOUNCE_MS);
                       }}
@@ -762,7 +828,7 @@ export const Editor = React.memo(
                       language={language}
                       spellCheck={spellCheck}
                       onOpenSearch={onOpenSearch}
-                      onChange={(val: string, isUndoRedo?: boolean) => {
+                      onChange={(val: string, isUndoRedo?: boolean): void => {
                         setLocalContent(val);
                         localContentRef.current = val;
                         // Clear diff immediately on user input so typed text is
@@ -782,7 +848,7 @@ export const Editor = React.memo(
                         if (contentDebounceRef.current) {
                           clearTimeout(contentDebounceRef.current);
                         }
-                        contentDebounceRef.current = setTimeout(() => {
+                        contentDebounceRef.current = setTimeout((): void => {
                           onChange(chapter.id, { content: val }, isUndoRedo);
                         }, DEBOUNCE_MS);
                       }}
@@ -796,10 +862,10 @@ export const Editor = React.memo(
                       }
                       showWhitespace={showWhitespace}
                       showDiff={settings.showDiff}
-                      streamingMode={proseStreamingActive}
+                      streamingMode={streamingModeActive}
                       baselineValue={localBaseline}
                       searchHighlightRanges={chapterSearchHighlightRanges}
-                      enterBehavior={viewMode === 'raw' ? 'newline' : 'softbreak'}
+                      enterBehavior="softbreak"
                       selectionBg={selectionBg}
                       placeholder={
                         chapter.scope === 'story'

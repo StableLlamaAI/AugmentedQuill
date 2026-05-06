@@ -9,8 +9,15 @@
  * Purpose: Encapsulate chat scroll-to-bottom behavior and MutationObserver tracking.
  */
 
-import { useRef, useEffect } from 'react';
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  type WheelEvent,
+  type TouchEvent,
+} from 'react';
 import { ChatMessage } from '../../../types';
+import { scrollDistanceFromBottom } from '../../../utils/scrollUtils';
 
 interface UseChatScrollDeps {
   messages: ChatMessage[];
@@ -22,8 +29,18 @@ interface UseChatScrollDeps {
 interface UseChatScrollResult {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   handleScroll: () => void;
+  handleWheel: (event: WheelEvent<HTMLDivElement>) => void;
+  handleTouchStart: (event: TouchEvent<HTMLDivElement>) => void;
+  handleTouchMove: (event: TouchEvent<HTMLDivElement>) => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
+  isAtBottomRef: React.MutableRefObject<boolean>;
 }
+
+/**
+ * Distance from the bottom (px) at or below which the viewport is considered
+ * "at the bottom" and auto-scroll re-attaches.
+ */
+const ATTACH_DISTANCE = 50;
 
 /** Custom React hook that manages chat scroll. */
 export function useChatScroll({
@@ -34,23 +51,86 @@ export function useChatScroll({
 }: UseChatScrollDeps): UseChatScrollResult {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const prevScrollTopRef = useRef(0);
+  const lastTouchYRef = useRef<number | null>(null);
+  /**
+   * Set to true immediately before a programmatic scrollTo/scrollTop so that
+   * the resulting scroll event is skipped for user-intent detection.
+   * prevScrollTopRef is intentionally NOT updated on programmatic scrolls so
+   * that browser-coalesced user+programmatic events are handled correctly by
+   * the delta check.
+   */
+  const isProgrammaticScrollRef = useRef(false);
 
-  const handleScroll = () => {
-    if (scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Consider "at bottom" if within 50px of the actual bottom to handle fast layouts
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
-      isAtBottomRef.current = isAtBottom;
-    }
-  };
-
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth'): void => {
     if (!scrollContainerRef.current) return;
     const { scrollHeight } = scrollContainerRef.current;
+    if (behavior === 'auto' || behavior === 'instant') {
+      isProgrammaticScrollRef.current = true;
+    }
     scrollContainerRef.current.scrollTo({ top: scrollHeight, behavior });
-  };
+  }, []);
 
-  useEffect(() => {
+  const handleScroll = useCallback((): void => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop } = scrollContainerRef.current;
+    const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
+    const isAtBottom = distanceFromBottom < 24;
+
+    // Skip direction logic for programmatic scrolls.
+    // prevScrollTopRef is intentionally NOT updated here.
+    if (isProgrammaticScrollRef.current) {
+      isProgrammaticScrollRef.current = false;
+      isAtBottomRef.current = isAtBottom;
+      return;
+    }
+
+    const scrollDelta = scrollTop - prevScrollTopRef.current;
+    prevScrollTopRef.current = scrollTop;
+
+    // Any upward user scroll immediately detaches auto-scroll.
+    if (scrollDelta < -2) {
+      isAtBottomRef.current = false;
+    } else if (distanceFromBottom < ATTACH_DISTANCE) {
+      // User scrolled down to near the bottom — re-attach auto-scroll.
+      isAtBottomRef.current = true;
+    }
+  }, []);
+
+  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>): void => {
+    if (event.deltaY < 0) {
+      isAtBottomRef.current = false;
+    } else if (event.deltaY > 0 && scrollContainerRef.current) {
+      const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
+      if (distanceFromBottom < ATTACH_DISTANCE + 80) {
+        isAtBottomRef.current = true;
+      }
+    }
+  }, []);
+
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>): void => {
+    lastTouchYRef.current = event.touches[0]?.clientY ?? null;
+  }, []);
+
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>): void => {
+    const currentY = event.touches[0]?.clientY ?? null;
+    const previousY = lastTouchYRef.current;
+    lastTouchYRef.current = currentY;
+    if (previousY === null || currentY === null) return;
+
+    // Positive deltaY = finger moved down = content scrolled up = user wants to see above.
+    const deltaY = currentY - previousY;
+    if (deltaY > 2) {
+      isAtBottomRef.current = false;
+    } else if (deltaY < -2 && scrollContainerRef.current) {
+      const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
+      if (distanceFromBottom < ATTACH_DISTANCE + 80) {
+        isAtBottomRef.current = true;
+      }
+    }
+  }, []);
+
+  useEffect((): (() => void) | undefined => {
     const el = scrollContainerRef.current;
     if (!el) return undefined;
 
@@ -59,10 +139,10 @@ export function useChatScroll({
     // RAF-throttled so that rapid DOM mutations during streaming don't pile up
     // redundant scroll operations.
     let rafId: number | null = null;
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((): void => {
       if (!isAtBottomRef.current) return;
       if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame((): void => {
         rafId = null;
         scrollToBottom(isLoading ? 'auto' : 'smooth');
       });
@@ -75,17 +155,25 @@ export function useChatScroll({
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
 
-    return () => {
+    return (): void => {
       observer.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [messages, isLoading, editingMessageId]);
+  }, [messages, isLoading, editingMessageId, scrollToBottom]);
 
   // Always scroll to bottom on session switch
-  useEffect(() => {
+  useEffect((): void => {
     isAtBottomRef.current = true;
     scrollToBottom('auto');
-  }, [currentSessionId]);
+  }, [currentSessionId, scrollToBottom]);
 
-  return { scrollContainerRef, handleScroll, scrollToBottom };
+  return {
+    scrollContainerRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    scrollToBottom,
+    isAtBottomRef,
+  };
 }

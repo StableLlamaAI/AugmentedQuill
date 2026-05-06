@@ -56,6 +56,7 @@ describe('chatApi', () => {
       messages: [],
       systemPrompt: 'Prompt',
       allowWebSearch: true,
+      projectContextRevision: 12,
     };
 
     await chatApi.save('c1', payload);

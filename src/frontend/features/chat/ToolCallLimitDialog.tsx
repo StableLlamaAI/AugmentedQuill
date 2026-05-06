@@ -33,7 +33,7 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
 }: ToolCallLimitDialogProps) => {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(isOpen, dialogRef, () => onResolve('stop'));
+  useFocusTrap(isOpen, dialogRef, (): void => onResolve('stop'));
 
   const isDarkMode = theme !== 'light';
 
@@ -69,20 +69,20 @@ export const ToolCallLimitDialog: React.FC<ToolCallLimitDialogProps> = ({
         </p>
         <div className="flex flex-col gap-2">
           <button
-            onClick={() => onResolve('continue')}
+            onClick={(): void => onResolve('continue')}
             className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors shadow-sm"
           >
             {t('Continue (+10 calls)')}
           </button>
           <button
-            onClick={() => onResolve('unlimited')}
+            onClick={(): void => onResolve('unlimited')}
             className="w-full py-2.5 px-4 bg-brand-gray-200 dark:bg-brand-gray-800 hover:bg-brand-gray-300 dark:hover:bg-brand-gray-700 rounded-md font-medium transition-colors"
           >
             {t('Continue without limit')}
           </button>
           <div className="mt-2 pt-2 border-t border-brand-gray-100 dark:border-brand-gray-800">
             <button
-              onClick={() => onResolve('stop')}
+              onClick={(): void => onResolve('stop')}
               className="w-full py-2.5 px-4 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md font-medium transition-colors"
             >
               {t('Stop and review')}

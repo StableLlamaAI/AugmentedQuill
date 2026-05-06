@@ -16,7 +16,17 @@ import type { MutableRefObject } from 'react';
 import { api } from '../../services/api';
 import { createChatSession } from '../../services/openaiService';
 import { useChatStore } from '../../stores/chatStore';
-import type { ChatAttachment, ChatMessage, ChatSession, LLMConfig } from '../../types';
+import { useStoryStore } from '../../stores/storyStore';
+import type {
+  Chapter,
+  ChatAttachment,
+  ChatMessage,
+  ChatToolCall,
+  ChatSession,
+  LLMConfig,
+  SourcebookEntry,
+  StoryState,
+} from '../../types';
 import type {
   ChatToolExecutionResponse,
   ChatToolFunctionCall,
@@ -28,6 +38,283 @@ export type ChatToolMutationPayload = ChatToolExecutionResponse & {
     args: Record<string, unknown>;
     result: Record<string, unknown>;
   }>;
+};
+
+const PROJECT_CONTEXT_TOOL_NAMES = new Set<string>([
+  'refresh_project_context',
+  'get_current_chapter_id',
+  'get_project_overview',
+  'get_story_metadata',
+  'update_story_metadata',
+  'read_story_content',
+  'write_story_content',
+  'get_book_metadata',
+  'update_book_metadata',
+  'read_book_content',
+  'write_book_content',
+  'sync_story_summary',
+  'get_chapter_metadata',
+  'update_chapter_metadata',
+  'get_chapter_summaries',
+  'get_chapter_content',
+  'write_chapter_content',
+  'replace_text_in_chapter',
+  'insert_text_at_marker',
+  'apply_chapter_replacements',
+  'write_chapter_summary',
+  'sync_summary',
+  'write_chapter',
+  'continue_chapter',
+  'create_new_chapter',
+  'get_chapter_heading',
+  'write_chapter_heading',
+  'get_chapter_summary',
+  'delete_chapter',
+  'recommend_metadata_updates',
+  'get_sourcebook_entry',
+  'create_sourcebook_entry',
+  'update_sourcebook_entry',
+  'delete_sourcebook_entry',
+  'list_sourcebook_entries',
+  'add_sourcebook_relation',
+  'remove_sourcebook_relation',
+  'search_in_project',
+  'replace_in_project',
+  'reorder_chapters',
+  'reorder_books',
+  'delete_book',
+  'create_new_book',
+  'change_project_type',
+]);
+
+const trimText = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength)}...`;
+};
+
+const normalizeSourcebookForRefresh = (
+  story: StoryState
+): { entries: Array<Record<string, unknown>>; omittedEntries: number } => {
+  const entries = story.sourcebook ?? [];
+  const maxEntries = 5;
+  return {
+    entries: entries.slice(0, maxEntries).map((entry: SourcebookEntry) => ({
+      id: entry.id,
+      name: entry.name,
+      category: entry.category ?? '',
+      description: trimText(entry.description ?? '', 600),
+      synonyms: entry.synonyms.slice(0, 10),
+      relations: (entry.relations ?? []).slice(0, 10),
+    })),
+    omittedEntries: Math.max(0, entries.length - maxEntries),
+  };
+};
+
+const buildRefreshSections = (
+  story: StoryState,
+  currentChapter?: { id: string; title: string } | null
+): string[] => {
+  const sections = new Set<string>();
+
+  sections.add('story.summary');
+  sections.add('story.notes');
+  sections.add('story.conflicts');
+
+  if (story.projectType === 'short-story' && story.draft) {
+    return Array.from(sections);
+  }
+
+  if (currentChapter?.id) {
+    sections.add(`chapter:${currentChapter.id}.summary`);
+    sections.add(`chapter:${currentChapter.id}.notes`);
+    sections.add(`chapter:${currentChapter.id}.conflicts`);
+  }
+
+  const sourcebook = normalizeSourcebookForRefresh(story);
+  sourcebook.entries.forEach((entry: Record<string, unknown>): void => {
+    const entryId = typeof entry.id === 'string' ? entry.id : '';
+    if (!entryId) {
+      return;
+    }
+    sections.add(`sourcebook:${entryId}.description`);
+    sections.add(`sourcebook:${entryId}.synonyms`);
+    sections.add(`sourcebook:${entryId}.relations`);
+  });
+
+  return Array.from(sections);
+};
+
+const buildSectionRefreshPayload = (
+  story: StoryState,
+  sections: string[]
+): Record<string, unknown> => {
+  const results: Record<string, unknown> = {};
+
+  for (const section of sections) {
+    if (section === 'story.summary') {
+      results[section] = story.summary;
+      continue;
+    }
+    if (section === 'story.notes') {
+      results[section] = story.notes ?? '';
+      continue;
+    }
+    if (section === 'story.conflicts') {
+      results[section] = story.conflicts ?? [];
+      continue;
+    }
+
+    if (section.startsWith('chapter:')) {
+      const chapterMatch = section.match(
+        /^chapter:([^\.]+)\.(summary|notes|conflicts)$/
+      );
+      if (!chapterMatch) {
+        continue;
+      }
+      const [, chapterId, field] = chapterMatch;
+      const chapter = story.chapters.find(
+        (candidate: Chapter): boolean => candidate.id === chapterId
+      );
+      if (!chapter) {
+        continue;
+      }
+      if (field === 'summary') {
+        results[section] = chapter.summary;
+      }
+      if (field === 'notes') {
+        results[section] = chapter.notes ?? '';
+      }
+      if (field === 'conflicts') {
+        results[section] = chapter.conflicts ?? [];
+      }
+      continue;
+    }
+
+    if (section.startsWith('sourcebook:')) {
+      const sourcebookMatch = section.match(
+        /^sourcebook:([^\.]+)\.(description|synonyms|relations)$/
+      );
+      if (!sourcebookMatch) {
+        continue;
+      }
+      const [, entryId, field] = sourcebookMatch;
+      const entry = (story.sourcebook ?? []).find(
+        (candidate: SourcebookEntry): boolean => candidate.id === entryId
+      );
+      if (!entry) {
+        continue;
+      }
+      if (field === 'description') {
+        results[section] = trimText(entry.description ?? '', 600);
+      }
+      if (field === 'synonyms') {
+        results[section] = entry.synonyms.slice(0, 10);
+      }
+      if (field === 'relations') {
+        results[section] = (entry.relations ?? []).slice(0, 10);
+      }
+    }
+  }
+
+  return results;
+};
+
+const hasProjectContextHistory = (history: ChatMessage[]): boolean =>
+  history.some((message: ChatMessage): boolean => {
+    if (message.role === 'tool') {
+      return PROJECT_CONTEXT_TOOL_NAMES.has(message.name ?? '');
+    }
+    return (
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.some((call: ChatToolCall): boolean =>
+        PROJECT_CONTEXT_TOOL_NAMES.has(call.name)
+      )
+    );
+  });
+
+const stripProjectContextMessages = (history: ChatMessage[]): ChatMessage[] =>
+  history.flatMap((message: ChatMessage): ChatMessage[] => {
+    if (message.role === 'tool' && PROJECT_CONTEXT_TOOL_NAMES.has(message.name ?? '')) {
+      return [];
+    }
+
+    if (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0) {
+      return [message];
+    }
+
+    const remainingToolCalls = message.tool_calls.filter(
+      (call: ChatToolCall): boolean => !PROJECT_CONTEXT_TOOL_NAMES.has(call.name)
+    );
+    if (remainingToolCalls.length === message.tool_calls.length) {
+      return [message];
+    }
+
+    if (
+      remainingToolCalls.length === 0 &&
+      !(message.text || '').trim() &&
+      !(message.thinking || '').trim()
+    ) {
+      return [];
+    }
+
+    return [{ ...message, tool_calls: remainingToolCalls }];
+  });
+
+type RefreshHistoryResult = {
+  history: ChatMessage[];
+  injected: boolean;
+};
+
+export const refreshStaleProjectContextHistory = (
+  history: ChatMessage[],
+  story: StoryState,
+  currentChapter?: { id: string; title: string } | null,
+  projectContextRevision?: number | null
+): RefreshHistoryResult => {
+  const currentStoryRevision = story.lastUpdated ?? null;
+  if (
+    currentStoryRevision === projectContextRevision ||
+    !hasProjectContextHistory(history)
+  ) {
+    return { history, injected: false };
+  }
+
+  const sanitizedHistory = stripProjectContextMessages(history);
+  const sections = buildRefreshSections(story, currentChapter);
+  const refreshedSections = buildSectionRefreshPayload(story, sections);
+  const toolCallId = `project-context-refresh-${currentStoryRevision ?? Date.now()}`;
+  const refreshArgs = {
+    sections,
+  };
+  const refreshPayload = refreshedSections;
+
+  return {
+    history: [
+      ...sanitizedHistory,
+      {
+        id: `${toolCallId}-assistant`,
+        role: 'model',
+        text: '',
+        tool_calls: [
+          {
+            id: toolCallId,
+            name: 'refresh_project_context',
+            args: refreshArgs,
+          },
+        ],
+      },
+      {
+        id: `${toolCallId}-tool`,
+        role: 'tool',
+        name: 'refresh_project_context',
+        tool_call_id: toolCallId,
+        text: JSON.stringify(refreshPayload),
+      },
+    ],
+    injected: true,
+  };
 };
 
 export type ExecuteChatRequestContext = {
@@ -49,6 +336,7 @@ export type ExecuteChatRequestContext = {
     onUndo?: () => Promise<void>;
     onRedo?: () => Promise<void>;
     forceNewHistory?: boolean;
+    baselineChapterOverrides?: { id: string; content: string }[];
   }) => void;
   setChatMessages: (
     v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
@@ -71,7 +359,7 @@ export type ExecuteChatRequestContext = {
 
 export const ensureUniqueMessages = (messages: ChatMessage[]): ChatMessage[] => {
   const seen = new Set<string>();
-  return messages.filter((message: ChatMessage) => {
+  return messages.filter((message: ChatMessage): boolean => {
     if (!message.id) return true;
     if (seen.has(message.id)) return false;
     seen.add(message.id);
@@ -87,8 +375,10 @@ export const upsertChatMessage = (
   msgId: string,
   messageUpdate: Partial<ChatMessage>
 ): void => {
-  setChatMessages((prev: ChatMessage[]) => {
-    const messageIndex = prev.findIndex((item: ChatMessage) => item.id === msgId);
+  setChatMessages((prev: ChatMessage[]): ChatMessage[] => {
+    const messageIndex = prev.findIndex(
+      (item: ChatMessage): boolean => item.id === msgId
+    );
     if (messageIndex !== -1) {
       const next = [...prev];
       next[messageIndex] = {
@@ -163,7 +453,8 @@ const parseToolCallResults = (
 
   for (const message of messages) {
     const toolCall = assistantMessage.tool_calls?.find(
-      (tc: import('../../types').ChatToolCall) => tc.id === message.tool_call_id
+      (tc: import('../../types').ChatToolCall): boolean =>
+        tc.id === message.tool_call_id
     );
     if (!toolCall) continue;
 
@@ -192,8 +483,10 @@ export const makeMessageUpdater =
   ): ((
     msgId: string
   ) => (update: { text?: string; thinking?: string; traceback?: string }) => void) =>
-  (msgId: string) =>
-  (update: { text?: string; thinking?: string; traceback?: string }) => {
+  (
+    msgId: string
+  ): ((update: { text?: string; thinking?: string; traceback?: string }) => void) =>
+  (update: { text?: string; thinking?: string; traceback?: string }): void => {
     upsertChatMessage(setChatMessages, ensureUniqueMessages, msgId, update);
   };
 
@@ -205,7 +498,11 @@ const normalizeFunctionCalls = (
   }>
 ): Array<ChatToolFunctionCall> | undefined =>
   functionCalls?.map(
-    (call: { id: string; name: string; args: Record<string, unknown> | string }) => ({
+    (call: {
+      id: string;
+      name: string;
+      args: Record<string, unknown> | string;
+    }): { id: string; name: string; args: Record<string, unknown> } => ({
       id: call.id,
       name: call.name,
       args: typeof call.args === 'string' ? { raw: call.args } : call.args,
@@ -240,7 +537,13 @@ const buildToolPayload = (
       | 'tool',
     content: message.text || null,
     tool_calls: message.tool_calls?.map(
-      (toolCall: import('../../types').ChatToolCall) => ({
+      (
+        toolCall: import('../../types').ChatToolCall
+      ): {
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      } => ({
         id: toolCall.id,
         type: 'function' as const,
         function: {
@@ -307,9 +610,10 @@ export const applyScratchpadToolResult = (
   setScratchpad(content);
 
   if (isIncognito && currentChatId) {
-    setIncognitoSessions((prev: ChatSession[]) =>
-      prev.map((session: ChatSession) =>
-        session.id === currentChatId ? { ...session, scratchpad: content } : session
+    setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+      prev.map(
+        (session: ChatSession): ChatSession =>
+          session.id === currentChatId ? { ...session, scratchpad: content } : session
       )
     );
   }
@@ -325,7 +629,9 @@ const handleToolResponse = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+    changed_chapter_ids?: number[];
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -355,8 +661,7 @@ const handleToolResponse = async (
   }
 
   if (toolResponse.mutations?.story_changed) {
-    await context.refreshProjects();
-    await context.refreshStory();
+    storyChangedState.value = true;
   }
 
   if (toolResponse.mutations) {
@@ -372,6 +677,9 @@ const handleToolResponse = async (
       batch_id: toolBatch.batch_id,
       label: toolBatch.label || `AI tools (${toolBatch.operation_count})`,
       operation_count: toolBatch.operation_count,
+      changed_chapter_ids: Array.isArray(toolBatch.changed_chapter_ids)
+        ? (toolBatch.changed_chapter_ids as number[])
+        : undefined,
     });
   }
 
@@ -387,6 +695,7 @@ const handleToolResponse = async (
     {
       allowWebSearch: context.getAllowWebSearch(),
       currentChapter: context.currentChapter,
+      isStopped: (): boolean => context.stopSignalRef.current,
     }
   );
 
@@ -423,7 +732,9 @@ const runToolCallLoop = async (
     batch_id: string;
     label: string;
     operation_count?: number;
-  }>
+    changed_chapter_ids?: number[];
+  }>,
+  storyChangedState: { value: boolean }
 ): Promise<{
   currentHistory: ChatMessage[];
   currentMsgId: string;
@@ -462,7 +773,8 @@ const runToolCallLoop = async (
     const currentChatId = context.getCurrentChatId();
     const toolResponse = await api.chat.executeTools(
       buildToolPayload(currentHistory, context.currentChapterId, currentChatId),
-      context.onProseChunk
+      context.onProseChunk,
+      (): boolean => context.stopSignalRef.current
     );
 
     if (context.stopSignalRef.current) break;
@@ -474,7 +786,8 @@ const runToolCallLoop = async (
       assistantMessage,
       currentHistory,
       currentMsgId,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     if (!nextState) break;
@@ -494,7 +807,7 @@ export const buildExecuteChatRequest =
     history: ChatMessage[],
     attachments?: ChatAttachment[],
     userMsgId?: string
-  ) =>
+  ): Promise<void> =>
     executeChatRequestImpl(context, userText, history, attachments, userMsgId);
 
 const executeChatRequestImpl = async (
@@ -510,7 +823,15 @@ const executeChatRequestImpl = async (
   const updateMessage = makeMessageUpdater(context.setChatMessages);
 
   try {
-    let currentHistory = [...history];
+    const story = useStoryStore.getState().story;
+    const projectContextRevision = useChatStore.getState().projectContextRevision;
+    const refreshedHistory = refreshStaleProjectContextHistory(
+      history,
+      story,
+      context.currentChapter,
+      projectContextRevision
+    );
+    let currentHistory = [...refreshedHistory.history];
     const session = createChatSession(
       context.getSystemPrompt(),
       currentHistory,
@@ -519,6 +840,7 @@ const executeChatRequestImpl = async (
       {
         allowWebSearch: context.getAllowWebSearch(),
         currentChapter: context.currentChapter,
+        isStopped: (): boolean => context.stopSignalRef.current,
       }
     );
 
@@ -529,7 +851,9 @@ const executeChatRequestImpl = async (
     );
 
     const effectiveUserMsgId = userMsgId || uuidv4();
-    if (!currentHistory.some((msg: ChatMessage) => msg.id === effectiveUserMsgId)) {
+    if (
+      !currentHistory.some((msg: ChatMessage): boolean => msg.id === effectiveUserMsgId)
+    ) {
       currentHistory.push({
         id: effectiveUserMsgId,
         role: 'user',
@@ -542,66 +866,57 @@ const executeChatRequestImpl = async (
       batch_id: string;
       label: string;
       operation_count?: number;
+      changed_chapter_ids?: number[];
     }> = [];
-
+    const storyChangedState = { value: false };
     const loopResult = await runToolCallLoop(
       context,
       currentHistory,
       currentMsgId,
       result,
-      accumulatedToolBatches
+      accumulatedToolBatches,
+      storyChangedState
     );
 
     currentHistory = loopResult.currentHistory;
     currentMsgId = loopResult.currentMsgId;
     result = loopResult.result;
 
+    if (storyChangedState.value) {
+      await context.refreshProjects();
+      await context.refreshStory();
+    }
+
+    const baselineChapterOverrides =
+      await fetchBaselineChapterOverrides(accumulatedToolBatches);
+
     if (accumulatedToolBatches.length > 0) {
-      const entryLabel =
-        accumulatedToolBatches.length === 1
-          ? accumulatedToolBatches[0].label
-          : `AI tools: ${accumulatedToolBatches
-              .map(
-                (batch: {
-                  batch_id: string;
-                  label: string;
-                  operation_count?: number;
-                }) => batch.label
-              )
-              .join(', ')}`;
-
-      await context.pushExternalHistoryEntry?.({
-        label: entryLabel,
-        onUndo: async () => {
-          for (const batch of [...accumulatedToolBatches].reverse()) {
-            await api.chat.undoToolBatch(batch.batch_id);
-          }
-          await context.refreshProjects();
-          await context.refreshStory();
-        },
-        onRedo: async () => {
-          for (const batch of accumulatedToolBatches) {
-            await api.chat.redoToolBatch(batch.batch_id);
-          }
-          await context.refreshProjects();
-          await context.refreshStory();
-        },
-      });
-    }
-
-    if (!context.stopSignalRef.current) {
-      const botMessage = context.createAssistantMessage(currentMsgId, {
-        text: result.text,
-        thinking: result.thinking,
-        functionCalls: normalizeFunctionCalls(result.functionCalls),
-      });
-      upsertChatMessage(
-        context.setChatMessages,
-        ensureUniqueMessages,
-        currentMsgId,
-        botMessage
+      await pushExternalHistoryEntryForToolBatches(
+        context,
+        accumulatedToolBatches,
+        baselineChapterOverrides
       );
+    } else if (storyChangedState.value) {
+      await context.pushExternalHistoryEntry?.({
+        label: 'AI tool changes',
+        forceNewHistory: true,
+      });
     }
+
+    const botMessage = context.createAssistantMessage(currentMsgId, {
+      text: result.text,
+      thinking: result.thinking,
+      functionCalls: normalizeFunctionCalls(result.functionCalls),
+    });
+    upsertChatMessage(
+      context.setChatMessages,
+      ensureUniqueMessages,
+      currentMsgId,
+      botMessage
+    );
+    useChatStore
+      .getState()
+      .setProjectContextRevision(useStoryStore.getState().story.lastUpdated ?? null);
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;
@@ -626,9 +941,71 @@ const executeChatRequestImpl = async (
       isError: true,
       traceback: detailedError.traceback,
     };
-    context.setChatMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
+    context.setChatMessages((prev: ChatMessage[]): ChatMessage[] => [
+      ...prev,
+      errorMessage,
+    ]);
   } finally {
     context.setIsChatLoading(false);
     context.stopSignalRef.current = false;
   }
+};
+
+type ToolBatchSummary = {
+  batch_id: string;
+  label: string;
+  operation_count?: number;
+  changed_chapter_ids?: number[];
+};
+
+const fetchBaselineChapterOverrides = async (
+  accumulatedToolBatches: ToolBatchSummary[]
+): Promise<Array<{ id: string; content: string }>> => {
+  const baselineChapterOverrides: Array<{ id: string; content: string }> = [];
+  const seen = new Set<number>();
+
+  for (const batch of accumulatedToolBatches) {
+    if (!batch.changed_chapter_ids?.length) continue;
+    for (const chapterId of batch.changed_chapter_ids) {
+      if (seen.has(chapterId)) continue;
+      seen.add(chapterId);
+      const content = await api.chat.getChapterBeforeContent(batch.batch_id, chapterId);
+      if (content !== null) {
+        baselineChapterOverrides.push({ id: String(chapterId), content });
+      }
+    }
+  }
+
+  return baselineChapterOverrides;
+};
+
+const buildToolBatchLabel = (batches: ToolBatchSummary[]): string =>
+  batches.length === 1
+    ? batches[0].label
+    : `AI tools: ${batches.map((batch: ToolBatchSummary) => batch.label).join(', ')}`;
+
+const pushExternalHistoryEntryForToolBatches = async (
+  context: ExecuteChatRequestContext,
+  accumulatedToolBatches: ToolBatchSummary[],
+  baselineChapterOverrides: Array<{ id: string; content: string }>
+): Promise<void> => {
+  await context.pushExternalHistoryEntry?.({
+    label: buildToolBatchLabel(accumulatedToolBatches),
+    forceNewHistory: true,
+    baselineChapterOverrides,
+    onUndo: async (): Promise<void> => {
+      for (const batch of [...accumulatedToolBatches].reverse()) {
+        await api.chat.undoToolBatch(batch.batch_id);
+      }
+      await context.refreshProjects();
+      await context.refreshStory();
+    },
+    onRedo: async (): Promise<void> => {
+      for (const batch of accumulatedToolBatches) {
+        await api.chat.redoToolBatch(batch.batch_id);
+      }
+      await context.refreshProjects();
+      await context.refreshStory();
+    },
+  });
 };

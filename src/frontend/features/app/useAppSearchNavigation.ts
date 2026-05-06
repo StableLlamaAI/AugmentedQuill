@@ -64,7 +64,7 @@ export function useAppSearchNavigation({
 
   const openSearch = searchState.open;
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     const handler = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
         const target = event.target as HTMLElement;
@@ -77,10 +77,10 @@ export function useAppSearchNavigation({
     };
 
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return (): void => window.removeEventListener('keydown', handler);
   }, [openSearch]);
 
-  useEffect(() => {
+  useEffect((): void => {
     const pending = pendingJumpRef.current;
     if (!pending || pending.chapterId !== currentChapterId) {
       return;
@@ -92,7 +92,7 @@ export function useAppSearchNavigation({
     }
 
     pendingJumpRef.current = null;
-    requestAnimationFrame(() => {
+    requestAnimationFrame((): void => {
       editorRef.current?.jumpToPosition(pending.start, pending.end);
     });
   }, [currentChapterContent, currentChapterId, editorRef]);
@@ -110,12 +110,12 @@ export function useAppSearchNavigation({
     ]
   );
 
-  const handleStoryChanged = useCallback(() => {
+  const handleStoryChanged = useCallback((): void => {
     void refreshStory();
   }, [refreshStory]);
 
   const handleNavigateToChapter = useCallback(
-    (chapterId: number, jumpStart?: number, jumpEnd?: number) => {
+    (chapterId: number, jumpStart?: number, jumpEnd?: number): void => {
       uiStoreActions.closeMetadataDialog();
       uiStoreActions.closeSourcebookDialog();
 
@@ -133,7 +133,7 @@ export function useAppSearchNavigation({
   );
 
   const handleNavigateToSourcebookEntry = useCallback(
-    (entryId: string) => {
+    (entryId: string): void => {
       uiStoreActions.closeMetadataDialog();
       openSourcebookEntryDialog(entryId);
     },
@@ -141,7 +141,7 @@ export function useAppSearchNavigation({
   );
 
   const handleNavigateToStoryMetadata = useCallback(
-    (field: string) => {
+    (field: string): void => {
       const tab: MetadataTab =
         field === 'story_summary'
           ? 'summary'
@@ -165,7 +165,7 @@ export function useAppSearchNavigation({
       activeChapterId:
         currentChapterId !== null ? Number.parseInt(currentChapterId, 10) : null,
       storyLanguage: storyLanguage || 'en',
-      onJumpToPosition: (start: number, end: number) => {
+      onJumpToPosition: (start: number, end: number): void => {
         editorRef.current?.jumpToPosition(start, end);
       },
       onStoryChanged: handleStoryChanged,

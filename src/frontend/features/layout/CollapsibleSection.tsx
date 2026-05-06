@@ -35,146 +35,34 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   isLast,
   isLight,
 }: CollapsibleSectionProps) => {
-  const [isResizing, setIsResizing] = useState(false);
-  const [minHeaderHeight, setMinHeaderHeight] = useState(50);
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLButtonElement>(null);
-  const heightRef = useRef<number | undefined>(height);
-  const startTopRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const {
+    sectionRef,
+    headerRef,
+    isResizing,
+    minHeaderHeight,
+    startResizing,
+    handleResizerKeyDown,
+  } = useCollapsibleSectionResize({
+    height,
+    isCollapsed,
+    onHeightChange,
+  });
 
-  const applyHeight = (value: number) => {
-    const clamped = Math.max(minHeaderHeight, value);
-    if (sectionRef.current) {
-      sectionRef.current.style.height = `${clamped}px`;
-    }
-  };
-
-  const updateMinHeight = useCallback(() => {
-    if (!headerRef.current) return;
-    const h = Math.round(headerRef.current.getBoundingClientRect().height);
-    setMinHeaderHeight(Math.max(50, h));
-  }, []);
-
-  useEffect(() => {
-    updateMinHeight();
-    window.addEventListener('resize', updateMinHeight);
-    return () => window.removeEventListener('resize', updateMinHeight);
-  }, [updateMinHeight]);
-
-  const startResizing = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setIsResizing(true);
-    startTopRef.current = sectionRef.current?.getBoundingClientRect().top ?? null;
-  };
-
-  const stopResizing = useCallback(() => {
-    if (isResizing && onHeightChange && heightRef.current) {
-      onHeightChange(Math.max(minHeaderHeight, heightRef.current));
-    }
-    setIsResizing(false);
-    startTopRef.current = null;
-    if (rafRef.current !== null) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-  }, [isResizing, minHeaderHeight, onHeightChange]);
-
-  const resize = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing || !sectionRef.current || !onHeightChange) return;
-      const top = startTopRef.current ?? sectionRef.current.getBoundingClientRect().top;
-      const newHeight = Math.max(minHeaderHeight, e.clientY - top);
-      heightRef.current = newHeight;
-      if (rafRef.current !== null) return;
-      rafRef.current = window.requestAnimationFrame(() => {
-        rafRef.current = null;
-        if (!isResizing) return;
-        applyHeight(newHeight);
-      });
-    },
-    [isResizing, minHeaderHeight, onHeightChange]
-  );
-
-  useEffect(() => {
-    if (!sectionRef.current) return;
-
-    // Keep min-height in sync with what the header actually renders as.
-    sectionRef.current.style.minHeight = `${minHeaderHeight}px`;
-
-    if (isCollapsed) {
-      sectionRef.current.style.height = '';
-      return;
-    }
-
-    if (!isResizing && typeof height === 'number') {
-      applyHeight(height);
-      heightRef.current = height;
-    }
-  }, [height, isCollapsed, isResizing, minHeaderHeight]);
-
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', resize);
-      document.addEventListener('mouseup', stopResizing);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    } else {
-      document.removeEventListener('mousemove', resize);
-      document.removeEventListener('mouseup', stopResizing);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    return () => {
-      document.removeEventListener('mousemove', resize);
-      document.removeEventListener('mouseup', stopResizing);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizing, resize, stopResizing]);
-
-  const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-  const headerBg = isLight ? 'bg-brand-gray-100/50' : 'bg-brand-gray-800/30';
-  const textColor = isLight ? 'text-brand-gray-600' : 'text-brand-gray-400';
-
-  const resizerBase = isLight ? 'bg-brand-gray-200/18' : 'bg-brand-gray-800/20';
-  const resizerHover = isLight
-    ? 'hover:bg-brand-gray-300/30'
-    : 'hover:bg-brand-gray-700/30';
-  const resizerActive = isLight ? 'bg-brand-gray-300/38' : 'bg-brand-gray-700/38';
-
-  const gripDefault = isLight ? 'text-amber-500' : 'text-amber-400';
-  const gripActive = isLight ? 'text-amber-600' : 'text-rose-300';
+  const {
+    borderClass,
+    headerBg,
+    textColor,
+    resizerBase,
+    resizerHover,
+    resizerActive,
+    gripDefault,
+    gripActive,
+  } = getCollapsibleSectionClassNames(isLight, isResizing);
 
   const sectionId = useId();
   const contentId = `${sectionId}-content`;
 
-  const handleHeaderKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onToggle();
-    }
-  };
-
-  const handleResizerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (!sectionRef.current) return;
-    const currentHeight = sectionRef.current.getBoundingClientRect().height;
-    const step = 10;
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const next = Math.max(minHeaderHeight, currentHeight - step);
-      applyHeight(next);
-      heightRef.current = next;
-      onHeightChange?.(next);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const next = Math.max(minHeaderHeight, currentHeight + step);
-      applyHeight(next);
-      heightRef.current = next;
-      onHeightChange?.(next);
-    }
-  };
+  const handleHeaderKeyDown = getHeaderKeyDownHandler(onToggle);
 
   return (
     <div
@@ -215,10 +103,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           type="button"
           className={`h-1.5 w-full flex items-center justify-center transition-colors shrink-0 group ${resizerBase} ${resizerHover} ${isResizing ? resizerActive : ''}`}
           style={{ cursor: 'row-resize' }}
-          onMouseDown={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-            e.preventDefault();
-            startResizing(e);
-          }}
+          onMouseDown={startResizing}
           onKeyDown={handleResizerKeyDown}
           tabIndex={0}
           aria-label={`Resize ${title} section`}
@@ -241,3 +126,197 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     </div>
   );
 };
+
+interface CollapsibleSectionResizeParams {
+  height?: number;
+  isCollapsed: boolean;
+  onHeightChange?: (height: number) => void;
+}
+
+interface CollapsibleSectionResizeResult {
+  sectionRef: React.RefObject<HTMLDivElement | null>;
+  headerRef: React.RefObject<HTMLButtonElement | null>;
+  isResizing: boolean;
+  minHeaderHeight: number;
+  startResizing: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  handleResizerKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+}
+
+function useCollapsibleSectionResize(
+  params: CollapsibleSectionResizeParams
+): CollapsibleSectionResizeResult {
+  const { height, isCollapsed, onHeightChange } = params;
+  const [isResizing, setIsResizing] = useState(false);
+  const [minHeaderHeight, setMinHeaderHeight] = useState(50);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLButtonElement>(null);
+  const heightRef = useRef<number | undefined>(height);
+  const startTopRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const applyHeight = useCallback(
+    (next: number): void => {
+      const clamped = Math.max(minHeaderHeight, next);
+      if (sectionRef.current) {
+        sectionRef.current.style.height = `${clamped}px`;
+      }
+    },
+    [minHeaderHeight]
+  );
+
+  const updateMinHeight = useCallback((): void => {
+    if (!headerRef.current) return;
+    const headerHeight = Math.round(headerRef.current.getBoundingClientRect().height);
+    setMinHeaderHeight(Math.max(50, headerHeight));
+  }, []);
+
+  useEffect((): (() => void) => {
+    updateMinHeight();
+    window.addEventListener('resize', updateMinHeight);
+    return (): void => window.removeEventListener('resize', updateMinHeight);
+  }, [updateMinHeight]);
+
+  const startResizing = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement, MouseEvent>): void => {
+      e.stopPropagation();
+      e.preventDefault();
+      setIsResizing(true);
+      startTopRef.current = sectionRef.current?.getBoundingClientRect().top ?? null;
+    },
+    []
+  );
+
+  const stopResizing = useCallback((): void => {
+    if (isResizing && onHeightChange && heightRef.current) {
+      onHeightChange(Math.max(minHeaderHeight, heightRef.current));
+    }
+    setIsResizing(false);
+    startTopRef.current = null;
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, [isResizing, minHeaderHeight, onHeightChange]);
+
+  const resize = useCallback(
+    (e: MouseEvent): void => {
+      if (!isResizing || !sectionRef.current || !onHeightChange) return;
+      const top = startTopRef.current ?? sectionRef.current.getBoundingClientRect().top;
+      const nextHeight = Math.max(minHeaderHeight, e.clientY - top);
+      heightRef.current = nextHeight;
+      if (rafRef.current !== null) return;
+      rafRef.current = window.requestAnimationFrame((): void => {
+        rafRef.current = null;
+        if (!isResizing) return;
+        applyHeight(nextHeight);
+      });
+    },
+    [applyHeight, isResizing, minHeaderHeight, onHeightChange]
+  );
+
+  useEffect((): void => {
+    if (!sectionRef.current) return;
+
+    sectionRef.current.style.minHeight = `${minHeaderHeight}px`;
+
+    if (isCollapsed) {
+      sectionRef.current.style.height = '';
+      return;
+    }
+
+    if (!isResizing && typeof height === 'number') {
+      applyHeight(height);
+      heightRef.current = height;
+    }
+  }, [height, isCollapsed, isResizing, minHeaderHeight, applyHeight]);
+
+  useEffect((): (() => void) => {
+    if (isResizing) {
+      document.addEventListener('mousemove', resize);
+      document.addEventListener('mouseup', stopResizing);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.removeEventListener('mousemove', resize);
+      document.removeEventListener('mouseup', stopResizing);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+
+    return (): void => {
+      document.removeEventListener('mousemove', resize);
+      document.removeEventListener('mouseup', stopResizing);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  const handleResizerKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>): void => {
+      if (!sectionRef.current) return;
+      const currentHeight = sectionRef.current.getBoundingClientRect().height;
+      const step = 10;
+
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+        return;
+      }
+
+      e.preventDefault();
+      const next = Math.max(
+        minHeaderHeight,
+        currentHeight + (e.key === 'ArrowUp' ? -step : step)
+      );
+      applyHeight(next);
+      heightRef.current = next;
+      onHeightChange?.(next);
+    },
+    [applyHeight, minHeaderHeight, onHeightChange]
+  );
+
+  return {
+    sectionRef,
+    headerRef,
+    isResizing,
+    minHeaderHeight,
+    startResizing,
+    handleResizerKeyDown,
+  };
+}
+
+const getCollapsibleSectionClassNames = (
+  isLight?: boolean,
+  _isResizing?: boolean
+): {
+  borderClass: string;
+  headerBg: string;
+  textColor: string;
+  resizerBase: string;
+  resizerHover: string;
+  resizerActive: string;
+  gripDefault: string;
+  gripActive: string;
+} => {
+  const isLightTheme = Boolean(isLight);
+
+  return {
+    borderClass: isLightTheme ? 'border-brand-gray-200' : 'border-brand-gray-800',
+    headerBg: isLightTheme ? 'bg-brand-gray-100/50' : 'bg-brand-gray-800/30',
+    textColor: isLightTheme ? 'text-brand-gray-600' : 'text-brand-gray-400',
+    resizerBase: isLightTheme ? 'bg-brand-gray-200/18' : 'bg-brand-gray-800/20',
+    resizerHover: isLightTheme
+      ? 'hover:bg-brand-gray-300/30'
+      : 'hover:bg-brand-gray-700/30',
+    resizerActive: isLightTheme ? 'bg-brand-gray-300/38' : 'bg-brand-gray-700/38',
+    gripDefault: isLightTheme ? 'text-amber-500' : 'text-amber-400',
+    gripActive: isLightTheme ? 'text-amber-600' : 'text-rose-300',
+  };
+};
+
+const getHeaderKeyDownHandler =
+  (onToggle: () => void): ((e: React.KeyboardEvent<HTMLButtonElement>) => void) =>
+  (e: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };

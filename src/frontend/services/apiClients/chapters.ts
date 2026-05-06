@@ -13,7 +13,36 @@ import { Conflict } from '../../types';
 import { ChapterDetailResponse, ChapterListResponse } from '../apiTypes';
 import { fetchJson, putJson, postJson, deleteJson, projectEndpoint } from './shared';
 
-export const createChaptersApi = (projectName: string) => ({
+export interface ChaptersApi {
+  list: () => Promise<ChapterListResponse>;
+  get: (id: number) => Promise<ChapterDetailResponse>;
+  create: (
+    title: string,
+    content?: string,
+    book_id?: string
+  ) => Promise<{
+    ok: boolean;
+    id: number;
+    title: string;
+    book_id?: string | undefined;
+  }>;
+  updateContent: (id: number, content: string) => Promise<{ ok: boolean }>;
+  updateTitle: (id: number, title: string) => Promise<{ ok: boolean }>;
+  updateSummary: (id: number, summary: string) => Promise<{ ok: boolean }>;
+  updateMetadata: (
+    id: number,
+    data: {
+      summary?: string;
+      notes?: string;
+      private_notes?: string;
+      conflicts?: Conflict[];
+    }
+  ) => Promise<{ ok: boolean; id?: number | undefined; message?: string | undefined }>;
+  delete: (id: number) => Promise<{ ok: boolean }>;
+  reorder: (chapterIds: number[], bookId?: string) => Promise<{ ok: boolean }>;
+}
+
+export const createChaptersApi = (projectName: string): ChaptersApi => ({
   list: async () =>
     fetchJson<ChapterListResponse>(
       projectEndpoint(projectName, '/chapters'),
@@ -29,7 +58,16 @@ export const createChaptersApi = (projectName: string) => ({
     );
   },
 
-  create: async (title: string, content: string = '', book_id?: string) => {
+  create: async (
+    title: string,
+    content: string = '',
+    book_id?: string
+  ): Promise<{
+    ok: boolean;
+    id: number;
+    title: string;
+    book_id?: string | undefined;
+  }> => {
     return postJson<{ ok: boolean; id: number; title: string; book_id?: string }>(
       projectEndpoint(projectName, '/chapters'),
       { title, content, book_id },
@@ -37,7 +75,7 @@ export const createChaptersApi = (projectName: string) => ({
     );
   },
 
-  updateContent: async (id: number, content: string) => {
+  updateContent: async (id: number, content: string): Promise<{ ok: boolean }> => {
     return putJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chapters/${id}/content`),
       { content },
@@ -45,7 +83,7 @@ export const createChaptersApi = (projectName: string) => ({
     );
   },
 
-  updateTitle: async (id: number, title: string) => {
+  updateTitle: async (id: number, title: string): Promise<{ ok: boolean }> => {
     return putJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chapters/${id}/title`),
       { title },
@@ -53,7 +91,7 @@ export const createChaptersApi = (projectName: string) => ({
     );
   },
 
-  updateSummary: async (id: number, summary: string) => {
+  updateSummary: async (id: number, summary: string): Promise<{ ok: boolean }> => {
     return putJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chapters/${id}/summary`),
       { summary },
@@ -69,7 +107,11 @@ export const createChaptersApi = (projectName: string) => ({
       private_notes?: string;
       conflicts?: Conflict[];
     }
-  ) => {
+  ): Promise<{
+    ok: boolean;
+    id?: number | undefined;
+    message?: string | undefined;
+  }> => {
     return putJson<{ ok: boolean; id?: number; message?: string }>(
       projectEndpoint(projectName, `/chapters/${id}/metadata`),
       data,
@@ -77,14 +119,14 @@ export const createChaptersApi = (projectName: string) => ({
     );
   },
 
-  delete: async (id: number) => {
+  delete: async (id: number): Promise<{ ok: boolean }> => {
     return deleteJson<{ ok: boolean }>(
       projectEndpoint(projectName, `/chapters/${id}`),
       'Failed to delete chapter'
     );
   },
 
-  reorder: async (chapterIds: number[], bookId?: string) => {
+  reorder: async (chapterIds: number[], bookId?: string): Promise<{ ok: boolean }> => {
     return fetchJson<{ ok: boolean }>(
       projectEndpoint(projectName, '/chapters/reorder'),
       {

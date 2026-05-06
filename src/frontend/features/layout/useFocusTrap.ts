@@ -28,7 +28,7 @@ const FOCUSABLE_SELECTOR = [
 const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
   const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
   return nodes.filter(
-    (el: HTMLElement) =>
+    (el: HTMLElement): boolean =>
       el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement
   );
 };
@@ -40,7 +40,7 @@ export const useFocusTrap = (
 ): void => {
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (!isActive || !dialogRef.current) return;
 
     const dialogEl = dialogRef.current;
@@ -56,7 +56,7 @@ export const useFocusTrap = (
       dialogEl.focus();
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       if (!dialogRef.current) return;
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -89,7 +89,7 @@ export const useFocusTrap = (
 
     document.addEventListener('keydown', handleKeyDown, true);
 
-    return () => {
+    return (): void => {
       document.removeEventListener('keydown', handleKeyDown, true);
       if (previousActiveElement.current && previousActiveElement.current.focus) {
         previousActiveElement.current.focus();

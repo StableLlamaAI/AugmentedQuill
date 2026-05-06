@@ -20,14 +20,20 @@ export const machineApi = {
       'Failed to load machine config'
     );
   },
-  save: async (machine: MachineConfigResponse) => {
+  save: async (
+    machine: MachineConfigResponse
+  ): Promise<{ ok: boolean; detail?: string | undefined }> => {
     return putJson<{ ok: boolean; detail?: string }>(
       '/machine',
       machine,
       'Failed to save machine config'
     );
   },
-  test: async (payload: { base_url: string; api_key?: string; timeout_s?: number }) => {
+  test: async (payload: {
+    base_url: string;
+    api_key?: string;
+    timeout_s?: number;
+  }): Promise<{ ok: boolean; models: string[]; detail?: string | undefined }> => {
     return postJson<{ ok: boolean; models: string[]; detail?: string }>(
       '/machine/test',
       payload,

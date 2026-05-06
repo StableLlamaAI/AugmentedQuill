@@ -320,7 +320,6 @@ export const CodeMirrorEditor = React.forwardRef<
   EditorView | null,
   CodeMirrorEditorProps
 >(
-  // eslint-disable-next-line max-lines-per-function
   (
     {
       value,
@@ -351,8 +350,7 @@ export const CodeMirrorEditor = React.forwardRef<
         : (viewModeProp ?? (legacyMode === 'markdown' ? 'markdown' : 'raw'));
 
     // Derive enter behavior from viewMode unless explicitly overridden
-    const enterBehavior =
-      enterBehaviorProp ?? (viewMode === 'raw' ? 'newline' : 'softbreak');
+    const enterBehavior = enterBehaviorProp ?? 'softbreak';
 
     // Derive CodeMirror language mode from viewMode
     const mode: 'plain' | 'markdown' = viewMode === 'raw' ? 'plain' : 'markdown';
@@ -437,7 +435,7 @@ export const CodeMirrorEditor = React.forwardRef<
                   _fB: number,
                   _tB: number,
                   ins: import('@codemirror/state').Text
-                ) => {
+                ): void => {
                   if (toA !== fromA || ins.length !== 1) {
                     safeInsert = false;
                     return;
@@ -467,7 +465,10 @@ export const CodeMirrorEditor = React.forwardRef<
             return Decoration.set(decs, true);
           }
         },
-        { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+        {
+          decorations: (v: { decorations: DecorationSet }): DecorationSet =>
+            v.decorations,
+        }
       );
 
     const buildSearchHighlightExtension = (
@@ -506,7 +507,7 @@ export const CodeMirrorEditor = React.forwardRef<
     // ── Mount / unmount ─────────────────────────────────────────────────────
     // ── Mount / unmount ─────────────────────────────────────────────────────
 
-    useEffect(() => {
+    useEffect((): (() => void) | undefined => {
       if (!containerRef.current) return undefined;
 
       const extensions: Extension[] = [
@@ -529,7 +530,7 @@ export const CodeMirrorEditor = React.forwardRef<
             {
               key: 'Ctrl-f',
               mac: 'Cmd-f',
-              run: () => {
+              run: (): boolean => {
                 onOpenSearchRef.current?.();
                 return true;
               },
@@ -557,7 +558,7 @@ export const CodeMirrorEditor = React.forwardRef<
         placeholderCompartment.current.of(buildPlaceholderExtension(placeholder)),
         mdDecorationCompartment.current.of(buildMdDecorationExtension(viewMode)),
         selectionBgCompartment.current.of(buildSelectionBgExtension(selectionBg)),
-        EditorView.updateListener.of((update: ViewUpdate) => {
+        EditorView.updateListener.of((update: ViewUpdate): void => {
           if (update.docChanged) {
             const isExternalSync = update.transactions.some((tx: Transaction) =>
               tx.annotation(externalValueSyncAnnotation)
@@ -591,7 +592,7 @@ export const CodeMirrorEditor = React.forwardRef<
         (ref as React.MutableRefObject<EditorView | null>).current = view;
       }
 
-      return () => {
+      return (): void => {
         view.destroy();
         viewRef.current = null;
         if (typeof ref === 'function') {
@@ -604,13 +605,13 @@ export const CodeMirrorEditor = React.forwardRef<
 
     // ── Dynamic prop updates via Compartment.reconfigure ────────────────────
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: languageCompartment.current.reconfigure(buildLanguageExtension(mode)),
       });
     }, [mode]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: mdDecorationCompartment.current.reconfigure(
           buildMdDecorationExtension(viewMode)
@@ -618,7 +619,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [viewMode]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: wsCompartment.current.reconfigure(
           buildWsExtension(showWhitespace, baselineValue, showDiff, streamingMode)
@@ -626,7 +627,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [showWhitespace, baselineValue, showDiff, streamingMode]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: enterCompartment.current.reconfigure(
           buildEnterExtension(enterBehavior)
@@ -634,7 +635,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [enterBehavior]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: selectionBgCompartment.current.reconfigure(
           buildSelectionBgExtension(selectionBg)
@@ -642,7 +643,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [selectionBg]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: placeholderCompartment.current.reconfigure(
           buildPlaceholderExtension(placeholder)
@@ -650,7 +651,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [placeholder]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: attributesCompartment.current.reconfigure(
           buildAttributesExtension(language, spellCheck, placeholder)
@@ -664,7 +665,7 @@ export const CodeMirrorEditor = React.forwardRef<
     // same render the plugin is reconfigured with the correct baseline BEFORE
     // the content dispatch fires — ensuring the first painted frame already
     // shows the correct diff decorations rather than missing them.
-    useLayoutEffect(() => {
+    useLayoutEffect((): void => {
       viewRef.current?.dispatch({
         effects: diffCompartment.current.reconfigure(
           buildDiffExtension(baselineValue, showDiff, streamingMode, showWhitespace)
@@ -672,7 +673,7 @@ export const CodeMirrorEditor = React.forwardRef<
       });
     }, [baselineValue, showDiff, streamingMode, showWhitespace]);
 
-    useEffect(() => {
+    useEffect((): void => {
       viewRef.current?.dispatch({
         effects: searchHighlightCompartment.current.reconfigure(
           buildSearchHighlightExtension(searchHighlightRanges)
@@ -688,7 +689,7 @@ export const CodeMirrorEditor = React.forwardRef<
     // synchronously in the same commit phase as the React render, so that any
     // sibling layout effects that measure scrollHeight see the new content
     // height immediately — eliminating one-frame flicker during LLM streaming.
-    useLayoutEffect(() => {
+    useLayoutEffect((): void => {
       const view = viewRef.current;
       if (!view) return;
       const docStr = view.state.doc.toString();

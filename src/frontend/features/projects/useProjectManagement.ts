@@ -61,14 +61,32 @@ const normalizeProjectType = (
   return 'novel';
 };
 
-const mapProjectsList = (projects: ProjectListItem[]) =>
-  projects.map((project: ProjectListItem) => ({
-    id: project.name,
-    title: project.title || project.name,
-    type: normalizeProjectType(project.type),
-    updatedAt: Date.now(),
-    language: project.language ?? 'en',
-  }));
+const mapProjectsList = (
+  projects: ProjectListItem[]
+): {
+  id: string;
+  title: string;
+  type: 'short-story' | 'novel' | 'series';
+  updatedAt: number;
+  language: string;
+}[] =>
+  projects.map(
+    (
+      project: ProjectListItem
+    ): {
+      id: string;
+      title: string;
+      type: 'short-story' | 'novel' | 'series';
+      updatedAt: number;
+      language: string;
+    } => ({
+      id: project.name,
+      title: project.title || project.name,
+      type: normalizeProjectType(project.type),
+      updatedAt: Date.now(),
+      language: project.language ?? 'en',
+    })
+  );
 
 /** Custom React hook that manages project management. */
 export function useProjectManagement({
@@ -119,12 +137,12 @@ export function useProjectManagement({
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [instructionLanguages, setInstructionLanguages] = useState<string[]>(['en']);
 
-  const refreshProjects = useCallback(async () => {
+  const refreshProjects = useCallback(async (): Promise<void> => {
     try {
       const data = await api.projects.list();
       if (data.available) {
         const listedProjects = mapProjectsList(data.available);
-        setProjects((prev: ProjectMetadata[]) => {
+        setProjects((prev: ProjectMetadata[]): ProjectMetadata[] => {
           const hasActiveStory = listedProjects.some(
             (project: {
               id: string;
@@ -132,13 +150,13 @@ export function useProjectManagement({
               type: 'short-story' | 'novel' | 'series';
               updatedAt: number;
               language: string;
-            }) => project.id === storyId
+            }): boolean => project.id === storyId
           );
           if (hasActiveStory) {
             return listedProjects;
           }
           const activeFromPreviousState = prev.find(
-            (project: ProjectMetadata) => project.id === storyId
+            (project: ProjectMetadata): boolean => project.id === storyId
           );
           return activeFromPreviousState
             ? [...listedProjects, activeFromPreviousState]
@@ -150,15 +168,15 @@ export function useProjectManagement({
     }
   }, [storyId]);
 
-  useEffect(() => {
+  useEffect((): void => {
     refreshProjects();
   }, [refreshProjects]);
 
-  useEffect(() => {
+  useEffect((): void => {
     localStorage.setItem('augmentedquill_projects_meta', JSON.stringify(projects));
   }, [projects]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!storyId) return;
 
     localStorage.setItem(
@@ -170,8 +188,10 @@ export function useProjectManagement({
         language: storyLanguage,
       })
     );
-    setProjects((prev: ProjectMetadata[]) => {
-      const exists = prev.find((project: ProjectMetadata) => project.id === storyId);
+    setProjects((prev: ProjectMetadata[]): ProjectMetadata[] => {
+      const exists = prev.find(
+        (project: ProjectMetadata): boolean => project.id === storyId
+      );
       const language = storyLanguage || 'en';
       if (
         exists &&
@@ -179,21 +199,23 @@ export function useProjectManagement({
         exists.type === storyProjectType &&
         exists.language === language
       ) {
-        return prev.map((project: ProjectMetadata) =>
-          project.id === storyId ? { ...project, updatedAt: Date.now() } : project
+        return prev.map(
+          (project: ProjectMetadata): ProjectMetadata =>
+            project.id === storyId ? { ...project, updatedAt: Date.now() } : project
         );
       }
       if (exists) {
-        return prev.map((project: ProjectMetadata) =>
-          project.id === storyId
-            ? {
-                ...project,
-                title: storyTitle,
-                type: storyProjectType,
-                language,
-                updatedAt: Date.now(),
-              }
-            : project
+        return prev.map(
+          (project: ProjectMetadata): ProjectMetadata =>
+            project.id === storyId
+              ? {
+                  ...project,
+                  title: storyTitle,
+                  type: storyProjectType,
+                  language,
+                  updatedAt: Date.now(),
+                }
+              : project
         );
       }
       return [
@@ -210,7 +232,7 @@ export function useProjectManagement({
   }, [storyId, storyTitle, storyProjectType, storyLanguage]);
 
   const handleLoadProject = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       try {
         const response = await api.projects.select(id);
         if (!response.ok) return;
@@ -231,12 +253,12 @@ export function useProjectManagement({
   );
 
   const handleImportProject = useCallback(
-    async (file: File) => {
+    async (file: File): Promise<void> => {
       try {
         const previousActiveProjectId = storyId;
         const importedFileSnapshot = file;
         const knownProjectIds = new Set(
-          projects.map((project: ProjectMetadata) => project.id)
+          projects.map((project: ProjectMetadata): string => project.id)
         );
         const response = await api.projects.import(file);
         if (response.ok) {
@@ -246,8 +268,8 @@ export function useProjectManagement({
           setProjects(mapProjectsList(listing.available));
 
           const importedNameFromList = listing.available
-            .map((project: ProjectListItem) => project.name)
-            .find((name: string) => !knownProjectIds.has(name));
+            .map((project: ProjectListItem): string => project.name)
+            .find((name: string): boolean => !knownProjectIds.has(name));
           const importedNameFromMessage =
             typeof response.message === 'string'
               ? response.message.match(/Imported as\s+(.+)$/)?.[1]?.trim()
@@ -258,14 +280,14 @@ export function useProjectManagement({
           if (importedProjectName) {
             recordHistoryEntry?.({
               label: `Import project: ${importedProjectName}`,
-              onUndo: async () => {
+              onUndo: async (): Promise<void> => {
                 await api.projects.delete(importedProjectName);
                 await refreshProjects();
                 if (previousActiveProjectId) {
                   await handleLoadProject(previousActiveProjectId);
                 }
               },
-              onRedo: async () => {
+              onRedo: async (): Promise<void> => {
                 await api.projects.import(importedFileSnapshot);
                 await refreshProjects();
                 await handleLoadProject(importedProjectName);
@@ -287,14 +309,14 @@ export function useProjectManagement({
     ]
   );
 
-  const handleCreateProject = useCallback(() => {
+  const handleCreateProject = useCallback((): void => {
     setIsCreateProjectOpen(true);
   }, []);
 
   // gather languages from the instructions endpoint so the create dialog can
   // populate its dropdown
-  useEffect(() => {
-    const loadLangs = async () => {
+  useEffect((): void => {
+    const loadLangs = async (): Promise<void> => {
       try {
         const data = await api.settings.getPrompts();
         if (data.languages) setInstructionLanguages(data.languages);
@@ -307,7 +329,11 @@ export function useProjectManagement({
   }, []);
 
   const handleCreateProjectConfirm = useCallback(
-    async (name: string, type: CreateProjectType, language: string = 'en') => {
+    async (
+      name: string,
+      type: CreateProjectType,
+      language: string = 'en'
+    ): Promise<void> => {
       try {
         const previousProjectId = storyId;
         const result = await api.projects.create(name, type, language);
@@ -363,14 +389,14 @@ export function useProjectManagement({
 
           recordHistoryEntry?.({
             label: `Create project: ${name}`,
-            onUndo: async () => {
+            onUndo: async (): Promise<void> => {
               await api.projects.delete(name);
               await refreshProjects();
               if (previousProjectId && previousProjectId !== name) {
                 await handleLoadProject(previousProjectId);
               }
             },
-            onRedo: async () => {
+            onRedo: async (): Promise<void> => {
               await api.projects.create(name, type, language);
               await refreshProjects();
               await handleLoadProject(name);
@@ -397,7 +423,7 @@ export function useProjectManagement({
   );
 
   const handleDeleteProject = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       if (projects.length <= 1) return;
 
       try {
@@ -410,7 +436,7 @@ export function useProjectManagement({
 
         await api.projects.delete(id);
         const newProjects = projects.filter(
-          (project: ProjectMetadata) => project.id !== id
+          (project: ProjectMetadata): boolean => project.id !== id
         );
         setProjects(newProjects);
         localStorage.removeItem(`project_${id}`);
@@ -422,7 +448,7 @@ export function useProjectManagement({
         if (exported) {
           recordHistoryEntry?.({
             label: `Delete project: ${id}`,
-            onUndo: async () => {
+            onUndo: async (): Promise<void> => {
               const snapshotFile = new File([exported as Blob], `${id}.zip`, {
                 type: 'application/zip',
               });
@@ -430,7 +456,7 @@ export function useProjectManagement({
               await refreshProjects();
               await handleLoadProject(id);
             },
-            onRedo: async () => {
+            onRedo: async (): Promise<void> => {
               await api.projects.delete(id);
               await refreshProjects();
             },
@@ -454,7 +480,7 @@ export function useProjectManagement({
   );
 
   const handleRenameProject = useCallback(
-    (id: string, newName: string, newLang?: string) => {
+    (id: string, newName: string, newLang?: string): void => {
       if (id === storyId) {
         // if the active project is renamed, update story metadata
         updateStoryMetadata(
@@ -469,11 +495,12 @@ export function useProjectManagement({
         return;
       }
 
-      setProjects((prev: ProjectMetadata[]) =>
-        prev.map((project: ProjectMetadata) =>
-          project.id === id
-            ? { ...project, title: newName, language: newLang || project.language }
-            : project
+      setProjects((prev: ProjectMetadata[]): ProjectMetadata[] =>
+        prev.map(
+          (project: ProjectMetadata): ProjectMetadata =>
+            project.id === id
+              ? { ...project, title: newName, language: newLang || project.language }
+              : project
         )
       );
       const saved = localStorage.getItem(`project_${id}`);

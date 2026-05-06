@@ -44,11 +44,18 @@ export interface ChatStoreState {
   // ── Prose streaming flag (only flips at turn start/end) ──────────────────
   /** True only while chat is actively writing prose into the editor. */
   isProseStreamingFromChat: boolean;
+  /**
+   * True after the user stops chat mid-write: streaming is done but the
+   * editor keeps streamingMode=true (prefix diff) so the green block stays
+   * visible.  Cleared when the next chat interaction begins.
+   */
+  isProseStreamingFrozen: boolean;
 
   // ── Session management ────────────────────────────────────────────────────
   chatHistoryList: ChatSession[];
   currentChatId: string | null;
   incognitoSessions: ChatSession[];
+  projectContextRevision: number | null;
 
   // ── User preferences (rarely changing) ───────────────────────────────────
   isIncognito: boolean;
@@ -62,6 +69,10 @@ export interface ChatStoreState {
   ) => void;
   setIsChatLoading: (v: boolean) => void;
   setIsProseStreamingFromChat: (v: boolean) => void;
+  setIsProseStreamingFrozen: (v: boolean) => void;
+  /** Atomically clears isProseStreamingFromChat and sets isProseStreamingFrozen=true
+   * so no render frame sees both flags false (which would drop the green highlight). */
+  freezeProseStreaming: () => void;
   setSessionMutations: (
     v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
   ) => void;
@@ -72,6 +83,7 @@ export interface ChatStoreState {
   setIncognitoSessions: (
     v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])
   ) => void;
+  setProjectContextRevision: (v: number | null) => void;
   setIsIncognito: (v: boolean) => void;
   setAllowWebSearch: (v: boolean) => void;
   setSystemPrompt: (v: string | ((prev: string) => string)) => void;
@@ -87,39 +99,72 @@ export const useChatStore = create<ChatStoreState>()(
     chatMessages: [],
     isChatLoading: false,
     isProseStreamingFromChat: false,
+    isProseStreamingFrozen: false,
     sessionMutations: [],
     chatHistoryList: [],
     currentChatId: null,
     incognitoSessions: [],
+    projectContextRevision: null,
     isIncognito: false,
     allowWebSearch: false,
     systemPrompt: '',
     scratchpad: '',
 
     setChatMessages: (v: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) =>
-      set((s: ChatStoreState) => ({ chatMessages: resolve(v, s.chatMessages) })),
-    setIsChatLoading: (v: boolean) => set(() => ({ isChatLoading: v })),
+      set((s: ChatStoreState): { chatMessages: ChatMessage[] } => ({
+        chatMessages: resolve(v, s.chatMessages),
+      })),
+    setIsChatLoading: (v: boolean) =>
+      set((s: ChatStoreState): ChatStoreState | { isChatLoading: boolean } =>
+        s.isChatLoading === v ? s : { isChatLoading: v }
+      ),
     setIsProseStreamingFromChat: (v: boolean) =>
-      set(() => ({ isProseStreamingFromChat: v })),
+      set(
+        (s: ChatStoreState): ChatStoreState | { isProseStreamingFromChat: boolean } =>
+          s.isProseStreamingFromChat === v ? s : { isProseStreamingFromChat: v }
+      ),
+    setIsProseStreamingFrozen: (v: boolean) =>
+      set((s: ChatStoreState): ChatStoreState | { isProseStreamingFrozen: boolean } =>
+        s.isProseStreamingFrozen === v ? s : { isProseStreamingFrozen: v }
+      ),
+    freezeProseStreaming: () =>
+      set(
+        (): { isProseStreamingFromChat: boolean; isProseStreamingFrozen: boolean } => ({
+          isProseStreamingFromChat: false,
+          isProseStreamingFrozen: true,
+        })
+      ),
     setSessionMutations: (
       v: SessionMutation[] | ((prev: SessionMutation[]) => SessionMutation[])
     ) =>
-      set((s: ChatStoreState) => ({
+      set((s: ChatStoreState): { sessionMutations: SessionMutation[] } => ({
         sessionMutations: resolve(v, s.sessionMutations),
       })),
     setChatHistoryList: (v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])) =>
-      set((s: ChatStoreState) => ({ chatHistoryList: resolve(v, s.chatHistoryList) })),
-    setCurrentChatId: (id: string | null) => set(() => ({ currentChatId: id })),
+      set((s: ChatStoreState): { chatHistoryList: ChatSession[] } => ({
+        chatHistoryList: resolve(v, s.chatHistoryList),
+      })),
+    setCurrentChatId: (id: string | null) =>
+      set((): { currentChatId: string | null } => ({ currentChatId: id })),
     setIncognitoSessions: (
       v: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])
     ) =>
-      set((s: ChatStoreState) => ({
+      set((s: ChatStoreState): { incognitoSessions: ChatSession[] } => ({
         incognitoSessions: resolve(v, s.incognitoSessions),
       })),
-    setIsIncognito: (v: boolean) => set(() => ({ isIncognito: v })),
-    setAllowWebSearch: (v: boolean) => set(() => ({ allowWebSearch: v })),
+    setProjectContextRevision: (v: number | null) =>
+      set((): { projectContextRevision: number | null } => ({
+        projectContextRevision: v,
+      })),
+    setIsIncognito: (v: boolean) =>
+      set((): { isIncognito: boolean } => ({ isIncognito: v })),
+    setAllowWebSearch: (v: boolean) =>
+      set((): { allowWebSearch: boolean } => ({ allowWebSearch: v })),
     setSystemPrompt: (v: string | ((prev: string) => string)) =>
-      set((s: ChatStoreState) => ({ systemPrompt: resolve(v, s.systemPrompt) })),
-    setScratchpad: (v: string) => set(() => ({ scratchpad: v })),
+      set((s: ChatStoreState): { systemPrompt: string } => ({
+        systemPrompt: resolve(v, s.systemPrompt),
+      })),
+    setScratchpad: (v: string) =>
+      set((): { scratchpad: string } => ({ scratchpad: v })),
   })
 );

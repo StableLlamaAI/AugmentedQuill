@@ -42,7 +42,7 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
 
   useFocusTrap(isOpen, dialogRef, onClose);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       setDraft(scratchpad || '');
     }
@@ -88,7 +88,7 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
             </div>
             <CodeMirrorEditor
               value={draft}
-              onChange={(value: string) => setDraft(value)}
+              onChange={(value: string): void => setDraft(value)}
               language={storyLanguage}
               spellCheck={true}
               mode="markdown"
@@ -100,7 +100,7 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
           </div>
           <div className="p-4 border-t dark:border-brand-gray-800 flex justify-between items-center gap-3 flex-wrap">
             <button
-              onClick={() => {
+              onClick={(): void => {
                 onDelete();
                 setDraft('');
               }}
@@ -117,7 +117,7 @@ export const ChatScratchpadDialog: React.FC<ChatScratchpadDialogProps> = ({
                 {t('Cancel')}
               </button>
               <button
-                onClick={() => {
+                onClick={(): void => {
                   onSave(draft);
                   onClose();
                 }}

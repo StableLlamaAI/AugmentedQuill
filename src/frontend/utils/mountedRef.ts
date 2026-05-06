@@ -13,7 +13,7 @@ type MountedRef = { current: boolean };
 
 export const setupMountedRefLifecycle = (mountedRef: MountedRef): (() => void) => {
   mountedRef.current = true;
-  return () => {
+  return (): void => {
     mountedRef.current = false;
   };
 };

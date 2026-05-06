@@ -465,6 +465,8 @@ export const de = {
       'Diese Aktion ist nicht verfügbar, da kein funktionierendes WRITING-Modell konfiguriert ist.',
     'Toggle whitespace characters': 'Leerzeichenzeichen umschalten',
     'Close menu': 'Menü schließen',
+    'More tools': 'Mehr Werkzeuge',
+    Tools: 'Werkzeuge',
     Formatting: 'Formatierung',
     'Close formatting menu': 'Formatierungsmenü schließen',
     Format: 'Format',
@@ -479,5 +481,13 @@ export const de = {
     'Model settings': 'Modelleinstellungen',
     Models: 'Modelle',
     'Close model menu': 'Modellmenü schließen',
+    // MutationTags
+    'Story prose': 'Geschichte (Text)',
+    'Story title': 'Geschichte (Titel)',
+    'Story summary': 'Geschichte (Zusammenfassung)',
+    'Story notes': 'Geschichte (Notizen)',
+    'Story private notes': 'Geschichte (Private Notizen)',
+    'Chapter prose': 'Kapitel (Text)',
+    'Project replace': 'Projekt-Ersetzung',
   },
 };

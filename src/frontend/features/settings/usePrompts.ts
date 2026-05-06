@@ -28,13 +28,13 @@ const EMPTY_PROMPTS: PromptsState = {
 export function usePrompts(storyId: string): PromptsState {
   const [prompts, setPrompts] = useState<PromptsState>(EMPTY_PROMPTS);
 
-  useEffect(() => {
-    const fetchPrompts = async () => {
+  useEffect((): void => {
+    const fetchPrompts = async (): Promise<void> => {
       try {
         const promptsData = await api.settings.getPrompts();
         const system_messages = promptsData.system_messages || {};
 
-        startTransition(() => {
+        startTransition((): void => {
           setPrompts({
             system_messages,
             user_prompts: promptsData.user_prompts || {},

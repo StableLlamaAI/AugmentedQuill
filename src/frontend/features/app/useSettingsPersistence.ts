@@ -36,7 +36,7 @@ export function useSettingsPersistence({
   handleSaveSettings: (nextSettings: AppSettings) => Promise<void>;
 } {
   const handleSaveSettings = useCallback(
-    async (nextSettings: AppSettings) => {
+    async (nextSettings: AppSettings): Promise<void> => {
       const previousSettings = structuredClone(appSettings);
       const nextSettingsSnapshot = structuredClone(nextSettings);
       const previousPayload = buildMachinePayload(previousSettings);
@@ -48,12 +48,12 @@ export function useSettingsPersistence({
 
       pushExternalHistoryEntry({
         label: 'Update machine settings',
-        onUndo: async () => {
+        onUndo: async (): Promise<void> => {
           await api.machine.save(previousPayload);
           setAppSettings(previousSettings);
           refreshHealth();
         },
-        onRedo: async () => {
+        onRedo: async (): Promise<void> => {
           await api.machine.save(nextPayload);
           setAppSettings(nextSettingsSnapshot);
           refreshHealth();

@@ -26,6 +26,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
+import { JsonSyntaxView } from '../../../components/ui/JsonSyntaxView';
 import { MarkdownView } from '../../editor/MarkdownView';
 import { CollapsibleToolSection } from './CollapsibleToolSection';
 import { WebSearchResults, VisitPageResult } from './ToolResultViews';
@@ -37,21 +38,27 @@ import { WebSearchResults, VisitPageResult } from './ToolResultViews';
 
 type ToolCallArgumentsProps = { args: unknown };
 
+const tryParseJson = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
 const ToolCallArguments = React.memo(function ToolCallArguments({
   args,
 }: ToolCallArgumentsProps) {
-  const formattedArgs = useMemo(() => {
-    if (typeof args === 'string') return args;
-    try {
-      return JSON.stringify(args, null, 2);
-    } catch {
-      return String(args);
-    }
-  }, [args]);
+  const formattedArgs = useMemo((): unknown => tryParseJson(args), [args]);
 
   return (
-    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar">
-      {formattedArgs}
+    <div className="whitespace-pre-wrap break-all opacity-80 max-h-[300px] overflow-y-auto custom-scrollbar font-mono text-[11px]">
+      {typeof formattedArgs === 'string' ? (
+        formattedArgs
+      ) : (
+        <JsonSyntaxView data={formattedArgs} />
+      )}
     </div>
   );
 });
@@ -90,6 +97,7 @@ export interface ChatMessageItemProps {
   onThinkingToggle: (id: string, next: boolean) => void;
 }
 
+// eslint-disable-next-line complexity
 export const ChatMessageItem = React.memo(function ChatMessageItem({
   msg,
   isLast,
@@ -160,7 +168,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               spellCheck={true}
               onChange={(
                 e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
-              ) => onSetEditContent(e.target.value)}
+              ): void => onSetEditContent(e.target.value)}
               className={`w-full text-sm p-2 rounded border focus:outline-none focus:border-brand-500 min-h-[100px] ${inputBg}`}
             />
             <div className="flex justify-end space-x-2 mt-2">
@@ -173,7 +181,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 <X size={14} />
               </button>
               <button
-                onClick={() => onSaveEdit(msg.id)}
+                onClick={(): void => onSaveEdit(msg.id)}
                 className="p-1 text-brand-500 hover:opacity-80"
                 aria-label={t('Save message edit')}
                 title={t('Save edit')}
@@ -207,7 +215,11 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   <CollapsibleToolSection
                     title={t('Tool Result: {{name}}', { name: msg.name })}
                   >
-                    <MarkdownView content={msg.text} />
+                    {tryParseJson(msg.text) !== msg.text ? (
+                      <JsonSyntaxView data={tryParseJson(msg.text)} />
+                    ) : (
+                      <MarkdownView content={msg.text} />
+                    )}
                     {msg.name === 'create_project' &&
                       msg.text.includes('Project created:') &&
                       onSwitchProject && (
@@ -216,7 +228,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                             theme={theme}
                             size="sm"
                             variant="secondary"
-                            onClick={() => {
+                            onClick={(): void => {
                               if (!isModelAvailable) return;
                               let projectName = '';
                               try {
@@ -224,7 +236,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                                 const innerMsg = parsed.message || '';
                                 const match = innerMsg.match(/Project created: (.+)/);
                                 if (match) projectName = match[1];
-                              } catch (e) {
+                              } catch {
                                 /* ignore */
                               }
                               if (!projectName) {
@@ -262,7 +274,9 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                         ? isThinkingExpanded
                         : isLoading && isLast
                     }
-                    onExpandedChange={(next: boolean) => onThinkingToggle(msg.id, next)}
+                    onExpandedChange={(next: boolean): void =>
+                      onThinkingToggle(msg.id, next)
+                    }
                   >
                     <div className="text-xs italic text-brand-gray-500 whitespace-pre-wrap">
                       {msg.thinking}
@@ -314,7 +328,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                           : '{{count}} Tool Call',
                         { count: msg.tool_calls.length }
                       ) +
-                      ` [${msg.tool_calls.map((tc: import('../../../types').ChatToolCall) => tc.name).join(', ')}]`
+                      ` [${msg.tool_calls.map((tc: import('../../../types').ChatToolCall): string => tc.name).join(', ')}]`
                     }
                   >
                     <div className="space-y-2">
@@ -344,7 +358,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         {!anyMessageBeingEdited && !isLoading && (
           <div className="mt-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={() => onStartEditing(msg)}
+              onClick={(): void => onStartEditing(msg)}
               className="p-1 text-brand-gray-400 hover:text-brand-gray-600 bg-brand-gray-950/5 rounded"
               title={!isModelAvailable ? chatDisabledReason : t('Edit')}
               disabled={!isModelAvailable}
@@ -352,7 +366,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               <Edit2 size={12} />
             </button>
             <button
-              onClick={() => onDeleteMessage(msg.id)}
+              onClick={(): void => onDeleteMessage(msg.id)}
               className="p-1 text-brand-gray-400 hover:text-red-500 bg-brand-gray-950/5 rounded"
               title={!isModelAvailable ? chatDisabledReason : t('Delete')}
               disabled={!isModelAvailable}

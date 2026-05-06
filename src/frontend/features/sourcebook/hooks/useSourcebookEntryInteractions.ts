@@ -52,7 +52,7 @@ export function useSourcebookEntryInteractions({
   const [availableImages, setAvailableImages] = useState<ProjectImage[]>([]);
 
   const handleEntryHover = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, entry: SourcebookEntry) => {
+    (event: React.MouseEvent<HTMLButtonElement>, entry: SourcebookEntry): void => {
       const rect = event.currentTarget.getBoundingClientRect();
       const x = rect.right + 10;
       const y = Math.min(rect.top, window.innerHeight - 200);
@@ -62,16 +62,17 @@ export function useSourcebookEntryInteractions({
     []
   );
 
-  const handleEntryHoverLeave = useCallback(() => {
+  const handleEntryHoverLeave = useCallback((): void => {
     setHoveredEntry(null);
   }, []);
 
   const handleEntryClick = useCallback(
-    async (entry: SourcebookEntry) => {
+    async (entry: SourcebookEntry): Promise<void> => {
       setIsLoadingEntry(true);
       try {
         const all = await listSourcebookEntries();
-        const full = all.find((x: SourcebookEntry) => x.id === entry.id) || entry;
+        const full =
+          all.find((x: SourcebookEntry): boolean => x.id === entry.id) || entry;
         setEntries(all);
         setSelectedEntry(full);
         setDialogOpenedViaTrigger(createdEntryIdsRef.current.has(entry.id));
@@ -90,7 +91,7 @@ export function useSourcebookEntryInteractions({
   );
 
   const handleToggleEntry = useCallback(
-    (id: string, checked: boolean) => {
+    (id: string, checked: boolean): void => {
       if (isAutoSelectionEnabled) {
         return;
       }
@@ -99,9 +100,9 @@ export function useSourcebookEntryInteractions({
     [isAutoSelectionEnabled, onToggle]
   );
 
-  useEffect(() => {
+  useEffect((): void => {
     if (hoveredEntry && hoveredEntry.images?.length > 0) {
-      listProjectImages().then((images: ProjectImage[]) => {
+      listProjectImages().then((images: ProjectImage[]): void => {
         setAvailableImages(images);
       });
     }

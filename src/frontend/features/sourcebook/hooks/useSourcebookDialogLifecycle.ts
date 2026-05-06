@@ -13,7 +13,7 @@ import React, { useEffect } from 'react';
 import { SourcebookEntry } from '../../../types';
 import { entryDiffSignature } from '../sourcebookUtils';
 import { listSourcebookEntries } from '../sourcebookApi';
-import { useSourcebookDialog, useUIStore } from '../../../stores/uiStore';
+import { useSourcebookDialog } from '../../../stores/uiStore';
 
 export interface UseSourcebookDialogLifecycleArgs {
   entries: SourcebookEntry[];
@@ -41,17 +41,19 @@ export function useSourcebookDialogLifecycle({
 }: UseSourcebookDialogLifecycleArgs): void {
   const sourcebookDialog = useSourcebookDialog();
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (!sourcebookDialog.isOpen || !sourcebookDialog.entryId) {
       return;
     }
 
     let cancelled = false;
     const entryId = sourcebookDialog.entryId;
-    const findEntry = (entriesToSearch: SourcebookEntry[]) =>
-      entriesToSearch.find((entry: SourcebookEntry) => entry.id === entryId);
+    const findEntry = (
+      entriesToSearch: SourcebookEntry[]
+    ): SourcebookEntry | undefined =>
+      entriesToSearch.find((entry: SourcebookEntry): boolean => entry.id === entryId);
 
-    const openTriggeredEntry = async () => {
+    const openTriggeredEntry = async (): Promise<void> => {
       const existing = findEntry(entries);
       if (existing) {
         setSelectedEntry(existing);
@@ -78,7 +80,7 @@ export function useSourcebookDialogLifecycle({
     };
 
     openTriggeredEntry();
-    return () => {
+    return (): void => {
       cancelled = true;
     };
   }, [
@@ -92,19 +94,19 @@ export function useSourcebookDialogLifecycle({
     sourcebookDialog.version,
   ]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!sourcebookDialog.isOpen) {
       setIsDialogOpen(false);
     }
   }, [sourcebookDialog.isOpen, setIsDialogOpen]);
 
-  useEffect(() => {
+  useEffect((): void => {
     if (!isDialogOpen || !selectedEntry || !Array.isArray(externalEntries)) {
       return;
     }
 
     const updated = externalEntries.find(
-      (entry: SourcebookEntry) => entry.id === selectedEntry.id
+      (entry: SourcebookEntry): boolean => entry.id === selectedEntry.id
     );
     if (!updated) {
       setIsDialogOpen(false);
@@ -114,7 +116,7 @@ export function useSourcebookDialogLifecycle({
     }
     if (entryDiffSignature(updated) !== entryDiffSignature(selectedEntry)) {
       setSelectedEntry(updated);
-      setDialogKey((value: number) => value + 1);
+      setDialogKey((value: number): number => value + 1);
     }
   }, [
     externalEntries,

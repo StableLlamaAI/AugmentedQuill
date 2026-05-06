@@ -67,16 +67,18 @@ export const reanchorChapterSelection = (
   }
 
   // First try to find the exact same ID.
-  const exactMatch = nextChapters.find((c: Chapter) => c.id === previousSelection);
+  const exactMatch = nextChapters.find(
+    (c: Chapter): boolean => c.id === previousSelection
+  );
   if (exactMatch) return exactMatch.id;
 
   const oldChapter = previousChapters.find(
-    (chapter: Chapter) => chapter.id === previousSelection
+    (chapter: Chapter): boolean => chapter.id === previousSelection
   );
   if (!oldChapter) return null;
 
   const matching = nextChapters.find(
-    (chapter: Chapter) =>
+    (chapter: Chapter): boolean | '' | undefined =>
       chapter.filename &&
       chapter.book_id &&
       chapter.filename === oldChapter.filename &&
@@ -101,8 +103,8 @@ export const mapSelectStoryToState = (
 
   const shouldPreserveChapterContent = previousProjectId === projectId;
   const chaptersWithPreservedState = shouldPreserveChapterContent
-    ? chapters.map((c: Chapter) => {
-        const prev = previousChapters.find((pc: Chapter) => pc.id === c.id);
+    ? chapters.map((c: Chapter): Chapter => {
+        const prev = previousChapters.find((pc: Chapter): boolean => pc.id === c.id);
         if (prev) {
           return { ...c, content: prev.content };
         }

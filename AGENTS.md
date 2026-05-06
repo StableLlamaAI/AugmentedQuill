@@ -167,6 +167,7 @@ python tools/check_copyright.py .
 - Never hardcode user-facing English strings in UI components.
 - Use `react-i18next` translation keys.
 - Inputs/textareas that edit story text must set `lang={storyLanguage || 'en'}` (or equivalent) and keep spellcheck behavior correct.
+- Never hardcode LLM facing prompts or prompt templates, use `instructions.json` and its infrastructure for project specific language prompts and templates.
 
 ## 8. Test Data Safety (Strict)
 

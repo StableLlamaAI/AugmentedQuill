@@ -472,6 +472,8 @@ export const fr = {
       'Cette action est indisponible car aucun modèle WRITING fonctionnel n’est configuré.',
     'Toggle whitespace characters': 'Afficher/masquer les caractères d’espacement',
     'Close menu': 'Fermer le menu',
+    'More tools': 'Plus d’outils',
+    Tools: 'Outils',
     Formatting: 'Mise en forme',
     'Close formatting menu': 'Fermer le menu de mise en forme',
     Format: 'Format',
@@ -486,5 +488,13 @@ export const fr = {
     'Model settings': 'Paramètres des modèles',
     Models: 'Modèles',
     'Close model menu': 'Fermer le menu des modèles',
+    // MutationTags
+    'Story prose': 'Histoire (texte)',
+    'Story title': 'Histoire (titre)',
+    'Story summary': 'Histoire (résumé)',
+    'Story notes': 'Histoire (notes)',
+    'Story private notes': 'Histoire (notes privées)',
+    'Chapter prose': 'Chapitre (texte)',
+    'Project replace': 'Remplacement dans le projet',
   },
 };

@@ -19,35 +19,58 @@ interface UseSidebarIntentsParams {
   setEditorSettings: Dispatch<SetStateAction<EditorSettings>>;
 }
 
-export const useSidebarIntents = ({ setEditorSettings }: UseSidebarIntentsParams) => {
-  const setIsSidebarOpen = useUIStore((s: UIStoreState) => s.setIsSidebarOpen);
+export const useSidebarIntents = ({
+  setEditorSettings,
+}: UseSidebarIntentsParams): {
+  openAndExpandStory: () => void;
+  openAndExpandSourcebook: () => void;
+  openStoryMetadataDialog: (initialTab?: MetadataTab) => void;
+  openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
+  openSourcebookEntryDialog: (entryId: string) => void;
+} => {
+  const setIsSidebarOpen = useUIStore(
+    (s: UIStoreState): ((open: boolean | ((prev: boolean) => boolean)) => void) =>
+      s.setIsSidebarOpen
+  );
 
-  const openAndExpandStory = useCallback(() => {
+  const openAndExpandStory = useCallback((): void => {
     setIsSidebarOpen(true);
-    setEditorSettings((prev: EditorSettings) => ({
-      ...prev,
-      sidebar: { ...prev.sidebar, isStoryCollapsed: false },
-    }));
+    setEditorSettings(
+      (prev: EditorSettings): EditorSettings => ({
+        ...prev,
+        sidebar: { ...prev.sidebar, isStoryCollapsed: false },
+      })
+    );
   }, [setIsSidebarOpen, setEditorSettings]);
 
-  const openAndExpandSourcebook = useCallback(() => {
+  const openAndExpandSourcebook = useCallback((): void => {
     setIsSidebarOpen(true);
-    setEditorSettings((prev: EditorSettings) => ({
-      ...prev,
-      sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
-    }));
+    setEditorSettings(
+      (prev: EditorSettings): EditorSettings => ({
+        ...prev,
+        sidebar: { ...prev.sidebar, isSourcebookCollapsed: false },
+      })
+    );
   }, [setIsSidebarOpen, setEditorSettings]);
 
   const openStoryMetadataDialog = useCallback(
-    (initialTab?: MetadataTab) => {
+    (initialTab?: MetadataTab): void => {
       openAndExpandStory();
       uiStoreActions.openMetadataDialog(initialTab);
     },
     [openAndExpandStory]
   );
 
+  const openChapterMetadataDialog = useCallback(
+    (chapterId: string, initialTab?: MetadataTab): void => {
+      openAndExpandStory();
+      uiStoreActions.openChapterMetadataDialog(chapterId, initialTab);
+    },
+    [openAndExpandStory]
+  );
+
   const openSourcebookEntryDialog = useCallback(
-    (entryId: string) => {
+    (entryId: string): void => {
       openAndExpandSourcebook();
       uiStoreActions.openSourcebookDialog(entryId);
     },
@@ -58,6 +81,7 @@ export const useSidebarIntents = ({ setEditorSettings }: UseSidebarIntentsParams
     openAndExpandStory,
     openAndExpandSourcebook,
     openStoryMetadataDialog,
+    openChapterMetadataDialog,
     openSourcebookEntryDialog,
   };
 };

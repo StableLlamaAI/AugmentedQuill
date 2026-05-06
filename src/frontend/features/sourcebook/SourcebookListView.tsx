@@ -96,7 +96,9 @@ const SourcebookListHeader: React.FC<SourcebookListHeaderProps> = ({
         )}
         <button
           type="button"
-          onClick={() => onToggleAutoSelection?.(!isAutoSelectionEnabled)}
+          onClick={(): void | undefined =>
+            onToggleAutoSelection?.(!isAutoSelectionEnabled)
+          }
           className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
             isAutoSelectionEnabled
               ? 'bg-brand-500 border-brand-500 text-white'
@@ -399,9 +401,9 @@ export const SourcebookListView: React.FC<SourcebookListViewProps> = ({
           <input
             type="text"
             value={search}
-            onChange={(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>) =>
-              onSearchChange(event.target.value)
-            }
+            onChange={(
+              event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+            ): void => onSearchChange(event.target.value)}
             placeholder={t('Filter entries...')}
             className={`w-full pl-8 pr-2 py-1.5 text-xs rounded border ${inputBorder} ${inputBg} ${textClass} ${inputPlace} focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors`}
           />
@@ -441,7 +443,7 @@ export const SourcebookListView: React.FC<SourcebookListViewProps> = ({
         theme={theme}
         baselineEntry={
           baselineEntries?.find(
-            (entry: SourcebookEntry) => entry.id === selectedEntry?.id
+            (entry: SourcebookEntry): boolean => entry.id === selectedEntry?.id
           ) ?? null
         }
         showDiffForNew={dialogOpenedViaTrigger}

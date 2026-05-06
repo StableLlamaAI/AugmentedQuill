@@ -35,14 +35,15 @@ export const SourcebookHoverCard: React.FC<SourcebookHoverCardProps> = ({
   textClass,
   subTextClass,
   availableImages,
-}: SourcebookHoverCardProps) => {
+}: SourcebookHoverCardProps): React.ReactPortal => {
   const { t } = useTranslation();
-  const getEntryImage = () => {
+  const getEntryImage = (): ProjectImage | null => {
     if (!entry.images || entry.images.length === 0) return null;
     const firstImgName = entry.images[0];
     return (
-      availableImages.find((image: ProjectImage) => image.filename === firstImgName) ??
-      null
+      availableImages.find(
+        (image: ProjectImage): boolean => image.filename === firstImgName
+      ) ?? null
     );
   };
 

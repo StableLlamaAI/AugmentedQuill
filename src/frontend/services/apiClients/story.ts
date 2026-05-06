@@ -12,8 +12,37 @@
 import { StoryContentResponse } from '../apiTypes';
 import { fetchJson, putJson, projectEndpoint } from './shared';
 
-export const createStoryApi = (projectName: string) => ({
-  updateTitle: async (title: string) => {
+export interface StoryApi {
+  updateTitle: (title: string) => Promise<{ ok: boolean; detail?: string | undefined }>;
+  updateSummary: (
+    summary: string
+  ) => Promise<{ ok: boolean; summary?: string | undefined }>;
+  updateTags: (tags: string[]) => Promise<{ ok: boolean }>;
+  updateSettings: (settings: {
+    image_style?: string;
+    image_additional_info?: string;
+  }) => Promise<{ ok: boolean; story?: unknown }>;
+  updateMetadata: (data: {
+    title?: string;
+    summary?: string;
+    tags?: string[];
+    notes?: string;
+    private_notes?: string;
+    conflicts?: Array<{ id?: string; description?: string; resolution?: string }>;
+    language?: string;
+  }) => Promise<{ ok: boolean; detail?: string | undefined }>;
+  getContent: () => Promise<{ ok: boolean; content: string }>;
+  updateContent: (content: string) => Promise<{ ok: boolean }>;
+  computeSourcebookRelevance: (
+    chapId: string,
+    currentText: string
+  ) => Promise<{ relevant: string[] }>;
+}
+
+export const createStoryApi = (projectName: string): StoryApi => ({
+  updateTitle: async (
+    title: string
+  ): Promise<{ ok: boolean; detail?: string | undefined }> => {
     return fetchJson<{ ok: boolean; detail?: string }>(
       projectEndpoint(projectName, '/story/title'),
       {
@@ -25,7 +54,9 @@ export const createStoryApi = (projectName: string) => ({
     );
   },
 
-  updateSummary: async (summary: string) => {
+  updateSummary: async (
+    summary: string
+  ): Promise<{ ok: boolean; summary?: string | undefined }> => {
     return putJson<{ ok: boolean; summary?: string }>(
       projectEndpoint(projectName, '/story/summary'),
       { summary },
@@ -33,7 +64,7 @@ export const createStoryApi = (projectName: string) => ({
     );
   },
 
-  updateTags: async (tags: string[]) => {
+  updateTags: async (tags: string[]): Promise<{ ok: boolean }> => {
     return putJson<{ ok: boolean }>(
       projectEndpoint(projectName, '/story/tags'),
       { tags },
@@ -44,7 +75,7 @@ export const createStoryApi = (projectName: string) => ({
   updateSettings: async (settings: {
     image_style?: string;
     image_additional_info?: string;
-  }) => {
+  }): Promise<{ ok: boolean; story?: unknown }> => {
     return fetchJson<{ ok: boolean; story?: unknown }>(
       projectEndpoint(projectName, '/story/settings'),
       {
@@ -64,7 +95,7 @@ export const createStoryApi = (projectName: string) => ({
     private_notes?: string;
     conflicts?: Array<{ id?: string; description?: string; resolution?: string }>;
     language?: string;
-  }) => {
+  }): Promise<{ ok: boolean; detail?: string | undefined }> => {
     return fetchJson<{ ok: boolean; detail?: string }>(
       projectEndpoint(projectName, '/story/metadata'),
       {
@@ -76,7 +107,7 @@ export const createStoryApi = (projectName: string) => ({
     );
   },
 
-  getContent: async () => {
+  getContent: async (): Promise<{ ok: boolean; content: string }> => {
     return fetchJson<StoryContentResponse>(
       projectEndpoint(projectName, '/story/content'),
       undefined,
@@ -84,7 +115,7 @@ export const createStoryApi = (projectName: string) => ({
     );
   },
 
-  updateContent: async (content: string) => {
+  updateContent: async (content: string): Promise<{ ok: boolean }> => {
     return fetchJson<{ ok: boolean }>(
       projectEndpoint(projectName, '/story/content'),
       {
@@ -96,7 +127,10 @@ export const createStoryApi = (projectName: string) => ({
     );
   },
 
-  computeSourcebookRelevance: async (chapId: string, currentText: string) => {
+  computeSourcebookRelevance: async (
+    chapId: string,
+    currentText: string
+  ): Promise<{ relevant: string[] }> => {
     return fetchJson<{ relevant: string[] }>(
       projectEndpoint(projectName, '/story/sourcebook/relevance'),
       {

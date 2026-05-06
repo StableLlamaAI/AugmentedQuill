@@ -47,14 +47,13 @@ import { setErrorDispatcher } from './services/errorNotifier';
 import { useChatStore, ChatStoreState } from './stores/chatStore';
 import type { SessionMutation } from './features/chat';
 
-// eslint-disable-next-line max-lines-per-function
 const App: React.FC = () => {
   const { confirm, alert, confirmDialogState, handleConfirm, handleCancel } =
     useConfirmDialog();
 
   const addToast = useToast();
-  useEffect(() => {
-    setErrorDispatcher((msg: string) => addToast(msg, 'error'));
+  useEffect((): void => {
+    setErrorDispatcher((msg: string): void => addToast(msg, 'error'));
   }, [addToast]);
 
   const {
@@ -85,7 +84,7 @@ const App: React.FC = () => {
     advanceBaselineToCurrentStory,
     patchSourcebook,
     isChapterLoading,
-  } = useStory({ confirm, alert: (msg: string) => void alert(msg) });
+  } = useStory({ confirm, alert: (msg: string): undefined => void alert(msg) });
 
   // Stable ref to avoid recreating callbacks that read story state during
   // streaming (e.g. onProseChunk).
@@ -134,11 +133,12 @@ const App: React.FC = () => {
   });
 
   const roleAvailability = useMemo(
-    () => resolveRoleAvailability(appSettings, modelConnectionStatus),
+    (): { writing: boolean; editing: boolean; chat: boolean } =>
+      resolveRoleAvailability(appSettings, modelConnectionStatus),
     [appSettings, modelConnectionStatus]
   );
   const imageActionsAvailable = useMemo(
-    () =>
+    (): boolean =>
       supportsImageActions(appSettings, detectedCapabilities, modelConnectionStatus),
     [appSettings, detectedCapabilities, modelConnectionStatus]
   );
@@ -161,7 +161,10 @@ const App: React.FC = () => {
     appearanceRef,
   } = useUIPanels();
 
-  const openImagesDialog = useCallback(() => setIsImagesOpen(true), [setIsImagesOpen]);
+  const openImagesDialog = useCallback(
+    (): void => setIsImagesOpen(true),
+    [setIsImagesOpen]
+  );
 
   const {
     viewMode,
@@ -181,10 +184,14 @@ const App: React.FC = () => {
   const { editorSettings, setEditorSettings, currentTheme, isLight } =
     useEditorPreferences();
 
-  const { openAndExpandStory, openSourcebookEntryDialog, openStoryMetadataDialog } =
-    useSidebarIntents({
-      setEditorSettings,
-    });
+  const {
+    openAndExpandStory,
+    openSourcebookEntryDialog,
+    openStoryMetadataDialog,
+    openChapterMetadataDialog,
+  } = useSidebarIntents({
+    setEditorSettings,
+  });
 
   // Get Active LLM Configs — memoized so hooks that receive these as params
   // don't re-run unnecessarily when unrelated appSettings fields change.
@@ -232,7 +239,6 @@ const App: React.FC = () => {
     handleDeleteAllChats,
     onUpdateScratchpad,
     onDeleteScratchpad,
-    refreshChatList,
   } = useAppChatRuntime({
     storyId: story.id,
 
@@ -243,7 +249,7 @@ const App: React.FC = () => {
     currentChapterId,
     currentChapterContext,
     advanceBaselineToCurrentStory,
-    refreshProjects: async () => {
+    refreshProjects: async (): Promise<void> => {
       await refreshProjectsRef.current?.();
     },
     refreshStory,
@@ -254,6 +260,7 @@ const App: React.FC = () => {
     openAndExpandStory,
     openSourcebookEntryDialog,
     openStoryMetadataDialog,
+    openChapterMetadataDialog,
   });
 
   // sessionMutations changes only when LLM tool calls complete (a few times per
@@ -261,11 +268,11 @@ const App: React.FC = () => {
   // and per the explicit-mutation exception in the architecture decision.
   const sessionMutations = useChatStore((s: ChatStoreState) => s.sessionMutations);
   const sourcebookMutationEntryIds = useMemo(
-    () =>
+    (): Set<string> =>
       new Set(
         sessionMutations
           .filter((m: SessionMutation) => m.type === 'sourcebook' && m.targetId)
-          .map((m: SessionMutation) => m.targetId as string)
+          .map((m: SessionMutation): string => m.targetId as string)
       ),
     [sessionMutations]
   );
@@ -276,7 +283,6 @@ const App: React.FC = () => {
     setSuggestionMode,
     isSuggesting,
     isSuggestionMode,
-    suggestCursor,
     handleTriggerSuggestions,
     handleKeyboardSuggestionAction,
     handleAcceptContinuation,
@@ -301,7 +307,7 @@ const App: React.FC = () => {
   // Stabilize checkedSourcebookIds so useAiActions does not receive a new
   // array reference on every render when checkedEntries hasn't changed.
   const checkedSourcebookIdsMemo = useMemo(
-    () => Array.from(checkedEntries),
+    (): string[] => Array.from(checkedEntries),
     [checkedEntries]
   );
 
@@ -354,7 +360,7 @@ const App: React.FC = () => {
       currentChapterId,
       currentChapterContent: currentChapter?.content,
       storyLanguage: story.language,
-      refreshStory: async () => {
+      refreshStory: async (): Promise<void> => {
         await refreshStory();
       },
       handleChapterSelect,
@@ -414,7 +420,7 @@ const App: React.FC = () => {
     currentChapterId,
     handleChapterSelect,
     deleteChapter,
-    updateChapter: (id: string, partial: Record<string, unknown>) =>
+    updateChapter: (id: string, partial: Record<string, unknown>): Promise<void> =>
       updateChapter(id, partial, true, true, true),
     updateBook,
     addChapter,

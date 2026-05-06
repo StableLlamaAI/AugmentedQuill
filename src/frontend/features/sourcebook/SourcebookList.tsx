@@ -80,6 +80,34 @@ export {
   updateSourcebookEntryInList,
 } from './sourcebookUtils';
 
+interface SourcebookListTheme {
+  borderClass: string;
+  textHeaderClass: string;
+  textClass: string;
+  subTextClass: string;
+  itemHoverClass: string;
+  inputBg: string;
+  inputBorder: string;
+  inputPlace: string;
+  btnHover: string;
+}
+
+function buildSourcebookTheme(isLight: boolean): SourcebookListTheme {
+  return {
+    borderClass: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
+    textHeaderClass: isLight ? 'text-brand-gray-500' : 'text-brand-gray-400',
+    textClass: isLight ? 'text-brand-gray-900' : 'text-brand-gray-200',
+    subTextClass: isLight ? 'text-brand-gray-500' : 'text-brand-gray-400',
+    itemHoverClass: isLight ? 'hover:bg-brand-gray-100' : 'hover:bg-brand-gray-800',
+    inputBg: isLight ? 'bg-white' : 'bg-brand-gray-950/50',
+    inputBorder: isLight ? 'border-brand-gray-200' : 'border-brand-gray-800',
+    inputPlace: 'placeholder-brand-gray-500',
+    btnHover: isLight
+      ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
+      : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300',
+  };
+}
+
 export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
   ({
     theme = 'mixed',
@@ -137,7 +165,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
 
     const { isLight } = useThemeClasses();
 
-    const loadEntries = async (query?: string) => {
+    const loadEntries = async (query?: string): Promise<void> => {
       try {
         const data = await listSourcebookEntries(query, 'extensive');
         setEntries(data);
@@ -146,7 +174,7 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       }
     };
 
-    useEffect(() => {
+    useEffect((): (() => void) => {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
       const hasQuery = search.trim().length > 0;
 
@@ -159,12 +187,12 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
           setEntries(filterSourcebookEntries(externalEntries, search));
         }
       } else {
-        timeoutId = setTimeout(() => {
+        timeoutId = setTimeout((): void => {
           loadEntries(search);
         }, 300);
       }
 
-      return () => {
+      return (): void => {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -184,27 +212,29 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
     });
 
     // Compute diff status for each entry relative to the baseline snapshot.
-    const createdEntryIds = useMemo<Set<string>>(() => {
+    const createdEntryIds = useMemo<Set<string>>((): Set<string> => {
       if (!baselineEntries) return new Set();
-      const baselineIds = new Set(baselineEntries.map((b: SourcebookEntry) => b.id));
+      const baselineIds = new Set(
+        baselineEntries.map((b: SourcebookEntry): string => b.id)
+      );
       return new Set(
         entries
-          .filter((e: SourcebookEntry) => !baselineIds.has(e.id))
-          .map((e: SourcebookEntry) => e.id)
+          .filter((e: SourcebookEntry): boolean => !baselineIds.has(e.id))
+          .map((e: SourcebookEntry): string => e.id)
       );
     }, [entries, baselineEntries]);
 
-    useEffect(() => {
+    useEffect((): void => {
       createdEntryIdsRef.current = createdEntryIds;
     }, [createdEntryIds]);
 
-    const modifiedEntryIds = useMemo<Set<string>>(() => {
+    const modifiedEntryIds = useMemo<Set<string>>((): Set<string> => {
       if (!baselineEntries) return new Set();
       return new Set(
         entries
-          .filter((e: SourcebookEntry) => {
+          .filter((e: SourcebookEntry): boolean | undefined => {
             const baseline = baselineEntries.find(
-              (b: SourcebookEntry) => b.id === e.id
+              (b: SourcebookEntry): boolean => b.id === e.id
             );
             // Use entryDiffSignature to normalize optional arrays and field
             // ordering so that semantically identical entries stored at different
@@ -212,15 +242,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
             // flagged as modified.
             return baseline && entryDiffSignature(baseline) !== entryDiffSignature(e);
           })
-          .map((e: SourcebookEntry) => e.id)
+          .map((e: SourcebookEntry): string => e.id)
       );
     }, [entries, baselineEntries]);
     const externalMutationEntryIds = mutatedEntryIds ?? new Set<string>();
 
-    const deletedEntries = useMemo<SourcebookEntry[]>(() => {
+    const deletedEntries = useMemo<SourcebookEntry[]>((): SourcebookEntry[] => {
       if (!baselineEntries) return [];
-      const currentIds = new Set(entries.map((e: SourcebookEntry) => e.id));
-      return baselineEntries.filter((b: SourcebookEntry) => !currentIds.has(b.id));
+      const currentIds = new Set(entries.map((e: SourcebookEntry): string => e.id));
+      return baselineEntries.filter(
+        (b: SourcebookEntry): boolean => !currentIds.has(b.id)
+      );
     }, [entries, baselineEntries]);
 
     const { handleCreate, handleUpdate, handleDelete } = useSourcebookListMutations({
@@ -235,19 +267,17 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
       loadEntries,
     });
 
-    const borderClass = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-    const textHeaderClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-    const textClass = isLight ? 'text-brand-gray-900' : 'text-brand-gray-200';
-    const subTextClass = isLight ? 'text-brand-gray-500' : 'text-brand-gray-400';
-    const itemHoverClass = isLight
-      ? 'hover:bg-brand-gray-100'
-      : 'hover:bg-brand-gray-800';
-    const inputBg = isLight ? 'bg-white' : 'bg-brand-gray-950/50';
-    const inputBorder = isLight ? 'border-brand-gray-200' : 'border-brand-gray-800';
-    const inputPlace = 'placeholder-brand-gray-500';
-    const btnHover = isLight
-      ? 'hover:bg-brand-gray-200 text-brand-gray-500 hover:text-brand-gray-700'
-      : 'hover:bg-brand-gray-800 text-brand-gray-500 hover:text-brand-gray-300';
+    const {
+      borderClass,
+      textHeaderClass,
+      textClass,
+      subTextClass,
+      itemHoverClass,
+      inputBg,
+      inputBorder,
+      inputPlace,
+      btnHover,
+    } = buildSourcebookTheme(isLight);
 
     return (
       <SourcebookListView
@@ -278,11 +308,11 @@ export const SourcebookList: React.FC<SourcebookListProps> = React.memo(
         onAppRedo={onAppRedo}
         onToggleAutoSelection={onToggleAutoSelection}
         onSearchChange={setSearch}
-        onOpenCreate={() => {
+        onOpenCreate={(): void => {
           setSelectedEntry(null);
           setIsDialogOpen(true);
         }}
-        onDialogClose={() => {
+        onDialogClose={(): void => {
           setIsDialogOpen(false);
           setDialogOpenedViaTrigger(false);
           useUIStore.getState().closeSourcebookDialog();

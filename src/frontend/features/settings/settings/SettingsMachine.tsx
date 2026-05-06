@@ -61,7 +61,7 @@ export const SettingsMachine: React.FC<SettingsMachineProps> = ({
   const { isLight } = useThemeClasses();
 
   const activeProvider = localSettings.providers.find(
-    (p: LLMConfig) => p.id === editingProviderId
+    (p: LLMConfig): boolean => p.id === editingProviderId
   );
   const isActiveProviderAvailable =
     !!activeProvider &&

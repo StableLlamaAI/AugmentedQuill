@@ -90,7 +90,7 @@ const SettingsTabButton: React.FC<SettingsTabButtonProps> = ({
   onSelectTab,
 }: SettingsTabButtonProps) => (
   <button
-    onClick={() => onSelectTab(id)}
+    onClick={(): void => onSelectTab(id)}
     className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 md:flex-none ${
       activeTab === id
         ? isLight
@@ -141,9 +141,9 @@ const GeneralSettingsTab: React.FC<GeneralSettingsTabProps> = ({
           <select
             id="guiLanguage"
             value={guiLanguage || ''}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>) =>
-              onChangeGuiLanguage(e.target.value)
-            }
+            onChange={(
+              e: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>
+            ): void => onChangeGuiLanguage(e.target.value)}
             className={`w-full px-3 py-2 text-sm rounded ${
               isLight
                 ? 'bg-brand-gray-100 text-brand-gray-900 border-brand-gray-200'
@@ -726,7 +726,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const browserVersion =
     typeof navigator !== 'undefined' ? `${navigator.userAgent}` : 'unknown';
 
-  useEffect(() => {
+  useEffect((): void => {
     if (isOpen) {
       setSaveError('');
     }
@@ -737,7 +737,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     setSaveError('');
     setSaveLoading(true);
     try {

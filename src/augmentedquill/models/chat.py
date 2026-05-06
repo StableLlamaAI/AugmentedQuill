@@ -43,6 +43,12 @@ class ChatToolBatchMutationResponse(BaseModel):
     detail: Optional[str] = None
 
 
+class ChapterBeforeContentResponse(BaseModel):
+    """Response body for ``GET /api/v1/chat/tools/batches/{batch_id}/chapter-before/{chapter_id}``."""
+
+    content: str
+
+
 # ---------------------------------------------------------------------------
 # Chat session list / load
 # ---------------------------------------------------------------------------
@@ -73,6 +79,7 @@ class ChatDetailResponse(BaseModel):
     allowWebSearch: Optional[bool] = None
     scratchpad: Optional[str] = None
     editing_scratchpad: Optional[str] = None
+    projectContextRevision: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

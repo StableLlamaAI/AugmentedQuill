@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatSession, ChatMessage } from '../../types';
 import { api } from '../../services/api';
 import { useChatStore, ChatStoreState } from '../../stores/chatStore';
+import { useStoryStore } from '../../stores/storyStore';
 
 type UseChatSessionManagementParams = {
   storyId: string;
@@ -52,15 +53,17 @@ export function useChatSessionManagement({
     setSystemPrompt,
     setScratchpad,
     setIncognitoSessions,
+    setSessionMutations,
+    setProjectContextRevision,
     // Setters are stable — read via getState() to avoid subscribing to every token.
   } = useChatStore.getState();
 
   // Update systemPrompt when the project changes.
-  useEffect(() => {
+  useEffect((): void => {
     setSystemPrompt(getSystemPrompt());
   }, [storyId, getSystemPrompt, setSystemPrompt]);
 
-  const refreshChatList = useCallback(async () => {
+  const refreshChatList = useCallback(async (): Promise<void> => {
     try {
       const chats = await api.chat.list();
       setChatHistoryList(chats);
@@ -70,9 +73,10 @@ export function useChatSessionManagement({
   }, []);
 
   const handleNewChat = useCallback(
-    (incognito: boolean = false) => {
+    (incognito: boolean = false): void => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const newId = incognito ? uuidv4() : `chat-${timestamp}`;
+      const projectContextRevision = useStoryStore.getState().story.lastUpdated ?? null;
       if (incognito) {
         const newSession: ChatSession = {
           id: newId,
@@ -82,21 +86,28 @@ export function useChatSessionManagement({
           isIncognito: true,
           allowWebSearch: false,
           scratchpad: '',
+          projectContextRevision,
         };
-        setIncognitoSessions((prev: ChatSession[]) => [newSession, ...prev]);
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] => [
+          newSession,
+          ...prev,
+        ]);
         setChatMessages([]);
         setIsIncognito(true);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
         setScratchpad('');
+        setProjectContextRevision(projectContextRevision);
       } else {
         setChatMessages([]);
         setIsIncognito(false);
         setCurrentChatId(newId);
         setAllowWebSearch(false);
         setScratchpad('');
+        setProjectContextRevision(projectContextRevision);
       }
       setSystemPrompt(getSystemPrompt());
+      setSessionMutations([]);
     },
     [
       getSystemPrompt,
@@ -106,20 +117,22 @@ export function useChatSessionManagement({
       setCurrentChatId,
       setAllowWebSearch,
       setScratchpad,
+      setProjectContextRevision,
       setSystemPrompt,
     ]
   );
 
   const handleSelectChat = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       const incognito = useChatStore
         .getState()
-        .incognitoSessions.find((session: ChatSession) => session.id === id);
+        .incognitoSessions.find((session: ChatSession): boolean => session.id === id);
       if (incognito) {
         setChatMessages(incognito.messages || []);
         setCurrentChatId(id);
         setIsIncognito(true);
         setScratchpad(incognito.scratchpad || '');
+        setProjectContextRevision(incognito.projectContextRevision ?? null);
         if (incognito.systemPrompt) {
           setSystemPrompt(incognito.systemPrompt);
         }
@@ -130,16 +143,18 @@ export function useChatSessionManagement({
       try {
         const chat = await api.chat.load(id);
         if (chat) {
-          startTransition(() => {
+          startTransition((): void => {
             setChatMessages(chat.messages || []);
             setCurrentChatId(id);
             setIsIncognito(false);
             setScratchpad(chat.scratchpad || '');
+            setProjectContextRevision(chat.projectContextRevision ?? null);
             if (chat.systemPrompt) {
               setSystemPrompt(chat.systemPrompt);
             }
             setAllowWebSearch(chat.allowWebSearch || false);
           });
+          setSessionMutations([]);
         }
       } catch (error) {
         console.error('Failed to load chat', error);
@@ -150,19 +165,23 @@ export function useChatSessionManagement({
       setCurrentChatId,
       setIsIncognito,
       setScratchpad,
+      setProjectContextRevision,
       setSystemPrompt,
       setAllowWebSearch,
     ]
   );
 
   const handleUpdateScratchpad = useCallback(
-    (content: string) => {
+    (content: string): void => {
       setScratchpad(content);
       const { currentChatId, isIncognito } = useChatStore.getState();
       if (isIncognito && currentChatId) {
-        setIncognitoSessions((prev: ChatSession[]) =>
-          prev.map((session: ChatSession) =>
-            session.id === currentChatId ? { ...session, scratchpad: content } : session
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+          prev.map(
+            (session: ChatSession): ChatSession =>
+              session.id === currentChatId
+                ? { ...session, scratchpad: content }
+                : session
           )
         );
       }
@@ -170,16 +189,18 @@ export function useChatSessionManagement({
     [setScratchpad, setIncognitoSessions]
   );
 
-  const handleDeleteScratchpad = useCallback(() => {
+  const handleDeleteScratchpad = useCallback((): void => {
     handleUpdateScratchpad('');
   }, [handleUpdateScratchpad]);
 
   const handleDeleteChat = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<void> => {
       const { incognitoSessions, currentChatId } = useChatStore.getState();
-      if (incognitoSessions.some((session: ChatSession) => session.id === id)) {
-        setIncognitoSessions((prev: ChatSession[]) =>
-          prev.filter((session: ChatSession) => session.id !== id)
+      if (
+        incognitoSessions.some((session: ChatSession): boolean => session.id === id)
+      ) {
+        setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+          prev.filter((session: ChatSession): boolean => session.id !== id)
         );
         if (currentChatId === id) {
           handleNewChat();
@@ -200,7 +221,7 @@ export function useChatSessionManagement({
     [handleNewChat, refreshChatList, setIncognitoSessions]
   );
 
-  const handleDeleteAllChats = useCallback(async () => {
+  const handleDeleteAllChats = useCallback(async (): Promise<void> => {
     if (
       !confirm(
         'Are you sure you want to delete ALL chats (including incognito)? This cannot be undone.'
@@ -222,10 +243,10 @@ export function useChatSessionManagement({
   // ---------------------------------------------------------------------------
   // Initial chat load
   // ---------------------------------------------------------------------------
-  useEffect(() => {
+  useEffect((): void => {
     const { currentChatId, isIncognito } = useChatStore.getState();
     if (storyId && !currentChatId && !isIncognito) {
-      const loadInitialChats = async () => {
+      const loadInitialChats = async (): Promise<void> => {
         try {
           const chats = await api.chat.list();
           startTransition(() => setChatHistoryList(chats));
@@ -248,11 +269,11 @@ export function useChatSessionManagement({
   // re-renders up to App.tsx).  chatStore.subscribe() fires imperatively
   // without triggering any React render cycle.
   // ---------------------------------------------------------------------------
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const unsubscribe = useChatStore.subscribe(
-      (state: ChatStoreState, prevState: ChatStoreState) => {
+      (state: ChatStoreState, prevState: ChatStoreState): void => {
         // Only fire when persisted session fields actually changed.
         if (
           state.chatMessages === prevState.chatMessages &&
@@ -276,6 +297,7 @@ export function useChatSessionManagement({
           systemPrompt,
           scratchpad,
           allowWebSearch,
+          projectContextRevision,
         } = state;
 
         if (!currentChatId || isChatLoading) {
@@ -284,25 +306,29 @@ export function useChatSessionManagement({
 
         if (isIncognito) {
           const firstUserMsg = chatMessages.find(
-            (message: ChatMessage) => message.role === 'user'
+            (message: ChatMessage): boolean => message.role === 'user'
           );
           const name = firstUserMsg?.text?.substring(0, 40) || 'Incognito Chat';
-          useChatStore.getState().setIncognitoSessions((prev: ChatSession[]) =>
-            prev.map((session: ChatSession) =>
-              session.id === currentChatId
-                ? {
-                    ...session,
-                    name,
-                    messages: chatMessages,
-                    systemPrompt,
-                    allowWebSearch,
-                    scratchpad,
-                  }
-                : session
-            )
-          );
+          useChatStore
+            .getState()
+            .setIncognitoSessions((prev: ChatSession[]): ChatSession[] =>
+              prev.map(
+                (session: ChatSession): ChatSession =>
+                  session.id === currentChatId
+                    ? {
+                        ...session,
+                        name,
+                        messages: chatMessages,
+                        systemPrompt,
+                        allowWebSearch,
+                        scratchpad,
+                        projectContextRevision,
+                      }
+                    : session
+              )
+            );
         } else {
-          timeout = setTimeout(async () => {
+          timeout = setTimeout(async (): Promise<void> => {
             try {
               const {
                 chatMessages: msgs,
@@ -310,9 +336,12 @@ export function useChatSessionManagement({
                 systemPrompt: sp,
                 allowWebSearch: aws,
                 scratchpad: sc,
+                projectContextRevision: pcr,
               } = useChatStore.getState();
               if (!cid) return;
-              const firstUserMsg = msgs.find((m: ChatMessage) => m.role === 'user');
+              const firstUserMsg = msgs.find(
+                (m: ChatMessage): boolean => m.role === 'user'
+              );
               const name = firstUserMsg?.text?.substring(0, 40) || 'Untitled Chat';
               await api.chat.save(cid, {
                 name,
@@ -320,6 +349,7 @@ export function useChatSessionManagement({
                 systemPrompt: sp,
                 allowWebSearch: aws,
                 scratchpad: sc,
+                projectContextRevision: pcr,
               });
               refreshChatList();
             } catch (error) {
@@ -330,7 +360,7 @@ export function useChatSessionManagement({
       }
     );
 
-    return () => {
+    return (): void => {
       clearTimeout(timeout);
       unsubscribe();
     };

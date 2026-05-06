@@ -145,7 +145,7 @@ export function useChatExecution({
       ? [...historyBefore, contextMsg]
       : historyBefore;
 
-    setChatMessages((prev: ChatMessage[]) => [
+    setChatMessages((prev: ChatMessage[]): ChatMessage[] => [
       ...prev,
       ...(contextMsg ? [contextMsg] : []),
       { id: userMsgId, role: 'user', text, attachments },

@@ -34,8 +34,8 @@ class GetProjectOverviewParams(BaseModel):
     """Parameters for get_project_overview."""
 
     include_notes: bool = Field(
-        False,
-        description="If true, include per-chapter notes in the overview output (default false).",
+        True,
+        description="If true, include per-chapter notes in the overview output (default true).",
     )
 
 
@@ -101,7 +101,6 @@ async def get_project_overview(
 ) -> Any:
     """Return project overview."""
     data = _project_overview(include_notes=params.include_notes)
-    # Return data directly - decorator handles wrapping in tool message format
     return data
 
 
