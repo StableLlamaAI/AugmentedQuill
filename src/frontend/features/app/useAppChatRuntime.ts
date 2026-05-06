@@ -254,6 +254,10 @@ export function useAppChatRuntime({
     refreshStory,
     onProseChunk: useCallback(
       (chapterId: number, writeMode: string, accumulated: string): void => {
+        if (!useChatStore.getState().isChatLoading) {
+          return;
+        }
+
         const currentStory = storyRef.current;
         const unit =
           currentStory.projectType === 'short-story' && currentStory.draft

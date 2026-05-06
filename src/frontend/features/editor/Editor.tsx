@@ -159,30 +159,33 @@ export const Editor = React.memo(
 
       useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
-        if (!isChapterSwitch) return;
+        if (isChapterSwitch) {
+          lastChapterIdRef.current = chapter.id;
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
+          return;
+        }
 
-        lastChapterIdRef.current = chapter.id;
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        } else if (baselineContent === undefined) {
-          savedBaselineRef.current = undefined;
+        if (baselineContent !== prevBaselineRef.current) {
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          // Only preserve as the real AI baseline when baselineContent differs from
+          // chapter.content. When isUserEdit=true, pushState sets baselineContent
+          // equal to chapter.content (no diff), so we must not overwrite the saved
+          // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+          // that wrong baseline instead of the original AI-written baseline.
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
         }
       }, [chapter.id, baselineContent, chapter.content]);
-
-      if (baselineContent !== prevBaselineRef.current) {
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        // Only preserve as the real AI baseline when baselineContent differs from
-        // chapter.content. When isUserEdit=true, pushState sets baselineContent
-        // equal to chapter.content (no diff), so we must not overwrite the saved
-        // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
-        // that wrong baseline instead of the original AI-written baseline.
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        }
-      }
 
       const isChatStreaming = useChatStore(
         (s: ChatStoreState): boolean => s.isProseStreamingFromChat

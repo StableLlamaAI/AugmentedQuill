@@ -131,12 +131,21 @@ interface ProseChunkScheduler {
   flushPendingProseChunk: () => void;
 }
 
-const yieldToNextAnimationFrame = async (): Promise<void> => {
-  if (typeof globalThis.requestAnimationFrame !== 'function') {
-    return;
-  }
+/**
+ * Yield to the next macrotask via MessageChannel so Zustand store updates
+ * triggered by the resumed code run outside React's render/commit phase.
+ * Using requestAnimationFrame instead would fire inside React 19's concurrent
+ * renderer commit phase and trigger "Maximum update depth exceeded" errors.
+ */
+const yieldToMacrotask = async (): Promise<void> => {
   await new Promise<void>((resolve: () => void) => {
-    globalThis.requestAnimationFrame((): void => resolve());
+    if (typeof MessageChannel !== 'undefined') {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (): void => resolve();
+      channel.port2.postMessage(null);
+    } else {
+      setTimeout(resolve, 0);
+    }
   });
 };
 
@@ -144,8 +153,7 @@ const createProseChunkScheduler = (
   onProseChunk?: (chapId: number, writeMode: string, accumulated: string) => void
 ): ProseChunkScheduler => {
   let pendingProseChunk: ToolProseChunk | null = null;
-  let proseFlushHandle: number | null = null;
-  let proseFlushUsesRaf = false;
+  let proseFlushHandle: ReturnType<typeof setTimeout> | null = null;
   let proseFlushToken = 0;
 
   const flushPendingProseChunk = (): void => {
@@ -159,36 +167,26 @@ const createProseChunkScheduler = (
   const scheduleProseChunkFlush = (): void => {
     if (!onProseChunk || proseFlushHandle !== null) return;
 
-    // Coalesce bursts into a single UI-frame flush so we render the latest
-    // accumulated chunk once per frame without fixed-delay throttling.
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-      proseFlushUsesRaf = true;
-      proseFlushHandle = globalThis.requestAnimationFrame((): void => {
-        flushPendingProseChunk();
-      });
-      return;
-    }
-
-    proseFlushUsesRaf = false;
+    // Coalesce bursts into a single macrotask flush so we render the latest
+    // accumulated chunk without triggering React render-phase store updates.
+    // setTimeout(0) is used (not requestAnimationFrame) because RAF fires
+    // inside React 19's concurrent renderer commit phase, which causes
+    // "Maximum update depth exceeded" errors when Zustand setState is called.
     const token = ++proseFlushToken;
-    proseFlushHandle = token;
-    queueMicrotask((): void => {
-      if (proseFlushHandle !== token || proseFlushToken !== token) {
+    proseFlushHandle = setTimeout((): void => {
+      if (proseFlushHandle === null || proseFlushToken !== token) {
         return;
       }
       flushPendingProseChunk();
-    });
+    }, 0);
   };
 
   const cancelScheduledProseFlush = (): void => {
     if (proseFlushHandle === null) return;
 
-    if (proseFlushUsesRaf && typeof globalThis.cancelAnimationFrame === 'function') {
-      globalThis.cancelAnimationFrame(proseFlushHandle);
-    }
+    clearTimeout(proseFlushHandle);
     proseFlushToken += 1;
     proseFlushHandle = null;
-    proseFlushUsesRaf = false;
   };
 
   const setPendingProseChunk = (chunk: ToolProseChunk): void => {
@@ -320,7 +318,7 @@ export const createChatApi = (projectName: string): ChatApi => ({
             proseChunkScheduler.flushPendingProseChunk();
             // Let the browser paint the latest prose preview before control
             // returns to the chat loop and potentially starts more async work.
-            await yieldToNextAnimationFrame();
+            await yieldToMacrotask();
             return {
               ok: event.ok,
               appended_messages: event.appended_messages,
