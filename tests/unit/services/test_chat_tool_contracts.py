@@ -7,6 +7,7 @@
 
 """Validates all LLM-callable chat tools for successful execution and graceful handling of malformed and invalid tool-call inputs."""
 
+import datetime
 import json
 import os
 import tempfile
@@ -20,7 +21,11 @@ from fastapi.testclient import TestClient
 import augmentedquill.main as main
 from augmentedquill.services.chat.chat_tools_schema import get_story_tools
 from augmentedquill.services.chat.chat_tool_decorator import get_registered_tool_schemas
-from augmentedquill.services.projects.projects import select_project
+from augmentedquill.services.projects.project_snapshots import capture_project_snapshot
+from augmentedquill.services.projects.projects import (
+    get_active_project_dir,
+    select_project,
+)
 from augmentedquill.services.sourcebook.sourcebook_helpers import (
     sourcebook_create_entry,
 )
@@ -43,6 +48,7 @@ class ChatToolContractsTest(TestCase):
     _SPECIAL_CASE_MUTATION_TOOLS = {
         # Covered with nested-tool-call behavior assertions in test_chat_tools.py
         "call_editing_assistant",
+        "undo_last_tool_changes",
     }
 
     _READ_ONLY_TOOLS = {
@@ -431,6 +437,28 @@ class ChatToolContractsTest(TestCase):
             built["project_type"] = base["project_type"]
         if tool_name in {"delete_project", "delete_book", "delete_chapter"}:
             built["confirm"] = base["confirm"]
+
+        if tool_name == "undo_last_tool_changes":
+            built["scope"] = "last_call"
+            batch_id = "undo_last_tool_changes"
+            project_dir = get_active_project_dir()
+            if project_dir is not None:
+                batch_dir = project_dir / ".aq_history" / "chat_tool_batches" / batch_id
+                if not batch_dir.exists():
+                    batch_dir.mkdir(parents=True, exist_ok=True)
+                    snapshot = capture_project_snapshot(project_dir)
+                    metadata = {
+                        "batch_id": batch_id,
+                        "created_at": datetime.datetime.now().isoformat(),
+                        "tool_names": [tool_name],
+                        "changed_chapter_ids": [],
+                        "before": snapshot,
+                        "after": snapshot,
+                    }
+                    (batch_dir / "batch.json").write_text(
+                        json.dumps(metadata), encoding="utf-8"
+                    )
+            built["batch_ids"] = [batch_id]
 
         if invalid:
             invalid_overrides = {
