@@ -177,8 +177,39 @@ export const useStoryStore = create<StoryStoreState>()(
     setIsChapterLoading: (isChapterLoading: boolean) => set({ isChapterLoading }),
 
     setStreamingContent: (
-      streamingContent: { chapterId: string; content: string } | null
-    ) => set({ streamingContent }),
+      streamingContent: {
+        chapterId: string;
+        content: string;
+        writeMode?: string;
+      } | null
+    ) =>
+      set(
+        (
+          state: StoryStoreState
+        ):
+          | StoryStoreState
+          | {
+              streamingContent: {
+                chapterId: string;
+                content: string;
+                writeMode?: string;
+              } | null;
+            } => {
+          const current = state.streamingContent;
+          if (
+            (current === null && streamingContent === null) ||
+            (current !== null &&
+              streamingContent !== null &&
+              current.chapterId === streamingContent.chapterId &&
+              current.content === streamingContent.content &&
+              (current.writeMode ?? 'append') ===
+                (streamingContent.writeMode ?? 'append'))
+          ) {
+            return state;
+          }
+          return { streamingContent };
+        }
+      ),
 
     patchSourcebookEntry: (
       entry: SourcebookEntry | null,

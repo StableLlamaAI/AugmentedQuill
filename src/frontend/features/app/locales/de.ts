@@ -465,6 +465,8 @@ export const de = {
       'Diese Aktion ist nicht verfügbar, da kein funktionierendes WRITING-Modell konfiguriert ist.',
     'Toggle whitespace characters': 'Leerzeichenzeichen umschalten',
     'Close menu': 'Menü schließen',
+    'More tools': 'Mehr Werkzeuge',
+    Tools: 'Werkzeuge',
     Formatting: 'Formatierung',
     'Close formatting menu': 'Formatierungsmenü schließen',
     Format: 'Format',

@@ -13,6 +13,7 @@ import json
 from pydantic import AliasChoices, BaseModel, Field
 
 from augmentedquill.core.config import load_story_config
+from augmentedquill.core.prompts import get_user_prompt
 from augmentedquill.utils.json_repair import apply_typographic_quotes
 from augmentedquill.services.chapters.chapter_helpers import _chapter_by_id_or_404
 from augmentedquill.services.chat.chat_tool_decorator import (
@@ -72,6 +73,82 @@ def _extract_tail_paragraphs(text: str, max_paragraphs: int = 3) -> str:
     return "\n\n".join(paragraphs[-max_paragraphs:])
 
 
+def _format_sourcebook_entry_prompt(entry: dict, language: str) -> str:
+    """Format a sourcebook entry compactly for the WRITING LLM prompt."""
+    name = entry.get("name", "")
+    category = entry.get("category") or get_user_prompt(
+        "sourcebook_entry_unknown_category", language=language
+    )
+    description = entry.get("description", "").strip()
+    if not description:
+        description = get_user_prompt(
+            "sourcebook_entry_missing_description",
+            language=language,
+        )
+
+    relations = entry.get("relations") or []
+    relation_lines: list[str] = []
+    for relation in relations:
+        relation_type = relation.get("relation", "")
+        target_id = relation.get("target_id", "")
+        direction = relation.get("direction", "forward")
+        if relation_type and target_id:
+            relation_lines.append(f"{relation_type} ({direction}) -> {target_id}")
+    relation_text = (
+        "; ".join(relation_lines)
+        if relation_lines
+        else get_user_prompt(
+            "sourcebook_entry_relations_none",
+            language=language,
+        )
+    )
+
+    summary = get_user_prompt(
+        "sourcebook_entry_summary",
+        language=language,
+        name=name,
+        category=category,
+        description=description,
+    )
+    relations_line = get_user_prompt(
+        "sourcebook_entry_relations",
+        language=language,
+        relation_text=relation_text,
+    )
+
+    return f"{summary}\n{relations_line}"
+
+
+def _build_sourcebook_entries_context(entry_names: list[str], language: str) -> str:
+    """Build a compact sourcebook context block for the writing prompt."""
+    from augmentedquill.services.sourcebook.sourcebook_helpers import (
+        sourcebook_get_entry,
+    )
+
+    seen_ids: set[str] = set()
+    lines: list[str] = []
+    for name_or_synonym in entry_names:
+        if not isinstance(name_or_synonym, str) or not name_or_synonym.strip():
+            continue
+        entry = sourcebook_get_entry(name_or_synonym)
+        if not entry:
+            continue
+        entry_id = str(entry.get("id") or "")
+        if entry_id in seen_ids:
+            continue
+        seen_ids.add(entry_id)
+        lines.append(_format_sourcebook_entry_prompt(entry, language=language))
+
+    if not lines:
+        return ""
+
+    return (
+        get_user_prompt("sourcebook_entries_block", language=language)
+        + "\n"
+        + "\n".join(lines)
+    )
+
+
 # ============================================================================
 # call_writing_llm
 # ============================================================================
@@ -93,9 +170,17 @@ class CallWritingLlmParams(BaseModel):
         validation_alias=AliasChoices("preceding_content", "preceeding_content"),
         description="Optional prose immediately preceding the insertion point. In append mode, if omitted, the system auto-fills this with the last paragraphs of the target chapter.",
     )
+    sourcebook_entries: list[str] | None = Field(
+        None,
+        description="Optional list of sourcebook entry names or synonyms to include in the WRITING LLM prompt. Matching entries are resolved by name or synonym and added compactly with category, description, and relations.",
+    )
     write_mode: str | None = Field(
         None,
-        description="How to persist output: 'append' (add to end of chapter), 'replace' (overwrite entire chapter), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+        description="How to persist output: 'append' (add to end of chapter), 'replace' (replace the single occurrence of replace_target in the chapter with the generated text — replace_target is required), 'replace_all' (REPLACES THE COMPLETE EXISTING CONTENT of the chapter/draft with the newly generated text — all prior content is lost), 'insert_at_marker' (insert at ~~~ marker), or None (return text without writing).",
+    )
+    replace_target: str | None = Field(
+        None,
+        description="Required when write_mode='replace': the exact text passage to search for in the chapter. The first occurrence is replaced with the generated text. Must match the existing text exactly.",
     )
     chap_id: int | None = Field(
         None,
@@ -104,7 +189,7 @@ class CallWritingLlmParams(BaseModel):
 
 
 @chat_tool(
-    description="Delegate a creative writing or rewriting task to the WRITING LLM. Stateless behavior: it only sees instruction/context provided in this call, so include all required chapter context and exact IDs explicitly. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' overwrites all, 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
+    description="Delegate a creative writing or rewriting task to the WRITING LLM. Stateless behavior: it only sees instruction/context provided in this call, so include all required chapter context and exact IDs explicitly. Can optionally write the output directly to a chapter with write_mode: 'append' adds to end, 'replace' substitutes a specific passage (set replace_target to the exact text to swap out — only the first occurrence is replaced), 'replace_all' REPLACES THE COMPLETE EXISTING CONTENT of the chapter/draft (all prior text is permanently overwritten — use only for full rewrites), 'insert_at_marker' inserts at ~~~ marker. Without write_mode, just returns generated text.",
     allowed_roles=(CHAT_ROLE, EDITING_ROLE),
     capability="delegation",
     project_types=("short-story", "novel", "series"),
@@ -188,6 +273,18 @@ async def call_writing_llm(
         instruction=params.instruction,
         context=params.context,
     )
+
+    sourcebook_context = _build_sourcebook_entries_context(
+        params.sourcebook_entries or [], project_lang
+    )
+    user_content = get_user_prompt(
+        "call_writing_llm_request",
+        language=project_lang,
+        instruction=params.instruction,
+        context=params.context,
+        sourcebook_entries=sourcebook_context,
+    )
+
     if preceding_content:
         user_content += get_user_prompt(
             "call_writing_llm_preceding_anchor",
@@ -307,14 +404,39 @@ async def call_writing_llm(
             }
 
         elif params.write_mode == "replace":
-            # Replace entire chapter content
-            _write_chapter_content(chap_id, generated_text)
+            # Replace first occurrence of replace_target with generated text.
+            if not params.replace_target:
+                raise BadRequestError(
+                    "replace_target is required when write_mode='replace'. "
+                    "Provide the exact text passage to search for and replace."
+                )
+            existing = path.read_text(encoding="utf-8")
+            if params.replace_target not in existing:
+                raise BadRequestError(
+                    f"replace_target not found in chapter {chap_id}. "
+                    "Ensure the text matches the chapter content exactly."
+                )
+            new_content = existing.replace(params.replace_target, generated_text, 1)
+            _write_chapter_content(chap_id, new_content)
             mutations["story_changed"] = True
             return {
                 "generated_text": generated_text,
                 "written": True,
                 "write_mode": "replace",
                 "chap_id": chap_id,
+            }
+
+        elif params.write_mode == "replace_all":
+            # Replace entire chapter content — ALL prior content is overwritten.
+            _write_chapter_content(chap_id, generated_text)
+            mutations["story_changed"] = True
+            return {
+                "generated_text": generated_text,
+                "written": True,
+                "write_mode": "replace_all",
+                "replaced_complete_content": True,
+                "chap_id": chap_id,
+                "status": "Complete chapter content has been replaced with the newly generated text.",
             }
 
         elif params.write_mode == "insert_at_marker":
@@ -343,7 +465,7 @@ async def call_writing_llm(
         else:
             raise BadRequestError(
                 f"Invalid write_mode: {params.write_mode}. "
-                "Use 'append', 'replace', 'insert_at_marker', or omit for return-only."
+                "Use 'append', 'replace', 'replace_all', 'insert_at_marker', or omit for return-only."
             )
 
     # Default: just return the generated text without writing

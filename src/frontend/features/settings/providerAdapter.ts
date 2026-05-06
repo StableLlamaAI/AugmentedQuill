@@ -51,6 +51,9 @@ const toNumberWithOptionalDefault = (
   value: unknown,
   fallback?: number
 ): number | undefined => {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return fallback;
+  }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 };

@@ -17,6 +17,7 @@ import {
   type TouchEvent,
 } from 'react';
 import { ChatMessage } from '../../../types';
+import { scrollDistanceFromBottom } from '../../../utils/scrollUtils';
 
 interface UseChatScrollDeps {
   messages: ChatMessage[];
@@ -72,8 +73,8 @@ export function useChatScroll({
 
   const handleScroll = useCallback((): void => {
     if (!scrollContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const { scrollTop } = scrollContainerRef.current;
+    const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
     const isAtBottom = distanceFromBottom < 24;
 
     // Skip direction logic for programmatic scrolls.
@@ -100,8 +101,7 @@ export function useChatScroll({
     if (event.deltaY < 0) {
       isAtBottomRef.current = false;
     } else if (event.deltaY > 0 && scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
       if (distanceFromBottom < ATTACH_DISTANCE + 80) {
         isAtBottomRef.current = true;
       }
@@ -123,8 +123,7 @@ export function useChatScroll({
     if (deltaY > 2) {
       isAtBottomRef.current = false;
     } else if (deltaY < -2 && scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const distanceFromBottom = scrollDistanceFromBottom(scrollContainerRef.current);
       if (distanceFromBottom < ATTACH_DISTANCE + 80) {
         isAtBottomRef.current = true;
       }

@@ -34,8 +34,8 @@ class GetProjectOverviewParams(BaseModel):
     """Parameters for get_project_overview."""
 
     include_notes: bool = Field(
-        False,
-        description="If true, include per-chapter notes in the overview output (default false).",
+        True,
+        description="If true, include per-chapter notes in the overview output (default true).",
     )
 
 

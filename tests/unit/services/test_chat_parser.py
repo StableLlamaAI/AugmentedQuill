@@ -220,6 +220,14 @@ class TestChatParser(unittest.TestCase):
         content = "Before <thinking>hidden</thinking> After"
         self.assertEqual(strip_thinking_tags(content), "Before  After")
 
+    def test_strip_thinking_tags_removes_inline_think_blocks(self):
+        content = "Before <think>hidden</think> After"
+        self.assertEqual(strip_thinking_tags(content), "Before  After")
+
+    def test_strip_thinking_tags_drops_empty_think_token(self):
+        content = "<think></think>"
+        self.assertEqual(strip_thinking_tags(content), "")
+
     def test_strip_thinking_tags_removes_leaked_channel_marker_noise(self):
         content = "<|channel>thought\n<channel|>Visible answer"
         self.assertEqual(strip_thinking_tags(content), "Visible answer")

@@ -11,10 +11,6 @@
  * Design goals:
  *   1. At bottom → auto-scroll to follow new content.
  *   2. Not at bottom → never programmatically move the user's viewport.
- *
- * Auto-scroll decision is made by reading the live scroll position synchronously
- * inside useLayoutEffect (before browser paint). This avoids all timing races
- * with RAF-deferred scrolls and wheel/touch event coalescing.
  */
 
 import {
@@ -25,6 +21,7 @@ import {
   type WheelEvent,
   type TouchEvent,
 } from 'react';
+import { scrollDistanceFromBottom } from '../../../utils/scrollUtils';
 
 interface UseEditorScrollOptions {
   /** Current text content — triggers stream-follow on change. */
@@ -54,11 +51,11 @@ export interface UseEditorScrollResult {
   distanceFromBottomRef: React.MutableRefObject<number>;
 }
 
-/**
- * Distance from the bottom (px) at or below which the viewport is considered
- * "at the bottom" and auto-scroll re-attaches.
- */
-const ATTACH_DISTANCE = 50;
+/** Distance from bottom considered attached/following. */
+const FOLLOW_ATTACH_DISTANCE = 24;
+const FOLLOW_REATTACH_DISTANCE = 200;
+const SCROLL_UP_DETACH_DELTA = 1;
+const FOLLOW_WRITE_EPSILON_PX = 1;
 
 /** Custom React hook that manages editor scroll. */
 export function useEditorScroll({
@@ -70,215 +67,330 @@ export function useEditorScroll({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isDetachedFromBottomRef = useRef<boolean>(false);
   const distanceFromBottomRef = useRef<number>(0);
-  const detachedAnchorScrollTopRef = useRef<number | null>(null);
-  const prevScrollTopRef = useRef<number | null>(null);
+  const pendingFollowRafRef = useRef<number | null>(null);
+  const prevScrollTopRef = useRef<number>(0);
+  const lastKnownMaxScrollTopRef = useRef<number>(0);
   const lastTouchYRef = useRef<number | null>(null);
-  /**
-   * Set to true immediately before a programmatic scrollTop assignment so that
-   * the resulting scroll event is skipped for user-intent detection.
-   */
-  const isProgrammaticScrollRef = useRef<boolean>(false);
+  const lastUserScrollIntentAtRef = useRef<number>(0);
+  const prevChapterKeyRef = useRef<string>(String(chapterId));
+  const hasMountedRef = useRef<boolean>(false);
+  const shouldAutoFollowRef = useRef<boolean>(true);
 
-  // Keep a stable ref so useLayoutEffect can read the current value.
-  const isProseStreamingRef = useRef(isProseStreaming);
+  const isProseStreamingRef = useRef<boolean>(isProseStreaming);
   isProseStreamingRef.current = isProseStreaming;
+
+  const wasProseStreamingRef = useRef<boolean>(isProseStreaming);
 
   // isReplaceStreaming is retained in the interface for callers but the hook
   // no longer branches on it — the live position check handles both modes.
   void isReplaceStreaming;
 
+  const clearPendingFollow = useCallback((): void => {
+    if (pendingFollowRafRef.current !== null) {
+      window.cancelAnimationFrame(pendingFollowRafRef.current);
+      pendingFollowRafRef.current = null;
+    }
+  }, []);
+
+  const isNearBottom = useCallback((container: HTMLDivElement): boolean => {
+    return scrollDistanceFromBottom(container) <= FOLLOW_ATTACH_DISTANCE;
+  }, []);
+
+  const isWithinReattachRange = useCallback((container: HTMLDivElement): boolean => {
+    return scrollDistanceFromBottom(container) <= FOLLOW_REATTACH_DISTANCE;
+  }, []);
+
+  const updateDistanceFromContainer = useCallback((container: HTMLDivElement): void => {
+    distanceFromBottomRef.current = scrollDistanceFromBottom(container);
+  }, []);
+
+  const syncDetachedFlag = useCallback((): void => {
+    isDetachedFromBottomRef.current = !shouldAutoFollowRef.current;
+  }, []);
+
+  const updateAutoFollowFromScrollPosition = useCallback(
+    (container: HTMLDivElement): void => {
+      const currentTop = container.scrollTop;
+      const previousTop = prevScrollTopRef.current;
+      const delta = currentTop - previousTop;
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const userIntentRecent = now - lastUserScrollIntentAtRef.current < 500;
+      let detachedInThisUpdate = false;
+
+      if (delta <= -SCROLL_UP_DETACH_DELTA) {
+        if (!isProseStreamingRef.current || userIntentRecent) {
+          shouldAutoFollowRef.current = false;
+          detachedInThisUpdate = true;
+        }
+      } else if (
+        !shouldAutoFollowRef.current &&
+        delta > SCROLL_UP_DETACH_DELTA &&
+        userIntentRecent &&
+        isWithinReattachRange(container)
+      ) {
+        shouldAutoFollowRef.current = true;
+      } else if (isNearBottom(container)) {
+        shouldAutoFollowRef.current = true;
+      }
+
+      // If detach came from a generic scroll event (e.g. scrollbar drag),
+      // cancel any already queued follow write to prevent a late jump.
+      if (detachedInThisUpdate && pendingFollowRafRef.current !== null) {
+        clearPendingFollow();
+      }
+
+      prevScrollTopRef.current = currentTop;
+      updateDistanceFromContainer(container);
+      syncDetachedFlag();
+      void delta;
+      void userIntentRecent;
+    },
+    [
+      clearPendingFollow,
+      isNearBottom,
+      isWithinReattachRange,
+      syncDetachedFlag,
+      updateDistanceFromContainer,
+    ]
+  );
+
+  const scheduleFollowToBottom = useCallback((): void => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const liveDistance = scrollDistanceFromBottom(container);
+    if (liveDistance <= FOLLOW_WRITE_EPSILON_PX) {
+      updateDistanceFromContainer(container);
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const alreadyPinned = Math.abs(container.scrollTop - maxScrollTop) <= 1;
+    const maxScrollTopChanged =
+      Math.abs(maxScrollTop - lastKnownMaxScrollTopRef.current) > 1;
+
+    // Avoid per-chunk RAF churn when geometry and position are unchanged.
+    if (alreadyPinned && !maxScrollTopChanged) {
+      void maxScrollTop;
+      return;
+    }
+
+    if (pendingFollowRafRef.current !== null) {
+      return;
+    }
+    pendingFollowRafRef.current = window.requestAnimationFrame((): void => {
+      pendingFollowRafRef.current = null;
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return;
+      }
+      if (!shouldAutoFollowRef.current) {
+        return;
+      }
+      const liveDistance = scrollDistanceFromBottom(container);
+      if (liveDistance <= FOLLOW_WRITE_EPSILON_PX) {
+        updateDistanceFromContainer(container);
+        return;
+      }
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const didWrite = Math.abs(container.scrollTop - maxScrollTop) > 1;
+      if (didWrite) {
+        container.scrollTop = maxScrollTop;
+      }
+      lastKnownMaxScrollTopRef.current = maxScrollTop;
+      prevScrollTopRef.current = container.scrollTop;
+      updateDistanceFromContainer(container);
+      shouldAutoFollowRef.current = true;
+      syncDetachedFlag();
+      void didWrite;
+      void maxScrollTop;
+    });
+  }, [syncDetachedFlag, updateDistanceFromContainer]);
+
   /**
    * Pin the container to its maximum scroll position.
-   * Marks the resulting scroll event as programmatic so it is not mistaken for
-   * a user gesture.
    */
   const pinToBottom = useCallback((container: HTMLDivElement): void => {
     const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
     if (Math.abs(maxScrollTop - container.scrollTop) > 1) {
-      isProgrammaticScrollRef.current = true;
       container.scrollTop = maxScrollTop;
     }
   }, []);
 
   const handleScroll = useCallback((): void => {
-    if (!scrollContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    updateAutoFollowFromScrollPosition(container);
+  }, [updateAutoFollowFromScrollPosition]);
 
-    distanceFromBottomRef.current = distanceFromBottom;
+  const handleWheel = useCallback(
+    (event: WheelEvent<HTMLDivElement>): void => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      lastUserScrollIntentAtRef.current =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    // Programmatic scrolls must not influence user-intent detection.
-    // prevScrollTopRef is intentionally NOT updated here.
-    if (isProgrammaticScrollRef.current) {
-      isProgrammaticScrollRef.current = false;
-      return;
-    }
-
-    const prevScrollTop = prevScrollTopRef.current ?? scrollTop;
-    const scrollDelta = scrollTop - prevScrollTop;
-    prevScrollTopRef.current = scrollTop;
-
-    if (scrollDelta < 0) {
-      isDetachedFromBottomRef.current = true;
-      detachedAnchorScrollTopRef.current = scrollTop;
-    } else if (scrollDelta > 0 && distanceFromBottom < ATTACH_DISTANCE) {
-      isDetachedFromBottomRef.current = false;
-      detachedAnchorScrollTopRef.current = null;
-    } else if (isDetachedFromBottomRef.current) {
-      // Keep anchor current while user scrolls in detached mode.
-      detachedAnchorScrollTopRef.current = scrollTop;
-    }
-  }, []);
-
-  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>): void => {
-    // Wheel fires before the DOM scroll updates — earliest possible signal of
-    // user intent. Primary detach trigger for the "first wheel tick" case where
-    // scrollTop hasn't changed yet when the next useLayoutEffect runs.
-    if (event.deltaY < 0) {
-      isDetachedFromBottomRef.current = true;
-      if (scrollContainerRef.current) {
-        detachedAnchorScrollTopRef.current = scrollContainerRef.current.scrollTop;
+      // When detached, never keep stale pending follow frames while the user is
+      // manually wheeling through content.
+      if (!shouldAutoFollowRef.current && pendingFollowRafRef.current !== null) {
+        clearPendingFollow();
       }
-    } else if (event.deltaY > 0 && scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      if (distanceFromBottom < ATTACH_DISTANCE + 80) {
-        isDetachedFromBottomRef.current = false;
-        detachedAnchorScrollTopRef.current = null;
+
+      // Detach immediately on upward intent so we don't fight user scroll before
+      // the browser emits the resulting scroll event.
+      if (event.deltaY < 0) {
+        shouldAutoFollowRef.current = false;
+        syncDetachedFlag();
+        clearPendingFollow();
+        return;
       }
-    }
-  }, []);
+
+      // Reattach decisions are handled in handleScroll from actual geometry
+      // updates to avoid wheel-vs-stream races.
+      updateDistanceFromContainer(container);
+      void event.deltaY;
+    },
+    [clearPendingFollow, syncDetachedFlag, updateDistanceFromContainer]
+  );
 
   const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>): void => {
     lastTouchYRef.current = event.touches[0]?.clientY ?? null;
+    lastUserScrollIntentAtRef.current =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
   }, []);
 
-  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>): void => {
-    const currentY = event.touches[0]?.clientY ?? null;
-    const previousY = lastTouchYRef.current;
-    lastTouchYRef.current = currentY;
-    if (previousY === null || currentY === null) return;
+  const handleTouchMove = useCallback(
+    (event: TouchEvent<HTMLDivElement>): void => {
+      const currentY = event.touches[0]?.clientY ?? null;
+      const previousY = lastTouchYRef.current;
+      lastTouchYRef.current = currentY;
+      if (previousY === null || currentY === null) return;
 
-    const deltaY = currentY - previousY;
-    if (deltaY > 2) {
-      isDetachedFromBottomRef.current = true;
-      if (scrollContainerRef.current) {
-        detachedAnchorScrollTopRef.current = scrollContainerRef.current.scrollTop;
+      const deltaY = currentY - previousY;
+      lastUserScrollIntentAtRef.current =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (deltaY > 2) {
+        shouldAutoFollowRef.current = false;
+        syncDetachedFlag();
+        clearPendingFollow();
+        return;
       }
-    } else if (deltaY < -2 && scrollContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      if (distanceFromBottom < ATTACH_DISTANCE + 80) {
-        isDetachedFromBottomRef.current = false;
-        detachedAnchorScrollTopRef.current = null;
+      if (deltaY < -2 && scrollContainerRef.current) {
+        updateDistanceFromContainer(scrollContainerRef.current);
+        if (isNearBottom(scrollContainerRef.current)) {
+          shouldAutoFollowRef.current = true;
+          syncDetachedFlag();
+        }
       }
-    }
-  }, []);
+      void deltaY;
+    },
+    [clearPendingFollow, isNearBottom, syncDetachedFlag, updateDistanceFromContainer]
+  );
 
   const scrollMainContentToBottom = useCallback((): void => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    isProgrammaticScrollRef.current = true;
-    container.scrollTop = container.scrollHeight;
-    detachedAnchorScrollTopRef.current = null;
-  }, []);
+    shouldAutoFollowRef.current = true;
+    syncDetachedFlag();
+    scheduleFollowToBottom();
+  }, [scheduleFollowToBottom, syncDetachedFlag]);
 
-  /**
-   * Auto-scroll during streaming.
-   *
-   * Runs synchronously in the commit phase (before browser paint) so wheel
-   * events that fired before this render have already updated
-   * isDetachedFromBottomRef, and the live scrollTop reflects the user's actual
-   * position. No RAF is used, eliminating the timing window where a RAF could
-   * move the viewport after the wheel event set the detach flag.
-   */
+  /** Auto-scroll during streaming before paint to avoid visual jumps. */
   useLayoutEffect((): void => {
-    if (!isProseStreamingRef.current) return;
+    if (!isProseStreaming) return;
 
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const wasDetached = isDetachedFromBottomRef.current;
-    const previousDistanceFromBottom = distanceFromBottomRef.current;
-    const previousKnownScrollTop = prevScrollTopRef.current;
-
-    // Primary guard: read the live scroll position right now.
-    // Content growth can increase this distance even when the user was at
-    // bottom before this chunk; preserve attached state across that case.
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    distanceFromBottomRef.current = distanceFromBottom;
-
-    // If currently at bottom, usually (re)attach and follow new content.
-    // Exception: detached mode with an anchor beyond the current max means the
-    // viewport is temporarily clamped by short content during replace streaming.
-    // Keep detached in that case and restore the anchor when content grows.
-    if (distanceFromBottom <= ATTACH_DISTANCE) {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-      const anchorTop = detachedAnchorScrollTopRef.current;
-      const isDetachedClampCase =
-        wasDetached && anchorTop !== null && anchorTop > maxScrollTop + 1;
-
-      if (isDetachedClampCase) {
-        isDetachedFromBottomRef.current = true;
-        return;
-      }
-
-      isDetachedFromBottomRef.current = false;
-      detachedAnchorScrollTopRef.current = null;
-      pinToBottom(container);
-      return;
+    // On stream start, initialize follow mode from current viewport position.
+    const startedStreamingNow = !wasProseStreamingRef.current;
+    if (startedStreamingNow) {
+      updateDistanceFromContainer(container);
+      // Preserve existing attached state when streaming starts so transient
+      // layout shifts cannot disable auto-follow.
+      shouldAutoFollowRef.current =
+        shouldAutoFollowRef.current || isNearBottom(container);
+      prevScrollTopRef.current = container.scrollTop;
+      syncDetachedFlag();
     }
 
-    // Keep auto-scroll attached across chunk growth if we were attached and
-    // previously at/near bottom, unless the user has already moved upward
-    // without a delivered scroll event.
     const userLikelyMovedUpWithoutScrollEvent =
-      previousKnownScrollTop !== null &&
-      container.scrollTop < previousKnownScrollTop - 1;
-    if (
-      !wasDetached &&
-      previousDistanceFromBottom <= ATTACH_DISTANCE &&
-      !userLikelyMovedUpWithoutScrollEvent
-    ) {
-      isDetachedFromBottomRef.current = false;
-      detachedAnchorScrollTopRef.current = null;
-      pinToBottom(container);
+      container.scrollTop < prevScrollTopRef.current - SCROLL_UP_DETACH_DELTA;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const userIntentRecent = now - lastUserScrollIntentAtRef.current < 500;
+    if (userLikelyMovedUpWithoutScrollEvent) {
+      if (userIntentRecent) {
+        shouldAutoFollowRef.current = false;
+        prevScrollTopRef.current = container.scrollTop;
+        updateDistanceFromContainer(container);
+        syncDetachedFlag();
+      }
+    }
+
+    if (!shouldAutoFollowRef.current) {
       return;
     }
 
-    // Detached mode: preserve viewport anchor and restore it when geometry
-    // temporarily clamps during replace streaming.
-    isDetachedFromBottomRef.current = true;
-    if (detachedAnchorScrollTopRef.current === null) {
-      detachedAnchorScrollTopRef.current = container.scrollTop;
+    const liveDistance = scrollDistanceFromBottom(container);
+    if (liveDistance > FOLLOW_WRITE_EPSILON_PX) {
+      pinToBottom(container);
     }
 
-    const anchorTop = detachedAnchorScrollTopRef.current;
-    if (anchorTop !== null) {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-      const targetTop = Math.min(anchorTop, maxScrollTop);
-      if (Math.abs(container.scrollTop - targetTop) > 1) {
-        isProgrammaticScrollRef.current = true;
-        container.scrollTop = targetTop;
-      }
-    }
-  }, [localContent, pinToBottom]);
+    lastKnownMaxScrollTopRef.current = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight
+    );
+    prevScrollTopRef.current = container.scrollTop;
+    updateDistanceFromContainer(container);
+    shouldAutoFollowRef.current = true;
+    syncDetachedFlag();
+  }, [
+    isProseStreaming,
+    pinToBottom,
+    localContent,
+    isNearBottom,
+    syncDetachedFlag,
+    updateDistanceFromContainer,
+  ]);
+
+  useEffect((): void => {
+    wasProseStreamingRef.current = isProseStreaming;
+  }, [isProseStreaming]);
 
   // Chapter switch: reset scroll so the new chapter starts at the top.
   useLayoutEffect((): void => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      prevChapterKeyRef.current = String(chapterId);
+      return;
+    }
+
+    const chapterKey = String(chapterId);
+    if (prevChapterKeyRef.current === chapterKey) {
+      return;
+    }
+
+    prevChapterKeyRef.current = chapterKey;
     const container = scrollContainerRef.current;
     if (!container) return;
-    isProgrammaticScrollRef.current = true;
-    container.scrollTop = 0;
-    isDetachedFromBottomRef.current = false;
-    detachedAnchorScrollTopRef.current = null;
-    prevScrollTopRef.current = 0;
-    distanceFromBottomRef.current = 0;
-  }, [chapterId]);
 
-  // No cleanup needed (no pending animation frames).
-  useEffect((): undefined => undefined, []);
+    clearPendingFollow();
+    container.scrollTop = 0;
+    shouldAutoFollowRef.current = true;
+    syncDetachedFlag();
+    distanceFromBottomRef.current = 0;
+    prevScrollTopRef.current = 0;
+    lastKnownMaxScrollTopRef.current = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight
+    );
+  }, [chapterId, clearPendingFollow, syncDetachedFlag]);
+
+  useEffect((): (() => void) => {
+    return (): void => {
+      clearPendingFollow();
+    };
+  }, [clearPendingFollow]);
 
   return {
     scrollContainerRef,

@@ -45,6 +45,8 @@ import {
 import { useEditorScroll } from './hooks/useEditorScroll';
 import { useEditorFormatting } from './hooks/useEditorFormatting';
 
+const STREAM_FOLLOW_ATTACH_DISTANCE_PX = 200;
+
 // URL sanitizer — re-exported for backward compat with Editor.url.test.ts
 export { isSafeImageUrl } from './editorUtils';
 import { isSafeImageUrl } from './editorUtils';
@@ -137,6 +139,7 @@ export const Editor = React.memo(
       // Local content/title state so the editor div always gets the latest
       // typed value immediately, while the parent onChange (API call) is debounced.
       const [localContent, setLocalContent] = useState(chapter.content);
+      const deferredStreamingContentRef = useRef<string | null>(null);
       // Ref that always holds the current content without triggering re-renders.
       // Used in callbacks that need the latest value at call time (e.g. suggestion
       // hotkeys) so those callbacks don't need localContent in their deps arrays.
@@ -156,30 +159,33 @@ export const Editor = React.memo(
 
       useEffect((): void => {
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
-        if (!isChapterSwitch) return;
+        if (isChapterSwitch) {
+          lastChapterIdRef.current = chapter.id;
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
+          return;
+        }
 
-        lastChapterIdRef.current = chapter.id;
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        } else if (baselineContent === undefined) {
-          savedBaselineRef.current = undefined;
+        if (baselineContent !== prevBaselineRef.current) {
+          prevBaselineRef.current = baselineContent;
+          setLocalBaseline(baselineContent);
+          // Only preserve as the real AI baseline when baselineContent differs from
+          // chapter.content. When isUserEdit=true, pushState sets baselineContent
+          // equal to chapter.content (no diff), so we must not overwrite the saved
+          // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
+          // that wrong baseline instead of the original AI-written baseline.
+          if (baselineContent !== undefined && baselineContent !== chapter.content) {
+            savedBaselineRef.current = baselineContent;
+          } else if (baselineContent === undefined) {
+            savedBaselineRef.current = undefined;
+          }
         }
       }, [chapter.id, baselineContent, chapter.content]);
-
-      if (baselineContent !== prevBaselineRef.current) {
-        prevBaselineRef.current = baselineContent;
-        setLocalBaseline(baselineContent);
-        // Only preserve as the real AI baseline when baselineContent differs from
-        // chapter.content. When isUserEdit=true, pushState sets baselineContent
-        // equal to chapter.content (no diff), so we must not overwrite the saved
-        // AI baseline with the user-edited value — otherwise Ctrl+Z would restore
-        // that wrong baseline instead of the original AI-written baseline.
-        if (baselineContent !== undefined && baselineContent !== chapter.content) {
-          savedBaselineRef.current = baselineContent;
-        }
-      }
 
       const isChatStreaming = useChatStore(
         (s: ChatStoreState): boolean => s.isProseStreamingFromChat
@@ -216,6 +222,10 @@ export const Editor = React.memo(
         const isChapterSwitch = chapter.id !== lastChapterIdRef.current;
         lastChapterIdRef.current = chapter.id;
 
+        if (isChapterSwitch) {
+          deferredStreamingContentRef.current = null;
+        }
+
         // During active streaming the streaming-slot effect below owns
         // localContent; skip the chapter.content sync to avoid flashing the
         // pre-AI baseline content on every chunk.
@@ -228,7 +238,7 @@ export const Editor = React.memo(
         const shouldDeferStreamingSync =
           proseStreamingActive &&
           isDetachedFromBottomRef.current &&
-          distanceFromBottomRef.current > 120 &&
+          distanceFromBottomRef.current > STREAM_FOLLOW_ATTACH_DISTANCE_PX &&
           !isChapterSwitch;
 
         if (isChapterSwitch || (!editorFocused && !shouldDeferStreamingSync)) {
@@ -250,18 +260,33 @@ export const Editor = React.memo(
           const shouldDeferStreamingChunk =
             proseStreamingActive &&
             isDetachedFromBottomRef.current &&
-            distanceFromBottomRef.current > 120 &&
+            distanceFromBottomRef.current > STREAM_FOLLOW_ATTACH_DISTANCE_PX &&
             !isLiveAtBottom;
 
           // While detached from the bottom, freeze chunk-by-chunk updates so
           // stream geometry changes cannot pull the viewport unexpectedly.
-          // Final content still syncs via chapter.content once streaming ends.
-          if (shouldDeferStreamingChunk) return;
+          if (shouldDeferStreamingChunk) {
+            deferredStreamingContentRef.current = streamingContent;
+            return;
+          }
 
+          deferredStreamingContentRef.current = null;
           localContentRef.current = streamingContent;
           setLocalContent(streamingContent);
         }
       }, [streamingContent, proseStreamingActive]);
+
+      // If the stream ends while a chunk was deferred, flush the latest deferred
+      // content immediately so the editor doesn't lag until a later model update.
+      useEffect((): void => {
+        if (proseStreamingActive) return;
+        const deferred = deferredStreamingContentRef.current;
+        if (deferred === null) return;
+
+        deferredStreamingContentRef.current = null;
+        localContentRef.current = deferred;
+        setLocalContent(deferred);
+      }, [proseStreamingActive]);
 
       useEffect((): void => {
         setLocalTitle(chapter.title);
@@ -296,7 +321,7 @@ export const Editor = React.memo(
         distanceFromBottomRef,
       } = useEditorScroll({
         localContent,
-        isProseStreaming,
+        isProseStreaming: proseStreamingActive,
         isReplaceStreaming,
         chapterId: chapter.id,
       });
@@ -668,7 +693,7 @@ export const Editor = React.memo(
         const justOpened = !prevHasContinuationRef.current && hasContinuationOptions;
         prevHasContinuationRef.current = hasContinuationOptions;
 
-        if (isProseStreaming) return undefined;
+        if (proseStreamingActive) return undefined;
         if (!(isAiLoading || isSuggesting || justOpened)) return undefined;
 
         const raf = window.requestAnimationFrame((): void => {
@@ -683,7 +708,7 @@ export const Editor = React.memo(
         continuations,
         isAiLoading,
         isSuggesting,
-        isProseStreaming,
+        proseStreamingActive,
         hasContinuationOptions,
         scrollMainContentToBottom,
       ]);

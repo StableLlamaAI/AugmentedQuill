@@ -465,6 +465,8 @@ export const es = {
       'Esta acción no está disponible porque no hay un modelo WRITING funcional configurado.',
     'Toggle whitespace characters': 'Alternar caracteres de espacio en blanco',
     'Close menu': 'Cerrar menú',
+    'More tools': 'Más herramientas',
+    Tools: 'Herramientas',
     Formatting: 'Formato',
     'Close formatting menu': 'Cerrar menú de formato',
     Format: 'Formato',

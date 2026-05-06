@@ -68,6 +68,7 @@ interface ViewModeSelectorProps {
   setViewMode: (mode: 'raw' | 'markdown' | 'wysiwyg') => void;
   showWhitespace: boolean;
   setShowWhitespace: (v: boolean) => void;
+  showInlineTabs: boolean;
   isViewMenuOpen: boolean;
   setIsViewMenuOpen: (v: boolean) => void;
   isLight: boolean;
@@ -92,6 +93,7 @@ const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
   setViewMode,
   showWhitespace,
   setShowWhitespace,
+  showInlineTabs,
   isViewMenuOpen,
   setIsViewMenuOpen,
   isLight,
@@ -111,7 +113,9 @@ const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
   return (
     <div className="relative">
       {/* Desktop: inline tab row */}
-      <div className={`hidden 2xl:flex items-center p-1 rounded-lg border ${tabBg}`}>
+      <div
+        className={`${showInlineTabs ? 'flex' : 'hidden'} items-center p-1 rounded-lg border ${tabBg}`}
+      >
         {VIEW_MODES.map((m: (typeof VIEW_MODES)[0]) => (
           <button
             key={m.key}
@@ -142,7 +146,7 @@ const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
       </div>
 
       {/* Mobile/tablet: dropdown */}
-      <div className="2xl:hidden relative">
+      <div className={`${showInlineTabs ? 'hidden' : 'relative'}`}>
         <button
           onClick={(): void => setIsViewMenuOpen(!isViewMenuOpen)}
           className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium border ${
@@ -168,7 +172,7 @@ const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
             />
             <div
               role="menu"
-              className={`absolute top-full left-0 mt-2 w-32 rounded-lg shadow-lg border p-1 z-20 flex flex-col gap-1 ${dropBg}`}
+              className={`absolute top-full left-0 mt-2 w-36 rounded-lg shadow-lg border p-1 z-20 flex flex-col gap-1 ${dropBg}`}
             >
               {VIEW_MODES.map((m: (typeof VIEW_MODES)[0]) => (
                 <button
@@ -187,6 +191,23 @@ const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
                   <span>{m.label}</span>
                 </button>
               ))}
+              <div
+                className={`my-1 h-px ${isLight ? 'bg-brand-gray-200' : 'bg-brand-gray-700'}`}
+              />
+              <button
+                onClick={(): void => {
+                  setShowWhitespace(!showWhitespace);
+                  setIsViewMenuOpen(false);
+                }}
+                className={`flex items-center space-x-2 px-2 py-1.5 rounded text-xs text-left ${
+                  showWhitespace
+                    ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                    : dropItem
+                }`}
+              >
+                <Pilcrow size={14} />
+                <span>WS</span>
+              </button>
             </div>
           </>
         )}
@@ -348,6 +369,7 @@ interface AiChapterControlsProps {
   isAiActionLoading: boolean;
   isWritingAvailable: boolean;
   isChapterEmpty: boolean | undefined;
+  showLabel: boolean;
   isLight: boolean;
   currentTheme: AppTheme;
   t: (key: string) => string;
@@ -358,6 +380,7 @@ const AiChapterControls: React.FC<AiChapterControlsProps> = ({
   isAiActionLoading,
   isWritingAvailable,
   isChapterEmpty,
+  showLabel,
   isLight,
   currentTheme,
   t,
@@ -377,12 +400,16 @@ const AiChapterControls: React.FC<AiChapterControlsProps> = ({
             : 'bg-brand-gray-800 border-brand-gray-700'
         }`}
       >
-        <span className="hidden 2xl:inline text-[10px] text-brand-gray-500 font-bold uppercase px-2">
-          {t('Chapter AI')}
-        </span>
-        <div
-          className={`hidden 2xl:block w-px h-4 ${isLight ? 'bg-brand-gray-300' : 'bg-brand-gray-700'}`}
-        />
+        {showLabel && (
+          <>
+            <span className="text-[10px] text-brand-gray-500 font-bold uppercase px-2 whitespace-nowrap">
+              {t('Chapter AI')}
+            </span>
+            <div
+              className={`w-px h-4 ${isLight ? 'bg-brand-gray-300' : 'bg-brand-gray-700'}`}
+            />
+          </>
+        )}
         <Button
           theme={currentTheme}
           size="sm"
@@ -472,12 +499,37 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const formatMenuRef = useRef<HTMLDivElement | null>(null);
+  const centerRef = useRef<HTMLDivElement | null>(null);
+  const [centerWidth, setCenterWidth] = useState<number>(0);
 
-  const [windowWidth, setWindowWidth] = useState((): number => window.innerWidth);
-  useEffect((): (() => void) => {
-    const onResize = (): void => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', onResize);
-    return (): void => window.removeEventListener('resize', onResize);
+  useEffect((): (() => void) | void => {
+    const element = centerRef.current;
+    if (!element) {
+      return;
+    }
+
+    if (typeof ResizeObserver === 'undefined') {
+      const syncFromWindow = (): void => {
+        setCenterWidth(window.innerWidth);
+      };
+      syncFromWindow();
+      window.addEventListener('resize', syncFromWindow);
+      return (): void => window.removeEventListener('resize', syncFromWindow);
+    }
+
+    const syncWidth = (): void => {
+      setCenterWidth(element.getBoundingClientRect().width);
+    };
+    syncWidth();
+
+    const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
+      const next = entries[0]?.contentRect.width;
+      if (typeof next === 'number') {
+        setCenterWidth(next);
+      }
+    });
+    observer.observe(element);
+    return (): void => observer.disconnect();
   }, []);
 
   useClickOutside(modelMenuRef, (): void => setIsModelMenuOpen(false), isModelMenuOpen);
@@ -580,16 +632,26 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
     },
   ];
 
+  const showInlineViewTabs = centerWidth >= 900;
+
   const inlineCount = ((): number => {
-    if (windowWidth >= 1920) return allFormatButtons.length;
-    if (windowWidth >= 1700) return 14;
-    if (windowWidth >= 1536) return 13;
-    if (windowWidth >= 1400) return 12;
-    if (windowWidth >= 1280) return 10;
-    if (windowWidth >= 1180) return 8;
-    if (windowWidth >= 1024) return 6;
+    if (centerWidth >= 1500) return allFormatButtons.length;
+    if (centerWidth >= 1320) return 12;
+    if (centerWidth >= 1180) return 10;
+    if (centerWidth >= 1060) return 8;
+    if (centerWidth >= 960) return 6;
+    if (centerWidth >= 860) return 4;
+    if (centerWidth >= 760) return 2;
     return 0;
   })();
+
+  const effectiveInlineCount =
+    inlineCount === allFormatButtons.length - 1 ? allFormatButtons.length : inlineCount;
+
+  const showAiControls = centerWidth >= 860;
+  const showAiLabel = centerWidth >= 1180;
+  const showModelInline = centerWidth >= 1360;
+  const showModelDropdown = centerWidth >= 980 && !showModelInline;
 
   const modelSelectorProps = {
     options: appSettings.providers,
@@ -599,12 +661,16 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
   };
 
   return (
-    <div className="basis-full sm:basis-auto order-3 sm:order-2 flex-1 flex justify-center items-center min-w-0 px-2 space-x-2 xl:space-x-4 py-1 sm:py-0">
+    <div
+      ref={centerRef}
+      className="basis-full sm:basis-auto order-3 sm:order-2 flex-1 flex justify-center items-center min-w-0 px-2 space-x-2 xl:space-x-4 py-1 sm:py-0"
+    >
       <ViewModeSelector
         viewMode={viewMode}
         setViewMode={setViewMode}
         showWhitespace={showWhitespace}
         setShowWhitespace={setShowWhitespace}
+        showInlineTabs={showInlineViewTabs}
         isViewMenuOpen={isViewMenuOpen}
         setIsViewMenuOpen={setIsViewMenuOpen}
         isLight={isLight}
@@ -616,7 +682,7 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
 
       <FormatToolbar
         allFormatButtons={allFormatButtons}
-        inlineCount={inlineCount}
+        inlineCount={effectiveInlineCount}
         getFormatButtonClass={getFormatButtonClass}
         isFormatMenuOpen={isFormatMenuOpen}
         setIsFormatMenuOpen={setIsFormatMenuOpen}
@@ -630,136 +696,155 @@ export const HeaderCenterControls: React.FC<HeaderCenterControlsProps> = ({
         t={t}
       />
 
-      <div className="hidden lg:flex items-center space-x-1">
-        <div className={`w-px h-4 mx-2 ${dividerColor}`} />
-        <AiChapterControls
-          handleAiAction={handleAiAction}
-          isAiActionLoading={isAiActionLoading}
-          isWritingAvailable={isWritingAvailable}
-          isChapterEmpty={isChapterEmpty}
-          isLight={isLight}
-          currentTheme={currentTheme}
-          t={t}
-        />
-      </div>
+      {showAiControls && (
+        <div className="hidden lg:flex items-center space-x-1">
+          <div className={`w-px h-4 mx-2 ${dividerColor}`} />
+          <AiChapterControls
+            handleAiAction={handleAiAction}
+            isAiActionLoading={isAiActionLoading}
+            isWritingAvailable={isWritingAvailable}
+            isChapterEmpty={isChapterEmpty}
+            showLabel={showAiLabel}
+            isLight={isLight}
+            currentTheme={currentTheme}
+            t={t}
+          />
+        </div>
+      )}
 
       {/* Model selectors */}
-      <div
-        className={`hidden 2xl:flex items-center ml-2 pl-2 border-l h-8 ${isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'}`}
-      >
-        <div className="2xl:hidden relative" ref={modelMenuRef}>
-          <button
-            onClick={(): void => setIsModelMenuOpen(!isModelMenuOpen)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
-              isLight
-                ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700 hover:bg-brand-gray-100'
-                : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-300 hover:bg-brand-gray-700'
-            }`}
-            title={t('Model settings')}
-          >
-            <Cpu size={13} />
-            <span>{t('Models')}</span>
-            <ChevronDown size={10} className="opacity-60" />
-          </button>
-          {isModelMenuOpen && (
-            <>
+      {(showModelDropdown || showModelInline) && (
+        <div
+          className={`hidden lg:flex items-center ml-2 pl-2 border-l h-8 ${isLight ? 'border-brand-gray-200' : 'border-brand-gray-800'}`}
+        >
+          {showModelDropdown && (
+            <div className="relative" ref={modelMenuRef}>
               <button
-                className="fixed inset-0 z-10 cursor-default"
-                onClick={(): void => setIsModelMenuOpen(false)}
-                aria-label={t('Close model menu')}
-              />
-              <div
-                className={`absolute top-full right-0 mt-2 w-72 rounded-lg shadow-xl border p-3 z-20 flex flex-col gap-3 ${isLight ? 'bg-brand-gray-50 border-brand-gray-200' : 'bg-brand-gray-900 border-brand-gray-700'}`}
+                onClick={(): void => setIsModelMenuOpen(!isModelMenuOpen)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+                  isLight
+                    ? 'bg-brand-gray-50 border-brand-gray-200 text-brand-gray-700 hover:bg-brand-gray-100'
+                    : 'bg-brand-gray-800 border-brand-gray-700 text-brand-gray-300 hover:bg-brand-gray-700'
+                }`}
+                title={t('Model settings')}
               >
-                <ModelSelector
-                  {...modelSelectorProps}
-                  label="Writing"
-                  value={appSettings.activeWritingProviderId}
-                  onSelectorClick={(): void => {
-                    void recheckUnavailableProviderIfStale(
-                      appSettings.activeWritingProviderId
-                    );
-                  }}
-                  onChange={(v: string): void =>
-                    updateAppSettings({ ...appSettings, activeWritingProviderId: v })
-                  }
-                  labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
-                />
-                <ModelSelector
-                  {...modelSelectorProps}
-                  label="Editing"
-                  value={appSettings.activeEditingProviderId}
-                  onSelectorClick={(): void => {
-                    void recheckUnavailableProviderIfStale(
-                      appSettings.activeEditingProviderId
-                    );
-                  }}
-                  onChange={(v: string): void =>
-                    updateAppSettings({ ...appSettings, activeEditingProviderId: v })
-                  }
-                  labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
-                />
-                <ModelSelector
-                  {...modelSelectorProps}
-                  label="Chat"
-                  value={appSettings.activeChatProviderId}
-                  onSelectorClick={(): void => {
-                    void recheckUnavailableProviderIfStale(
-                      appSettings.activeChatProviderId
-                    );
-                  }}
-                  onChange={(v: string): void =>
-                    updateAppSettings({ ...appSettings, activeChatProviderId: v })
-                  }
-                  labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
-                />
-              </div>
-            </>
+                <Cpu size={13} />
+                <span>{t('Models')}</span>
+                <ChevronDown size={10} className="opacity-60" />
+              </button>
+              {isModelMenuOpen && (
+                <>
+                  <button
+                    className="fixed inset-0 z-10 cursor-default"
+                    onClick={(): void => setIsModelMenuOpen(false)}
+                    aria-label={t('Close model menu')}
+                  />
+                  <div
+                    className={`absolute top-full right-0 mt-2 w-72 rounded-lg shadow-xl border p-3 z-20 flex flex-col gap-3 ${isLight ? 'bg-brand-gray-50 border-brand-gray-200' : 'bg-brand-gray-900 border-brand-gray-700'}`}
+                  >
+                    <ModelSelector
+                      {...modelSelectorProps}
+                      label="Writing"
+                      value={appSettings.activeWritingProviderId}
+                      onSelectorClick={(): void => {
+                        void recheckUnavailableProviderIfStale(
+                          appSettings.activeWritingProviderId
+                        );
+                      }}
+                      onChange={(v: string): void =>
+                        updateAppSettings({
+                          ...appSettings,
+                          activeWritingProviderId: v,
+                        })
+                      }
+                      labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+                    />
+                    <ModelSelector
+                      {...modelSelectorProps}
+                      label="Editing"
+                      value={appSettings.activeEditingProviderId}
+                      onSelectorClick={(): void => {
+                        void recheckUnavailableProviderIfStale(
+                          appSettings.activeEditingProviderId
+                        );
+                      }}
+                      onChange={(v: string): void =>
+                        updateAppSettings({
+                          ...appSettings,
+                          activeEditingProviderId: v,
+                        })
+                      }
+                      labelColorClass={
+                        isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'
+                      }
+                    />
+                    <ModelSelector
+                      {...modelSelectorProps}
+                      label="Chat"
+                      value={appSettings.activeChatProviderId}
+                      onSelectorClick={(): void => {
+                        void recheckUnavailableProviderIfStale(
+                          appSettings.activeChatProviderId
+                        );
+                      }}
+                      onChange={(v: string): void =>
+                        updateAppSettings({ ...appSettings, activeChatProviderId: v })
+                      }
+                      labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {showModelInline && (
+            <div className="flex items-center space-x-3">
+              <ModelSelector
+                {...modelSelectorProps}
+                label="Writing"
+                value={appSettings.activeWritingProviderId}
+                onSelectorClick={(): void => {
+                  void recheckUnavailableProviderIfStale(
+                    appSettings.activeWritingProviderId
+                  );
+                }}
+                onChange={(v: string): void =>
+                  updateAppSettings({ ...appSettings, activeWritingProviderId: v })
+                }
+                labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
+              />
+              <ModelSelector
+                {...modelSelectorProps}
+                label="Editing"
+                value={appSettings.activeEditingProviderId}
+                onSelectorClick={(): void => {
+                  void recheckUnavailableProviderIfStale(
+                    appSettings.activeEditingProviderId
+                  );
+                }}
+                onChange={(v: string): void =>
+                  updateAppSettings({ ...appSettings, activeEditingProviderId: v })
+                }
+                labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
+              />
+              <ModelSelector
+                {...modelSelectorProps}
+                label="Chat"
+                value={appSettings.activeChatProviderId}
+                onSelectorClick={(): void => {
+                  void recheckUnavailableProviderIfStale(
+                    appSettings.activeChatProviderId
+                  );
+                }}
+                onChange={(v: string): void =>
+                  updateAppSettings({ ...appSettings, activeChatProviderId: v })
+                }
+                labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
+              />
+            </div>
           )}
         </div>
-        <div className="hidden 2xl:flex items-center space-x-3">
-          <ModelSelector
-            {...modelSelectorProps}
-            label="Writing"
-            value={appSettings.activeWritingProviderId}
-            onSelectorClick={(): void => {
-              void recheckUnavailableProviderIfStale(
-                appSettings.activeWritingProviderId
-              );
-            }}
-            onChange={(v: string): void =>
-              updateAppSettings({ ...appSettings, activeWritingProviderId: v })
-            }
-            labelColorClass={isLight ? 'text-violet-600' : 'text-violet-400'}
-          />
-          <ModelSelector
-            {...modelSelectorProps}
-            label="Editing"
-            value={appSettings.activeEditingProviderId}
-            onSelectorClick={(): void => {
-              void recheckUnavailableProviderIfStale(
-                appSettings.activeEditingProviderId
-              );
-            }}
-            onChange={(v: string): void =>
-              updateAppSettings({ ...appSettings, activeEditingProviderId: v })
-            }
-            labelColorClass={isLight ? 'text-fuchsia-600' : 'text-fuchsia-400'}
-          />
-          <ModelSelector
-            {...modelSelectorProps}
-            label="Chat"
-            value={appSettings.activeChatProviderId}
-            onSelectorClick={(): void => {
-              void recheckUnavailableProviderIfStale(appSettings.activeChatProviderId);
-            }}
-            onChange={(v: string): void =>
-              updateAppSettings({ ...appSettings, activeChatProviderId: v })
-            }
-            labelColorClass={isLight ? 'text-blue-600' : 'text-blue-400'}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 };
