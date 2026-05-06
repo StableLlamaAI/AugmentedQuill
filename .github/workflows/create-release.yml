@@ -60,6 +60,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
           pip install pyinstaller uvicorn
+      - name: Set frontend package version
+        run: |
+          VERSION="${{ env.RELEASE_VERSION }}"
+          VERSION_CLEAN="${VERSION#v}"
+          python -c "import json; p='src/frontend/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
+      - name: Build Frontend
+        run: |
           cd src/frontend
           npm ci
           npm run build
@@ -151,6 +158,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
           pip install pyinstaller uvicorn
+      - name: Set frontend package version
+        run: |
+          VERSION="${{ env.RELEASE_VERSION }}"
+          VERSION_CLEAN="${VERSION#v}"
+          python -c "import json; p='src/frontend/package.json'; d=json.load(open(p)); d['version']='${VERSION_CLEAN}'; json.dump(d, open(p, 'w'), indent=2)"
+      - name: Build Frontend
+        run: |
           cd src/frontend
           npm ci
           npm run build
