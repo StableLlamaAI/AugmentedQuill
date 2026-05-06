@@ -247,6 +247,7 @@ export type MainEditorControls = {
 
 export type MainChatControls = {
   isChatOpen: boolean;
+  setIsChatOpen: (v: boolean) => void;
   isChatAvailable: boolean;
   activeChatConfig: LLMConfig;
   handleSendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;

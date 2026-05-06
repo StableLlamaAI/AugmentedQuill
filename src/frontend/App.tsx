@@ -378,6 +378,7 @@ const App: React.FC = () => {
   const chatControls = useMemo(
     () => ({
       isChatOpen,
+      setIsChatOpen,
       isChatAvailable: roleAvailability.chat,
       activeChatConfig,
       handleSendMessage: handleSendMessageWithReset,
@@ -396,6 +397,7 @@ const App: React.FC = () => {
     }),
     [
       isChatOpen,
+      setIsChatOpen,
       roleAvailability.chat,
       activeChatConfig,
       handleSendMessageWithReset,
@@ -415,6 +417,23 @@ const App: React.FC = () => {
   );
 
   const { sidebarControls, appMainLayoutProps } = useAppMainLayoutProps({
+    viewControls: {
+      viewMode,
+      setViewMode,
+      showWhitespace,
+      setShowWhitespace,
+      isViewMenuOpen,
+      setIsViewMenuOpen,
+    },
+    formatControls: {
+      handleFormat,
+      getFormatButtonClass,
+      isFormatMenuOpen,
+      setIsFormatMenuOpen,
+      isMobileFormatMenuOpen,
+      setIsMobileFormatMenuOpen,
+      onOpenImages: openImagesDialog,
+    },
     isSidebarOpen,
     setIsSidebarOpen,
     currentChapterId,
@@ -490,18 +509,6 @@ const App: React.FC = () => {
     nextRedoLabel,
     canUndo,
     canRedo,
-    viewMode,
-    setViewMode,
-    showWhitespace,
-    setShowWhitespace,
-    isViewMenuOpen,
-    setIsViewMenuOpen,
-    isFormatMenuOpen,
-    setIsFormatMenuOpen,
-    isMobileFormatMenuOpen,
-    setIsMobileFormatMenuOpen,
-    handleFormat,
-    getFormatButtonClass,
     openImagesDialog,
     setIsSettingsOpen,
     setIsImagesOpen,

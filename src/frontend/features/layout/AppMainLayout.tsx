@@ -21,14 +21,20 @@ import {
   MainChatControls,
   MainEditorControls,
   MainSidebarControls,
+  HeaderFormatControls,
+  HeaderViewControls,
 } from './layoutControlTypes';
 import { useStoryLanguage } from '../../stores/storyStore';
+
+import { useWorkspaceMode } from '../../stores/uiStore';
+import { EditorToolbar } from '../editor/EditorToolbar';
 
 type AppMainLayoutProps = {
   sidebarControls: MainSidebarControls;
   editorControls: MainEditorControls;
   chatControls: MainChatControls;
-  /** languages available for instructions; used by the metadata editor */
+  viewControls: HeaderViewControls;
+  formatControls: HeaderFormatControls;
   instructionLanguages: string[];
 };
 
@@ -82,10 +88,13 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
     sidebarControls,
     editorControls,
     chatControls,
+    viewControls,
+    formatControls,
     instructionLanguages,
   }: AppMainLayoutProps) => {
     const { bgMain, isLight, currentTheme } = useTheme();
     const { t } = useTranslation();
+    const workspaceMode = useWorkspaceMode();
 
     if (!sidebarControls || !editorControls || !chatControls) {
       console.error('AppMainLayout missing required controls', {
@@ -145,7 +154,14 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
       sidebarPrefs.chaptersHeight,
     ]);
 
-    // Stable callbacks \u2014 setEditorSettings is a useState setter (always stable)
+    // Collapse sidebar automatically when switching to split mode
+    useEffect(() => {
+      if (workspaceMode === 'split') {
+        setIsSidebarOpen(false);
+      }
+    }, [workspaceMode, setIsSidebarOpen]);
+
+    // Stable callbacks — setEditorSettings is a useState setter (always stable)
     // so these will never be recreated, preventing AppSidebar from re-rendering
     // just because AppMainLayout re-rendered (e.g. when editorControls changes).
     const toggleCollapsed = useCallback(
@@ -216,68 +232,153 @@ export const AppMainLayout: React.FC<AppMainLayoutProps> = React.memo(
           handleAddChapter={handleAddChapter}
           toggleCollapsed={toggleCollapsed}
           updateHeight={updateHeight}
+          workspaceMode={workspaceMode}
         />
 
         <section
-          id="aq-editor"
+          id="aq-workspace"
           role="main"
-          aria-label={t('Story editor')}
-          className={`flex-1 flex flex-col relative overflow-hidden w-full h-full ${bgMain}`}
+          aria-label={workspaceMode === 'scenes' ? t('Scenes') : t('Story editor')}
+          className={`flex-1 flex relative overflow-hidden w-full h-full ${bgMain}`}
         >
-          <div className="flex-1 overflow-hidden h-full flex flex-col">
-            {isChapterLoading ? (
-              <ChapterLoadingSkeleton isLight={isLight} t={t} />
-            ) : currentChapter ? (
-              <Editor
-                ref={editorRef}
-                chapter={currentChapter}
-                settings={editorSettings}
-                language={editorControls.storyLanguage || 'en'}
-                viewMode={viewMode}
-                onChange={editorControls.updateChapter}
-                suggestionControls={{
-                  continuations: suggestionControls.continuations,
-                  suggestionMode: suggestionControls.suggestionMode,
-                  setSuggestionMode: suggestionControls.setSuggestionMode,
-                  isSuggesting: suggestionControls.isSuggesting,
-                  onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
-                  onCancelSuggestion: suggestionControls.handleCancelSuggestions,
-                  onAcceptContinuation: suggestionControls.handleAcceptContinuation,
-                  isSuggestionMode: suggestionControls.isSuggestionMode,
-                  onKeyboardSuggestionAction:
-                    suggestionControls.handleKeyboardSuggestionAction,
-                }}
-                aiControls={{
-                  onAiAction: aiControls.handleAiAction,
-                  isAiLoading: aiControls.isAiActionLoading,
-                  isProseStreaming: aiControls.isProseStreaming,
-                  isWritingAvailable: aiControls.isWritingAvailable,
-                  onCancelAiAction: aiControls.cancelAiAction,
-                }}
-                onContextChange={setActiveFormats}
-                showWhitespace={showWhitespace}
-                onToggleShowWhitespace={(): void => setShowWhitespace(!showWhitespace)}
-                baselineContent={editorControls.baselineContent}
-                spellCheck={true}
-                onOpenSearch={onOpenSearch}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
-                <img
-                  src="/static/images/logo_512.png"
-                  srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
-                  sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
-                  className="w-64 h-64 mb-8 opacity-20"
-                  alt="AugmentedQuill Logo"
-                  decoding="async"
-                  loading="lazy"
-                />
-                <p className="text-lg font-medium">
-                  {t('Select or create a chapter to start writing.')}
-                </p>
+          {workspaceMode === 'split' ? (
+            <>
+              <div className="w-1/3 border-r dark:border-brand-gray-800 h-full flex items-center justify-center">
+                <span className="text-brand-gray-500">Scenes View (Placeholder)</span>
               </div>
-            )}
-          </div>
+              <div className="flex-1 flex flex-col min-w-0 h-full relative">
+                <EditorToolbar
+                  viewControls={viewControls}
+                  formatControls={formatControls}
+                />
+                <div className="flex-1 overflow-hidden h-full flex flex-col">
+                  {isChapterLoading ? (
+                    <ChapterLoadingSkeleton isLight={isLight} t={t} />
+                  ) : currentChapter ? (
+                    <Editor
+                      ref={editorRef}
+                      chapter={currentChapter}
+                      settings={editorSettings}
+                      language={editorControls.storyLanguage || 'en'}
+                      viewMode={viewMode}
+                      onChange={editorControls.updateChapter}
+                      suggestionControls={{
+                        continuations: suggestionControls.continuations,
+                        suggestionMode: suggestionControls.suggestionMode,
+                        setSuggestionMode: suggestionControls.setSuggestionMode,
+                        isSuggesting: suggestionControls.isSuggesting,
+                        onTriggerSuggestions:
+                          suggestionControls.handleTriggerSuggestions,
+                        onCancelSuggestion: suggestionControls.handleCancelSuggestions,
+                        onAcceptContinuation:
+                          suggestionControls.handleAcceptContinuation,
+                        isSuggestionMode: suggestionControls.isSuggestionMode,
+                        onKeyboardSuggestionAction:
+                          suggestionControls.handleKeyboardSuggestionAction,
+                      }}
+                      aiControls={{
+                        onAiAction: aiControls.handleAiAction,
+                        isAiLoading: aiControls.isAiActionLoading,
+                        isProseStreaming: aiControls.isProseStreaming,
+                        isWritingAvailable: aiControls.isWritingAvailable,
+                        onCancelAiAction: aiControls.cancelAiAction,
+                      }}
+                      onContextChange={setActiveFormats}
+                      showWhitespace={showWhitespace}
+                      onToggleShowWhitespace={(): void =>
+                        setShowWhitespace(!showWhitespace)
+                      }
+                      baselineContent={editorControls.baselineContent}
+                      spellCheck={true}
+                      onOpenSearch={onOpenSearch}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
+                      <img
+                        src="/static/images/logo_512.png"
+                        srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
+                        sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
+                        className="w-64 h-64 mb-8 opacity-20"
+                        alt="AugmentedQuill Logo"
+                        decoding="async"
+                        loading="lazy"
+                      />
+                      <p className="text-lg font-medium">
+                        {t('Select or create a chapter to start writing.')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : workspaceMode === 'scenes' ? (
+            <div className="flex-1 h-full flex items-center justify-center">
+              <span className="text-brand-gray-500">Scenes View (Placeholder)</span>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col min-w-0 h-full relative">
+              <EditorToolbar
+                viewControls={viewControls}
+                formatControls={formatControls}
+              />
+              <div className="flex-1 flex flex-col min-h-0 relative">
+                {isChapterLoading ? (
+                  <ChapterLoadingSkeleton isLight={isLight} t={t} />
+                ) : currentChapter ? (
+                  <Editor
+                    ref={editorRef}
+                    chapter={currentChapter}
+                    settings={editorSettings}
+                    language={editorControls.storyLanguage || 'en'}
+                    viewMode={viewMode}
+                    onChange={editorControls.updateChapter}
+                    suggestionControls={{
+                      continuations: suggestionControls.continuations,
+                      suggestionMode: suggestionControls.suggestionMode,
+                      setSuggestionMode: suggestionControls.setSuggestionMode,
+                      isSuggesting: suggestionControls.isSuggesting,
+                      onTriggerSuggestions: suggestionControls.handleTriggerSuggestions,
+                      onCancelSuggestion: suggestionControls.handleCancelSuggestions,
+                      onAcceptContinuation: suggestionControls.handleAcceptContinuation,
+                      isSuggestionMode: suggestionControls.isSuggestionMode,
+                      onKeyboardSuggestionAction:
+                        suggestionControls.handleKeyboardSuggestionAction,
+                    }}
+                    aiControls={{
+                      onAiAction: aiControls.handleAiAction,
+                      isAiLoading: aiControls.isAiActionLoading,
+                      isProseStreaming: aiControls.isProseStreaming,
+                      isWritingAvailable: aiControls.isWritingAvailable,
+                      onCancelAiAction: aiControls.cancelAiAction,
+                    }}
+                    onContextChange={setActiveFormats}
+                    showWhitespace={showWhitespace}
+                    onToggleShowWhitespace={(): void =>
+                      setShowWhitespace(!showWhitespace)
+                    }
+                    baselineContent={editorControls.baselineContent}
+                    spellCheck={true}
+                    onOpenSearch={onOpenSearch}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-brand-gray-500">
+                    <img
+                      src="/static/images/logo_512.png"
+                      srcSet="/static/images/logo_256.png 256w, /static/images/logo_512.png 512w, /static/images/logo_1024.png 1024w, /static/images/logo_2048.png 2048w"
+                      sizes="(max-width: 640px) 128px, (max-width: 1024px) 192px, 256px"
+                      className="w-64 h-64 mb-8 opacity-20"
+                      alt="AugmentedQuill Logo"
+                      decoding="async"
+                      loading="lazy"
+                    />
+                    <p className="text-lg font-medium">
+                      {t('Select or create a chapter to start writing.')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         <AppChatPanel

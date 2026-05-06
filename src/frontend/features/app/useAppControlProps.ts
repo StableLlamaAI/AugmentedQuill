@@ -19,6 +19,10 @@ import { useCallback, useMemo, useRef } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { AppMainLayout } from '../layout/AppMainLayout';
 import type {
+  HeaderViewControls,
+  HeaderFormatControls,
+} from '../layout/layoutControlTypes';
+import type {
   EditorSettings,
   SourcebookEntry,
   StoryState,
@@ -41,18 +45,6 @@ type UseAppHeaderPropsParams = {
   nextRedoLabel?: string | null;
   canUndo: boolean;
   canRedo: boolean;
-  viewMode: AppHeaderProps['viewControls']['viewMode'];
-  setViewMode: AppHeaderProps['viewControls']['setViewMode'];
-  showWhitespace: boolean;
-  setShowWhitespace: (show: boolean) => void;
-  isViewMenuOpen: boolean;
-  setIsViewMenuOpen: (open: boolean) => void;
-  isFormatMenuOpen: boolean;
-  setIsFormatMenuOpen: (open: boolean) => void;
-  isMobileFormatMenuOpen: boolean;
-  setIsMobileFormatMenuOpen: (open: boolean) => void;
-  handleFormat: (format: string) => void;
-  getFormatButtonClass: (format: string) => string;
   openImagesDialog: () => void;
   setIsSettingsOpen: (open: boolean) => void;
   setIsImagesOpen: (open: boolean) => void;
@@ -79,6 +71,8 @@ type UseAppHeaderPropsParams = {
 };
 
 type UseAppMainLayoutPropsParams = {
+  viewControls: HeaderViewControls;
+  formatControls: HeaderFormatControls;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
   currentChapterId: string | null;
@@ -166,18 +160,6 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
     nextRedoLabel,
     canUndo,
     canRedo,
-    viewMode,
-    setViewMode,
-    showWhitespace,
-    setShowWhitespace,
-    isViewMenuOpen,
-    setIsViewMenuOpen,
-    isFormatMenuOpen,
-    setIsFormatMenuOpen,
-    isMobileFormatMenuOpen,
-    setIsMobileFormatMenuOpen,
-    handleFormat,
-    getFormatButtonClass,
     openImagesDialog,
     setIsSettingsOpen,
     setIsImagesOpen,
@@ -233,32 +215,6 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
       canRedo,
     ]
   );
-  const viewControls = useMemo(
-    () => ({
-      viewMode,
-      setViewMode,
-      showWhitespace,
-      setShowWhitespace,
-      isViewMenuOpen,
-      setIsViewMenuOpen,
-      isFormatMenuOpen,
-      setIsFormatMenuOpen,
-      isMobileFormatMenuOpen,
-      setIsMobileFormatMenuOpen,
-    }),
-    [
-      viewMode,
-      setViewMode,
-      showWhitespace,
-      setShowWhitespace,
-      isViewMenuOpen,
-      setIsViewMenuOpen,
-      isFormatMenuOpen,
-      setIsFormatMenuOpen,
-      isMobileFormatMenuOpen,
-      setIsMobileFormatMenuOpen,
-    ]
-  );
   return useMemo(
     () => ({
       storyTitle,
@@ -269,16 +225,6 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
         setIsDebugLogsOpen,
       },
       historyControls,
-      viewControls,
-      formatControls: {
-        handleFormat,
-        getFormatButtonClass,
-        isFormatMenuOpen,
-        setIsFormatMenuOpen,
-        isMobileFormatMenuOpen,
-        setIsMobileFormatMenuOpen,
-        onOpenImages: openImagesDialog,
-      },
       aiControls: {
         handleAiAction,
         isAiActionLoading,
@@ -309,20 +255,12 @@ export function useAppHeaderProps(params: UseAppHeaderPropsParams): AppHeaderPro
     }),
     [
       historyControls,
-      viewControls,
       searchControls,
       storyTitle,
       sidebarControls,
       setIsSettingsOpen,
       setIsImagesOpen,
       setIsDebugLogsOpen,
-      handleFormat,
-      getFormatButtonClass,
-      openImagesDialog,
-      isFormatMenuOpen,
-      setIsFormatMenuOpen,
-      isMobileFormatMenuOpen,
-      setIsMobileFormatMenuOpen,
       handleAiAction,
       isAiActionLoading,
       isWritingAvailable,
@@ -354,6 +292,8 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
   // values rather than the whole params object (which is a new reference every
   // render and would defeat all memoization).
   const {
+    viewControls,
+    formatControls,
     isSidebarOpen,
     setIsSidebarOpen,
     currentChapterId,
@@ -630,9 +570,18 @@ export function useAppMainLayoutProps(params: UseAppMainLayoutPropsParams): {
         sidebarControls,
         editorControls,
         chatControls,
+        viewControls: params.viewControls,
+        formatControls: params.formatControls,
         instructionLanguages,
       }),
-      [sidebarControls, editorControls, chatControls, instructionLanguages]
+      [
+        sidebarControls,
+        editorControls,
+        chatControls,
+        params.viewControls,
+        params.formatControls,
+        instructionLanguages,
+      ]
     ),
   };
 }

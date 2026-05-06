@@ -62,6 +62,7 @@ export interface UIStoreState {
 
   // ── Editor UI flags ───────────────────────────────────────────────────────
   viewMode: ViewMode;
+  workspaceMode: 'page' | 'scenes' | 'split';
   showWhitespace: boolean;
   activeFormats: string[];
   isViewMenuOpen: boolean;
@@ -83,6 +84,13 @@ export interface UIStoreState {
   openChapterMetadataDialog: (chapterId: string, initialTab?: MetadataTab) => void;
   closeChapterMetadataDialog: () => void;
 
+  setWorkspaceMode: (
+    mode:
+      | 'page'
+      | 'scenes'
+      | 'split'
+      | ((prev: 'page' | 'scenes' | 'split') => 'page' | 'scenes' | 'split')
+  ) => void;
   setViewMode: (mode: ViewMode | ((prev: ViewMode) => ViewMode)) => void;
   setShowWhitespace: (show: boolean | ((prev: boolean) => boolean)) => void;
   setActiveFormats: (formats: string[] | ((prev: string[]) => string[])) => void;
@@ -131,6 +139,7 @@ export const useUIStore = create<UIStoreState>()(
 
       // ── Editor UI flags (not persisted) ─────────────────────────────────
       viewMode: 'raw' as ViewMode,
+      workspaceMode: 'page' as 'page' | 'scenes' | 'split',
       showWhitespace: false,
       activeFormats: [] as string[],
       isViewMenuOpen: false,
@@ -242,6 +251,16 @@ export const useUIStore = create<UIStoreState>()(
         })),
 
       // ── Editor UI actions ────────────────────────────────────────────────
+      setWorkspaceMode: (
+        v:
+          | 'page'
+          | 'scenes'
+          | 'split'
+          | ((prev: 'page' | 'scenes' | 'split') => 'page' | 'scenes' | 'split')
+      ) =>
+        set((s: UIStoreState): { workspaceMode: 'page' | 'scenes' | 'split' } => ({
+          workspaceMode: resolve(v, s.workspaceMode),
+        })),
       setViewMode: (v: ViewMode | ((prev: ViewMode) => ViewMode)) =>
         set((s: UIStoreState): { viewMode: ViewMode } => ({
           viewMode: resolve(v, s.viewMode),
@@ -300,6 +319,11 @@ export function useChapterMetadataDialog(): ChapterMetadataDialogState {
   return useUIStore(
     (s: UIStoreState): ChapterMetadataDialogState => s.chapterMetadataDialog
   );
+}
+
+/** Subscribe to workspace mode state only. */
+export function useWorkspaceMode(): 'page' | 'scenes' | 'split' {
+  return useUIStore((s: UIStoreState) => s.workspaceMode);
 }
 
 // ---------------------------------------------------------------------------
